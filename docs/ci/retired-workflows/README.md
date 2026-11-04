@@ -41,3 +41,25 @@ AI 专用兼容接口保留。截图判官/AI 列自动回写未完成，不能�
 同一 `/api/staff/skill-drafts/:id` 后端继续按原 ID 恢复历史草稿，当前 API/default unit
 合同覆盖状态互斥、异步生成、输入回答、回调与租户隔离。退出无消费者的旧视图，
 不把 `/skill-eval` 的 zip 上传视为草稿创建等价产品。
+
+2026-11-04 退出旧独立 agent-preflight-e2e.yml 及 services/agent/src/preflight/。
+源码、打包入口与全仓消费者复核确认，产品由 src/index.ts 的 ModuleManager
+执行模块目录 preflight.js；当前打包源是 modules/line04/preflight.ts。
+旧 core runner 仅被自己的 workflow/tests 调用，三个其他 Line 分支只是空成功 stub；
+旧 registry-only 检测及放行 >=4.1.9 的策略不符合当前 exe-first、仅 4.1.8.x 合同。
+
+本目录 agent-preflight-e2e.yml 是 main
+1af527a4d191db3066ebeab98e87274b03b51bf6:.github/workflows/agent-preflight-e2e.yml
+原文字节归档，不能当作当前入口执行。本候选最后源码可从
+4dce62432fdb7b88aadc2513bfc0cad63e517e47:<原路径> 恢复；十个删除路径的
+commit/blob/SHA256、七维理由与替代测试见
+[agent-preflight-retirement.json](agent-preflight-retirement.json)。
+
+当前同 SHA 的 canonical Module E2E
+[ROG job 126419603803](https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/41783304463/job/126419603803)
+于 2026-11-04 06:14:25 UTC 在版本 MOCK 场景之前执行真实编译模块：
+ok:true，微信版本 4.1.8.107，版本/pywinauto/内存三项均为 true。
+其静默、送达、更新锁标为跳过，不据此宣称登录、真实 UI 或送达成功。
+完整 canonical Module E2E、ModuleManager、现役版本与修复负例、Windows handler
+required 合同和 WeChat required gate 全部保留。只服务旧 workflow 的本轮两份
+辅助测试与 proxy helper 调用同步退出，保留两个现役 checkout-reuse 消费者。

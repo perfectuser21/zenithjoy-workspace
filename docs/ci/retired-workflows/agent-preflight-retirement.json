@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "unit_id": "core-retire-unconsumed-core-preflight",
+  "decision": "delete_archive",
+  "reviewed_candidate": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+  "dimensions": {
+    "current_value": "Current product activation uses ModuleManager and the downloaded Line04 module preflight.js. Legacy core runner has no current product/manual caller; Line01/02/05 are empty success stubs.",
+    "active_status": "Full tracked-repository search finds only the retiring standalone workflow/self-tests for src/preflight. Compilation via src glob is not an execution entry. Current index.ts imports ModuleManager.",
+    "real_effect": "Legacy registry-only >=4.1.8 check rejected current ROG while canonical exe-first ==4.1.8 actually passed on this candidate, alongside Python and 4GiB memory checks.",
+    "test_and_blocking": "Keep canonical ModuleManager/module preflight tests, Windows required contracts and WeChat required gate. Remove only obsolete runner tests and sole-target workflow helpers.",
+    "duplication_and_obsolescence": "Legacy core runner predates module architecture and permits >=4.1.9 rejected by current product. Canonical owns both DWORD encodings, exe-first detection, repair, exact-version policy and CLI contracts.",
+    "runtime_and_maintenance_cost": "Retire one independent self-hosted workflow (push/PR/manual), six dead implementation/type files, one dead-code test and two candidate-only helpers. No unmeasured CPU/RSS/time savings claimed.",
+    "retirement_and_dependencies": "Ten source paths anchored by commit/blob/SHA256; main workflow archived byte-for-byte. Remove sole Windows proxy-test call and third checkout tuple; retain both current consumers. No deployment/data/ledger/UI changes."
+  },
+  "removed_paths": [
+    {
+      "path": ".github/workflows/agent-preflight-e2e.yml",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "c6c98f4025c8cb3445cae666be530b7eec13dd4a",
+      "source_sha256": "0d92dc565546a5e4ff5d3fbcc21e145d2f809d35b7df96b4f950a0372c74ff4c",
+      "bytes": 4741
+    },
+    {
+      "path": ".github/workflows/scripts/__tests__/agent-preflight-proxy.test.ps1",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "0b85b15ff2fb97c7b4a4d5a39328d235b3a7fe86",
+      "source_sha256": "9ebb2cce78381568a17004a35e8672035c8b153b7c9e44f9676034dc57f3bb2d",
+      "bytes": 6119
+    },
+    {
+      "path": ".github/workflows/scripts/__tests__/agent-preflight-result.test.mjs",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "1354e890e5d04c3eb9692170d82aafb9517eeef8",
+      "source_sha256": "495137fb024757911659aec28dbf2e4914693ec933f50b1c38c618d8aea8798a",
+      "bytes": 2264
+    },
+    {
+      "path": "services/agent/src/preflight/__tests__/preflight.test.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "bfe2bf1230445c46eaca3a96abf807f3b445b06b",
+      "source_sha256": "082f7427ff7de46e7cd684438654bf8f09c8c4eadb94183f47521ee510d9fa90",
+      "bytes": 3373
+    },
+    {
+      "path": "services/agent/src/preflight/line01-preflight.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "32b99275b7857d04e33c1bec610999107b736950",
+      "source_sha256": "90c4c0129b1c8aaa3b7ee57aa91310653c992e7c467aa7ebb374b1942250913c",
+      "bytes": 363
+    },
+    {
+      "path": "services/agent/src/preflight/line02-preflight.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "c881f903c2704da19f3e5a76df1499f82e27dcfb",
+      "source_sha256": "468731e667b9bc109854c1bb866e63ea15f8f56a952fb67b01ceeb1fa48fe667",
+      "bytes": 366
+    },
+    {
+      "path": "services/agent/src/preflight/line04-preflight.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "f912234e84bface5c97c6ae4b2700ee334377a88",
+      "source_sha256": "19da46f42dfa458c585e157f0fcbbea8dc2cf1ea7f6b800f87a57fb8d718f5f0",
+      "bytes": 6009
+    },
+    {
+      "path": "services/agent/src/preflight/line05-preflight.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "418565750203c10bc1e026012d1de1daa2fdd551",
+      "source_sha256": "f6d51ff320dba697273aa86ad4f7068d59c3fd45fb4694c8e9f4ea8dd93bce39",
+      "bytes": 336
+    },
+    {
+      "path": "services/agent/src/preflight/preflight-runner.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "1f7a0497c95fc438dd9fd397e8ed3e2f60e2b0ed",
+      "source_sha256": "e36b6c4fea26815ab3c3a26328abc6ba6913cf3ac65319ce381264612bf42100",
+      "bytes": 1421
+    },
+    {
+      "path": "services/agent/src/preflight/types.ts",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "6fb349accf330f6a801274b8bdedc9bf6f2c5766",
+      "source_sha256": "374bcc045a30a4ed24b5cb0c69b82722483681945e07e6ed8605b8fe35680791",
+      "bytes": 694
+    }
+  ],
+  "main_workflow_archive": {
+    "path": "docs/ci/retired-workflows/agent-preflight-e2e.yml",
+    "source_commit": "1af527a4d191db3066ebeab98e87274b03b51bf6",
+    "source_path": ".github/workflows/agent-preflight-e2e.yml",
+    "source_blob": "00d3cc3a1dd9e4aeb62076b490bb4856cb77fbc1",
+    "source_sha256": "4c783f61af88cda0bc85cc9254acbfc2571d291504fe4efe0ed00facda0c4544"
+  },
+  "current_consumers": [
+    "services/agent/src/index.ts:186",
+    "services/agent/src/index.ts:815",
+    "services/agent/src/module-manager.ts:581",
+    "services/agent/scripts/build-line-module.sh:22",
+    "services/agent/modules/line04/preflight.ts"
+  ],
+  "replacement_tests": [
+    "services/agent/modules/line04/__tests__/preflight.test.ts",
+    "services/agent/modules/line04/__tests__/preflight-cli.test.ts",
+    "services/agent/src/__tests__/module-manager.test.ts"
+  ],
+  "real_rog_evidence": {
+    "head_sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+    "run_id": 41783304463,
+    "job_id": 126419603803,
+    "url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/41783304463/job/126419603803",
+    "step": "Step 3 — preflight real machine (node compiled dist)",
+    "command": "node dist/modules/line04/preflight.js",
+    "observed_at_utc": "2026-11-04T06:14:25.4804706Z",
+    "result": {
+      "ok": true,
+      "checks": {
+        "wechat_version": true,
+        "pywinauto": true,
+        "memory": true
+      }
+    },
+    "reason": "微信 4.1.8.107 / 静默 跳过 / 送达 跳过 / 更新 跳过",
+    "mock_scope": "No MOCK assignment in the real step or preceding workflow steps; explicit version MOCK cases execute afterwards. No login/UI/delivery success claimed."
+  },
+  "strict_retirement_manifest": "docs/ci/test-retirements.json validates sprint contracts only; none of these ten paths match its classifier. Existing sprint retirement records unchanged.",
+  "validation": {
+    "node20_service": {
+      "files": 97,
+      "pass": 1033,
+      "fail": 0
+    },
+    "source_tsc": "pass",
+    "test_esnext_bundler_tsc": "pass",
+    "registry": {
+      "registered": 1570,
+      "discovered": 1548
+    },
+    "sprint_retirement_records": 34,
+    "product_map": "no drift",
+    "actionlint": "pass current Windows workflow",
+    "required_checkout_retirement_tests": {
+      "pass": 358,
+      "fail": 0,
+      "required_gate_cases": 337,
+      "retirement_cases": 17,
+      "checkout_cases": 4
+    }
+  }
+}

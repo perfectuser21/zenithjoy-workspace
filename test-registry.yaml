@@ -2733,9 +2733,11 @@ tests:
     path: services/agent/src/preflight/__tests__/preflight.test.ts
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: 私域运营
     note: "Sprint 06081603 — per-Line preflight 路由 + line04 微信版本/pywinauto/内存检测 + 注册表解析纯函数"
+
+    retirement: "2026-11-04 unconsumed core runner retired; restore 1af527a4d191db3066ebeab98e87274b03b51bf6:services/agent/src/preflight/__tests__/preflight.test.ts. Current product consumer is ModuleManager -> module preflight.js; canonical modules/line04/__tests__/{preflight,preflight-cli}.test.ts and agent-module-e2e.yml real ROG Step 3 retain version/Python/memory obligations. Detailed ten-path anchors: docs/ci/retired-workflows/agent-preflight-retirement.json."
 
   - id: p4-ws1-openrouter-pairing
     path: apps/api/src/llm/__tests__/openrouter.test.ts
@@ -9803,21 +9805,3 @@ tests:
     product: unclassified
     execution: pr-review.yml / review / node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs; real Git fixtures, no model calls
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
-
-  - id: ci-review-agent-preflight-result
-    path: .github/workflows/scripts/__tests__/agent-preflight-result.test.mjs
-    type: unit
-    ci: L3
-    status: active
-    product: unclassified
-    execution: ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs
-    note: Executes the actual preflight workflow command with isolated result fixtures; version, combined failures and incomplete results must fail. No device or login verification is claimed.
-
-  - id: ci-agent-preflight-github-proxy
-    path: .github/workflows/scripts/__tests__/agent-preflight-proxy.test.ps1
-    type: unit
-    ci: L4
-    status: active
-    product: unclassified
-    execution: 'ci-l4-runtime.yml / agent-windows-contracts -> agent-qr-windows-verify.yml / unit-tests-windows / powershell at GITHUB_WORKSPACE'
-    note: Executes the actual inline pre-checkout proxy step with a fake TCP boundary and private temporary GITHUB_ENV files; ten cases preserve inherited Git config, bound loopback probing, reject malformed counts and prohibit diagnostic credential leakage. No live network, global config, UI or device operations.
