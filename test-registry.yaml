@@ -4188,7 +4188,7 @@ tests:
     ci: L4
     status: active
     product: 客户私域AI接管
-    note: "微信客服加固静态校验（5处修复 + 心跳端点 + watchdog/autostart 落地，CI Linux 可跑）"
+    note: "Current Android CS path and required aggregate behavioral matrix; executes offline service suite; shared real HTTP drafts/config/receipt run in middleware-chain. No Windows installer/listener pins."
 
   - id: module-health-page
     path: apps/dashboard/src/pages/__tests__/ModuleHealthPage.test.tsx
@@ -7847,6 +7847,7 @@ tests:
 
   - id: wechat-cs-runtime-contact-binding
     path: services/wechat-cs-android/tests/test_identity.py
+    execution: "wechat-cs-e2e.yml / android-cs / bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh; also ci-l3-code.yml api-scripts-test; offline only"
     type: unit
     ci: L3
     status: active
@@ -7855,6 +7856,7 @@ tests:
 
   - id: wechat-cs-runtime-workflow-contract
     path: services/wechat-cs-android/tests/test_workflow_contract.py
+    execution: "wechat-cs-e2e.yml / android-cs / bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh; also ci-l3-code.yml api-scripts-test; offline only"
     type: unit
     ci: L3
     status: active
@@ -7871,6 +7873,7 @@ tests:
 
   - id: wechat-cs-screenshot-read-budget
     path: services/wechat-cs-android/tests/test_phone_read_budget.py
+    execution: "wechat-cs-e2e.yml / android-cs / bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh; also ci-l3-code.yml api-scripts-test; offline only"
     type: unit
     ci: L3
     status: active
@@ -7879,6 +7882,7 @@ tests:
 
   - id: wechat-cs-prestart-recovery
     path: services/wechat-cs-android/tests/test_prestart_recovery.py
+    execution: "wechat-cs-e2e.yml / android-cs / bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh; also ci-l3-code.yml api-scripts-test; offline only"
     type: unit
     ci: L3
     status: active
@@ -8854,7 +8858,7 @@ tests:
   - {"id":"inventory-f57815dbb5419678","path":"scripts/ci/__tests__/pilot-release-workflow.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-acd978164fce1778","path":"scripts/ci/__tests__/pr-review-thinking.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-26d0f25a8dea879a","path":"scripts/ci/__tests__/run-core-regression.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-c428a3258767ebe7","path":"scripts/ci/__tests__/wechat-agent-scope.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-c428a3258767ebe7","path":"scripts/ci/__tests__/wechat-agent-scope.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"Windows CS-only classifier retired; restore b9746d8adea210cca015721949b11624ba2f4d03:scripts/ci/__tests__/wechat-agent-scope.test.mjs; Android routes and generic source ownership tests replace unique current obligations; docs/ci/wechat-cs-android-gate-migration.json."}
   - {"id":"inventory-3e168cfe02791d3e","path":"scripts/common-runner/sync.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-edd0003f092365a2","path":"scripts/deploy/__tests__/comfy-official-assets.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-fa4dddedaf24ac59","path":"scripts/deploy/__tests__/hk-source-fetch.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9181,7 +9185,7 @@ tests:
   - {"id":"inventory-f030dd1be4c48624","path":"services/agent/wechat-rpa/tests/test_offscreen.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-4c4e847927bf3ddb","path":"services/agent/wechat-rpa/tests/test_offscreen_scan_fixes.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-a612bafe15068da0","path":"services/agent/wechat-rpa/tests/test_operator_foreground_skip_and_anim_symmetry.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-4a81cc14fe92bf94","path":"services/agent/wechat-rpa/tests/test_overlay_window.py","type":"unit","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/wechat-cs-e2e.yml","job":"agent-windows","command":"python -m pytest tests/ -q"},"note":"Runs real overlay helper and production callback with isolated Win32/webview boundaries; style/call contracts only, no real foreground-focus evidence."}
+  - {"id":"inventory-4a81cc14fe92bf94","path":"services/agent/wechat-rpa/tests/test_overlay_window.py","type":"unit","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/ci-smoke-glob-runner.yml","job":"smoke-glob-shards","command":"wechat-listener-telemetry-smoke.sh -> python3 -m pytest services/agent/wechat-rpa/tests/ -q"},"note":"Legacy Windows SDK overlay compatibility only; no current Android CS or foreground-focus proof. Win32/webview boundaries isolated."}
   - {"id":"inventory-88c6f1441149542f","path":"services/agent/wechat-rpa/tests/test_phase0_observability.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-0ed13a14786fba87","path":"services/agent/wechat-rpa/tests/test_pixel_direction.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-306bf125cbb79ff3","path":"services/agent/wechat-rpa/tests/test_preflight_hotkey_summon.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9538,11 +9542,11 @@ tests:
   - {"id":"inventory-5822e38b0db44e6a","path":"services/phone-adb-controller/runtime/tests/test_runtime.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-13d7593614f14649","path":"services/phone-adb-controller/runtime/tests/test_runtime_kind.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-948bdcba0313e375","path":"services/wechat-contact-inventory/tests/test_inventory.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-671048bc2fe9231e","path":"services/wechat-cs-android/tests/test_artifact_transport.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-0e1c2207f8cd5114","path":"services/wechat-cs-android/tests/test_bridge.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-5d2647d6d2a24be5","path":"services/wechat-cs-android/tests/test_cs_phone.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-7c599c4bc613e94f","path":"services/wechat-cs-android/tests/test_recovery.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-f906ea859bb145c1","path":"services/wechat-cs-android/tests/test_watcher.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-671048bc2fe9231e","path":"services/wechat-cs-android/tests/test_artifact_transport.py","type":"contract","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/wechat-cs-e2e.yml","job":"android-cs","command":"bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh"},"note":"Real Android CS service functions; local SQLite/phone/gateway fixtures, no device/model/messages. Also unconditional ci-l3-code.yml api-scripts-test."}
+  - {"id":"inventory-0e1c2207f8cd5114","path":"services/wechat-cs-android/tests/test_bridge.py","type":"contract","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/wechat-cs-e2e.yml","job":"android-cs","command":"bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh"},"note":"Real Android CS service functions; local SQLite/phone/gateway fixtures, no device/model/messages. Also unconditional ci-l3-code.yml api-scripts-test."}
+  - {"id":"inventory-5d2647d6d2a24be5","path":"services/wechat-cs-android/tests/test_cs_phone.py","type":"contract","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/wechat-cs-e2e.yml","job":"android-cs","command":"bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh"},"note":"Real Android CS service functions; local SQLite/phone/gateway fixtures, no device/model/messages. Also unconditional ci-l3-code.yml api-scripts-test."}
+  - {"id":"inventory-7c599c4bc613e94f","path":"services/wechat-cs-android/tests/test_recovery.py","type":"contract","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/wechat-cs-e2e.yml","job":"android-cs","command":"bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh"},"note":"Real Android CS service functions; local SQLite/phone/gateway fixtures, no device/model/messages. Also unconditional ci-l3-code.yml api-scripts-test."}
+  - {"id":"inventory-f906ea859bb145c1","path":"services/wechat-cs-android/tests/test_watcher.py","type":"contract","ci":"L4","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/wechat-cs-e2e.yml","job":"android-cs","command":"bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh"},"note":"Real Android CS service functions; local SQLite/phone/gateway fixtures, no device/model/messages. Also unconditional ci-l3-code.yml api-scripts-test."}
   - {"id":"inventory-4cb5280d003c7017","path":"services/wechat-phone-controller/tests/test_display.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-3950ff76fd6b4473","path":"services/wechat-phone-controller/tests/test_legacy.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-074613422af653ac","path":"services/wechat-phone-controller/tests/test_pad_login.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}

@@ -1,12 +1,9 @@
 name: WeChat CS Hardening — E2E
 
-# Path 4 微信 AI 客服稳定性加固 E2E。
-# 设计如此（PrepPRD 已说明）：pywinauto 真机操作微信 GHA 跑不了（runner 无微信），
-# 由 xian-pc lead 自验。本 workflow 只验证：
-#   job1 (ubuntu)  — 中台链路模拟用户：curl 真打 /listener-heartbeat + /draft-generate(mode:auto)
-#                    + schema mode 透传单测（mock 飞书/DeepSeek）
-#   job2 (windows) — Agent 启动路径解析 + listen_chat.py dryrun 退出码 0（python-embedded getPythonExe 逻辑）
-# required context = "WeChat CS Gate Passed"（path-aware：不相关 PR 三个 job skip、gate 秒绿不占 rog）
+# Current CS producer: services/wechat-cs-android (Android RPA).
+# Offline contracts exercise real service/router code with isolated DB/model/phone adapters.
+# This gate does not send messages, access a phone, or claim fresh device delivery evidence.
+# Keep the existing required context: WeChat CS Gate Passed.
 
 on:
   push:
@@ -26,35 +23,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      agent_or_api: ${{ steps.filter.outputs.agent_or_api }}
-      agent: ${{ steps.filter.outputs.agent }}
+      cs_backend: ${{ steps.filter.outputs.cs_backend }}
+      android_cs: ${{ steps.filter.outputs.android_cs }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify agent scope classification
-        run: node --test scripts/ci/__tests__/wechat-agent-scope.test.mjs
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Detect changed files
         id: filter
-        env:
-          SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-          CI_SCOPE_PROOF: ${{ runner.temp }}/wechat-agent-scope.json
         run: node scripts/ci/detect-changes.mjs wechat
-      - name: Preserve fixed-source scope proof
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wechat-agent-scope-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/wechat-agent-scope.json
-          if-no-files-found: ignore
 
   middleware-chain:
     name: job1 — 真实HTTP Router/Service（隔离DB与模型）
     needs: changes
-    if: needs.changes.outputs.agent_or_api == 'true'
+    if: needs.changes.outputs.cs_backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -65,6 +50,10 @@ jobs:
       ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
     steps:
       - uses: actions/checkout@v4
+      - name: Restore pinned skill sources
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -85,214 +74,38 @@ jobs:
 
       - name: Real HTTP draft success/failure/gating contract (no platform or paid model)
         working-directory: apps/api
-        run: npx vitest run src/routes/wechat-draft-behavior.test.ts tests/services/wechat-draft.test.ts --reporter=basic
+        run: |
+          npx vitest run \
+            src/routes/wechat-draft-behavior.test.ts \
+            tests/services/wechat-draft.test.ts \
+            src/routes/__tests__/wechat-message-receipt.test.ts \
+            src/routes/__tests__/wechat-crm-event-access.test.ts \
+            src/routes/__tests__/wechat-config.test.ts \
+            --reporter=basic
 
-      - name: Static smoke（5 处修复 + 守护落地）
+      - name: Current CS routing and shared API smoke
         run: bash .github/workflows/scripts/smoke/wechat-cs-hardening-smoke.sh
 
 
-  agent-windows:
-    name: job2 — Agent 启动路径 + listen_chat dryrun（self-hosted xian-rog）
+  android-cs:
+    name: Android CS safety contracts (offline)
     needs: changes
-    if: needs.changes.outputs.agent == 'true'
-    runs-on: [self-hosted, wechat-capable]
-    timeout-minutes: 12
-    # Windows self-hosted runner 默认 locale=GBK，python 读含中文的 .py/文件会 UnicodeDecodeError，
-    # stdout 打中文会 UnicodeEncodeError。强制 UTF-8 模式根治读写两侧（Python 3.7+）。
-    env:
-      PYTHONUTF8: '1'
-      PYTHONIOENCODING: 'utf-8'
+    if: needs.changes.outputs.android_cs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-
-      - name: Restore complete agent source after reused checkout
-        shell: bash
-        run: |
-          # checkout removes worktreeConfig after disabling sparse mode; old local
-          # core.sparseCheckout can become effective again on this reused runner.
-          git sparse-checkout disable
-          test -f services/agent/src/handlers/__tests__/wechat-rpa.test.ts
-
-      # 不用 actions/setup-node：self-hosted runner 走国内 proxy 拉 codeload.github.com
-      # 100s 超时×3 必挂（2026-07-02 排查实锤，agent-module-e2e.yml 同款处理）。用本机 node。
-      - name: Verify Node.js (self-hosted, skip setup-node to avoid proxy timeout)
-        shell: bash
-        run: node --version
-
-      - name: Install services/agent deps
-        shell: bash
-        working-directory: services/agent
-        run: npm ci
-
-      - name: Agent 路径解析单测（process.execPath / getPythonExe，Windows 验证）
-        shell: bash
-        working-directory: services/agent
-        # 仅跑路径解析相关用例：resolveScript / getPythonExe / process.execPath。
-        # "非 Windows skip" 用例按设计只在 Linux agent CI 跑（windows-latest 上 startWechatListener
-        # 真走 win32 分支不 skip，故在此 job 用 -t 过滤掉）。
-        run: npx vitest run src/handlers/__tests__/wechat-rpa.test.ts -t "resolveScript|getPythonExe|process.execPath"
-
-      - name: listen_chat.py --dryrun-print-version 退出码 0
-        shell: bash
-        working-directory: services/agent/wechat-rpa
-        run: python listen_chat.py --dryrun-print-version
-
-      - name: listen_chat.py --dryrun 注入消息退出码 0（中台 dryrun，不真发）
-        shell: bash
-        working-directory: services/agent/wechat-rpa
-        env:
-          WECHAT_DRAFT_API_DRYRUN: '1'
-        run: python listen_chat.py --dryrun --inject-message '{"sender":"ci","wechat_id":"ci_wx","content":"hi"}'
-
-      - name: 纯逻辑单测（_parse_item_name / reply_in_chat / post_heartbeat）
-        shell: bash
-        working-directory: services/agent/wechat-rpa
-        run: |
-          python -m pip install --quiet pytest
-          python -m pytest tests/ -q
-
-      # ─── pywebview 建窗探针（仅建窗，不验证 NOACTIVATE / 前台焦点）────────
-      # overlay_window.py --probe 模式：建窗后定时 2s 退出，exit_code=0
-      # 无 WebView2 时退出码非 0，步骤会 FAIL（CI 拦截）
-      # 目的：证明 pywebview 可正常导入 + WebView2 就绪（不依赖真实微信）
-      - name: pywebview / WebView2 建窗探针（不验证前台焦点）
-        shell: bash
-        working-directory: services/agent/wechat-rpa
-        env:
-          ZJ_STATE_DIR: ${{ runner.temp }}/overlay-probe-state
-        run: |
-          mkdir -p "$ZJ_STATE_DIR"
-          python -m pip install --quiet pywebview==6.2.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
-          python overlay/overlay_window.py --probe
-          echo "PASS: pywebview / WebView2 window probe exit_code=0 (focus not evaluated)"
-
-      # NOACTIVATE 的 helper 样式位及生产 callback 接线由上方 pytest tests/ 执行：
-      # tests/test_overlay_window.py 只替换 Win32 / webview 外界，运行真实生产函数。
-      # 真实前台焦点仍缺 Session-1 观测证据；此 job 不宣称已验收“不抢焦”。
-
-  # job3 — 真机行为 gate：在 rog 的真微信上验证"开会话→读气泡→判向"整链。
-  # 2026-07-02 事故（连发5条只回1条+闪屏死循环）的根因是 read_chat_bubbles 在真机上
-  # 一条气泡都读不到，而 Fake 注入 pytest 全绿带病合入——本 gate 堵这个洞：
-  # PR 改到 wechat-rpa 就真发一条 marker 到"文件传输助手"并断言气泡可读+方向正确。
-  # 必须 session 1（GUI）才能 UIA 操作微信，runner 服务在 session 0 → PsExec64 -i 1 包一层。
-  bubble-read-gate:
-    name: job3 — 真机气泡可读性 gate（xian-rog 真微信）
-    needs: changes
-    if: needs.changes.outputs.agent == 'true'
-    runs-on: [self-hosted, wechat-capable]
-    timeout-minutes: 10
-    env:
-      PYTHONUTF8: '1'
-      PYTHONIOENCODING: 'utf-8'
-    steps:
-      - uses: actions/checkout@v4
-
-      # run 块必须全 ASCII：Windows PowerShell 5.1 按 GBK 解析 runner 写出的 UTF-8 临时
-      # .ps1，中文字符串会吞引号 → ParserError（2026-07-02 首跑实锤）。中文只放 YAML 注释。
-      - name: Run bubble gate in session 1 via PsExec
-        shell: powershell
-        run: |
-          $py = 'C:\Users\asus\anaconda3\python.exe'
-          $script = Join-Path $env:GITHUB_WORKSPACE 'services\agent\tools\selfcheck_bubbles.py'
-          $outJson = 'C:\Users\Public\zj-bubble-gate.json'
-          $outLog = 'C:\Users\Public\zj-bubble-gate-stdout.txt'
-          Remove-Item $outJson, $outLog -ErrorAction SilentlyContinue
-          $bat = 'C:\Users\Public\zj-bubble-gate.bat'
-          $lines = @(
-            '@echo off',
-            'set PYTHONUTF8=1',
-            ('"' + $py + '" "' + $script + '" > "' + $outLog + '" 2>&1')
-          )
-          Set-Content -Path $bat -Value $lines -Encoding ascii
-          # Two-phase desktop handoff: acquire the high-priority lease, then wait until the
-          # resident listener reaches its loop-top safe point before PsExec grabs session-1.
-          # Old installed agents acknowledge through a post-acquire safe-point log; new agents
-          # acknowledge the exact lease id through broker status. All failures are closed.
-          $port = if ($env:ZENITHJOY_LOCAL_PORT) { $env:ZENITHJOY_LOCAL_PORT } else { '58432' }
-          $leaseBase = "http://127.0.0.1:$port/api/agent/desktop-lease-broker"
-          $listenerLog = 'C:\Users\Public\zj-listener.log'
-          $listenerLogLineCount = 0
-          if (Test-Path $listenerLog) {
-            $listenerLogLineCount = @(Get-Content $listenerLog -Encoding utf8).Count
-          }
-          $leaseId = $null
-          try {
-            try {
-              $acqBody = @{ clientId = 'ci/bubble-read-gate'; priority = 10; ttlMs = 180000 } | ConvertTo-Json -Compress
-              $acq = Invoke-RestMethod -Uri "$leaseBase/acquire" -Method Post -Body $acqBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop
-              if (-not $acq.granted -or -not $acq.lease_id) {
-                throw 'not granted'
-              }
-              $leaseId = [string]$acq.lease_id
-              Write-Host "desktop-lease acquired lease_id=$leaseId"
-
-              $acknowledged = $false
-              $deadline = (Get-Date).AddSeconds(30)
-              while ((Get-Date) -lt $deadline) {
-                $status = Invoke-RestMethod -Uri "$leaseBase/status" -Method Get -TimeoutSec 5 -ErrorAction Stop
-                if (-not $status.held -or [string]$status.client_id -ne 'ci/bubble-read-gate') {
-                  throw 'desktop-lease owner changed while waiting for quiescence'
-                }
-
-                $leaseField = $status.PSObject.Properties['lease_id']
-                if ($null -ne $leaseField) {
-                  if ([string]$status.lease_id -ne $leaseId) {
-                    throw 'desktop-lease id changed while waiting for quiescence'
-                  }
-                  if (
-                    $status.yield_acknowledged -and
-                    [string]$status.yield_acknowledged_by -eq 'line04/listen_chat'
-                  ) {
-                    $acknowledged = $true
-                    Write-Host "desktop-lease quiescence acknowledged lease_id=$leaseId"
-                    break
-                  }
-                } elseif (Test-Path $listenerLog) {
-                  $newLines = @(Get-Content $listenerLog -Encoding utf8 | Select-Object -Skip $listenerLogLineCount)
-                  if ($newLines | Select-String -SimpleMatch '(CI)') {
-                    $acknowledged = $true
-                    Write-Host "desktop-lease legacy quiescence acknowledged lease_id=$leaseId"
-                    break
-                  }
-                }
-                Start-Sleep -Milliseconds 500
-              }
-              if (-not $acknowledged) {
-                throw 'desktop-lease quiescence timeout'
-              }
-            } catch {
-              Write-Error ("desktop-lease acquire failed closed: " + $_)
-              throw
-            }
-
-            & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
-            if (-not (Test-Path $outJson)) {
-              if (Test-Path $outLog) { Get-Content $outLog }
-              Write-Error 'bubble gate produced no result JSON (script crash or PsExec failure)'
-              exit 1
-            }
-            $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
-            Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
-            if (-not $j.ok) {
-              if (Test-Path $outLog) { Get-Content $outLog }
-              Write-Error ("bubble gate FAILED: " + $j.err)
-              exit 1
-            }
-            Write-Host "bubble gate PASS"
-          } finally {
-            if ($leaseId) {
-              try {
-                $relBody = @{ leaseId = $leaseId; clientId = 'ci/bubble-read-gate' } | ConvertTo-Json -Compress
-                Invoke-RestMethod -Uri "$leaseBase/release" -Method Post -Body $relBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
-                Write-Host "desktop-lease released lease_id=$leaseId"
-              } catch { Write-Host "desktop-lease release failed (ignored, TTL will expire): $_" }
-            }
-          }
+      - name: Restore pinned skill sources
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - name: Android reception, exact-contact delivery and recovery contracts
+        run: bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh
 
   # ─── Gate job（required context，与 L1/L2 Gate Passed 同款）─────────────────
   wechat-cs-gate:
     name: WeChat CS Gate Passed
-    needs: [changes, middleware-chain, agent-windows, bubble-read-gate]
+    needs: [changes, middleware-chain, android-cs]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

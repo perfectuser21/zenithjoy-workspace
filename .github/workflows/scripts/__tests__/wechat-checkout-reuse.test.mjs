@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 
-for (const mode of ['cone', 'non-cone']) for (const [file, job] of [['wechat-cs-e2e.yml','agent-windows'], ['agent-module-e2e.yml','preflight-xian-rog']]) test(`${file} (${mode}): ROG历史local sparse开关不能让完整checkout漏掉微信源码测试和build配置`,()=>{
+for (const mode of ['cone', 'non-cone']) for (const [file, job] of [['agent-module-e2e.yml','preflight-xian-rog']]) test(`${file} (${mode}): ROG历史local sparse开关不能让完整checkout漏掉微信源码测试和build配置`,()=>{
  const root=mkdtempSync(join(tmpdir(),'zj-checkout-reuse-'));
  const required='services/agent/src/handlers/__tests__/wechat-rpa.test.ts';
  function run(cmd,args){const r=spawnSync(cmd,args,{cwd:root,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r;}

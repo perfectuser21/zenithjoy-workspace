@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "source_commit": "b9746d8adea210cca015721949b11624ba2f4d03",
+  "authority": "User correction: current smart customer service is Android RPA; ROG Windows CS is obsolete.",
+  "required_context": "WeChat CS Gate Passed",
+  "current_consumers": {
+    "producer": "services/wechat-cs-android/watcher.py",
+    "draft_and_receipt": "services/wechat-cs-android/backend_cli.py",
+    "api_mount": "apps/api/src/app.ts /api/wechat",
+    "api_routes": [
+      "apps/api/src/routes/wechat.ts",
+      "apps/api/src/routes/wechat-config.ts"
+    ],
+    "spec": "services/wechat-cs-android/workflows/wechat_cs_reply_delivery.android.json",
+    "offline_tests": ".github/workflows/scripts/smoke/wechat-cs-android-smoke.sh",
+    "already_required_consumer": "ci-l3-code.yml / api-scripts-test"
+  },
+  "route_selection": "cs_backend and android_cs both true for services/wechat-cs-android/**, apps/api/**, shared workspace manifests/lock, CI and pinned skill metadata; generic APK and Windows-only source do not substitute.",
+  "removed_workflow_jobs": [
+    "agent-windows",
+    "bubble-read-gate"
+  ],
+  "retirements": [
+    {
+      "path": "scripts/ci/wechat-agent-scope.mjs",
+      "source_commit": "b9746d8adea210cca015721949b11624ba2f4d03",
+      "source_blob": "2dd30181bbfce7f8196b5a5ac633968c2975fb00",
+      "source_sha256": "f6b3bc728161d3753b1e8ca65f50e37ac01ea4c0861cfdb6b70f83d0c9575f5c",
+      "reason": "Only consumed by the retired Windows CS selection in wechat-cs-e2e and its smoke. Android CS selection uses exact current service/API/CI paths; generic skill ownership reader and live implementation-impact tests remain.",
+      "dimensions": {
+        "current_value": "No current Android CS consumer: classifier only scans services/agent, the obsolete Windows CS tree.",
+        "active_status": "Sole workflow and smoke callers removed together; generic implementation-skill-source reader remains consumed by implementation-impact.",
+        "real_effect": "Old helper excluded proven identical Windows skill relocations; it cannot identify Android watcher/backend/workflow changes.",
+        "test_and_blocking": "Same required WeChat CS Gate Passed now checks Android83 plus shared HTTP drafts/config/receipt; real YAML selected missing/skip/fail/cancel are red.",
+        "duplication_and_obsolescence": "Specialized Windows CS route no longer represents user-authoritative Android product; sourceownership assertions remain in generic independent suite.",
+        "runtime_and_maintenance_cost": "Remove 2617 bytes obsolete helper/test; no measured per-file RSS claim.",
+        "retirement_and_dependencies": "No other executable callers from git grep. Keep implementation-skill-source.mjs/tests and implementation-impact caller; original bytes recoverable at source_commit:path."
+      },
+      "replacement_test_paths": [
+        ".github/workflows/scripts/__tests__/adjacent-required-gates.test.mjs",
+        "scripts/ci/__tests__/implementation-skill-source.test.mjs"
+      ]
+    },
+    {
+      "path": "scripts/ci/__tests__/wechat-agent-scope.test.mjs",
+      "source_commit": "b9746d8adea210cca015721949b11624ba2f4d03",
+      "source_blob": "268eed78b6fd09b1201ea70cb1896f947b7e6d42",
+      "source_sha256": "1db64464f00819da94e6d0586e2badca2a61e80cd99caec36f5a1f16d3003c1d",
+      "reason": "Only consumed by the retired Windows CS selection in wechat-cs-e2e and its smoke. Android CS selection uses exact current service/API/CI paths; generic skill ownership reader and live implementation-impact tests remain.",
+      "dimensions": {
+        "current_value": "No current Android CS consumer: classifier only scans services/agent, the obsolete Windows CS tree.",
+        "active_status": "Sole workflow and smoke callers removed together; generic implementation-skill-source reader remains consumed by implementation-impact.",
+        "real_effect": "Old helper excluded proven identical Windows skill relocations; it cannot identify Android watcher/backend/workflow changes.",
+        "test_and_blocking": "Same required WeChat CS Gate Passed now checks Android83 plus shared HTTP drafts/config/receipt; real YAML selected missing/skip/fail/cancel are red.",
+        "duplication_and_obsolescence": "Specialized Windows CS route no longer represents user-authoritative Android product; sourceownership assertions remain in generic independent suite.",
+        "runtime_and_maintenance_cost": "Remove 4402 bytes obsolete helper/test; no measured per-file RSS claim.",
+        "retirement_and_dependencies": "No other executable callers from git grep. Keep implementation-skill-source.mjs/tests and implementation-impact caller; original bytes recoverable at source_commit:path."
+      },
+      "replacement_test_paths": [
+        ".github/workflows/scripts/__tests__/adjacent-required-gates.test.mjs",
+        "scripts/ci/__tests__/implementation-skill-source.test.mjs"
+      ]
+    }
+  ],
+  "remaining_windows_cs": [
+    {
+      "path": ".github/workflows/nightly-real-machine-staging.yml",
+      "scope": "wechat-bubble marker job plus report/dependent jobs; parent reviewing release/nightly policy, unchanged here"
+    },
+    {
+      "path": ".github/workflows/agent-module-e2e.yml",
+      "scope": "Line04 Windows preflight compatibility alongside generic ModuleManager contracts; unchanged"
+    },
+    {
+      "path": ".github/workflows/agent-preflight-hardening-e2e.yml",
+      "scope": "Windows Line04 Python/install lock behavior; unchanged"
+    },
+    {
+      "path": ".github/workflows/agent-installpack.yml",
+      "scope": "Shared Windows installer contains Line04 dryrun probe, other Lines stay active; unchanged"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/wechat-listener-telemetry-smoke.sh",
+      "scope": "Legacy listener Python tests still executed in SmokeGlob; retained as compatibility, not Android device proof"
+    },
+    {
+      "path": ".github/workflows/ci-l4-runtime.yml",
+      "scope": "Legacy Line04 Python/TS tests, runtime bytes guard and shared desktop broker remain; no runtime removal"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
+      "scope": "Mixed binding/API/CRM and Windows legacy assertions; shared contracts prohibit wholesale deletion"
+    },
+    {
+      "path": "services/agent/src/handlers/wechat-rpa.ts",
+      "scope": "Shared lease broker still mounted from src/index.ts; retain"
+    },
+    {
+      "path": "services/agent/modules/line04",
+      "scope": "Code-wired legacy SDK module/listener/overlay; not evidence of current Android CS business, unchanged"
+    }
+  ],
+  "limits": [
+    "83 offline tests exercise real watcher/bridge/phone budget/recovery with isolated phone/gateway boundaries; not fresh device delivery or model output evidence.",
+    "No device/UI/login operation; no runtime source, packaging bytes or production settings changed.",
+    "Nightly/release admission intentionally unchanged, separately owned by root."
+  ],
+  "verification": {
+    "test_first_old_configuration": {
+      "tests": 69,
+      "passed": 26,
+      "failed": 43
+    },
+    "android_service": {
+      "tests": 83,
+      "passed": 83,
+      "skipped": 0
+    },
+    "shared_http": {
+      "files": 8,
+      "tests": 69,
+      "passed": 69
+    },
+    "required_gate_and_retirement": {
+      "tests": 547,
+      "passed": 547,
+      "skipped": 0
+    },
+    "generic_skill_ownership_and_live_checkout": {
+      "tests": 14,
+      "passed": 14
+    },
+    "final_wechat_smoke": {
+      "tests": 66,
+      "passed": 66,
+      "skipped": 0
+    },
+    "actionlint": "pass",
+    "registry": {
+      "registered": 1569,
+      "discovered": 1547
+    },
+    "immutable_sprint_retirement_records_validated": 34,
+    "product_map": "no drift",
+    "typecheck": "No TypeScript/runtime/config changed; not required for workflow and MJS routing change."
+  }
+}

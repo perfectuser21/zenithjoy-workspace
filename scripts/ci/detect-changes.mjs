@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { gates } from './required-gate.mjs';
-import { classifyAgentChanges } from './wechat-agent-scope.mjs';
 
 const zero = '0'.repeat(40);
 function git(...args) { return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); }
@@ -40,24 +39,21 @@ export function detectChanges(profile, eventName, event) {
   const ci = has(/^(?:\.github\/|scripts\/ci\/|tsconfig\.base\.json$|package\.json$|\.npmrc$|\.skills-source\.json$)/);
   // Root workspace installs validate the shared lock and workspace manifests.
   const rootDependencies = has(/^(?:package-lock\.json$|apps\/[^/]+\/package\.json$)/);
-  let agentScope;
-  if (profile === 'wechat') {
-    // Preserve the fixed-source proof that excludes only identical skill relocations.
-    // Merge-group uses a two-commit diff, like push; a non-ancestor base runs Agent.
-    agentScope = classifyAgentChanges({ repoRoot: process.cwd(), base, head, event: eventName === 'merge_group' ? 'push' : eventName });
-    if (process.env.CI_SCOPE_PROOF) writeFileSync(process.env.CI_SCOPE_PROOF, JSON.stringify(agentScope, null, 2) + '\n');
-  }
   // Company freeze SQL lives in phone code but is executed by required API PG.
   const companyPostgres = profile === 'integration' && has(/^services\/phone-adb-controller\/(?:company-config-(?:lib\.js|readiness\.mjs|sync-lib\.js)|__tests__\/company-config(?:-postgres|-sync)?\.test\.mjs)$/);
+  // Current customer-service producer is the standalone Android RPA service.
+  // Its workflow JSON and backend adapter must exercise both service and API contracts.
+  const wechatCs = ci || rootDependencies || has(/^(?:services\/wechat-cs-android\/|apps\/api\/)/);
   const apiOrDashboard = has(/^apps\/(?:api|dashboard)\//);
   const selected = {
     dashboard: ci || rootDependencies || has(/^apps\/dashboard\//),
     api: ci || rootDependencies || companyPostgres || has(/^apps\/api\//),
     geoai: ci || rootDependencies || has(/^apps\/geoai\//),
-    agent: agentScope ? agentScope.agent : ci || has(/^services\/agent\//) || has(/^apps\/api\/src\/services\/walking-skeleton\.service\.ts$/),
+    agent: ci || has(/^services\/agent\//) || has(/^apps\/api\/src\/services\/walking-skeleton\.service\.ts$/),
     agent_modules: ci || has(/^services\/agent\//),
     staff_hub: ci || rootDependencies || has(/^apps\/staff-hub\//),
-    agent_or_api: ci || rootDependencies || agentScope?.agent === true || has(/^(?:services\/agent\/|apps\/api\/)/),
+    cs_backend: wechatCs,
+    android_cs: wechatCs,
     lead: ci || rootDependencies || apiOrDashboard || has(/^services\/agent\/src\/line02\/reply-poller\.ts$/) || has(/^sprints\/07032333-line02-lead-human-handoff\//),
     lead_windows: false, // The existing Windows evaluator is dispatch-only.
     orphan: ci || rootDependencies || apiOrDashboard,
