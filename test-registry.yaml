@@ -9798,3 +9798,12 @@ tests:
     product: unclassified
     execution: pr-review.yml / review / node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs; real Git fixtures, no model calls
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-agent-preflight-result
+    path: .github/workflows/scripts/__tests__/agent-preflight-result.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: unclassified
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    note: Executes the actual preflight workflow command with isolated result fixtures; version, combined failures and incomplete results must fail. No device or login verification is claimed.

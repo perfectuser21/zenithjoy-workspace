@@ -52,12 +52,12 @@ jobs:
           const { runPreflight } = require('./dist/preflight/preflight-runner');
           runPreflight('line04-wechat-cs').then(r => {
             console.log(JSON.stringify(r, null, 2));
-            // xian-rog 已锁微信 4.1.8 + 装 pywinauto + 内存充足 → 应全通过。
-            // 若失败但原因仅微信版本（version/版本）则放行（机器临时升级场景），
-            // 其它原因（pywinauto/内存）失败即判 CI 红。
-            if (!r.ok && !/version|版本/.test(r.reason || '')) {
-              console.error('[preflight] line04 真机检测未通过（非版本原因）：' + (r.reason || '未知'));
-              console.error('[preflight] checks=' + JSON.stringify(r.checks));
+            // All current checks must pass. A version error must not mask a
+            // simultaneous Python/memory failure or become a successful run.
+            const requiredChecks = ['wechat_version', 'pywinauto', 'memory'];
+            if (r?.ok !== true || requiredChecks.some(key => r.checks?.[key] !== true)) {
+              console.error('[preflight] line04 真机检测未通过：' + (r?.reason || '未知或不完整结果'));
+              console.error('[preflight] checks=' + JSON.stringify(r?.checks));
               process.exit(1);
             }
             console.log('[preflight] line04 真机检测通过');
