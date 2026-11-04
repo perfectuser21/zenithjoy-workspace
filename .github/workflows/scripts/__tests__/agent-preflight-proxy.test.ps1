@@ -9,6 +9,15 @@ $actualStep = [ScriptBlock]::Create([regex]::Replace($match.Groups['body'].Value
 $directory = Join-Path ([IO.Path]::GetTempPath()) ('zj-proxy-fixture-' + [guid]::NewGuid())
 [void][IO.Directory]::CreateDirectory($directory)
 $results = @()
+# Environment is process-wide even when invoked as a child script in one shell.
+# Preserve values in memory only; never print them or write the original env file.
+$savedEnvironment = @{}
+foreach ($name in @('GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0', 'GIT_CONFIG_KEY_1', 'GIT_CONFIG_VALUE_1', 'GITHUB_ENV')) {
+  $savedEnvironment[$name] = @{
+    Present = Test-Path ('Env:' + $name)
+    Value = [Environment]::GetEnvironmentVariable($name, 'Process')
+  }
+}
 # Replace only the TCP boundary. Every case executes the actual workflow body.
 function New-Object {
   param([string]$TypeName)
@@ -77,5 +86,16 @@ try {
   }
   @{ scope = 'actual workflow body; TCP boundary fake; no network/global config/UI/credentials'; cases = $results; passed = $results.Count } | ConvertTo-Json -Depth 4 -Compress
 } finally {
-  Remove-Item -LiteralPath $directory -Recurse -Force
+  try {
+    Remove-Item -LiteralPath $directory -Recurse -Force
+  } finally {
+    foreach ($name in $savedEnvironment.Keys) {
+      $saved = $savedEnvironment[$name]
+      if ($saved.Present) {
+        [Environment]::SetEnvironmentVariable($name, $saved.Value, 'Process')
+      } else {
+        [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+      }
+    }
+  }
 }
