@@ -15,6 +15,8 @@
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 const BARK_URL = process.env.BARK_URL || 'https://api.day.app/QU7ktbzPJxZbNx9pEHcstW';
 const FORCE_NOTIFY = process.env.FORCE_NOTIFY === 'true';
@@ -36,7 +38,7 @@ const validateTrue = () => true;
 
 // ── 平台定义（8×4=32 平台账号 + 3 API key = 35 条目）────────────────
 
-const PLATFORMS = [
+export const PLATFORMS = [
   // ── 抖音（4 账号）────────────────────────────────────────────────
   { platform: '抖音主号',  secretEnv: 'DOUYIN_COOKIES',  healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
   { platform: '抖音小号1', secretEnv: 'DOUYIN_SUB_1', healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
@@ -163,11 +165,11 @@ async function sendFeishuAlert(title, content) {
 
 // ── 检查单个平台 ─────────────────────────────────────────────────
 
-async function checkPlatform(p) {
+export async function checkPlatform(p, { env = process.env, skipHttpCheck = SKIP_HTTP_CHECK, request = httpGet } = {}) {
   const checkedAt = new Date().toISOString();
 
   if (p.type === 'api_key') {
-    const raw = process.env[p.secretEnv];
+    const raw = env[p.secretEnv];
     let status = 'ok';
     if (!raw) {
       status = 'missing';
@@ -175,7 +177,7 @@ async function checkPlatform(p) {
     return { platform: p.platform, secretEnv: p.secretEnv, status, checkedAt, expiresAt: null };
   }
 
-  const raw = process.env[p.secretEnv];
+  const raw = env[p.secretEnv];
   if (!raw) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'missing', checkedAt, expiresAt: null };
   }
@@ -216,13 +218,13 @@ async function checkPlatform(p) {
 
   const expiresAt = earliestExpiry ? new Date(earliestExpiry * 1000).toISOString() : null;
 
-  if (SKIP_HTTP_CHECK) {
-    return { platform: p.platform, secretEnv: p.secretEnv, status: 'ok', checkedAt, expiresAt };
+  if (skipHttpCheck) {
+    return { platform: p.platform, secretEnv: p.secretEnv, status: 'unknown', checkedAt, expiresAt };
   }
 
   // ── 检查 2：HTTP 调用验证 ──
   const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  const resp = await httpGet(p.healthUrl, cookieStr, p.referer);
+  const resp = await request(p.healthUrl, cookieStr, p.referer);
 
   if (resp.status === 0) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'unknown', checkedAt, expiresAt };
@@ -289,7 +291,7 @@ async function postSessionStatus(results) {
 
 // ── 主逻辑 ───────────────────────────────────────────────────────
 
-async function main() {
+export async function main() {
   console.log(`[session-health] 开始巡检 @ ${new Date().toISOString()}`);
 
   const results = [];
@@ -371,7 +373,9 @@ async function main() {
   }
 }
 
-main().catch(e => {
-  console.error('[session-health] 崩溃:', e.message);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => {
+    console.error('[session-health] 崩溃:', e.message);
+    process.exitCode = 1;
+  });
+}

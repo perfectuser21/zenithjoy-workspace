@@ -1,5 +1,9 @@
 import './setup-env';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+const {model,provider}=vi.hoisted(()=>({model:vi.fn(),provider:vi.fn()}));
+vi.mock('axios',()=>({default:{post:provider,get:provider,isAxiosError:()=>false}}));
+vi.mock('../../../src/services/comment-grading',()=>({gradeComments:vi.fn(async(_profile,_title,_transcript,comments)=>comments.map(()=> '精准'))}));
+vi.mock('../../../src/llm/openrouter',()=>({callOpenRouter:model}));
 import request from 'supertest';
 import app from '../../../src/app';
 import pool from '../../../src/db/connection';
@@ -41,4 +45,187 @@ describe('real SQL tenant boundaries',()=>{
   const alien=await request(app).get(`/api/works/${work}/performance`).set('Cookie',tenants[1].cookie);expect(alien.status).toBe(200);expect(alien.body.platforms).toEqual({});
   const alienPlatform=await request(app).get(`/api/works/${work}/performance/douyin`).set('Cookie',tenants[1].cookie);expect(alienPlatform.status).toBe(200);expect(alienPlatform.body.data).toEqual([]);
  });
+});
+
+
+async function account() {
+ const signup=await request(app).post('/api/auth/sign-up/email').send({email:`fixture-${randomUUID()}@example.test`,password:'Local-test-password-123',name:'Isolated business fixture'});
+ expect(signup.status).toBe(200);
+ const userId=signup.body.user.id;
+ const license=(await pool.query('SELECT * FROM zenithjoy.licenses WHERE customer_id=$1',[userId])).rows[0];
+ return {cookie:signup.headers['set-cookie'] as string[],userId,tenant:license.tenant_id as string,key:license.license_key as string};
+}
+async function device() {
+ const owner=await account(), machine=randomUUID();
+ const reg=await request(app).post('/api/agent/register').send({license_key:owner.key,machine_id:machine,hostname:machine,agent_id:`fixture-${machine}`});
+ expect(reg.status).toBe(200);
+ await pool.query("UPDATE zenithjoy.agents SET os_type='android',last_heartbeat_at=now() WHERE id=$1",[reg.body.agent_id]);
+ return {...owner,machine,agent:reg.body.agent_id as string};
+}
+async function bindCs(d:Awaited<ReturnType<typeof device>>) {
+ const cs=`fixture-cs-${randomUUID()}`;
+ const r=await request(app).put(`/api/wechat/cs/setup/${d.machine}`).set('Cookie',d.cookie).send({wechat_id:cs,auto_agent_enabled:false,real_wechat_id:`real-${randomUUID()}`});
+ expect(r.status).toBe(200); expect(r.body.wechat_id).toBe(cs); return cs;
+}
+
+describe('agent event, account scan and Android warmup — actual producer SQL',()=>{
+ it('single/batch events persist license-derived tenant, and machine events reject another tenant',async()=>{
+  const d=await device();
+  const payload={agent_id:d.agent,kind:'log',level:'info',message:'business fixture event'};
+  expect((await request(app).post('/api/agent/events').send(payload)).status).toBe(401);
+  const single=await request(app).post('/api/agent/events').set('X-License-Key',d.key).send({...payload,tenant_id:randomUUID()});expect(single.status).toBe(200);
+  const batch=await request(app).post('/api/agent/events').set('X-License-Key',d.key).send({events:[{...payload,kind:'upgrade',phase:'done',percent:100},payload]});expect(batch.status).toBe(200);expect(batch.body.data.count).toBe(2);
+  const rows=(await pool.query('SELECT tenant_id,kind FROM zenithjoy.agent_events WHERE agent_id=$1',[d.agent])).rows;expect(rows).toHaveLength(3);expect(rows.every(r=>r.tenant_id===d.tenant)).toBe(true);
+  const own=await request(app).get(`/api/agent/machines/${d.agent}/events`).set('Cookie',d.cookie);expect(own.status).toBe(200);expect(own.body.data.logs).toHaveLength(2);expect(own.body.data.upgrades).toHaveLength(1);
+  const alien=await account();expect((await request(app).get(`/api/agent/machines/${d.agent}/events`).set('Cookie',alien.cookie)).status).toBe(404);
+ });
+ it('account scan closes the exact queued UUID, repeated result is idempotent and failures retain diagnostics',async()=>{
+  const d=await device();
+  const task=(await pool.query("INSERT INTO zenithjoy.publish_tasks(agent_id,tenant_id,platform,status,task_type,payload) VALUES($1,$2,'douyin','queued','account_scan','{}') RETURNING id",[d.agent,d.tenant])).rows[0].id;
+  const body={agent_id:d.agent,request_id:task,ok:true,account_ids:['fixture-burner-a','fixture-burner-b']};
+  const first=await request(app).post('/api/agent/burner/account-scan-result').send(body);expect(first.status).toBe(200);expect(first.body.data.written).toBe(2);
+  expect((await pool.query('SELECT status FROM zenithjoy.publish_tasks WHERE id=$1',[task])).rows).toEqual([{status:'done'}]);
+  const repeat=await request(app).post('/api/agent/burner/account-scan-result').send({...body,account_ids:['must-not-be-added']});expect(repeat.status).toBe(200);expect(repeat.body.data.idempotent).toBe(true);
+  expect((await pool.query("SELECT account_label FROM zenithjoy.agent_platform_sessions WHERE agent_id=$1 AND role='burner' ORDER BY account_label",[d.agent])).rows).toEqual([{account_label:'fixture-burner-a'},{account_label:'fixture-burner-b'}]);
+  const fail=await request(app).post('/api/agent/burner/account-scan-result').send({agent_id:d.agent,request_id:'periodic-fixture-request',ok:false,account_ids:[],error_code:'SCREEN_LOCKED',version_name:'2.1.20',stage:'lock_check',foreground_package:'com.android.systemui'});expect(fail.status).toBe(200);
+  expect((await pool.query('SELECT error_code,detail FROM zenithjoy.agent_scan_failures WHERE agent_id=$1',[d.agent])).rows[0]).toMatchObject({error_code:'SCREEN_LOCKED',detail:{version_name:'2.1.20',stage:'lock_check',foreground_package:'com.android.systemui'}});
+ });
+ it('warmup enqueues one Android job, preserves operator nickname, stores real result fields and duplicate HTTP success',async()=>{
+  const d=await device();
+  await pool.query("INSERT INTO zenithjoy.agent_platform_sessions(agent_id,platform,account_label,role,status,device_type) VALUES($1,'douyin','fixture-warmup','burner','active','android')",[d.agent]);
+  const run=()=>request(app).post('/api/acquisition/warmup/run').set('Cookie',d.cookie).send({operator_nickname:'fixture-operator'});
+  const first=await run();expect(first.status).toBe(200);expect(first.body.data.enqueued).toBe(1);
+  const second=await run();expect(second.status).toBe(200);expect(second.body.data.enqueued).toBe(0);
+  const tasks=(await pool.query("SELECT id,status,payload FROM zenithjoy.publish_tasks WHERE agent_id=$1 AND task_type='warmup'",[d.agent])).rows;expect(tasks).toHaveLength(1);expect(tasks[0]).toMatchObject({status:'queued',payload:{task_type:'warmup',operator_nickname:'fixture-operator'}});
+  const result=await request(app).post('/api/agent/burner/warmup-result').send({task_id:tasks[0].id,device_id:'isolated-fixture',results:[{nickname:'alive',alive:true,followers:1196},{nickname:'offline',alive:false,followers:null}],error_code:''});expect(result.status).toBe(200);expect(result.body.data).toMatchObject({task_status:'done',written:2});
+  const repeat=await request(app).post('/api/agent/burner/warmup-result').send({task_id:tasks[0].id,results:[{nickname:'must-not-be-added',alive:true}]});expect(repeat.status).toBe(200);expect(repeat.body.data.idempotent).toBe(true);
+  expect((await pool.query('SELECT nickname,alive,followers FROM zenithjoy.agent_warmup_liveness WHERE agent_id=$1 ORDER BY nickname',[d.agent])).rows).toEqual([{nickname:'alive',alive:true,followers:1196},{nickname:'offline',alive:false,followers:null}]);
+ });
+});
+
+describe('shared current CS setup, CRM, draft, escalation, receipt and moments contracts',()=>{
+ it('setup is owner-only and scoped, creates current shared agent config and scoped workbench list',async()=>{
+  const d=await device();
+  expect((await request(app).put(`/api/wechat/cs/setup/${d.machine}`).send({})).status).toBe(401);
+  const alien=await account();expect((await request(app).put(`/api/wechat/cs/setup/${d.machine}`).set('Cookie',alien.cookie).send({})).status).toBe(403);
+  const cs=await bindCs(d);
+  const config=await request(app).get(`/api/wechat/cs/agent-config?machine_id=${d.machine}`);expect(config.status).toBe(200);expect(config.body).toMatchObject({wechat_id:cs,auto_agent_enabled:false});
+  const own=await request(app).get('/api/wechat/cs/machines').set('Cookie',d.cookie);expect(own.status).toBe(200);expect(own.body.machines).toHaveLength(1);
+  const foreign=await request(app).get('/api/wechat/cs/machines').set('Cookie',alien.cookie);expect(foreign.status).toBe(200);expect(foreign.body.machines).toEqual([]);
+ });
+ it('CRM ingest keeps default dry-run, identity/onboarding, blacklists bots, skips self and hides deleted/foreign rows',async()=>{
+  const d=await device(),cs=await bindCs(d);
+  const ingest=(contacts:unknown[],extra={})=>request(app).post('/api/crm/friend-scan/ingest').set('X-License-Key',d.key).send({cs_wechat_id:cs,contacts,...extra});
+  const first=await ingest([{name:'fixture-customer',wechat_id:'wx-fixture'},{name:'fixture-absent'},{name:'微信ClawBot'},{name:'fixture-self'}],{self_name:'fixture-self'});expect(first.status).toBe(200);expect(first.body.ingested).toBe(3);
+  for(let i=0;i<3;i++)expect((await ingest([{name:'fixture-customer'}])).status).toBe(200);
+  const absent=(await pool.query("SELECT scan_miss_count,deleted_at FROM zenithjoy.crm_customers WHERE cs_wechat_id=$1 AND contact='fixture-absent'",[cs])).rows[0];expect(absent).toEqual({scan_miss_count:3,deleted_at:null});
+  expect((await ingest([{name:'fixture-customer'},{name:'fixture-absent'}])).status).toBe(200);
+  const restored=(await pool.query("SELECT scan_miss_count FROM zenithjoy.crm_customers WHERE cs_wechat_id=$1 AND contact='fixture-absent'",[cs])).rows[0];expect(restored.scan_miss_count).toBe(0);
+  expect((await pool.query("SELECT identity FROM zenithjoy.crm_customers WHERE cs_wechat_id=$1 AND contact='微信ClawBot'",[cs])).rows[0].identity).toBe('blacklist');
+  expect((await pool.query("SELECT contact FROM zenithjoy.crm_customers WHERE cs_wechat_id=$1 AND contact='fixture-self'",[cs])).rows).toEqual([]);
+  const identity=await request(app).put('/api/crm/customers/identity').set('Cookie',d.cookie).send({wechat_id:cs,contact:'fixture-customer',identity:'internal'});expect(identity.status).toBe(200);
+  const list=await request(app).get(`/api/crm/customers?cs_wechat_id=${cs}`).set('Cookie',d.cookie);expect(list.status).toBe(200);expect(list.body.customers.some((r:any)=>r.contact==='fixture-customer')).toBe(false);expect((await pool.query("SELECT identity FROM zenithjoy.crm_customers WHERE cs_wechat_id=$1 AND contact='fixture-customer'",[cs])).rows[0].identity).toBe('internal');
+  const onboarding=await request(app).get(`/api/crm/onboarding/${cs}`).set('Cookie',d.cookie);expect(onboarding.status).toBe(200);
+  await pool.query("UPDATE zenithjoy.crm_customers SET deleted_at=now() WHERE cs_wechat_id=$1 AND contact='fixture-customer'",[cs]);
+  const hidden=await request(app).get(`/api/crm/customers?cs_wechat_id=${cs}`).set('Cookie',d.cookie);expect(hidden.status).toBe(200);expect(hidden.body.customers.some((r:any)=>r.contact==='fixture-customer')).toBe(false);
+  const alien=await account();expect((await request(app).get(`/api/crm/customers?cs_wechat_id=${cs}`).set('Cookie',alien.cookie)).status).toBe(403);
+ });
+ it('isolated model output persists escalation and AI stage; drafts count as replies only after an actual receipt',async()=>{
+  const d=await device(),cs=await bindCs(d),contact=`fixture-contact-${randomUUID()}`;
+  model.mockResolvedValue({content:JSON.stringify({reply:'收到，我会核实您的问题。',tags:{stage:'A2',escalate:true}})});
+  const draft=await request(app).post('/api/wechat/draft-generate').send({tenant_id:d.tenant,cs_wechat_id:cs,wechat_id:contact,sender:contact,content:'需要人工协助',mode:'auto'});expect(draft.status).toBe(200);expect(draft.body).toMatchObject({status:'sent',reply:'收到，我会核实您的问题。'});expect(draft.body.message_id).toBeTypeOf('number');
+  await vi.waitFor(async()=>{expect((await pool.query("SELECT reason FROM zenithjoy.wechat_publish_task WHERE tenant_id=$1 AND target_user=$2",[d.tenant,contact])).rows).toEqual([{reason:'cs_escalate'}]);expect((await pool.query('SELECT new_status,changed_by FROM zenithjoy.crm_customer_status_history WHERE tenant_id=$1 AND contact=$2',[d.tenant,contact])).rows).toEqual([{new_status:'A2',changed_by:'ai_inferred'}]);});
+  const before=await request(app).get('/api/wechat/cs/stats');expect(before.status).toBe(200);expect(before.body.stats.find((r:any)=>r.cs_wechat_id===cs)).toMatchObject({received_count:1,reply_count:0,served_customers:1});
+  const forged=await request(app).post(`/api/wechat/messages/${draft.body.message_id}/receipt`).send({cs_wechat_id:'foreign-fixture',ok:true});expect(forged.status).toBe(200);expect(forged.body.updated).toBe(false);
+  const receipt=await request(app).post(`/api/wechat/messages/${draft.body.message_id}/receipt`).set('X-License-Key',d.key).send({cs_wechat_id:cs,ok:true});expect(receipt.status).toBe(200);expect(receipt.body.updated).toBe(true);
+  const repeat=await request(app).post(`/api/wechat/messages/${draft.body.message_id}/receipt`).send({cs_wechat_id:cs,ok:true});expect(repeat.status).toBe(200);expect(repeat.body.updated).toBe(false);
+  const after=await request(app).get('/api/wechat/cs/stats');expect(after.status).toBe(200);expect(after.body.stats.find((r:any)=>r.cs_wechat_id===cs)).toMatchObject({received_count:1,reply_count:1,served_customers:1,work_duration_minutes:expect.any(Number)});
+ });
+ it('marketing profile upsert and moment approve/reject stay on their tenant and preserve dispatch state',async()=>{
+  const d=await device(),other=await account();
+  const put=await request(app).post('/api/wechat/marketing-profile').set('X-Tenant-Id',d.tenant).send({customer:'fixture',industry:'software',audience:'operators',hook:'fixture-hook'});expect(put.status).toBe(200);
+  const update=await request(app).post('/api/wechat/marketing-profile').set('X-Tenant-Id',d.tenant).send({customer:'fixture',industry:'updated'});expect(update.status).toBe(200);expect(update.body.profile.industry).toBe('updated');
+  const profiles=await request(app).get('/api/wechat/marketing-profile').set('X-Tenant-Id',d.tenant);expect(profiles.status).toBe(200);expect(profiles.body.profiles).toHaveLength(1);
+  const task=randomUUID();await pool.query("INSERT INTO zenithjoy.wechat_publish_task(task_id,platform,type,target_user,content_draft,approval_status,tenant_id,status) VALUES($1,'wechat_personal','moment','fixture','isolated fixture','pending_review',$2,'draft')",[task,d.tenant]);
+  const foreign=await request(app).post(`/api/wechat/moment-drafts/${task}/approve`).set('X-Tenant-Id',other.tenant).send({});expect(foreign.status).toBe(404);
+  const approved=await request(app).post(`/api/wechat/moment-drafts/${task}/approve`).set('X-Tenant-Id',d.tenant).send({});expect(approved.status).toBe(200);expect(approved.body.task).toMatchObject({approval_status:'approved',approval_source:'dashboard',status:'draft'});
+  const rejected=await request(app).post(`/api/wechat/moment-drafts/${task}/reject`).set('X-Tenant-Id',d.tenant).send({});expect(rejected.status).toBe(200);expect(rejected.body.task.approval_status).toBe('rejected');
+ });
+ it('skill registry returns a real seeded array with statuses instead of accepting empty/string shapes',async()=>{
+  const r=await request(app).get('/api/skills');expect(r.status).toBe(200);expect(Array.isArray(r.body.skills)).toBe(true);expect(r.body.skills.length).toBeGreaterThan(0);
+  for(const skill of r.body.skills)expect(skill).toMatchObject({slug:expect.any(String),platform:expect.any(String),name:expect.any(String),agent_statuses:expect.any(Object)});
+  expect(r.body.skills.some((s:any)=>s.slug==='kuaishou_image_publish')).toBe(true);
+ });
+});
+
+
+describe('current acquisition pipeline against PostgreSQL with isolated provider transports',()=>{
+ it('two-stage collection produces real video cards/leads and final counts; foreign tenants cannot read them',async()=>{
+  const d=await device(),other=await account();
+  const task=(await pool.query("INSERT INTO zenithjoy.acquisition_collect_tasks(tenant_id,agent_id,status,keywords) VALUES($1,$2,'running','[\"fixture\"]') RETURNING id",[d.tenant,d.agent])).rows[0].id;
+  const videos=['7111111111111111111','7222222222222222222'];
+  const first=await request(app).post('/api/acquisition/collect/report-videos').set('x-agent-id',d.agent).send({task_id:task,videos:videos.map(video_id=>({video_id,title:'fixture video'}))});expect(first.status).toBe(200);expect(first.body.data).toMatchObject({status:'stage_1_done',video_count:2,accepted:2});
+  const repeat=await request(app).post('/api/acquisition/collect/report-videos').set('x-agent-id',d.agent).send({task_id:task,videos:videos.map(video_id=>({video_id}))});expect(repeat.status).toBe(200);expect(repeat.body.data.video_count).toBe(2);
+  for(const [i,video_id] of videos.entries()){
+   const report=await request(app).post('/api/acquisition/collect/report').send({task_id:task,video_id,commenters:[{sec_uid:`fixture-sec-${i}`,nickname:`fixture-commenter-${i}`,comment_text:'如何预约',douyin_id:`fixture-douyin-${i}`}],terminal:i===1?'done':false});expect(report.status).toBe(200);expect(report.body.data.inserted).toBe(1);
+  }
+  const row=(await pool.query('SELECT status,video_count,lead_count_raw FROM zenithjoy.acquisition_collect_tasks WHERE id=$1',[task])).rows[0];expect(row).toMatchObject({status:'done',video_count:2,lead_count_raw:2});
+  const cards=await request(app).get(`/api/acquisition/collect-tasks/${task}/videos`).set('Cookie',d.cookie);expect(cards.status).toBe(200);expect(cards.body.data.videos).toHaveLength(2);expect(cards.body.data.videos.every((v:any)=>v.comment_count===1)).toBe(true);
+  const leads=await request(app).get(`/api/acquisition/videos/${videos[0]}/leads`).set('Cookie',d.cookie);expect(leads.status).toBe(200);expect(leads.body.data.leads).toEqual([expect.objectContaining({commenter_id:'fixture-commenter-0',comment_text:'如何预约',grade:'精准'})]);
+  expect((await request(app).get(`/api/acquisition/collect-tasks/${task}/videos`).set('Cookie',other.cookie)).status).toBe(404);
+  expect((await request(app).get(`/api/acquisition/videos/${videos[0]}/leads`).set('Cookie',other.cookie)).status).toBe(404);
+  const terminal=await request(app).post('/api/acquisition/collect/report').send({task_id:task,video_id:videos[0],commenters:[],terminal:'done'});expect(terminal.status).toBe(200);expect(terminal.body.data.ignored).toBe(true);
+ });
+ it('real judgment parsing writes matched to SQL and second request reuses cache without another paid provider call',async()=>{
+  const d=await device();
+  await pool.query('INSERT INTO zenithjoy.acquisition_config(tenant_id,target_profile_desc) VALUES($1,$2)',[d.tenant,'software operators']);
+  const task=(await pool.query("INSERT INTO zenithjoy.acquisition_collect_tasks(tenant_id,status) VALUES($1,'running') RETURNING id",[d.tenant])).rows[0].id;
+  const video='7333333333333333333';await pool.query('INSERT INTO zenithjoy.acquisition_collect_videos(video_id,task_id,tenant_id,title) VALUES($1,$2,$3,$4)',[video,task,d.tenant,'fixture']);
+  provider.mockReset().mockResolvedValue({data:{choices:[{finish_reason:'stop',message:{content:'MATCHED\n转写：软件运营工作流'}}]}});
+  vi.stubEnv('TOAPIS_API_KEY','synthetic-fixture-only');
+  try {
+   const judge=()=>request(app).post('/api/acquisition/judge-video').set('x-agent-id',d.agent).send({video_id:video,capture_type:'audio',data_b64:'Zml4dHVyZQ=='});
+   const first=await judge();expect(first.status).toBe(200);expect(first.body.data.judgment_status).toBe('matched');expect(provider).toHaveBeenCalledTimes(1);
+   expect((await pool.query('SELECT judgment_status FROM zenithjoy.acquisition_collect_videos WHERE task_id=$1 AND video_id=$2',[task,video])).rows).toEqual([{judgment_status:'matched'}]);
+   const second=await judge();expect(second.status).toBe(200);expect(second.body.data).toMatchObject({judgment_status:'matched',cache_hit:true});expect(provider).toHaveBeenCalledTimes(1);
+  } finally {vi.unstubAllEnvs();}
+ });
+ it('build schedules only a live Android burner; run creates one real dm job and receipts remain idempotent',async()=>{
+  const d=await device();await pool.query("UPDATE zenithjoy.agents SET capabilities=ARRAY['android'] WHERE id=$1",[d.agent]);
+  await pool.query("INSERT INTO zenithjoy.agent_platform_sessions(agent_id,platform,account_label,role,status,device_type,bound_at) VALUES($1,'douyin','fixture-dm','burner','active','android',now())",[d.agent]);
+  const config=await request(app).put('/api/acquisition/config').set('Cookie',d.cookie).send({burner_count:1,dm_per_hour:10,dm_per_day:30,dm_active_start:'00:00',dm_active_end:'23:59',dm_interval_min_sec:1,dm_interval_max_sec:2,dm_message:'fixture message'});expect(config.status).toBe(200);
+  const lead=(await pool.query("INSERT INTO zenithjoy.acquisition_leads(tenant_id,nickname,profile_url,douyin_id,relevance_score,outreach_eligible) VALUES($1,'fixture dm lead','https://www.douyin.com/user/fixture','fixture-dm-target',90,true) RETURNING id",[d.tenant])).rows[0].id;
+  const build=await request(app).post('/api/acquisition/dispatch/build').set('Cookie',d.cookie).send({});expect(build.status).toBe(200);expect(build.body.data.assigned).toBe(1);expect(build.body.data.burners).toEqual(['fixture-dm']);
+  const assignment=(await pool.query('SELECT id,status FROM zenithjoy.dm_assignments WHERE tenant_id=$1 AND lead_id=$2',[d.tenant,lead])).rows[0];expect(assignment.status).toBe('queued');
+  await pool.query("UPDATE zenithjoy.dm_assignments SET scheduled_for=now()-interval '1 minute' WHERE id=$1",[assignment.id]);
+  const run=await request(app).post('/api/acquisition/dispatch/run').set('Cookie',d.cookie).send({});expect(run.status).toBe(200);expect(run.body.data.dispatched).toBe(1);
+  const jobs=(await pool.query("SELECT id,payload FROM zenithjoy.publish_tasks WHERE agent_id=$1 AND task_type='dm_outreach'",[d.agent])).rows;expect(jobs).toHaveLength(1);expect(jobs[0].payload).toMatchObject({device_platform:'android',douyin_id:'fixture-dm-target',message:'fixture message',dm_assignment_id:assignment.id});
+  const result={task_id:jobs[0].id,agent_id:d.agent,account_label:'fixture-dm',status:'sent',dm_assignment_id:assignment.id};
+  for(let i=0;i<2;i++)expect((await request(app).post('/api/agent/burner/dm-outreach-result').send(result)).status).toBe(200);
+  expect((await pool.query('SELECT status FROM zenithjoy.dm_assignments WHERE id=$1',[assignment.id])).rows).toEqual([{status:'sent'}]);
+  expect((await pool.query('SELECT status FROM zenithjoy.dm_outreach_log WHERE assignment_id=$1',[assignment.id])).rows).toEqual([{status:'sent'}]);
+  const history=await request(app).get('/api/acquisition/dispatch/outreach-history').set('Cookie',d.cookie);expect(history.status).toBe(200);expect(history.body.data.items.some((r:any)=>r.id===assignment.id&&r.status==='sent')).toBe(true);
+ });
+});
+
+it('orphan legacy license fails with an actionable 4xx and creates no partial machine binding',async()=>{
+ const created=await request(app).post('/api/admin/license').set('X-Internal-Token',process.env.ZENITHJOY_INTERNAL_TOKEN!).send({tier:'basic'});expect(created.status).toBe(200);
+ const license=created.body.data;await pool.query('UPDATE zenithjoy.licenses SET tenant_id=NULL WHERE id=$1',[license.id]);
+ const result=await request(app).post('/api/agent/register').send({license_key:license.license_key,machine_id:randomUUID()});expect(result.status).toBe(403);expect(result.body.code).toBe('LICENSE_NO_TENANT');
+ expect((await pool.query('SELECT id FROM zenithjoy.license_machines WHERE license_id=$1',[license.id])).rows).toEqual([]);
+});
+
+it('manual history default production router authenticates a real cookie, confirms once and rejects foreign readers',async()=>{
+ const d=await device(),cs=await bindCs(d),alien=await account();
+ const customer=(await pool.query("INSERT INTO zenithjoy.crm_customers(tenant_id,cs_wechat_id,contact) VALUES($1,$2,'manual fixture') RETURNING id",[d.tenant,cs])).rows[0].id;
+ const analysis={summary:'客户需要样品',needs:[],quotes:[],commitments:[],next_actions:[],uncertainties:['历史时间未知']};model.mockResolvedValue({content:JSON.stringify(analysis)});
+ const body={customer_id:String(customer),cs_wechat_id:cs,source_type:'group',channel_name:'合成业务群',text:'客户：需要100件样品。'};
+ expect((await request(app).post('/api/crm/manual-history/preview').set('X-User-Email','fixture@example.test').send(body)).status).toBe(401);
+ const preview=await request(app).post('/api/crm/manual-history/preview').set('Cookie',d.cookie).send(body);expect(preview.status).toBe(200);
+ const commit={customer_id:String(customer),cs_wechat_id:cs,preview_id:preview.body.preview.id,preview_version:preview.body.preview.version,request_id:randomUUID(),confirmed_result:analysis};
+ const results=await Promise.all([0,1].map(()=>request(app).post('/api/crm/manual-history/commit').set('Cookie',d.cookie).send(commit)));for(const r of results)expect(r.status).toBe(200);expect(results[0].body.record.id).toBe(results[1].body.record.id);
+ const record=results[0].body.record;expect(record).toMatchObject({created_by:d.userId,raw_text:body.text});
+ const read=`/api/crm/manual-history/${record.id}?customer_id=${customer}&cs_wechat_id=${cs}`;
+ expect((await request(app).get(read).set('Cookie',d.cookie)).body.record.raw_text).toBe(body.text);expect((await request(app).get(read).set('Cookie',alien.cookie)).status).toBe(404);
+ expect((await pool.query('SELECT id FROM zenithjoy.crm_manual_history_imports WHERE tenant_id=$1',[d.tenant])).rows).toHaveLength(1);
 });

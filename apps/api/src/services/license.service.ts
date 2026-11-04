@@ -50,6 +50,7 @@ export interface LicenseRow {
   tier: Tier;
   max_machines: number;
   customer_id: string | null;
+  tenant_id?: string | null;
   customer_name: string | null;
   customer_email: string | null;
   status: LicenseStatus;
@@ -273,7 +274,8 @@ export type RegisterErrorCode =
   | 'EXPIRED'
   | 'SUSPENDED'
   | 'QUOTA_EXCEEDED'
-  | 'TEST_LICENSE_IN_PRODUCTION';
+  | 'TEST_LICENSE_IN_PRODUCTION'
+  | 'LICENSE_NO_TENANT';
 
 /**
  * RegisterSuccess — 双 schema (H-1):
@@ -315,7 +317,8 @@ export interface RegisterFailure {
     | 'EXPIRED'
     | 'SUSPENDED'
     | 'LICENSE_DEVICE_LIMIT_EXCEEDED'
-    | 'TEST_LICENSE_IN_PRODUCTION';
+    | 'TEST_LICENSE_IN_PRODUCTION'
+    | 'LICENSE_NO_TENANT';
   current_count?: number;    // 仅 LICENSE_DEVICE_LIMIT_EXCEEDED 时填
   limit?: number;
 }
@@ -463,6 +466,13 @@ export async function registerAgent(
       success: false,
       error: 'EXPIRED',
     };
+  }
+
+  // Historical orphan licenses must fail before writing license_machines.
+  // Newly created licenses always carry their tenant in the same atomic statement.
+  if (license.tenant_id === null) {
+    return { ok: false, success: false, code: 'LICENSE_NO_TENANT', error: 'LICENSE_NO_TENANT',
+      message: 'License 未关联租户，请联系管理员修复绑定后重试' };
   }
 
   // 已绑定的 machine？直接续签
