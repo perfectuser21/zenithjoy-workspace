@@ -1,0 +1,288 @@
+{
+  "requests": [
+    {
+      "unit_id": "acquisition-overview-stub",
+      "retired_path": ".github/workflows/scripts/smoke/acquisition-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "test-registry.yaml:3109:    path: .github/workflows/scripts/smoke/acquisition-smoke.sh",
+        "docs/smoke-debt-report.md:146:- `acquisition-smoke.sh` (exit 1) —   API_BASE=http://localhost:5200 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ❌ expected 200, got 000",
+        "docs/production-invariants.md:31:- CI smoke：`acquisition-smoke.sh` + `acquisition-collect-smoke.sh`",
+        ".github/workflows/scripts/smoke/acquisition-smoke.sh:2:# acquisition-smoke.sh",
+        ".github/workflows/scripts/smoke/acquisition-smoke.sh:6:#   bash .github/workflows/scripts/smoke/acquisition-smoke.sh",
+        ".github/workflows/scripts/smoke/acquisition-smoke.sh:7:#   API_PORT=3001 bash acquisition-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "retired-windows-cs-source-smokes",
+      "retired_path": ".github/workflows/scripts/smoke/agent-python-embedded-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "test-registry.yaml:4047:    path: .github/workflows/scripts/smoke/agent-python-embedded-smoke.sh",
+        "docs/smoke-debt-report.md:31:- `agent-python-embedded-smoke.sh` (exit 1) —   ✅ PASS [4] start.bat 含讲述人（Narrator）解锁命令 FAIL: start.bat 缺 Narrator 解锁",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:69:### Step 4: agent-python-embedded-smoke.sh 新建且含真实内容验证",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:71:**来源**: `[FROM_PRD]` — PRD「预期受影响文件」第 4 条：`.github/workflows/scripts/smoke/agent-python-embedded-smoke.sh`（新建），CI 静态验证安装包内容",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:77:SMOKE=\".github/workflows/scripts/smoke/agent-python-embedded-smoke.sh\"",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:181:Write-Host \"▶ [4/5] 验证 agent-python-embedded-smoke.sh 存在且含真实内容...\"",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:182:$smokePath = \"$repoRoot\\.github\\workflows\\scripts\\smoke\\agent-python-embedded-smoke.sh\"",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:184:  throw \"FAIL: agent-python-embedded-smoke.sh 不存在\"",
+        "sprints/06031608-agent-python-embedded/contract-draft.md:194:Write-Host \"✅ agent-python-embedded-smoke.sh 存在且含真实验证内容\"",
+        "sprints/06031608-agent-python-embedded/contract-dod.md:22:- [ ] [ARTIFACT] `.github/workflows/scripts/smoke/agent-python-embedded-smoke.sh` 新建且有内容",
+        "sprints/06031608-agent-python-embedded/contract-dod.md:23:  Test: node -e \"const fs=require('fs');const p='.github/workflows/scripts/smoke/agent-python-embedded-smoke.sh';if(!fs.existsSync(p))process.exit(1);const c=fs.readFileSync(p,'utf8');if(!c.includes('python-embedded'))process.exit(2)\"",
+        "sprints/06031608-agent-python-embedded/contract-dod.md:46:  Test: manual:bash -c 'SMOKE=\".github/workflows/scripts/smoke/agent-python-embedded-smoke.sh\"; [ -f \"$SMOKE\" ] || exit 1; REAL=$(grep -v \"^#\" \"$SMOKE\" | grep -v \"^[[:space:]]*$\" | wc -l | tr -d \" \"); [ \"$REAL\" -gt 5 ] || exit 1; echo OK'",
+        "sprints/06031608-agent-python-embedded/sprint-prd.md:53:- `.github/workflows/scripts/smoke/agent-python-embedded-smoke.sh`（新建）：CI 静态验证安装包内容",
+        "sprints/06031608-agent-python-embedded/e2e-verify.ps1:52:Write-Host \"`u{25B6} [4/5] 验证 agent-python-embedded-smoke.sh 存在且含真实内容...\"",
+        "sprints/06031608-agent-python-embedded/e2e-verify.ps1:53:$smokePath = \"$repoRoot\\.github\\workflows\\scripts\\smoke\\agent-python-embedded-smoke.sh\"",
+        "sprints/06031608-agent-python-embedded/e2e-verify.ps1:55:  throw \"FAIL: agent-python-embedded-smoke.sh 不存在\"",
+        "sprints/06031608-agent-python-embedded/e2e-verify.ps1:65:Write-Host \"OK agent-python-embedded-smoke.sh 存在（$realLines 行实质内容）\"",
+        "sprints/06031608-agent-python-embedded/task-plan.json:9:      \"scope\": \"build-install-pack.sh 加 Python 3.11 embeddable 下载/解压/pip install pywinauto+pywin32 + wechat-rpa/*.py 拷贝；start.bat 加讲述人解锁 PowerShell 命令；wechat-rpa.ts handler 改用 python-embedded/python.exe 优先逻辑（startWechatListener + handleWechatRpa）；新建 agent-python-embedded-smoke.sh；版本 bump 1.1.77→1.1.78\",",
+        "sprints/06031608-agent-python-embedded/task-plan.json:14:        \"[BEHAVIOR] agent-python-embedded-smoke.sh 存在且含 >5 行实质内容和 python-embedded 断言\",",
+        "sprints/06031608-agent-python-embedded/task-plan.json:23:        \".github/workflows/scripts/smoke/agent-python-embedded-smoke.sh\",",
+        ".github/workflows/scripts/smoke/agent-python-embedded-smoke.sh:2:# agent-python-embedded-smoke.sh — Agent v1.1.78 内置 Python embedded + wechat-rpa 零依赖安装验证"
+      ]
+    },
+    {
+      "unit_id": "retired-windows-cs-source-smokes",
+      "retired_path": ".github/workflows/scripts/smoke/rpa-reset-stage-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/smoke-debt-report.md:117:- `rpa-reset-stage-smoke.sh` (exit 2) — ━━━ RPA 复位台：洗回黄金态（expected_account=测试号_zr）━━━ ❌ 复位红：step=close reason=关残留微信 app 失败   ❌ 复位红 → 按 PrepPRD WS-B：smoke 不跑（测试号登出/版本不对都会到这）",
+        ".github/workflows/e2e-rpa-reset-stage.yml:6:#   （UI 驱动半在 xian-rog 真机 smoke，由 rpa-reset-stage-smoke.sh 跑，不在本 CI。）",
+        ".github/workflows/scripts/smoke-falsegreen-debt.txt:49:rpa-reset-stage-smoke.sh",
+        ".github/workflows/scripts/smoke/rpa-reset-stage-smoke.sh:2:# rpa-reset-stage-smoke.sh — WS-B RPA 复位台真机 smoke（xian-rog 跑，UI 驱动半）。"
+      ]
+    },
+    {
+      "unit_id": "dashboard-walking-skeleton-placeholder",
+      "retired_path": ".github/workflows/scripts/smoke/dashboard-walking-skeleton-1-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:38:dashboard-walking-skeleton-1-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt:17:dashboard-walking-skeleton-1-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-cs",
+      "retired_path": ".github/workflows/scripts/smoke/fleet-wechat-status-col-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke-falsegreen-debt.txt:26:fleet-wechat-status-col-smoke.sh",
+        ".github/workflows/scripts/smoke/fleet-wechat-status-col-smoke.sh:2:# fleet-wechat-status-col-smoke.sh",
+        "docs/smoke-debt-report.md:151:- `fleet-wechat-status-col-smoke.sh` (exit 1) — ##[group]RUN fleet-wechat-status-col-smoke.sh fleet-wechat-status-col-smoke: 验车队看板数据源 http://localhost:5200/api/agent/module-health FAIL: module-health 端点未返回 au"
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-cs",
+      "retired_path": ".github/workflows/scripts/smoke/wechat-cs-visible-delivery-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/handoffs/202607180711-line04-scan-offscreen-cloak-cleanup.md:15:   - `.github/workflows/scripts/smoke/wechat-cs-visible-delivery-smoke.sh`",
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:230:wechat-cs-visible-delivery-smoke.sh",
+        ".github/workflows/scripts/smoke/wechat-cs-visible-delivery-smoke.sh:2:# wechat-cs-visible-delivery-smoke.sh",
+        "docs/superpowers/plans/2026-07-02-line04-scan-anchor-redesign.md:850:- Modify: `.github/workflows/scripts/smoke/offscreen-version-gate-smoke.sh:16` / `preflight-delivery-selfcheck-smoke.sh:13` / `wechat-cs-visible-delivery-smoke.sh:20`（EXPECTED=\"1.0.91\"）、`heartbeat-module-health-smoke.sh:70`（\"1.0.91\"）",
+        ".github/workflows/ci-smoke-glob-runner.yml:228:          wechat-cs-visible-delivery-smoke.sh",
+        ".github/workflows/ci-smoke-glob-runner.yml:441:                    \"wechat-cs-visible-delivery-smoke.sh\", \"line04-preflight-smoke.sh\","
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-cs",
+      "retired_path": ".github/workflows/scripts/smoke/wechat-rpa-auto-reply-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke/wechat-rpa-auto-reply-smoke.sh:2:# wechat-rpa-auto-reply-smoke.sh — Path 4 Step 5 微信4.0 隐形AI客服(pywinauto + auto-reply)冒烟。",
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:229:wechat-rpa-auto-reply-smoke.sh",
+        ".github/workflows/ci-smoke-glob-runner.yml:227:          wechat-rpa-auto-reply-smoke.sh",
+        ".github/workflows/ci-smoke-glob-runner.yml:440:          denied = {\"wechat-auto-launch-smoke.sh\", \"wechat-rpa-auto-reply-smoke.sh\","
+      ]
+    },
+    {
+      "unit_id": "obsolete-windows-overlay-existence-wrapper",
+      "retired_path": ".github/workflows/scripts/smoke/line04-ai-overlay-r2-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "sprints/07150800-line04-overlay-continuation/sprint-prd.md:30:- `.github/workflows/scripts/smoke/line04-ai-overlay-r2-smoke.sh`（第二刀 smoke）",
+        ".github/workflows/scripts/smoke-baseline.txt:78:line04-ai-overlay-r2-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-ai-overlay-r2-smoke.sh:2:# line04-ai-overlay-r2-smoke.sh",
+        "sprints/07152230-line04-events-writer/contract-draft.md:63:- `.github/workflows/scripts/smoke/line04-ai-overlay-r2-smoke.sh`",
+        "sprints/07152230-line04-events-writer/sprint-prd.md:46:- `.github/workflows/scripts/smoke/line04-ai-overlay-r2-smoke.sh`（第二刀 smoke）"
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-overlay",
+      "retired_path": ".github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke-falsegreen-debt.txt:38:line04-ai-overlay-smoke.sh",
+        "sprints/07150800-line04-overlay-continuation/sprint-prd.md:29:- `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh`（第一刀 smoke）",
+        ".github/workflows/scripts/smoke-baseline.txt:77:line04-ai-overlay-smoke.sh",
+        "sprints/07201810-overlay-card-redesign-gp4/contract-draft.md:207:## Step 8：line04-ai-overlay-smoke.sh 追加 thinking 断言",
+        "sprints/07201810-overlay-card-redesign-gp4/contract-draft.md:211:**可观测行为**：`line04-ai-overlay-smoke.sh` 含 thinking 事件 grep 断言；L2-1 smoke 链路可验。",
+        "sprints/07201810-overlay-card-redesign-gp4/contract-draft.md:216:SMOKE=\".github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh\"",
+        "sprints/07201810-overlay-card-redesign-gp4/contract-draft.md:220:**硬阈值**：`line04-ai-overlay-smoke.sh` 含 thinking 事件断言行。",
+        "sprints/07201810-overlay-card-redesign-gp4/sprint-prd.md:73:**F5.2** `line04-ai-overlay-smoke.sh` 追加：thinking event 写入断言（grep events.jsonl 含 `\"type\":\"thinking\"`）。",
+        "sprints/07152230-line04-events-writer/contract-draft.md:62:- `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh`",
+        "sprints/07152230-line04-events-writer/sprint-prd.md:45:- `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh`（第一刀 smoke）",
+        "sprints/07121132-line04-ai-thinking-overlay/contract-draft.md:32:  - `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh`（只补充，不删旧项）",
+        "sprints/07121132-line04-ai-thinking-overlay/contract-draft.md:71:8. **smoke 补充**：`line04-ai-overlay-smoke.sh` 追加第二刀验收项（overlay_window.py 文件存在 + overlay.ts handler 可 require + reasoning 字段通过 API 回显）",
+        "sprints/07121132-line04-ai-thinking-overlay/sprint-prd.md:27:- `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh`（smoke 接入 CI）",
+        "sprints/07121132-line04-ai-thinking-overlay/sprint-prd.md:153:- [ ] **smoke**：`line04-ai-overlay-smoke.sh` 补充第二刀验收项，CI 全绿",
+        ".github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh:2:# line04-ai-overlay-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-overlay",
+      "retired_path": ".github/workflows/scripts/smoke/line04-events-writer-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke/line04-events-writer-smoke.sh:2:# line04-events-writer-smoke.sh — Line04 events_writer 第三刀 smoke",
+        ".github/workflows/scripts/smoke/line04-events-writer-smoke.sh:23:echo \"=== line04-events-writer-smoke.sh START ===\"",
+        ".github/workflows/scripts/smoke-baseline.txt:86:line04-events-writer-smoke.sh",
+        "sprints/07152230-line04-events-writer/contract-draft.md:52:| `.github/workflows/scripts/smoke/line04-events-writer-smoke.sh` | 第三刀 smoke（6 节） |",
+        "sprints/07152230-line04-events-writer/contract-draft.md:147:| smoke sh | line04-events-writer-smoke.sh 6 节 | 全绿 |",
+        "sprints/07152230-line04-events-writer/sprint-prd.md:183:**F-5.3** 新增 smoke 脚本 `.github/workflows/scripts/smoke/line04-events-writer-smoke.sh`（第三刀 smoke）：",
+        "sprints/07152230-line04-events-writer/sprint-prd.md:210:| smoke sh | line04-events-writer-smoke.sh 6 节 | 全绿 |",
+        "sprints/07152230-line04-events-writer/contract-dod.md:217:bash .github/workflows/scripts/smoke/line04-events-writer-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-overlay",
+      "retired_path": ".github/workflows/scripts/smoke/overlay-card-redesign-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke-baseline.txt:101:overlay-card-redesign-smoke.sh",
+        ".github/workflows/scripts/smoke/overlay-card-redesign-smoke.sh:2:# overlay-card-redesign-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "line04-customer-profile",
+      "retired_path": ".github/workflows/scripts/smoke/line04-customer-profile-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke-baseline.txt:84:line04-customer-profile-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-customer-profile-smoke.sh:2:# line04-customer-profile-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "legacy-windows-preflight",
+      "retired_path": ".github/workflows/scripts/smoke/line04-preflight-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke/line04-preflight-smoke.sh:2:# line04-preflight-smoke.sh — Line04 微信AI客服模块环境预检 smoke test",
+        ".github/workflows/ci-smoke-glob-runner.yml:229:          line04-preflight-smoke.sh",
+        ".github/workflows/ci-smoke-glob-runner.yml:441:                    \"wechat-cs-visible-delivery-smoke.sh\", \"line04-preflight-smoke.sh\",",
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:231:line04-preflight-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "line04-profile-panel-wiring",
+      "retired_path": ".github/workflows/scripts/smoke/line04-profile-panel-wiring-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke-baseline.txt:88:line04-profile-panel-wiring-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-profile-panel-wiring-smoke.sh:2:# line04-profile-panel-wiring-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "line04-startup-selfcheck",
+      "retired_path": ".github/workflows/scripts/smoke/line04-startup-selfcheck-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke-baseline.txt:87:line04-startup-selfcheck-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-startup-selfcheck-smoke.sh:2:# line04-startup-selfcheck-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "offscreen-version-gate",
+      "retired_path": ".github/workflows/scripts/smoke/offscreen-version-gate-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/handoffs/202607180711-line04-scan-offscreen-cloak-cleanup.md:13:   - `.github/workflows/scripts/smoke/offscreen-version-gate-smoke.sh`",
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:58:offscreen-version-gate-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt:39:offscreen-version-gate-smoke.sh",
+        "docs/superpowers/plans/2026-07-02-line04-scan-anchor-redesign.md:850:- Modify: `.github/workflows/scripts/smoke/offscreen-version-gate-smoke.sh:16` / `preflight-delivery-selfcheck-smoke.sh:13` / `wechat-cs-visible-delivery-smoke.sh:20`（EXPECTED=\"1.0.91\"）、`heartbeat-module-health-smoke.sh:70`（\"1.0.91\"）",
+        ".github/workflows/scripts/smoke/offscreen-version-gate-smoke.sh:2:# offscreen-version-gate-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "retired-feishu-approval-columns-wrapper",
+      "retired_path": ".github/workflows/scripts/smoke/p4-ws2-feishu-bitable-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:60:p4-ws2-feishu-bitable-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt:41:p4-ws2-feishu-bitable-smoke.sh",
+        ".github/workflows/scripts/smoke/p4-ws2-feishu-bitable-smoke.sh:2:# p4-ws2-feishu-bitable-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "path-2-arch-bind-smoke",
+      "retired_path": ".github/workflows/scripts/smoke/path-2-arch-bind-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/smoke-debt-report.md:112:- `path-2-arch-bind-smoke.sh` (exit 1) — == path-2 arch hotfix smoke == API_BASE=http://localhost:5200 FAIL Step 1: /bind 返回非 JSON (http=000)",
+        ".github/workflows/scripts/smoke-falsegreen-debt.txt:42:path-2-arch-bind-smoke.sh",
+        ".github/workflows/scripts/smoke/path-2-arch-bind-smoke.sh:2:# path-2-arch-bind-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "path4-crm-wechat-sync",
+      "retired_path": ".github/workflows/scripts/smoke/path4-crm-wechat-sync-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/smoke-debt-report.md:113:- `path4-crm-wechat-sync-smoke.sh` (exit 1) — ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ [1] POST /api/crm/init (mode=create) — 200 + table_id FAIL: 端点未返回 200",
+        ".github/workflows/scripts/smoke/path4-crm-wechat-sync-smoke.sh:2:# path4-crm-wechat-sync-smoke.sh — Path 4 Step 2 CRM 打通 E2E Smoke"
+      ]
+    },
+    {
+      "unit_id": "cs-sprint-meta",
+      "retired_path": ".github/workflows/scripts/smoke/path4-sprint-1-ws6-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/smoke-debt-report.md:114:- `path4-sprint-1-ws6-smoke.sh` (exit 1) — ##[endgroup] ##[group]RUN path4-sprint-1-ws6-smoke.sh === ws6 Step 1: golden-path-4-smoke.sh 形态 ==="
+      ]
+    },
+    {
+      "unit_id": "skill-create",
+      "retired_path": ".github/workflows/scripts/smoke/skill-create-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/scripts/smoke/skill-create-longrun-smoke.sh:6:# 双层验证策略（同 skill-create-smoke.sh 惯例）：",
+        ".github/workflows/scripts/smoke-baseline.txt:71:skill-create-smoke.sh",
+        ".github/workflows/scripts/smoke/skill-create-smoke.sh:2:# skill-create-smoke.sh — 对话式创建 Skill 端到端冒烟测试"
+      ]
+    },
+    {
+      "unit_id": "agent-uptime",
+      "retired_path": ".github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        "docs/superpowers/specs/2026-05-08-sprint-2-1d-agent-supervisor-design.md:216:放在 `.github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh`，CI 上跑 1 分钟版本（缩短到 10 个心跳周期），rog Lead 自验跑 1 小时全量。",
+        "docs/superpowers/specs/2026-05-08-sprint-2-1d-agent-supervisor-design.md:272:- 新增 `.github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh` — 跑 10 个心跳周期 (5 分钟)，目前必然 FAIL（agent 没 supervisor，会死）",
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:71:sprint-2-1d-agent-uptime-smoke.sh",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:29:| `.github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh` | **Create** | E2E smoke (CI 跑 1 分钟版 + Lead 跑 1 小时全量) |",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:37:- Create: `.github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh`",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:43:写 `.github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh`:",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:47:# sprint-2-1d-agent-uptime-smoke.sh",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:77:chmod +x .github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:168:bash .github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh 2>&1 | tail -8",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:177:git add .github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh \\",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:183:- 新增 sprint-2-1d-agent-uptime-smoke.sh: 5 步真环境验证",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:430:bash .github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh 2>&1 | tail -8",
+        "docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:478:- smoke.sh: sprint-2-1d-agent-uptime-smoke.sh 5/5 PASS",
+        ".github/workflows/scripts/smoke-baseline.txt:55:sprint-2-1d-agent-uptime-smoke.sh",
+        ".github/workflows/scripts/smoke/sprint-2-1d-agent-uptime-smoke.sh:2:# sprint-2-1d-agent-uptime-smoke.sh"
+      ]
+    },
+    {
+      "unit_id": "wechat-auto-launch",
+      "retired_path": ".github/workflows/scripts/smoke/wechat-auto-launch-smoke.sh",
+      "action": "Remove stale baseline/registry/GP/denylist/script references or explicitly mark deprecated; no success alias or dummy shell. Existing product tests and runtime source remain.",
+      "references": [
+        ".github/workflows/ci-smoke-glob-runner.yml:226:          wechat-auto-launch-smoke.sh",
+        ".github/workflows/ci-smoke-glob-runner.yml:440:          denied = {\"wechat-auto-launch-smoke.sh\", \"wechat-rpa-auto-reply-smoke.sh\",",
+        ".github/workflows/scripts/__tests__/smoke-glob-sharding.test.mjs:27:  if (denied) names.push('wechat-auto-launch-smoke.sh');",
+        "docs/superpowers/plans/2026-07-07-smoke-ratchet-gate.md:228:wechat-auto-launch-smoke.sh",
+        ".github/workflows/scripts/smoke/wechat-auto-launch-smoke.sh:2:# wechat-auto-launch-smoke.sh — 微信未运行时 listen_chat 自动拉起 Weixin.exe 回归 smoke"
+      ]
+    }
+  ]
+}
