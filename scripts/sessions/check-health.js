@@ -249,12 +249,17 @@ async function checkPlatform(p) {
 // ── DB 回写 ──────────────────────────────────────────────────────
 
 async function postSessionStatus(results) {
-  const apiBase = process.env.OPERATOR_API_URL || 'http://localhost:3000';
+  const apiBase = process.env.OPERATOR_API_URL || '';
   const secret = process.env.INTERNAL_API_SECRET || '';
   const updates = results
     .filter(r => r.status === 'ok' || r.status === 'expired')
     .map(r => ({ platform: r.platform, status: r.status === 'ok' ? 'active' : r.status, checkedAt: r.checkedAt }));
   if (updates.length === 0) return;
+  const missing = [!apiBase && 'OPERATOR_API_URL', !secret && 'INTERNAL_API_SECRET'].filter(Boolean);
+  if (missing.length > 0) {
+    console.error('[session-health] missing required writeback configuration: ' + missing.join(', '));
+    return 0;
+  }
   const payload = JSON.stringify({ updates });
   const url = `${apiBase}/api/operator/sessions/status`;
   return new Promise((resolve) => {
