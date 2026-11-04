@@ -134,6 +134,17 @@ class ExactLockTest(unittest.TestCase):
                 with self.subTest(name=name),self.assertRaisesRegex(ValueError,'LOCK_INVENTORY'):
                     with m.OwnedGuards(self.home):pass
             finally:p.unlink()
+    def test_target_claim_and_422_component_prefix_changes_still_rejected(self):
+        parent=self.old/'standalone-claims';parent.mkdir()
+        m.CONTRACT['lock_state']['legacy'].append(['standalone-claims','dir',0o755]);m.CONTRACT['lock_state']['legacy'].sort()
+        for serial in ['ANGYVB4227006983-evil','ANGYVB4311010223']:
+            d=parent/serial;d.mkdir();(d/'new-claim').write_text('foreign')
+            try:
+                with self.subTest(serial=serial),self.assertRaisesRegex(ValueError,'LOCK_INVENTORY'):
+                    with m.OwnedGuards(self.home):pass
+            finally:shutil.rmtree(d)
+        with m.OwnedGuards(self.home) as g:self.assertTrue(g.verify())
+
     def test_saved_snapshot_mismatch_and_unstable_double_read_rejected(self):
         baseline=m.locks.inventory(self.old)
         (self.old/'ANGYVB4227006983.lock'/'owner').write_text('changed')
