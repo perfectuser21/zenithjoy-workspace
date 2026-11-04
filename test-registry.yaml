@@ -9755,3 +9755,21 @@ tests:
     product: unclassified
     execution: ci-smoke-glob-runner.yml / smoke-glob-shards / baseline, isolated provider fixtures; no browser or real message
     note: Provider API acceptance contract only; external delivery remains unverified.
+
+  - id: ci-review-apps-api-tests-helpers-http-lifetime-test-ts
+    path: apps/api/tests/helpers/http-lifetime.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / api-test / vitest default current route/fixture contracts
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-apps-api-tests-helpers-supertest-transport-test-ts
+    path: apps/api/tests/helpers/supertest-transport.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / api-test / vitest default current route/fixture contracts
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
