@@ -85,10 +85,43 @@ class MaintenanceClaimTest(unittest.TestCase):
             with patch.object(h,'brain',return_value={**self.current,**changed}),self.subTest(changed=changed),self.assertRaises(ValueError):h.task(self.f.root,proof)
         with patch.object(h,'brain',return_value=self.current):
             self.assertEqual(h.task(self.f.root,proof),proof['current_maintenance_claim'])
+    def test_admission_keeps_history_separate_and_checks_actual_current_claim(self):
+        def api(home,path):
+            if path.endswith('/tasks/'+m.TASK['id']):return self.current
+            if path.endswith('/tasks/'+m.SCOPE['task_id']):return self.f.old
+            if path.endswith('/device-locks'):return self.records['locks-confirm.json']
+            raise AssertionError(path)
+        with patch.object(h,'brain',side_effect=api),patch.object(h,'quiet',return_value={'cron':'frozen'}),patch.object(h,'candidate',return_value={'source_commit':'a'*40}),patch.object(h.m,'verify_original',return_value={'execution_stopped':False,'leaves':1486}),patch.object(h,'quiet_recorders'),patch.object(h.m,'legacy_record'):
+            auth,_=h.admission(self.f.root,'a'*40,'release',self.f.path)
+            self.assertEqual(auth['maintenance'],m.TASK)
+            self.assertEqual(auth['current_maintenance_claim']['claimed_by'],NEW)
+            self.assertEqual(auth['scope'],m.SCOPE)
     def test_v1_remains_strict_and_does_not_accept_v2_claim(self):
         self.f.manifest.update(version=1,kind='collection-review-new-isolation-after-gap-v1')
         self.f.records={k:v for k,v in self.records.items() if k in h.GAP_FILES};self.f.manifest['files']={};self.f.save()
         with self.assertRaises(ValueError):self.verify()
+    def test_current_claim_is_persisted_in_snapshot_prerecord_and_completion(self):
+        from types import SimpleNamespace
+        # 模拟资源/设备IO，仅核真实host的原子记录链；不代表真实手机清场。
+        proof=self.verify();auth={'scope':m.SCOPE,'maintenance':m.TASK,'acquisition_gap':proof,
+             'current_maintenance_claim':proof['current_maintenance_claim'],
+             'task_lease_epoch':proof['task_lease_epoch'],'blocked_task_sha256':proof['blocked_task_sha256']}
+        home=self.f.root;(home/'.config/zenithjoy').mkdir(parents=True,mode=0o700)
+        identity={'source_commit':'b'*40,'files':{'collection-review-maintenance-contract.json':'c'*64}}
+        retired={'released':True,'archive':m.ARCHIVE,'owner':m.SCOPE['owner'],'serial':m.SCOPE['serial'],
+                 'other_owners_unchanged':True,'central_lease_released':False}
+        guard=SimpleNamespace(target_identity=[1,2,3,4],legacy_snapshot=m.CONTRACT['lock_state']['legacy'],verify=lambda:True)
+        guard.retire=lambda check:(check() or retired)
+        phone=SimpleNamespace(home_state=lambda:{'home':True},capture_desktop=lambda *args:{'home':{'home':True}})
+        with patch.object(h,'admission',return_value=(auth,home)),patch.object(h,'tool_identity',return_value=identity),patch.object(h.m,'OwnedGuards') as factory,patch.object(h.phone_module,'Phone',return_value=phone):
+            factory.return_value.__enter__.return_value=guard
+            result=h.execute('apply',home,'a'*40,'release',self.f.path)
+        directory=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
+        for name in [h.SNAPSHOT,'pre-retirement.json','completion.json']:
+            record=json.loads(m.read(directory/name));self.assertEqual(record['maintenance'],m.TASK)
+            for field in ['current_maintenance_claim','task_lease_epoch','blocked_task_sha256']:
+                self.assertEqual(record[field],proof[field])
+        self.assertFalse(result['execution_stopped']);self.assertFalse(result['old_run_modified'])
     def test_snapshot_claim_binding_prevents_old_journal_adoption(self):
         from types import SimpleNamespace
         proof=self.verify();auth={'acquisition_gap':proof,'current_maintenance_claim':proof['current_maintenance_claim'],'task_lease_epoch':proof['task_lease_epoch'],'blocked_task_sha256':proof['blocked_task_sha256']}

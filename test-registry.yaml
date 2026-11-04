@@ -9957,3 +9957,11 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition#step3；纯Skill主执行、受控原语与原件验收；无设备测试不代表实机通过"
+
+  - id: collection-review-maintenance-claim
+    path: services/phone-adb-controller/__tests__/collection-review-maintenance-claim.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "v2绑定blocked原件与正式新claim/恢复/heartbeat/双GET，历史认领不冒充当前权限，旧journal不迁移"
