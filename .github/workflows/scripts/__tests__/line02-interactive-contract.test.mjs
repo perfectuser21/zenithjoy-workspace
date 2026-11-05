@@ -23,3 +23,11 @@ test('异常路径必须留存证据并在返回前确认本次进程树退出',
  assert.match(runner,/line02-candidate-evidence/);
  assert.doesNotMatch(runner,/Remove-Item -LiteralPath \$directory -Recurse/);
 });
+test('retired Kotlin-only tests cannot remain in the active L1 real-device suite',()=>{
+ const ci=read('.github/workflows/ci-l1-process.yml');
+ for(const name of ['line02-android-collect-realmachine-smoke.agent-id','line02-android-collect-realmachine-smoke.ui-bounds','stage2-comment-await','dm-search-input-await','collect-poll-diagnostics','douyin-launch-gesture-fallback','smoke-device-readiness']){
+  assert.equal(existsSync('.github/workflows/scripts/__tests__/'+name+'.test.sh'),false,name);
+  assert.ok(!ci.includes(name+'.test.sh'),name);
+ }
+ for(const name of ['smoke-adb-binding-and-state-isolation','smoke-logcat-narrowing'])assert.ok(ci.includes(name+'.test.sh'),name+' mixed shared guard remains');
+});
