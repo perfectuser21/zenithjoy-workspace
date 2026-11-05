@@ -77,28 +77,15 @@ describe('agent-burner router [ARCH agentContext]', () => {
     vi.mocked(pool.query).mockReset();
   });
 
-  it('[ARCH] POST /qr-bind 仅传 account_label + middleware 注入 → 200 + task_id', async () => {
-    // existing-burner check returns no rows → no conflict
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
-    // INSERT publish_tasks → returns task_id UUID
-    vi.mocked(pool.query).mockResolvedValueOnce({
-      rows: [{ id: '99999999-9999-9999-9999-999999999999' }],
-    } as any);
-
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/qr-bind')
-      .set('X-Test-Tenant-Id', TENANT_UUID)
-      .set('X-Test-Agent-Id', AGENT_UUID)
-      .send({ account_label: '装修小号B1' });
-
-    expect(r.status).toBe(200);
-    expect(r.body.data.task_id).toBe('99999999-9999-9999-9999-999999999999');
-
-    // 验证 INSERT 用的是 middleware 注入的 AGENT_UUID
-    const insertCall = vi.mocked(pool.query).mock.calls[1];
-    expect(insertCall[1]).toContain(AGENT_UUID); // agent_id 参数
-    expect(insertCall[1]).toContain(TENANT_UUID); // tenant_id 参数
+  it('retired burner QR creation rejects valid context without writing a task', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'fixture-task' }] } as any);
+    const r = await request(buildApp()).post('/api/agent/burner/qr-bind')
+      .set('X-Test-Tenant-Id', TENANT_UUID).set('X-Test-Agent-Id', AGENT_UUID)
+      .send({ account_label: 'fixture-burner' });
+    expect(r.status).toBe(410);
+    expect(r.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it('[ARCH] POST /qr-bind 没 agent → 401 NO_AGENT_CONTEXT (middleware 拦)', async () => {
@@ -114,51 +101,18 @@ describe('agent-burner router [ARCH agentContext]', () => {
     expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
 
-  it('[ARCH] POST /crawl-comments 仅传 account_label + video_url → 200', async () => {
-    // burner session check（飞书绑定门卫已移除，不再有第一次 Feishu DB 查询）
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ '?column?': 1 }] } as any);
-    // INSERT crawl task
-    vi.mocked(pool.query).mockResolvedValueOnce({
-      rows: [{ id: '88888888-8888-8888-8888-888888888888' }],
-    } as any);
-
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/crawl-comments')
-      .set('X-Test-Tenant-Id', TENANT_UUID)
-      .set('X-Test-Agent-Id', AGENT_UUID)
-      .send({
-        account_label: '装修小号B1',
-        video_url: 'https://www.douyin.com/video/7000',
-      });
-
-    expect(r.status).toBe(200);
-    expect(r.body.data.task_id).toBe('88888888-8888-8888-8888-888888888888');
-
-    // 验证 burner session check 用 AGENT_UUID（索引 0，飞书查询已删）
-    const sessionCall = vi.mocked(pool.query).mock.calls[0];
-    expect(sessionCall[1]).toEqual([AGENT_UUID, '装修小号B1']);
+  it('retired browser comment collection rejects valid context without writing a task', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{}] } as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'fixture-task' }] } as any);
+    const r = await request(buildApp()).post('/api/agent/burner/crawl-comments')
+      .set('X-Test-Tenant-Id', TENANT_UUID).set('X-Test-Agent-Id', AGENT_UUID)
+      .send({ account_label: 'fixture-burner', video_url: 'https://example.test/video/1' });
+    expect(r.status).toBe(410);
+    expect(r.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('[BACK-COMPAT] POST /qr-bind 显式 body 传 tenant_id + agent_id → 200（既有 supertest 兼容）', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
-    vi.mocked(pool.query).mockResolvedValueOnce({
-      rows: [{ id: '77777777-7777-7777-7777-777777777777' }],
-    } as any);
 
-    const app = buildApp();
-    // 不设 X-Test-Tenant-Id / X-Test-Agent-Id 头 — 仅靠 body
-    const r = await request(app)
-      .post('/api/agent/burner/qr-bind')
-      .send({
-        tenant_id: TENANT_UUID,
-        agent_id: AGENT_UUID,
-        account_label: '装修小号C',
-      });
-
-    expect(r.status).toBe(200);
-    expect(r.body.data.task_id).toBe('77777777-7777-7777-7777-777777777777');
-  });
 });
 
 // ── Path 2 抖音私信主动触达（dm_outreach）3 端点 ──
@@ -167,83 +121,22 @@ describe('agent-burner router [dm_outreach]', () => {
     vi.mocked(pool.query).mockReset();
   });
 
-  it('POST /dm-outreach 派单 → 200 + data 只含 task_id', async () => {
-    vi.mocked(pool.query)
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] } as any) // burner session active
-      .mockResolvedValueOnce({ rows: [{ app_token: 'bascn_x', table_id_leads: 'tbl_b1_leads' }] } as any) // feishu binding
-      .mockResolvedValueOnce({ rows: [{ id: 'dddddddd-dddd-dddd-dddd-dddddddddddd' }] } as any); // INSERT
-
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/dm-outreach')
-      .send({
-        tenant_id: TENANT_UUID,
-        agent_id: AGENT_UUID,
-        account_label: '装修小号1',
-        profile_url: 'https://www.douyin.com/user/MS4w1',
-        message: '您好',
-      });
-
-    expect(r.status).toBe(200);
-    expect(Object.keys(r.body.data).sort()).toEqual(['task_id']);
-    expect(r.body.data.task_id).toBe('dddddddd-dddd-dddd-dddd-dddddddddddd');
-    // INSERT 落 task_type=dm_outreach / platform=douyin
-    const insertSql = vi.mocked(pool.query).mock.calls[2][0] as string;
-    expect(insertSql).toMatch(/'dm_outreach'/);
-    expect(insertSql).toMatch(/'douyin'/);
+  it('retired direct DM creation rejects valid context without writing a task', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{}] } as any)
+      .mockResolvedValueOnce({ rows: [{ app_token: 'fixture', table_id_leads: 'fixture' }] } as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'fixture-task' }] } as any);
+    const r = await request(buildApp()).post('/api/agent/burner/dm-outreach')
+      .send({ tenant_id: TENANT_UUID, agent_id: AGENT_UUID, account_label: 'fixture-burner', profile_url: 'https://example.test/user/1', message: 'fixture' });
+    expect(r.status).toBe(410);
+    expect(r.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('POST /dm-outreach 缺 profile_url → 400 MISSING_PROFILE_URL（不落库）', async () => {
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/dm-outreach')
-      .send({ tenant_id: TENANT_UUID, agent_id: AGENT_UUID, account_label: '号1', message: 'x' });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('MISSING_PROFILE_URL');
-    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
-  });
-
-  it('POST /dm-outreach 缺 message → 400 MISSING_MESSAGE', async () => {
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/dm-outreach')
-      .send({ tenant_id: TENANT_UUID, agent_id: AGENT_UUID, account_label: '号1', profile_url: 'https://x' });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('MISSING_MESSAGE');
-  });
-
-  it('POST /dm-outreach 无 active burner → 400 NO_BURNER_SESSION', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // 无 session
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/dm-outreach')
-      .send({
-        tenant_id: TENANT_UUID,
-        agent_id: AGENT_UUID,
-        account_label: '不存在的号',
-        profile_url: 'https://x',
-        message: 'x',
-      });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('NO_BURNER_SESSION');
-  });
-
-  it('POST /dm-outreach tenant 未绑飞书 → 400 FEISHU_NOT_BOUND', async () => {
-    vi.mocked(pool.query)
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] } as any) // burner active
-      .mockResolvedValueOnce({ rows: [] } as any); // 无 feishu binding
-    const app = buildApp();
-    const r = await request(app)
-      .post('/api/agent/burner/dm-outreach')
-      .send({
-        tenant_id: TENANT_UUID,
-        agent_id: AGENT_UUID,
-        account_label: '号1',
-        profile_url: 'https://x',
-        message: 'x',
-      });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('FEISHU_NOT_BOUND');
+  it('retired direct DM creation still requires an agent context', async () => {
+    const r = await request(buildApp()).post('/api/agent/burner/dm-outreach').set('X-Test-Tenant-Id', TENANT_UUID).send({});
+    expect(r.status).toBe(401);
+    expect(r.body.error.code).toBe('NO_AGENT_CONTEXT');
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it('POST /dm-outreach-result sent → task done + data schema 恰 4 键（无 session_disabled）', async () => {

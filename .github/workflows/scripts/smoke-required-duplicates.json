@@ -8,7 +8,7 @@
       "job": "smoke-api-contract",
       "step": "Smoke — Dashboard License (Sprint A)",
       "required_context": "L4 E2E Gate Passed",
-      "consumer_contract_sha256": "2087b4e8e3c88f2e6cda0c2fe2fc3d528ad07c01a03a3ad53fc26dc87d0b7271"
+      "consumer_contract_sha256": "09f4ca52b4b81d10777c39f7b9eb2dcb9a8f8b20e887f61261266726e17c4736"
     },
     {
       "name": "line04-crm-view-prefs-smoke.sh",
@@ -17,7 +17,7 @@
       "job": "smoke-api-contract",
       "step": "Line04 CRM view-prefs smoke（列偏好服务端持久化 GET/PUT）",
       "required_context": "L4 E2E Gate Passed",
-      "consumer_contract_sha256": "f18844953ebf87927e65425735a608fc74f675750b7bce6829a2322c69278d4f"
+      "consumer_contract_sha256": "d9f4d52393428a3ffc85e79540a46ce203d1457d7766e9f5d19005232adeb7af"
     }
   ]
 }

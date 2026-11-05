@@ -181,8 +181,9 @@ class StaticPrChecksTest(unittest.TestCase):
         for name in ("test-pairing", "test-quality", "tdd-commit-order", "no-fake-test",
                      "smoke-mock-honesty", "rpa-failure-scene", "feature-has-smoke",
                      "gp-anchor", "agent-version-bump", "line04-manifest-version-bump",
-                     "wechat-rpa-runner", "contract-test-immutability"):
+                     "contract-test-immutability"):
             self.assertEqual(commands.count("scripts/lint-" + name + ".sh"), 1, name)
+        self.assertNotIn("lint-wechat-rpa-runner.sh", commands)
         self.assertNotIn("lint-nightly-sparse-checkout-deps.sh", commands)
         self.assertFalse(any(s.get("continue-on-error") for s in job["steps"]))
         self.assertIn("static-pr-checks", jobs["l1-passed"]["needs"])

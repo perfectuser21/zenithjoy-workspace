@@ -41,11 +41,10 @@ jobs:
           SHA: ${{ inputs.sha }}
           TARGETS: ${{ inputs.targets }}
         run: node scripts/release-gate/staging-evidence.mjs "$SHA" "$TARGETS"
-      - name: Preserve nightly real-machine job admission
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGETS: ${{ inputs.targets }}
-        run: node scripts/release-gate/nightly-evidence.mjs "$TARGETS"
+      - name: Report retired legacy nightly evidence
+        run: |
+          echo '::warning::Legacy Kotlin/browser nightly checks are retired; no Skill or Android physical acceptance is implied.'
+          echo 'Legacy nightly is retired. Device acceptance is not established by this step; exact-version Brain business evidence remains required.' >> "$GITHUB_STEP_SUMMARY"
       - uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}

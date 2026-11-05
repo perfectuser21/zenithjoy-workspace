@@ -54,35 +54,29 @@ afterAll(async () => {
 });
 
 describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
-  it('POST /api/agent/burner/qr-bind 正常 200 + task_id', async () => {
-    const r = await request(app)
-      .post('/api/agent/burner/qr-bind')
-      .send({ tenant_id: tenantId, agent_id: agentId, account_label: '装修小号1' });
-    expect(r.status).toBe(200);
-    expect(r.body.data.task_id).toMatch(/^[0-9a-f-]{36}$/);
-  });
-
-  it('POST /api/agent/burner/qr-bind 缺 account_label → 400 MISSING_ACCOUNT_LABEL', async () => {
-    const r = await request(app)
-      .post('/api/agent/burner/qr-bind')
-      .send({ tenant_id: tenantId, agent_id: agentId });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('MISSING_ACCOUNT_LABEL');
-  });
-
-  it('POST /api/agent/burner/qr-bind account_label=default → 400 RESERVED_ACCOUNT_LABEL', async () => {
-    const r = await request(app)
-      .post('/api/agent/burner/qr-bind')
-      .send({ tenant_id: tenantId, agent_id: agentId, account_label: 'default' });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('RESERVED_ACCOUNT_LABEL');
+  it('retired qr-bind never creates a new task, even for previously valid or invalid inputs', async () => {
+    const before = await pool.query(`SELECT count(*)::int AS n FROM zenithjoy.publish_tasks WHERE tenant_id=$1`, [tenantId]);
+    for (const body of [
+      { tenant_id: tenantId, agent_id: agentId, account_label: '装修小号1' },
+      { tenant_id: tenantId, agent_id: agentId },
+      { tenant_id: tenantId, agent_id: agentId, account_label: 'default' },
+    ]) {
+      const r = await request(app).post('/api/agent/burner/qr-bind').send(body);
+      expect(r.status).toBe(410);
+      expect(r.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+    }
+    const after = await pool.query(`SELECT count(*)::int AS n FROM zenithjoy.publish_tasks WHERE tenant_id=$1`, [tenantId]);
+    expect(after.rows[0].n).toBe(before.rows[0].n);
   });
 
   it('POST /api/agent/burner/qr-bind-result 写 agent_platform_sessions role=burner', async () => {
-    const t = await request(app)
-      .post('/api/agent/burner/qr-bind')
-      .send({ tenant_id: tenantId, agent_id: agentId, account_label: '装修小号A' });
-    const taskId = t.body.data.task_id;
+    // Seed an already-created legacy task: retirement must not discard in-flight receipts.
+    const { rows: [task] } = await pool.query(
+      `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+       VALUES ($1, 'qr_bind/douyin_burner', 'queued', 'qr_bind/douyin_burner', $2, $3, NOW(), NOW()) RETURNING id`,
+      [agentId, JSON.stringify({ agent_id: agentId, account_label: '装修小号A', tenant_id: tenantId }), tenantId],
+    );
+    const taskId = task.id;
 
     const r = await request(app)
       .post('/api/agent/burner/qr-bind-result')
@@ -116,38 +110,28 @@ describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
     expect(r.body.data.sessions.every((s: any) => s.role === 'burner')).toBe(true);
   });
 
-  it('POST /api/agent/burner/crawl-comments 缺 video_url → 400 MISSING_VIDEO_URL', async () => {
-    const r = await request(app)
-      .post('/api/agent/burner/crawl-comments')
-      .send({ tenant_id: tenantId, agent_id: agentId, account_label: '装修小号A' });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('MISSING_VIDEO_URL');
-  });
-
-  it('POST /api/agent/burner/crawl-comments 无 burner session → 400 NO_BURNER_SESSION', async () => {
-    const r = await request(app)
-      .post('/api/agent/burner/crawl-comments')
-      .send({
-        tenant_id: tenantId,
-        agent_id: agentId,
-        account_label: '不存在小号_xyz',
-        video_url: 'https://www.douyin.com/video/123',
-      });
-    expect(r.status).toBe(400);
-    expect(r.body.error.code).toBe('NO_BURNER_SESSION');
+  it('retired crawl-comments never creates a new task, even for previously valid or invalid inputs', async () => {
+    const before = await pool.query(`SELECT count(*)::int AS n FROM zenithjoy.publish_tasks WHERE tenant_id=$1`, [tenantId]);
+    for (const body of [
+      { tenant_id: tenantId, agent_id: agentId, account_label: '小号A', video_url: 'https://www.douyin.com/video/123' },
+      { tenant_id: tenantId, agent_id: agentId, account_label: '小号A' },
+      { tenant_id: tenantId, agent_id: agentId, account_label: '不存在小号_xyz', video_url: 'https://www.douyin.com/video/123' },
+    ]) {
+      const r = await request(app).post('/api/agent/burner/crawl-comments').send(body);
+      expect(r.status).toBe(410);
+      expect(r.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+    }
+    const after = await pool.query(`SELECT count(*)::int AS n FROM zenithjoy.publish_tasks WHERE tenant_id=$1`, [tenantId]);
+    expect(after.rows[0].n).toBe(before.rows[0].n);
   });
 
   it('POST /api/agent/burner/crawl-comments-result 触发 lead-writer + 更新 task', async () => {
-    const c = await request(app)
-      .post('/api/agent/burner/crawl-comments')
-      .send({
-        tenant_id: tenantId,
-        agent_id: agentId,
-        account_label: '小号A',
-        video_url: 'https://www.douyin.com/video/7000000000000000001',
-      });
-    expect(c.status, JSON.stringify(c.body)).toBe(200);
-    const crawlTaskId = c.body.data.task_id;
+    const { rows: [task] } = await pool.query(
+      `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+       VALUES ($1, 'crawl_comments/douyin', 'queued', 'crawl_comments/douyin', $2, $3, NOW(), NOW()) RETURNING id`,
+      [agentId, JSON.stringify({ agent_id: agentId, account_label: '小号A', video_url: 'https://www.douyin.com/video/7000000000000000001', tenant_id: tenantId }), tenantId],
+    );
+    const crawlTaskId = task.id;
 
     const r = await request(app)
       .post('/api/agent/burner/crawl-comments-result')

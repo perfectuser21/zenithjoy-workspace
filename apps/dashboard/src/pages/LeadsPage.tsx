@@ -73,10 +73,10 @@ export default function LeadsPage() {
       )}
 
       {/* 数量 */}
-      <div className="flex-shrink-0 text-xs text-gray-500">共 {total} 条</div>
+      {!error && <div className="flex-shrink-0 text-xs text-gray-500">共 {total} 条</div>}
 
       {/* Leads 表格（共用组件） */}
-      <LeadsTable leads={leads} total={total} loading={loading} />
+      {!error && <LeadsTable leads={leads} total={total} loading={loading} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@
 # (lint-realmachine-unverified-ratchet.sh) 真的有牙齿：
 #   A. 故意造一个未覆盖的 [CI-MOCK] 标记（count 从 baseline 之上）→ 脚本必须 exit 1，
 #      且必须机械调用 gh issue create（不依赖 ci-patrol 巡检/LLM判断）
-#   B. 现有仓库真实状态（count=baseline=0）→ 脚本必须 exit 0（不误伤正常状态）
+#   B. 现有仓库真实状态（count=baseline，若本次有授权上调则传理由）→ 脚本必须 exit 0（不误伤正常状态）
 #   C. baseline 文件被人为改大但 PR body 没有 REALMACHINE-BASELINE-RAISE: 声明
 #      → 脚本必须 exit 1（棘轮只降不升）
 #
@@ -94,7 +94,7 @@ fi
 
 # ── Test B: 仓库真实当前状态（count=baseline=0）→ exit 0，不误伤 ──
 rm -f "$GH_CALLED_FLAG"
-OUTPUT_B=$(GH_BIN="$FAKE_GH" GITHUB_REPOSITORY="fake/repo" bash "$SCRIPT" 2>&1)
+OUTPUT_B=$(GH_BIN="$FAKE_GH" GITHUB_REPOSITORY="fake/repo" PR_BODY="REALMACHINE-BASELINE-RAISE: retired Kotlin nightly; physical evidence is not verified" bash "$SCRIPT" 2>&1)
 CODE_B=$?
 echo "$OUTPUT_B"
 echo "── Test B exit=$CODE_B ──"

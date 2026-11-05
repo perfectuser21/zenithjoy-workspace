@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Path 2 — 抖音私信主动触达 Golden Path E2E smoke（fake-agent 模式）
-#
-# 落地 contract-draft.md 「## E2E 验收」段：派单 → fake-agent 回报 sent/limited/failed
-#   → 查 DB task 状态 + 单号停用不连坐 + fake-feishu 校验 Lead 触达状态回写。
-# 真发 CDP（semi-button-second 私信按钮 + contenteditable + Enter）由 xian-pc 真机手验，
-#   证据另附 sprint，不入自动 E2E（PRD 范围限定）。
+# Historical in-flight DM receipts: synthetic local PostgreSQL rows, actual
+# result endpoint and disposable fake Feishu. Creation is retired and rejects.
+# This does not send a real message or validate Skill/device execution.
+
 set -euo pipefail
 
 # ── 前置 ENV 自检 ──
@@ -23,13 +21,14 @@ AGENT_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.agents (tenant_id, agent_id,
 LABEL="装修小号1"
 psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status, bound_at, created_at) VALUES ('$AGENT_ID','douyin','$LABEL','burner','active',NOW(),NOW()) ON CONFLICT (agent_id,platform,account_label) DO UPDATE SET status='active'" >/dev/null
 
-echo "=== Step 1: 派 dm_outreach 单 → DB 落 task_type=dm_outreach/platform=douyin/status=queued ==="
-RESP=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4waaa\",\"message\":\"您好，看到您在评论区的提问\"}")
-echo "$RESP" | jq -e '.success == true and (.data.task_id | type == "string")' >/dev/null || { echo "FAIL Step 1: 派单未返 data.task_id"; exit 1; }
-DM_TASK_ID=$(echo "$RESP" | jq -r '.data.task_id')
-C=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE id='$DM_TASK_ID' AND task_type='dm_outreach' AND platform='douyin' AND status='queued' AND created_at > NOW() - interval '60 seconds'")
-[ "$C" = "1" ] || { echo "FAIL Step 1: dm_outreach task 未落库 (count=$C)"; exit 1; }
+echo "=== Step 1: 种隔离数据库中的历史在途任务 ==="
+# A historical in-flight task is inserted into the disposable PG fixture;
+# this checks real result processing, not new dispatch or real message delivery.
+seed_dm() {
+ psql "$DB" -At -c "INSERT INTO zenithjoy.publish_tasks (tenant_id,agent_id,platform,status,task_type,payload) VALUES ('$TENANT_ID','$AGENT_ID','douyin','queued','dm_outreach',jsonb_build_object('tenant_id','$TENANT_ID','agent_id','$AGENT_ID','account_label','$LABEL','profile_url','$1')) RETURNING id" | head -1
+}
+DM_TASK_ID=$(seed_dm 'https://www.douyin.com/user/MS4waaa')
+[ -n "$DM_TASK_ID" ] || { echo 'FAIL historical task fixture'; exit 1; }
 
 echo "=== Step 2: fake-agent 取单 → 触达中 ==="
 curl -sf -X POST "$API_BASE/api/_smoke/fake-agent-burner-progress" \
@@ -51,8 +50,8 @@ REC=$(curl -sf "${FEISHU_API_BASE}/__test/seen-records?table_id=tbl_b1_leads" | 
 echo "$REC" | jq -e '(.["触达小号"] | length > 0) and (.["触达时间"] | length > 0)' >/dev/null || { echo "FAIL Step 3: 已私信记录缺 触达小号/触达时间"; exit 1; }
 
 echo "=== Step 4: 仅互关 → limited → 飞书写「未送达-仅互关」，禁假 sent ==="
-DM2=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wbbb\",\"message\":\"hi\"}" | jq -r '.data.task_id')
+DM2=$(seed_dm 'https://www.douyin.com/user/MS4wbbb')
+[ -n "$DM2" ] || { echo 'FAIL historical limited fixture'; exit 1; }
 curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
   -d "{\"task_id\":\"$DM2\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"status\":\"limited\",\"profile_url\":\"https://www.douyin.com/user/MS4wbbb\"}" \
@@ -64,8 +63,8 @@ echo "$ALL" | jq -e '[.records[] | select(.["触达主页 URL"]=="https://www.do
 
 echo "=== Step 5: SESSION_EXPIRED → task failed + 该号 expired + 另一号不连坐 ==="
 psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status, bound_at, created_at) VALUES ('$AGENT_ID','douyin','装修小号2','burner','active',NOW(),NOW()) ON CONFLICT (agent_id,platform,account_label) DO UPDATE SET status='active'" >/dev/null
-DM3=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wccc\",\"message\":\"hi\"}" | jq -r '.data.task_id')
+DM3=$(seed_dm 'https://www.douyin.com/user/MS4wccc')
+[ -n "$DM3" ] || { echo 'FAIL historical failed fixture'; exit 1; }
 # gate-allow: 下一步不是自我实现假测试——除了 error_code 读回，还直接断言了 HTTP 响应里
 # session_disabled 真实副作用(服务端按 error_code 触发 session 失效的业务逻辑)，属于真实行为验证
 curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" \
@@ -90,12 +89,12 @@ CODE=$(curl -s -o /tmp/dm404.json -w '%{http_code}' "$API_BASE/api/agent/burner/
 [ "$CODE" = "404" ] || { echo "FAIL Step 6: 未知 task 应 404 got $CODE"; exit 1; }
 jq -e '.error.code == "NO_DM_TASK"' /tmp/dm404.json >/dev/null || { echo "FAIL Step 6: 404 错码非 NO_DM_TASK"; exit 1; }
 
-echo "=== Step 7: 派单守卫错码 ==="
-C1=$(curl -s -o /tmp/e1.json -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"message\":\"x\"}")
-{ [ "$C1" = "400" ] && jq -e '.error.code == "MISSING_PROFILE_URL"' /tmp/e1.json >/dev/null; } || { echo "FAIL Step 7: 缺 profile_url 错码"; exit 1; }
-C2=$(curl -s -o /tmp/e2.json -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/x\"}")
-{ [ "$C2" = "400" ] && jq -e '.error.code == "MISSING_MESSAGE"' /tmp/e2.json >/dev/null; } || { echo "FAIL Step 7: 缺 message 错码"; exit 1; }
-C3=$(curl -s -o /tmp/e3.json -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"不存在的号\",\"profile_url\":\"https://www.douyin.com/user/x\",\"message\":\"x\"}")
-{ [ "$C3" = "400" ] && jq -e '.error.code == "NO_BURNER_SESSION"' /tmp/e3.json >/dev/null; } || { echo "FAIL Step 7: 无 burner 错码"; exit 1; }
-
-echo "✅ Path 2 抖音私信主动触达 Golden Path E2E 通过"
+echo "=== Step 7: retired new dispatch is refused ==="
+RFILE=$(mktemp); trap 'rm -f "$RFILE"' EXIT
+BEFORE=$(psql "$DB" -At -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE tenant_id='$TENANT_ID'")
+CODE=$(curl -s -o "$RFILE" -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/dm-outreach" -H 'Content-Type: application/json' \
+ -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/x\",\"message\":\"x\"}")
+[ "$CODE" = 410 ] && jq -e '.error.code == "LEGACY_ACQUISITION_RETIRED"' "$RFILE" >/dev/null || { echo "FAIL: retired dispatch expected 410"; exit 1; }
+AFTER=$(psql "$DB" -At -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE tenant_id='$TENANT_ID'")
+[ "$BEFORE" = "$AFTER" ] || { echo "FAIL: retired dispatch created task"; exit 1; }
+echo "Historical callbacks tested via actual HTTP+PG; no real message or Skill/device acceptance"

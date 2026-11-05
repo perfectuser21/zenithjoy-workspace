@@ -1,24 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import YAML from 'yaml';
+import { readFileSync, existsSync } from 'node:fs';
 const read = path => readFileSync(path,'utf8');
-test('nightly抖音在ROG串行运行同SHA交互候选，不选择latestinstalled',()=>{
- const workflow=YAML.parse(read('.github/workflows/nightly-real-machine-staging.yml'));
- const job=workflow.jobs['douyin-read'];
- assert.deepEqual(job['runs-on'],['self-hosted','wechat-capable']);
- assert.equal(job.needs,undefined,'retired Windows CS is not a current Line02 prerequisite');
- assert.equal(job.concurrency.group,'zj-rog-desktop');
- assert.equal(job.concurrency['cancel-in-progress'],false);
- const checkout=job.steps.find(s=>s.uses==='actions/checkout@v4');
- assert.equal(checkout.with.ref,'${{ github.sha }}');
- assert.match(checkout.with['sparse-checkout'],/services\/agent\/publishers/);
- assert.ok(job.steps.some(s=>s.run?.includes('npm ci --ignore-scripts --omit=dev --workspaces=false')));
- const runner=job.steps.find(s=>s.run?.includes('run-line02-candidate.ps1'));
- assert.equal(runner.shell,'powershell');
- assert.equal(job['continue-on-error'],undefined);
- assert.doesNotMatch(JSON.stringify(job),/zenithjoy-agent-v|latest|最新 agent/);
- assert.equal(workflow.jobs['wechat-bubble'],undefined,'retired Windows CS must not be scheduled');
+test('retired web and Kotlin workflows are absent from automatic CI',()=>{
+ for(const name of ['e2e-line02-keyword-comment.yml','e2e-line02-android-collect.yml','nightly-real-machine-staging.yml']) assert.equal(existsSync('.github/workflows/'+name),false);
 });
 test('交互执行器只使用明确批准的用户和专用profile，核实session和候选回执',()=>{
  const runner=read('.github/workflows/scripts/run-line02-candidate.ps1');
@@ -38,54 +23,11 @@ test('异常路径必须留存证据并在返回前确认本次进程树退出',
  assert.match(runner,/line02-candidate-evidence/);
  assert.doesNotMatch(runner,/Remove-Item -LiteralPath \$directory -Recurse/);
 });
-test('独立F06与nightly用同一候选交互入口和设备锁，业务失败不得软放行',()=>{
- const workflow=YAML.parse(read('.github/workflows/e2e-line02-keyword-comment.yml'));
- const job=workflow.jobs['keyword-comment-smoke'];
- assert.equal(job['continue-on-error'],undefined);
- assert.equal(job.concurrency.group,'zj-rog-desktop');
- assert.equal(job.concurrency['cancel-in-progress'],false);
- assert.equal(job.steps.find(s=>s.uses==='actions/checkout@v4').with.ref,'${{ github.sha }}');
- assert.ok(job.steps.some(s=>s.run?.includes('run-line02-candidate.ps1')&&s.shell==='powershell'));
- assert.doesNotMatch(JSON.stringify(job),/zenithjoy-agent-v|最新 agent/);
-});
-
-test('nightly只调度原抖音与通用Android车道，报告不再等待旧Windows客服',()=>{
- const workflow=YAML.parse(read('.github/workflows/nightly-real-machine-staging.yml'));
- assert.deepEqual(Object.keys(workflow.jobs),['douyin-read','account-scan','nightly-report']);
- assert.equal(workflow.jobs['account-scan'].needs,undefined);
- assert.deepEqual(workflow.jobs['nightly-report'].needs,['douyin-read','account-scan']);
- assert.equal(workflow.jobs['account-scan']['continue-on-error'],undefined);
- assert.match(workflow.jobs['account-scan'].steps.find(s=>s.id==='run').run,/exit "\$CODE"/);
- assert.doesNotMatch(workflow.jobs['nightly-report'].steps[0].run,/wechat-bubble|WECHAT|真微信/);
-});
-for(const row of [
- {douyin:'success',android:'success',code:'0',pass:true},
- {douyin:'failure',android:'success',code:'0',pass:false},
- {douyin:'success',android:'failure',code:'3',pass:false},
- {douyin:'cancelled',android:'success',code:'0',pass:false},
-])test('actual nightly report safe transport fixture '+JSON.stringify(row),async t=>{
- const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {spawnSync}=await import('node:child_process');
- const dir=mkdtempSync(join(tmpdir(),'nightly-report-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const bin=join(dir,'bin');mkdirSync(bin);const calls=join(dir,'calls');const summary=join(dir,'summary');
- writeFileSync(join(bin,'gh'),'#!'+process.execPath+'\n'+`const fs=require('node:fs'),args=process.argv.slice(2);fs.appendFileSync(process.env.FIXTURE_GH_CALLS,JSON.stringify(args)+'\\n');if(args[0]!=='issue'||!['list','create'].includes(args[1]))process.exit(80);if(args[1]==='list')process.stdout.write('0');\n`,{mode:0o755});
- const wf=YAML.parse(read('.github/workflows/nightly-real-machine-staging.yml'));
- const command=wf.jobs['nightly-report'].steps[0].run.replaceAll('${{ needs.douyin-read.result }}',row.douyin).replaceAll('${{ needs.account-scan.result }}',row.android).replaceAll('${{ needs.account-scan.outputs.exit_code }}',row.code);
- const r=spawnSync('bash',['-e','-o','pipefail','-c',command],{encoding:'utf8',timeout:5000,env:{...process.env,PATH:bin+':'+process.env.PATH,GITHUB_STEP_SUMMARY:summary,GITHUB_REPOSITORY:'fixture/repository',GITHUB_SERVER_URL:'https://github.com',GITHUB_RUN_ID:'fixture-run',FIXTURE_GH_CALLS:calls}});
- assert.ifError(r.error);assert.equal(r.status===0,row.pass,r.stdout+r.stderr);const body=readFileSync(summary,'utf8');assert.doesNotMatch(body,/微信/);assert.match(body,/account-scan/);
- if(row.pass)assert.equal(existsSync(calls),false);else{const observed=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);assert.equal(observed.length,2);assert.equal(observed[1][1],'create');if(row.code==='3')assert.match(observed[1].join(' '),/envfail/);}
-});
-
-test('headful operator probe stays outside automatic Linux glob with explicit candidate and workflow callers',()=>{
- const path='.github/workflows/scripts/operator-probes/line02-keyword-comment.sh';
- const source=read(path);
- const runner=read('.github/workflows/scripts/run-line02-candidate.ps1');
- assert.ok(runner.includes(path.replaceAll('/','\\')),'actual PowerShell candidate launcher must call relocated probe');
- assert.doesNotMatch(runner,/scripts\\smoke\\line02-keyword-comment-smoke/);
- const wf=YAML.parse(read('.github/workflows/e2e-line02-keyword-comment.yml'));
- for(const event of ['push','pull_request']) {
-  assert.ok(wf.on[event].paths.includes(path));
-  assert.ok(!wf.on[event].paths.includes('.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh'));
+test('retired Kotlin-only tests cannot remain in the active L1 real-device suite',()=>{
+ const ci=read('.github/workflows/ci-l1-process.yml');
+ for(const name of ['line02-android-collect-realmachine-smoke.agent-id','line02-android-collect-realmachine-smoke.ui-bounds','stage2-comment-await','dm-search-input-await','collect-poll-diagnostics','douyin-launch-gesture-fallback','smoke-device-readiness']){
+  assert.equal(existsSync('.github/workflows/scripts/__tests__/'+name+'.test.sh'),false,name);
+  assert.ok(!ci.includes(name+'.test.sh'),name);
  }
- assert.match(source,/--source-only/);
- assert.match(source,/CANDIDATE_SHA_MISMATCH/);
- assert.match(source,/DOUYIN_SESSION_EXPIRED/);
+ for(const name of ['smoke-adb-binding-and-state-isolation','smoke-logcat-narrowing'])assert.ok(ci.includes(name+'.test.sh'),name+' mixed shared guard remains');
 });

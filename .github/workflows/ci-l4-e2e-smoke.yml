@@ -92,7 +92,8 @@ jobs:
       FEISHU_STATE_SECRET: ci-only-state-secret-2026
       DASHBOARD_BASE_URL: http://localhost:5173
       SMOKE_TOKEN: smoke-secret-2026
-      # Path 2 8步本地版 smoke — judge-video 真调判定（handoff 0714 刀1；无 key = Step 8 真红，不许 mock 兜底）
+      # Other API contracts may use these configured providers. The retired Kotlin
+      # model probes are not evidence that the new Skill path or device has run.
       TOAPIS_API_KEY: ${{ secrets.TOAPIS_API_KEY }}
       # 评论意向判定链 0922 迁到 OpenRouter（ToAPIs 侧无一模型能同时过三关，
       # 见 comment-grading.ts 注释）。TOAPIS_API_KEY 保留为回退凭据。
@@ -414,8 +415,8 @@ jobs:
           grep -q 'topic_id.*uuid' /tmp/schema.txt || (echo "FAIL: topic_id not UUID"; exit 1)
           grep -q 'fk_pipeline_runs_topic_id' /tmp/schema.txt || (echo "FAIL: FK constraint missing"; exit 1)
 
-      # ─── Path 2 Golden Path 11步本地版 smoke（去飞书——decision 431acd2c；真调判定，禁 force_*）───
-      - name: Smoke — Path 2 Golden Path 11步本地版 (Step 1-11)
+      # Retained service and shared safety contracts; not Skill/device acceptance.
+      - name: Smoke — retained acquisition API and shared safety contracts
         env:
           API_BASE: http://localhost:5200
           DB_URL: postgresql://cecelia:cecelia@localhost:5432/cecelia
@@ -423,8 +424,8 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
 
-      # ─── Path 2 Sprint B-1 抖音小号绑定 + 评论抓取 smoke ─────────────────────
-      - name: Smoke — Path 2 Sprint B-1 Golden Path (10 Step E2E)
+      # Historical task receipts on disposable DB; old task creation rejects.
+      - name: Smoke — historical burner bind and crawl receipts
         env:
           API_BASE: http://localhost:5200
           DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
@@ -437,8 +438,8 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
 
-      # ─── Path 2 抖音私信主动触达 smoke（fake-agent 派单→回报→飞书回写）─────────
-      - name: Smoke — Path 2 抖音私信主动触达 Golden Path (dm_outreach)
+      # Historical in-flight DM receipts only; no live message is sent.
+      - name: Smoke — historical DM receipts and retirement refusal
         env:
           API_BASE: http://localhost:5200
           DB: postgresql://cecelia:cecelia@localhost:5432/cecelia

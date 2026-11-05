@@ -36,6 +36,7 @@ test('default core contract executes real regressions and catches a broken publi
  for(const path of ['services/listing-workflow','scripts/release-gate']){mkdirSync(resolve(dir,path,'..'),{recursive:true});cpSync(join(root,path),join(dir,path),{recursive:true});}
  // The legacy sentinel scripts are syntactically valid yet always fail at runtime.
  const smoke=join(dir,'.github/workflows/scripts/smoke');mkdirSync(smoke,{recursive:true});
+ cpSync(join(root,'.github/workflows/release-admission.yml'),join(dir,'.github/workflows/release-admission.yml'));
  for(const name of ['golden-path-1-smoke.sh','golden-path-2-smoke.sh'])writeFileSync(join(smoke,name),'#!/bin/sh\nexit 97\n');
  mkdirSync(join(dir,'scripts/ci'),{recursive:true});cpSync(runner,join(dir,'scripts/ci/run-core-regression.sh'));
  const bin=join(dir,'bin');mkdirSync(bin);const marker=join(dir,'executed-tests');

@@ -168,15 +168,15 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "R16 真机回归：heartbeat UUID 身份、取消 command 收敛、未分配 pending 防 500"
+    note: "真实 PostgreSQL + 登录 session 模拟 Android heartbeat UUID、取消 command 收敛、未分配 pending 防 500；不代表真机验收"
 
   - id: acquisition-cancel-integration
     path: sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts
     type: integration
     ci: L4
-    status: active
+    status: pending-ci
     product: AI员工
-    note: "Sprint 07310943：真 Postgres 验证不可逆取消、心跳、绑定回执与稳定设备冷却"
+    note: "历史合同含已退役 collect/start 成功断言，不能作为现役 CI；独有取消/租户/回执保护待逐项迁移。当前 acquisition-cancel-uuid-agent.integration.test.ts 保留部分真实 PostgreSQL 回执覆盖，不声称全量替代。"
 
   - id: acquisition-cancel-workflow-contract
     path: sprints/07310943-kernel-0e82adad/tests/workflow-cancel-contract.test.ts
@@ -2729,7 +2729,7 @@ tests:
     product: 私域运营
     note: "Sprint 06081603 — per-Line preflight 路由 + line04 微信版本/pywinauto/内存检测 + 注册表解析纯函数"
 
-    retirement: "2026-11-04 unconsumed core runner retired; restore 1af527a4d191db3066ebeab98e87274b03b51bf6:services/agent/src/preflight/__tests__/preflight.test.ts. Current product consumer is ModuleManager -> module preflight.js; canonical modules/line04/__tests__/{preflight,preflight-cli}.test.ts and agent-module-e2e.yml real ROG Step 3 retain version/Python/memory obligations. Detailed ten-path anchors: docs/ci/retired-workflows/agent-preflight-retirement.json."
+    retirement: "2026-11-04 unconsumed core runner retired; restore 1af527a4d191db3066ebeab98e87274b03b51bf6:services/agent/src/preflight/__tests__/preflight.test.ts. The historical Windows consumer was ModuleManager -> module preflight.js; canonical modules/line04/__tests__/{preflight,preflight-cli}.test.ts remain, and the Windows-only ROG preflight was retired on 2026-11-05. Detailed ten-path anchors: docs/ci/retired-workflows/agent-preflight-retirement.json."
 
   - id: p4-ws1-openrouter-pairing
     path: apps/api/src/llm/__tests__/openrouter.test.ts
@@ -3069,6 +3069,30 @@ tests:
     status: active
     product: 新媒体运营
     note: "ZJ1 Smart Acquisition WS1 — GET /api/acquisition/overview TDD 合同测试"
+
+  - id: acquisition-history-auth-pairing
+    path: apps/api/src/middleware/acquisition-history-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Session-derived tenant, unauthenticated and ambiguous memberships, and membership lookup failures; auth and DB boundaries mocked.
+
+  - id: legacy-acquisition-retired-guard-pairing
+    path: apps/api/src/routes/legacy-acquisition-retired.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Retired guard rejects missing tenant or stops authenticated work before downstream handler.
+
+  - id: legacy-acquisition-retired-writes
+    path: apps/api/src/routes/acquisition-retirement.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Retired Kotlin acquisition endpoints fail closed after tenant resolution; historical reads and in-flight callbacks remain available.
 
   - id: zj1-smart-acquisition-route-unit
     path: apps/api/src/routes/acquisition.test.ts
@@ -3469,10 +3493,10 @@ tests:
   - id: line01-kuaishou-sprint-ws4
     path: sprints/tests/ws4/kuaishou-e2e-workflow.test.ts
     type: e2e
-    ci: L4
-    status: active
+    ci: unverified
+    status: deprecated
     product: 新媒体运营
-    note: "Line 01 Sprint WS4 TDD Red/Green — .github/workflows/kuaishou-e2e.yml GHA windows-latest + 截图 artifact + KUAISHOU_COOKIES secret"
+    retirement: "2026-11-05 obsolete Windows web Kuaishou dry-run workflow retired at business direction; historical source retained in Git commit 9784012af142f8095dc11cf162bf3f60576f1706. Android publishing and shared session credentials remain unchanged."
   - id: line01-kuaishou-three-mode-ws1
     path: sprints/zj-kuaishou-three-mode/tests/ws1/kuaishou-image-dryrun.test.ts
     type: unit
@@ -3490,10 +3514,10 @@ tests:
   - id: line01-kuaishou-three-mode-ws3
     path: sprints/zj-kuaishou-three-mode/tests/ws3/kuaishou-gha-workflow.test.ts
     type: e2e
-    ci: L4
-    status: active
+    ci: unverified
+    status: deprecated
     product: 新媒体运营
-    note: "Line 01 Sprint zj-kuaishou-three-mode WS3 — .github/workflows/kuaishou-e2e.yml GHA windows-latest E2E"
+    retirement: "2026-11-05 obsolete Windows web Kuaishou dry-run workflow retired at business direction; historical source retained in Git commit 9784012af142f8095dc11cf162bf3f60576f1706. Android publishing and shared session credentials remain unchanged."
   - id: line05-ai-video-pipeline-ws1
     path: sprints/run-20260527-1934/tests/ws1/original-script-fields.test.ts
     type: unit
@@ -3589,13 +3613,10 @@ tests:
   - id: line05-zj-ai-video-ws3-e2e-spec-coverage
     path: sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts
     type: unit
-    ci: L3
-    status: pending-ci
+    ci: unverified
+    status: deprecated
     product: 视频剪辑
-    note: "Line 05 Sprint zj-ai-video-ws1-ws3-ws4 WS3 — E2E spec 覆盖率 + Agent version 1.1.29 bump 验证"
-
-  # ── Line 00 运营中枢 — line00-session-health-medium ──────────────────────────
-
+    retirement: "2026-11-05 retired historical Windows video E2E/workflow source-shape snapshot; exact original source 8dbe7c39bf240344c61e8896356852e1f9652123:sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts. Retained video code and tests are not equivalent proof of current real video processing; real acceptance remains unverified."
   - id: line00-session-health-ws1-migration
     path: sprints/line00-session-health-medium/tests/ws1/operator-sessions-migration.test.ts
     type: integration
@@ -5071,17 +5092,18 @@ tests:
     path: sprints/07041249-line02-dashboard-ia-redesign/tests/line02-outreach-api.test.ts
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: AI员工
     note: "sprint(07041249): Hub GP 顺序 + 触达记录视图 — outreach-history 端点注册+tenant_id过滤+items/total schema，fetchOutreachHistory API 函数，AcquisitionOutreachPage 存在+空状态，Hub MODULES 无 comingSoon，accounts 无昵称列，navigation 新路由注册"
 
+    retirement: "2026-11-05: 旧获客PC发起入口按用户决定退役；历史触达权限、双租户隔离与返回通过 outreach-history.pg.test.ts 真 HTTP/PG 验证，历史页面和导航通过 AcquisitionOutreachPage.test.tsx 与 AcquisitionHubPage.test.tsx 验证；原始测试内容保留 Git。"
   - id: line02-dashboard-ia-redesign-e2e
     path: apps/dashboard/e2e/acquisition-ia-redesign.spec.ts
     type: e2e
     ci: L4
     status: active
     product: AI员工
-    note: "sprint(07041249): Playwright E2E — Hub 4 卡片可见/无即将上线，账号页无昵称列/有绑定机器列，Leads 路由正确，触达记录页空状态，设置页无指派计划"
+    note: "Playwright E2E：旧获客退役提示及历史入口；保留账号、线索、触达历史与共享设置页导航检查。"
 
   - id: acquisition-tasks-collect-start-e2e
     path: apps/dashboard/e2e/acquisition-tasks-collect-start.spec.ts
@@ -5089,7 +5111,7 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "2026-07-19: golden-path-2-smoke.sh号称覆盖客户在dashboard发起采集但全程curl从未真点过按钮——首个真实驱动浏览器填关键词+点开始采集按钮的Playwright E2E，断言真调用collect/start且body.keywords正确"
+    note: "Playwright E2E：旧采集不再提供启动入口、不发新建请求，历史任务和详情入口仍可访问。"
 
   - id: agent-credit-routes
     path: apps/api/src/routes/agent-credit.test.ts
@@ -5353,7 +5375,7 @@ tests:
     ci: windows_cloud
     status: active
     product: AI员工
-    note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
+    note: "Playwright E2E：旧获客不再暴露旧手机采集入口；通用安卓客户端下载页仍可访问。"
 
   - id: line04-ai-overlay-wechat-draft-reasoning
     path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts
@@ -5533,7 +5555,7 @@ tests:
     ci: L4
     status: active
     product: 客户智能获客
-    note: "sprint(07192358): 账号扫描手动触发通道——Dashboard立即扫描按钮真Playwright规格，验证点击后调真实端点+60秒本地禁用+离线态错误提示"
+    note: "Playwright E2E：旧账号扫描和 Windows 绑定不再展示或触发，历史账号仍可查看。"
 
   - id: agent-line04-report-health-once-overlay-branch
     path: services/agent/modules/line04/__tests__/report-health-once.test.ts
@@ -8676,9 +8698,7 @@ tests:
   - {"id":"inventory-43299fe18e16b38f","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.db-ssh-host-default.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d2bbe4522f61fdc6","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.dbquery-retry.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-04d62e4317ff4c4c","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.envbind.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-e5c2ce7724953790","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.envfail-red.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d605d6570ee350c5","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.heartbeat-align.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-439bd6df96003733","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.promote-job-granularity.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d5f05018fb9aaa9c","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.relaunch-after-install.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c1ce95862813c860","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.ssh-hostkey.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b730bbb6b7d6077d","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.terminal-assert.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -8686,24 +8706,18 @@ tests:
   - {"id":"inventory-8879e9c18a9ada9d","path":".github/workflows/scripts/__tests__/adb-target.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-97a8a2112494a258","path":".github/workflows/scripts/__tests__/agent-cmd-executor-smoke.diagnostics.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-dc97890859721001","path":".github/workflows/scripts/__tests__/android-cancel-realmachine-smoke.launch-entrypoint.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-48b8719dfbec19af","path":".github/workflows/scripts/__tests__/android-cancel-workflow.real-fixture.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-5c2de12996ab93f6","path":".github/workflows/scripts/__tests__/audit-gate.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b4b9041e00e7aadf","path":".github/workflows/scripts/__tests__/auto-version-publication.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:.github/workflows/scripts/__tests__/auto-version-publication.test.mjs. Removed root-only auto-version workflow has no runtime version consumer; API uses own package/Git SHA, Agent and Android own versions. Active authoring and release version guards remain."}
   - {"id":"inventory-a73c892e1d181810","path":".github/workflows/scripts/__tests__/browser-dod-scope.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-ab4fb4a4fb41b1d8","path":".github/workflows/scripts/__tests__/ci-required-gates.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-bbe99f48535b7ec7","path":".github/workflows/scripts/__tests__/collect-poll-diagnostics.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-602da8a79aaa3377","path":".github/workflows/scripts/__tests__/deploy-lib.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-33806d9c0e12e6be","path":".github/workflows/scripts/__tests__/deploy-phone-adb-controller-workflow.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-7576baba9d7315b9","path":".github/workflows/scripts/__tests__/deploy-phone-adb-remote-lib.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-e4f08d20156502f3","path":".github/workflows/scripts/__tests__/dm-search-input-await.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-0f1f51d7e17c59fd","path":".github/workflows/scripts/__tests__/dm-send-realmachine-smoke.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-9d05d9f0fe8fc8b6","path":".github/workflows/scripts/__tests__/douyin-launch-gesture-fallback.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b61e77c53e2b1ef9","path":".github/workflows/scripts/__tests__/l4-creator-cache-egress.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d8630f677375b977","path":".github/workflows/scripts/__tests__/leadgen-field-cleanup-smoke.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-49b9f3958ebe046e","path":".github/workflows/scripts/__tests__/line02-android-collect-realmachine-smoke.agent-id.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-33b11efec8ebe60b","path":".github/workflows/scripts/__tests__/line02-android-collect-realmachine-smoke.ui-bounds.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-457545ac1e0b6ff5","path":".github/workflows/scripts/__tests__/line02-candidate-gate.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-6af223734c6b32a1","path":".github/workflows/scripts/__tests__/line02-interactive-contract.test.mjs","type":"contract","ci":"L3","status":"active","product":"unclassified","execution":"ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs","note":"Preserves current exact-SHA approved Line02 interactive user/profile/desktop exclusion/process cleanup. Only obsolete Windows CS dependencies removed. Actual nightly report runs with gh transport stub; no real notification/device calls."}
+  - {"id":"inventory-6af223734c6b32a1","path":".github/workflows/scripts/__tests__/line02-interactive-contract.test.mjs","type":"contract","ci":"L3","status":"active","product":"unclassified","execution":"ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs","note":"Retired Windows and Kotlin workflows absent; remaining interactive process safety tested with isolated fixtures."}
   - {"id":"inventory-0709ac11b1cbb0ec","path":".github/workflows/scripts/__tests__/line02-keyword-comment-smoke.diagnostics.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c1435ddec957616b","path":".github/workflows/scripts/__tests__/line02-process-job.test.ps1","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-7dca2d22e1944071","path":".github/workflows/scripts/__tests__/lint-feature-has-smoke.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -8725,12 +8739,10 @@ tests:
   - {"id":"inventory-c6ed1edeceb7925b","path":".github/workflows/scripts/__tests__/session-sync.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-0968038af4b44941","path":".github/workflows/scripts/__tests__/smoke-adb-binding-and-state-isolation.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-64477b97d987c2ce","path":".github/workflows/scripts/__tests__/smoke-ci-os-preparation.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-e2a5204e3a5da530","path":".github/workflows/scripts/__tests__/smoke-device-readiness.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d8653add6b62d88b","path":".github/workflows/scripts/__tests__/smoke-glob-sharding.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-47b1af1d2aab014b","path":".github/workflows/scripts/__tests__/smoke-logcat-narrowing.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-6af52a959eae9535","path":".github/workflows/scripts/__tests__/stage2-comment-await.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-88d13406734aeac5","path":".github/workflows/scripts/__tests__/test-registry.test.mjs","type":"integration","ci":"L2","status":"active","product":"unclassified","execution":{"workflow":".github/workflows/ci-l2-consistency.yml","job":"orphan-test-check","command":"node --test .github/workflows/scripts/__tests__/test-registry.test.mjs scripts/ci/__tests__/orphan-cache-filter.test.mjs scripts/ci/__tests__/orphan-test-workflow.test.mjs"}}
-  - {"id":"inventory-3bcc3108b4f8b446","path":".github/workflows/scripts/__tests__/wechat-checkout-reuse.test.mjs","type":"integration","ci":"L3","status":"active","product":"unclassified","execution":"ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs; real Git cone/non-cone inherited sparse checkout fixtures"}
+  - {"id":"inventory-3bcc3108b4f8b446","path":".github/workflows/scripts/__tests__/wechat-checkout-reuse.test.mjs","type":"integration","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-05: obsolete Windows customer-service preflight job retired; restore source from 9784012af142f8095dc11cf162bf3f60576f1706 if needed. Android customer-service gate remains independent."}
   - {"id":"inventory-0578a32eddbac0e5","path":".github/workflows/scripts/__tests__/windows-cancel-workflow.evidence-correlation.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-ab23e8525b384dfc","path":".github/workflows/scripts/__tests__/workbench-port-isolation.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-a9dc4f751c5a36b7","path":".github/workflows/scripts/__tests__/workbench-process-ownership.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -8763,7 +8775,6 @@ tests:
   - {"id":"inventory-d9b8a9ccdb75ce61","path":"scripts/release-gate/__tests__/create-release-acceptance.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-03227d06ee8564f1","path":"scripts/release-gate/__tests__/frontend-release.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-00ec8aba7058be5f","path":"scripts/release-gate/__tests__/frontend-staging.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-660b5043d1f0351e","path":"scripts/release-gate/__tests__/nightly-evidence.test.mjs","type":"unit","ci":"L1","status":"active","product":"unclassified","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"Current Douyin physical lane required; generic Android original warning policy, distinct two main runs/36h/full job identity and fail-closed cases retained; retired Windows CS not a prerequisite."}
   - {"id":"inventory-c13a3377edd30b31","path":"scripts/release-gate/__tests__/process-and-business-gates.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-50112f6769a93c25","path":"scripts/release-gate/__tests__/production-backup.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b1da779048d91a09","path":"scripts/release-gate/__tests__/release-admission.test.mjs","type":"contract","ci":"L1","status":"active","product":"unclassified","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"Actual mandatory Brain workflow shell and stdin validation module run with SSH/fetch transports isolated; frozen same-SHA S2/S3 required. No real Brain/network/credentials/device/message operations."}
@@ -10319,11 +10330,58 @@ tests:
     product: 基础设施
     note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.
 
-  - id: nightly-github-checkout-proxy
-    path: .github/workflows/scripts/__tests__/nightly-checkout-proxy.test.mjs
-    type: contract
+  - id: acquisition-retired-outreach-history-pg
+    path: apps/api/tests/integration/business-contracts/outreach-history.pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "Business PostgreSQL 必需检查：真实登录租户、两个历史路由、跨租户与伪造头拒绝、错误不伪装空记录。"
+
+  - id: dashboard-retired-outreach-history
+    path: apps/dashboard/src/pages/AcquisitionOutreachPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "历史触达页面的授权请求、记录展示和读取错误明确显示。"
+
+  - id: dashboard-retired-acquisition-history-errors
+    path: apps/dashboard/src/pages/__tests__/retired-history-errors.test.tsx
+    type: unit
     ci: L3
     status: active
-    product: 基础设施
-    execution: ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs
-    note: Executes both real nightly proxy steps with isolated fake curl and Git environment; no device or live checkout acceptance is implied.
+    product: 智能获客历史
+    note: "账号、验活、任务和线索历史的网络及 HTTP 失败不得显示为空记录。"
+
+  - id: acquisition-cancel-contract-selection
+    path: apps/api/tests/contracts/cancel-spec-selection.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: AI员工
+    note: "真实 Vitest 文件选择核验取消回执仅在必需 business PG 套件运行，不得漏测。"
+
+  - id: retired-acquisition-account-history-browser
+    path: apps/dashboard/e2e/retired-acquisition-account-history.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "专用 PR 浏览器作业：隔离 HTTP 响应验证历史账号、绑定机器与读取错误；不是线上后端、设备或真实账号验收。"
+
+  - id: retired-acquisition-leads-history-real-api
+    path: apps/dashboard/e2e/leads-history-real-api.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "独立测试数据库、真实 API 与登录会话验证历史线索页面和租户隔离；不代表生产或设备验收。"
+
+  - id: acquisition-history-and-retired-rate-limits
+    path: apps/api/src/routes/acquisition-rate-limit.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "Express真实请求逐路验证认证前IP限流、隔离预算和429；不代表真实设备验收。"

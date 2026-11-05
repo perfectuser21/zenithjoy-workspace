@@ -143,7 +143,9 @@ jobs:
         working-directory: apps/dashboard
         env:
           E2E_BASE_URL: 'http://localhost:5174'
-        run: npx playwright test e2e/leads-unified-table.spec.ts --reporter=list
+          E2E_API_URL: 'http://localhost:5200'
+          E2E_DISPOSABLE_DB: '1'
+        run: npx playwright test e2e/leads-history-real-api.spec.ts --reporter=list
 
       - name: Dump apps/api log on failure
         if: failure()
