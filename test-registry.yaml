@@ -10318,3 +10318,12 @@ tests:
     status: active
     product: 基础设施
     note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.
+
+  - id: nightly-github-checkout-proxy
+    path: .github/workflows/scripts/__tests__/nightly-checkout-proxy.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 基础设施
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    note: Executes both real nightly proxy steps with isolated fake curl and Git environment; no device or live checkout acceptance is implied.
