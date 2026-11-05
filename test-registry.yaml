@@ -10617,3 +10617,30 @@ tests:
     status: active
     product: 智能获客历史
     note: "Express真实请求逐路验证认证前IP限流、隔离预算和429；不代表真实设备验收。"
+
+  - id: ci-executed-contract-collection
+    path: .github/workflows/scripts/smoke/helpers/executed-contracts.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: 基础设施
+    execution: ci-smoke-glob-runner.yml / smoke-glob-shards / product-delivery-contracts-smoke.sh
+    note: Actual Node/Python subprocess collections reject empty files, partial empty inventories, skip, todo, import failure and failed assertions.
+
+  - id: ci-local-video-scratch-boundary
+    path: .github/workflows/scripts/smoke/helpers/pipeline-smoke.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: 基础设施
+    execution: ci-smoke-glob-runner.yml / smoke-glob-shards / product-delivery-contracts-smoke.sh
+    note: The actual local-video smoke must reject unowned/nonloopback origins before transport; positive mounted HTTP/PostgreSQL execution is in media/pipeline.test.ts.
+
+  - id: canvas-starter-workflows
+    path: infrastructure/comfyui/tests/starter-workflows.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: AI视频
+    execution: ci-smoke-glob-runner.yml / smoke-glob-shards / video-tools-smoke.sh
+    note: Both shipped starter graphs retain owned asset links, required nodes and fresh request identities; no provider submission.
