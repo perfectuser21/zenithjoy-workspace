@@ -275,7 +275,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-preflight
-        version: 0.4.1
+        version: 0.5.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -802,7 +802,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-dedup
-        version: 0.4.1
+        version: 0.5.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/producer-descriptor.mjs
@@ -1270,7 +1270,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-qualification
-        version: 0.4.1
+        version: 0.5.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/producer-descriptor.mjs
@@ -1938,7 +1938,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.5.1
+        version: 0.6.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/runtime-receipts.mjs
@@ -2551,7 +2551,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-cleanup
-        version: 0.4.1
+        version: 0.5.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs

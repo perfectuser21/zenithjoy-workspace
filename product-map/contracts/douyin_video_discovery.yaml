@@ -246,7 +246,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.5.1
+        version: 0.6.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs

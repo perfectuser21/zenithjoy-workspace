@@ -205,7 +205,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.11.1
+        version: 0.12.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -733,7 +733,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.11.1
+        version: 0.12.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
