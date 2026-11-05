@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync,mkdirSync,readFileSync,readdirSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,rmSync,mkdirSync,readFileSync,readdirSync,statSync,utimesSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHandlers} from '../leadgen-handlers.mjs';
@@ -122,13 +122,35 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
   const panelBase=readFileSync(new URL('./fixtures/honor-e1b-recipient/returned.xml',import.meta.url),'utf8');
   let panelBad=false,wrongVideo=false,nativeCalls=0,panelOpen=false,position=0,shareCount=0,openCount=0;const scrollCalls=[];
   const panel=()=>{if(panelBad)return '<hierarchy/>';let xml=panelBase.replaceAll('测试评论人','测试人'+screen).replaceAll('测试完整评论 首评','在哪里报名'+screen);if(footer){const last=xml.lastIndexOf('</node>'),index=xml.lastIndexOf('</node>',last-1);xml=xml.slice(0,index)+`<node package="${pkg}" text="暂时没有更多了"/>`+xml.slice(index);}return xml;};
-  const timeoutEvidence=[];
+  const timeoutEvidence=[],captureTimes=new Map(),fileClockFacts=[];let freshnessChecked=false;
+  // 显式模拟内核mtime与采证时钟不同步；这不宣称已还原CI遗失的stat。
+  const writeCapturedXml=(file,xml,{simulateCoarseClock=false}={})=>{
+    const capturedAt=Date.now();writeFileSync(file,xml,{mode:0o600});
+    const original=statSync(file);
+    if(simulateCoarseClock)utimesSync(file,Math.floor(capturedAt/1000)-1,Math.floor(capturedAt/1000)-1);
+    const simulated=statSync(file);
+    utimesSync(file,capturedAt/1000,capturedAt/1000);
+    assert.ok(capturedAt<=Date.now()&&capturedAt<collectionScope.deadline_ms,'fixture采证时刻不能来自未来或超原截止');
+    captureTimes.set(file,capturedAt);
+    fileClockFacts.push({name:file.split('/').at(-1),original_mtime_ms:original.mtimeMs,simulated_mtime_ms:simulated.mtimeMs,adopted_mtime_ms:statSync(file).mtimeMs,captured_at_ms:capturedAt,read_at_ms:Date.now(),regular:original.isFile(),size:original.size});
+  };
+  t.after(()=>t.diagnostic(JSON.stringify({fixture_evidence_clock:fileClockFacts})));
   const r=await phoneRig(t,{sample:true,durationMs:450000,onQueue:async(q,{env,vid})=>{
     const v={video_id:vid,video_url:`https://www.douyin.com/video/${vid}`,title:'原视频',keyword:'关键词',line_key:'yuesheng',process_status:persistedCollected?'评论已采':'处理中:'+env.WFR_TAG,judgment_status:'matched',judgment_config:{company_id:'company',version:1,run_id:'prior102'}};
     if(q.op==='claim_videos'||q.op==='inspect_videos')return [v];
     if(q.op==='comment_history')return {version:1,status:'verified',line:'yuesheng',line_key:'yuesheng',run:env.WFR_TAG,source_run:'source101',video_id:vid,video_url:v.video_url,rows:[]};
     if(q.op==='collect'||q.op==='collect_partial'){
       let inserted=0;for(const c of q.comments){recipient.validateEvidence(c.recipientEvidence,{...c.recipientEvidence.scope,comment_body:c.commentBody},{companyBinding:c.recipientEvidence.company_binding});const key=JSON.stringify([c.douyinId,c.commentBody]);if(!pg.has(key)){inserted++;pg.set(key,{id:`00000000-0000-4000-8000-${String(pg.size+11).padStart(12,'0')}`,douyinId:c.douyinId,commentBody:c.commentBody,sourceVideoUrl:c.sourceVideoUrl});}}
+      if(!freshnessChecked&&q.comments.length){
+        const e=q.comments[0].recipientEvidence,s=e.scope,profilePath=join(env.WFR_RUN_DIR,s.profile_eid+'-profile.xml'),returnedPath=join(env.WFR_RUN_DIR,s.profile_eid+'-returned.xml'),capturedAt=captureTimes.get(profilePath),started=Math.floor(capturedAt/1000);
+        const input={runDir:env.WFR_RUN_DIR,line:s.line_key,run:s.run,sourceRun:s.source_run,videoId:s.video_id,videoUrl:s.video_url,profile:s.profile,douyinId:s.douyin_id,nickname:s.nickname,commentBody:q.comments[0].commentBody,started,profilePath,returnedPath,profileEid:s.profile_eid,videoEid:s.video_identity_eid,companyBindingFile:join(env.WFR_RUN_DIR,s.run+'-company-binding.json')};
+        input.companyBindingSha=recipient.hash(readFileSync(input.companyBindingFile));
+        const old=(started-1);utimesSync(profilePath,old,old);
+        assert.throws(()=>recipient.capture(input),/RECIPIENT_FRESH_FILE_INVALID/,'原guard必须拒绝前一秒旧mtime，不能因fixture修复放松');
+        utimesSync(profilePath,capturedAt/1000,capturedAt/1000);
+        assert.ok(capturedAt<=Date.now()&&capturedAt<collectionScope.deadline_ms);
+        assert.ok(recipient.capture(input).file,'同scope与bytes恢复合法采证时刻后仍通过完整原身份核验');freshnessChecked=true;
+      }
       const out={video_id:vid,inserted,comments:q.comments.length,history_verified:0,coverage:q.comments.length};writes.push({op:q.op,inserted,coverage:out.coverage});if(q.op==='collect'){persistedCollected=true;if(lostAck)throw Error('lost final commit ACK');}return out;
     }
     if(q.op==='sample_readback'){assert.deepEqual(q.rows.map(x=>x.douyinId).sort(),[...pg.values()].map(x=>x.douyinId).sort());return {verified:true,video_id:vid,coverage:pg.size,rows:[...pg.values()]};}
@@ -142,14 +164,14 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
     if(op==='ui-evidence'){const file=join(dir,args[0]+'.xml');writeFileSync(file,panelOpen?panel():'<hierarchy><node package="com.ss.android.ugc.aweme" text="视频详情"/></hierarchy>',{mode:0o600});return file;}
     if(op==='commenter-identity'){
       const eid=args[3],profile=join(dir,eid+'-profile.xml'),returned=join(dir,eid+'-returned.xml');
-      writeFileSync(profile,`<hierarchy><node package="${pkg}" text="测试人${screen}" content-desc="测试人${screen}，复制名字和修改备注"/><node package="${pkg}" text="抖音号：person${screen}"/></hierarchy>`,{mode:0o600});writeFileSync(returned,panel(),{mode:0o600});
+      writeCapturedXml(profile,`<hierarchy><node package="${pkg}" text="测试人${screen}" content-desc="测试人${screen}，复制名字和修改备注"/><node package="${pkg}" text="抖音号：person${screen}"/></hierarchy>`,{simulateCoarseClock:screen===1});writeCapturedXml(returned,panel());
       return `douyin_id=person${screen}\naccount_type=personal\nnickname=测试人${screen}\nprofile_evidence=${profile}\nreturn_evidence=${returned}\n`;
     }
   }});
   const previous=process.env.DOUYIN_PHONE_TMP_ROOT,phoneRoot=join(r.dir,'phone');mkdirSync(join(phoneRoot,'evidence'),{recursive:true});
   const {symlinkSync}=await import('node:fs');symlinkSync(r.dir,join(phoneRoot,'evidence','fixture'));process.env.DOUYIN_PHONE_TMP_ROOT=phoneRoot;t.after(()=>{if(previous===undefined)delete process.env.DOUYIN_PHONE_TMP_ROOT;else process.env.DOUYIN_PHONE_TMP_ROOT=previous;});
   r.h.state.intakeVideoIds=[r.vid];const qualification=await r.h.createAgentTools({key:'qualification'},r.scope('qualification'));await qualification.prepare();await qualification.business('claim_videos');await qualification.phone('open-video',r.vid);await qualification.phone('current-video-link');await qualification.business('qualify',{video_id:r.vid});await qualification.business('qualification_readback',{video_id:r.vid});await qualification.settle({execution_stopped:true});
-  const tools=await r.h.createAgentTools({key:'collection'},r.scope('collection'));await tools.prepare();await tools.phone('open-video',r.vid);const beforeSession=nativeCalls;await assert.rejects(()=>tools.phone('swipe-evidence','up'),/PANEL_SESSION/);assert.equal(nativeCalls,beforeSession);await tools.phone('current-video-link');await tools.phone('open-comments');
+  const collectionScope=r.scope('collection'),tools=await r.h.createAgentTools({key:'collection'},collectionScope);await tools.prepare();await tools.phone('open-video',r.vid);const beforeSession=nativeCalls;await assert.rejects(()=>tools.phone('swipe-evidence','up'),/PANEL_SESSION/);assert.equal(nativeCalls,beforeSession);await tools.phone('current-video-link');await tools.phone('open-comments');
   for(const args of [['0','0','0','0','0'],['100','2500','100','2500','0'],[],['left']]){const before=nativeCalls;await assert.rejects(()=>tools.phone('swipe-evidence',...args),/SWIPE_SCOPE|PHONE_INPUT/);assert.equal(nativeCalls,before);}
   await tools.phone('back-evidence');const afterNav=nativeCalls;await assert.rejects(()=>tools.phone('swipe-evidence','up'),/PANEL_SESSION/);assert.equal(nativeCalls,afterNav);await assert.rejects(()=>tools.phone('commenter-identity','111','1258',Buffer.from('测试人1').toString('base64')),/PANEL_SESSION/);assert.equal(nativeCalls,afterNav);await tools.phone('open-video',r.vid);await tools.phone('current-video-link');await tools.phone('open-comments');
   panelBad=true;await assert.rejects(()=>tools.phone('swipe-evidence','up'),/COMMENT_PANEL|SCROLL_VIEWPORT/);assert.equal(scrollCalls.length,0);panelBad=false;await tools.phone('open-comments');
