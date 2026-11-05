@@ -67,3 +67,10 @@ test('真实transport已回但request close观测缺失必须持久false且保un
   }finally{rmSync(dir,{recursive:true,force:true});}
  },{rawTransport:true,scoring:true});
 });
+
+test('仅增诊断不能把原pre-dispatch authority拒绝改类成Gateway可用性故障',async t=>{
+ const g=await gateway(t);await using(async({instance,q,source,runtimeRoot})=>{const cold=await import('file://'+join(runtimeRoot,'official-commander-sdk.mjs')),dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-sdk-authority-error-')));let n=0;const denied=Object.assign(Error('PRIVATE_AUTHORITY_SECRET_SENTINEL'),{code:'OFFICIAL_CONTROL_TASK'}),control={authorizeParentContext:request=>++n===2?Promise.reject(denied):instance.authorizeParentContext(request)};
+  try{const domain=cold.createOfficialCommanderExecute({control,request:q,source,runtimeRoot,directory:dir,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'}),a=argv(q);await assert.rejects(domain.execute('openclaw',a.args,a.options),error=>error===denied);await domain.close();assert.equal(g.frames.length,0);const files=artifacts(dir);assert.equal(files[a.params.idempotencyKey+'.agent.rpc.json'].allocated,false);assert.doesNotMatch(JSON.stringify(files),/PRIVATE_AUTHORITY_SECRET_SENTINEL/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ },{rawTransport:true,scoring:true});
+});
