@@ -9783,6 +9783,38 @@ tests:
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；父Code直连原broker的授权、Commander交换、封权及未知确认不重发；不代表实机或新transport已启用"
 
+  - id: phone-activity-skill-parent-context
+    path: services/phone-adb-controller/__tests__/activity-skill-parent-context.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code父端上下文单独授权、前后epoch、封权与Commander指导，不授业务权限"
+
+  - id: phone-activity-skill-parent-loop
+    path: services/phone-adb-controller/__tests__/activity-skill-parent-loop.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；受限JSON意图、opaque官方回执、一次permit、截止与模型域私有停止事实"
+
+  - id: phone-agent-raw-transport
+    path: services/phone-adb-controller/__tests__/agent-raw-transport.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；显式raw transport与总turn额度冻结及续跑漂移拒绝，旧默认不变"
+
+  - id: phone-agent-raw-executor
+    path: services/phone-adb-controller/__tests__/agent-raw-executor.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实main/executor/broker调用点只认server结果，无旧child字段，不代表真实Agent验收"
+
   - id: phone-activity-skill-primary-broker
     path: services/phone-adb-controller/__tests__/activity-skill-primary-broker.test.mjs
     type: integration

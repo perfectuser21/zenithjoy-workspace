@@ -17,20 +17,51 @@ export function validatePreflightProfile(value){
  return structuredClone(value);
 }
 const agentWorkflows=new Set(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring']);
+function transportPair(value,mode,workflow,{environment=false}={}){
+ const transportKey=environment?'LEADGEN_EXECUTION_TRANSPORT':'execution_transport',turnKey=environment?'LEADGEN_MAX_TURNS':'max_turns';
+ if(!Object.hasOwn(value,transportKey)&&!Object.hasOwn(value,turnKey))return null;
+ const turns=value[turnKey];
+ if(mode!=='agent'||!agentWorkflows.has(workflow)||value[transportKey]!=='raw-model-v1'
+  ||environment&&!(typeof turns==='string'&&/^[1-9][0-9]*$/.test(turns))
+  ||!environment&&!Number.isInteger(turns)||Number(turns)<1||Number(turns)>64)throw Error('EXECUTION_TRANSPORT_INVALID');
+ return {execution_transport:'raw-model-v1',max_turns:Number(turns)};
+}
 export function executionModeInput(env){
  const mode=Object.hasOwn(env,'LEADGEN_EXECUTION_MODE')?env.LEADGEN_EXECUTION_MODE:'code';
  if(!['code','agent'].includes(mode)||mode==='agent'&&!agentWorkflows.has(env.WF_BRAIN_WORKFLOW))throw Error('EXECUTION_MODE_INVALID');
+ transportPair(env,mode,env.WF_BRAIN_WORKFLOW,{environment:true});
  return mode;
 }
+export function executionTransportInput(env){return transportPair(env,executionModeInput(env),env.WF_BRAIN_WORKFLOW,{environment:true});}
 export function frozenExecutionMode(snapshot){
  const mode=Object.hasOwn(snapshot,'execution_mode')?snapshot.execution_mode:'code';
  if(!['code','agent'].includes(mode)||mode==='agent'&&!agentWorkflows.has(snapshot.workflow_version?.payload?.key))throw Error('EXECUTION_MODE_FROZEN_INVALID');
+ transportPair(snapshot,mode,snapshot.workflow_version?.payload?.key);
  return mode;
 }
 export function assertExecutionMode(snapshot,env){
  const mode=executionModeInput(env),frozen=frozenExecutionMode(snapshot);
  if(mode!==frozen)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
+ if(canonical(executionTransportInput(env))!==canonical(transportPair(snapshot,frozen,snapshot.workflow_version?.payload?.key)))throw Error('EXECUTION_TRANSPORT_RESUME_MISMATCH');
  return frozen;
+}
+export function assertExecutionTransport(snapshot,env){const mode=assertExecutionMode(snapshot,env);return transportPair(snapshot,mode,snapshot.workflow_version?.payload?.key);}
+export function methodAllowsExecutionTransport(text,transport){
+ if(transport!=='raw-model-v1'||typeof text!=='string')return false;
+ const front=text.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1]||'';
+ const metadata=front.match(/^metadata:\n((?:[ \t]+[^\n]*(?:\n|$))*)/m)?.[1]||'';
+ const primary=[...metadata.matchAll(/^  primary_execution: *(\S+) *$/gm)],declared=[...metadata.matchAll(/^  execution_transports:([^\n]*)$/gm)];
+ let values=[];
+ if(declared.length===1){
+  const inline=declared[0][1].trim();
+  if(/^\[[a-z0-9., -]+\]$/.test(inline))values=inline.slice(1,-1).split(',').map(value=>value.trim());
+  else if(inline===''){
+   const tail=metadata.slice(declared[0].index+declared[0][0].length),block=tail.match(/^\n((?:    - [a-z0-9][a-z0-9.-]* *(?:\n|$))+)/)?.[1];
+   if(block)values=block.trimEnd().split('\n').map(line=>line.slice(6).trim());
+  }
+ }
+ return (front.match(/^metadata:$/gm)||[]).length===1&&primary.length===1&&primary[0][1]==='agent-v1'
+  &&declared.length===1&&new Set(values).size===values.length&&values.includes(transport);
 }
 export const executionActor=snapshot=>frozenExecutionMode(snapshot)==='agent'?'runtime:phone-adb-controller:agent-v1':'runtime:phone-adb-controller';
 const agentInputKeys=['schema_version','workflow_key','task_id','run_tag','profile','serial','line','source_run','limit','comment_limit','run_max_seconds','run_start_ts','discovery_filters','collection_budget_s'];
@@ -67,15 +98,18 @@ export function agentInput(env){
   sampling=commentSamplingInput(env);
   if(workflow==='douyin_video_processing'){if(!sampling)throw Error('explicit sampling quota required');collectionBudget=collectionBudgetSeconds(env);}
  }catch{throw Error('AGENT_INPUT_COMMENT_QUOTA_INVALID');}
+ const transport=executionTransportInput(env);
  return {schema_version:1,workflow_key:workflow,task_id:tasks[0],run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,
-  source_run:source,limit,comment_limit:sampling?.comment_limit??null,run_max_seconds:runMax,run_start_ts:runStart,discovery_filters:filters,collection_budget_s:collectionBudget};
+  source_run:source,limit,comment_limit:sampling?.comment_limit??null,run_max_seconds:runMax,run_start_ts:runStart,discovery_filters:filters,collection_budget_s:collectionBudget,...(transport||{})};
 }
 export function validateAgentInput(input){
- if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==agentInputKeys.length||Object.keys(input).some(key=>!agentInputKeys.includes(key))||input.schema_version!==1)throw Error('AGENT_INPUT_FROZEN_INVALID');
+ const transport=input&&transportPair(input,'agent',input.workflow_key),keys=[...agentInputKeys,...(transport?['execution_transport','max_turns']:[])];
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==keys.length||Object.keys(input).some(key=>!keys.includes(key))||input.schema_version!==1)throw Error('AGENT_INPUT_FROZEN_INVALID');
  const env={LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:input.workflow_key,WF_BRAIN_TASK_ID:input.task_id,WFR_TAG:input.run_tag,P:input.profile,SERIAL:input.serial,LEADGEN_LINE:input.line,
   LEADGEN_LIMIT:String(input.limit),WF_RUN_MAX_SECONDS:String(input.run_max_seconds),WF_RUN_START_TS:String(input.run_start_ts),...(input.source_run===null?{}:{LEADGEN_SOURCE_RUN:input.source_run}),
   ...(input.comment_limit===null?{}:{LEADGEN_COMMENT_LIMIT:String(input.comment_limit)}),...(input.collection_budget_s===null?{}:{QUEUED_VIDEO_COLLECTION_SECONDS:String(input.collection_budget_s)}),
-  ...(input.discovery_filters?{LEADGEN_SORT:input.discovery_filters.sort,LEADGEN_TIME_LAYER:input.discovery_filters.time_layer,LEADGEN_LOCATION:input.discovery_filters.location}:{})};
+  ...(input.discovery_filters?{LEADGEN_SORT:input.discovery_filters.sort,LEADGEN_TIME_LAYER:input.discovery_filters.time_layer,LEADGEN_LOCATION:input.discovery_filters.location}:{}),
+  ...(transport?{LEADGEN_EXECUTION_TRANSPORT:transport.execution_transport,LEADGEN_MAX_TURNS:String(transport.max_turns)}:{})};
  if(canonical(agentInput(env))!==canonical(input))throw Error('AGENT_INPUT_FROZEN_INVALID');
  return input;
 }
@@ -213,6 +247,8 @@ export async function freezeDefinition(o) {
   const executionMode=executionModeInput({WF_BRAIN_WORKFLOW:o.workflowKey,...(Object.hasOwn(o,'executionMode')?{LEADGEN_EXECUTION_MODE:o.executionMode}:{})});
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
   const fixedAgentInput=executionMode==='agent'?validateAgentInput(o.agentInput):null;
+  const executionTransport=fixedAgentInput?transportPair(fixedAgentInput,executionMode,o.workflowKey):null;
+  if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(transportPair(readFrozen(o.runDir),executionMode,o.workflowKey))!==canonical(executionTransport))throw Error('EXECUTION_TRANSPORT_RESUME_MISMATCH');
   const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null||o.preflightProfile!=null;
   if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null)||canonical(old.preflight_profile||null)!==canonical(o.preflightProfile||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
   if(hasPreflight&&(executionMode!=='agent'||!['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey)||!o.preflightPg||!o.preflightControlScope||!o.preflightProfile||Object.keys(o.preflightPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.preflightPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('PREFLIGHT_INPUT_MODE_INVALID');
@@ -286,6 +322,10 @@ export async function freezeDefinition(o) {
     const entry=av.payload.contract.runtime?.entry;
     if(entry && !implementations.some(b=>b.execution_verification==='verified_local' && b.path===`services/phone-adb-controller/${entry}`)) throw Error(`运行入口没有本机已核验binding: ${entry}`);
     if(executionMode==='agent'&&implementations.filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local').length!==1)throw Error('AGENT_PRIMARY_SKILL_BINDING_UNVERIFIED');
+    if(executionTransport){
+      const method=implementations.find(b=>b.kind==='skill'&&b.execution_verification==='verified_local');
+      if(!methodAllowsExecutionTransport(checked.get(method.path).bytes.toString('utf8'),executionTransport.execution_transport))throw Error('EXECUTION_TRANSPORT_METHOD_UNSUPPORTED');
+    }
     activities.push({reference:ref,version:av,implementations});
   }
   if(!activities.length) throw Error('运行工作流无活动');
@@ -302,7 +342,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
+    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{})}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};

@@ -116,3 +116,10 @@ test('a real socket loses its acknowledgement after the effect and the parent ne
  await assert.rejects(client.call('business',{operation:'lookup',input:{}}),/PARENT_BROKER_DELIVERY_UNKNOWN/);
  assert.equal(effects,1);
 });
+
+test('both parent permit and server delivery authority receive the exact parsed operation body',async t=>{
+ const {client,effects}=await fixture(t,{authorize:async(q,delivery)=>q.nonce==='a'.repeat(48)&&delivery?.op==='business'
+  &&JSON.stringify(delivery.body)===JSON.stringify({operation:'lookup',input:{video_id:'original'}})});
+ await client.call('business',{operation:'lookup',input:{video_id:'original'}});
+ assert.deepEqual(effects,[{operation:'lookup',input:{video_id:'original'}}]);
+});

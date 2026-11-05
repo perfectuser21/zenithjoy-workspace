@@ -1,6 +1,7 @@
 // Parent-only preflight resource issuer. Serialized data is never cleanup authority.
 import {readFileSync,lstatSync,realpathSync,appendFileSync,mkdirSync} from 'node:fs';import {join,resolve} from 'node:path';import {userInfo} from 'node:os';import {createHash,randomUUID} from 'node:crypto';
 import {skillLaunchDidNotStart} from './activity-skill-executor.mjs';
+import {rawModelScopeStopped} from './activity-skill-parent-loop.mjs';
 import {readFrozen} from './runtime-definition.mjs';import {readBinding} from './runtime-binding.mjs';import {rpcSource} from './leadgen-client.mjs';import {createPreflightMetadata} from './preflight-metadata.mjs';import {createPreflightPoolFactory,assertPreflightProfile} from './preflight-control-scope.mjs';import {startPreflightNativeDomain,preflightDomainClosure} from './preflight-native-domain.mjs';import {assertPreflightPng,createPreflightPhoneDriver} from './preflight-phone-driver.mjs';import {startPreflightLocalLeaves} from './preflight-local-leaves.mjs';
 const runtimes=new WeakSet(),records=new WeakMap(),hash=b=>createHash('sha256').update(b).digest('hex');
 export const isPreflightRuntime=value=>runtimes.has(value);
@@ -22,6 +23,10 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
  const runtime={metadata,supports:()=>false,nativeState:()=>({execution_unknown:bootstrapUnknown||metadata.snapshot().unknown||Boolean(current&&records.get(current)?.unknown)}),
   async prepare(scope,ctx){
    if(!['preflight','cleanup'].includes(scope.activity))fail('ACTIVITY');
+   if(['execution_transport','max_turns','agent_nonce'].some(key=>Object.hasOwn(scope,key))||Object.hasOwn(frozen,'execution_transport')){
+    if(scope.execution_transport!=='raw-model-v1'||frozen.execution_transport!==scope.execution_transport||frozen.agent_input.execution_transport!==scope.execution_transport
+      ||!Number.isInteger(scope.max_turns)||scope.max_turns<1||scope.max_turns>64||frozen.max_turns!==scope.max_turns||frozen.agent_input.max_turns!==scope.max_turns||!/^[a-f0-9]{48}$/.test(scope.agent_nonce||''))fail('RAW_TRANSPORT');
+   }
    const spec=frozen.discovery_phone_scope||frozen.collection_phone_scope,identity={task_id:taskId,run_id:binding.run_id,binding_id:binding.id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,owner:env.WFR_TAG};Object.freeze(identity);
    if(!spec||spec.version!==1||scope.task_id!==taskId||scope.binding_id!==binding.id||scope.run_id!==binding.run_id||ctx.state.source_commit!==identity.source_commit||ctx.state.task_id!==taskId)fail('IDENTITY');
    for(const k of ['task_id','run_id','source_commit','profile','serial'])if(spec[k]!==identity[k]||scope[k]!==identity[k])fail('IDENTITY');
@@ -46,7 +51,8 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
    r.stable=stable;r.assertResources=assertResources;r.lockRoot=localRoot;r.lock=lock;const adb=async(...args)=>{await assertResources();r.physicalSequence++;r.desktopCapability=null;return domain.adb(...args);};
    r.driver=createPreflightPhoneDriver({adb,local:{run:(...args)=>domain.local(...args)},purpose:scope.activity,evidenceRoot:spec.evidence_root,owner:identity.owner,profile:env.P,serial:env.SERIAL,model:profile.model,width:profile.width,height:profile.height,expectedAccount:spec.expected_account,deadlineMs:scope.worker_deadline_ms,assertResources});
    const handle={identity,activity:scope.activity,async phone(command,...args){if(!r.owned)fail('NO_LOCAL_OWNER');return r.driver.run(command,...args);},async heartbeat(){await lock('refresh');return {renewed:true};},async close(proof,desktop){
-     const noLaunch=skillLaunchDidNotStart(proof,scope),stopped=official(proof,identity.source_commit);r.official=stopped;r.noLaunch=noLaunch;
+     const noLaunch=skillLaunchDidNotStart(proof,scope),stopped=scope.execution_transport==='raw-model-v1'
+      ?proof?.execution_stopped===true&&rawModelScopeStopped(proof.raw_model_proof,scope):official(proof,identity.source_commit);r.official=stopped;r.noLaunch=noLaunch;
      try{
       if(stopped&&scope.activity==='cleanup'&&desktop){
        await assertResources();const {close_stdout,desktop_stdout,xml,png}=desktop;

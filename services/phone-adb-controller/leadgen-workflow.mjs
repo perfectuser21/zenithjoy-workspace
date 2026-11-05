@@ -61,7 +61,7 @@ export function activityExecutionDeadline({activity,env,previous,now=Date.now(),
 
 // Main and tests consume this same mode/deadline boundary. It never downgrades
 // an Agent-first request into the original Code implementation.
-export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,activities,taskId}){
+export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,activities,taskId,createOfficialControl}){
  const executionMode=assertExecutionMode(frozen,env),activityDeadlines=new Map();
  const fixedAgentInput=assertAgentInput(frozen,env);
  if(fixedAgentInput&&taskId!=null&&taskId!==fixedAgentInput.task_id)throw Object.assign(Error('AGENT_INPUT_TASK_CONFLICT'),{executionStopped:true});
@@ -84,6 +84,10 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  if(executionMode==='agent'){
   if(typeof handlers.createAgentTools!=='function')throw Object.assign(Error('AGENT_PRIMARY_TOOLS_UNAVAILABLE'),{executionStopped:true});
   const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,
+   createOfficialControl:createOfficialControl|| (async options=>{
+    const {createOfficialAgentControlFactory}=await import('./official-agent-control.mjs');
+    return createOfficialAgentControlFactory({runtimeRoot:join(runDir,'runtime'),source:rpcSource(frozen)})(options);
+   }),
    nativeState:()=>handlers.agentNativeState?.()||{execution_unknown:true},
    supportsNativeScope:activity=>handlers.agentSupportsNativeScope?.(activity)===true,
    createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});

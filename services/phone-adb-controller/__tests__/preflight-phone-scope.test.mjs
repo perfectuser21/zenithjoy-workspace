@@ -1,6 +1,16 @@
 import {preflightTestPython} from './helpers/preflight-test-python.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {fileURLToPath,pathToFileURL} from 'node:url';import {spawnSync} from 'node:child_process';import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,realpathSync} from 'node:fs';import os from 'node:os';import {syncBuiltinESMExports} from 'node:module';import {join,dirname} from 'node:path';import {createHash} from 'node:crypto';
 const root=dirname(fileURLToPath(new URL('../preflight-phone-scope.mjs',import.meta.url))),sha=b=>createHash('sha256').update(b).digest('hex');
+// Only the remote official SDK is controlled here. The loop, broker, raw brand,
+// native nofork producer and exact-epoch local lock below are the real modules.
+async function rawModelProof(scope,directory){
+ const {startPrimaryActivityBroker}=await import('../activity-skill-primary-broker.mjs'),{runActivitySkillParentLoop}=await import('../activity-skill-parent-loop.mjs');
+ const dir=join(directory,'raw-model-'+scope.activity),request={protocol:'leadgen-activity-v1',mode:'execute',execution_transport:'raw-model-v1',max_turns:scope.max_turns,workflow_key:scope.workflow,activity_key:scope.activity,run_id:scope.run_id,run_tag:scope.run,task_id:scope.task_id,binding_id:scope.binding_id,source_commit:scope.source_commit,runtime_snapshot_sha256:scope.snapshot_sha256,nonce:scope.agent_nonce,profile:scope.profile,serial:scope.serial,line:scope.line,source_run:scope.source_run,limit:scope.limit,comment_limit:scope.comment_limit,deadline_ms:scope.deadline_ms,worker_deadline_ms:scope.worker_deadline_ms,receipt_deadline_ms:scope.receipt_deadline_ms,method:{text:readFileSync(join(root,'skills/douyin-leadgen-activity-102-'+scope.activity+'/SKILL.md'),'utf8')},broker_request_path:join(dir,'broker-request.json')};
+ let receipt,sealed=false,closed=false;const snapshots=new WeakSet();
+ const control={async request(q){assert.equal(q.kind,'official_agent_turn');assert.equal(q.turn.index,0);receipt=Object.freeze({});return receipt;},verifyTurnReceipt(value){assert.equal(value,receipt);return {status:'ok',text:'{"type":"finish"}',official_run_id:'33333333-3333-4333-8333-333333333333'};},verifyStopReceipt(){throw Error('NO_STOP');},authorizeIntent(){throw Error('NO_TOOL_INTENT');},consumeIntentPermit(){return false;},seal(){sealed=true;},async close(){closed=true;},snapshot(){const value=Object.freeze({sealed,closed});snapshots.add(value);return value;},verifySealedExecution(value){return snapshots.has(value)&&sealed&&closed;}};
+ const broker=await startPrimaryActivityBroker({directory:dir,request,inspect:async()=>({}),phone:async()=>{throw Error('NO_MODEL_PHONE');},business:async()=>{throw Error('NO_MODEL_BUSINESS');},authorizeParentContext:async()=>true});
+ try{const result=await runActivitySkillParentLoop({request,scope,broker,control});assert.equal(result.official_execution_stopped,true);assert.ok(result.model_stop_proof);return {execution_stopped:true,raw_model_proof:result.model_stop_proof};}finally{await broker.close();}
+}
 async function fixture(){
  const {SourceTextModule,SyntheticModule}=vm,serial=process.argv.includes('--tcp')?'47.100.213.173:10001':'SERIAL';
  const directory=realpathSync(mkdtempSync(join(os.tmpdir(),'preflight-scope-real-'))),runtime=join(directory,'runtime'),home=join(directory,'home'),evidence=join(directory,'evidence');mkdirSync(runtime);mkdirSync(home);mkdirSync(evidence);
@@ -37,7 +47,9 @@ async function fixture(){
     writeFileSync(join(runtime,'deployment-manifest.json'),JSON.stringify({source_commit:source}));
    }
    if(process.argv.includes('--missing-profile')){delete frozen.preflight_profile;assert.throws(()=>createPreflightRuntime({root:runtime,env,frozen,binding,taskId:task}),/PREFLIGHT_PROFILE/);assert.equal((await import('node:fs')).existsSync(join(lockRoot,serial+'.lock')),false);return {missing_profile:true};}
+   if(process.argv.includes('--raw')){frozen.execution_transport='raw-model-v1';frozen.max_turns=2;Object.assign(frozen.agent_input,{execution_transport:'raw-model-v1',max_turns:2});}
    const factory=createPreflightRuntime({root:runtime,env,frozen,binding,taskId:task}),now=Date.now(),scope={workflow:'douyin_video_discovery',run:'fixture',activity:'preflight',profile:'fixture',serial:serial,task_id:task,run_id:binding.run_id,binding_id:binding.id,source_commit:source,worker_deadline_ms:now+15000,receipt_deadline_ms:now+20000};
+   if(process.argv.includes('--raw'))Object.assign(scope,{execution_transport:'raw-model-v1',max_turns:2,agent_nonce:'d'.repeat(48),snapshot_sha256:frozen.snapshot_sha256,line:'yuesheng',source_run:null,limit:2,comment_limit:null,deadline_ms:now+22000});
    assert.deepEqual(await factory.quarantine(),{verified:false,not_owned:true,physical_actions:0});
    activeFactory=factory;if(process.argv.includes('--runner'))return await runFixtureWorkflow({root,runtime,directory,frozen,env,factory,binding,task,module,SourceTextModule,SyntheticModule});
    if(process.argv.includes('--tcp')){await assert.rejects(()=>factory.prepare({...scope,serial:'47.100.213.173:10002'},{state:{source_commit:source,task_id:task,company_config:{expected_sender:'actual'}},assertResources:async()=>{}}),/IDENTITY/);assert.equal(factory.current(),undefined);}
@@ -51,20 +63,21 @@ async function fixture(){
     assert.deepEqual(await factory.release(),{local_resources_released:1,physical_cleanup_not_required:true,lock_released:1,no_lock:true});assert.equal(factory.nativeState().execution_unknown,false);return {no_local:true};
    }
    const handle=await factory.prepare(scope,context);assert.equal(handle.snapshot().owned,true);assert.equal(handle.snapshot().facts.call_state_idle,true);
-   const proof={execution_stopped:true,receipt:{source_commit:source,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:'33333333-3333-4333-8333-333333333333',terminal:{runId:'33333333-3333-4333-8333-333333333333',endedAt:Date.now()}}};
+   const proof=process.argv.includes('--raw')?await rawModelProof(scope,directory):{execution_stopped:true,receipt:{source_commit:source,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:'33333333-3333-4333-8333-333333333333',terminal:{runId:'33333333-3333-4333-8333-333333333333',endedAt:Date.now()}}};
+   if(process.argv.includes('--raw-forged')){await assert.rejects(()=>handle.close(structuredClone(proof)),/OFFICIAL_STOP/);assert.equal(factory.nativeState().execution_unknown,true);return {raw_forged:true};}
    if(process.argv.includes('--wrong-source')){proof.receipt.source_commit='c'.repeat(40);await assert.rejects(()=>handle.close(proof),/OFFICIAL_STOP/);assert.equal(handle.snapshot().closed,true);assert.equal(factory.nativeState().execution_unknown,true);await assert.rejects(()=>factory.prepare({...scope,activity:'cleanup'},context),/CLEANUP_AUTHORITY/);
     if(process.argv.includes('--quarantine-expired')){const realNow=Date.now;try{Date.now=()=>scope.receipt_deadline_ms+1;const marker=await factory.quarantine();assert.equal(marker.verified,true);assert.equal(marker.physical_actions,0);}finally{Date.now=realNow;}assert.equal(readFileSync(join(lockRoot,serial+'.lock/standalone_review_required'),'utf8').trim(),'fixture');assert.equal(factory.nativeState().execution_unknown,true);return {unknown:true,marker:true};}
     return {unknown:true};}
    assert.equal((await handle.close(proof)).execution_stopped,true);assert.equal(factory.nativeState().execution_unknown,false);assert.throws(()=>factory.desktopVerificationOptions(),/DESKTOP_AUTHORITY/);
-   const cleanup=await factory.prepare({...scope,activity:'cleanup'},context);try{
+   const cleanupScope={...scope,activity:'cleanup',...(process.argv.includes('--raw')?{agent_nonce:'e'.repeat(48)}:{})},cleanup=await factory.prepare(cleanupScope,context),cleanupProof=process.argv.includes('--raw')?await rawModelProof(cleanupScope,directory):proof;try{
    const close_stdout=await cleanup.phone('close-app'),desktop_stdout=await cleanup.phone('return-safe-desktop'),id='fixture-a1-cleanup-desktop';
    const xmlFile=(await cleanup.phone('ui-evidence',id)).trim(),pngFile=(await cleanup.phone('snapshot-evidence',id)).trim(),xml=readFileSync(xmlFile,'utf8'),png=readFileSync(pngFile);
-   assert.equal((await cleanup.close(proof,{close_stdout,desktop_stdout,xml,png})).execution_stopped,true);
+   assert.equal((await cleanup.close(cleanupProof,{close_stdout,desktop_stdout,xml,png})).execution_stopped,true);
    const options=factory.desktopVerificationOptions(),{verifyAgentDesktopNative}=await import('../discovery-cleanup-readback.mjs');assert.equal(verifyAgentDesktopNative(close_stdout,desktop_stdout,xml,png,options),'com.android.launcher');
    assert.throws(()=>verifyAgentDesktopNative(close_stdout,desktop_stdout,xml+' ',png,options),/DESKTOP_BINDING/);
    await assert.rejects(()=>cleanup.phone('close-app'),/PREFLIGHT_PHONE_CLOSED/);
    assert.deepEqual(await factory.release(),{lock_released:1,no_lock:true});await assert.rejects(()=>factory.release(),/RELEASE_AUTHORITY/);
-   return {owned:cleanup.snapshot().owned,closed:cleanup.snapshot().closed,supports:factory.supports({key:'preflight'})};}finally{await cleanup.close(proof);}
+   return {owned:cleanup.snapshot().owned,closed:cleanup.snapshot().closed,supports:factory.supports({key:'preflight'})};}finally{await cleanup.close(cleanupProof);}
   }finally{if(activeFactory?.current()&&!activeFactory.current().snapshot().closed)await activeFactory.current().close().catch(()=>{});for(const s of sockets)s.destroy();await new Promise(r=>server.close(r));}
  }finally{os.userInfo=originalUser;syncBuiltinESMExports();rmSync(directory,{recursive:true,force:true});}
 }
@@ -94,6 +107,9 @@ if(process.argv.includes('--scope-fixture')){try{console.log(JSON.stringify(awai
 else test('actual preflight factory owns nofork route/device/local lock and requires independent official stop',{skip:process.platform!=='darwin'},()=>{
  const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{owned:false,closed:true,supports:false});
 });
+
+if(!process.argv.includes('--scope-fixture'))test('real raw model brand closes only its matching preflight and cleanup native domains',{skip:process.platform!=='darwin'},()=>{const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture','--raw'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{owned:false,closed:true,supports:false});});
+if(!process.argv.includes('--scope-fixture'))test('serialized raw model brand never grants cleanup or releases the native lock',{skip:process.platform!=='darwin'},()=>{const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture','--raw','--raw-forged'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{raw_forged:true});});
 
 if(!process.argv.includes('--scope-fixture'))test('wrong official source still seals owned host leaves but never grants cleanup authority',{skip:process.platform!=='darwin'},()=>{const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture','--wrong-source'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{unknown:true});});
 

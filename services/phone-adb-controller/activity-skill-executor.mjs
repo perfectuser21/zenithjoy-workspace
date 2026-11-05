@@ -3,9 +3,10 @@ import {existsSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {frozenMethod} from './activity-skill-recovery.mjs';
-import {assertExecutionMode,assertAgentInput,canonical} from './runtime-definition.mjs';
+import {assertExecutionMode,assertExecutionTransport,assertAgentInput,canonical,methodAllowsExecutionTransport} from './runtime-definition.mjs';
 import {safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {startPrimaryActivityBroker} from './activity-skill-primary-broker.mjs';
+import {runActivitySkillParentLoop,rawModelScopeStopped} from './activity-skill-parent-loop.mjs';
 
 const notLaunched=new WeakMap();
 export const skillLaunchDidNotStart=(proof,scope)=>Boolean(proof&&scope&&notLaunched.get(proof)===canonical(scope));
@@ -30,13 +31,14 @@ const uncertainty=(actual,receipt,request)=>{
  return {unknown_reasons:[...reasons],owner_execution_stopped:sourceMatches&&receipt?.owner_execution_stopped===true,child_execution_stopped:sourceMatches&&receipt?.child_execution_stopped===true};
 };
 
-export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,createTools,deadlineFor,supportsNativeScope=()=>false,nativeState=()=>({})}){
+export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,createTools,createOfficialControl,deadlineFor,supportsNativeScope=()=>false,nativeState=()=>({})}){
  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
  assertAgentInput(frozen,env);
  if(typeof createTools!=='function'||typeof rpc!=='function'||typeof deadlineFor!=='function')throw noLaunch('AGENT_PRIMARY_DEPENDENCY_UNAVAILABLE');
  return async(activity,{context={},guidance=[],signal,deadline_ms:runnerDeadline,onEvent=async()=>({action:'none'})}={})=>{
   if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
   const fixed=assertAgentInput(frozen,env);
+  const transport=assertExecutionTransport(frozen,env);
   const directory=join(runDir,'skill-primary',activity.key);
   if(existsSync(directory))throw Object.assign(Error('SKILL_PRIMARY_ALREADY_REQUESTED_TERMINATION_UNVERIFIED'),{executionStopped:false});
   const known=nativeState();if(known.native_stop_unproven===true||known.execution_unknown===true)return {status:'needs_review',not_started:true,execution_stopped:false,reason:'AGENT_PRIMARY_PREVIOUS_NATIVE_UNVERIFIED',resource_unverified:true};
@@ -52,35 +54,48 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   const metadata=front?.match(/^metadata:\n((?:[ \t]+[^\n]*(?:\n|$))*)/m)?.[1]||'';
   const declarations=[...metadata.matchAll(/^  primary_execution: *(\S+) *$/gm)];
   if((front?.match(/^metadata:$/gm)||[]).length!==1||declarations.length!==1||declarations[0][1]!=='agent-v1')throw noLaunch('AGENT_PRIMARY_METHOD_UNSUPPORTED');
+  if(transport&&(!methodAllowsExecutionTransport(method.text,transport.execution_transport)||typeof createOfficialControl!=='function'))throw noLaunch('AGENT_PRIMARY_RAW_TRANSPORT_UNAVAILABLE');
   if(!Number.isSafeInteger(deadline)||deadline<=Date.now())throw noLaunch('AGENT_PRIMARY_DEADLINE_EXHAUSTED');
+  const rawNonce=transport?randomBytes(24).toString('hex'):null;
   const scope={workflow:fixed.workflow_key,activity:activity.key,run:fixed.run_tag,run_id:binding.run_id,task_id:taskId,
    binding_id:binding.id,source_commit:frozen.deployment.source_commit,snapshot_sha256:frozen.snapshot_sha256,
    profile:fixed.profile,serial:fixed.serial,line:fixed.line,source_run:fixed.source_run,
    limit:fixed.limit,comment_limit:fixed.comment_limit,discovery_filters:structuredClone(fixed.discovery_filters),collection_budget_s:fixed.collection_budget_s,
-   run_start_ts:fixed.run_start_ts,run_max_seconds:fixed.run_max_seconds,deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline};
+   run_start_ts:fixed.run_start_ts,run_max_seconds:fixed.run_max_seconds,deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,
+   ...(transport?{...transport,agent_nonce:rawNonce}:{})};
   const tools=await createTools(activity,scope);
   if(!tools||['inspect','phone','business','getResult','prepare','settle'].some(key=>typeof tools[key]!=='function')
-    ||activity.key==='cleanup'&&typeof tools.release!=='function')throw noLaunch('AGENT_PRIMARY_TOOLS_UNAVAILABLE');
+    ||activity.key==='cleanup'&&typeof tools.release!=='function'||transport&&typeof tools.closeNativeScope!=='function')throw noLaunch('AGENT_PRIMARY_TOOLS_UNAVAILABLE');
   // This durable directory reserves one launch, including an ambiguous RPC result.
   mkdirSync(directory,{recursive:true,mode:0o700});
   let request={protocol:'leadgen-activity-v1',mode:'execute',run_id:binding.run_id,task_id:taskId,binding_id:binding.id,
    workflow_key:scope.workflow,run_tag:scope.run,profile:scope.profile,serial:scope.serial,line:scope.line,
    source_run:fixed.source_run,limit:fixed.limit,comment_limit:fixed.comment_limit,run_max_seconds:fixed.run_max_seconds,
    discovery_filters:structuredClone(fixed.discovery_filters),discovery_input:structuredClone(frozen.discovery_input||null),
-   activity_key:activity.key,nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,source_commit:scope.source_commit,
+   activity_key:activity.key,nonce:rawNonce||randomBytes(24).toString('hex'),deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,source_commit:scope.source_commit,...(transport||{}),
    workflow_definition_version_id:frozen.workflow_version.id,runtime_snapshot_sha256:frozen.snapshot_sha256,
    release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,method,broker_host:frozen.deployment.target,
    broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
    commander_guidance:Array.isArray(guidance)?guidance.filter(value=>typeof value==='string').map(value=>safeExecutionDiagnostic(value,env).slice(0,16000)).slice(0,4):[]};
   writeFileSync(join(directory,'launch-intent.json'),JSON.stringify({scope,request}),{flag:'wx',mode:0o600});
-  let broker,receipt,caughtError,dispatched=false,stopped=false,lastProgress=Date.now(),heartbeatError=null;
+  let broker,receipt,caughtError,dispatched=false,stopped=false,lastProgress=Date.now(),heartbeatError=null,rawControl,rawProof,rawLastIndex=null,rawControlKnown=false;
   let heartbeat,stall,heartbeatJob=Promise.resolve(),stallJob=Promise.resolve(),abortJob=Promise.resolve(),heartbeatBusy=false,stallBusy=false;
   const stop=async reason=>{
+   if(transport){
+    if(rawLastIndex===null)return {execution_stopped:!dispatched};
+    try{const value=await rawControl.request({kind:'official_agent_stop',request,turn_index:rawLastIndex});return {execution_stopped:object(rawControl.verifyStopReceipt(value,{request,index:rawLastIndex}))};}
+    catch{return {execution_stopped:false};}
+   }
    try{return (await rpc({kind:'activity_skill_stop',request,reason},{timeoutMs:Math.max(1,Math.min(48000,deadline-Date.now()))})).result;}
    catch{return {execution_stopped:false};}
   };
   const abort=()=>{if(dispatched)abortJob=Promise.resolve(broker?.abort('runner_cancelled')).catch(()=>{});};
   try{
+   if(transport){
+    rawControl=await createOfficialControl({request,scope,directory});
+    if(!rawControl||['authorizeParentContext','authorizeBrokerDelivery','seal','close','snapshot','verifySealedExecution'].some(key=>typeof rawControl[key]!=='function')
+      ||await rawControl.authorizeParentContext(request)!==true)throw noLaunch('AGENT_PRIMARY_RAW_AUTHORITY_UNVERIFIED');
+   }
    const preparation=await tools.prepare();
    if(activity.key==='cleanup'&&preparation?.native_cleanup_not_required===true){
     const proof=Object.freeze({agent_not_launched:true,execution_stopped:true});notLaunched.set(proof,canonical(scope));
@@ -93,7 +108,8 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    broker=await startPrimaryActivityBroker({directory,request,inspect:tools.inspect,phone:tools.phone,business:tools.business,
     isReadOnlyBusinessOperation:(operation,input)=>tools.canReadback?.(operation,input)===true,
     getActivityResult:tools.getResult,onEvent:async event=>{if(event.type==='progress')lastProgress=Date.now();return onEvent(event);},onAbort:stop,
-    authorize:async()=>!heartbeatError&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:Math.max(1,Math.min(10000,deadline-Date.now()))})).authorized===true});
+    authorize:async(_incoming,delivery)=>!heartbeatError&&(transport?await rawControl.authorizeBrokerDelivery(request,delivery)===true:(await rpc({kind:'activity_skill_authority',request},{timeoutMs:Math.max(1,Math.min(10000,deadline-Date.now()))})).authorized===true),
+    ...(transport?{authorizeParentContext:async q=>!heartbeatError&&await rawControl.authorizeParentContext(q)===true}:{})});
    signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
    if(typeof tools.heartbeat==='function'){
     heartbeat=setInterval(()=>{if(heartbeatBusy||heartbeatError)return;heartbeatBusy=true;heartbeatJob=Promise.resolve().then(()=>tools.heartbeat()).catch(error=>{heartbeatError=error;return broker.abort('resource_heartbeat_unverified');}).finally(()=>{heartbeatBusy=false;});},60000);heartbeat.unref();
@@ -105,6 +121,29 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
      .catch(async error=>{heartbeatError=error;await broker.abort('event_sink_failed');}).finally(()=>{lastProgress=Date.now();stallBusy=false;});
    },Math.min(1000,stallMs));stall.unref();
    if(signal?.aborted||Date.now()>=workerDeadline)throw Error('AGENT_PRIMARY_DEADLINE_EXHAUSTED_BEFORE_DISPATCH');
+   if(transport){
+    const control=new Proxy(rawControl,{get(target,key){if(key==='request')return message=>{if(message.kind==='official_agent_turn'){dispatched=true;rawLastIndex=message.turn.index;}return target.request(message);};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});
+    const raw=await runActivitySkillParentLoop({request,scope,broker,control,signal,canReadback:(operation,input)=>tools.canReadback?.(operation,input)===true});
+    rawProof=raw.model_stop_proof;rawControlKnown=rawControl.verifySealedExecution(rawControl.snapshot(),{request})===true;
+    receipt={execution_transport:transport.execution_transport,source_commit:request.source_commit,reason:raw.reason,turn_count:raw.turn_count,
+     official_execution_stopped:raw.official_execution_stopped,model_execution_unknown:raw.model_execution_unknown,broker_execution_unknown:raw.broker_execution_unknown};
+    writeFileSync(join(directory,'raw-agent-receipt.json'),JSON.stringify(receipt),{flag:'wx',mode:0o600});
+    signal?.removeEventListener('abort',abort);clearInterval(heartbeat);clearInterval(stall);await heartbeatJob;await stallJob;await abortJob;
+    let actual=broker.getResult();
+    if(!rawModelScopeStopped(rawProof,scope)||!rawControlKnown||nativeUnknown(actual)||heartbeatError)return {status:'needs_review',execution_stopped:false,reason:'raw模型域、资源或原生停止未全部验证',skill_receipt:receipt,
+     ...(heartbeatError?{resource_unverified:true,resource_unknown_reasons:['heartbeat_unverified']}:{})};
+    stopped=true; // Finally still requires the independent native close proof.
+    const proof={execution_stopped:true,raw_model_proof:rawProof};
+    await tools.settle(proof);actual=broker.getResult();
+    if(nativeUnknown(actual))return {status:'needs_review',execution_stopped:false,reason:'raw模型已停，原生或业务结果仍未知',skill_receipt:receipt};
+    if(activity.key==='cleanup')await tools.release(proof);
+    actual=broker.getResult();
+    if(nativeUnknown(actual))return {status:'needs_review',execution_stopped:false,reason:'raw收尾资源或业务结果未知',skill_receipt:receipt};
+    stopped=true;
+    if(actual.commander_aborted)return {status:'needs_review',execution_stopped:true,reason:'Commander请求中止，等待复核',skill_receipt:receipt,commander_status:actual.commander_status};
+    if(raw.reason!=='agent_finished'||!object(actual.result))return {status:'partial',execution_stopped:true,reason:'raw Agent未交付可独立验收的完整工具结果',skill_receipt:receipt,commander_status:actual.commander_status};
+    return {status:['failed','partial','paused','needs_review'].includes(actual.result.status)?'partial':actual.result.status==='empty'?'empty':'completed',execution_stopped:true,result:actual.result,skill_receipt:receipt,commander_status:actual.commander_status};
+   }
    dispatched=true;receipt=(await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,rpcDeadline-Date.now())})).result;
    // Revoke the capability synchronously before any await can admit a late
    // authorized call. A live request includes its Commander/log/reply tail.
@@ -133,7 +172,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   }catch(error){
    caughtError=error;
    const sealed=broker?.seal();
-   if(broker&&dispatched&&!stopped){
+   if(!transport&&broker&&dispatched&&!stopped){
     // A child-only stop acknowledgement never proves that its parent returned.
     error.executionStopped=false;
     const stopReceipt=await stop('execution_failed');
@@ -145,9 +184,10 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   finally{
    signal?.removeEventListener('abort',abort);clearInterval(heartbeat);clearInterval(stall);await heartbeatJob;await stallJob;await abortJob;
    if(broker)await broker.close();
+   if(rawControl){try{rawControl.seal(request);await rawControl.close();rawControlKnown=rawControl.verifySealedExecution(rawControl.snapshot(),{request})===true;}catch{rawControlKnown=false;}}
    if(typeof tools.closeNativeScope==='function'){
-    let proof={execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
-    if(!dispatched){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
+    let proof=transport?{execution_stopped:rawControlKnown&&rawModelScopeStopped(rawProof,scope),raw_model_proof:rawProof}:{execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
+    if(!dispatched&&(!transport||!rawControl||rawControlKnown)){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
     try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;}
     catch{if(caughtError)caughtError.executionStopped=false;else throw Object.assign(Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED'),{executionStopped:false});}
    }

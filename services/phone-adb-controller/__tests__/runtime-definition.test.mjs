@@ -39,12 +39,12 @@ test('旧快照缺执行模式仍为Code，不能把已冻结Code静默改成Age
  assert.throws(()=>assertExecutionMode(agent,env),/EXECUTION_MODE/);
  assert.throws(()=>assertExecutionMode({execution_mode:'invalid'},env),/EXECUTION_MODE/);
 });
-function primaryFixture({skill=true}={}){
+function primaryFixture({skill=true,raw=false}={}){
  const f=fixture(),workflow='douyin_video_discovery';f.options.workflowKey=workflow;f.routes['/api/brain/workflows'][0].key=workflow;
  const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;
  w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
  if(skill){
-  const name='skills/douyin-leadgen-activity-101-collect-videos/SKILL.md',path=join(f.dir,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'---\nname: douyin-leadgen-activity-101-collect-videos\nmetadata:\n  version: 0.1.0\n---\n按合同交付视频。\n');
+  const name='skills/douyin-leadgen-activity-101-collect-videos/SKILL.md',path=join(f.dir,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'---\nname: douyin-leadgen-activity-101-collect-videos\nmetadata:\n  version: 0.1.0\n'+(raw?'  primary_execution: agent-v1\n  execution_transports:\n    - raw-model-v1\n':'')+'---\n按合同交付视频。\n');
   const sha=hash(readFileSync(path,'utf8')),av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;
   av.payload.implementation_bindings.push({kind:'skill',name:'douyin-leadgen-activity-101-collect-videos',version:'0.1.0',status:'verified',repo:av.source_repo,path:'services/phone-adb-controller/'+name,revision:av.source_commit,content_sha256:sha});
   av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
@@ -62,6 +62,17 @@ test('Agent执行模式进入真实冻结摘要；原Code及Agent运行都不能
 });
 test('Agent冻结缺本机已验证Skill时在起跑前拒绝，不能只凭Code binding启动',async()=>{
  const f=primaryFixture({skill:false});await assert.rejects(freezeDefinition({...f.options,executionMode:'agent',agentInput:f.agentInput}),/AGENT.*SKILL/);
+});
+test('raw transport is frozen with its exact turn limit only when every verified Skill explicitly declares it',async()=>{
+ const f=primaryFixture({raw:true}),input={...f.agentInput,execution_transport:'raw-model-v1',max_turns:4},options={...f.options,executionMode:'agent',agentInput:input};
+ const snapshot=await freezeDefinition(options);
+ assert.equal(snapshot.execution_transport,'raw-model-v1');assert.equal(snapshot.max_turns,4);assert.deepEqual(snapshot.agent_input,input);
+ assert.equal(snapshot.snapshot_sha256,hash(Object.fromEntries(Object.entries(snapshot).filter(([key])=>key!=='snapshot_sha256'))));
+ for(const value of [f.agentInput,{...input,max_turns:5}])await assert.rejects(freezeDefinition({...options,agentInput:value}),/EXECUTION_TRANSPORT|AGENT_INPUT/);
+ const legacy=primaryFixture();await assert.rejects(freezeDefinition({...legacy.options,executionMode:'agent',agentInput:{...legacy.agentInput,execution_transport:'raw-model-v1',max_turns:4}}),/EXECUTION_TRANSPORT_METHOD_UNSUPPORTED/);
+ const old=primaryFixture({raw:true});const oldFrozen=await freezeDefinition({...old.options,executionMode:'agent',agentInput:old.agentInput});
+ assert.equal(Object.hasOwn(oldFrozen,'execution_transport'),false);assert.equal(Object.hasOwn(oldFrozen,'max_turns'),false);
+ await assert.rejects(freezeDefinition({...old.options,executionMode:'agent',agentInput:{...old.agentInput,execution_transport:'raw-model-v1',max_turns:4}}),/EXECUTION_TRANSPORT|AGENT_INPUT/);
 });
 test('真实Agent快照保存完整输入，冻结续跑不能改配额、来源、筛选、任务或预算，也不能撤输入',async()=>{
  const f=primaryFixture(),options={...f.options,executionMode:'agent',agentInput:f.agentInput};
