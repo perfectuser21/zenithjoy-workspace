@@ -3589,13 +3589,10 @@ tests:
   - id: line05-zj-ai-video-ws3-e2e-spec-coverage
     path: sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts
     type: unit
-    ci: L3
-    status: pending-ci
+    ci: unverified
+    status: deprecated
     product: 视频剪辑
-    note: "Line 05 Sprint zj-ai-video-ws1-ws3-ws4 WS3 — E2E spec 覆盖率 + Agent version 1.1.29 bump 验证"
-
-  # ── Line 00 运营中枢 — line00-session-health-medium ──────────────────────────
-
+    retirement: "2026-11-05 retired historical Windows video E2E/workflow source-shape snapshot; exact original source 8dbe7c39bf240344c61e8896356852e1f9652123:sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts. Retained video code and tests are not equivalent proof of current real video processing; real acceptance remains unverified."
   - id: line00-session-health-ws1-migration
     path: sprints/line00-session-health-medium/tests/ws1/operator-sessions-migration.test.ts
     type: integration

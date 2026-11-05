@@ -900,6 +900,29 @@
         "test-registry.yaml"
       ],
       "historical_obligation_evidence": "This contract asserts the structure of a PC workflow the user explicitly retired. Git retains its exact contents; no unique current Android obligation follows from the retired workflow structure."
+    },
+    {
+      "path": "sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts",
+      "source_commit": "8dbe7c39bf240344c61e8896356852e1f9652123",
+      "source_blob": "5277ea53e081167eca985b10d4988889429dd1a2",
+      "source_sha256": "91b03c748e7a5b9fa8464fd58e5513cb1d249100e6213fb0b93fc32eef5245ab",
+      "reason": "Historical sprint snapshot asserts hard-coded version of the retired Windows video-agent workflow and strings in its old desktop E2E; it never executes video behavior and is not an active CI consumer.",
+      "dimensions": {
+        "current_value": "The user retained video editing but retired the Windows client. Current value is real video processing and observable results, not old workflow-version string assertions.",
+        "active_status": "Registry labels this pending-ci; no current workflow or executable caller was found. The former Windows video workflow was manual dispatch and is being retired.",
+        "real_effect": "Seven static assertions read old E2E/workflow text, do not create or render video. The old real Playwright video E2E source stays unchanged but has no current Windows workflow runner.",
+        "test_and_blocking": "This pending-ci snapshot is not a blocking real video test. The current L4 API smoke is retained, but API contracts do not prove real rendering or a completed physical business run.",
+        "duplication_and_obsolescence": "Two assertions demand obsolete static 1.1.29 defaults; the other five inspect strings in an old Windows E2E, including W-G text that its present implementation does not contain.",
+        "runtime_and_maintenance_cost": "Removing an unexecuted static snapshot avoids a stale pending-CI contract; no runtime or cost saving is asserted.",
+        "retirement_and_dependencies": "Exact historical bytes and metadata are retained in Git; preserve the old E2E source, all live video code and API tests. Real retained-path video acceptance remains open and needs separate evidence."
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        "e2e/agent-video-pipeline.spec.js",
+        ".github/workflows/ci-l4-e2e-smoke.yml",
+        "test-registry.yaml"
+      ],
+      "historical_obligation_evidence": "The user explicitly retired Windows clients. This sprint snapshot only checked source text and is not an active CI runner; no unique real-video execution is removed by this snapshot deletion. The former manual Windows E2E runner is separately retired, and actual retained-path video processing remains unverified; neither retained API smoke nor these evidence files is claimed as an equivalent replacement."
     }
   ]
 }
