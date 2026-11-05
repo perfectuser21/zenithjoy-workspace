@@ -57,7 +57,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const records={'activity-request.json':q,'agent-request.json':agent,'spawn-claimed.json':{...agent,source_commit:commit},'agent-binding.json':{...agent,child_run_id:childRun,child_session_key:childKey},'spawn-receipt.json':{runId:childRun,childSessionKey:childKey,resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'}};
  for(const [name,value]of Object.entries(records))writeFileSync(join(runDir,name),JSON.stringify(value),{mode:0o600});
  writeFileSync(join(runtimeRoot,'deployment-manifest.json'),JSON.stringify({source_commit:commit}));
- const source={commit,files:[...RPC_FILES,'official-agent-control.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json'].map(path=>({path,sha256:sha(readFileSync(join(runtimeRoot,path)))}))};
+ const source={commit,files:[...RPC_FILES,'official-agent-control.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json','official-commander-sdk.mjs'].map(path=>({path,sha256:sha(readFileSync(join(runtimeRoot,path)))}))};
  let dispatches=0;const sockets=new Set();let arrived;const firstRequest=new Promise(r=>{arrived=r;});
  const server=createServer((req,res)=>{
   dispatches++;assert.equal(req.headers['x-internal-token'],'fixture-private-token');arrived();
