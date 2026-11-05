@@ -192,28 +192,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -318,7 +325,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -552,13 +559,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "992ba354f6c9d5f3c6f1364d4e4481ac5f8d28c81ce66d124484b5e7534fea0d",
+      "code_digest": "8564ca1b3c12e529bbcb3012ccf6d2568156a8be72b86cfc54a953fb18205e07",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "89d5bbe34e10d7f22cccb901cb0b630237d7b5b4854660a5f335df3e8080f025",
-        "current_code_digest": "992ba354f6c9d5f3c6f1364d4e4481ac5f8d28c81ce66d124484b5e7534fea0d"
+        "previous_code_digest": "09713bda1ea325bc4102dadc96b774ab7bfb557cc5a6bfcf7c085443a0398da6",
+        "current_code_digest": "8564ca1b3c12e529bbcb3012ccf6d2568156a8be72b86cfc54a953fb18205e07"
       }
     },
     "douyin_video_processing.preflight": {
@@ -724,14 +731,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "5b113e6ad11754e6ffd79b47d897092807cae72c1bca5c4ac3b32dfbd09c3480"
+          "sha256": "48101ce19e3e1245cd82f63632b8ccbe7662cdcbfef7916e110103470bd1a6c8"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "ce0b7c957e83c97a1db4d027d64a7a85773c96c9b2dd1dee1c7b2b03af615057"
+          "sha256": "9f2206d1ea860eb167b7ba635cf87adf0ec87f373723c12adb2b578265282a0f"
         },
         {
           "kind": "code",
@@ -794,28 +801,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -920,7 +934,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -1137,13 +1151,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8c41d08c3c95db6461fa24e4803578892be9c8d11b5f0ac687966d448c1b48e0",
+      "code_digest": "c11aa21469f108d9f4d5260ea67e36f35c8360716e36b8d552c8752e18a4fe97",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "c11ad8b694a5ddc015c56b98d769eee7aef113d3ecf524ed00e657e26fbe2cd5",
-        "current_code_digest": "8c41d08c3c95db6461fa24e4803578892be9c8d11b5f0ac687966d448c1b48e0"
+        "previous_code_digest": "e8b86113a07ba8a6da712517b22c9220e89f050227f8b2378e2e1099b6598416",
+        "current_code_digest": "c11aa21469f108d9f4d5260ea67e36f35c8360716e36b8d552c8752e18a4fe97"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1344,28 +1358,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -1470,7 +1491,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -1690,13 +1711,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "461087dfb9d6e9177613951091066af7bd11bcff4ac22de3e8bab1bb61307633",
+      "code_digest": "0bea29ec1b4efe4299135a02e573da5f7b8e5452388eb222b7175f034d25f09b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "2d4169e2269106f58084eea3d410adc964d77b07e44468a270bdb2e3ec6c7925",
-        "current_code_digest": "461087dfb9d6e9177613951091066af7bd11bcff4ac22de3e8bab1bb61307633"
+        "previous_code_digest": "118cec400f176736af40d646ddbd606ddf271663f52c0c383ff86a5a9656d009",
+        "current_code_digest": "0bea29ec1b4efe4299135a02e573da5f7b8e5452388eb222b7175f034d25f09b"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1925,28 +1946,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -2051,7 +2079,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -2327,13 +2355,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "39765d00af2faa33125abce662609900ce1d47d6cc75819adeb63e29e452519a",
+      "code_digest": "070f51d4e12a4e919fb6edbac8c220f6fe16da5e5b1a4b694db149b733b68ef6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "cc0d5c903b4179d97fee116d7361bc6dd8a5b2e37657bde7bc2af88e2e5e679a",
-        "current_code_digest": "39765d00af2faa33125abce662609900ce1d47d6cc75819adeb63e29e452519a"
+        "previous_code_digest": "e236e03f4c83d2582ad3f6c1b38ffd569d5ea77a751bbe586ca8423625645e01",
+        "current_code_digest": "070f51d4e12a4e919fb6edbac8c220f6fe16da5e5b1a4b694db149b733b68ef6"
       }
     },
     "douyin_video_processing.collection": {
@@ -2534,28 +2562,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -2660,7 +2695,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -2902,13 +2937,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "3122cd355beb890737d3bea5552f06811d4f476f53ae089904628888c1c18215",
+      "code_digest": "9c3e5c88dc33dca0ddc28172c225601a020699adb14687f45f35cfb4f4db4961",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "ff872658b742a1603f5a5ed1a935d100863da850b4c457f6dc486d67e23c6b8c",
-        "current_code_digest": "3122cd355beb890737d3bea5552f06811d4f476f53ae089904628888c1c18215"
+        "previous_code_digest": "ee042ee0d24690b5fce9bb870772b548763cfe6401fb77a45db9735264faf1b0",
+        "current_code_digest": "9c3e5c88dc33dca0ddc28172c225601a020699adb14687f45f35cfb4f4db4961"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -3074,14 +3109,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "5b113e6ad11754e6ffd79b47d897092807cae72c1bca5c4ac3b32dfbd09c3480"
+          "sha256": "48101ce19e3e1245cd82f63632b8ccbe7662cdcbfef7916e110103470bd1a6c8"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "ce0b7c957e83c97a1db4d027d64a7a85773c96c9b2dd1dee1c7b2b03af615057"
+          "sha256": "9f2206d1ea860eb167b7ba635cf87adf0ec87f373723c12adb2b578265282a0f"
         },
         {
           "kind": "code",
@@ -3130,28 +3165,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -3256,7 +3298,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -3472,13 +3514,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "01aedcc2f822eb9a8d6205a137dddd7c3f3e414e4972b4bad84a61b460698691",
+      "code_digest": "1b412e6f17c5485cb29fa5ae56c57d6c9646a2ba2b43420d9813f4c25ca601c2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "5d4bdadbb38bd7a7659d8b4abbcf1ff17b1751f6a8a902a93a38755eb60f047f",
-        "current_code_digest": "01aedcc2f822eb9a8d6205a137dddd7c3f3e414e4972b4bad84a61b460698691"
+        "previous_code_digest": "d470daf2252193040f9986a3cac387002cc8b4c956e92ee82ff1fe055a783395",
+        "current_code_digest": "1b412e6f17c5485cb29fa5ae56c57d6c9646a2ba2b43420d9813f4c25ca601c2"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3672,28 +3714,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -3798,7 +3847,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -4025,13 +4074,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "a1e5aef32ef20f8055fd1ffa43502e3d580b0a88691c4ba31ee48227a50cae0c",
+      "code_digest": "0ba1e7cdb33ce4b0fb3104cbecae5fd5d9f2aebaa52e171c7cac3a71f0134426",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "07af68b00eac6ed09981111d2e85813995597ba0c5fd47efed9540af79ded9f3",
-        "current_code_digest": "a1e5aef32ef20f8055fd1ffa43502e3d580b0a88691c4ba31ee48227a50cae0c"
+        "previous_code_digest": "f4f7973bc4aad361ea60794af085515ef720c88bfcdfbac19f7a9d1d664f5032",
+        "current_code_digest": "0ba1e7cdb33ce4b0fb3104cbecae5fd5d9f2aebaa52e171c7cac3a71f0134426"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -4232,28 +4281,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -4358,7 +4414,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -4620,13 +4676,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8a73da926bbf68db597515eeb04058fa2e529d70316d7238145f1bf364b3d3ae",
+      "code_digest": "48f006e9f6f5b28409adf639c2c7cbf624592845b4d2a0da32b854f12b57d90d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "c70151688451fe376987b919c97068eb3943fa0b955933dab491343a912c209f",
-        "current_code_digest": "8a73da926bbf68db597515eeb04058fa2e529d70316d7238145f1bf364b3d3ae"
+        "previous_code_digest": "c9fbe892e101d5865b3c0d886f52ae00f574bb751aef97e07e766756acba147e",
+        "current_code_digest": "48f006e9f6f5b28409adf639c2c7cbf624592845b4d2a0da32b854f12b57d90d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -4680,28 +4736,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -4911,7 +4974,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -5163,13 +5226,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "225bebbb6f28bc7e350a014cf6ed977b7fe8a2166f1df81a86874751d35bf7d6",
+      "code_digest": "9549797ee9dbcbeaa64460a52aa4aed10544f8f742e22ca538575b7c2714e657",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "e97473047b68f8c6481b10a5e950db370ee9ac34ab05393148def340b3f4fd07",
-        "current_code_digest": "225bebbb6f28bc7e350a014cf6ed977b7fe8a2166f1df81a86874751d35bf7d6"
+        "previous_code_digest": "6cd18c620d03594020680a7499d52e06724e99897dc9705e0daa16c148787927",
+        "current_code_digest": "9549797ee9dbcbeaa64460a52aa4aed10544f8f742e22ca538575b7c2714e657"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -5223,28 +5286,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -5454,7 +5524,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -5681,13 +5751,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2c00024d57b7507d709938a3a9f3bf657f101ad569816f4b3bb648d85c97d782",
+      "code_digest": "093b991523d100d51545c78629962f0f14ddc89ddb88a239565fe063480c01f5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "880c00090425c061d356f79f03572f5bcb260c5a6961e669e65d7d7a1c911936",
-        "current_code_digest": "2c00024d57b7507d709938a3a9f3bf657f101ad569816f4b3bb648d85c97d782"
+        "previous_code_digest": "1ce29d129e833b878b4a635cc3c6cd21441f335b9c754c073cb4ee69c80bad98",
+        "current_code_digest": "093b991523d100d51545c78629962f0f14ddc89ddb88a239565fe063480c01f5"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -5741,28 +5811,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -5972,7 +6049,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -6192,13 +6269,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "43a34ac786f619d83dd7fc2b6e8414112fc3f1b4fa9b7ff34e16ac04df26129f",
+      "code_digest": "2a393ba8d121c3d038f1b0691b3853a3920bc297e20cef80074df685c5fd413d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "6ab6312511608688a441d14208885ac96444f843fa0c80f5bde13048c4bf49c3",
-        "current_code_digest": "43a34ac786f619d83dd7fc2b6e8414112fc3f1b4fa9b7ff34e16ac04df26129f"
+        "previous_code_digest": "780fbf072baec6ee75ea77850413df7f29b146cc5f36a01916d82142fce9f253",
+        "current_code_digest": "2a393ba8d121c3d038f1b0691b3853a3920bc297e20cef80074df685c5fd413d"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -6252,28 +6329,35 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "168517b5bbb14bf085b2b7bc434ee6841bcadb143247126b828d74eb799a1e16"
+          "sha256": "aba2b75cc32825ea81608dda669ba8dd7522b1902f8eefed74b1710e6338855a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.mjs",
           "revision": "contract",
-          "sha256": "30a302be5a8f7e762a8f3961cc46cc79a9840e6eb8a1932233fd93c09f8218b6"
+          "sha256": "7dcea7a501390110b938c2fd73d1c4b2f832ec93624180869c1de4bd49b10abb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-gateway-runtime.json",
           "revision": "contract",
-          "sha256": "d65b113f910411c9dfc293d7bc779728009360761e963f6fd1f1112c9dbfe0b1"
+          "sha256": "40ed4b1e22b5fa4de93cb160731f5770cdc326ed0ec22d80b83044752a9c34c5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-commander-sdk.mjs",
           "revision": "contract",
-          "sha256": "c136acb7daf1503fb5b477fb072fd825c70d7e2c9fdccb901fa6636a5f6bf401"
+          "sha256": "47b372ced240b0dd6bacdcb74a22aa481a985b6e1993affc1073007a46482d86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-model-turn.mjs",
+          "revision": "contract",
+          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
         },
         {
           "kind": "code",
@@ -6483,7 +6567,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "b918e2d327e379a7addf232d044d20e611709a462643e02128f2790153c2efb3"
+          "sha256": "6be09e84c70a8ae2a3160a96744e2ea5a8190a2d0aa698137cb29208c522e80f"
         },
         {
           "kind": "code",
@@ -6713,13 +6797,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4abc06f90cf56472ffe506d25c7769c3ae732df69fe5c9f61ab95518554d9e3b",
+      "code_digest": "07ebdb27aa64efc8a389b6e68253bdfba6fb515b79d3eb0745e75d02c767d566",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
+        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
         "reviewed_by": "codex",
-        "previous_code_digest": "eb771c092a053cb284c33190a87812e3df3c0830a712c7ad497415e33ade6fab",
-        "current_code_digest": "4abc06f90cf56472ffe506d25c7769c3ae732df69fe5c9f61ab95518554d9e3b"
+        "previous_code_digest": "25041fc4130d6a7044d3585eac789ad418af29b231cc225a713ba0767452a0a5",
+        "current_code_digest": "07ebdb27aa64efc8a389b6e68253bdfba6fb515b79d3eb0745e75d02c767d566"
       }
     }
   },

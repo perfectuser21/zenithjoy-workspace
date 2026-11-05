@@ -273,7 +273,7 @@ test('真实部署闭包冻结后导入新handler；缺文件、错hash或冻结
  const deploy=readFileSync(join(source,'deploy.sh'),'utf8'),arrays=deploy.slice(deploy.indexOf('MMV_JS_FILES=('),deploy.indexOf('# 在任何SSH前'));
  const declared=execFileSync('bash',['-c',arrays+'\nprintf "%s\\n" "${MMV_RUNTIME_FILES[@]}"'],{encoding:'utf8'}).trim().split('\n');
  const files=declared.filter(x=>/\.(?:mjs|js|json)$/.test(x));assert.ok(files.includes('leadgen-handlers.mjs'),'official MMV runtime omitted actual handler');
- for(const name of ['runner-official-commander.mjs','control-acceptance-tools.mjs','official-agent-control.mjs','official-commander-sdk.mjs','commander-bounded-owner.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json','official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'])
+ for(const name of ['runner-official-commander.mjs','control-acceptance-tools.mjs','official-agent-control.mjs','official-commander-sdk.mjs','official-model-turn.mjs','commander-bounded-owner.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json','official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'])
   assert.equal(declared.filter(value=>value===name).length,1,`official raw runtime must include exactly one ${name}`);
  for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js'])
   assert.ok(files.includes(name),`official MMV runtime omitted ${name}`);
