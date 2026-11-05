@@ -3,15 +3,16 @@ import { test, expect } from '@playwright/test';
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:5174';
 
 test.describe('Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图', () => {
-  test('Hub 页显示 4 张 GP 顺序卡片，无"即将上线"标签', async ({ page }) => {
+  test('Hub 页显示旧版退役提示与历史入口', async ({ page }) => {
     await page.goto(`${BASE_URL}/area/acquisition`);
     await page.screenshot({ path: 'sprints/07041249-line02-dashboard-ia-redesign/screenshots/01-hub-page.png', fullPage: true });
 
-    await expect(page.getByText('绑抖音小号').first()).toBeVisible();
-    await expect(page.getByText('采集').first()).toBeVisible();
+    await expect(page.getByText(/旧版获客已停用/)).toBeVisible();
+    await expect(page.getByText('历史账号').first()).toBeVisible();
+    await expect(page.getByText('历史采集任务').first()).toBeVisible();
     await expect(page.getByText('看线索').first()).toBeVisible();
     await expect(page.getByText('触达记录').first()).toBeVisible();
-    await expect(page.getByText('即将上线')).not.toBeVisible();
+    await expect(page.getByRole('link', { name: /绑抖音小号|下载安卓客户端/ })).toHaveCount(0);
   });
 
   test('账号管理页无"抖音昵称"列头，含"绑定机器"列', async ({ page }) => {
@@ -44,7 +45,7 @@ test.describe('Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图
     }
   });
 
-  test('设置入口存在，可进入 AcquisitionConfigPage，无"指派计划"区块', async ({ page }) => {
+  test('共享设置页可直接访问，无"指派计划"区块', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/acquisition-config`);
     await page.screenshot({ path: 'sprints/07041249-line02-dashboard-ia-redesign/screenshots/05-config-page.png', fullPage: true });
 

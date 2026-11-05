@@ -5078,7 +5078,7 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "sprint(07041249): Playwright E2E — Hub 4 卡片可见/无即将上线，账号页无昵称列/有绑定机器列，Leads 路由正确，触达记录页空状态，设置页无指派计划"
+    note: "Playwright E2E：旧获客退役提示及历史入口；保留账号、线索、触达历史与共享设置页导航检查。"
 
   - id: acquisition-tasks-collect-start-e2e
     path: apps/dashboard/e2e/acquisition-tasks-collect-start.spec.ts
@@ -5086,7 +5086,7 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "2026-07-19: golden-path-2-smoke.sh号称覆盖客户在dashboard发起采集但全程curl从未真点过按钮——首个真实驱动浏览器填关键词+点开始采集按钮的Playwright E2E，断言真调用collect/start且body.keywords正确"
+    note: "Playwright E2E：旧采集不再提供启动入口、不发新建请求，历史任务和详情入口仍可访问。"
 
   - id: agent-credit-routes
     path: apps/api/src/routes/agent-credit.test.ts
@@ -5350,7 +5350,7 @@ tests:
     ci: windows_cloud
     status: active
     product: AI员工
-    note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
+    note: "Playwright E2E：旧获客不再暴露旧手机采集入口；通用安卓客户端下载页仍可访问。"
 
   - id: line04-ai-overlay-wechat-draft-reasoning
     path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts
@@ -5530,7 +5530,7 @@ tests:
     ci: L4
     status: active
     product: 客户智能获客
-    note: "sprint(07192358): 账号扫描手动触发通道——Dashboard立即扫描按钮真Playwright规格，验证点击后调真实端点+60秒本地禁用+离线态错误提示"
+    note: "Playwright E2E：旧账号扫描和 Windows 绑定不再展示或触发，历史账号仍可查看。"
 
   - id: agent-line04-report-health-once-overlay-branch
     path: services/agent/modules/line04/__tests__/report-health-once.test.ts
