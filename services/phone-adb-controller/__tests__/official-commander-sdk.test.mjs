@@ -18,16 +18,16 @@ test('Commander原模型timeout不得超过本AV剩余worker截止，不能只�
 test('同Commander日志重建不继承原Caller/socket停证，不重发或伪空域closed',async t=>{const g=await gateway(t);await using(async({instance,q,source,runtimeRoot})=>{const cold=await import('file://'+join(runtimeRoot,'official-commander-sdk.mjs')),dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-sdk-')));try{const options={control:instance,request:q,source,runtimeRoot,directory:dir,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'},first=cold.createOfficialCommanderExecute(options),a=argv(q);await first.execute('openclaw',a.args,a.options);assert.equal(first.verifySealedExecution(await first.close()),true);const next=cold.createOfficialCommanderExecute(options),closed=await next.close();assert.equal(closed.execution_unknown,true);assert.equal(closed.previous_caller_stop_unproven,true);assert.equal(next.verifySealedExecution(closed),false);assert.equal(g.frames.filter(f=>f.method==='agent').length,1);}finally{rmSync(dir,{recursive:true,force:true});}},{rawTransport:true,scoring:true});});
 
 const artifacts=dir=>Object.fromEntries(readdirSync(dir).filter(name=>lstatSync(join(dir,name)).isFile()).map(name=>[name,JSON.parse(readFileSync(join(dir,name),'utf8'))]));
-for(const [missing,options]of [['agent',{agentMissingReceipt:true}],['agent.wait',{waitMissingReceipt:true}]])test('失败仍逐RPC留下安全projection和三close；缺证来源可区分：'+missing,async t=>{
+for(const [missing,options]of [['agent',{agentMissingReceipt:true}],['agent.wait',{waitMissingReceipt:true}],['wrong-model',{wrongModel:true}],['missing-session',{missingSession:true}],['both-missing',{agentMissingReceipt:true,waitMissingReceipt:true}]])test('失败仍逐RPC留下安全projection和三close；缺证来源可区分：'+missing,async t=>{
  const g=await gateway(t,{...options,sensitive:true});await using(async({instance,q,source,runtimeRoot})=>{
   const cold=await import('file://'+join(runtimeRoot,'official-commander-sdk.mjs')),dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-sdk-evidence-')));
   try{const domain=cold.createOfficialCommanderExecute({control:instance,request:q,source,runtimeRoot,directory:dir,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'PRIVATE_GATEWAY_SECRET_SENTINEL'}),a=argv(q);a.params.message='PRIVATE_PROMPT_SENTINEL';a.args[8]=JSON.stringify(a.params);
    await assert.rejects(domain.execute('openclaw',a.args,a.options),/TERMINAL/);const closed=await domain.close();assert.equal(closed.execution_unknown,true);assert.equal(domain.verifySealedExecution(closed),false);
    const files=artifacts(dir),agent=files[a.params.idempotencyKey+'.agent.response.json'],wait=files[a.params.idempotencyKey+'.agent.wait.response.json'];
    assert.ok(agent,'原agent回包projection不能因wait/terminal失败消失');assert.ok(wait,'wait原回包projection必须独立保留');
-   assert.equal(agent.receipt.present,missing!=='agent');assert.equal(wait.receipt.present,missing!=='agent.wait');assert.equal(agent.agent_meta.agent_harness_id_matches,true);
+   assert.equal(agent.receipt.present,!options.agentMissingReceipt);assert.equal(wait.receipt.present,!options.waitMissingReceipt);assert.equal(agent.agent_meta.agent_harness_id_matches,true);
    for(const method of ['agent','agent.wait']){const rpc=files[a.params.idempotencyKey+'.'+method+'.rpc.json'];assert.equal(rpc.method,method);assert.equal(rpc.dispatched,true);for(const k of ['request_closed','websocket_closed','socket_closed'])assert.equal(rpc[k],true);}
-   const failure=files[a.params.idempotencyKey+'.failure.json'];assert.equal(failure.error_code,'OFFICIAL_COMMANDER_TERMINAL');assert.equal(failure.phase,'terminal_validation');assert.equal(failure.dispatched,true);
+   const failure=files[a.params.idempotencyKey+'.failure.json'];assert.equal(failure.error_code,'OFFICIAL_COMMANDER_TERMINAL');assert.equal(failure.phase,'terminal_validation');assert.equal(failure.dispatched,true);if(options.agentMissingReceipt&&options.waitMissingReceipt)assert.equal(failure.validation.receipt_run_ids_match,false,'双缺失不能记成身份一致');
    assert.doesNotMatch(JSON.stringify(files),/PRIVATE_(?:RESPONSE|WAIT|PROVIDER|GATEWAY|PROMPT)/);
   }finally{rmSync(dir,{recursive:true,force:true});}
  },{rawTransport:true,scoring:true});
@@ -47,6 +47,23 @@ test('response journal排他写失败也必须先真实关闭socket；不能越�
 test('成功终态artifact仅安全projection，原内存回包不变且文本不落盘',async t=>{
  const g=await gateway(t,{sensitive:true});await using(async({instance,q,source,runtimeRoot})=>{const cold=await import('file://'+join(runtimeRoot,'official-commander-sdk.mjs')),dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-sdk-safe-terminal-')));
   try{const domain=cold.createOfficialCommanderExecute({control:instance,request:q,source,runtimeRoot,directory:dir,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'}),a=argv(q);const reply=await domain.execute('openclaw',a.args,a.options);assert.match(reply.stdout,/PRIVATE_RESPONSE_PROSE_SENTINEL/);assert.equal(domain.verifySealedExecution(await domain.close()),true);const files=artifacts(dir),terminal=files[a.params.idempotencyKey+'.terminal.json'];assert.equal(terminal.schema_version,2);assert.equal(terminal.terminal.receipt.present,true);assert.doesNotMatch(JSON.stringify(files),/PRIVATE_(?:RESPONSE|WAIT|PROVIDER)/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ },{rawTransport:true,scoring:true});
+});
+
+test('pre-dispatch authority等待时seal也须留未分配proof，不产生unhandled rejection或新Agent',async t=>{
+ const g=await gateway(t);await using(async({instance,q,source,runtimeRoot})=>{const cold=await import('file://'+join(runtimeRoot,'official-commander-sdk.mjs')),dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-sdk-authority-seal-')));let count=0,release,arrived;const held=new Promise(r=>release=r),ready=new Promise(r=>arrived=r);
+  const control={async authorizeParentContext(request){if(++count===2){arrived();await held;}return instance.authorizeParentContext(request);}};
+  try{const domain=cold.createOfficialCommanderExecute({control,request:q,source,runtimeRoot,directory:dir,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'}),a=argv(q),work=domain.execute('openclaw',a.args,a.options),rejected=assert.rejects(work,/CLOSED/);await ready;domain.seal();await new Promise(r=>setImmediate(r));release();await rejected;const closed=await domain.close();assert.equal(closed.pending,0);assert.equal(g.frames.filter(f=>f.method==='agent').length,0);const rpc=artifacts(dir)[a.params.idempotencyKey+'.agent.rpc.json'];assert.equal(rpc.allocated,false);assert.equal(rpc.dispatched,false);
+  }finally{release?.();rmSync(dir,{recursive:true,force:true});}
+ },{rawTransport:true,scoring:true});
+});
+test('真实transport已回但request close观测缺失必须持久false且保unknown',async t=>{
+ const g=await gateway(t),Original=g.dependencies.WebSocket;class MissingRequestClose extends Original{constructor(...args){super(...args);const once=this._req.once.bind(this._req);this._req.once=(event,listener)=>event==='close'?this._req:once(event,listener);}}g.dependencies.WebSocket=MissingRequestClose;
+ await using(async({instance,q,source,runtimeRoot})=>{const cold=await import('file://'+join(runtimeRoot,'official-commander-sdk.mjs')),dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-sdk-missing-close-'))),short={...q,deadline_ms:Date.now()+1500};
+  // Same real authority with a strictly narrower local wait deadline, no extra dispatch permission.
+  const control={authorizeParentContext:()=>instance.authorizeParentContext(q)};
+  try{const domain=cold.createOfficialCommanderExecute({control,request:short,source,runtimeRoot,directory:dir,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'}),a=argv(short);a.params.timeout=1;a.args[6]='6000';a.args[8]=JSON.stringify(a.params);a.options.timeout=6000;await assert.rejects(domain.execute('openclaw',a.args,a.options),/UNKNOWN|DEADLINE/);const closed=await domain.close();assert.equal(closed.execution_unknown,true);const files=artifacts(dir),rpc=files[a.params.idempotencyKey+'.agent.rpc.json'];assert.equal(rpc.request_closed,false);assert.equal(rpc.websocket_closed,true);assert.equal(rpc.socket_closed,true);assert.equal(domain.verifySealedExecution(closed),false);
   }finally{rmSync(dir,{recursive:true,force:true});}
  },{rawTransport:true,scoring:true});
 });
