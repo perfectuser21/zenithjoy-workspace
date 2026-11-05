@@ -5,6 +5,7 @@ import AcquisitionTasksPage from './AcquisitionTasksPage';
 
 function mockFetchByUrl(handlers: Record<string, unknown>) {
   return vi.fn((url: string, _init?: RequestInit) => {
+    void _init;
     for (const [pattern, body] of Object.entries(handlers)) {
       if (url.includes(pattern)) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);

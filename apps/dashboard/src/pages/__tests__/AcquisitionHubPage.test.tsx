@@ -3,12 +3,12 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AcquisitionHubPage from '../AcquisitionHubPage';
 afterEach(cleanup);
-it('renders current acquisition workflow navigation as usable links', () => {
+it('shows legacy retirement and keeps historical pages reachable', () => {
   render(<MemoryRouter><AcquisitionHubPage /></MemoryRouter>);
   for (const [name, destination] of [
-    ['绑抖音小号', '/area/acquisition/accounts'], ['采集', '/area/acquisition/tasks'],
+    ['历史账号', '/area/acquisition/accounts'], ['历史采集任务', '/area/acquisition/tasks'],
     ['看线索', '/area/acquisition/leads'], ['触达记录', '/area/acquisition/outreach'],
   ]) expect(screen.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveAttribute('href', destination);
-  expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute('href', '/dashboard/acquisition-config');
-  expect(screen.queryByText('即将上线')).not.toBeInTheDocument();
+  expect(screen.getByText(/旧版获客已停用/)).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /下载安卓客户端|绑抖音小号/ })).not.toBeInTheDocument();
 });

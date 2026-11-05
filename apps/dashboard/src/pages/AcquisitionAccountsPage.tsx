@@ -4,10 +4,7 @@
  * Line02 获客工作台 IA 重设计 Track A：把 DouyinBurnerBindPage 的绑定部分迁移进来，
  * 采集部分移到 AcquisitionTasksPage。
  */
-import { useEffect, useRef, useState } from 'react';
-import { KeyRound } from 'lucide-react';
-
-const MAX_BURNER_ACCOUNTS = 10;
+import { useEffect, useState } from 'react';
 
 interface BurnerSession {
   account_label: string;
@@ -106,14 +103,6 @@ export default function AcquisitionAccountsPage() {
   const [sessions, setSessions] = useState<BurnerSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [accountLabel, setAccountLabel] = useState('');
-  const [labelError, setLabelError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [scanTriggering, setScanTriggering] = useState(false);
-  const [scanMessage, setScanMessage] = useState('');
-  const [scanError, setScanError] = useState('');
-  const [scanCooldownUntil, setScanCooldownUntil] = useState(0);
-  const scanCooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -129,72 +118,11 @@ export default function AcquisitionAccountsPage() {
 
   useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    return () => {
-      if (scanCooldownTimerRef.current) clearTimeout(scanCooldownTimerRef.current);
-    };
-  }, []);
-
-  const atCap = sessions.length >= MAX_BURNER_ACCOUNTS;
-
-  function onLabelChange(v: string) {
-    setAccountLabel(v);
-    setLabelError(v === 'default' ? 'account_label 不能用 default — 这个名字保留给主号' : '');
-  }
-
-  async function handleStartBind() {
-    if (!accountLabel || accountLabel === 'default' || atCap) return;
-    setSubmitting(true);
-    setError('');
-    try {
-      const r = await fetch('/api/agent/burner/qr-bind', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_label: accountLabel }),
-      });
-      const j = await r.json();
-      if (!j?.success) {
-        setError(j?.error?.message || '派 burner 绑定 task 失败');
-      } else {
-        setAccountLabel('');
-        await load();
-      }
-    } catch (e) {
-      setError(String((e as Error).message || e));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleTriggerScan() {
-    setScanTriggering(true);
-    setScanMessage('');
-    setScanError('');
-    try {
-      const r = await fetch('/api/acquisition/account-scan/trigger', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      const j = await r.json();
-      if (!j?.success) {
-        setScanError(j?.error?.message || '触发扫描失败');
-      } else {
-        setScanMessage('已发送扫描请求，最长等待约30秒后刷新本页查看');
-        setScanCooldownUntil(Date.now() + 60_000);
-        if (scanCooldownTimerRef.current) clearTimeout(scanCooldownTimerRef.current);
-        scanCooldownTimerRef.current = setTimeout(() => setScanCooldownUntil(0), 60_000);
-      }
-    } catch (e) {
-      setScanError(String((e as Error).message || e));
-    } finally {
-      setScanTriggering(false);
-    }
-  }
-
-  const scanOnCooldown = Date.now() < scanCooldownUntil;
-
   return (
     <div className="max-w-3xl mx-auto py-2 space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">账号管理</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">管理用于评论触达的抖音小号（与主号 session 物理隔离）。</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">旧版获客已停用，可继续查看历史账号状态。</p>
       </div>
 
       {error ? (
@@ -202,13 +130,13 @@ export default function AcquisitionAccountsPage() {
       ) : null}
 
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-        <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">已绑小号（{sessions.length}/{MAX_BURNER_ACCOUNTS}）</h3>
+        <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">历史账号（{sessions.length}）</h3>
 
         {sessions.some((s) => s.status === 'needs_rebind') && (
           <div className="mb-3 rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-3">
             <p className="font-medium text-red-800 dark:text-red-300 text-sm">⚠️ 有小号登录已过期</p>
             <p className="mt-1 text-xs text-red-700 dark:text-red-400">
-              Cookie 已失效，在下方重新输入该小号名后点"开始绑定"，弹出的 Chrome 窗口里重新扫码登录。
+              旧版账号登录状态已过期。
             </p>
           </div>
         )}
@@ -250,7 +178,7 @@ export default function AcquisitionAccountsPage() {
             </table>
             {sessions.length === 0 && (
               <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                暂无小号 — 在下方绑定第一个
+                暂无历史小号
               </div>
             )}
             {/* 每个绑定设备一个养号验活面板（有验活记录才显示，掉线号标红）*/}
@@ -267,56 +195,7 @@ export default function AcquisitionAccountsPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-        <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
-          <KeyRound className="w-4 h-4 text-orange-600" />
-          绑定新小号
-        </h3>
 
-        <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">💻 Windows / PC 绑定</div>
-        {atCap ? (
-          <div className="text-sm text-amber-600 dark:text-amber-400">
-            已达 {MAX_BURNER_ACCOUNTS} 个小号上限，联系升级套餐以绑定更多。
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="account_label（小号名，例：装修小号1）"
-              className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              value={accountLabel}
-              onChange={(e) => onLabelChange(e.target.value)}
-            />
-            {labelError ? <div className="text-xs text-red-600">{labelError}</div> : null}
-            <button
-              type="button"
-              disabled={!accountLabel || accountLabel === 'default' || submitting}
-              onClick={handleStartBind}
-              className="rounded bg-orange-600 px-4 py-2 text-white text-sm disabled:bg-gray-300 dark:disabled:bg-slate-700"
-            >
-              开始绑定（弹独立 Chrome 扫码）
-            </button>
-          </div>
-        )}
-
-        <hr className="my-4 border-slate-200 dark:border-slate-700" />
-
-        <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">📱 Android 绑定</div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          在手机 ZenithJoy Agent App 里，切换到你要绑定的抖音小号——中台会自动检测到并出现在上方账号列表里，无需在此操作。
-          App 内置每 30-60 分钟自动扫描一次；如果不想等，可以点下面的按钮立即触发一次。
-        </p>
-        <button
-          type="button"
-          disabled={scanTriggering || scanOnCooldown}
-          onClick={handleTriggerScan}
-          className="mt-2 rounded bg-orange-600 px-4 py-2 text-white text-sm disabled:bg-gray-300 dark:disabled:bg-slate-700"
-        >
-          立即扫描
-        </button>
-        {scanMessage ? <div className="mt-2 text-sm text-green-600 dark:text-green-400">{scanMessage}</div> : null}
-        {scanError ? <div className="mt-2 text-sm text-red-600 dark:text-red-400">{scanError}</div> : null}
-      </section>
     </div>
   );
 }

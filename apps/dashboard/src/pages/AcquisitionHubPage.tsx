@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { KeyRound, Target, Users, Send, Settings, Smartphone } from 'lucide-react';
+import { KeyRound, Target, Users, Send } from 'lucide-react';
 
 interface Module {
   label: string;
@@ -13,8 +13,8 @@ interface Module {
 
 const MODULES: Module[] = [
   {
-    label: '绑抖音小号',
-    desc: '绑定用于评论触达的抖音小号，与主号 session 物理隔离。',
+    label: '历史账号',
+    desc: '查看旧版获客的账号状态。',
     to: '/area/acquisition/accounts',
     Icon: KeyRound,
     color: 'text-orange-600',
@@ -22,8 +22,8 @@ const MODULES: Module[] = [
     borderColor: 'border-orange-200 dark:border-orange-800',
   },
   {
-    label: '采集',
-    desc: '发起关键词采集，抓取对标视频评论，挖掘潜在线索。',
+    label: '历史采集任务',
+    desc: '查看旧版采集任务、视频和评论。',
     to: '/area/acquisition/tasks',
     Icon: Target,
     color: 'text-emerald-600',
@@ -48,31 +48,14 @@ const MODULES: Module[] = [
     bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     borderColor: 'border-blue-200 dark:border-blue-800',
   },
-  {
-    label: '下载安卓客户端',
-    desc: '手机装 Agent，扫码自动绑定，手机端采集。',
-    to: '/dashboard/android',
-    Icon: Smartphone,
-    color: 'text-lime-600',
-    bgColor: 'bg-lime-50 dark:bg-lime-900/20',
-    borderColor: 'border-lime-200 dark:border-lime-800',
-  },
+
 ];
 
 export default function AcquisitionHubPage() {
   return (
     <div className="max-w-3xl mx-auto py-2">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">智能获客</h2>
-        <Link
-          to="/dashboard/acquisition-config"
-          className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-        >
-          <Settings className="w-4 h-4" />
-          设置
-        </Link>
-      </div>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">对标找客、抓评论挖客、触达，把流量变成线索。</p>
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">智能获客</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">旧版获客已停用，以下内容供查看历史记录。</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {MODULES.map((m) => {

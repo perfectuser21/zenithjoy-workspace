@@ -2,13 +2,12 @@
  * AcquisitionTasksPage — 智能获客 · 采集任务（两级视图）
  *
  * Line02 获客工作台 IA 重设计 Track A：
- *   一级（/area/acquisition/tasks）        — 关键词输入 + 历史任务列表
+ *   一级（/area/acquisition/tasks）        — 历史任务列表
  *   二级（/area/acquisition/tasks/:taskId）— 该任务下的视频卡片列表 + 展开评论
  */
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
-import { fetchMachines, fetchBurnerSessions, type Machine, type BurnerSession } from '../api/machines.api';
+import { ChevronLeft, ChevronDown, ChevronRight } from 'lucide-react';
 import LeadsTable from '../components/LeadsTable';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -102,11 +101,6 @@ function TaskListView() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [keyword, setKeyword] = useState('');
-  const [starting, setStarting] = useState(false);
-  const [machines, setMachines] = useState<Machine[] | null>(null);
-  const [burnerSessions, setBurnerSessions] = useState<BurnerSession[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -126,46 +120,7 @@ function TaskListView() {
     }
   };
 
-  useEffect(() => {
-    load();
-    fetchMachines().then(setMachines).catch(() => setMachines([]));
-    fetchBurnerSessions().then(setBurnerSessions).catch(() => setBurnerSessions([]));
-  }, []);
-
-  const onlineMachines = (machines ?? []).filter((m) => m.status === 'online');
-  const activeBurnerSessions = burnerSessions.filter((s) => s.status === 'active');
-  const selectedSession = activeBurnerSessions.find((s) => s.account_label === selectedAccount);
-  const noOnlineMachine = machines !== null && onlineMachines.length === 0;
-
-  async function handleStart() {
-    const words = keyword.split(/[,，\s]+/).map((w) => w.trim()).filter(Boolean);
-    if (words.length === 0) return;
-    setStarting(true);
-    setError('');
-    try {
-      const preferredAgentId = localStorage.getItem('preferred_agent_id') || undefined;
-      const r = await fetch('/api/acquisition/collect/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keywords: words,
-          ...(selectedAccount ? { account_label: selectedAccount } : {}),
-          ...(preferredAgentId ? { agent_id: preferredAgentId } : {}),
-        }),
-      });
-      const j = await r.json();
-      if (!j?.success) {
-        setError(j?.error?.message || '发起采集失败');
-        return;
-      }
-      setKeyword('');
-      await load();
-    } catch (e) {
-      setError(String((e as Error).message || e));
-    } finally {
-      setStarting(false);
-    }
-  }
+  useEffect(() => { load(); }, []);
 
   async function handleCancel(taskId: string) {
     setError('');
@@ -198,59 +153,12 @@ function TaskListView() {
     <div className="max-w-4xl mx-auto py-2 space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">采集任务</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">输入关键词发起采集，或查看历史任务的视频+评论明细。</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">旧版获客已停用，可继续查看历史任务的视频和评论明细。</p>
       </div>
 
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-3 text-red-700 dark:text-red-300 text-sm">{error}</div>
       ) : null}
-
-      {noOnlineMachine ? (
-        <div className="flex items-center gap-1.5 rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-3 text-red-700 dark:text-red-300 text-sm">
-          <AlertTriangle className="w-4 h-4" />
-          无在线机器，无法创建采集任务 — 请先确认客户端在线
-        </div>
-      ) : null}
-
-      <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="关键词（逗号或空格分隔多个），例：美甲"
-            className="flex-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-          />
-          <select
-            aria-label="使用账号"
-            className="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm"
-            value={selectedAccount}
-            onChange={(e) => setSelectedAccount(e.target.value)}
-          >
-            <option value="">不指定账号</option>
-            {activeBurnerSessions.map((s) => (
-              <option key={s.account_label} value={s.account_label}>
-                {s.account_nickname || s.account_label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={!keyword.trim() || starting || noOnlineMachine}
-            onClick={handleStart}
-            className="flex items-center gap-1 rounded bg-emerald-600 px-4 py-2 text-white text-sm disabled:bg-gray-300 dark:disabled:bg-slate-700"
-          >
-            <Search className="w-4 h-4" />
-            开始采集
-          </button>
-        </div>
-        {selectedSession ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            将在 {selectedSession.nickname || selectedSession.hostname} 上运行
-          </p>
-        ) : null}
-      </section>
 
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
         <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">历史任务</h3>
@@ -258,7 +166,7 @@ function TaskListView() {
           <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
         ) : tasks.length === 0 ? (
           <div className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
-            暂无任务 — 在上方输入关键词发起第一次采集
+            暂无历史任务
           </div>
         ) : (
           <table className="w-full text-sm">
