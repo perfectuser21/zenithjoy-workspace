@@ -19,7 +19,7 @@ function fixture(t){
  const contract={budget:{max_duration_s:30}},frozen={execution_mode:'agent',deployment:{target:'mmv',source_commit:'a'.repeat(40),observation_id:'observation'},release:{id:'release'},snapshot_sha256:'b'.repeat(64),workflow_version:{id:'wv',payload:{key:'douyin_comment_scoring'}},files:{[path]:sha(method),'runtime/skills/leadgen-activity-execution.md':sha(support)},activities:[{reference:{slot_key:'scoring',reference_id:'ref'},version:{id:'av',payload:{definition_key:'douyin_comment_scoring.scoring',contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-103-scoring',version:'0.1.0',path:'services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md'}]}}}]};
  const env={LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WF_BRAIN_TASK_ID:taskId,WFR_TAG:'pure_103',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'2',LEADGEN_SOURCE_RUN:'pure_102',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'1800'};
  frozen.agent_input=agentInput(env);
- return {runDir,frozen,env,binding:{id:bindingId,run_id:'pure_103__a1',task_id:taskId},deadlineFor:()=>Date.now()+10000};
+ return {runDir,frozen,env,supportsNativeScope:()=>true,nativeState:()=>({}),binding:{id:bindingId,run_id:'pure_103__a1',task_id:taskId},deadlineFor:()=>Date.now()+10000};
 }
 function phoneFixture(t,{discovery=false}={}){
  const f=fixture(t);Object.assign(f.env,{WF_BRAIN_WORKFLOW:discovery?'douyin_video_discovery':'douyin_video_processing',WFR_TAG:discovery?'pure_101':'pure_102',P:'xiaolongxia',SERIAL:'ANGYVB4311010223',...(discovery?{}:{LEADGEN_SOURCE_RUN:'pure_101',LEADGEN_COMMENT_LIMIT:'5'})});
@@ -267,4 +267,42 @@ test('早期stall的Observer异常仅记unavailable，不触发资源未知或�
  const result=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId},onEvent:async()=>{throw Error('observer unavailable');}});
  assert.equal(result.status,'completed');assert.equal(result.execution_stopped,true);assert.equal(stopped,0);
  const row=JSON.parse(readFileSync(join(f.runDir,'skill-primary/scoring/broker-events.jsonl'),'utf8').trim());assert.equal(row.commander_status,'unavailable');assert.equal(row.event.type,'stall');
+});
+
+test('unproved primary slot is not started; no tools, phone, worker or broker launch is attempted',async t=>{
+ const f=fixture(t);let calls=0;
+ const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,createTools:async()=>{calls++;throw Error('must not allocate');},rpc:async()=>{calls++;throw Error('must not dispatch');}});
+ const actual=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,true);assert.equal(calls,0);
+});
+
+test('existing unproved native state remains unknown even when the new launch guard rejects a slot',async t=>{
+ const f=fixture(t);let calls=0;const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,nativeState:()=>({native_stop_unproven:true}),createTools:async()=>{calls++;throw Error('must not prepare');},rpc:async()=>{calls++;throw Error('must not launch');}});
+ const actual=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,false);assert.equal(actual.resource_unverified,true);assert.equal(calls,0);
+});
+test('actual generic provider native uncertainty reaches executor even behind a new not-started guard',async t=>{
+ const f=phoneFixture(t),{createHandlers}=await import('../leadgen-handlers.mjs'),{digest,commentSamplingInput}=await import('../runtime-definition.mjs');
+ const env={...f.env,HOME:f.runDir,WFR_RUN_DIR:f.runDir,WFR_RUN_ID:'douyin_video_processing-'+f.env.WFR_TAG,WFR_ATTEMPT:'a1',DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/fixture/adb'};
+ const body={execution_mode:'agent',deployment:{source_commit:'a'.repeat(40)},files:{},sampling_input:commentSamplingInput(env)};writeFileSync(join(f.runDir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
+ const h=createHandlers({root:f.runDir,env,taskId,sourceCommit:'a'.repeat(40),centralLease:{async verifyTask(){},async acquire(){},async ensure(){},async verifyHeld(){}},rpc:async()=>({result:{company_id:'company',tenant_id:'tenant',version:1,run_id:env.WFR_TAG,device_binding:{company_id:'company',tenant_id:'tenant',version:1,run_id:env.WFR_TAG,profile:env.P,device_serial:env.SERIAL,douyin_id:'expected-account',verification_status:'verified',enabled:true}}}),execute:async(_command,args)=>({code:0,stdout:args[0]?.endsWith('adb-existing-route.py')?'5042\n':args.includes('get-state')?'device\n':args.includes('preflight')?`serial=${env.SERIAL}\n`:args.includes('lock-acquire')?'lock=acquired\n':'mCallState=0\n',stderr:''})});
+ const scope={workflow:env.WF_BRAIN_WORKFLOW,activity:'preflight',run:env.WFR_TAG,run_id:env.WFR_RUN_ID+'__a1',task_id:taskId,binding_id:bindingId,source_commit:'a'.repeat(40),snapshot_sha256:digest(body),profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,source_run:env.LEADGEN_SOURCE_RUN,limit:2,comment_limit:5,deadline_ms:Date.now()+20000};
+ const tools=await h.createAgentTools({key:'preflight'},scope);await tools.prepare();assert.equal(h.state.nativeStopUnproven,true);assert.equal(tools.getResult().execution_stopped,false);
+ let dispatched=0;const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,nativeState:h.agentNativeState,createTools:async()=>{dispatched++;return tools;},rpc:async()=>{dispatched++;throw Error('must not launch');}});
+ const result=await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});assert.equal(result.not_started,true);assert.equal(result.execution_stopped,false);assert.equal(result.resource_unverified,true);assert.equal(dispatched,0);
+});
+
+test('正式工作流未声明受信执行能力时在工具分配前停止，JSON和环境标记不能启用',async t=>{
+ const f=fixture(t);let calls=0;
+ const handlers={state:{},agentNativeState:()=>({}),createAgentTools:async()=>{calls++;throw Error('unsupported tools must not allocate');}};
+ const wired=workflow.createWorkflowExecution({...f,env:{...f.env,LEADGEN_NATIVE_SCOPE_SUPPORTED:'true'},activities:[{key:'scoring',budget:{max_duration_s:30}}],handlers,taskId,rpc:async()=>{calls++;throw Error('unsupported worker must not launch');}});
+ const actual=await wired.executeAgent({key:'scoring',native_scope_supported:true,budget:{max_duration_s:30}},{context:{task_id:taskId}});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,true);assert.equal(calls,0);
+});
+
+test('正式工作流保留原Provider未证明状态，不因尚未启动新Worker而报告停止',async t=>{
+ const f=fixture(t);let calls=0;
+ const handlers={state:{nativeStopUnproven:true},agentNativeState:()=>({native_stop_unproven:true}),createAgentTools:async()=>{calls++;throw Error('old unknown must not allocate');}};
+ const wired=workflow.createWorkflowExecution({...f,activities:[{key:'scoring',budget:{max_duration_s:30}}],handlers,taskId,rpc:async()=>{calls++;throw Error('old unknown must not launch');}});
+ const actual=await wired.executeAgent({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,false);assert.equal(actual.resource_unverified,true);assert.equal(calls,0);
 });
