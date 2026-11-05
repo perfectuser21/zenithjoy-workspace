@@ -2,7 +2,8 @@
  * 智能获客「分析+指派」中台路由（刀1）
  * 契约：scratchpad/dispatch-engine-contract.md「API 端点」节
  *
- * 全部 tenantContextOptional：租户从 req.tenantId（session / X-Tenant-Id 头），绝不信 query.tenant_id。
+ * 历史触达读取要求认证成员并从服务端成员关系解析租户，不信任请求指定的租户。
+ * 其他既有路由暂保留 tenantContextOptional，迁移时逐一核对调用方。
  *
  *   GET  /api/acquisition/config           读配置（无则返默认）
  *   PUT  /api/acquisition/config           upsert（数值范围校验，非法 400）
@@ -14,7 +15,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
-import { tenantContextOptional } from '../middleware/tenant-context';
+import { tenantContext, tenantContextOptional } from '../middleware/tenant-context';
 import { enqueueWarmupTasks } from '../services/warmup-dispatch';
 import {
   getConfig,
@@ -159,11 +160,11 @@ async function outreachHistoryHandler(req: Request, res: Response) {
     }));
     return res.json(OK({ items, total: items.length }));
   } catch {
-    return res.json(OK({ items: [], total: 0 }));
+    return res.status(503).json(ERR('HISTORY_UNAVAILABLE', '触达历史暂时不可用，请稍后重试'));
   }
 }
-acquisitionDispatchRouter.get('/outreach-history', tenantContextOptional, outreachHistoryHandler);
-acquisitionDispatchRouter.get('/dispatch/outreach-history', tenantContextOptional, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/outreach-history', tenantContext, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/dispatch/outreach-history', tenantContext, outreachHistoryHandler);
 
 // ── GET /cookie-health — 各号健康分类 + 需重扫项 ──
 acquisitionDispatchRouter.get('/cookie-health', tenantContextOptional, async (req: Request, res: Response) => {

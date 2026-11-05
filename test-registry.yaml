@@ -5076,10 +5076,11 @@ tests:
     path: sprints/07041249-line02-dashboard-ia-redesign/tests/line02-outreach-api.test.ts
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: AI员工
     note: "sprint(07041249): Hub GP 顺序 + 触达记录视图 — outreach-history 端点注册+tenant_id过滤+items/total schema，fetchOutreachHistory API 函数，AcquisitionOutreachPage 存在+空状态，Hub MODULES 无 comingSoon，accounts 无昵称列，navigation 新路由注册"
 
+    retirement: "2026-11-05: 旧获客PC发起入口按用户决定退役；历史触达权限、双租户隔离与返回通过 outreach-history.pg.test.ts 真 HTTP/PG 验证，历史页面和导航通过 AcquisitionOutreachPage.test.tsx 与 AcquisitionHubPage.test.tsx 验证；原始测试内容保留 Git。"
   - id: line02-dashboard-ia-redesign-e2e
     path: apps/dashboard/e2e/acquisition-ia-redesign.spec.ts
     type: e2e
@@ -10312,3 +10313,19 @@ tests:
     status: active
     product: 基础设施
     note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.
+
+  - id: acquisition-retired-outreach-history-pg
+    path: apps/api/tests/integration/business-contracts/outreach-history.pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "Business PostgreSQL 必需检查：真实登录租户、两个历史路由、跨租户与伪造头拒绝、错误不伪装空记录。"
+
+  - id: dashboard-retired-outreach-history
+    path: apps/dashboard/src/pages/AcquisitionOutreachPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "历史触达页面的授权请求、记录展示和读取错误明确显示。"

@@ -923,6 +923,33 @@
         "test-registry.yaml"
       ],
       "historical_obligation_evidence": "The user explicitly retired Windows clients. This sprint snapshot only checked source text and is not an active CI runner; no unique real-video execution is removed by this snapshot deletion. The former manual Windows E2E runner is separately retired, and actual retained-path video processing remains unverified; neither retained API smoke nor these evidence files is claimed as an equivalent replacement."
+    },
+    {
+      "path": "sprints/07041249-line02-dashboard-ia-redesign/tests/line02-outreach-api.test.ts",
+      "source_commit": "9784012af142f8095dc11cf162bf3f60576f1706",
+      "source_blob": "5cf9ea80d4dc89396a4576d143fee90f281affdb",
+      "source_sha256": "c2800d4f8ab8b3a81fd6619506db6098fe9a8e511ecabc9ba17027477ba7b5c1",
+      "reason": "旧获客发起入口已按用户决定退役，原不可变快照要求继续出现旧绑定文案；保留的历史读取义务迁至执行真实路由与浏览器合同。",
+      "dimensions": {
+        "current_value": "旧创建与 PC 绑定不再需要；历史账号、线索和触达记录仍需授权读取。",
+        "active_status": "旧文案不再对应用户指定的产品路径；历史读取由现有 dashboard 与 API 使用。",
+        "real_effect": "原测试只搜索源码文字，不能验证租户隔离、实际返回内容或数据库故障；实际 HTTP 加 PostgreSQL 合同现在核验。",
+        "test_and_blocking": "新的真实 PG 双租户与错误负例在 L4 business PG 中执行；dashboard 组件合同和 Chromium E2E 检查历史入口与内容。",
+        "duplication_and_obsolescence": "原 Hub 旧绑定文字要求与已退役行为冲突；导航、表格及历史数据义务转移到现役行为测试。",
+        "runtime_and_maintenance_cost": "去除只依赖旧源码文本的不可变快照，复用现有业务 PG 与页面测试；不声称额外耗时节省。",
+        "retirement_and_dependencies": "保留完整 Git 内容、旧数据、历史 URL、授权校验和取消能力；账号与触达历史仍可读，旧创建不再开放。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/integration/business-contracts/outreach-history.pg.test.ts",
+        "apps/dashboard/src/pages/AcquisitionOutreachPage.test.tsx",
+        "apps/dashboard/src/pages/__tests__/AcquisitionHubPage.test.tsx",
+        "apps/dashboard/e2e/acquisition-ia-redesign.spec.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/vitest.business-pg.config.ts",
+        ".github/workflows/ci-l4-integration.yml"
+      ],
+      "historical_obligation_evidence": "用户确认旧获客不用；历史读取与租户隔离迁入真实可执行合同，不将新 Skill 视为已上线。"
     }
   ]
 }
