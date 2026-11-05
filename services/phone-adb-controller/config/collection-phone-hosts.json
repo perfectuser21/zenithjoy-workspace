@@ -158,6 +158,41 @@
         "douyin_video_discovery",
         "douyin_video_processing"
       ]
+    },
+    {
+      "target": "mmv",
+      "profile": "cloud-phone-test",
+      "serial": "47.100.213.173:10001",
+      "expected_account": "77980009922",
+      "workflow_keys": [
+        "douyin_video_discovery",
+        "douyin_video_processing"
+      ],
+      "evidence_root": "/private/tmp/openclaw-phone/evidence/cloud-phone-test",
+      "policy": {
+        "schema_version": 1,
+        "host_id": "mmv",
+        "transport": "tcp",
+        "endpoint": "tcp:127.0.0.1:5041",
+        "forbidden_ports": [],
+        "adb_bin": "/opt/homebrew/bin/adb",
+        "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/37.0.0/platform-tools/adb",
+        "adb_sha256": "9fdf861259dc807937b13afdd5f053c7fda9f3b7726933fe0e0f45130ecb8dc7"
+      },
+      "executables": {
+        "python": {
+          "path": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "f13707ff725eb3675d57e0f04527a4dada0511cebfb7cbd80f5cab72733a2a9d"
+        },
+        "node": {
+          "path": "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+          "sha256": "f023ca4cc73074018b8085e846c8f46fc175f923d6349708e9af2e3cef76af59"
+        },
+        "zsh": {
+          "path": "/bin/zsh",
+          "sha256": "abc56520c469fa4985fca02c5f55621932ad79de4f36440a64a27526f4b535ef"
+        }
+      }
     }
   ]
 }

@@ -86,3 +86,9 @@ test('server续期每次新鲜执行，未知续期永久阻止原生动作和se
     await assert.rejects(()=>t.settle({execution_stopped:true}),/UNKNOWN/);
   },{primitives:{heartbeat:async()=>{if(++refreshes===3)throw Error('lost lease ACK');return {renewed:true};}}});
 });
+
+test('可信scope可使用规范云serial；连接或改ADB服务仍不在Agent白名单',async()=>using(async(t,calls)=>{
+ assert.equal((await t.inspect()).scope.serial,'47.100.213.173:10001');
+ for(const command of ['connect','disconnect','start-server','kill-server'])await assert.rejects(()=>t.phone(command),/PHONE/);
+ assert.equal(calls.length,0);
+},{scope:{serial:'47.100.213.173:10001',profile:'cloud-phone-test'}}));

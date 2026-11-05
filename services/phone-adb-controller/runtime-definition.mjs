@@ -30,6 +30,13 @@ export const executionActor=snapshot=>frozenExecutionMode(snapshot)==='agent'?'r
 const agentInputKeys=['schema_version','workflow_key','task_id','run_tag','profile','serial','line','source_run','limit','comment_limit','run_max_seconds','run_start_ts','discovery_filters','collection_budget_s'];
 const agentUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const agentToken=value=>typeof value==='string'&&/^[-A-Za-z0-9_]{1,120}$/.test(value);
+// Syntax only: a TCP serial still needs the exact frozen host/profile resource binding.
+export function isCanonicalTcpDeviceSerial(value){
+ if(typeof value!=='string'||value.length>21)return false;
+ const match=/^((?:[0-9]{1,3}\.){3}[0-9]{1,3}):([1-9][0-9]{0,4})$/.exec(value);
+ return Boolean(match&&match[1].split('.').every(part=>String(Number(part))===part&&Number(part)<=255)&&Number(match[2])<=65535);
+}
+
 function agentInteger(raw,min=1,max=Number.MAX_SAFE_INTEGER){
  if(typeof raw!=='string'||!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)<min||Number(raw)>max)throw Error('AGENT_INPUT_INTEGER_INVALID');
  return Number(raw);
@@ -38,7 +45,7 @@ export function agentInput(env){
  if(executionModeInput(env)!=='agent')return null;
  const tasks=[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID].filter(Boolean);
  if(!tasks.length||new Set(tasks).size!==1||typeof tasks[0]!=='string'||!agentUuid.test(tasks[0])
-   ||!['WFR_TAG','P','SERIAL','LEADGEN_LINE'].every(key=>agentToken(env[key])))throw Error('AGENT_INPUT_IDENTITY_INVALID');
+   ||!['WFR_TAG','P','LEADGEN_LINE'].every(key=>agentToken(env[key]))||!(agentToken(env.SERIAL)||isCanonicalTcpDeviceSerial(env.SERIAL)))throw Error('AGENT_INPUT_IDENTITY_INVALID');
  const workflow=env.WF_BRAIN_WORKFLOW,source=env.LEADGEN_SOURCE_RUN||null;
  if(source!==null&&!agentToken(source)||workflow==='douyin_video_discovery'&&source!==null||workflow==='douyin_video_processing'&&source===null
    ||workflow==='douyin_comment_scoring'&&env.SERIAL!=='none'||workflow!=='douyin_comment_scoring'&&env.SERIAL==='none')throw Error('AGENT_INPUT_SOURCE_DEVICE_INVALID');
@@ -135,7 +142,7 @@ export function assertOutreachScope(snapshot,env){
 export function validateDiscoveryInput(value){
  const quotaKey=value?.schema_version===2?'max_attempts':'max_candidates';
  const keys=['schema_version','workflow_key','run_tag','profile','serial','line',quotaKey,'max_screens','source_kind','sources','source_sha256'];
- if(!value||Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k))||![1,2].includes(value.schema_version)||value.workflow_key!=='douyin_video_discovery'||!['run_tag','profile','serial','line'].every(k=>/^[A-Za-z0-9_-]+$/.test(value[k]||''))||!Number.isSafeInteger(value[quotaKey])||value[quotaKey]<1||value[quotaKey]>1000||value.max_screens!==1||value.source_kind!=='keyword'||!Array.isArray(value.sources)||value.sources.length!==1||typeof value.sources[0]!=='string'||!value.sources[0].trim()||/[\r\n]/.test(value.sources[0])||!/^[a-f0-9]{64}$/.test(value.source_sha256||''))throw Error('DISCOVERY_INPUT_INVALID');
+ if(!value||Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k))||![1,2].includes(value.schema_version)||value.workflow_key!=='douyin_video_discovery'||!['run_tag','profile','line'].every(k=>/^[A-Za-z0-9_-]+$/.test(value[k]||''))||!(/^[A-Za-z0-9_-]+$/.test(value.serial||'')||isCanonicalTcpDeviceSerial(value.serial))||!Number.isSafeInteger(value[quotaKey])||value[quotaKey]<1||value[quotaKey]>1000||value.max_screens!==1||value.source_kind!=='keyword'||!Array.isArray(value.sources)||value.sources.length!==1||typeof value.sources[0]!=='string'||!value.sources[0].trim()||/[\r\n]/.test(value.sources[0])||!/^[a-f0-9]{64}$/.test(value.source_sha256||''))throw Error('DISCOVERY_INPUT_INVALID');
  return value;
 }
 export function discoveryInput(env){
