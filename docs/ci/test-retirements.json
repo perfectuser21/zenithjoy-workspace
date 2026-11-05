@@ -878,6 +878,28 @@
         ".github/workflows/scripts/smoke/helpers/media-extra-contracts.mjs"
       ],
       "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj-kuaishou-three-mode/tests/ws3/kuaishou-gha-workflow.test.ts",
+      "source_commit": "9784012af142f8095dc11cf162bf3f60576f1706",
+      "source_blob": "1537e11ce71ccf50609ec8d2fd444cc0f3d52ae3",
+      "source_sha256": "35acbe7e08b3c358a7f7baf5b0bf9abe90d477de08655422a4d1f383b7a768b0",
+      "reason": "The user retired PC publishing; this historical contract only asserts the retired Windows Kuaishou web dryrun workflow structure.",
+      "dimensions": {
+        "current_value": "The PC web dryrun is retired by the user; Android phone publishing remains in scope.",
+        "active_status": "The contract only reads the retired Kuaishou web workflow; product code and shared session components remain.",
+        "real_effect": "It asserts workflow strings for cookies, dryruns and screenshots; it does not verify a phone publication.",
+        "test_and_blocking": "This static contract is not a substitute for Android acceptance; physical delivery remains unverified.",
+        "duplication_and_obsolescence": "The sole subject is the explicitly retired PC web workflow and it has no unique Android guarantee.",
+        "runtime_and_maintenance_cost": "Remove the obsolete static workflow contract; no runtime saving is asserted.",
+        "retirement_and_dependencies": "Retain business implementation, secrets and shared notification/session code; original test bytes remain recoverable in Git."
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        "product-map/generated/product-map.md",
+        "test-registry.yaml"
+      ],
+      "historical_obligation_evidence": "This contract asserts the structure of a PC workflow the user explicitly retired. Git retains its exact contents; no unique current Android obligation follows from the retired workflow structure."
     }
   ]
 }
