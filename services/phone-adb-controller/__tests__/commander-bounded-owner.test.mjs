@@ -80,3 +80,17 @@ test('the parent keeps the shared flock FD after helper death until explicit clo
   assert.equal(third.snapshot().leaves.find(leaf=>leaf.purpose==='owner').ready,true,'flock is free only after close; original pending still blocks reserve');
  }finally{await third.close();}
 }));
+test('a bounded owner manager cannot migrate to another run with the same source',{skip:process.platform!=='darwin'},()=>using(async({owner,home})=>{
+ const first=await owner.reserveOwner(scope,{home});await first.returned('{"done":true}');await first.close();
+ const count=owner.snapshot().leaves.length;
+ await assert.rejects(owner.reserveOwner({...scope,run_id:'douyin_comment_scoring-foreign_run__a1'},{home}),/COMMANDER_OWNER/);
+ assert.equal(owner.snapshot().leaves.length,count);
+}));
+test('unknown owner state prevents even another helper launch',{skip:process.platform!=='darwin'},()=>using(async({owner,home})=>{
+ const first=await owner.reserveOwner(scope,{home});const pid=owner.snapshot().leaves.find(leaf=>leaf.purpose==='owner').pid;
+ process.kill(pid,'SIGKILL');
+ for(let i=0;i<40&&!owner.snapshot().leaves.find(leaf=>leaf.purpose==='owner').process_closed;i++)await new Promise(resolve=>setTimeout(resolve,5));
+ await first.close();assert.equal(owner.snapshot().execution_unknown,true);const count=owner.snapshot().leaves.length;
+ await assert.rejects(owner.reserveOwner(scope,{home}),/COMMANDER_OWNER/);
+ assert.equal(owner.snapshot().leaves.length,count);
+}));
