@@ -40,10 +40,12 @@
     "npm": ">=9.0.0"
   },
   "devDependencies": {
+    "@openclaw/gateway-client": "2026.8.1",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "pg": "8.18.0",
     "vitest": "^4.0.18",
+    "ws": "8.21.3",
     "yaml": "^2.9.0"
   },
   "overrides": {

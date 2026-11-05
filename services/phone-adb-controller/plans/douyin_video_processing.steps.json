@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_processing",
   "brain_workflow_key": "douyin_video_processing",
-  "contract_sha256": "5778e3d0b834caad2f0c0ca1fb1f0135ee3baf38a8f67d77925b8e4f078852ba",
+  "contract_sha256": "d3d5d541511e2790f62927cf7f09168e2604f2f21407ea9751f6f860e464cb33",
   "promotion": {
     "min_consecutive_pass": 20
   },
