@@ -227,7 +227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -461,13 +461,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "03c19622e00ab26e008d1681d29b4089eed8361c2a0288fce9236c3c67bdf77b",
+      "code_digest": "b9572072542383aa4bb5a01c51bb9be0f8aa971d2b5852cf8fd26e32e7e2e2b3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "f20ffcda1c33ac5c20c9249e9197591e2c6860b9f68201ee36eb77921f2b07e7",
-        "current_code_digest": "03c19622e00ab26e008d1681d29b4089eed8361c2a0288fce9236c3c67bdf77b"
+        "current_code_digest": "b9572072542383aa4bb5a01c51bb9be0f8aa971d2b5852cf8fd26e32e7e2e2b3"
       }
     },
     "douyin_video_processing.preflight": {
@@ -738,7 +738,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -955,13 +955,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3daaa405ccc9e6c6526238ec35f9956f1e308fa4d68d52e6ad40768f3d6e2ec2",
+      "code_digest": "8c96722b82070ef5a406b97cbc2301037a002c5abdbf7343fedda1753412b6ed",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "e3266fc87f67e4e51b834037ea3ddd0e64d40bd4b617e36d9b2a3af3371913e7",
-        "current_code_digest": "3daaa405ccc9e6c6526238ec35f9956f1e308fa4d68d52e6ad40768f3d6e2ec2"
+        "current_code_digest": "8c96722b82070ef5a406b97cbc2301037a002c5abdbf7343fedda1753412b6ed"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1197,7 +1197,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -1417,13 +1417,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "2d133e0e6f8d64e62250c7b1bbb83305f74a39b6ded96b254ba5578cecfb7a67",
+      "code_digest": "0c3dc6c40e1719a93496935a3cfef178a51b0ac4951e5b27e57921559b54cce0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "04fdb8c45a1d48885f172ba35159d0d8fc10b6afe5b853d82ad11972400588fe",
-        "current_code_digest": "2d133e0e6f8d64e62250c7b1bbb83305f74a39b6ded96b254ba5578cecfb7a67"
+        "current_code_digest": "0c3dc6c40e1719a93496935a3cfef178a51b0ac4951e5b27e57921559b54cce0"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1687,7 +1687,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -1963,13 +1963,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "b73da5ecd254e8eaba009d62ad2df3ec5f1ea0f86a71c1a0e698b00c5c82d5e4",
+      "code_digest": "dc20f566254c2c5f06cbcdfc8303931ea51b2948db2c6555f3aaf16ffa15bd61",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "ad3a92753db78a20a45599e4be13731e9cd51b737b135fccfaab52834490b4b3",
-        "current_code_digest": "b73da5ecd254e8eaba009d62ad2df3ec5f1ea0f86a71c1a0e698b00c5c82d5e4"
+        "current_code_digest": "dc20f566254c2c5f06cbcdfc8303931ea51b2948db2c6555f3aaf16ffa15bd61"
       }
     },
     "douyin_video_processing.collection": {
@@ -2205,7 +2205,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -2447,13 +2447,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "221edfcb956cb86d3d3ab1a87c5f34b05e661ec8084de129cace741251dc3e6e",
+      "code_digest": "bba3c6d3c3e40131229760cc5fb075c2be92c44820c316e3f9e6219b6be72bde",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "703d3274a4b37b9ff37d344c83fda0f6e804a9d3bf4e7814d702ca750c688384",
-        "current_code_digest": "221edfcb956cb86d3d3ab1a87c5f34b05e661ec8084de129cace741251dc3e6e"
+        "current_code_digest": "bba3c6d3c3e40131229760cc5fb075c2be92c44820c316e3f9e6219b6be72bde"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -2710,7 +2710,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -2926,13 +2926,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "09145bf43466db5d1f2950bd205b32da4bd35df1772fdfc03a3d091c6f189cdc",
+      "code_digest": "eb4d33dee8ca9fd57d96743444dbbae71bfa8305113364e187455995301e1db7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "ce8869082153c497796d5f96ba7d9a15aa34f066df1e1a102c2110c64e808aa0",
-        "current_code_digest": "09145bf43466db5d1f2950bd205b32da4bd35df1772fdfc03a3d091c6f189cdc"
+        "current_code_digest": "eb4d33dee8ca9fd57d96743444dbbae71bfa8305113364e187455995301e1db7"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3161,7 +3161,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "bf75ad78569c06bc8346e0b9427c125a0336397377962ca9fb85d0506f0d2f3a",
+      "code_digest": "e36d65e4cd6222b7ffb5eaef956709274d35d865c33ce4b0d9f3f16b029de597",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "aa9ef121e96ac49769bde5e08886e779da674e6ec93ccca4b714684f26dc36eb",
-        "current_code_digest": "bf75ad78569c06bc8346e0b9427c125a0336397377962ca9fb85d0506f0d2f3a"
+        "current_code_digest": "e36d65e4cd6222b7ffb5eaef956709274d35d865c33ce4b0d9f3f16b029de597"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -3630,7 +3630,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -3892,13 +3892,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "cc200ed61a72c9340cf336f4ffdf4fc756586aaea409086bf36fafa968c384c2",
+      "code_digest": "41d1bfb2b8a7c7d9b08d456438e0e1e3e861cc582e8b06e04efedeef11ae127e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。",
+        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "4531ae42b30cef492eb08f96fcd7de6a794e5c7d10559d8e8d069c763bbf086f",
-        "current_code_digest": "cc200ed61a72c9340cf336f4ffdf4fc756586aaea409086bf36fafa968c384c2"
+        "current_code_digest": "41d1bfb2b8a7c7d9b08d456438e0e1e3e861cc582e8b06e04efedeef11ae127e"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -4092,7 +4092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -4344,13 +4344,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "89789de63a93e0e1fbc9562d7b9f263efdd05a457cb64e67abea92ab8e157435",
+      "code_digest": "2e190790a0b80f81659c540de762bc859655f511838d1b0427536e7acca73072",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。",
+        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "8d96cc688733c9a69af7a8be025efd402be5c9a2008cf8ba0c5ce41ebabaf73b",
-        "current_code_digest": "89789de63a93e0e1fbc9562d7b9f263efdd05a457cb64e67abea92ab8e157435"
+        "current_code_digest": "2e190790a0b80f81659c540de762bc859655f511838d1b0427536e7acca73072"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -4544,7 +4544,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -4771,13 +4771,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eabe827ab810cbcfc110f257102c3f5731fafa681e0f1cc16820395530350747",
+      "code_digest": "69a827b5d7285845fd0ded1d73eba5b367682d64c1037c23cc898d0d3fd6e580",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。",
+        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "1a4f0d01f65923dcdbc58b7f0b55333a00a59d2f120c98decc9b77fd45cdba3d",
-        "current_code_digest": "eabe827ab810cbcfc110f257102c3f5731fafa681e0f1cc16820395530350747"
+        "current_code_digest": "69a827b5d7285845fd0ded1d73eba5b367682d64c1037c23cc898d0d3fd6e580"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -4971,7 +4971,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -5191,13 +5191,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "55bf7a893d6d06040eda25641e32c5d4239ca754804b824b604f807cc5fbf776",
+      "code_digest": "5ae833bf7fc74711e29ea8a399dbc55e2db380d53ba444593c693b09086e935b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。",
+        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "27be7ea3bde7b0b0c5e20e42b6cbfb927f589ebfa79991d337fc827776cda18c",
-        "current_code_digest": "55bf7a893d6d06040eda25641e32c5d4239ca754804b824b604f807cc5fbf776"
+        "current_code_digest": "5ae833bf7fc74711e29ea8a399dbc55e2db380d53ba444593c693b09086e935b"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -5391,7 +5391,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "7df6da4dee237a81cfdb56dfd806268d2d1a6505d4f99aada185095da3d65e69"
+          "sha256": "773021de078a00e67acb3e09d5d742112a6c3c9f52ef467648f32cf28d96dda5"
         },
         {
           "kind": "code",
@@ -5621,13 +5621,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "21f2dea1892a6c94dd50f078221f0895fb79187ecf94f0a39279c0b166c8ff5b",
+      "code_digest": "ce36ccc289300ac9be38466818ab069d6f614780227c833df8354ee56f52c9f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base22782至30deb：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。",
+        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "44caa0f85230a200bf41ca1554713dadadcdfad91ddc20dc2aee0d5e27e27076",
-        "current_code_digest": "21f2dea1892a6c94dd50f078221f0895fb79187ecf94f0a39279c0b166c8ff5b"
+        "current_code_digest": "ce36ccc289300ac9be38466818ab069d6f614780227c833df8354ee56f52c9f3"
       }
     }
   },
