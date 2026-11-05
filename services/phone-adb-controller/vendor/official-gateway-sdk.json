@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "gateway_client": "2026.8.1",
+  "websocket": "8.21.3",
+  "protocol": 4,
+  "package_search": false,
+  "optional_native_modules": false,
+  "module_sha256": "a3336064c1f5886a134a2c1cd94c91aeae3ff2d21f0477f4107c2dd28f83f90a",
+  "license_sha256": "dc151a184ef61a999243e86dca4979793cd11d04765bac692ac00db132b7012e",
+  "compiler": {
+    "name": "esbuild",
+    "version": "0.28.1"
+  },
+  "source_manifest_sha256": "40371ec2bf59f12f2b8ba7e8dca148bef80105bb3f2be4a0dd0a39716d712b90",
+  "packages": [
+    {
+      "name": "@openclaw/gateway-client",
+      "version": "2026.8.1",
+      "integrity": "sha512-Qp4A41c4mWROftJDpr88XwXBIq1yJAh8IghGRljhxPxL6w/yGiV0PW70nBiGXceoNP8D6Li6ZNCK7gi4DD03SA=="
+    },
+    {
+      "name": "@openclaw/gateway-protocol",
+      "version": "2026.8.1",
+      "integrity": "sha512-hHa2sAWPumAn+kH0VdQE9MYZQIC5piGZm0b6zvazcTk4tFJeDkc2emXIYjJS7SYjxyLfjaGAP9CTN2yOvl/gVQ=="
+    },
+    {
+      "name": "ws",
+      "version": "8.21.3",
+      "integrity": "sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw=="
+    },
+    {
+      "name": "ipaddr.js",
+      "version": "2.5.0",
+      "integrity": "sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w=="
+    },
+    {
+      "name": "typebox",
+      "version": "1.3.16",
+      "integrity": "sha512-Jac8dgnin+g2p1w1v9sk92Wvp49ZqsmSgNhrXDK+RqrovsjiORMZvYZ8t8id9b9XQp6LMfaAwnIRSHGsM+3FMw=="
+    }
+  ],
+  "inputs": [
+    {
+      "path": "node_modules/@openclaw/gateway-client/dist/timeouts.mjs",
+      "sha256": "c8f502adc095d752857bfaca3669e27a70ce5c5ac47b0fb2735bcab8476e46a5"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/record-coerce-BKHrZ46I.mjs",
+      "sha256": "6d8bdf3aa3fa50ab01ad97ba16c43ae373cc0bd623a32c6ecc77e271bb9e609e"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/protocol-value-normalization-DcAoxLUs.mjs",
+      "sha256": "9c2d48a0311d1744eeff698d872d6d593f00b0d104611056913f06bc9388c2f2"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/connect-error-details.mjs",
+      "sha256": "76f9211e70a8db2e1e64c22cb503149c7e6d9238828d64528ff26c4ebb705e7d"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/frame-guards.mjs",
+      "sha256": "437502a8681d45b9fcda37a74f47a66efa2b6aaf68908898f2ca7aaaee408934"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-client/dist/session-subscriptions-BxuNBgqH.mjs",
+      "sha256": "5b276e482eb865279a5b9b15740a2b6d21731748a54d708948bbe24170d074be"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/client-info.mjs",
+      "sha256": "08a7a32a67e253c40fe819d02de9a88f531f5507ba47e60ff2b5079632dfb055"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/gateway-error-details.mjs",
+      "sha256": "2bd2f1754f59fe71a16d0d47641c34873944383b55eead61f76e5af4e266860b"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/startup-unavailable.mjs",
+      "sha256": "f5aebb53bbf82bdeaeff02df2f34f91c0ad43c72263db628e902a2c8f541723c"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-protocol/dist/version.mjs",
+      "sha256": "6603d6ba49d22473d7d608772c380fd0a41cfb48f557098fc9bc7cbabbae8892"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-client/dist/browser.mjs",
+      "sha256": "f9d5c2195f3ac2fffb82ac2e0e213e8bf8c680ba8153ce69a22eaa7d6bffc3c9"
+    },
+    {
+      "path": "node_modules/@openclaw/gateway-client/dist/websocket-data.mjs",
+      "sha256": "37ccb163f63f0950b172b92be8438b27b5ec017a86146b7c8ee7275cec51c23b"
+    },
+    {
+      "path": "node_modules/ws/lib/constants.js",
+      "sha256": "391e823142b8b370e55a2fd32b022deaf03b8415c56000009674ebc86a0b4f86"
+    },
+    {
+      "path": "node_modules/ws/lib/buffer-util.js",
+      "sha256": "8b0a45739132f82e25ea13163780abf547ccfe989267f3eb7abb475beec92da3"
+    },
+    {
+      "path": "node_modules/ws/lib/limiter.js",
+      "sha256": "e0469d4b83f6ba764b15f80e1766b75c136fbff68f048f4c050f0b1c7f065f69"
+    },
+    {
+      "path": "node_modules/ws/lib/permessage-deflate.js",
+      "sha256": "16a91536988a53c23047ee5882392068728a839a244178c3b09b8c54982f58b0"
+    },
+    {
+      "path": "node_modules/ws/lib/validation.js",
+      "sha256": "41ce8e83d0d434132e1704895fedb91f6703a701b42d91c80954ab29b2845593"
+    },
+    {
+      "path": "node_modules/ws/lib/receiver.js",
+      "sha256": "a6ada33c9a2d54eaf595824b821ea89ca2c6395f89aa06755c52142148274884"
+    },
+    {
+      "path": "node_modules/ws/lib/sender.js",
+      "sha256": "d0791d30c3defd44dcabbddb879a901c757993fea2c00a7ffea01d53b23b4b77"
+    },
+    {
+      "path": "node_modules/ws/lib/event-target.js",
+      "sha256": "c45d3c6e12d170c860c0c3f1a050aa0f864d9806632b609a1e607d675aba128c"
+    },
+    {
+      "path": "node_modules/ws/lib/extension.js",
+      "sha256": "852564f0f6b460287043803eae732666fb5610f676874354fc89f06aa4e986ed"
+    },
+    {
+      "path": "node_modules/ws/lib/websocket.js",
+      "sha256": "de5add831db49e159d3ee0adb1c5e042eba3af13166374c5584f4fc520d1e734"
+    },
+    {
+      "path": "node_modules/ws/lib/stream.js",
+      "sha256": "a56fcb6e2b152097ee820b6f5410b1f71e59819b45d08d9f8bda588fe39070ec"
+    },
+    {
+      "path": "node_modules/ws/lib/subprotocol.js",
+      "sha256": "be3f6323d6f549568577dcba9004c1479d95c65a7abb0fe0c582875b9fac0b7c"
+    },
+    {
+      "path": "node_modules/ws/lib/websocket-server.js",
+      "sha256": "6d8dd89a841748c80445fd5fcdb5ba8005369b53cc3525135e11304c8b9c55e5"
+    },
+    {
+      "path": "node_modules/ws/wrapper.mjs",
+      "sha256": "fe154662301fd558f935f9c217fccbe7a7dac02ff39e648a000589403ff27c7f"
+    }
+  ]
+}
