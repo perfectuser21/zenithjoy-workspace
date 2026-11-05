@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-05T21:30:32.640579+00:00",
+  "task_id": "354bb3da-0832-4517-9bfc-089450b9f111",
+  "actor": "zenithjoy-session-http-oracles-20261106",
+  "branch": "cp-1106-session-http-oracles",
+  "base_sha": "df770484414df84db14e0adaa60f3e651eb2e2ea",
+  "upstream_main_readback": "989819e885cdc8634af37186014f2d51a279dc63",
+  "gp_anchor": "none(infra)",
+  "scope": "Followup only to20HTTP200-only session slots. Does not change PR2421 worktree/workflows/registry/required profile/notification/writeback policy, original172 denominator, credentials or product behavior outside health response rejection.",
+  "search_method": "Repository-wide exact endpoint search found only check-health.js definitions for all5 endpoints; reviewed provider publishers/scrapers and existing session tests. Existing production code is evidence of a consumer contract, not a fresh provider response or proof that different endpoints have identical success schemas.",
+  "source_refs": {
+    "weibo_error_source": {
+      "path": "workflows/platform-data/workflows/scraper/scripts/scraper-weibo-v3.js",
+      "line": 95,
+      "sha256": "585c2e980733bafff6c6da5766ba3b5c06cfa4a77914b74a3088b1e208323863",
+      "role": "Provider API consumer rejects apiData.error. Different endpoint; negative envelope only, not profile identity proof."
+    },
+    "weibo_login_source": {
+      "path": "services/agent/publishers/weibo-publisher/publish-weibo-api.cjs",
+      "line": 116,
+      "sha256": "699620dc64c04b711386bd350201662474d9fbef56512342fe740883209db67f",
+      "role": "Existing provider publisher rejects login error body; no network executed by import-only unit tests."
+    },
+    "weibo_login_tests": {
+      "path": "services/agent/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs",
+      "line": 156,
+      "sha256": "a4870f5080df6a9dc385b2cfa65b8519d2d0a88bb2605de1f320376d54834144",
+      "role": "Existing test rejects HTTP200 top-level error containing login-required text."
+    },
+    "zhihu_error_source": {
+      "path": "services/agent/publishers/zhihu-publisher/publish-zhihu-api.cjs",
+      "line": 92,
+      "sha256": "46a3a334fc4a63c5268f890a5e5bab62cfd23327ac68397c3637139c624854ef",
+      "role": "parseZhihuResponse rejects JSON parse failure and truthy top-level error. Creating articles is a different endpoint; no publish invoked."
+    },
+    "zhihu_error_tests": {
+      "path": "services/agent/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs",
+      "line": 53,
+      "sha256": "9431ecbda9b38834a0d10e7f54bea774283cf909aebbb3ac816713ab00df5611",
+      "role": "Existing executable tests include200 error object and non-JSON rejection."
+    },
+    "channels_other_api": {
+      "path": "workflows/platform-data/workflows/scraper/scripts/scraper-channels-v3.js",
+      "line": 103,
+      "sha256": "622365cebda9f96432aeedc68e485844adb54d371988f7d66053c85e4a2db2e9",
+      "role": "post_list checks errCode/data.list; endpoint differs from auth_info and cannot define its response contract."
+    },
+    "channels_browser": {
+      "path": "services/agent/publishers/shipinhao-publisher/publish-shipinhao-image-dryrun.cjs",
+      "line": 65,
+      "sha256": "e06a08e193ec1131a15f6533d79f1344d6887f9efd785a6f7d4d99d02df426bf",
+      "role": "Browser final URL detects login; HTTP health transport does not run this DOM/final-URL probe."
+    },
+    "toutiao_dom": {
+      "path": "workflows/platform-data/workflows/scraper/scripts/scraper-toutiao-v3.js",
+      "line": 62,
+      "sha256": "4b4f2a68cb1aff68502fbde06f105d6f89d95bf37aa79bdcd9cfc0d69ab2cd40",
+      "role": "Browser navigates content/all and reads DOM; no homepage/userinfo response fixture/schema."
+    },
+    "wechat_dom": {
+      "path": "services/agent/publishers/wechat-publisher/publish-wechat-article.cjs",
+      "line": 174,
+      "sha256": "c1ce9e7299471284aebc7ee1f1081e39af1e7bcc81c1afd83552e313bf964423",
+      "role": "Browser login redirect rejection for editor path; not homepage HTML authenticated-success markers."
+    },
+    "wechat_oauth": {
+      "path": "services/content-pipeline/scripts/publishers/wechat-publisher/check-wechat-token.cjs",
+      "line": 65,
+      "sha256": "9483a7180b75fd8d6f6a928e8590358fcdbbde129df376b66ca2540adecca514",
+      "role": "OAuth app credential/token checker uses different endpoint and auth; not cookie-session homepage schema."
+    },
+    "old_static_test": {
+      "path": "sprints/zj-ops1-session-health/tests/ws1/check-health.test.ts",
+      "line": 13,
+      "sha256": "17588b3afe229f6b2e010d84404ad0e5b7fe901a7d7ed38e261ed4bf3d006b9d",
+      "role": "Tests35slot inventory/report shape/offline run; no provider health JSON/HTML response contracts."
+    },
+    "current_cli_fixture": {
+      "path": ".github/workflows/scripts/__tests__/session-health.test.mjs",
+      "line": 18,
+      "sha256": "e35bb3f6f0aa164b4da71bd80cf9ef00c557cceec6ff9db7317cb6c79590c2e8",
+      "role": "Transport fixture supplies a shared synthetic response to all providers; positive controls are backward-compatibility only, not captured real vendor responses."
+    }
+  },
+  "counts": {
+    "audited_slots": 20,
+    "known_negative_guard_added": 8,
+    "unchanged_without_endpoint_contract": 12,
+    "positive_identity_contract_still_missing": 20,
+    "physical_acceptance_closed": 0
+  },
+  "slots": [
+    {
+      "secretEnv": "SHIPINHAO_COOKIES",
+      "endpoint": "https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "channels_other_api",
+        "channels_browser"
+      ],
+      "unresolved_contract": "No exact auth_info success/error response fixture or schema found. Do not transfer errCode/data.list from post_list, or infer authenticated identity from an HTML200 login page.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "SHIPINHAO_SUB_1",
+      "endpoint": "https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "channels_other_api",
+        "channels_browser"
+      ],
+      "unresolved_contract": "No exact auth_info success/error response fixture or schema found. Do not transfer errCode/data.list from post_list, or infer authenticated identity from an HTML200 login page.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "SHIPINHAO_SUB_2",
+      "endpoint": "https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "channels_other_api",
+        "channels_browser"
+      ],
+      "unresolved_contract": "No exact auth_info success/error response fixture or schema found. Do not transfer errCode/data.list from post_list, or infer authenticated identity from an HTML200 login page.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "SHIPINHAO_SUB_3",
+      "endpoint": "https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "channels_other_api",
+        "channels_browser"
+      ],
+      "unresolved_contract": "No exact auth_info success/error response fixture or schema found. Do not transfer errCode/data.list from post_list, or infer authenticated identity from an HTML200 login page.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "TOUTIAO_COOKIES",
+      "endpoint": "https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "toutiao_dom"
+      ],
+      "unresolved_contract": "Repository publisher/scraper uses browser DOM; no exact homepage/userinfo payload schema or deterministic business failure envelope found. No guessed errno/code/result rule.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "TOUTIAO_SUB_1",
+      "endpoint": "https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "toutiao_dom"
+      ],
+      "unresolved_contract": "Repository publisher/scraper uses browser DOM; no exact homepage/userinfo payload schema or deterministic business failure envelope found. No guessed errno/code/result rule.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "TOUTIAO_SUB_2",
+      "endpoint": "https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "toutiao_dom"
+      ],
+      "unresolved_contract": "Repository publisher/scraper uses browser DOM; no exact homepage/userinfo payload schema or deterministic business failure envelope found. No guessed errno/code/result rule.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "TOUTIAO_SUB_3",
+      "endpoint": "https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "toutiao_dom"
+      ],
+      "unresolved_contract": "Repository publisher/scraper uses browser DOM; no exact homepage/userinfo payload schema or deterministic business failure envelope found. No guessed errno/code/result rule.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "WEIBO_COOKIES",
+      "endpoint": "https://weibo.com/ajax/profile/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "weibo_error_source",
+        "weibo_login_source",
+        "weibo_login_tests"
+      ],
+      "unresolved_contract": "No exact /ajax/profile/me account-identity success schema or captured response fixture. Shared provider top-level error rejection reduces known false greens; a non-error JSON object (including {}) retains old acceptance and is not independent identity proof.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "WEIBO_SUB_1",
+      "endpoint": "https://weibo.com/ajax/profile/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "weibo_error_source",
+        "weibo_login_source",
+        "weibo_login_tests"
+      ],
+      "unresolved_contract": "No exact /ajax/profile/me account-identity success schema or captured response fixture. Shared provider top-level error rejection reduces known false greens; a non-error JSON object (including {}) retains old acceptance and is not independent identity proof.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "WEIBO_SUB_2",
+      "endpoint": "https://weibo.com/ajax/profile/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "weibo_error_source",
+        "weibo_login_source",
+        "weibo_login_tests"
+      ],
+      "unresolved_contract": "No exact /ajax/profile/me account-identity success schema or captured response fixture. Shared provider top-level error rejection reduces known false greens; a non-error JSON object (including {}) retains old acceptance and is not independent identity proof.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "WEIBO_SUB_3",
+      "endpoint": "https://weibo.com/ajax/profile/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "weibo_error_source",
+        "weibo_login_source",
+        "weibo_login_tests"
+      ],
+      "unresolved_contract": "No exact /ajax/profile/me account-identity success schema or captured response fixture. Shared provider top-level error rejection reduces known false greens; a non-error JSON object (including {}) retains old acceptance and is not independent identity proof.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "ZHIHU_COOKIES",
+      "endpoint": "https://www.zhihu.com/api/v4/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "zhihu_error_source",
+        "zhihu_error_tests"
+      ],
+      "unresolved_contract": "No exact /api/v4/me account-identity success schema/fixture. Existing parseZhihuResponse rejects error/non-JSON but is for article endpoints; only the negative envelope is reused. Non-error JSON object is not proof of authenticated identity.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "ZHIHU_SUB_1",
+      "endpoint": "https://www.zhihu.com/api/v4/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "zhihu_error_source",
+        "zhihu_error_tests"
+      ],
+      "unresolved_contract": "No exact /api/v4/me account-identity success schema/fixture. Existing parseZhihuResponse rejects error/non-JSON but is for article endpoints; only the negative envelope is reused. Non-error JSON object is not proof of authenticated identity.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "ZHIHU_SUB_2",
+      "endpoint": "https://www.zhihu.com/api/v4/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "zhihu_error_source",
+        "zhihu_error_tests"
+      ],
+      "unresolved_contract": "No exact /api/v4/me account-identity success schema/fixture. Existing parseZhihuResponse rejects error/non-JSON but is for article endpoints; only the negative envelope is reused. Non-error JSON object is not proof of authenticated identity.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "ZHIHU_SUB_3",
+      "endpoint": "https://www.zhihu.com/api/v4/me",
+      "disposition": "known_error_and_nonobject_json_rejection_added",
+      "source_refs": [
+        "zhihu_error_source",
+        "zhihu_error_tests"
+      ],
+      "unresolved_contract": "No exact /api/v4/me account-identity success schema/fixture. Existing parseZhihuResponse rejects error/non-JSON but is for article endpoints; only the negative envelope is reused. Non-error JSON object is not proof of authenticated identity.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "GONGZHONGHAO_COOKIES",
+      "endpoint": "https://mp.weixin.qq.com/cgi-bin/homepage",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "wechat_dom",
+        "wechat_oauth"
+      ],
+      "unresolved_contract": "Homepage can be HTML; no maintained authenticated homepage markers or login-HTML response fixture found. Editor URL rules and OAuth errcode/token success cannot be applied to cookie homepage authentication.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "GONGZHONGHAO_SUB_1",
+      "endpoint": "https://mp.weixin.qq.com/cgi-bin/homepage",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "wechat_dom",
+        "wechat_oauth"
+      ],
+      "unresolved_contract": "Homepage can be HTML; no maintained authenticated homepage markers or login-HTML response fixture found. Editor URL rules and OAuth errcode/token success cannot be applied to cookie homepage authentication.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "GONGZHONGHAO_SUB_2",
+      "endpoint": "https://mp.weixin.qq.com/cgi-bin/homepage",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "wechat_dom",
+        "wechat_oauth"
+      ],
+      "unresolved_contract": "Homepage can be HTML; no maintained authenticated homepage markers or login-HTML response fixture found. Editor URL rules and OAuth errcode/token success cannot be applied to cookie homepage authentication.",
+      "physical_verified": false
+    },
+    {
+      "secretEnv": "GONGZHONGHAO_SUB_3",
+      "endpoint": "https://mp.weixin.qq.com/cgi-bin/homepage",
+      "disposition": "unchanged_http200_only",
+      "source_refs": [
+        "wechat_dom",
+        "wechat_oauth"
+      ],
+      "unresolved_contract": "Homepage can be HTML; no maintained authenticated homepage markers or login-HTML response fixture found. Editor URL rules and OAuth errcode/token success cannot be applied to cookie homepage authentication.",
+      "physical_verified": false
+    }
+  ],
+  "change": "For Weibo/Zhihu main+3sub each, require a parsed non-null JSON object and reject truthy top-level error; preserve other non-error JSON-object acceptance. Malformed/empty/HTML/null/array/primitive/error responses become unknown, never active/expired. No success-ID/vendor-code fields invented and profile text containing login words is not inspected.",
+  "remaining_risk": "This is a partial negative-oracle repair. {} or another non-error object still satisfies the old handling for Weibo/Zhihu;12other slots still accept arbitraryHTTP200. Do not describe this as all20authenticated health fixed or business success.",
+  "verification": {
+    "test_first_commit": "868efcac1",
+    "baseline": {
+      "CLI_negative_failed": 16,
+      "CLI_positive_passed": 4,
+      "all8slots_guard_test_failed": 1,
+      "existing_filtered": 79,
+      "log": {
+        "path": "/private/tmp/zj-session-http-red.log",
+        "sha256": "afbd495816975e50489fd1ca0b7a377ff8c6f0cfe433114d76bfd5eb84fef6d4"
+      }
+    },
+    "session_surrounding": {
+      "tests": 129,
+      "passed": 129,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 44995.666125,
+      "command": "PATH=/opt/homebrew/opt/node@20/bin:$PATH node --test .github/workflows/scripts/__tests__/session-health.test.mjs .github/workflows/scripts/__tests__/session-sync.test.mjs scripts/sessions/check-health.test.mjs scripts/sessions/qr-notification.test.mjs",
+      "log": {
+        "path": "/private/tmp/zj-session-http-green.log",
+        "sha256": "421c92f3b38162ffa25ed57a40a63f022ded2289e9bcf6801f0ccba81518e8ad"
+      }
+    },
+    "existing_provider_contracts": {
+      "files": 2,
+      "tests": 56,
+      "passed": 56,
+      "skipped": 0,
+      "runner": "own services/agent locked npm ci;Vitest3.2.4",
+      "command": "cd services/agent && PATH=/opt/homebrew/opt/node@20/bin:$PATH node node_modules/vitest/vitest.mjs run publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs",
+      "log": {
+        "path": "/private/tmp/zj-session-http-provider-contracts.log",
+        "sha256": "d30841e404fb2b9a6c396a4f1ae755a2efe7437f2020704582690b807e48c3a5"
+      }
+    },
+    "product_map": "PASS no drift at fixed local skill3bbea5b;own cache, no credential read",
+    "syntax": "node --check scripts/sessions/check-health.js exit0",
+    "diff": "git diff --check exit0"
+  },
+  "fixture_boundary": "Actual health CLI runs in owned scratch with synthetic cookies/HTTP transports. No real browser/CDP/phone/account/cookie/profile, messages, production DB or platform network. Provider tests import pure helpers and do not call publishing main.",
+  "seven_dimensions": {
+    "current_value": "Do not mark operator sessions active after known business error payload.",
+    "active_status": "Scheduled and manual session-health-check.yml still consumes this producer; all35report entries remain.",
+    "real_effect": "Baseline16CLI cases falsely passed and wrote active; updated8slots reject known-error/unrecognized payloads and exitnonzero.",
+    "test_and_blocking": "Appended existing L3-required glob testfile; direct canonical unit verifies all8definitions. Existing notification/writeback/missing-config failures remain tested.",
+    "duplication_and_obsolescence": "Current scheduled consumer preserved; provider response failure contracts already exist elsewhere but exact health success contracts do not. No domain/endpoint/auth migration.",
+    "runtime_and_maintenance_cost": "20CLI cases plus1direct8slot guard;surrounding129tests45s;no repeated builds or physical operations.",
+    "retirement_and_dependencies": "No retirement, workflow or registry change; all20slotnames/endpoints/cookienames remain. Other12andall20positiveidentity gaps explicitly retained."
+  }
+}

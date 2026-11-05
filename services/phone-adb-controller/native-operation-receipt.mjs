@@ -62,13 +62,13 @@ export function processIdentity(pid,deadline){
 }
 function inspectAsync(pid,mode,deadline,signal){
  if(!Number.isSafeInteger(pid)||pid<=0)return mode==='identity'?Promise.resolve(null):Promise.reject(Error('NATIVE_PROCESS_INSPECTION_FAILED'));
- const timeout=inspectionTimeout(mode==='identity'?2000:3000,deadline);
+ const maximum=mode==='identity'?2000:3000;
+ inspectionTimeout(maximum,deadline);
  return new Promise((resolve,reject)=>{
   if(signal.aborted){reject(Error('NATIVE_OBSERVATION_CANCELLED'));return;}
   const child=spawn('python3',['-c',inspector,String(pid),mode],{stdio:['ignore','pipe','pipe']});
-  let stdout='',bytes=0,failure,settled=false;
+  let stdout='',bytes=0,failure,settled=false,timer;
   const cancel=()=>{failure??=Error('NATIVE_OBSERVATION_CANCELLED');child.kill('SIGKILL');child.stdout.destroy();child.stderr.destroy();finish(failure);};
-  const timer=setTimeout(()=>{failure??=Error('NATIVE_PROCESS_INSPECTION_FAILED');cancel();},timeout);
   const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);signal.removeEventListener('abort',cancel);error?reject(error):resolve(value);};
   signal.addEventListener('abort',cancel,{once:true});
   child.once('spawn',()=>{if(signal.aborted)cancel();});
@@ -78,6 +78,10 @@ function inspectAsync(pid,mode,deadline,signal){
   child.once('close',code=>{if(failure||code!==0){finish(failure||Error('NATIVE_PROCESS_INSPECTION_FAILED'));return;}
    try{finish(null,JSON.parse(stdout));}catch{finish(Error('NATIVE_PROCESS_INSPECTION_FAILED'));}
   });
+  // OS process creation can itself block. Charge that elapsed time to the
+  // same deadline instead of granting the observer a stale pre-spawn budget.
+  try{timer=setTimeout(()=>{failure??=Error('NATIVE_PROCESS_INSPECTION_FAILED');cancel();},inspectionTimeout(maximum,deadline));}
+  catch{failure??=Error('NATIVE_OBSERVATION_BUDGET_EXHAUSTED');cancel();}
  });
 }
 function watchExit(pid){

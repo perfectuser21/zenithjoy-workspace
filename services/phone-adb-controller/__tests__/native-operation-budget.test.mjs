@@ -53,11 +53,24 @@ function observations(t,{count=8,exited=false,childrenOverride}={}){
 }
 
 test('停止多个未确认watcher共用尾段预算，不逐PID累计200ms', {timeout:5000},async t=>{
- const f=observations(t);await f.operation.started(f.root);
- const start=performance.now();const receipt=await f.operation.stop(null,0,null);const elapsed=performance.now()-start;
+ // Check the shared deadline, not host scheduling or receipt fsync latency.
+ // Advance the actual timer queue and its monotonic clock together.
+ t.mock.timers.enable({apis:['setTimeout']});
+ const f=observations(t);f.clocked();await f.operation.started(f.root);
+ const start=f.clock();let receipt,settled=false;
+ const stopping=f.operation.stop(null,0,null).then(result=>{receipt=result;settled=true;});
+ // Drain real inspection/watcher microtasks between timer turns. Extra turns
+ // let a regressed implementation close observers before its assertion fails.
+ for(let turn=0;turn<50&&!settled;turn++){
+  await new Promise(resolve=>setImmediate(resolve));
+  if(settled)break;
+  f.advance(200);t.mock.timers.tick(200);
+ }
+ assert.equal(settled,true,'停止必须在有限轮次内完成');await stopping;
  assert.equal(receipt.execution_stopped,false);assert.equal(receipt.status,'unknown');
+ assert.equal(f.counts().watchers,9,'必须实际观测root及八个后代');
  assert.equal(f.counts().closed,f.counts().watchers,'退出观测器必须全部关闭');
- assert.ok(elapsed<1200,`停止尾段累计耗时 ${elapsed.toFixed(1)}ms，不能按PID逐个等待`);
+ assert.ok(f.clock()-start<=1000,`停止尾段累计预算 ${f.clock()-start}ms，不能按PID逐个等待`);
 });
 
 test('异步身份观测也扣同一尾段剩余预算',async t=>{

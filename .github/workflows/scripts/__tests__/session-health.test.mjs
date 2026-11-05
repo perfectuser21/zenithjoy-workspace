@@ -332,3 +332,56 @@ for (const platform of Object.keys(operatorEndpoints)) {
     assert.match(result.stdout, /PASS:/);
   });
 }
+
+for (const [name, body, configuredCookies] of [
+  ['Douyin rejects explicit failure with user_info', '{"status_code":8,"user_info":{"uid":"fixture"}}', ['DOUYIN_COOKIES']],
+  ['Douyin rejects explicit failure with creator_info', '{"status_code":8,"creator_info":{"uid":"fixture"}}', ['DOUYIN_COOKIES']],
+  ['Kuaishou rejects explicit failure with data', '{"result":0,"data":{"userId":"fixture"}}', ['KUAISHOU_COOKIES']],
+  ['XHS rejects failed code with success true', '{"code":-1,"success":true}', ['XIAOHONGSHU_COOKIES']],
+  ['XHS rejects success false with code zero', '{"code":0,"success":false}', ['XIAOHONGSHU_COOKIES']],
+]) test('session patrol business failure veto: '+name, () => {
+  const result = runHealth({ body, configuredCookies, required: configuredCookies.join(','), apiKeysMissing: true, noAlerts: true });
+  assert.equal(result.report.find(row => row.secretEnv === configuredCookies[0]).status, 'unknown');
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.updates.length, 0, 'conflicting business response must not mark a session active');
+  assert.doesNotMatch(result.stdout, /全部正常|已检查账号通过/);
+});
+
+for (const [name, body, configuredCookies] of [
+  ['Douyin status_code zero', '{"status_code":0}', ['DOUYIN_COOKIES']],
+  ['Douyin legacy user_info', '{"user_info":{"uid":"fixture"}}', ['DOUYIN_COOKIES']],
+  ['Douyin legacy creator_info', '{"creator_info":{"uid":"fixture"}}', ['DOUYIN_COOKIES']],
+  ['Kuaishou result one', '{"result":1}', ['KUAISHOU_COOKIES']],
+  ['Kuaishou legacy data', '{"data":{"userId":"fixture"}}', ['KUAISHOU_COOKIES']],
+  ['XHS code zero', '{"code":0}', ['XIAOHONGSHU_COOKIES']],
+  ['XHS success true', '{"success":true}', ['XIAOHONGSHU_COOKIES']],
+]) test('session patrol preserves affirmative response: '+name, () => {
+  const result = runHealth({ body, configuredCookies, required: configuredCookies.join(','), apiKeysMissing: true, noAlerts: true });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.report.find(row => row.secretEnv === configuredCookies[0]).status, 'ok');
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].status, 'active');
+});
+
+// The exact health identity schemas remain unproven. These tests assert only
+// existing provider error-envelope/JSON rejection, not authenticated identity.
+for (const account of ['WEIBO_COOKIES', 'ZHIHU_COOKIES']) {
+  for (const body of ['<html>login required</html>', '{broken', '', 'null', '[]', 'true',
+    '{"error":"未登录，请先登录"}', '{"error":{"message":"failed"},"id":"fixture"}']) {
+    test(`HTTP-only health rejects known error or unrecognized JSON for ${account}: ${body}`, () => {
+      const result = runHealth({ body, required: account, configuredCookies: [account], apiKeysMissing: true, noAlerts: true });
+      assert.equal(result.report.find(row => row.secretEnv === account).status, 'unknown');
+      assert.notEqual(result.status, 0, result.stdout + result.stderr);
+      assert.equal(result.updates.length, 0, 'failed/unrecognized response must not write active');
+      assert.doesNotMatch(result.stdout, /全部正常|已检查账号通过/);
+    });
+  }
+  for (const body of ['{"id":"fixture"}', '{"data":{"description":"请登录"},"error":null}']) {
+    test(`HTTP-only health retains prior non-error JSON handling for ${account}: ${body}`, () => {
+      const result = runHealth({ body, required: account, configuredCookies: [account], apiKeysMissing: true, noAlerts: true });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      assert.equal(result.updates.length, 1);
+      assert.equal(result.updates[0].status, 'active');
+    });
+  }
+}

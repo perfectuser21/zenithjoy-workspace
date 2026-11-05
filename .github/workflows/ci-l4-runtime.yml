@@ -144,11 +144,7 @@ jobs:
         working-directory: services/agent
       - name: Install real media tools for agent runtime contracts
         timeout-minutes: 5
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffmpeg -version
-          ffprobe -version
+        run: timeout --signal=KILL 240s bash .github/workflows/scripts/prepare-agent-media-tools.sh
       - name: Run tests (vitest config：src/ + modules/ + publishers/ 全覆盖，publishers 用 mock 不依赖 Chrome CDP)
         working-directory: services/agent
         run: npx vitest run
