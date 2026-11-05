@@ -32,7 +32,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const contract={budget:{max_duration_s:30}},contractSha=jsonHash(contract),commit='a'.repeat(40);
  const q={protocol:'leadgen-activity-v1',run_id:'douyin_video_discovery-official_fixture__a1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',workflow_key:'douyin_video_discovery',run_tag:'official_fixture',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',source_commit:commit,workflow_definition_version_id:'wv1',release_id:'r1',observation_id:'o1',runtime_snapshot_sha256:'b'.repeat(64),activity_key:'collect_videos',broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,mode:'execute',source_run:null,limit:2,comment_limit:null,run_max_seconds:1800,discovery_filters:{sort:'comprehensive',time_layer:'one_week',location:'unlimited'},discovery_input:null,method:{reference_id:'ref1',activity_version_id:'av1',name:methodName,version,sha256:sha(text),text,support:{text:support,sha256:sha(support)},contract:{activity_version_id:'av1',definition_key:'douyin_video_discovery.collect_videos',payload:contract,sha256:contractSha}}};
  if(scoring){Object.assign(q,{workflow_key:'douyin_comment_scoring',profile:'none',serial:'none',activity_key:'scoring',discovery_filters:null});q.method.contract.definition_key='douyin_comment_scoring.scoring';}
- if(controlAcceptance)q.control_scope={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']};
+ if(controlAcceptance){q.control_claim={claimed_by:'headed-fixture',claimed_at:'2026-11-05T05:00:00.000Z'};q.control_scope={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']};}
  if(rawTransport){
   q.execution_transport='raw-model-v1';q.max_turns=4;
   assert.match(q.method.text,/execution_transports:\n\s+- raw-model-v1/,'raw fixture must use actual distributed new Skill bytes');
@@ -45,6 +45,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const av={contract_sha256:contractSha,payload:{definition_key:q.method.contract.definition_key,contract,implementation_bindings:[{kind:'skill',status:'verified',repo:'perfectuser21/zenithjoy-workspace',revision:commit,name:methodName,version,content_sha256:q.method.sha256}]}};
  const task={id:q.task_id,status:'in_progress',claimed_by:'headed-fixture',payload:{workflow_key:q.workflow_key,run_tag:q.run_tag,profile:q.profile,device_serial:q.serial,company_line:q.line,source_commit:commit}};
  if(scoring)delete task.payload.device_serial;
+ if(controlAcceptance){task.claimed_at=q.control_claim.claimed_at;}
  if(controlAcceptance)task.payload.scope={control_scope:structuredClone(q.control_scope)};
  const routes=new Map([['/api/brain/runs/'+q.run_id+'/definition',{binding}],['/api/brain/workflows/w1/versions/wv1',{version:wf}],['/api/brain/tasks/'+q.task_id,task],['/api/brain/activities/a1/versions/av1',{version:av}]]);
  for(const folder of ['.openclaw/commander','openclaw-root/workspaces-root/clawd-work-commander'])for(const file of ['AGENTS.md','skills/workflow-commander/SKILL.md']){
