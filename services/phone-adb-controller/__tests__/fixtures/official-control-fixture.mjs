@@ -33,8 +33,10 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const q={protocol:'leadgen-activity-v1',run_id:'douyin_video_discovery-official_fixture__a1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',workflow_key:'douyin_video_discovery',run_tag:'official_fixture',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',source_commit:commit,workflow_definition_version_id:'wv1',release_id:'r1',observation_id:'o1',runtime_snapshot_sha256:'b'.repeat(64),activity_key:'collect_videos',broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,mode:'execute',source_run:null,limit:2,comment_limit:null,run_max_seconds:1800,discovery_filters:{sort:'comprehensive',time_layer:'one_week',location:'unlimited'},discovery_input:null,method:{reference_id:'ref1',activity_version_id:'av1',name:methodName,version,sha256:sha(text),text,support:{text:support,sha256:sha(support)},contract:{activity_version_id:'av1',definition_key:'douyin_video_discovery.collect_videos',payload:contract,sha256:contractSha}}};
  if(rawTransport){
   q.execution_transport='raw-model-v1';q.max_turns=4;
-  q.method.text=q.method.text.replace('metadata:\n','metadata:\n  execution_transports:\n    - raw-model-v1\n');q.method.sha256=sha(q.method.text);
-  writeFileSync(join(runtimeRoot,'skills',methodName,'SKILL.md'),q.method.text);
+  assert.match(q.method.text,/execution_transports:\n\s+- raw-model-v1/,'raw fixture must use actual distributed new Skill bytes');
+  const policy=JSON.parse(readFileSync(join(runtimeRoot,'official-gateway-runtime.json'))),pkg=join(directory,'gateway-fixture');mkdirSync(join(pkg,'dist'),{recursive:true});writeFileSync(join(pkg,'package.json'),JSON.stringify({version:policy.gateway_version}));
+  policy.package_root=pkg;policy.agent_config_path=join(directory,'agent-config.json');writeFileSync(policy.agent_config_path,JSON.stringify({agents:{entries:Object.fromEntries(['skill-factory','work-commander'].map(a=>[a,{model:{primary:'openai/gpt-6.1-sol',fallbacks:[]}}]))}}),{mode:0o600});for(const f of policy.files){const bytes='synthetic future runtime policy fixture '+f.path;writeFileSync(join(pkg,f.path),bytes);f.sha256=sha(bytes);}writeFileSync(join(runtimeRoot,'official-gateway-runtime.json'),JSON.stringify(policy));
+
  }
  const binding={id:q.binding_id,run_id:q.run_id,workflow_id:'w1',workflow_definition_version_id:'wv1',release_id:'r1',observation_id:'o1',runtime_snapshot_sha256:q.runtime_snapshot_sha256,external_origin:'zenithjoy:mmv',actor:'runtime:phone-adb-controller:agent-v1',task_id:q.task_id};
  const wf={source_commit:commit,payload:{key:q.workflow_key,activities:[{slot_key:q.activity_key,reference_id:'ref1',activity_id:'a1',activity_version_id:'av1'}]}};
@@ -50,7 +52,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const records={'activity-request.json':q,'agent-request.json':agent,'spawn-claimed.json':{...agent,source_commit:commit},'agent-binding.json':{...agent,child_run_id:childRun,child_session_key:childKey},'spawn-receipt.json':{runId:childRun,childSessionKey:childKey,resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'}};
  for(const [name,value]of Object.entries(records))writeFileSync(join(runDir,name),JSON.stringify(value),{mode:0o600});
  writeFileSync(join(runtimeRoot,'deployment-manifest.json'),JSON.stringify({source_commit:commit}));
- const source={commit,files:[...RPC_FILES,'official-agent-control.mjs'].map(path=>({path,sha256:sha(readFileSync(join(runtimeRoot,path)))}))};
+ const source={commit,files:[...RPC_FILES,'official-agent-control.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json'].map(path=>({path,sha256:sha(readFileSync(join(runtimeRoot,path)))}))};
  let dispatches=0;const sockets=new Set();let arrived;const firstRequest=new Promise(r=>{arrived=r;});
  const server=createServer((req,res)=>{
   dispatches++;assert.equal(req.headers['x-internal-token'],'fixture-private-token');arrived();
@@ -67,7 +69,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  }};
  const replay=[];
  let instance;
- try{instance=localControl.createOfficialAgentControl(options);await fn({instance,q,source,options,routes,firstRequest,count:()=>dispatches,journalDirectory,runDir,replay,runtimeRoot});}
+ try{instance=localControl.createOfficialAgentControl(options);await fn({instance,q,source,options,createControl:localControl.createOfficialAgentControl,createFactory:localControl.createOfficialAgentControlFactory,routes,firstRequest,count:()=>dispatches,journalDirectory,runDir,replay,runtimeRoot});}
  finally{for(const callback of replay)callback();if(instance)await instance.close();for(const socket of sockets)socket.destroy();await new Promise(r=>server.close(r));rmSync(directory,{recursive:true,force:true});rmSync(copied,{recursive:true,force:true});}
 }
 
