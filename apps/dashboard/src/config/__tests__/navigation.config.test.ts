@@ -110,6 +110,15 @@ describe('config/navigation — 短侧栏 + 区下钻', () => {
   });
 });
 
+describe('config/navigation — shared module health', () => {
+  it('模块健康路由允许已登录普通用户，管理 License 仍需超管', () => {
+    const health = additionalRoutes.find((route) => route.path === '/module-health');
+    expect(health).toMatchObject({ component: 'ModuleHealthPage', requireAuth: true });
+    expect(health?.requireSuperAdmin).not.toBe(true);
+    expect(additionalRoutes.find((route) => route.path === '/admin/license')?.requireSuperAdmin).toBe(true);
+  });
+});
+
 describe('config/navigation — License 入口仍可达（防误删）', () => {
   it('/license 与 /admin/license 都在 additionalRoutes', () => {
     const paths = routePaths();
