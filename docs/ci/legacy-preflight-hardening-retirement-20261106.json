@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-06",
+  "base_sha": "9acfa9a469a312396d6209465a80591af3cefe97",
+  "state": "implemented_local_verified_pending_parent_integration_and_exact_sha_ci",
+  "historical_scope": "Original frozen 172 ledger, six external gaps, original report and sprint bytes unchanged. Follow-up retirement of an independently scheduled legacy Windows CS workflow; no new Android or Windows business acceptance claim.",
+  "retired_workflow": {
+    "path": ".github/workflows/agent-preflight-hardening-e2e.yml",
+    "source_commit": "9acfa9a469a312396d6209465a80591af3cefe97",
+    "source_blob": "333183778a23c8d4cc8f11610d7ab6608148ce94",
+    "sha256": "9f8328c4cd95c91c3b5761015e5b0a56147f67e5b08d47d634b75536a42db6e9",
+    "bytes": 11607,
+    "jobs": [
+      "preflight-e2e-static",
+      "preflight-e2e-windows"
+    ],
+    "restore_command": "git show 9acfa9a469a312396d6209465a80591af3cefe97:.github/workflows/agent-preflight-hardening-e2e.yml > .github/workflows/agent-preflight-hardening-e2e.yml"
+  },
+  "dimensions": {
+    "current_value": "Windows customer-service product is retired by user decision. Current CS is services/wechat-cs-android. Old Python root env-doctor is not the currently consumed TS module preflight, and its nine-item CS environmental policy has no newly demonstrated runtime consumer.",
+    "active_status": "Standalone push/PR/manual workflow only; not called by any other workflow. Root Python env-doctor references outside tests/CI are documentation/informational echo in start.bat; retained Golden Path4 legacy compatibility assertions do not establish a product runtime consumer. No current repository runtime invocation found; external operator use is not claimed absent.",
+    "real_effect": "Old Python workflow runs dry-run nine-check shape and mocks old WeChat version/login warning, plus grep for UI strings. Linux explicitly ignores preflight exit; Windows E2E6 merely warns on nonzero. These do not establish device readiness or active Android CS health.",
+    "test_and_blocking": "Current shared module-health route object is imported by navigation.config.test.ts in default Dashboard Vitest; actual component and API-client behavior remain ModuleHealthPage and moduleHealth.api tests. Existing Orphan required caller keeps real UI specs line04-preflight-card/module-health/module-health-access and strict aggregate. 40 local Dashboard assertions and 197 real gate tests pass; no new Windows run claimed.",
+    "duplication_and_obsolescence": "Retire root Python legacy-CS-only obligations instead of creating a new required Python business gate. Shared route access grep becomes actual imported route assertion; existing UI/API tests continue. Nine-count/version/login-warning assertions are retired as obsolete product policy, not claimed equivalent to shared TS or Android tests.",
+    "runtime_and_maintenance_cost": "Remove two independent runners and repeated Python setup plus obsolete global fixture cleanup/firewall commands. No runtime source deleted, no measured minute/RSS savings asserted.",
+    "retirement_and_dependencies": "Keep shared ModuleManager -> preflight.js, modules/line04/preflight.ts and CLI tests, overlay/preflight.py, Voice, Windows handler/package jobs and candidate installer. Keep old Python/sprint source for restoration/operator history. Correct three registry entries previously labelled L3 but absent from current default includes to manual; no denylist, baseline or required aggregator change."
+  },
+  "consumer_trace": [
+    {
+      "source": "services/agent/install-pack/start.bat:278-284",
+      "effect": "if-exist followed by informational echo only; no python execution"
+    },
+    {
+      "source": "services/agent/src/module-manager.ts:581-593",
+      "effect": "runs process.execPath with installed module preflight.js; not root Python env-doctor"
+    },
+    {
+      "source": "services/agent/modules/line04/preflight.ts",
+      "effect": "current compiled module preflight; independent implementation with own real CLI tests, retained"
+    },
+    {
+      "source": "services/agent/modules/line04/handlers/overlay.ts:227",
+      "effect": "calls wechat-rpa/overlay/preflight.py, a distinct file; retained"
+    },
+    {
+      "source": ".github/workflows/scripts/smoke/golden-path-4-smoke.sh:1069",
+      "effect": "existing CI dry-run shape/hotkey legacy compatibility, not runtime consumer; unchanged"
+    },
+    {
+      "source": ".github/workflows/e2e-orphan-consolidation-windows.yml:206-222",
+      "effect": "existing current UI producers call actual line04-preflight-card, module-health, module-health-access Playwright specs; no replacement toy or extra mandatory lane added"
+    },
+    {
+      "source": "apps/dashboard/src/components/DynamicRouter.tsx",
+      "effect": "imports additionalRoutes production config; new route-object assertion protects ordinary authenticated access without source-text grep"
+    }
+  ],
+  "obligation_disposition": [
+    {
+      "old": "Python nine-check dryrun, version downgrade, loginwarn/exit0",
+      "action": "retired legacy Windows CS obligation; implementation and historical tests retained manual, no new required business duty"
+    },
+    {
+      "old": "Line04PreflightCard source contains fetchModuleHealth/empty wording and page imports it",
+      "action": "retire redundant presence grep; already-existing required Orphan real component/browser specs retained"
+    },
+    {
+      "old": "module-health line lacks requireSuperAdmin source-text grep",
+      "action": "actual production additionalRoutes object assertion added to existing required Dashboard navigation test; authenticated-only and admin/license permission retained"
+    }
+  ],
+  "registry_corrections": [
+    {
+      "id": "wechat-cs-preflight-env-doctor",
+      "from": "L3",
+      "to": "manual",
+      "reason": "root Python tests not in required collection; retired business env-doctor, source kept"
+    },
+    {
+      "id": "line04-preflight-card-unit",
+      "from": "L3",
+      "to": "manual",
+      "reason": "immutable sprint outside default Dashboard include; existing real UI spec stays in Orphan required caller"
+    },
+    {
+      "id": "navigation-module-health-unit",
+      "from": "L3",
+      "to": "manual",
+      "reason": "immutable sprint outside default Dashboard include; current source-object test in dashboard-navigation-config"
+    }
+  ],
+  "verification": {
+    "dashboard": {
+      "files": 3,
+      "passed": 40,
+      "skipped": 0
+    },
+    "route_controlled_negative": {
+      "mutation": "only own worktree production route requireSuperAdmin=true, restored original bytes in finally",
+      "expected_and_actual_exit": 1,
+      "green_after_restore": true,
+      "boundary": "a controlled regression proves assertion fires, not a claim that baseline main was broken"
+    },
+    "adjacent_required_gate_tests": {
+      "passed": 197,
+      "skipped": 0
+    },
+    "registry": {
+      "registered": 1654,
+      "discovered": 1635
+    },
+    "immutable_sprint_retirement_anchors": 40,
+    "yaml_workflows": {
+      "base": 65,
+      "this_independent_branch": 64,
+      "combined_with_PR2422": 63
+    },
+    "skills_restore": "87 install/87 verify exact3bbea5b5 from local read-only source clone",
+    "product_map": "no drift17d1a312",
+    "source_changes": "workflow retirement, navigation test, three registry annotations and this dedicated report; no product runtime change",
+    "diff_check": "pass"
+  },
+  "logs": [
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-route-red.log",
+      "sha256": "b8848ab6e9b1a95975d5900ac759454727300fbcc73a9f90f800f5d473be0c44",
+      "size_bytes": 1832
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-route-green.log",
+      "sha256": "06dbd61bb24d24d0d4a0bec6675675bd7ab15be1f8f760fa418785ce2b85b686",
+      "size_bytes": 817
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-adjacent-gates.log",
+      "sha256": "14caeaade831189f381d87008578529d89af4579079117ece80ce355b28cd73e",
+      "size_bytes": 39179
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-immutable.log",
+      "sha256": "fec77c45018b3b13c842188037148d1a42fde56d3734460480596153ee224220",
+      "size_bytes": 76
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-registry.log",
+      "sha256": "b8862e9a35f7b3cf8ff200271879f0f94feab9bd1a793ff48ebe410d7be40166",
+      "size_bytes": 110
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-yaml.log",
+      "sha256": "89cf584887fdac774d669cf499ef2a77fad7efcf52ef8e8cad7e2321dacf63cb",
+      "size_bytes": 41
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-product-map.log",
+      "sha256": "09679d35111fdc204ecd4fb27c6868234ed894e4d4ed9bc3c852c90402123274",
+      "size_bytes": 178
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/preflight-hardening/ci-preflight-1106-skills.log",
+      "sha256": "8bce1856cbe4aec9d7b4964fb387a53215cd3b2fda65994388a49bd92518d604",
+      "size_bytes": 79
+    }
+  ],
+  "limits": [
+    "No device, profile, login, real message, production setting or global Windows fixture operation.",
+    "No source or index modification to original checkout. First-batch PR2422 worktree untouched after parent took ownership.",
+    "Existing required browser workflow callers are preserved; this local follow-up did not run Windows/browser CI and does not claim exact-SHA cloud success.",
+    "Current Android CS remains covered by its independent real offline/HTTP tests; no generic APK substitution."
+  ]
+}

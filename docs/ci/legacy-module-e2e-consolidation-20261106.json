@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-06",
+  "base_sha": "9acfa9a469a312396d6209465a80591af3cefe97",
+  "implementation_status": "implemented_local_verified_pending_parent_integration_and_exact_sha_ci",
+  "original_172_scope": "Historical 172 ledger and six external gaps unchanged; this follow-up consolidates remaining executable callers adjacent to legacy-windows-preflight/canonical-preflight contracts, not another claim that original 172 were all retired.",
+  "deduplication": {
+    "main": "#2417 already retired physical Windows CS/Kotlin-only checks; not repeated",
+    "open_pr_1946": "bc53bb0d54f2e8a2bef9f50ac8132630a92a1c97 broad Kotlin source/API retirement is unmerged and conflicting; not cherry-picked or closed"
+  },
+  "retired_sources": [
+    {
+      "path": ".github/workflows/agent-module-e2e.yml",
+      "source_commit": "9acfa9a469a312396d6209465a80591af3cefe97",
+      "source_blob": "a8410443866115765149ed9f79afde6ce45dd800",
+      "sha256": "83028cb75f8335254df215d54a4757d4913ff862d3d1c514a1cf46aebc098c3d",
+      "size_bytes": 8008,
+      "restore_command": "git show 9acfa9a469a312396d6209465a80591af3cefe97:.github/workflows/agent-module-e2e.yml > .github/workflows/agent-module-e2e.yml"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/agent-module-e2e-smoke.sh",
+      "source_commit": "9acfa9a469a312396d6209465a80591af3cefe97",
+      "source_blob": "d0bdd24d31fc737d626557384a317a133869d27b",
+      "sha256": "014aaa52def4cf7eb7e92e00fa8f8b38b3ae8e45edc7b4eace226d6529880b84",
+      "size_bytes": 2432,
+      "restore_command": "git show 9acfa9a469a312396d6209465a80591af3cefe97:.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh > .github/workflows/scripts/smoke/agent-module-e2e-smoke.sh"
+    }
+  ],
+  "dimensions": {
+    "current_value": "Retired workflow duplicates shared ModuleManager and Line04 compatibility contracts. Current Android CS is services/wechat-cs-android; no Windows business acceptance claimed.",
+    "active_status": "Only executable callers were standalone agent-module-e2e workflow and SmokeGlob discovery. Both workflow and smoke retired with exactly one baseline entry removed. No required context removed.",
+    "real_effect": "Real src/index.ts:807/1080 still syncs ModuleManager from heartbeat for installed modules across Lines. Keep generic module download/fork/config, Windows SDK compatibility, publishers and installer source.",
+    "test_and_blocking": "Actual module-manager, preflight and CLI tests collected by services/agent/vitest.config.ts; required L4 Agent runs full suite on Ubuntu and agent-windows-contracts calls agent-qr-windows-verify.yml full npm test on Windows. Existing 337 gate tests prove selected missing/skipped/failed/cancelled jobs block.",
+    "duplication_and_obsolescence": "Old inline ModuleManager download and activation tests duplicate canonical suite. Move previously workflow-only real CLI upper rejection and non-Windows JSON contract to preflight-cli.test.ts before retirement. API health unavailable old smoke reproduces exit0 under isolated curl connection failure.",
+    "runtime_and_maintenance_cost": "Remove two duplicate jobs (each repeated npm ci) and API-absent green smoke; no fabricated cloud timing or RSS savings. Canonical required jobs already run both OS suites.",
+    "retirement_and_dependencies": "Removed exact baseline name, no denylist addition. No other current executable caller found. Restore coordinates captured. Immutable sprint text and original ledger retained. Shared runtime, Windows required and candidate files remain."
+  },
+  "contract_mapping": [
+    {
+      "old": "Windows Step2 download once / Step4 fork config active",
+      "replacement": "services/agent/src/__tests__/module-manager.test.ts",
+      "production_consumer": "services/agent/src/index.ts -> ModuleManager.syncModules",
+      "execution": "ci-l4-runtime.yml agent-test + agent-windows-contracts -> agent-qr-windows-verify.yml unit-tests-windows npm test"
+    },
+    {
+      "old": "Step6a/b/c version allowed/lower/upper CLI rejection, JSON and exit",
+      "replacement": "services/agent/modules/line04/__tests__/preflight-cli.test.ts",
+      "production_consumer": "services/agent/src/module-manager.ts runModulePreflight -> installed preflight.js CLI",
+      "execution": "same required Agent default include modules/**/__tests__/**/*.test.ts"
+    },
+    {
+      "old": "Ubuntu Step3 unmocked non-Windows JSON",
+      "replacement": "services/agent/modules/line04/__tests__/preflight-cli.test.ts non-Windows case",
+      "execution": "required Ubuntu Agent; intentionally not unmocked on Windows, where source may repair/send"
+    },
+    {
+      "old": "Heartbeat four modules/status/required_version; module_status save/read shape",
+      "replacement": "apps/api/tests/routes/heartbeat-modules.test.ts",
+      "production_consumer": "apps/api/src/routes/walking-skeleton.ts heartbeat/module-health",
+      "execution": "ci-l4-runtime.yml api-test default Vitest",
+      "boundary": "actual HTTP router with service/DB mocks; asserts saveModuleStatus invocation and response shape, not real PostgreSQL persistence. Retired CI smoke did not start API or establish persistence evidence."
+    }
+  ],
+  "verification": {
+    "before_agent": {
+      "files": 3,
+      "passed": 134,
+      "skipped": 0
+    },
+    "after_agent": {
+      "files": 3,
+      "passed": 136,
+      "skipped": 0,
+      "platform": "local Darwin Node20; actual new Windows run still pending"
+    },
+    "api_router": {
+      "files": 1,
+      "passed": 6,
+      "skipped": 0
+    },
+    "agent_test_types": "pass",
+    "required_gates": {
+      "passed": 337,
+      "skipped": 0
+    },
+    "retirement_contracts": {
+      "passed": 17,
+      "skipped": 0
+    },
+    "immutable_sprint_records": 40,
+    "registry": {
+      "registered": 1654,
+      "discovered": 1635
+    },
+    "fixed_skills": "87 installed/87 verified from local exact3bbea5b5 source, no credentials read",
+    "product_map": "no drift 17d1a312",
+    "workflow_yaml_files": 64,
+    "baseline_removed": [
+      "agent-module-e2e-smoke.sh"
+    ],
+    "diff_check": "pass",
+    "baseline_removal_guard": {
+      "no_reason_exit": 1,
+      "with_declared_reason_exit": 0
+    }
+  },
+  "logs": [
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-agent-before.log",
+      "sha256": "109b10f0abe7d05c76c2dee9cef87596f5952ae27112a237e9e6a43b1b08a52e",
+      "size_bytes": 30988
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-agent-after.log",
+      "sha256": "415d7f96bc95e95ab309c2f34518702525bcaa5ee55c191706d899f32876c698",
+      "size_bytes": 31337
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-heartbeat-api.log",
+      "sha256": "2226bda0ccaf5d36d9edb03a605fe541571cb2b318dc305067e40a1752eb45b8",
+      "size_bytes": 704
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-agent-test-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-required-gates.log",
+      "sha256": "56bccce56e00f5a38ffe1c21d90af5793439dd5a8adc3719fad95797dbe72ad9",
+      "size_bytes": 62192
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-retirement-contracts.log",
+      "sha256": "99ce2cf8e262e6e7b4e1f8a33a6cc500e86e02bb31bc21b0f0daf128b7590cc8",
+      "size_bytes": 2772
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-retirement-validator.log",
+      "sha256": "fec77c45018b3b13c842188037148d1a42fde56d3734460480596153ee224220",
+      "size_bytes": 76
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-registry.log",
+      "sha256": "b8862e9a35f7b3cf8ff200271879f0f94feab9bd1a793ff48ebe410d7be40166",
+      "size_bytes": 110
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-skills-restored.log",
+      "sha256": "8bce1856cbe4aec9d7b4964fb387a53215cd3b2fda65994388a49bd92518d604",
+      "size_bytes": 79
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-product-map.log",
+      "sha256": "09679d35111fdc204ecd4fb27c6868234ed894e4d4ed9bc3c852c90402123274",
+      "size_bytes": 178
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-yaml.log",
+      "sha256": "89cf584887fdac774d669cf499ef2a77fad7efcf52ef8e8cad7e2321dacf63cb",
+      "size_bytes": 41
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-baseline-red.log",
+      "sha256": "21a3c519e4cd569947ad317feae5fb64b51a3592ab1b1de4174584e700c852cb",
+      "size_bytes": 131
+    },
+    {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/followup-20261106/module-e2e/ci-legacy-1106-baseline-green.log",
+      "sha256": "9f84e287e645f14fcc532669cc0c12d5403e202a39e8525afc2b24d47994f967",
+      "size_bytes": 31
+    }
+  ],
+  "limits": [
+    "No physical device, UI, login, real cookie/profile, message or production setting operations.",
+    "No exact-SHA cloud/PR/merge success claimed for this follow-up.",
+    "Agent preflight-hardening E2E is still mixed Python/install/UI compatibility and not silently retired by this change."
+  ],
+  "pr_body_requirement": "BASELINE-REMOVE: agent-module-e2e-smoke.sh retired; real module/CLI/API HTTP contracts execute through existing required Agent/API suites; old no-API SKIP was not assurance."
+}
