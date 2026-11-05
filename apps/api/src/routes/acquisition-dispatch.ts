@@ -144,7 +144,7 @@ async function outreachHistoryHandler(req: Request, res: Response) {
               ol.sent_at
          FROM zenithjoy.dm_assignments a
          LEFT JOIN zenithjoy.acquisition_leads l ON l.id = a.lead_id AND l.tenant_id = $1::uuid
-         LEFT JOIN zenithjoy.dm_outreach_log ol ON ol.assignment_id = a.id
+         LEFT JOIN zenithjoy.dm_outreach_log ol ON ol.assignment_id = a.id AND ol.tenant_id = $1::text
         WHERE a.tenant_id = $1::text
         ORDER BY a.scheduled_for DESC NULLS LAST, a.created_at DESC
         LIMIT 500`,

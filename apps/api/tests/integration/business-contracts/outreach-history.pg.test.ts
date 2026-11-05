@@ -26,6 +26,8 @@ describe('retained outreach history — actual HTTP and PostgreSQL', () => {
     const a = await member(), b = await member();
     const aId = await seed(a.tenant, 'tenant-a-history');
     const bId = await seed(b.tenant, 'tenant-b-history');
+    // A corrupt legacy record must not let another tenant's receipt leak into A's history.
+    await pool.query("INSERT INTO zenithjoy.dm_outreach_log(tenant_id,account_label,assignment_id,sent_at) VALUES($1,'foreign-receipt',$2,'2026-01-01T00:00:00Z')", [b.tenant, aId]);
     for (const path of ['/api/acquisition/outreach-history', '/api/acquisition/dispatch/outreach-history']) {
       const anonymous = await request(app).get(path);
       expect(anonymous.status).toBe(401);
@@ -33,7 +35,7 @@ describe('retained outreach history — actual HTTP and PostgreSQL', () => {
       expect(forgedAnonymous.status).toBe(401);
       const own = await request(app).get(path).query({ tenant_id: b.tenant }).set('Cookie', a.cookie).set('X-Tenant-Id', b.tenant);
       expect(own.status).toBe(200);
-      expect(own.body).toMatchObject({ success: true, data: { total: 1, items: [{ id: aId, lead_nickname: 'tenant-a-history' }] } });
+      expect(own.body).toMatchObject({ success: true, data: { total: 1, items: [{ id: aId, lead_nickname: 'tenant-a-history', sent_at: null }] } });
       expect(JSON.stringify(own.body)).not.toContain(bId);
       expect(JSON.stringify(own.body)).not.toContain('tenant-b-history');
       const other = await request(app).get(path).set('Cookie', b.cookie);
