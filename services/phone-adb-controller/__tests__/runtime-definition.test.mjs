@@ -39,12 +39,12 @@ test('旧快照缺执行模式仍为Code，不能把已冻结Code静默改成Age
  assert.throws(()=>assertExecutionMode(agent,env),/EXECUTION_MODE/);
  assert.throws(()=>assertExecutionMode({execution_mode:'invalid'},env),/EXECUTION_MODE/);
 });
-function primaryFixture({skill=true}={}){
+function primaryFixture({skill=true,raw=false}={}){
  const f=fixture(),workflow='douyin_video_discovery';f.options.workflowKey=workflow;f.routes['/api/brain/workflows'][0].key=workflow;
  const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;
  w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
  if(skill){
-  const name='skills/douyin-leadgen-activity-101-collect-videos/SKILL.md',path=join(f.dir,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'---\nname: douyin-leadgen-activity-101-collect-videos\nmetadata:\n  version: 0.1.0\n---\n按合同交付视频。\n');
+  const name='skills/douyin-leadgen-activity-101-collect-videos/SKILL.md',path=join(f.dir,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'---\nname: douyin-leadgen-activity-101-collect-videos\nmetadata:\n  version: 0.1.0\n'+(raw?'  primary_execution: agent-v1\n  execution_transports:\n    - raw-model-v1\n':'')+'---\n按合同交付视频。\n');
   const sha=hash(readFileSync(path,'utf8')),av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;
   av.payload.implementation_bindings.push({kind:'skill',name:'douyin-leadgen-activity-101-collect-videos',version:'0.1.0',status:'verified',repo:av.source_repo,path:'services/phone-adb-controller/'+name,revision:av.source_commit,content_sha256:sha});
   av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
@@ -62,6 +62,34 @@ test('Agent执行模式进入真实冻结摘要；原Code及Agent运行都不能
 });
 test('Agent冻结缺本机已验证Skill时在起跑前拒绝，不能只凭Code binding启动',async()=>{
  const f=primaryFixture({skill:false});await assert.rejects(freezeDefinition({...f.options,executionMode:'agent',agentInput:f.agentInput}),/AGENT.*SKILL/);
+});
+test('raw transport is frozen with its exact turn limit only when every verified Skill explicitly declares it',async()=>{
+ const f=primaryFixture({raw:true}),input={...f.agentInput,execution_transport:'raw-model-v1',max_turns:4},options={...f.options,executionMode:'agent',agentInput:input};
+ const snapshot=await freezeDefinition(options);
+ assert.equal(snapshot.execution_transport,'raw-model-v1');assert.equal(snapshot.max_turns,4);assert.deepEqual(snapshot.agent_input,input);
+ assert.equal(snapshot.snapshot_sha256,hash(Object.fromEntries(Object.entries(snapshot).filter(([key])=>key!=='snapshot_sha256'))));
+ for(const value of [f.agentInput,{...input,max_turns:5}])await assert.rejects(freezeDefinition({...options,agentInput:value}),/EXECUTION_TRANSPORT|AGENT_INPUT/);
+ const legacy=primaryFixture();await assert.rejects(freezeDefinition({...legacy.options,executionMode:'agent',agentInput:{...legacy.agentInput,execution_transport:'raw-model-v1',max_turns:4}}),/EXECUTION_TRANSPORT_METHOD_UNSUPPORTED/);
+ const old=primaryFixture({raw:true});const oldFrozen=await freezeDefinition({...old.options,executionMode:'agent',agentInput:old.agentInput});
+ assert.equal(Object.hasOwn(oldFrozen,'execution_transport'),false);assert.equal(Object.hasOwn(oldFrozen,'max_turns'),false);
+ await assert.rejects(freezeDefinition({...old.options,executionMode:'agent',agentInput:{...old.agentInput,execution_transport:'raw-model-v1',max_turns:4}}),/EXECUTION_TRANSPORT|AGENT_INPUT/);
+});
+test('control acceptance scope and claim come only from the live Task and cannot drift on frozen-run continuation',async()=>{
+ const f=primaryFixture({raw:true}),workflow='douyin_comment_scoring',taskId='11111111-1111-4111-8111-111111111111';
+ f.options.workflowKey=workflow;f.routes['/api/brain/workflows'][0].key=workflow;
+ const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;w.payload.activities[0].slot_key='scoring';w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
+ const input=agentInput({LEADGEN_EXECUTION_MODE:'agent',LEADGEN_EXECUTION_TRANSPORT:'raw-model-v1',LEADGEN_MAX_TURNS:'8',WF_BRAIN_WORKFLOW:workflow,WF_BRAIN_TASK_ID:taskId,WFR_TAG:'control_fixture',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_MAX_SECONDS:'300',WF_RUN_START_TS:'1700000000'});
+ const control={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']},claim={claimed_by:'headed-control-fixture',claimed_at:'2026-11-05T00:00:00.000Z'};
+ const task={id:taskId,status:'in_progress',...claim,payload:{source_commit:'a'.repeat(40),workflow_key:workflow,run_tag:input.run_tag,profile:'mmv-scoring',company_line:'yuesheng',scope:{limit:1,score_limit:1,send:0,source_run:null,run_max_seconds:300,execution_transport:'raw-model-v1',max_turns:8,control_scope:control}}};
+ f.routes['/api/brain/tasks/'+taskId]={task};
+ const options={...f.options,executionMode:'agent',agentInput:input},snapshot=await freezeDefinition(options);
+ assert.deepEqual(snapshot.control_scope,control);assert.deepEqual(snapshot.control_claim,claim);
+ assert.equal(snapshot.snapshot_sha256,hash(Object.fromEntries(Object.entries(snapshot).filter(([key])=>key!=='snapshot_sha256'))));
+ const original=readFileSync(join(f.options.runDir,'run-definition.json'),'utf8');
+ for(const change of [()=>{task.claimed_at='2026-11-05T00:00:01.000Z';},()=>{task.claimed_by='foreign';},()=>{task.status='failed';},()=>{delete task.payload.scope.control_scope;task.result={control_scope:control};}]){
+  Object.assign(task,{status:'in_progress',...claim});task.payload.scope.control_scope=control;delete task.result;change();
+  await assert.rejects(freezeDefinition(options),/CONTROL_ACCEPTANCE/);assert.equal(readFileSync(join(f.options.runDir,'run-definition.json'),'utf8'),original);
+ }
 });
 test('真实Agent快照保存完整输入，冻结续跑不能改配额、来源、筛选、任务或预算，也不能撤输入',async()=>{
  const f=primaryFixture(),options={...f.options,executionMode:'agent',agentInput:f.agentInput};
@@ -245,6 +273,8 @@ test('真实部署闭包冻结后导入新handler；缺文件、错hash或冻结
  const deploy=readFileSync(join(source,'deploy.sh'),'utf8'),arrays=deploy.slice(deploy.indexOf('MMV_JS_FILES=('),deploy.indexOf('# 在任何SSH前'));
  const declared=execFileSync('bash',['-c',arrays+'\nprintf "%s\\n" "${MMV_RUNTIME_FILES[@]}"'],{encoding:'utf8'}).trim().split('\n');
  const files=declared.filter(x=>/\.(?:mjs|js|json)$/.test(x));assert.ok(files.includes('leadgen-handlers.mjs'),'official MMV runtime omitted actual handler');
+ for(const name of ['runner-official-commander.mjs','control-acceptance-tools.mjs','official-agent-control.mjs','official-commander-sdk.mjs','commander-bounded-owner.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json','official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'])
+  assert.equal(declared.filter(value=>value===name).length,1,`official raw runtime must include exactly one ${name}`);
  for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js'])
   assert.ok(files.includes(name),`official MMV runtime omitted ${name}`);
  const setup=()=>{
@@ -388,6 +418,21 @@ test('真实HTTP prepare仅取精确MMV活记录，全量不可用仍冻结路�
  assert.ok(seen.includes('/api/brain/machines/mac-mini-m4-us'));
  assert.ok(!seen.includes('/api/brain/machines'),'不回退全库存或缓存');
  assert.ok(seen.every(path=>path==='/api/brain/machines/mac-mini-m4-us'||path==='/api/brain/releases/'+release.id),'无别名/任意机器fallback');
+});
+
+test('Agent preflight private dependency/control identities freeze together and cannot drift or disappear on resume',async()=>{
+ const f=primaryFixture(),deps=await import('../preflight-pg-dependencies.mjs');await deps.installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40)});
+ const preflightPg=deps.preflightPgLockIdentity({runtimeRoot:f.dir}),manifestPath=join(f.dir,'deployment-manifest.json'),manifest=JSON.parse(readFileSync(manifestPath)),descriptor='preflight-pg-lock.json',bytes=readFileSync(join(f.dir,descriptor));
+ manifest.files.push({path:'services/phone-adb-controller/'+descriptor,deployed_path:descriptor,content_sha256:hash(bytes.toString('utf8'))});manifest.dependencies={preflight_pg:deps.preflightPgDeployment({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40)})};writeFileSync(manifestPath,JSON.stringify(manifest));
+ const av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;av.payload.implementation_bindings.push({kind:'code',status:'verified',repo:av.source_repo,path:'services/phone-adb-controller/'+descriptor,revision:av.source_commit,content_sha256:hash(bytes.toString('utf8'))});av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
+ const preflightControlScope={version:1,source_commit:'a'.repeat(40),target:'mmv',policy_sha256:'e'.repeat(64),credentials_sha256:'f'.repeat(64)};
+ const preflightProfile={schema_version:1,path:join(f.dir,'cloud-phone-test-profiles.tsv'),sha256:'1'.repeat(64),profile:f.agentInput.profile,serial:f.agentInput.serial,model:'iPad Pro',width:720,height:1280,enabled:true};
+ const options={...f.options,executionMode:'agent',agentInput:f.agentInput,preflightPg,preflightControlScope,preflightProfile};
+ const frozen=await freezeDefinition(options);const runtimeRoot=join(f.options.runDir,'runtime'),pool=new (deps.loadPreflightPg({runtimeRoot,frozen}).Pool)({max:1});await pool.end();assert.deepEqual(deps.preflightPgDeployment({runtimeRoot,sourceCommit:'a'.repeat(40)}),manifest.dependencies.preflight_pg);assert.deepEqual(frozen.preflight_pg,preflightPg);assert.deepEqual(frozen.preflight_control_scope,preflightControlScope);assert.deepEqual(frozen.preflight_profile,preflightProfile);
+ const code=await freezeDefinition({...f.options,runDir:join(f.dir,'code-run')});assert.equal(Object.hasOwn(code,'preflight_pg'),false);assert.equal(Object.hasOwn(code,'preflight_control_scope'),false);assert.equal(Object.hasOwn(code,'preflight_profile'),false);assert.deepEqual(deps.preflightPgDeployment({runtimeRoot:join(f.dir,'code-run/runtime'),sourceCommit:'a'.repeat(40)}),manifest.dependencies.preflight_pg);
+ const wf=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;f.routes['/api/brain/workflows'][0].key='douyin_lead_outreach';wf.payload.key='douyin_lead_outreach';wf.payload_sha256=hash({source:{repo:wf.source_repo,path:wf.source_path,commit:wf.source_commit},payload:wf.payload});
+ const outreach=await freezeDefinition({...f.options,workflowKey:'douyin_lead_outreach',runDir:join(f.dir,'outreach-code-run')});assert.equal(Object.hasOwn(outreach,'preflight_pg'),false);assert.equal(Object.hasOwn(outreach,'execution_mode'),false);assert.equal(Object.hasOwn(outreach,'preflight_profile'),false);assert.deepEqual(deps.preflightPgDeployment({runtimeRoot:join(f.dir,'outreach-code-run/runtime'),sourceCommit:'a'.repeat(40)}),manifest.dependencies.preflight_pg);
+ for(const change of [{preflightProfile:undefined},...Object.entries(preflightProfile).map(([k,v])=>({preflightProfile:{...preflightProfile,[k]:typeof v==='number'?v+1:typeof v==='boolean'?!v:String(v)+'changed'}})),{preflightPg:undefined},{preflightControlScope:undefined},{preflightPg:{...preflightPg,lock_sha256:'0'.repeat(64)}},{preflightControlScope:{...preflightControlScope,credentials_sha256:'0'.repeat(64)}}])await assert.rejects(freezeDefinition({...options,...change}),/PREFLIGHT_INPUT_RESUME/);
 });
 
 const cloudAgentEnv=()=>({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_BRAIN_TASK_ID:'11111111-1111-4111-8111-111111111111',WFR_TAG:'cloud101',P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'2',WF_RUN_MAX_SECONDS:'1800',WF_RUN_START_TS:'1700000000'});

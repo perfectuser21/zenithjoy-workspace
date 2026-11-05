@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "database_identity": {"database": "zenithjoy", "role": "zenithjoy", "system_identifier": "7662392643931066407"},
+  "hosts": [
+    {
+      "target": "xian-m4", "home": "/Users/jinnuoshengyuan", "mode": "ssh",
+      "ssh": {
+        "ssh_bin": "/usr/bin/ssh", "ssh_sha256": "17542914a3fb55e7efeb35a90d594a21c84bf6a4cfe1fc8ddff5606dc2658fc3",
+        "user": "administrator", "port": 22,
+        "identity_fingerprint": "SHA256:sTWK9lR1fQLPAUEYl7ih1nWWxbt0kTqmfqdqUBRmrsk",
+        "host_key_fingerprint": "SHA256:zPRRZ6ib0YutSv9NiW1MK5Yv+0tcTlk7UXggNXnTH1k", "host_key_kind": "ssh-ed25519"
+      }
+    },
+    {"target": "mmv", "home": "/Users/administrator", "mode": "local"}
+  ]
+}

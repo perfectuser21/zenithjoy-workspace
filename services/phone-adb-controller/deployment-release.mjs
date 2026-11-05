@@ -12,6 +12,14 @@ export {deploymentTarget} from './runtime-host.mjs';
 function actualComponents(release,observed,manifest){
  if(observed.source_repo!==manifest.source_repo||observed.source_commit!==manifest.source_commit)throw Error('实际来源与部署commit不符');
  if(digest(observed.files)!==digest(manifest.files))throw Error('实际文件组件与部署manifest不符');
+ const pgPath='services/phone-adb-controller/preflight-pg-lock.json';
+ const dependencyComponent=(release.payload.components||[]).find(c=>c.kind==='code'&&c.path===pgPath);
+ if(dependencyComponent&&!manifest.dependencies)throw Error('预检依赖缺实际部署清单');
+ if(manifest.dependencies!==undefined||observed.dependencies!==undefined){
+  if(!manifest.dependencies||!observed.dependencies||digest(observed.dependencies)!==digest(manifest.dependencies))throw Error('实际依赖组件与部署manifest不符');
+  const pg=manifest.dependencies.preflight_pg;
+  if(!dependencyComponent||dependencyComponent.digest!=='sha256:'+pg?.lock_sha256||pg.source_commit!==manifest.source_commit)throw Error('依赖来源未绑定中央Git descriptor');
+ }
  return (release.payload.components||[]).map(component=>{
   if(component.repo!==observed.source_repo||component.revision!==observed.source_commit)throw Error('组件来源无实机证据');
   if(component.kind==='repo')return {kind:'repo',repo:observed.source_repo,revision:observed.source_commit};

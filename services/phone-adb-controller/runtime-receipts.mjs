@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {freezePreflightControlScope,freezePreflightProfile} from './preflight-control-scope.mjs';
+import {preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
 import {readProducerDescriptor} from './producer-descriptor.mjs';
 import {createHash} from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -149,6 +151,11 @@ export function send(event,{deadline=deliveryDeadline()}={}){
   return Number(output.trim().split('\n').at(-1));
 }
 async function flushReceipts(dir){const deadline=deliveryDeadline();const status=await flush(dir,{send:event=>send(event,{deadline}),limit:Math.max(1,Math.min(20,Number(e.WFR_OUTBOX_LIMIT)||3))});if(status.pending||status.blocked)process.stderr.write(`WFR_WARN span/callback evidence pending=${status.pending} blocked=${status.blocked}\n`);return status;}
+export function markActivityStart({dir,attempt,activity,n=1}) {
+  const started=occurrence(dir,`${attempt||'a0'}.${activity}.${n}`,true);
+  writeFileSync(resolve(dir,`span-start.${attempt||'a0'}.${activity}.${n}`),started.started_at);
+  return started;
+}
 export async function run(args){
   const [cmd,...rest]=args; const dir=e.WFR_RUN_DIR;
   const indexRoot=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'run-index');
@@ -183,7 +190,8 @@ export async function run(args){
       const machine=await request('/api/brain/machines/mac-mini-m4-us');
       runtimeTransport=selectMmvTransport([machine],e.WF_MMV_SSH_ROUTE);
     }
-    await freezeDefinition({executionMode,agentInput:fixedAgentInput,discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
+    const preflightControlScope=freezePreflightControlScope({root,env:e,runtimeTransport}),preflightPg=preflightControlScope?preflightPgLockIdentity({runtimeRoot:root}):undefined,preflightProfile=preflightControlScope?freezePreflightProfile({env:e}):undefined;
+    await freezeDefinition({preflightControlScope,preflightPg,preflightProfile,executionMode,agentInput:fixedAgentInput,discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){
       // prepare冻结入口统一在freezeDefinition中记录，不能由业务活动改投影台账。
       const snapshot=readFrozen(dir);
@@ -194,8 +202,7 @@ export async function run(args){
   if(cmd==='bind-run'){const result=await bindRun({dir,runId:e.WFR_RUN_ID,brainUrl:e.BRAIN_URL,request});process.stdout.write(`WFR_ATTEMPT=${result.attempt_key}\nWFR_SKIP_WORDS='${result.skip_words.join('|').replace(/'/g,"'\\''")}'\n`);return;}
   if(cmd==='flush'){const status=await flushReceipts(dir);process.stdout.write(`WFR_EVIDENCE_STATUS=${status.blocked?'blocked':status.pending?'pending':'sent'}\n`);return;}
   if(cmd==='mark-start'){
-    const started=occurrence(dir,`${e.WFR_ATTEMPT||'a0'}.${rest[0]}.${rest[1]||1}`,true);
-    writeFileSync(resolve(dir,`span-start.${e.WFR_ATTEMPT||'a0'}.${rest[0]}.${rest[1]||1}`),started.started_at);return;
+    markActivityStart({dir,attempt:e.WFR_ATTEMPT,activity:rest[0],n:rest[1]||1});return;
   }
   if(cmd==='callback'){
     const body=JSON.parse(readFileSync(0,'utf8'));

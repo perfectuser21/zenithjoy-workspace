@@ -12,8 +12,7 @@ import {runWorkflow} from '../leadgen-runner-adapter.mjs';
 const api=await import('../activity-skill-executor.mjs').catch(error=>{if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;return {};});
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const taskId='11111111-1111-4111-8111-111111111111',bindingId='22222222-2222-4222-8222-222222222222',childId='33333333-3333-4333-8333-333333333333';
-// These controlled test providers model a supported domain; production handlers
-// do not gain support from this fixture or from an Agent/environment value.
+// Controlled providers explicitly model a supported domain; JSON/env cannot enable production.
 const supportedNativeFixture={agentSupportsNativeScope:()=>true,agentNativeState:()=>({})};
 function fixture(t){
  const runDir=mkdtempSync(join(tmpdir(),'primary-executor-'));t.after(()=>rmSync(runDir,{recursive:true,force:true}));
@@ -208,7 +207,7 @@ test('正式workflow执行接点从冻结mode选择Primary工厂，原scoring ha
 
 test('正式执行接点创建后输入漂移仍在每slot取资源之前拒绝；scope只取冻结输入',async t=>{
  const f=fixture(t);let tools=0;
- const wired=workflow.createWorkflowExecution({...f,activities:[{key:'scoring',budget:{max_duration_s:30}}],taskId,handlers:{state:{},createAgentTools:async()=>{tools++;throw Error('不应取工具');}},rpc:async()=>{throw Error('不应RPC');}});
+ const wired=workflow.createWorkflowExecution({...f,activities:[{key:'scoring',budget:{max_duration_s:30}}],taskId,handlers:{...supportedNativeFixture,state:{},createAgentTools:async()=>{tools++;throw Error('不应取工具');}},rpc:async()=>{throw Error('不应RPC');}});
  f.env.LEADGEN_LIMIT='3';await assert.rejects(()=>wired.executeAgent({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}}),/AGENT_INPUT/);assert.equal(tools,0);
 });
 
@@ -272,6 +271,13 @@ test('早期stall的Observer异常仅记unavailable，不触发资源未知或�
  const row=JSON.parse(readFileSync(join(f.runDir,'skill-primary/scoring/broker-events.jsonl'),'utf8').trim());assert.equal(row.commander_status,'unavailable');assert.equal(row.event.type,'stall');
 });
 
+test('prepare receives the same worker/receipt absolute windows as the official primary request',async t=>{
+ const f=phoneFixture(t);let captured,request;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async(_activity,scope)=>{captured=scope;return {prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>({account_verified:true})};},rpc:async q=>{if(q.kind==='activity_skill_authority')return {authorized:true};request=q.request;return {result:receipt(q.request)};}});
+ await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});
+ assert.equal(captured.worker_deadline_ms,request.worker_deadline_ms);assert.equal(captured.receipt_deadline_ms,request.receipt_deadline_ms);
+ assert.ok(captured.worker_deadline_ms<captured.receipt_deadline_ms);assert.ok(captured.receipt_deadline_ms<captured.deadline_ms);
+});
 test('unproved primary slot is not started; no tools, phone, worker or broker launch is attempted',async t=>{
  const f=fixture(t);let calls=0;
  const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,createTools:async()=>{calls++;throw Error('must not allocate');},rpc:async()=>{calls++;throw Error('must not dispatch');}});
@@ -294,6 +300,12 @@ test('actual generic provider native uncertainty reaches executor even behind a 
  const result=await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});assert.equal(result.not_started,true);assert.equal(result.execution_stopped,false);assert.equal(result.resource_unverified,true);assert.equal(dispatched,0);
 });
 
+test('prepare失败仍关闭已创建native域，未派发证明不可从JSON克隆',async t=>{
+ assert.equal(api.skillLaunchDidNotStart(undefined,undefined),false);const f=fixture(t);let dispatches=0,closed=0,scope;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async(_activity,s)=>{scope=s;return {prepare:async()=>{throw Error('PREPARE_SEMANTIC_REFUSED');},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>null,closeNativeScope:async proof=>{closed++;assert.equal(api.skillLaunchDidNotStart(proof,scope),true);assert.equal(api.skillLaunchDidNotStart(structuredClone(proof),scope),false);return {execution_stopped:true};}};},rpc:async()=>{dispatches++;throw Error('MUST_NOT_DISPATCH');}});
+ await assert.rejects(()=>execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}}),error=>{assert.equal(error.message,'PREPARE_SEMANTIC_REFUSED');assert.equal(error.executionStopped,true);return true;});assert.equal(closed,1);assert.equal(dispatches,0);
+});
+
 test('正式工作流未声明受信执行能力时在工具分配前停止，JSON和环境标记不能启用',async t=>{
  const f=fixture(t);let calls=0;
  const handlers={state:{},agentNativeState:()=>({}),createAgentTools:async()=>{calls++;throw Error('unsupported tools must not allocate');}};
@@ -308,4 +320,16 @@ test('正式工作流保留原Provider未证明状态，不因尚未启动新Wor
  const wired=workflow.createWorkflowExecution({...f,activities:[{key:'scoring',budget:{max_duration_s:30}}],handlers,taskId,rpc:async()=>{calls++;throw Error('old unknown must not launch');}});
  const actual=await wired.executeAgent({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});
  assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,false);assert.equal(actual.resource_unverified,true);assert.equal(calls,0);
+});
+
+test('Code-owned no-local-resource cleanup never launches a worker or invents desktop success',async t=>{
+ const f=phoneFixture(t);let dispatched=0,settled=0,released=0;let result;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async(_activity,scope)=>({prepare:async()=>({native_cleanup_not_required:true}),settle:async proof=>{assert.equal(api.skillLaunchDidNotStart(proof,scope),true);settled++;result={status:'needs_review',physical_cleanup_not_required:true,close_app_attempts:0,safe_desktop_visible:0};},release:async()=>{released++;result={...result,central_lock_released:1};},closeNativeScope:async proof=>{assert.equal(api.skillLaunchDidNotStart(proof,scope),true);return {execution_stopped:true};},inspect:async()=>({}),phone:async()=>{throw Error('NO_UI');},business:async()=>{throw Error('NO_BUSINESS');},getResult:()=>result}),rpc:async()=>{dispatched++;throw Error('NO_WORKER');}});
+ const actual=await execute({key:'cleanup',budget:{max_duration_s:60}},{context:{task_id:taskId}});assert.equal(actual.status,'partial');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,true);assert.equal(actual.result.safe_desktop_visible,0);assert.equal(actual.result.close_app_attempts,0);assert.deepEqual([dispatched,settled,released],[0,1,1]);
+});
+
+test('prepare exhausts worker admission before dispatch: no unbound stop RPC and private NoLaunch closure',async t=>{
+ const f=fixture(t);let rpcCalls=0,closed=0;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async(_activity,scope)=>({prepare:async()=>{t.mock.method(Date,'now',()=>scope.worker_deadline_ms+1);},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>null,closeNativeScope:async proof=>{closed++;assert.equal(api.skillLaunchDidNotStart(proof,scope),true);assert.equal(api.skillLaunchDidNotStart(structuredClone(proof),scope),false);return {execution_stopped:true};}}),rpc:async()=>{rpcCalls++;throw Error('UNBOUND_RPC_FORBIDDEN');}});
+ await assert.rejects(()=>execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}}),/DEADLINE_EXHAUSTED_BEFORE_DISPATCH/);assert.equal(rpcCalls,0);assert.equal(closed,1);
 });

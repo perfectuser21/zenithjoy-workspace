@@ -54,6 +54,41 @@ function check(root,base){return call(root,'--base',base);}
 function refresh(root){const r=call(root,'--write');assert.equal(r.status,0,r.stderr);}
 function editFront(root,path,edit){const text=readFileSync(join(root,path),'utf8');const match=text.match(/^---\n([\s\S]*?)\n---/);const f=parse(match[1]);edit(f);put(root,path,text.replace(match[0],'---\n'+stringify(f)+'---'));}
 
+function reviewedCodeBaseline(t){
+ const {root}=fixture(t),before=json(root,lockPath),path='services/phone-adb-controller/leadgen-workflow.mjs';
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// first isolated reviewed implementation change\n');
+ const current=collectMethods(root),approvals={};
+ for(const [ref,a] of Object.entries(current.activities))approvals[ref]={kind:'internal_compatible',reason:'Fixture independent review of exact code-only change.',reviewed_by:'fixture-reviewer',previous_code_digest:before.activities[ref].code_digest,current_code_digest:a.code_digest};
+ put(root,'approved-code-fixture.json',approvals);const generated=call(root,'--write','--compatibility','approved-code-fixture.json');assert.equal(generated.status,0,generated.stderr);
+ git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','reviewed code baseline');
+ return {root,base:git(root,'rev-parse','HEAD'),before:json(root,lockPath),path};
+}
+
+test('real method upgrade discards an older code-only approval while unchanged methods still require exact review',t=>{
+ const {root,base,before,path}=reviewedCodeBaseline(t),owner='douyin_video_processing',ref=owner+'.dedup';
+ refresh(root);assert.deepEqual(json(root,lockPath).activities[ref].code_compatibility,before.activities[ref].code_compatibility,'unchanged method retains its exact review');
+ editFront(root,before.activities[ref].skill.path,f=>f.metadata.version='0.2.0');
+ const cp='product-map/contracts/'+owner+'.yaml',c=parse(readFileSync(join(root,cp),'utf8'));
+ c.activities.find(a=>a.key==='dedup').implementation_bindings.find(b=>b.kind==='skill').version='0.2.0';c.commander_skill.version='0.3.0';put(root,cp,stringify(c));
+ const rp=skillRoot+'douyin-leadgen-102/references/activity-methods.json',deps=json(root,rp);deps.activities.find(a=>a.activity_ref===ref).skill_version='0.2.0';put(root,rp,deps);
+ editFront(root,skillRoot+'douyin-leadgen-102/SKILL.md',f=>f.metadata.version='0.3.0');
+ editFront(root,'services/phone-adb-controller/commander/skills/wf-'+owner+'/SKILL.md',f=>f.version='0.3.0');
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// second isolated implementation change\n');
+ const current=collectMethods(root),approvals={};
+ for(const [key,a] of Object.entries(current.activities))if(key!==ref)approvals[key]={kind:'internal_compatible',reason:'Fixture independent review of second exact code-only change.',reviewed_by:'fixture-reviewer',previous_code_digest:before.activities[key].code_digest,current_code_digest:a.code_digest};
+ put(root,'approved-code-fixture.json',approvals);let r=call(root,'--write','--compatibility','approved-code-fixture.json');assert.equal(r.status,0,r.stderr);
+ r=check(root,base);assert.equal(r.status,0,r.stderr);
+ assert.equal(json(root,lockPath).activities[ref].code_compatibility,undefined,'method upgrade is not approval of compatibility with its old method');
+ const lock=json(root,lockPath),other='douyin_lead_outreach.send_dm';delete lock.activities[other].code_compatibility;put(root,lockPath,lock);
+ r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/CODE_COMPATIBILITY_REQUIRED/);
+});
+
+test('an existing code-only review cannot bless a same-version method edit after regeneration',t=>{
+ const {root,base,before}=reviewedCodeBaseline(t),ref='douyin_video_processing.dedup',path=before.activities[ref].skill.path;
+ put(root,path,readFileSync(join(root,path),'utf8')+'\nUnversioned method behavior change.\n');refresh(root);
+ const r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/SKILL_VERSION_NOT_ADVANCED/);
+});
+
 test('fixed real-contract fixture has 12 methods and 14 exact ordered consumers',t=>{const {root,base}=fixture(t);const r=check(root,base);assert.equal(r.status,0,r.stderr);const m=json(root,lockPath);assert.equal(Object.keys(m.activities).length,12);assert.equal(Object.values(m.workflows).reduce((n,w)=>n+w.activities.length,0),14);});
 test('refreshing hashes cannot bless same-version Activity Skill text drift',t=>{const {root,base}=fixture(t);const p=skillRoot+'douyin-leadgen-activity-101-collect-videos/SKILL.md';put(root,p,readFileSync(join(root,p),'utf8')+'\nChanged method.\n');refresh(root);const r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/SKILL_VERSION_NOT_ADVANCED/);});
 test('shared support policy changes require every affected method version to advance',t=>{const {root,base}=fixture(t);put(root,policy,'Changed shared safety method.\n');refresh(root);const r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/SKILL_VERSION_NOT_ADVANCED/);});
@@ -210,4 +245,9 @@ for(const name of ['commander-owner-state.mjs','commander-owner-lock.mjs','comma
   assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted owner safety module '+name);
   assert.equal(after.activities[ref].contract_digest,method.contract_digest);assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
  }
+});
+
+for(const name of ['preflight-judge.mjs','preflight-local-leaves.mjs','preflight-local-step.py','preflight-metadata.mjs','preflight-native-domain.mjs','preflight-pg-stream.mjs','preflight-phone-driver.mjs','preflight-control-scope.mjs','preflight-phone-scope.mjs','config/preflight-control-hosts.json','preflight-pg-dependencies.mjs','preflight-pg-lock.json','phone-lock-root.py'])test('preflight shared source byte pin includes '+name,t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/'+name;put(root,path,readFileSync(join(source,path)));const before=collectMethods(root);put(root,path,Buffer.concat([readFileSync(join(root,path)),Buffer.from('\n')]));const after=collectMethods(root);
+ for(const [ref,method] of Object.entries(before.activities)){assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted shared source '+name);assert.equal(after.activities[ref].contract_digest,method.contract_digest);assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);}
 });

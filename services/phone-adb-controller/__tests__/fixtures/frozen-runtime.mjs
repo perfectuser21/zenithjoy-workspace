@@ -1,7 +1,7 @@
 import { mkdirSync,writeFileSync,readFileSync,existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { join,basename } from 'node:path';
+import { join,basename,dirname } from 'node:path';
 import { deploymentTarget } from '../../runtime-host.mjs';
 import { digest,registerRun } from '../../runtime-definition.mjs';
 // 固定历史计划仅供假机通用引擎回归；不得从当前生产计划去掉退役标记。
@@ -15,12 +15,13 @@ export function seedFrozen(dir,planPath,env={}){
     version:{id:`av-${i}`,payload:{steps:env.steps?.[slot]||[]}},implementations:[],
   }));
   const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
-  const names=['runtime-host.mjs','wf-run.sh','wf-run-lib.sh','wf-limits.sh','batch2.sh','harvest-keyword.sh','harvest-keyword-lib.sh','workflow-result.sh','runtime-definition.mjs','qualification-identity-snapshot.mjs','leadgen-outreach-scope.js','line-routes.js','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','runtime-release.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-receipts.mjs','discovery-phone-scope.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','ledger.mjs','step-judge.mjs','discover-keyword.sh','discover-benchmark.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','locate-element.py','wall-report.sh','wall-lib.sh'];
+  const names=['preflight-pg-dependencies.mjs','preflight-control-scope.mjs','preflight-metadata.mjs','leadgen-rpc.mjs','runtime-host.mjs','wf-run.sh','wf-run-lib.sh','wf-limits.sh','batch2.sh','harvest-keyword.sh','harvest-keyword-lib.sh','workflow-result.sh','runtime-definition.mjs','qualification-identity-snapshot.mjs','leadgen-outreach-scope.js','line-routes.js','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','runtime-release.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-receipts.mjs','discovery-phone-scope.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','ledger.mjs','step-judge.mjs','discover-keyword.sh','discover-benchmark.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','locate-element.py','wall-report.sh','wall-lib.sh','control-acceptance-tools.mjs','activity-skill-parent-loop.mjs','activity-skill-broker-client.mjs','activity-skill-tool.mjs','activity-skill-executor.mjs','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-primary-broker.mjs','activity-commander.mjs','leadgen-client.mjs','leadgen-runner-adapter.mjs','native-operation-receipt.mjs','commander-model-receipt.mjs','commander-owner-state.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs','common-runner/package.json','common-runner/activity-runtime.js','common-runner/activity-contract.js','common-runner/activity-process.js','common-runner/activity-judgment.js','common-runner/runner-commander-bridge.js'];
   const overrides={'harvest-keyword.sh':env.HARVEST_KEYWORD,'douyin-phone-adb':env.C|| (env.HOME&&join(env.HOME,'.local/bin/douyin-phone-adb')),'wall-report.sh':env.WALL_REPORT};
   mkdirSync(join(dir,'runtime'),{recursive:true});
   for(const name of names){
     const source=overrides[name]||new URL(`../../${name}`,import.meta.url).pathname;
     const bytes=existsSync(source)?readFileSync(source):Buffer.from('#!/bin/sh\nexit 0\n');
+    mkdirSync(dirname(join(dir,'runtime',name)),{recursive:true});
     writeFileSync(join(dir,'runtime',name),bytes,{mode:0o755});files[`runtime/${name}`]=digest(bytes);
   }
   const body={schema_version:2,release:{id:'release-fixture',target:deploymentTarget(hostname())},deployment:{observation_id:'observation-fixture',target:deploymentTarget(hostname())},workflow_version:{id:'workflow-version',payload_sha256:'d'.repeat(64),payload:{workflow_id:'b1000000-0000-4000-8000-000000000001',contract:{capability:env.runIdentity?.capability}}},activities,files,...(env.runIdentity?{run_identity:env.runIdentity}:{})};

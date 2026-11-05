@@ -1,5 +1,6 @@
 // 从原deploy字面清单产生唯一恢复写集；不执行shell、不吸收整个HOME目录。
 import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
 const need=(v,m)=>{if(!v)throw Error('手机整包写集: '+m);};
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const PREFIX='services/phone-adb-controller/';
@@ -17,7 +18,7 @@ export function parseDeployArrays(text){
  }
  return result;
 }
-export function buildWriteSet({groups:g,sha,homes,read,mode,commanderFiles,commanderManifest}){
+export function buildWriteSet({groups:g,sha,homes,read,mode,commanderFiles,commanderManifest,preflightPgRuntimeRoot}){
  need(/^[a-f0-9]{40}$/.test(sha),'source SHA');
  const targets={mmv:new Map(),'xian-m4':new Map()};
  function put(host,path,after){
@@ -58,6 +59,14 @@ export function buildWriteSet({groups:g,sha,homes,read,mode,commanderFiles,comma
  for(const path of ['.codex-team1/skills/multi-platform-publish','.openclaw/skills/multi-platform-publish']){
   need(/^\/[A-Za-z0-9_/-]+$/.test(homes.mmv),'canonical MMV home required');
   put('mmv',path,{kind:'symlink',target:homes.mmv+'/.local/share/zenithjoy/publish-releases/'+sha+'/.agents/skills/multi-platform-publish'});
+ }
+ if(preflightPgRuntimeRoot!==undefined){
+  const {preflightPgDeployment}=createRequire(import.meta.url)('./preflight-pg-dependencies.mjs');
+  const dependency=preflightPgDeployment({runtimeRoot:preflightPgRuntimeRoot,sourceCommit:sha});
+  for(const f of dependency.files){
+   need(pathOK(f.deployed_path)&&f.deployed_path.startsWith('_dependencies/preflight-pg/')&&f.mode===0o600&&/^[a-f0-9]{64}$/.test(f.content_sha256),'invalid private dependency write');
+   for(const [host,root]of [['mmv','bin-harvest'],['mmv','.openclaw/leadgen-scripts'],['xian-m4','bin-harvest']])put(host,root+'/'+f.deployed_path,{kind:'file',sha256:f.content_sha256,mode:0o600});
+  }
  }
  return Object.fromEntries(Object.entries(targets).map(([host,entries])=>[host,[...entries.values()].sort((a,b)=>a.path.localeCompare(b.path))]));
 }

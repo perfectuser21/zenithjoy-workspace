@@ -9786,6 +9786,46 @@ tests:
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition#step3；纯Skill主执行、受控原语与原件验收；无设备测试不代表实机通过"
 
+  - id: phone-activity-skill-broker-client
+    path: services/phone-adb-controller/__tests__/activity-skill-broker-client.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；父Code直连原broker的授权、Commander交换、封权及未知确认不重发；不代表实机或新transport已启用"
+
+  - id: phone-activity-skill-parent-context
+    path: services/phone-adb-controller/__tests__/activity-skill-parent-context.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code父端上下文单独授权、前后epoch、封权与Commander指导，不授业务权限"
+
+  - id: phone-activity-skill-parent-loop
+    path: services/phone-adb-controller/__tests__/activity-skill-parent-loop.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；受限JSON意图、opaque官方回执、一次permit、截止与模型域私有停止事实"
+
+  - id: phone-agent-raw-transport
+    path: services/phone-adb-controller/__tests__/agent-raw-transport.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；显式raw transport与总turn额度冻结及续跑漂移拒绝，旧默认不变"
+
+  - id: phone-agent-raw-executor
+    path: services/phone-adb-controller/__tests__/agent-raw-executor.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实main/executor/broker调用点只认server结果，无旧child字段，不代表真实Agent验收"
+
   - id: phone-activity-skill-primary-broker
     path: services/phone-adb-controller/__tests__/activity-skill-primary-broker.test.mjs
     type: integration
@@ -9825,6 +9865,86 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition#step3；纯Skill主执行、受控原语与原件验收；无设备测试不代表实机通过"
+
+  - id: phone-control-acceptance-tools
+    path: services/phone-adb-controller/__tests__/control-acceptance-tools.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-runner-workflow-lifecycle
+    path: services/phone-adb-controller/__tests__/runner-workflow-lifecycle.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际main消费Observer私有闭域、未知禁止Worker及独立Judge不被覆盖"
+
+  - id: phone-runner-official-commander
+    path: services/phone-adb-controller/__tests__/runner-official-commander.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-commander-bounded-owner
+    path: services/phone-adb-controller/__tests__/commander-bounded-owner.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-commander-sdk
+    path: services/phone-adb-controller/__tests__/official-commander-sdk.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-control
+    path: services/phone-adb-controller/__tests__/official-gateway-control.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-dependencies
+    path: services/phone-adb-controller/__tests__/official-gateway-dependencies.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-raw
+    path: services/phone-adb-controller/__tests__/official-gateway-raw.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-runtime
+    path: services/phone-adb-controller/__tests__/official-gateway-runtime.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-agent-control
+    path: services/phone-adb-controller/__tests__/official-agent-control.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition#step3；原Skill授权校验、真实本地HTTP与完整关闭/缺回执反例；仅私有Code组件，不代表launch、stop、设备或业务通过"
 
   - id: phone-agent-native-comment-panel
     path: services/phone-adb-controller/__tests__/agent-native-comment-panel.test.mjs
@@ -10329,6 +10449,118 @@ tests:
     status: active
     product: 基础设施
     note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.
+
+  - id: preflight-pg-private-dependencies
+    path: services/phone-adb-controller/__tests__/preflight-pg-dependencies.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Fixed official tarballs, full private-file verification, scoped Pool import, atomic completion marker and source/observation binding; no phone or business DB operation.
+
+  - id: phone-preflight-calibration-deadline
+    path: services/phone-adb-controller/__tests__/preflight-calibration-deadline.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-control-scope
+    path: services/phone-adb-controller/__tests__/preflight-control-scope.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-judge
+    path: services/phone-adb-controller/__tests__/preflight-judge.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-local-leaves
+    path: services/phone-adb-controller/__tests__/preflight-local-leaves.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-local-lock
+    path: services/phone-adb-controller/__tests__/preflight-local-lock.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-local-step
+    path: services/phone-adb-controller/__tests__/preflight-local-step.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-metadata-boundary
+    path: services/phone-adb-controller/__tests__/preflight-metadata-boundary.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-metadata
+    path: services/phone-adb-controller/__tests__/preflight-metadata.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-native-domain
+    path: services/phone-adb-controller/__tests__/preflight-native-domain.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-pg-stream
+    path: services/phone-adb-controller/__tests__/preflight-pg-stream.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-phone-driver
+    path: services/phone-adb-controller/__tests__/preflight-phone-driver.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-recorder
+    path: services/phone-adb-controller/__tests__/preflight-recorder.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-phone-scope
+    path: services/phone-adb-controller/__tests__/preflight-phone-scope.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Actual nofork local phone/parser/lock fixtures; central identity boundaries remain controlled fixtures, not live device acceptance.
 
   - id: acquisition-retired-outreach-history-pg
     path: apps/api/tests/integration/business-contracts/outreach-history.pg.test.ts

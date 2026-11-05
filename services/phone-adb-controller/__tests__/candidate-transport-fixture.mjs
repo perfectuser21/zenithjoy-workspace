@@ -25,10 +25,10 @@ function baseFixture(t){
  return {top,home,source,revision,put,git,commit,runtime,skill};
 }
 
-export function transportFixture(t,{payloadBytes=270000}={}){
+export function transportFixture(t,{payloadBytes=270000,preflightPg=false}={}){
  const f=baseFixture(t),prefix='services/phone-adb-controller/';
  // 全部部署执行器使用原件；手机业务不会执行。
- for(const name of ['deployment-manifest.mjs','deployment-fixed-source.mjs','runtime-definition.mjs','leadgen-outreach-scope.js','line-routes.js','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','runtime-host.mjs','runtime-release.mjs']){
+ for(const name of ['deployment-manifest.mjs','deployment-fixed-source.mjs','preflight-pg-dependencies.mjs','runtime-definition.mjs','leadgen-outreach-scope.js','line-routes.js','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','runtime-host.mjs','runtime-release.mjs','activity-commander.mjs','activity-skill-broker-client.mjs','activity-skill-broker.mjs','activity-skill-executor.mjs','activity-skill-parent-loop.mjs','activity-skill-primary-broker.mjs','activity-skill-recovery.mjs','activity-skill-tool.mjs','collection-acceptance-probe.mjs','collection-leaf-producer.mjs','collection-phone-scope.mjs','commander-model-receipt.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs','commander-owner-state.mjs','common-runner/package.json','common-runner/activity-contract.js','common-runner/activity-judgment.js','common-runner/activity-process.js','common-runner/activity-runtime.js','common-runner/runner-commander-bridge.js','control-acceptance-tools.mjs','discovery-phone-scope.mjs','leadgen-client.mjs','leadgen-runner-adapter.mjs','native-operation-receipt.mjs','runtime-binding.mjs','runtime-outbox.mjs']){
   f.put(f.source,prefix+name,readFileSync(new URL('../'+name,import.meta.url)));
  }
  const commander=['wf-launch.sh','wf-status.sh','wf-agent-run.sh','wf-agent-lib.py','wf-agent-handoff.py','wf-v2.py','wf-v2-io.py','wf-v2-phone.py','wf-v2-shell.py','wf-report.py','workflow-contracts.json','AGENTS.md'];
@@ -36,11 +36,20 @@ export function transportFixture(t,{payloadBytes=270000}={}){
  f.put(f.source,prefix+'commander/skills/workflow-commander/SKILL.md','# fixed fixture commander\n');
  f.put(f.source,prefix+'leadgen-run.sh','#!/bin/sh\nexit 0\n');f.put(f.source,prefix+'leadgen-rpc.mjs','export const fixed=true;\n');
  f.put(f.source,prefix+'transport-payload.bin',Buffer.alloc(payloadBytes,67));
+ if(preflightPg){
+  for(const file of ['preflight-pg-dependencies.mjs','preflight-pg-lock.json'])f.put(f.source,prefix+file,readFileSync(new URL('../'+file,import.meta.url)));
+  f.put(f.source,'package-lock.json',readFileSync(new URL('../../../package-lock.json',import.meta.url)));
+ }
  f.revision=f.commit(f.source);
  const environment='staging:'+f.revision,repo='perfectuser21/zenithjoy-workspace';
  f.plan={environment,releases:{},release_ids:{}};
  for(const host of ['mmv','xian-m4']){
   const payload={components:[{kind:'repo',repo,revision:f.revision}],workflows:[{payload:{key:'fixture'},payload_sha256:'f'.repeat(64)}]};
+  if(preflightPg){
+   const binding={kind:'code',scope:'activity',status:'verified',repo,revision:f.revision,path:prefix+'preflight-pg-lock.json',digest:'sha256:'+hash(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url)))};
+   payload.components.push(Object.fromEntries(Object.entries(binding).filter(([k])=>!['scope','status'].includes(k))));
+   payload.activities=[{payload:{implementation_bindings:[binding]}}];
+  }
   const release={id:'release-'+host,environment,target:host,payload};
   // 原digest是稳定key序JSON，不是普通JSON串。
   f.plan.releases[host]=release;f.plan.release_ids[host]=release.id;

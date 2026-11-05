@@ -11,7 +11,7 @@ const detail=error=>{
   const code=String(error?.message||'');
   return /^(?:SKILL_PRIMARY_|AGENT_(?:TOOL|PRIMARY)_|RPC_|COMPANY_|DISCOVERY_|RECIPIENT_|RECORD_)[A-Z0-9_]+$/.test(code)?code:'SKILL_PRIMARY_OPERATION_FAILED';
 };
-export async function startPrimaryActivityBroker({directory,request,inspect,phone,business,getActivityResult=()=>null,isReadOnlyBusinessOperation=()=>false,authorize=async()=>false,onEvent=async()=>({action:'none'}),onAbort=async()=>({execution_stopped:false}),observerTimeoutMs=20000}){
+export async function startPrimaryActivityBroker({directory,request,inspect,phone,business,getActivityResult=()=>null,isReadOnlyBusinessOperation=()=>false,authorize=async()=>false,authorizeParentContext=async()=>false,onEvent=async()=>({action:'none'}),onAbort=async()=>({execution_stopped:false}),observerTimeoutMs=20000}){
   if(request?.protocol!=='leadgen-activity-v1'||request.mode!=='execute'
     ||!/^\w[\w.-]{0,150}$/.test(request.run_id||'')||!uuid.test(request.task_id||'')||!uuid.test(request.binding_id||'')
     ||!/^\w{1,48}$/.test(request.activity_key||'')||!['preflight','source','collect_videos','dedup','qualification','collection','scoring','mark_leads','cleanup'].includes(request.activity_key)
@@ -25,6 +25,7 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
   if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)!==0)throw Error('SKILL_PRIMARY_DIRECTORY_INVALID');
   const socket=join(tmpdir(),'leadgen-primary-'+randomBytes(12).toString('hex')+'.sock');
   const requestPath=join(directory,'broker-request.json'),fixed={...request,socket};
+  const parentRequest=JSON.stringify(request);
   writeFileSync(requestPath,JSON.stringify(fixed),{flag:'wx',mode:0o600});
   let closed=false,sealed=false,pending=0,active=0,executionUnknown=false,commanderAborted=false,abortUnknown=false;
   const unknownReasons=new Set();
@@ -65,7 +66,9 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
     if(closed||Date.now()>=request.deadline_ms)throw Error('SKILL_PRIMARY_EXPIRED');
     for(const key of ['run_id','activity_key','nonce'])if(q[key]!==request[key])throw Error('SKILL_PRIMARY_SCOPE_MISMATCH');
     for(const key of ['task_id','binding_id','source_commit','runtime_snapshot_sha256','transport_generation'])if(q[key]!==undefined&&q[key]!==request[key])throw Error('SKILL_PRIMARY_SCOPE_MISMATCH');
-    if(await authorize(q)!==true)throw Error('SKILL_PRIMARY_CHILD_NOT_BOUND');
+    const body=q.op==='inspect'?Object.fromEntries(['question','progress','error'].filter(key=>Object.hasOwn(q,key)).map(key=>[key,q[key]]))
+      :q.op==='phone'?{command:q.command,args:q.args}:q.op==='business'?{operation:q.operation,input:q.input}:{};
+    if(await authorize(q,{op:q.op,body})!==true)throw Error('SKILL_PRIMARY_CHILD_NOT_BOUND');
     if(sealed)throw Error('SKILL_PRIMARY_SEALED');
     if(closed||Date.now()>=request.deadline_ms)throw Error('SKILL_PRIMARY_EXPIRED');
     if(q.op==='inspect'){
@@ -116,6 +119,28 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
   await new Promise((yes,no)=>{server.once('error',no);server.listen(socket,yes);});chmodSync(socket,0o600);
   const state=()=>({sealed,pending,active,execution_unknown:executionUnknown||abortUnknown});
   return {directory,requestPath,request:fixed,abort,
+    // This object capability belongs only to the creating Code parent. It is
+    // absent from the socket protocol and never authorizes a worker operation.
+    readParentContext:async()=>{
+      const admit=()=>{
+        if(sealed)throw Error('SKILL_PRIMARY_SEALED');
+        if(closed||Date.now()>=request.deadline_ms)throw Error('SKILL_PRIMARY_EXPIRED');
+        if(request.execution_transport!=='raw-model-v1')throw Error('SKILL_PRIMARY_PARENT_CONTEXT_UNSUPPORTED');
+        if(JSON.stringify(request)!==parentRequest)throw Error('SKILL_PRIMARY_PARENT_CONTEXT_SCOPE_CHANGED');
+      };
+      admit();
+      if(pending!==0||active!==0)throw Error('SKILL_PRIMARY_OPERATION_BUSY');
+      pending++;
+      try{
+        if(await authorizeParentContext(JSON.parse(parentRequest))!==true)throw Error('SKILL_PRIMARY_PARENT_CONTEXT_UNAUTHORIZED');
+        admit();
+        const context=await inspect();
+        if(await authorizeParentContext(JSON.parse(parentRequest))!==true)throw Error('SKILL_PRIMARY_PARENT_CONTEXT_UNAUTHORIZED');
+        admit();
+        if(!object(context))throw Error('SKILL_PRIMARY_INSPECT_INVALID');
+        return {...context,...(guidance.length?{commander_guidance:guidance.splice(0)}:{}),...(commanderAborted?{commander_abort:true}:{})};
+      }finally{pending--;}
+    },
     report:async event=>{
       const {action,commanderStatus}=await observe(event,!sealed&&!closed);
       const apply=!sealed&&!closed;

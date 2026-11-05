@@ -6,6 +6,8 @@ import {existsSync,realpathSync} from 'node:fs';
 import {readFrozen,isCanonicalTcpDeviceSerial} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {verifyProducerDescriptor,verifyProducerCompany} from './producer-descriptor.mjs';
+import {rawModelScopeStopped} from './activity-skill-parent-loop.mjs';
+import {skillLaunchDidNotStart} from './activity-skill-executor.mjs';
 
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const canonical=value=>Array.isArray(value)?value.map(canonical):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
@@ -83,6 +85,12 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const stat=lstatSync(directory);if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)!==0)throw Error('AGENT_TOOL_JOURNAL_INVALID');
   syncDirectory(dirname(directory));syncDirectory(runDir);
   const scopeKey=hash(scope),receipts=[];let result=null,settled=false,busy=false;
+  const rawTermination=proof=>{
+    if(scope.execution_transport!=='raw-model-v1')return;
+    const state=primitives.executionState?.()||{};
+    if(!(rawModelScopeStopped(proof?.raw_model_proof,scope)||skillLaunchDidNotStart(proof,scope))
+      ||state.native_stop_unproven===true||state.execution_unknown===true)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');
+  };
   const intents=()=>readdirSync(directory).filter(name=>/^[a-f0-9]{64}\.intent\.json$/.test(name)).map(name=>{
     const value=privateRead(join(directory,name));if(value.scope_key!==scopeKey)throw Error('AGENT_TOOL_JOURNAL_SCOPE_MISMATCH');return {name,key:name.slice(0,64),value};
   });
@@ -181,12 +189,13 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   };
   let prepared=false;
   return {business,phone,canReadback,
+    ...(typeof primitives.closeNativeScope==='function'?{closeNativeScope:proof=>primitives.closeNativeScope(proof,scope)}:{}),
     heartbeat:async()=>{if(unresolved().length)return {deferred:true,commit_unknown:true};try{return await lifecycle('resource_heartbeat',()=>primitives.heartbeat?.(scope));}catch(error){primitives.resourceUnknown?.(error,scope);error.executionStopped=false;throw error;}},
     inspect:async()=>({scope:structuredClone(scope),phone_capabilities:scope.serial==='none'?[]:[...readPhone,...phoneBySlot[scope.activity]],business_capabilities:[...slots[scope.activity]],
       pending_write_readbacks:unresolved().map(row=>({operation:row.value.operation,readback_operations:readbackFor[row.value.operation]||[]})),...await primitives.inspect?.(scope)}),
     prepare:async()=>{if(prepared)return;const result=await lifecycle('resource_prepare',()=>primitives.prepare?.(scope));if(!result?.deferred)prepared=true;return result;},
-    settle:async proof=>{if(proof?.execution_stopped!==true||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});await guard();if(typeof primitives.settle!=='function')throw Error('AGENT_TOOL_RESULT_ADAPTER_UNAVAILABLE');result=await primitives.settle({scope,receipts:structuredClone(receipts),proof});settled=true;return result;},
-    release:async proof=>{if(proof?.execution_stopped!==true||!settled||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');if(scope.activity!=='cleanup')throw Error('AGENT_TOOL_RELEASE_NOT_CLEANUP');const released=await lifecycle('resource_release',()=>primitives.release?.(proof,scope));if(!object(released))throw Error('AGENT_TOOL_RELEASE_UNVERIFIED');result={...result,...released};return released;},
+    settle:async proof=>{if(proof?.execution_stopped!==true||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');rawTermination(proof);if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});await guard();if(typeof primitives.settle!=='function')throw Error('AGENT_TOOL_RESULT_ADAPTER_UNAVAILABLE');result=await primitives.settle({scope,receipts:structuredClone(receipts),proof});settled=true;return result;},
+    release:async proof=>{if(proof?.execution_stopped!==true||!settled||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');rawTermination(proof);if(scope.activity!=='cleanup')throw Error('AGENT_TOOL_RELEASE_NOT_CLEANUP');const released=await lifecycle('resource_release',()=>primitives.release?.(proof,scope));if(!object(released))throw Error('AGENT_TOOL_RELEASE_UNVERIFIED');result={...result,...released};return released;},
     getResult:()=>{const state=primitives.executionState?.()||{};return state.native_stop_unproven===true||state.execution_unknown===true?{...(result||{}),execution_stopped:false,...(state.native_stop_unproven===true?{native_stop_unproven:true}:{})}:result;},
   };
 }

@@ -21,6 +21,14 @@ test('真实采集→持久请求→观测精确回读→gate之后才发布mani
  assert.equal(result.release_id,'release-1');assert.equal(result.observation_id,'obs-1');assert.equal(result.target,'xian-m4');assert.deepEqual(f.calls.find(c=>c.body).body.components,f.release.payload.components);
  const stored=JSON.parse(readFileSync(join(f.options.stateDir,readdirSync(f.options.stateDir).find(n=>n.endsWith('.request.json'))),'utf8'));assert.equal(stored.body.collector,'trusted-fixture');assert.equal(stored.body.deployed,undefined);
 });
+test('独立依赖缺实际观测或摘要漂移时零中央部署ACK',async()=>{
+ const {observeDeployment}=await import(path);
+ for(const observed of [undefined,{preflight_pg:{manifest_sha256:'f'.repeat(64)}}]){
+  const f=fixture();f.options.manifest.dependencies={preflight_pg:{manifest_sha256:'c'.repeat(64)}};
+  f.options.collect=async()=>({...f.options.manifest,dependencies:observed,observed_hostname:'m4-xian.local'});
+  await assert.rejects(observeDeployment(f.options),/依赖/);assert.equal(f.calls.some(c=>c.body),false);
+ }
+});
 test('假target、未采集组件与漂移观测均禁止可运行manifest',async()=>{
  const {observeDeployment}=await import(path);
  const host=fixture();host.options.collect=async()=>({...host.options.manifest,observed_hostname:'unrelated-host'});await assert.rejects(observeDeployment(host.options),/机器/);assert.equal(host.calls.some(c=>c.body),false);

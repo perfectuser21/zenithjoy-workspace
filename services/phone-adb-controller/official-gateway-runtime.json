@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "gateway_version": "2026.9.8",
+  "package_root": "/opt/homebrew/lib/node_modules/openclaw",
+  "files": [
+    {
+      "path": "dist/src-D2gvuSyP.mjs",
+      "sha256": "8f5ed8aa897a9d6a23dcfb597a071d875650a96d6346c63da291308999eaea53"
+    },
+    {
+      "path": "dist/agent-request-preflight-D_oWg-ft.mjs",
+      "sha256": "956cc85af25494015e8bfe6d14524d5685d1f396108578f18400afa75b7f24c8"
+    },
+    {
+      "path": "dist/attempt-execution.runtime-fpzJbrUc.mjs",
+      "sha256": "f25c52a638036504982b77d0ee3a2aa244fed2f61dc39347d7b43e491cb6d5ec"
+    },
+    {
+      "path": "dist/embedded-agent-DsCaQmKI.mjs",
+      "sha256": "f20437d75630c7e388ac6817fdcc72e3478e8c4f9be759b9287d99427ea08182"
+    },
+    {
+      "path": "dist/attempt-tool-construction-plan-BizPvV2W.mjs",
+      "sha256": "ab9ba0d1f8115b2a3fd6d2e4e38406a35fb36e1c37626fcddea5bd3b3706f1da"
+    },
+    {
+      "path": "dist/agent-turn-service-DTertIom.mjs",
+      "sha256": "88972f371e7790af0cb86164b6c2313bdf30a862575c0c74eed29723f865ca33"
+    },
+    {
+      "path": "dist/tool-surface-bridge-CgDvORRC.mjs",
+      "sha256": "7061972bbe3bdde0387a314f827e1945d941ff8bb4e2119d59fd4b48aa4277c1"
+    }
+  ],
+  "agent_config_path": "/Users/administrator/.openclaw/openclaw.json"
+}

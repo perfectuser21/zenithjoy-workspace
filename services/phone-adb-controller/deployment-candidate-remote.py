@@ -46,7 +46,7 @@ def pending(exclude=None):
     return [p for p in base.iterdir() if p.name.startswith('.' + sha + '.') and p != exclude]
 
 
-def regular(path, private=False):
+def regular(path, private=False, dependency=False):
     if not directory(path.parent):
         raise ValueError('candidate parent missing')
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -56,9 +56,11 @@ def regular(path, private=False):
             raise ValueError('candidate file type/owner mismatch')
         if info.st_mode & 0o022:
             raise ValueError('candidate file is writable by other users')
-        if private and info.st_mode & 0o077:
+        if (private or dependency) and info.st_mode & 0o077:
             raise ValueError('candidate identity is not private')
-        if info.st_size > (65536 if private else 128 * 1024 * 1024):
+        if dependency and info.st_nlink != 1:
+            raise ValueError('candidate dependency hardlink')
+        if info.st_size > (65536 if private else 4 * 1024 * 1024 if dependency else 128 * 1024 * 1024):
             raise ValueError('candidate file too large')
         with os.fdopen(fd, 'rb', closefd=False) as stream:
             return stream.read()
@@ -86,6 +88,20 @@ def presence():
         data = regular(final / 'runtime' / entry['deployed_path'])
         if hashlib.sha256(data).hexdigest() != entry['content_sha256']:
             raise ValueError('candidate content digest mismatch: ' + entry['deployed_path'])
+    for entry in spec.get('dependency_files', []):
+        relative = entry['deployed_path']
+        parts = relative.split('/')
+        if (not relative.startswith('_dependencies/preflight-pg/')
+                or any(p in ('', '.', '..') for p in parts) or entry.get('mode') != 0o600):
+            raise ValueError('invalid dependency path/mode')
+        path = final / 'runtime' / relative
+        for parent in path.parents:
+            if parent == final / 'runtime':
+                break
+            if not directory(parent) or parent.lstat().st_mode & 0o077:
+                raise ValueError('candidate dependency directory is not private')
+        if hashlib.sha256(regular(path, dependency=True)).hexdigest() != entry['content_sha256']:
+            raise ValueError('candidate dependency digest mismatch')
     return {'protocol': 'candidate_presence_v1', 'state': 'present', 'identity': identity}
 
 

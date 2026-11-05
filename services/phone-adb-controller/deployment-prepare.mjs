@@ -11,6 +11,7 @@ import {prepareTargetReleases} from './deployment-targets.mjs';
 import {verifyTransactionProtocol} from './deployment-protocol.mjs';
 import {stageCandidate} from './deployment-candidate.mjs';
 import {runMaintenanceInstall} from './maintenance-install-backend.mjs';
+import {verifyPreflightPgLock} from './preflight-pg-dependencies.mjs';
 const TOOL_ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[],acceptanceTaskIds={},transaction,
  toolRoot=TOOL_ROOT,toolSha,
@@ -47,7 +48,11 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  if(bundle.run?.repo!==DEPLOY_REPO||bundle.run.sha!==sha||bundle.run.branch!=='main'||!['push','workflow_dispatch'].includes(bundle.run.event)||bundle.run.path!=='.github/workflows/pilot-release-verification.yml'||!Number.isSafeInteger(bundle.run.id)||!attemptKey.startsWith(`github:${bundle.run.id}:`))throw Error('部署证据与受信run不符');
  prepareDeploymentSkillSources(root,sha);
 
- const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,acceptanceTaskIds,attemptKey,request,readFile:path=>{
+ const dependencyPath='services/phone-adb-controller/preflight-pg-lock.json';
+ const preflightPgLock=git('ls-tree','--name-only',sha,'--',dependencyPath)===dependencyPath?
+  verifyPreflightPgLock(readDeploymentSource(root,sha,'package-lock.json')):undefined;
+ if(preflightPgLock){readDeploymentSource(root,sha,dependencyPath);readDeploymentSource(root,sha,'services/phone-adb-controller/preflight-pg-dependencies.mjs');}
+ const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,acceptanceTaskIds,attemptKey,request,preflightPgLock,readFile:path=>{
   return readDeploymentSource(root,sha,path,{materialize:true});
  }});
  if(git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署预检期间工作区变化');

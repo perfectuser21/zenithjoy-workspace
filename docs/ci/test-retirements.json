@@ -903,7 +903,7 @@
     },
     {
       "path": "sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts",
-      "source_commit": "8dbe7c39bf240344c61e8896356852e1f9652123",
+      "source_commit": "9784012af142f8095dc11cf162bf3f60576f1706",
       "source_blob": "5277ea53e081167eca985b10d4988889429dd1a2",
       "source_sha256": "91b03c748e7a5b9fa8464fd58e5513cb1d249100e6213fb0b93fc32eef5245ab",
       "reason": "Historical sprint snapshot asserts hard-coded version of the retired Windows video-agent workflow and strings in its old desktop E2E; it never executes video behavior and is not an active CI consumer.",

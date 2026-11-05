@@ -163,3 +163,7 @@ b1221a58be60b2a2173215535ef6a47e8f38e132:apps/api/src/routes/walking-skeleton.te
 
 # phone-patrol deploy测试：公开已注册Workflow UUID（非API凭据），仅豁免历史单行误报
 0c261e463550d31c98106484ff0b14a3f970dedd:scripts/phone-account-patrol/test_deploy.py:generic-api-key:7
+
+# OpenSSH公开格式识别grammar（startsWith header及base64正则），不含任何私钥payload。
+# 独审仅批准这一条历史fingerprint，不能扩成文件/路径/规则豁免。
+9730d5c32d16b5d4fff88a36a6ede2fa812aca9b:services/phone-adb-controller/preflight-metadata.mjs:private-key:60

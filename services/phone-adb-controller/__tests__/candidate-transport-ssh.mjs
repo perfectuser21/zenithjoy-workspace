@@ -5,7 +5,8 @@ import {createHash} from 'node:crypto';
 const c=JSON.parse(readFileSync(process.env.CANDIDATE_TRANSPORT_CONFIG)),args=process.argv.slice(2),host=args.at(-2),command=args.at(-1);
 const presence=command.includes("' presence "),install=command.includes("' install ");
 const input=readFileSync(0),home=join(c.top,'remote-'+host);mkdirSync(home,{recursive:true});
-const archive=input.length>10000,collect=command.includes('deployment-manifest.mjs" collect'),manifest=command.includes('deployment-manifest.json.tmp');
+// Archive is an install primitive, never a large collector JSON envelope.
+const archive=install&&input.length>10000,collect=command.includes('deployment-manifest.mjs" collect'),manifest=command.includes('deployment-manifest.json.tmp');
 appendFileSync(join(c.top,'transport.jsonl'),JSON.stringify({host,args,input_bytes:input.length,input_sha256:createHash('sha256').update(input).digest('hex'),archive,collect,manifest})+'\n');
 const final=join(home,'.local/share/zenithjoy/phone-candidates',c.sha),lost=join(c.top,'lost-once');
 // 真实独立fakeSSH进程模拟TCP连接阶段退出；仍由原Python验证成功连接的闭包。

@@ -213,7 +213,17 @@ Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行
 
 Agent 主执行时，每个 Activity 加载自己的冻结 Skill，通过当前活动允许的手机、录音、提交和读回原语完成工作；不会调用原业务 handler 或 `resume`。底层控制器、事务、资源管理和规则校验仍由代码提供。`inspect`、`phone`、`business` 只使用本次原请求给出的入口，Agent 不创建绑定或直接调用内部队列。
 
-Agent 路径沿公共 Runner 的实际剩余时间设置一次绝对截止，在原 Activity 与整轮预算内为 Worker、父会话返回、精确停止读证和终检留时间；阶段字段只能缩短截止，预算不足不启动。Worker 截止限制新业务准入及官方子会话超时，不代表原生执行域已停止；此前已发起的操作仍需独立终止证明。普通超时也请求停止同一绑定对象，缺父子双方终态证明仍隔离。Parent 只负责官方派发，Child 分页读取同一冻结方法、支持材料和合同，完整原件保留。
+Agent 路径沿公共 Runner 的实际剩余时间设置一次绝对截止，在原 Activity 与整轮预算内为 Worker、父会话返回、精确停止读证和终检留时间；阶段字段只能缩短截止，预算不足不启动。Worker 截止限制新业务准入及官方子会话超时，不代表原生执行域已停止；此前已发起的操作仍需独立终止证明。普通超时也请求停止同一绑定对象，缺父子双方终态证明仍隔离。旧官方子会话路径中，Parent 只负责官方派发，Child 分页读取同一冻结方法、支持材料和合同，完整原件保留。
+
+以下描述新运输的合同与验收要求；组件测试通过不代表默认入口已部署或真实模型往返已通过。
+
+新中央方法版本显式支持 `raw-model-v1`：正式输入同时冻结运输类型与 `max_turns`（1–64），缺少声明不能借此运行旧方法。模型只提出结构化意图；父 Code 加载冻结方法、调用原 broker 白名单、保存工具回执，独立 Judge 决定状态。模型侧以官方 Gateway 的 `modelRun=true` 禁用工具，使用已配置的执行账号和模型，不伪造官方 Child 或其停止证明。冷候选包含固定摘要的 SDK，不从全局安装或运行时网络补依赖。
+
+此路径在 Runner 唤醒 Commander 前创建独立 Observer 调用域。Commander 的本机锁助手使用固定解释器和禁止派生进程的沙箱；助手关闭、SDK 请求与连接关闭、模型终态分别留证，任何一个都不能代替其他域的停止证明。超时或进程中断保留未决原件，不覆盖锁，也不将对象重建当作旧调用已停止。
+
+受限控制验收只能由真实 Task 的 `payload.scope.control_scope` 授权，沿正式 MMV `mmv-scoring`、`serial=none` 入口运行；仅允许 `inspect` 和 `finish`，不构造手机、业务数据库或队列写入能力。它用于验证真实模型、Commander 纠偏和收尾往返，业务 Judge 仍应拒绝缺少真实评分证据的结果，不能据此宣称 103 或获客完成。
+
+当前新增的 end-check 后恢复只开放一次只读续棒：保留原 Task、来源、剩余总轮数和绝对截止，Commander 指导进入下一轮，随后由 Code 再检查；第二次仍不通过进入 `needs_review`。这证明纠偏和复查链路，不代表已经具备修复手机或补写业务结果的能力。未知副作用仍只读回；完整 101–103 执行及业务修复必须另有真实验收，生产能力检查不能因控制验收通过而放开。
 
 `inspect.pending_write_readbacks` 是未确认写入的精确读回集合；指导和中止字段缺省分别为 `[]`、`false`。问题、进度、错误通过真实 inspect 事件传递。普通上下文 inspect 不额外等待 Observer；显式事件在剩余预算内有界等待，不可达记录为 unavailable，晚到指导记录为未应用，不能改变已判状态。原生或业务提交未知仍保隔离。
 
@@ -265,3 +275,33 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 4小时新claim、恢复PATCH短回执、成功heartbeat和两次Task读回；每次准入再GET同一新claim
 和全部冻结payload。新claim不改写旧timestamp，不恢复旧业务。具体17文件格式、真实API
 回执及保守租约边界见 `docs/runner/collection-review-gap-evidence.md`。已有journal不能迁移。
+
+### 预检的私有 pg 依赖
+
+`preflight-pg-lock.json` 固定根 `package-lock.json` 的精确 pg 8.18.0 运行闭包（14 包，包含原有 pg-cloudflare；不扩装 pg-native）。原 Git 锁的 13 个传递包没有 tarball integrity，新描述符补齐各自精确版本的官方 registry URL/SSRI，不重新解版本范围。
+
+候选构建在 `runtime/_dependencies/preflight-pg` 私有目录解包，不调用 npm 或安装脚本。每个 tarball 先验 SSRI，再拒绝路径穿越、重复项、软硬链接和扩展路径记录。全部文件和目录落盘后，排他原子提交完成清单；半成品不自动复用或覆盖，失败不进入部署观测。
+
+描述符须先在正式 Activity implementation_bindings 冻结，缺绑定在中央请求及候选运输前拒绝，不临时添加未绑定组件。中央 release 固定真实 Git 描述符的 code 组件；第三方文件保留独立的 `dependencies.preflight_pg` 观测。候选运输先核实际文件和权限，原 collector 再验归档、完整文件集合及字节；完整观测摘要进入原中央 observation。中央 code/skill gate 和第三方依赖证明分别保留。
+
+运行时 `loadPreflightPg({runtimeRoot,frozen})` 只接受服务端目录、`frozen.deployment.source_commit` 与冻结的两份锁摘要。它重新核所有归档、文件及 Unix owner/mode，禁止 NODE_PATH/native 偏移，只返回官方 Pool；缺包不能借 HOME/global 包兜底。此路径不下载、不写文件、不启动进程。当前交付仅接候选安装；传统晋级不自动安装依赖，缺依赖必须拒绝新预检入口。
+
+### Agent 预检的受控执行域（42e）
+
+当前源码的预检工厂仍不声明支持。正式 activity_skill / authority / stop 的 Caller 仍有普通 SSH、远端 shell 或本地 Node outer，尚无完整受支持执行域；官方 Agent 会话双停不能替这些 Caller 签停止证明。本组件的独立审查也不构成启用资格，必须由后续正式 Caller 修复闭合后再审。其它尚无完整原生域的 Activity 继续在工具分配和 Worker 派发前返回 `not_started / needs_review`，不能把这个安全修复当作 101→102→103 已跑通。
+
+101/102 Agent 预检使用父进程内的原关键词、公司冻结函数及独立 Judge、记录函数。物理操作只有固定、来源绑定的 nofork ADB/Python 叶，不再启动旧 controller shell。PG 控制面、本机物理叶和官方 Commander/Worker 双停分别留证：本机叶关闭不证明远端 PG 服务或 Android 应用进程全集停止；PG 提交未知仍保留未知，官方停证也不能由本机证明代替。
+
+正常失败可凭同源码、Task、binding、owner、epoch 的私有能力进入一次独立清理域。桌面解析在该域 seal 前执行原完整解析器，随后只读核验原件摘要和最后物理序号；资源释放后 Judge 仍可核验这份不可变事实，不再启动解析子进程。未派发 Worker 且未进行界面操作的失败只归还本人已知资源，跳过关闭应用、Home 和清理 Worker；缺桌面条件仍由原 Judge 判失败，不伪造成功指标。
+
+Worker 截止后不再准入新业务或手机动作，原 receipt 窗口只用于收口、纯读验收和停证。超时或未知之后，原有独立 20 秒隔离保护窗仅允许固定 nofork 叶核对本人 owner+epoch 并写持久隔离标记；不续租、不释放、不恢复业务，也不把标记当停止证明。整轮后的 span/flush 属于独立交付域，这份预检能力不声称覆盖它们。
+
+若候选 manifest 明确声明 `dependencies.preflight_pg`，冻结事务先完整核验候选实际依赖摘要，再用其 14 个已验证 tarball 离线重建 run 私有依赖并独立读回，零下载、零安装脚本、不建立软链或全局 fallback。Code/104 只获得声明中不可变 artifact 的副本，不新增 Agent 字段或业务能力；原无依赖输入保持原快照格式。
+
+预检在第一次 ADB 请求（包括只读请求）前原子发布带 epoch 与强制审查标记的本人本地锁。普通命令失败与 host 叶子停止证明分开记录；缺停止证明时标记保留，旧 TTL 回收入口不得重领。Worker 从未派发且未做 UI 操作时，仅 Code 私有 NoLaunch 能力可授权释放同 owner/epoch 的资源，原桌面指标保持 0，原 Judge 仍可判 needs_review。
+
+控制面拒绝带 query/hash 或歧义 authority 的数据库 URI，并拒绝非空 PG* 环境覆盖；不改进程全局环境。SSH 只使用由已冻结 known_hosts 提取的唯一期望 key 的 run 私有副本与精确 HostKeyAlgorithms，原全局文件不变。上述证明覆盖本机受控叶子与连接返还，不代表远端 PG 提交结果、Android App 全集或尚未闭合的正式 Caller。
+
+Agent 101/102 的 `preflight_profile` 在正式 prepare 阶段冻结规范 registry 路径、全文件摘要及唯一所选 profile/serial/model/尺寸/enabled。运行和续跑逐项复核，缺字段的旧 Agent 快照不能绑定当前表补齐。MMV 云入口必须显式传入既有 `DOUYIN_PHONE_REGISTRY=$HOME/.config/openclaw/cloud-phone-test-profiles.tsv`；不新建或修改全局表，这份静态元数据也不代表本轮账号或媒体验证已通过。
+
+采证的同一公开 ID+扩展名仅允许提交一次，重复文件、目录或悬空链接均在新手机操作前拒绝；XML/PNG 可以同 ID 各一次配对。提交采用排他/no-follow写入并 fsync，随机采证原件同时保留，竞争失败不删除赢家、不重发手机动作。

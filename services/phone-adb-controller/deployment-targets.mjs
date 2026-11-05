@@ -6,11 +6,13 @@ import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,deploymentAssertionPlan
 import {execFileSync} from 'node:child_process';
 import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
 import {verifyBusinessAdmission} from './deployment-business-admission.mjs';
+import {preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
+const pgLockPath='services/phone-adb-controller/preflight-pg-lock.json';
 const extraKeys=['workflow_report.internal','workflow_commander.internal','douyin_video_publish.android'];
 const need=(v,m)=>{if(!v)throw Error('统一部署: '+m);};
 const same=(a,b)=>digest(a)===digest(b);
 const rowHash=r=>digest({source:{repo:r.source_repo,path:r.source_path,commit:r.source_commit},payload:r.payload});
-export function bindingComponents(definitions,sha){
+export function bindingComponents(definitions,sha,{preflightPgLock}={}){
  const entries=new Map([['repo',{kind:'repo',repo:DEPLOY_REPO,revision:sha}]]);
  for(const a of definitions.activities){
   need(a.payload.implementation_bindings?.some(b=>b.scope==='activity'&&['code','skill'].includes(b.kind)&&b.status==='verified'),'缺Activity固定入口');
@@ -21,6 +23,7 @@ export function bindingComponents(definitions,sha){
    need(!entries.has(key)||same(entries.get(key),value),'binding同路径冲突');entries.set(key,value);
   }
  }
+ if(preflightPgLock){need(same(preflightPgLock,preflightPgLockIdentity()),'预检依赖Git锁身份不符');const key='code:'+pgLockPath;need(entries.has(key)&&same(entries.get(key),{kind:'code',repo:DEPLOY_REPO,path:pgLockPath,revision:sha,digest:'sha256:'+preflightPgLock.lock_sha256}),'预检依赖缺冻结定义binding');}
  return [...entries.values()].sort((a,b)=>`${a.kind}:${a.path||''}`.localeCompare(`${b.kind}:${b.path||''}`));
 }
 function checkScope(e,scope,sha){
@@ -43,7 +46,7 @@ function subset(definitions,workflows){
  const activities=definitions.activities.filter(a=>ids.has(a.id));
  need(ids.size&&activities.length===ids.size&&refs.every(r=>activities.some(a=>a.id===r.activity_version_id&&a.activity_id===r.activity_id&&a.payload.activity_id===r.activity_id)),'活动依赖闭包缺失');return{workflows,activities};
 }
-export function targetDefinitions(bundle,sha,readFile){
+export function targetDefinitions(bundle,sha,readFile,{preflightPgLock}={}){
  validateDeploymentEvidence(bundle,sha,readFile);
  // 第三scope是whole-Pilot门禁，不进入M4/MMV的7/4流程安装闭包。
  checkScope(bundle.patrol,'cecelia-device-patrol-definitions',sha);
@@ -53,7 +56,7 @@ export function targetDefinitions(bundle,sha,readFile){
  const extras=extraKeys.map(key=>{const found=all.workflows.filter(w=>w.payload.key===key);need(found.length===1,'缺或重复Commander workflow: '+key);return found[0];});
  const mmv=subset(all,[...legacy,...extras]);need(new Set(mmv.workflows.map(w=>w.workflow_id)).size===7,'MMV七流程身份冲突');
  const result={};for(const [target,definitions]of [['xian-m4',subset(all,legacy)],['mmv',mmv]]){
-  const components=bindingComponents(definitions,sha);for(const c of components.filter(c=>c.kind!=='repo'))need('sha256:'+digest(readFile(c.path))===c.digest,'实际源码binding漂移');result[target]={definitions,components};
+  const components=bindingComponents(definitions,sha,{preflightPgLock});for(const c of components.filter(c=>c.kind!=='repo'))need('sha256:'+digest(readFile(c.path))===c.digest,'实际源码binding漂移');result[target]={definitions,components};
  }return result;
 }
 export function commanderMap(release){
@@ -61,14 +64,16 @@ export function commanderMap(release){
 }
 export function verifyTargetRelease(release,target,sha,expected,environment='production'){
  need((environment==='production'||environment===`staging:${sha}`)&&release?.target===target&&release.environment===environment&&release.payload?.verification?.status==='verified'&&release.manifest_sha256===digest({environment:release.environment,target:release.target,payload:release.payload}),'release目标/摘要/状态错误');
- need(same(release.payload.components,bindingComponents(release.payload,sha)),'release组件不等于完整bindings');
+ const preflightPgLock=release.payload.components?.some(c=>c.kind==='code'&&c.path===pgLockPath)?preflightPgLockIdentity():undefined;
+ need(same(release.payload.components,bindingComponents(release.payload,sha,{preflightPgLock})),'release组件不等于完整bindings');
+ if(expected)need(same(release.payload.components,expected.components),'release依赖源码组件不等于固定目标');
  for(const r of [...release.payload.workflows,...release.payload.activities])need(r.source_repo===DEPLOY_REPO&&r.source_commit===sha&&r.payload_sha256===rowHash(r),'正式release冻结摘要/来源不符');
  const rows=release.payload.workflows;need(rows.filter(w=>WORKFLOWS.includes(w.workflow_id)).length===4&&rows.length===(target==='mmv'?7:4),'release缺完整目标闭包');
  if(target==='mmv')for(const key of extraKeys)need(rows.filter(w=>w.payload.key===key).length===1,'release缺Commander身份');
  if(expected)need(same([...rows].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.workflows].sort((a,b)=>a.id.localeCompare(b.id)))&&same([...release.payload.activities].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.activities].sort((a,b)=>a.id.localeCompare(b.id))),'Brain回了其它冻结版本');return release;
 }
-export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request,environment='production',businessRunIds,acceptanceTaskIds}){
- need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile),releases={};
+export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request,environment='production',businessRunIds,acceptanceTaskIds,preflightPgLock}){
+ need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile,{preflightPgLock}),releases={};
  const admission=environment==='production'?await verifyBusinessAdmission({sha,targets,runIds:businessRunIds,acceptanceTaskIds,readFile,request}):null;
  for(const target of ['xian-m4','mmv']){
   const {definitions,components}=targets[target],evidence=target==='mmv'?[bundle,bundle.commander]:[bundle];

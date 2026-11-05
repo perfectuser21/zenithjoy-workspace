@@ -29,8 +29,8 @@ export function assertWorkflowOwnerAvailable(scope,{home=homedir()}={}){
 }
 // A reservation can only deny another transport launch. It is never evidence
 // that business succeeded, a child stopped, or resources may be released.
-export async function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
-  const {file,session}=ownerPending(scope,home),nonce=randomUUID(),release=await acquireOwnerLock(file);
+export async function reserveWorkflowCommanderTurn(scope,{home=homedir(),acquireLock=acquireOwnerLock}={}){
+  const {file,session}=ownerPending(scope,home),nonce=randomUUID(),release=await acquireLock(file);
   const record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,rpc_readback_nonce:scope.rpc_readback_nonce??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
   const raw=JSON.stringify(record);let reservation;
   try{reservation=await release.command('reserve',{raw});}catch{await release();throw unresolved();}

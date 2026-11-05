@@ -7,6 +7,7 @@
 //   node ledger.mjs next-attempt --run-dir D      # 进入 batch2 前调用：分配 attempt，导出续跑 skip_words
 import fs from "fs";
 import path from "path";
+import {fileURLToPath} from "node:url";
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -54,21 +55,10 @@ function saveLedger(runDir, ledger) {
   fs.writeFileSync(ledgerPath(runDir), JSON.stringify(ledger, null, 2));
 }
 
-const args = parseArgs(process.argv.slice(2));
-const cmd = process.argv[2];
-const runDir = args["run-dir"];
-if (!runDir) { console.error("missing --run-dir"); process.exit(2); }
-
-if (cmd === "init") {
-  const fresh = freshLedger(args["run-id"] || `run-${Date.now()}`, args);
-  const ledger = args.preserve && fs.existsSync(ledgerPath(runDir))
-    ? { ...JSON.parse(fs.readFileSync(ledgerPath(runDir), "utf8")), task_request_hash: fresh.task_request_hash, run_meta: fresh.run_meta } : fresh;
-  saveLedger(runDir, ledger);
-  console.log(JSON.stringify({ ok: true, run_id: ledger.run_id, attempt_id: ledger.attempt_id }));
-} else if (cmd === "set") {
-  const stage = args["stage"], status = args["status"];
-  if (![...STAGES,"source","dedup","write_videos","collect_videos","mark_leads","send_dm","write_back"].includes(stage)) { console.error(`unknown stage: ${stage}`); process.exit(2); }
-  if (!STATUSES.includes(status)) { console.error(`invalid status: ${status}`); process.exit(2); }
+export function setLedgerStage({runDir,stage,status,n,word="",note=""}) {
+  const args={n,word,note};
+  if (![...STAGES,"source","dedup","write_videos","collect_videos","mark_leads","send_dm","write_back"].includes(stage)) throw Error(`unknown stage: ${stage}`);
+  if (!STATUSES.includes(status)) throw Error(`invalid status: ${status}`);
   const ledger = loadLedgerOrFresh(runDir);
   const st = ledger.stages[stage] || emptyStage();
   st.items = st.items || [];
@@ -81,7 +71,24 @@ if (cmd === "init") {
   st.status = status; st.note = args["note"] || st.note || ""; st.updated_at = new Date().toISOString();
   ledger.stages[stage] = st;
   saveLedger(runDir, ledger);
-  console.log(JSON.stringify({ ok: true, stage, status, n: args["n"] ?? null }));
+  return { ok: true, stage, status, n: args["n"] ?? null };
+}
+
+if(process.argv[1] && fs.realpathSync(process.argv[1])===fileURLToPath(import.meta.url)) {
+const args = parseArgs(process.argv.slice(2));
+const cmd = process.argv[2];
+const runDir = args["run-dir"];
+if (!runDir) { console.error("missing --run-dir"); process.exit(2); }
+
+if (cmd === "init") {
+  const fresh = freshLedger(args["run-id"] || `run-${Date.now()}`, args);
+  const ledger = args.preserve && fs.existsSync(ledgerPath(runDir))
+    ? { ...JSON.parse(fs.readFileSync(ledgerPath(runDir), "utf8")), task_request_hash: fresh.task_request_hash, run_meta: fresh.run_meta } : fresh;
+  saveLedger(runDir, ledger);
+  console.log(JSON.stringify({ ok: true, run_id: ledger.run_id, attempt_id: ledger.attempt_id }));
+} else if (cmd === "set") {
+  try { console.log(JSON.stringify(setLedgerStage({runDir,stage:args["stage"],status:args["status"],n:args["n"],word:args["word"],note:args["note"]}))); }
+  catch(error) { console.error(error.message); process.exit(2); }
 } else if (cmd === "show") {
   console.log(JSON.stringify(loadLedgerOrFresh(runDir), null, 2));
 } else if (cmd === "next-attempt") {
@@ -98,4 +105,6 @@ if (cmd === "init") {
 } else {
   console.error("usage: ledger.mjs <init|set|show|next-attempt> --run-dir <dir> ...");
   process.exit(2);
+}
+
 }

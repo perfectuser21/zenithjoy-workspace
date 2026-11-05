@@ -61,7 +61,7 @@ test('103桥接资格必须独立使用native主页+V3，不能只沿用personal
  assert.equal(called,1,'不能忽略新的独立资格输入');assert.equal(result.qualification.status,'excluded');assert.equal(row.intent_grade,'A','不得改原评分');
 });
 
-import {mkdtempSync,mkdirSync,rmSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,rmSync,writeFileSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -285,12 +285,22 @@ test('原飞书采集时间须使用源comment collected_at，不能变成103桥
 import {spawn} from 'node:child_process';
 test('原line锁真实进程崩溃后可在死owner证明下恢复，活owner仍拒竞争',async()=>{
  const {withOrderLock}=require('../leadgen-outreach-orders.js'),d=mkdtempSync(join(tmpdir(),'bridge-dead-owner-')),module=require.resolve('../leadgen-outreach-orders.js');
- const child=spawn(process.execPath,['-e',`const {withOrderLock}=require(${JSON.stringify(module)});withOrderLock('jinuo',async()=>{console.log('HELD');setInterval(()=>{},1000);await new Promise(()=>{});},{directory:process.argv[1]}).catch(e=>{console.error(e.message);process.exitCode=1;});`,d],{stdio:['ignore','pipe','pipe']});
+ const child=spawn(process.execPath,['-e',`const fs=require('node:fs'),cp=require('node:child_process'),original=cp.spawn;
+ cp.spawn=(command,args,options)=>{if(command!=='python3'||!args[0].endsWith('/outreach-order-lock.py'))throw Error('unexpected broker');const broker=original(command,args,{...options,stdio:[...options.stdio,3]});fs.writeFileSync(require('node:path').join(process.argv[1],'broker.pid'),String(broker.pid));return broker;};
+ const {withOrderLock}=require(${JSON.stringify(module)});withOrderLock('jinuo',async()=>{console.log('HELD');setInterval(()=>{},1000);await new Promise(()=>{});},{directory:process.argv[1]}).catch(e=>{console.error(e.message);process.exitCode=1;});`,d],{stdio:['ignore','pipe','pipe','pipe']});
+ child.stdio[3].resume();let brokerPid,paused=false,closed=false;
+ const done=new Promise(ok=>child.once('close',()=>{closed=true;ok();}));
  try{await new Promise((ok,bad)=>{const timer=setTimeout(()=>bad(Error('owner start bounded timeout')),5000);child.stdout.once('data',()=>{clearTimeout(timer);ok();});child.once('error',bad);});
  await assert.rejects(withOrderLock('jinuo',async()=>{}, {directory:d}),/锁忙/);
- const done=new Promise(ok=>child.once('close',ok));child.kill('SIGKILL');await done;
+ brokerPid=Number(readFileSync(join(d,'broker.pid'),'utf8'));assert.ok(Number.isSafeInteger(brokerPid)&&brokerPid>1);
+ process.kill(brokerPid,'SIGSTOP');paused=true;
+ const exited=new Promise(ok=>child.once('exit',ok)),stdoutClosed=new Promise(ok=>child.stdout.once('close',ok)),stderrClosed=new Promise(ok=>child.stderr.once('close',ok));
+ child.kill('SIGKILL');await Promise.all([exited,stdoutClosed,stderrClosed]);await new Promise(setImmediate);
+ assert.equal(closed,false,'Node exit与原stdout/stderr关闭不能替代仍暂停的真实Python broker终态');
+ await assert.rejects(withOrderLock('jinuo',async()=>{}, {directory:d}),/锁忙/,'broker尚未退出时原内核guard仍须拒竞争');
+ process.kill(brokerPid,'SIGCONT');paused=false;await done;
  let executed=0;await withOrderLock('jinuo',async()=>{executed++;},{directory:d});assert.equal(executed,1);
- }finally{if(child.exitCode===null)child.kill('SIGKILL');rmSync(d,{recursive:true,force:true});}
+ }finally{if(paused)try{process.kill(brokerPid,'SIGKILL');}catch{}if(child.exitCode===null)child.kill('SIGKILL');rmSync(d,{recursive:true,force:true});}
 });
 
 // 显式批次范围必须先于任何桥接行处置或外部访问；同公司/版本不能替代SOURCE_RUN。

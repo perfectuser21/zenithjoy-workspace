@@ -16,8 +16,9 @@ function pinnedClient(policy){
  if(!info.isFile()||(info.mode&0o022)||policy.adb_realpath&&actual!==policy.adb_realpath||sha(readFileSync(actual))!==policy.adb_sha256)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
  return actual;
 }
-async function run(command,args,env,timeoutMs,onStart=()=>{}){
+async function run(command,args,env,timeoutMs,onStart=()=>{},beforeSpawn=()=>{}){
  return new Promise((resolve,reject)=>{
+  beforeSpawn();
   const p=spawn(command,args,{env,stdio:['ignore','pipe','pipe']}),chunks=[[],[]];let bytes=0,tainted=false,force,startError;
   const timer=setTimeout(()=>{tainted=true;p.kill('SIGTERM');force=setTimeout(()=>p.kill('SIGKILL'),200);},Math.max(1,timeoutMs));
   p.once('spawn',()=>{try{onStart(p.pid);}catch(error){startError=error;tainted=true;p.kill('SIGKILL');}});p.once('error',error=>{startError=error;});
@@ -25,7 +26,9 @@ async function run(command,args,env,timeoutMs,onStart=()=>{}){
   p.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(force);if(startError){reject(startError);return;}resolve({code,signal,tainted,stdout:Buffer.concat(chunks[0]),stderr:Buffer.concat(chunks[1])});});
  });
 }
-export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,env=process.env}){
+export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env}){
+ const launchActive=()=>{if(admissionDeadlineMs!==undefined&&(!Number.isSafeInteger(admissionDeadlineMs)||admissionDeadlineMs>deadlineMs||Date.now()>=admissionDeadlineMs))throw Error('COLLECTION_LEAF_ADMISSION_DEADLINE');};
+ launchActive();
  const binary=pinnedClient(policy);
  if(process.platform!=='darwin')throw Error('COLLECTION_NOFORK_UNSUPPORTED');
  if(!/^[A-Za-z0-9_.:-]{1,200}$/.test(serial||'')||!Number.isSafeInteger(deadlineMs)||deadlineMs<=Date.now())throw Error('COLLECTION_LEAF_SCOPE_INVALID');
@@ -33,8 +36,8 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  if(!endpoint||Number(endpoint[1])<1||Number(endpoint[1])>65535)throw Error('COLLECTION_LEAF_ROUTE_INVALID');
  const clean={...env};for(const key of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(key))delete clean[key];
  // 每个producer实证内核拒绝fork；仅检查sandbox-exec文件存在不足以签发。
- const positive=await run(sandbox,['-p',profile,'/usr/bin/true'],clean,2000);
- const negative=await run(sandbox,['-p',profile,'/bin/sh','-c','/usr/bin/true & wait'],clean,2000);
+ const positive=await run(sandbox,['-p',profile,'/usr/bin/true'],clean,2000,()=>{},launchActive);
+ const negative=await run(sandbox,['-p',profile,'/bin/sh','-c','/usr/bin/true & wait'],clean,2000,()=>{},launchActive);
  if(positive.code!==0||positive.tainted||negative.code===0||negative.tainted||!/fork: (?:Operation not permitted|Resource temporarily unavailable)/.test(negative.stderr.toString()))throw Error('COLLECTION_NOFORK_BOUNDARY_UNVERIFIED');
  mkdirSync(directory,{recursive:true,mode:0o700});
  const socket=join(tmpdir(),'cl-'+randomBytes(12).toString('hex')+'.sock'),nonce=randomBytes(24).toString('hex');
@@ -53,7 +56,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   leaves.push(entry);
   try{
    append({...entry,phase:'intent'});
-   const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});});
+   const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},launchActive);
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
    // This is a lifecycle proof from our nofork child close, not business success.
    const dumpCrashReturned=result.code===137&&result.signal===null&&!result.tainted&&result.stderr.length===0
