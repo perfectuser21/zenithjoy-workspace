@@ -1,6 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';import os from 'node:os';import {syncBuiltinESMExports} from 'node:module';import {execFileSync} from 'node:child_process';import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,realpathSync} from 'node:fs';import {join,dirname} from 'node:path';import {createHash} from 'node:crypto';
 const sha=b=>createHash('sha256').update(b).digest('hex');
+// These fixtures own private connection inputs; the CI scratch service belongs to other test processes.
+function isolatePrivatePgEnvironment(t){const saved=Object.fromEntries(Object.entries(process.env).filter(([key])=>/^PG[A-Z_]*$/.test(key)));for(const key of Object.keys(saved))delete process.env[key];t.after(()=>{for(const key of Object.keys(process.env))if(/^PG[A-Z_]*$/.test(key))delete process.env[key];Object.assign(process.env,saved);});}
 test('control scope freezes independent source pins/central route without secrets and rejects late file drift',async t=>{
+ isolatePrivatePgEnvironment(t);
  const home=realpathSync(mkdtempSync(join(os.tmpdir(),'preflight-control-')));t.after(()=>rmSync(home,{recursive:true,force:true}));const user=os.userInfo();t.mock.method(os,'userInfo',()=>({...user,homedir:home}));syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
  mkdirSync(join(home,'.ssh'));mkdirSync(join(home,'.credentials'));mkdirSync(join(home,'runtime/config'),{recursive:true});
  const key=join(home,'.ssh/id_rsa');execFileSync('/usr/bin/ssh-keygen',['-q','-t','ed25519','-N','','-f',key]);const fp=execFileSync('/usr/bin/ssh-keygen',['-lf',key+'.pub'],{encoding:'utf8'}).trim().split(/\s+/)[1];
@@ -19,6 +22,7 @@ test('control scope freezes independent source pins/central route without secret
 });
 
 test('owned local PG pool enforces the original absolute deadline without closing an independent connection',{skip:process.platform!=='darwin'},async t=>{
+ isolatePrivatePgEnvironment(t);
  const {privatePgSsh}=await import('./helpers/preflight-private-pg-ssh.mjs');
  const f=await privatePgSsh(t),{createRequire}=await import('node:module'),{Pool}=createRequire(import.meta.url)('pg');
  const {createPreflightLocalPool}=await import('../preflight-control-scope.mjs');const uri=`postgresql://preflight_fixture@127.0.0.1:${f.connection.port}/postgres`,start=Date.now();
