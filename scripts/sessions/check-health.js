@@ -26,13 +26,29 @@ const FEISHU_BOT_WEBHOOK = process.env.FEISHU_BOT_WEBHOOK || '';
 // ── validate 函数 ─────────────────────────────────────────────────
 
 const validateDouyin = (text) => {
-  try { const d = JSON.parse(text); return d.status_code === 0 || !!d.user_info || !!d.creator_info; } catch { return false; }
+  try {
+    const d = JSON.parse(text);
+    return d !== null && typeof d === 'object' && !Array.isArray(d)
+      && (!Object.hasOwn(d, 'status_code') || d.status_code === 0)
+      && (d.status_code === 0 || !!d.user_info || !!d.creator_info);
+  } catch { return false; }
 };
 const validateKuaishou = (text) => {
-  try { const d = JSON.parse(text); return d.result === 1 || !!d.data; } catch { return false; }
+  try {
+    const d = JSON.parse(text);
+    return d !== null && typeof d === 'object' && !Array.isArray(d)
+      && (!Object.hasOwn(d, 'result') || d.result === 1)
+      && (d.result === 1 || !!d.data);
+  } catch { return false; }
 };
 const validateXhs = (text) => {
-  try { const d = JSON.parse(text); return d.code === 0 || d.success === true; } catch { return false; }
+  try {
+    const d = JSON.parse(text);
+    return d !== null && typeof d === 'object' && !Array.isArray(d)
+      && (!Object.hasOwn(d, 'code') || d.code === 0)
+      && (!Object.hasOwn(d, 'success') || d.success === true)
+      && (d.code === 0 || d.success === true);
+  } catch { return false; }
 };
 const validateTrue = () => true;
 

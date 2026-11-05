@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-05T21:03:24.150937+00:00",
+  "task_id": "4d50ee4a-e146-4ee8-aa00-47598b4c3fa0",
+  "actor": "zenithjoy-business-ci-20261106",
+  "base_sha": "9acfa9a469a312396d6209465a80591af3cefe97",
+  "branch": "cp-1106-business-ci-followup",
+  "gp_anchor": "none(infra)",
+  "scope": "Independent seven-dimension followup. Original172 denominator unchanged; no physical, production or provider acceptance claim.",
+  "historical_origin": {
+    "base": "32208ce1855331fb356bf97d3734bb9c067906a1",
+    "all3_predicates_byte_equal_to_current_base": true
+  },
+  "dimensions": {
+    "current_value": "Scheduled health checks update operator account status. Explicit business failure must not write active.",
+    "active_status": "session-health-check.yml runs check-health.js four times daily and manually. Run42077481302 reached health check and failed.",
+    "real_effect": "Actual CLI children reproduced5 false healthy responses that wrote active.7 existing affirmative formats passed before/after fix.",
+    "test_and_blocking": "Existing session-health.test.mjs is in unconditional L3 OpenClaw glob/shards. Assertions cover CLI exit, report status and zero active writes; no skip/threshold/registry/workflow change.",
+    "duplication_and_obsolescence": "PR2410 fixed browser operator CLIs. Separate scheduled health producer retained historical OR bypass; current consumer remains.",
+    "runtime_and_maintenance_cost": "12 new CLI cases; surrounding108tests48.98s. No repeated builds, real account/device/model calls.",
+    "retirement_and_dependencies": "Retain32account+3API-key slots, required profile, writeback ack and notification policy. No business or credential retirement."
+  },
+  "fix": [
+    "Parsed object required; explicit failed status_code/result/code/success veto positive-looking fallback fields.",
+    "Missing status fields retain old affirmative success formats; no invented provider fields."
+  ],
+  "verification": {
+    "red": {
+      "selected": 12,
+      "negative_failed": 5,
+      "positive_passed": 7,
+      "filtered_preexisting": 63,
+      "log": {
+        "path": "/private/tmp/zj-business1106-red.log",
+        "sha256": "3345a55645aa8c641ef42ad2c0ab0b48ccb6198b09b991aae03875d661608d39"
+      }
+    },
+    "green": {
+      "files": 4,
+      "tests": 108,
+      "passed": 108,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 48982.197458,
+      "command": "PATH=/opt/homebrew/opt/node@20/bin:$PATH node --test .github/workflows/scripts/__tests__/session-health.test.mjs .github/workflows/scripts/__tests__/session-sync.test.mjs scripts/sessions/check-health.test.mjs scripts/sessions/qr-notification.test.mjs",
+      "log": {
+        "path": "/private/tmp/zj-business1106-green-suite.log",
+        "sha256": "e79e9cd26286ea09c7ce9279e310ac952985daad2bf2be98fab840573951b7cf"
+      }
+    },
+    "product_map": "PASS no drift after exact pinned skill3bbea5b restored from local source into owned cache; initial uncached check failed honestly. No credentials read.",
+    "node_syntax": "node --check scripts/sessions/check-health.js exit0",
+    "diff_check": "git diff --check exit0",
+    "own_locked_dependencies": {
+      "path": "/private/tmp/zj-business1106-npm-ci.log",
+      "sha256": "da3d001671042bd1713c90c554afc37758f3dcdbd80fb737b1f73acc886c8237"
+    }
+  },
+  "current_schedule_failure": {
+    "run_id": 42077481302,
+    "job_id": 127421441641,
+    "head_sha": "9acfa9a469a312396d6209465a80591af3cefe97",
+    "failed_step": "Run health check",
+    "reported": {
+      "douyin": "unknown",
+      "kuaishou": "expired",
+      "toutiao": "expired",
+      "zhihu": "expired",
+      "xiaohongshu": "missing"
+    },
+    "limits": "Reported statuses only, not fresh independent account proof or diagnosis of unknown. No cookie/profile artifacts inspected. Must not bypass authentication to wash green.",
+    "log": {
+      "path": "/private/tmp/zj-business-1106-health-raw.log",
+      "sha256": "fddcc8c9aa36b7b8ad0002e36ee321f3d290b44388f56f326287fe9574c3e1a4"
+    }
+  },
+  "remaining_gaps": [
+    {
+      "id": "http-only-platform-health",
+      "status": "unresolved_source_oracle",
+      "detail": "validateTrue accepts HTTP200 for20slots: shipinhao,toutiao,weibo,zhihu,gongzhonghao(main+3sub each). Actual authenticated success schemas not established; no guessed fields introduced."
+    },
+    {
+      "id": "operator-provider-origin",
+      "status": "existing_unresolved_boundary",
+      "detail": "Browser CLI response includes(path) matcher remains; precise provider origin not established."
+    },
+    {
+      "id": "external-acceptance",
+      "status": "not_closed",
+      "detail": "Old six-gap inventory needs mapping to latest retired/current consumers. No physical acceptance, recipient delivery or fresh platform login occurred."
+    }
+  ],
+  "current_business48": {
+    "base": "9acfa9a469a312396d6209465a80591af3cefe97",
+    "unit_count": 48,
+    "missing": [],
+    "limitation": "Presence is not execution evidence."
+  },
+  "former_six_workflow_metadata": [
+    {
+      "workflow": "agent-qr-windows-verify.yml",
+      "workflow_state": {
+        "id": 285499582,
+        "name": "Agent Windows handler/session contracts + candidate files",
+        "state": "active",
+        "path": ".github/workflows/agent-qr-windows-verify.yml",
+        "updated_at": "2026-11-04T16:05:49.000+08:00"
+      },
+      "runs": [
+        {
+          "id": 29215161334,
+          "head_sha": "4ee7ba71e322f237a401090b593d91228d035310",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-07-13T00:21:04Z",
+          "updated_at": "2026-07-13T00:22:18Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/29215161334"
+        },
+        {
+          "id": 28770850521,
+          "head_sha": "ac47aae875e3ffeba9be7baa76cec156403b621c",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-07-06T05:53:06Z",
+          "updated_at": "2026-07-06T05:54:23Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/28770850521"
+        }
+      ],
+      "receipt": {
+        "path": "/private/tmp/zj-business1106-readonly/agent-qr-windows-verify.yml.json",
+        "sha256": "319112aff604e93d9a2a99dbcd956fe6a00a348c1ba765ee7ffadc2a57e408e3"
+      }
+    },
+    {
+      "workflow": "e2e-line02-android-collect.yml",
+      "workflow_state": {
+        "id": 312393332,
+        "name": "E2E Line02 Android Collect (ROG 真机 nightly)",
+        "state": "deleted",
+        "path": ".github/workflows/e2e-line02-android-collect.yml",
+        "updated_at": "2026-11-05T16:41:30.000+08:00"
+      },
+      "runs": [
+        {
+          "id": 37159047096,
+          "head_sha": "6403763c2f89ac3d7551173d3ab6b3eed3bb6715",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "created_at": "2026-10-03T22:36:57Z",
+          "updated_at": "2026-10-05T23:22:52Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/37159047096"
+        },
+        {
+          "id": 37077927655,
+          "head_sha": "6403763c2f89ac3d7551173d3ab6b3eed3bb6715",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "created_at": "2026-10-02T23:30:47Z",
+          "updated_at": "2026-10-03T22:36:58Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/37077927655"
+        }
+      ],
+      "receipt": {
+        "path": "/private/tmp/zj-business1106-readonly/e2e-line02-android-collect.yml.json",
+        "sha256": "318b87358028165b871aebcabfaedc94cf79ca0472af3e767a9a28ac739b8d22"
+      }
+    },
+    {
+      "workflow": "e2e-line02-keyword-comment.yml",
+      "workflow_state": {
+        "id": 306326896,
+        "name": "E2E Line02 Keyword→Comment (ROG)",
+        "state": "deleted",
+        "path": ".github/workflows/e2e-line02-keyword-comment.yml",
+        "updated_at": "2026-11-05T16:41:30.000+08:00"
+      },
+      "runs": [
+        {
+          "id": 41851356133,
+          "head_sha": "6eb7e637763aa7a4dd339bb99bf469fa9e562a80",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-11-04T14:49:06Z",
+          "updated_at": "2026-11-04T14:58:43Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/41851356133"
+        },
+        {
+          "id": 41848931773,
+          "head_sha": "1535285556608620e3f6b6c59086c1b9760cc25f",
+          "head_branch": "cp-11041805-ci-closeout",
+          "event": "pull_request",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-11-04T14:34:33Z",
+          "updated_at": "2026-11-04T14:44:05Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/41848931773"
+        }
+      ],
+      "receipt": {
+        "path": "/private/tmp/zj-business1106-readonly/e2e-line02-keyword-comment.yml.json",
+        "sha256": "de671d7d66a7473544ecfc9f9d16c0600448c01681a66392c3c929a17c76e04e"
+      }
+    },
+    {
+      "workflow": "nightly-real-machine-staging.yml",
+      "workflow_state": {
+        "id": 309935532,
+        "name": "Nightly Real-Machine Regression (staging)",
+        "state": "deleted",
+        "path": ".github/workflows/nightly-real-machine-staging.yml",
+        "updated_at": "2026-11-05T16:41:30.000+08:00"
+      },
+      "runs": [
+        {
+          "id": 41960667324,
+          "head_sha": "9784012af142f8095dc11cf162bf3f60576f1706",
+          "head_branch": "main",
+          "event": "workflow_dispatch",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-11-05T03:17:36Z",
+          "updated_at": "2026-11-05T03:20:46Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/41960667324"
+        },
+        {
+          "id": 41937845460,
+          "head_sha": "647b35f41231b804650cac852f62ea7424f7443b",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-11-04T23:58:41Z",
+          "updated_at": "2026-11-05T00:02:51Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/41937845460"
+        }
+      ],
+      "receipt": {
+        "path": "/private/tmp/zj-business1106-readonly/nightly-real-machine-staging.yml.json",
+        "sha256": "dcc70631101606b5bf4af37fce2312ee3a466524219fe36dd493865a4de0e433"
+      }
+    },
+    {
+      "workflow": "qr-feishu-notify-verify.yml",
+      "workflow_state": {
+        "id": 285989980,
+        "name": "QR Notification API Acceptance (Windows)",
+        "state": "active",
+        "path": ".github/workflows/qr-feishu-notify-verify.yml",
+        "updated_at": "2026-11-04T16:05:49.000+08:00"
+      },
+      "runs": [
+        {
+          "id": 26683961764,
+          "head_sha": "50fc4c0477bfe253ef16b78c359e41c68c73af24",
+          "head_branch": "main",
+          "event": "workflow_dispatch",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-05-30T12:35:59Z",
+          "updated_at": "2026-05-30T12:42:55Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/26683961764"
+        },
+        {
+          "id": 26682680430,
+          "head_sha": "5209db76b28a87fd508b9c37ee95ce85a8325d5d",
+          "head_branch": "main",
+          "event": "workflow_dispatch",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-05-30T11:29:58Z",
+          "updated_at": "2026-05-30T11:37:39Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/26682680430"
+        }
+      ],
+      "receipt": {
+        "path": "/private/tmp/zj-business1106-readonly/qr-feishu-notify-verify.yml.json",
+        "sha256": "41a227c7022465edb434e3cac24bea15bfcf77605fdd20b80705400c69eb885f"
+      }
+    },
+    {
+      "workflow": "xiaohongshu-operator-session-bind.yml",
+      "workflow_state": {
+        "id": 286078279,
+        "name": "小红书 Session 绑定 — 扫码 + 存 Secret",
+        "state": "active",
+        "path": ".github/workflows/xiaohongshu-operator-session-bind.yml",
+        "updated_at": "2026-05-31T00:01:06.000+08:00"
+      },
+      "runs": [
+        {
+          "id": 26701558236,
+          "head_sha": "2e08868c8466a11a8605b7a130a5229e0f3eb13a",
+          "head_branch": "main",
+          "event": "workflow_dispatch",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-05-31T02:55:42Z",
+          "updated_at": "2026-05-31T03:05:05Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/26701558236"
+        },
+        {
+          "id": 26701334997,
+          "head_sha": "4ab13719004c3ce57b17e8474fb2d0fc4f7c3ab9",
+          "head_branch": "main",
+          "event": "workflow_dispatch",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-05-31T02:42:43Z",
+          "updated_at": "2026-05-31T02:51:41Z",
+          "html_url": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/26701334997"
+        }
+      ],
+      "receipt": {
+        "path": "/private/tmp/zj-business1106-readonly/xiaohongshu-operator-session-bind.yml.json",
+        "sha256": "e87c3c16880e6d68da2ae74f1c4097a4da005f884b8fc58d101de638629d7049"
+      }
+    }
+  ],
+  "retirement_mapping": {
+    "commit": "23d6b01c115a9222afe095fe9212463dd6d6817b",
+    "pr": 2417,
+    "deleted_current_entries": [
+      "nightly-real-machine-staging.yml",
+      "e2e-line02-android-collect.yml",
+      "e2e-line02-keyword-comment.yml"
+    ],
+    "current_required_evidence": [
+      "Brain same-SHA S2 business independent readback",
+      "Brain same-SHA S3 failure/retry no duplicate/cross-tenant output"
+    ],
+    "source": [
+      "scripts/release-gate/__tests__/release-admission.test.mjs",
+      "scripts/release-gate/acceptance-record.mjs"
+    ],
+    "limits": "Old nightly2main/36h condition retired by current release admission; not fulfilled as physical success. Nov5nightly failures are historical diagnostics. Other3standalone sources lack fresh physical proof; runtime fixture callers may have separate code proof."
+  },
+  "boundaries": [
+    "No device/UI/login/QR/account cookie/profile read.",
+    "No real platform/notification/paid-provider calls from tests.",
+    "No workflow dispatch/rerun, credential change, deployment, original-workspace edits or production writes."
+  ]
+}
