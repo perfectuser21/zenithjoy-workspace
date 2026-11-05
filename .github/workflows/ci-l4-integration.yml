@@ -103,6 +103,10 @@ jobs:
             sleep 2
           done
 
+      - name: Verify cancellation contract selection
+        working-directory: apps/api
+        run: node --test tests/contracts/cancel-spec-selection.test.mjs
+
       - name: Run integration tests
         working-directory: apps/api
         run: npx vitest run --config vitest.integration.config.ts

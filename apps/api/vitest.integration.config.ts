@@ -11,6 +11,8 @@ export default defineConfig({
       'tests/integration/ws1/**/*.test.ts',
       'tests/integration/ws5/**/*.test.ts',
     ],
+    // This contract needs real better-auth sessions and the disposable business PG setup.
+    exclude: ['tests/integration/acquisition-cancel-uuid-agent.integration.test.ts', 'node_modules/**'],
     setupFiles: ['tests/integration/setup-env.ts'],
     globalSetup: 'tests/integration/global-setup.ts',
     testTimeout: 30000,

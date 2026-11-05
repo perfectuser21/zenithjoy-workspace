@@ -10337,3 +10337,11 @@ tests:
     status: active
     product: 智能获客历史
     note: "账号、验活、任务和线索历史的网络及 HTTP 失败不得显示为空记录。"
+
+  - id: acquisition-cancel-contract-selection
+    path: apps/api/tests/contracts/cancel-spec-selection.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: AI员工
+    note: "真实 Vitest 文件选择核验取消回执仅在必需 business PG 套件运行，不得漏测。"
