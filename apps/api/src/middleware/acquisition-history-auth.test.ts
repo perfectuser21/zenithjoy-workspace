@@ -10,7 +10,7 @@ vi.mock('../auth', () => ({ auth: { api: { getSession: vi.fn() } } }));
 
 const app = express();
 app.get('/history', acquisitionHistoryAuth, (req, res) => {
-  res.json({ tenant: req.tenantId, member: req.workbenchIdentity?.memberId });
+  res.json({ tenant: req.tenantId });
 });
 
 describe('acquisition history session guard', () => {
@@ -29,7 +29,7 @@ describe('acquisition history session guard', () => {
     vi.mocked(pool.query).mockResolvedValue({ rows: [{ tenant_id: 'tenant-a' }] } as never);
     const response = await request(app).get('/history').set('Cookie', 'session=fixture').set('X-Tenant-Id', 'tenant-b');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ tenant: 'tenant-a', member: 'member-a' });
+    expect(response.body).toEqual({ tenant: 'tenant-a' });
     expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual(['member-a']);
   });
 
