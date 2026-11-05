@@ -33,6 +33,18 @@ test('frozen SDK loads in a cold directory without node_modules',()=>using(async
  assert.equal(sdk.identity.websocket,'8.21.3');
  assert.equal(Object.isFrozen(sdk),true);
 }));
+test('different frozen runtimes cannot mutate each other through the SDK module cache',()=>using(async first=>{
+ const a=await first.load({runtimeRoot:first.root,source:first.source}),probe=Symbol('runtime isolation probe');
+ try{
+  a.GatewayProtocolClient.prototype[probe]=true;
+  await using(async second=>{
+   const b=await second.load({runtimeRoot:second.root,source:{...second.source,commit:'b'.repeat(40)}});
+   assert.equal(b.GatewayProtocolClient.prototype[probe],undefined);
+   assert.notEqual(a.GatewayProtocolClient,b.GatewayProtocolClient);
+   assert.notEqual(a.WebSocket,b.WebSocket);
+  });
+ }finally{delete a.GatewayProtocolClient.prototype[probe];}
+}));
 test('tampered bundle is rejected before evaluating any of its bytes',()=>using(async({root,source,load})=>{
  const key='__officialSdkTamperExecuted';delete globalThis[key];
  writeFileSync(join(root,paths[2]),'globalThis.__officialSdkTamperExecuted=true;\n');
