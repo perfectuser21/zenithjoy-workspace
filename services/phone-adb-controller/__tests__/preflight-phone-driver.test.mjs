@@ -79,3 +79,20 @@ test('a valid tiny PNG cannot stand in for the bound native profile dimensions',
  const {assertPreflightPng}=await import('../preflight-phone-driver.mjs'),png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082','hex');
  assert.throws(()=>assertPreflightPng(png,{width:720,height:1280}),/PREFLIGHT_PNG_DIMENSIONS/);assert.deepEqual(assertPreflightPng(png,{width:1,height:1}),{width:1,height:1});
 });
+
+test('evidence IDs are append-only per extension: existing files and dangling links refuse before any phone action',async t=>{
+ const {symlinkSync}=await import('node:fs'),{createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs'),directory=mkdtempSync(join(tmpdir(),'preflight-append-only-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));let calls=0;
+ const driver=createPreflightPhoneDriver({adb:async()=>{calls++;throw Error('PHONE_MUST_NOT_START');},local:{},evidenceRoot:directory,owner:'fixture_run',deadlineMs:Date.now()+10000,assertResources:async()=>{},width:1,height:1});
+ for(const [command,id,suffix] of [['ui-evidence','fixture_run-ui','.xml'],['snapshot-evidence','fixture_run-png','.png'],['account-current','fixture_run-account','-profile.xml']]){
+  const path=join(directory,id+suffix);writeFileSync(path,'original');await assert.rejects(()=>driver.run(command,id),/PREFLIGHT_EVIDENCE_EXISTS/);assert.equal(readFileSync(path,'utf8'),'original');rmSync(path);symlinkSync(join(directory,'missing'),path);await assert.rejects(()=>driver.run(command,id),/PREFLIGHT_EVIDENCE_EXISTS/);
+ }
+ assert.equal(calls,0);
+});
+
+test('racing evidence publication permits one winner, retains both raw captures, and XML/PNG pairing is allowed',async t=>{
+ const {readdirSync}=await import('node:fs'),{createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs'),directory=mkdtempSync(join(tmpdir(),'preflight-append-race-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082','hex');let pulls=0,resolve;const ready=new Promise(r=>resolve=r);
+ const driver=createPreflightPhoneDriver({adb:async(...args)=>{if(args[0]==='pull'){writeFileSync(args[2],args[1].endsWith('.xml')?'<hierarchy/>':png);if(args[1].endsWith('.png')&&++pulls<=2){if(pulls===2)resolve();await ready;}}return '';},local:{run:async()=>JSON.stringify({})},evidenceRoot:directory,owner:'fixture_run',deadlineMs:Date.now()+10000,assertResources:async()=>{},width:1,height:1});
+ const results=await Promise.allSettled([driver.run('snapshot-evidence','fixture_run-pair'),driver.run('snapshot-evidence','fixture_run-pair')]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.filter(r=>r.status==='rejected').length,1);assert.deepEqual(readFileSync(join(directory,'fixture_run-pair.png')),png);assert.equal(readdirSync(directory).filter(p=>p.endsWith('.tmp')).length,2);
+ assert.equal((await driver.run('ui-evidence','fixture_run-pair')).trim(),join(directory,'fixture_run-pair.xml'));assert.equal(readFileSync(join(directory,'fixture_run-pair.xml'),'utf8'),'<hierarchy/>');await assert.rejects(()=>driver.run('ui-evidence','fixture_run-pair'),/PREFLIGHT_EVIDENCE_EXISTS/);
+});

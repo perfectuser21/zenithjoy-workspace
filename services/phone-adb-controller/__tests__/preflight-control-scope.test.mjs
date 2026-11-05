@@ -26,3 +26,15 @@ test('owned local PG pool enforces the original absolute deadline without closin
  await assert.rejects(()=>owned.pool.query('SELECT pg_sleep(2)'));const proof=await owned.transport.close();assert.equal(proof.execution_stopped,false);assert.equal(proof.deadline_exceeded,true);assert.equal(owned.pool.ended,true);assert.ok(Date.now()-start<1500);
  const separate=new Pool(f.connection);try{assert.equal((await separate.query('SELECT 1 AS actual')).rows[0].actual,1);}finally{await separate.end();}
 });
+
+
+test('explicit existing cloud registry metadata freezes path/full bytes/row and rejects restart drift without default fallback',async t=>{
+ const {freezePreflightProfile,assertPreflightProfile}=await import('../preflight-control-scope.mjs');assert.equal(typeof freezePreflightProfile,'function');
+ const directory=realpathSync(mkdtempSync(join(os.tmpdir(),'preflight-cloud-profile-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));const path=join(directory,'cloud-phone-test-profiles.tsv');
+ const text='profile\tserial\tmodel\twidth\theight\tenabled\ncloud-phone-test\t47.100.213.173:10001\tiPad Pro\t720\t1280\ttrue\n';writeFileSync(path,text,{mode:0o600});
+ const env={HOME:directory,P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',DOUYIN_PHONE_REGISTRY:path},profile=freezePreflightProfile({env});assert.equal(profile.path,path);assert.equal(profile.sha256,sha(Buffer.from(text)));assert.deepEqual([profile.model,profile.width,profile.height,profile.enabled],['iPad Pro',720,1280,true]);
+ const frozen={agent_input:{profile:env.P,serial:env.SERIAL},preflight_profile:profile};assert.deepEqual(assertPreflightProfile({env,frozen}),profile);assert.throws(()=>assertPreflightProfile({env,frozen:{...frozen,preflight_profile:undefined}}),/PREFLIGHT_PROFILE/);
+ const another=join(directory,'other.tsv');writeFileSync(another,text,{mode:0o600});assert.throws(()=>assertPreflightProfile({env:{...env,DOUYIN_PHONE_REGISTRY:another},frozen}),/PREFLIGHT_PROFILE/);
+ for(const change of [text.replace('720','721'),text.replace('iPad Pro','Other'),text.replace('true','0'),text.replace(':10001',':10002'),text+'#different full-file bytes\n']){writeFileSync(path,change);assert.throws(()=>assertPreflightProfile({env,frozen}),/PREFLIGHT_PROFILE/);}writeFileSync(path,text);
+ assert.throws(()=>freezePreflightProfile({env:{...env,DOUYIN_PHONE_REGISTRY:undefined}}),/PREFLIGHT_PROFILE/);
+});

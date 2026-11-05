@@ -11,6 +11,11 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync,
 import { resolve, dirname, sep, basename, isAbsolute } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
+export function validatePreflightProfile(value){
+ const keys=['schema_version','path','sha256','profile','serial','model','width','height','enabled'];
+ if(!value||Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k))||value.schema_version!==1||!isAbsolute(value.path||'')||resolve(value.path)!==value.path||!/^[-A-Za-z0-9_.]+$/.test(value.profile||'')||!(/^[-A-Za-z0-9_]+$/.test(value.serial||'')||isCanonicalTcpDeviceSerial(value.serial))||!/^[a-f0-9]{64}$/.test(value.sha256||'')||typeof value.model!=='string'||!value.model.trim()||/[\r\n]/.test(value.model)||!['width','height'].every(k=>Number.isSafeInteger(value[k])&&value[k]>0)||value.enabled!==true)throw Error('PREFLIGHT_PROFILE_INVALID');
+ return structuredClone(value);
+}
 const agentWorkflows=new Set(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring']);
 export function executionModeInput(env){
  const mode=Object.hasOwn(env,'LEADGEN_EXECUTION_MODE')?env.LEADGEN_EXECUTION_MODE:'code';
@@ -208,9 +213,10 @@ export async function freezeDefinition(o) {
   const executionMode=executionModeInput({WF_BRAIN_WORKFLOW:o.workflowKey,...(Object.hasOwn(o,'executionMode')?{LEADGEN_EXECUTION_MODE:o.executionMode}:{})});
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
   const fixedAgentInput=executionMode==='agent'?validateAgentInput(o.agentInput):null;
-  const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null;
-  if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
-  if(hasPreflight&&(executionMode!=='agent'||!['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey)||!o.preflightPg||!o.preflightControlScope||Object.keys(o.preflightPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.preflightPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('PREFLIGHT_INPUT_MODE_INVALID');
+  const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null||o.preflightProfile!=null;
+  if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null)||canonical(old.preflight_profile||null)!==canonical(o.preflightProfile||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
+  if(hasPreflight&&(executionMode!=='agent'||!['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey)||!o.preflightPg||!o.preflightControlScope||!o.preflightProfile||Object.keys(o.preflightPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.preflightPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('PREFLIGHT_INPUT_MODE_INVALID');
+  if(hasPreflight){const p=validatePreflightProfile(o.preflightProfile);if(p.profile!==fixedAgentInput?.profile||p.serial!==fixedAgentInput?.serial)throw Error('PREFLIGHT_PROFILE_IDENTITY');}
   if(executionMode==='code'&&o.agentInput!=null)throw Error('AGENT_INPUT_MODE_INVALID');
   if(fixedAgentInput&&(fixedAgentInput.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(key=>o.runIdentity[key]!==fixedAgentInput[key==='tag'?'run_tag':key])))throw Error('AGENT_INPUT_FREEZE_SCOPE_INVALID');
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).agent_input||null)!==canonical(fixedAgentInput))throw Error('AGENT_INPUT_RESUME_MISMATCH');
@@ -296,7 +302,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope)}:{}),
+    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};

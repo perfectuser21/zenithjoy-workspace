@@ -291,3 +291,7 @@ Worker 截止后不再准入新业务或手机动作，原 receipt 窗口只用�
 预检在第一次 ADB 请求（包括只读请求）前原子发布带 epoch 与强制审查标记的本人本地锁。普通命令失败与 host 叶子停止证明分开记录；缺停止证明时标记保留，旧 TTL 回收入口不得重领。Worker 从未派发且未做 UI 操作时，仅 Code 私有 NoLaunch 能力可授权释放同 owner/epoch 的资源，原桌面指标保持 0，原 Judge 仍可判 needs_review。
 
 控制面拒绝带 query/hash 或歧义 authority 的数据库 URI，并拒绝非空 PG* 环境覆盖；不改进程全局环境。SSH 只使用由已冻结 known_hosts 提取的唯一期望 key 的 run 私有副本与精确 HostKeyAlgorithms，原全局文件不变。上述证明覆盖本机受控叶子与连接返还，不代表远端 PG 提交结果、Android App 全集或尚未闭合的正式 Caller。
+
+Agent 101/102 的 `preflight_profile` 在正式 prepare 阶段冻结规范 registry 路径、全文件摘要及唯一所选 profile/serial/model/尺寸/enabled。运行和续跑逐项复核，缺字段的旧 Agent 快照不能绑定当前表补齐。MMV 云入口必须显式传入既有 `DOUYIN_PHONE_REGISTRY=$HOME/.config/openclaw/cloud-phone-test-profiles.tsv`；不新建或修改全局表，这份静态元数据也不代表本轮账号或媒体验证已通过。
+
+采证的同一公开 ID+扩展名仅允许提交一次，重复文件、目录或悬空链接均在新手机操作前拒绝；XML/PNG 可以同 ID 各一次配对。提交采用排他/no-follow写入并 fsync，随机采证原件同时保留，竞争失败不删除赢家、不重发手机动作。

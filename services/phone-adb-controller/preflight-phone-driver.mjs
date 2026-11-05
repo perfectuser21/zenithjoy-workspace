@@ -1,5 +1,5 @@
 // Parent executes the preflight sequence; only fixed ADB/local leaves cross the native boundary.
-import {readFileSync,writeFileSync,lstatSync,renameSync,chmodSync} from 'node:fs';import {join} from 'node:path';import {randomUUID} from 'node:crypto';import {inflateSync} from 'node:zlib';
+import {readFileSync,writeFileSync,lstatSync,chmodSync,openSync,fsyncSync,closeSync,constants} from 'node:fs';import {join,dirname} from 'node:path';import {randomUUID} from 'node:crypto';import {inflateSync} from 'node:zlib';
 const packageName='com.ss.android.ugc.aweme';
 export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile,serial,model,width,height,expectedAccount,deadlineMs,assertResources,purpose='preflight'}){
  let sealed=false;
@@ -7,10 +7,13 @@ export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile
  const call=async(...args)=>{await active();return adb(...args);};
  const wait=async ms=>{await active();await new Promise(r=>setTimeout(r,Math.max(0,Math.min(ms,deadlineMs-Date.now()))));await active();};
  const evidence=id=>{if(!/^[-A-Za-z0-9_.]{1,160}$/.test(id||'')||!id.startsWith(owner+'-'))throw Error('PREFLIGHT_EVIDENCE_SCOPE');return join(evidenceRoot,id);};
+ const absent=path=>{try{lstatSync(path);}catch(error){if(error.code==='ENOENT')return;throw error;}throw Error('PREFLIGHT_EVIDENCE_EXISTS');};
+ const syncRaw=path=>{const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);try{fsyncSync(fd);}finally{closeSync(fd);}const directory=openSync(dirname(path),constants.O_RDONLY|constants.O_NOFOLLOW);try{fsyncSync(directory);}finally{closeSync(directory);}};
+ const publish=(path,bytes)=>{const fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}const directory=openSync(dirname(path),constants.O_RDONLY|constants.O_NOFOLLOW);try{fsyncSync(directory);}finally{closeSync(directory);}};
  const capture=async id=>{
   const prefix=evidence(id),remote='/sdcard/preflight-'+randomUUID()+'.xml',path=prefix+'-'+randomUUID()+'.xml';
   await call('shell','uiautomator','dump',remote);await call('pull',remote,path);await active();
-  const st=lstatSync(path);if(!st.isFile()||st.isSymbolicLink()||st.size>5*1024*1024)throw Error('PREFLIGHT_UI_INVALID');chmodSync(path,0o600);
+  const st=lstatSync(path);if(!st.isFile()||st.isSymbolicLink()||st.size>5*1024*1024)throw Error('PREFLIGHT_UI_INVALID');chmodSync(path,0o600);syncRaw(path);
   const text=readFileSync(path,'utf8'),facts=JSON.parse(await local.run('ui',text));await active();return {path,text,facts};
  };
  const foreground=async()=>String(await call('shell','dumpsys','window','displays')).replaceAll('\r','').split('\n').find(line=>/^\s*(mCurrentFocus|mFocusedApp)\s*=/.test(line)&&!/=null(?:\s|$)/.test(line))?.trim()||'unknown';
@@ -25,13 +28,13 @@ export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile
    return command==='foreground'?`foreground=${(await foreground()).trim()}\n`:call('shell','dumpsys','window');
   }
   if(command==='ui-evidence'){
-   if(args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');const screen=await capture(args[0]),path=evidence(args[0])+'.xml';renameSync(screen.path,path);return path+'\n';
+   if(args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');const path=evidence(args[0])+'.xml';absent(path);const screen=await capture(args[0]);publish(path,screen.text);return path+'\n';
   }
   if(command==='snapshot-evidence'){
    if(!Number.isSafeInteger(width)||width<1||!Number.isSafeInteger(height)||height<1)throw Error('PREFLIGHT_PROFILE_DIMENSIONS_UNVERIFIED');
-   if(args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');const path=evidence(args[0])+'.png',temp=path+'.'+randomUUID()+'.tmp',remote='/sdcard/preflight-'+randomUUID()+'.png';
+   if(args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');const path=evidence(args[0])+'.png',temp=path+'.'+randomUUID()+'.tmp',remote='/sdcard/preflight-'+randomUUID()+'.png';absent(path);
    await call('shell','screencap','-p',remote);await call('pull',remote,temp);await active();const st=lstatSync(temp);if(!st.isFile()||st.isSymbolicLink()||st.size>12*1024*1024)throw Error('PREFLIGHT_PNG_INVALID');
-   const png=readFileSync(temp);assertPreflightPng(png,{width,height});chmodSync(temp,0o600);renameSync(temp,path);return path+'\n';
+   chmodSync(temp,0o600);syncRaw(temp);const png=readFileSync(temp);assertPreflightPng(png,{width,height});publish(path,png);return path+'\n';
   }
   if(command==='open-app'&&purpose==='preflight'){
    if(args.length)throw Error('PREFLIGHT_PHONE_COMMAND');await target();await call('shell','monkey','-p',packageName,'-c','android.intent.category.LAUNCHER','1');
@@ -54,7 +57,7 @@ export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile
    const focus=await foreground();return `profile=${profile}\nserial=${serial}\nmodel=${model}\nstate=device\ncall_state=0\nforeground=${focus.trim()}\n`;
   }
   if(purpose!=='preflight'||command!=='account-current'||args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');
-  const id=args[0];evidence(id);if(!isDouyin(await foreground()))throw Error('PREFLIGHT_ACCOUNT_NAVIGATION_REFUSED');
+  const id=args[0];evidence(id);absent(evidence(id+'-profile')+'.xml');if(!isDouyin(await foreground()))throw Error('PREFLIGHT_ACCOUNT_NAVIGATION_REFUSED');
   let screen=await capture(id+'-before');
   if(['foreign','partial'].includes(screen.facts.kind))throw Error('PREFLIGHT_ACCOUNT_NAVIGATION_REFUSED');
   if(screen.facts.kind!=='own'){
@@ -63,9 +66,9 @@ export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile
    screen=await capture(id+'-profile');if(screen.facts.kind!=='own')throw Error('PREFLIGHT_ACCOUNT_NAVIGATION_REFUSED');
   }
   if(!screen.facts.account?.douyin_id||screen.facts.account.douyin_id!==expectedAccount)throw Error('PREFLIGHT_ACCOUNT_MISMATCH');
-  const path=evidence(id+'-profile')+'.xml',temporary=path+'.'+randomUUID()+'.tmp';
+  const path=evidence(id+'-profile')+'.xml';
   // Publish only the independently parsed, verified own-account screen.
-  writeFileSync(temporary,screen.text,{flag:'wx',mode:0o600});renameSync(temporary,path);
+  publish(path,screen.text);
   return `nickname=${screen.facts.account.nickname}\ndouyin_id=${screen.facts.account.douyin_id}\nprofile_xml=${path}\n`;
  };
  return {run,seal:()=>{sealed=true;},capture};

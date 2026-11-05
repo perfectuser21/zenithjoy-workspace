@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {freezePreflightControlScope} from './preflight-control-scope.mjs';
+import {freezePreflightControlScope,freezePreflightProfile} from './preflight-control-scope.mjs';
 import {preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
 import {readProducerDescriptor} from './producer-descriptor.mjs';
 import {createHash} from 'node:crypto';
@@ -190,8 +190,8 @@ export async function run(args){
       const machine=await request('/api/brain/machines/mac-mini-m4-us');
       runtimeTransport=selectMmvTransport([machine],e.WF_MMV_SSH_ROUTE);
     }
-    const preflightControlScope=freezePreflightControlScope({root,env:e,runtimeTransport}),preflightPg=preflightControlScope?preflightPgLockIdentity({runtimeRoot:root}):undefined;
-    await freezeDefinition({preflightControlScope,preflightPg,executionMode,agentInput:fixedAgentInput,discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
+    const preflightControlScope=freezePreflightControlScope({root,env:e,runtimeTransport}),preflightPg=preflightControlScope?preflightPgLockIdentity({runtimeRoot:root}):undefined,preflightProfile=preflightControlScope?freezePreflightProfile({env:e}):undefined;
+    await freezeDefinition({preflightControlScope,preflightPg,preflightProfile,executionMode,agentInput:fixedAgentInput,discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){
       // prepare冻结入口统一在freezeDefinition中记录，不能由业务活动改投影台账。
       const snapshot=readFrozen(dir);
