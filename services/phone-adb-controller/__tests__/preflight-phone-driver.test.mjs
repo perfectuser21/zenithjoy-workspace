@@ -1,10 +1,11 @@
+import {preflightTestPython} from './helpers/preflight-test-python.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join,dirname} from 'node:path';import {createHash} from 'node:crypto';
 const root=dirname(new URL('../leadgen-handlers.mjs',import.meta.url).pathname),hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
 async function rig(t,trees){
  const {createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs'),{startPreflightLocalLeaves}=await import('../preflight-local-leaves.mjs');
  const directory=mkdtempSync(join(tmpdir(),'preflight-driver-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
- const local=await startPreflightLocalLeaves({root,directory,python:{path:'/usr/bin/python3',sha256:hash('/usr/bin/python3')},sourceFiles:{'preflight-local-step.py':hash(join(root,'preflight-local-step.py'))},deadlineMs:Date.now()+10000});t.after(()=>local.close());
+ const local=await startPreflightLocalLeaves({root,directory,python:{path:preflightTestPython,sha256:hash(preflightTestPython)},sourceFiles:{'preflight-local-step.py':hash(join(root,'preflight-local-step.py'))},deadlineMs:Date.now()+10000});t.after(()=>local.close());
  let index=0;const calls=[];const adb=async(...args)=>{calls.push(args);if(args.join(' ')==='shell dumpsys window displays')return 'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}\n';if(args[0]==='pull'){writeFileSync(args[2],trees[Math.min(index++,trees.length-1)]);return '';}if(args[0]==='shell'&&['uiautomator','input'].includes(args[1]))return '';throw Error('UNEXPECTED_ADB:'+args.join(' '));};
  const driver=createPreflightPhoneDriver({adb,local,evidenceRoot:directory,owner:'fixture_run',profile:'fixture',serial:'SERIAL',model:'MODEL',expectedAccount:'44997267357',deadlineMs:Date.now()+10000,assertResources:async()=>{}});
  return {driver,calls,directory};
@@ -73,7 +74,7 @@ test('new preflight PNG validation rejects intact signatures with corrupted CRC 
 test('PNG chunk type high bits cannot alias IHDR after recomputing a valid CRC',async()=>{
  const {assertPreflightPng}=await import('../preflight-phone-driver.mjs'),{spawnSync}=await import('node:child_process');
  const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082','hex');
- const p=spawnSync('/usr/bin/python3',['-I','-S','-c',"import sys,zlib,struct;p=bytearray(sys.stdin.buffer.read());p[12]=0xc9;p[29:33]=struct.pack('>I',zlib.crc32(p[12:29]));sys.stdout.buffer.write(p)"],{input:png});assert.equal(p.status,0);assert.throws(()=>assertPreflightPng(p.stdout),/PREFLIGHT_PNG_INVALID/);
+ const p=spawnSync(preflightTestPython,['-I','-S','-c',"import sys,zlib,struct;p=bytearray(sys.stdin.buffer.read());p[12]=0xc9;p[29:33]=struct.pack('>I',zlib.crc32(p[12:29]));sys.stdout.buffer.write(p)"],{input:png});assert.equal(p.status,0);assert.throws(()=>assertPreflightPng(p.stdout),/PREFLIGHT_PNG_INVALID/);
 });
 test('a valid tiny PNG cannot stand in for the bound native profile dimensions',async()=>{
  const {assertPreflightPng}=await import('../preflight-phone-driver.mjs'),png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082','hex');

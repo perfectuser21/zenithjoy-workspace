@@ -1,8 +1,9 @@
+import {preflightTestPython} from './helpers/preflight-test-python.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync,realpathSync,symlinkSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {spawnSync} from 'node:child_process';
 const helper=new URL('../preflight-local-step.py',import.meta.url).pathname;
 function invoke(root,operation,owner='fresh_fixture',epoch='00000000-0000-4000-8000-000000000001',receipt=null){
  const code=`import importlib.util,sys,json\ns=importlib.util.spec_from_file_location('fixed',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ntry: print(json.dumps(m.lock_record(sys.argv[2], 'SERIAL',sys.argv[3],sys.argv[4],sys.argv[5],receipt=json.loads(sys.argv[6]))))\nexcept Exception: sys.exit(2)\n`;
- return spawnSync('/usr/bin/python3',['-I','-S','-c',code,helper,root,operation,owner,epoch,JSON.stringify(receipt)],{encoding:'utf8'});
+ return spawnSync(preflightTestPython,['-I','-S','-c',code,helper,root,operation,owner,epoch,JSON.stringify(receipt)],{encoding:'utf8'});
 }
 test('pure lock operation is fresh/exact: refuses adoption and foreign renew, preserves original owner',t=>{
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'preflight-lock-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
@@ -37,10 +38,10 @@ roots=p('phone-lock-root');roots.verify_root=roots.verify
 m.peer=lambda name: roots if name=='phone-lock-root' else p(name)
 sys.stdin=io.StringIO(sys.argv[2]);sys.argv=['fixed','lock'];m.main()
 `;
- const p=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)','/usr/bin/python3','-I','-S','-c',code,helper,JSON.stringify(request)],{encoding:'utf8'});
+ const p=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)',preflightTestPython,'-I','-S','-c',code,helper,JSON.stringify(request)],{encoding:'utf8'});
  assert.equal(p.status,0,p.stderr);assert.equal(JSON.parse(p.stdout).readback_owner,'fresh_fixture');
  assert.equal(JSON.parse(readFileSync(request.receipt.path)).latest.readback_owner,'fresh_fixture');
- const denied=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)','/usr/bin/python3','-I','-S','-c',code,helper,JSON.stringify(request)],{encoding:'utf8'});assert.notEqual(denied.status,0);
+ const denied=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)',preflightTestPython,'-I','-S','-c',code,helper,JSON.stringify(request)],{encoding:'utf8'});assert.notEqual(denied.status,0);
  const doc=JSON.parse(readFileSync(request.receipt.path));assert.equal(doc.events.length,2);assert.equal(doc.latest.result,'fail');assert.equal(doc.latest.readback_owner,'fresh_fixture');
 });
 
@@ -71,13 +72,13 @@ test('Node and Python accept exactly the same canonical TCP serial vectors witho
  const {isCanonicalTcpDeviceSerial}=await import('../runtime-definition.mjs');
  const vectors=['47.100.213.173:10001','47.100.213.173:10002','0.0.0.0:1','255.255.255.255:65535','047.100.213.173:10001','47.100.213.173:010001','47.100.213.173:0','256.100.213.173:10001','47.100.213.173:65536','host:10001','[::1]:10001','47.100.213.173:10001/alias',' 47.100.213.173:10001','47.100.213.173:10001\n'];
  const code="import importlib.util,sys,json;s=importlib.util.spec_from_file_location('fixed',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);print(json.dumps([m.is_canonical_tcp_serial(v) for v in json.loads(sys.argv[2])]))";
- const p=spawnSync('/usr/bin/python3',['-I','-S','-c',code,helper,JSON.stringify(vectors)],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),vectors.map(isCanonicalTcpDeviceSerial));
+ const p=spawnSync(preflightTestPython,['-I','-S','-c',code,helper,JSON.stringify(vectors)],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),vectors.map(isCanonicalTcpDeviceSerial));
 });
 
 test('a crashed parent leaves a durable proof-required lock that original compatible TTL acquire cannot reap',{skip:process.platform!=='darwin'},t=>{
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'preflight-lock-crash-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const code="import importlib.util,sys,os;s=importlib.util.spec_from_file_location('fixed',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);m.lock_record(sys.argv[2],'SERIAL','acquire','fresh_fixture','00000000-0000-4000-8000-000000000001');os._exit(71)";
- const crashed=spawnSync('/usr/bin/python3',['-I','-S','-c',code,helper,dir]);assert.equal(crashed.status,71);writeFileSync(join(dir,'SERIAL.lock/acquired_at'),'1\n');
+ const crashed=spawnSync(preflightTestPython,['-I','-S','-c',code,helper,dir]);assert.equal(crashed.status,71);writeFileSync(join(dir,'SERIAL.lock/acquired_at'),'1\n');
  const lib=new URL('../phone-lock-lib.sh',import.meta.url).pathname,zsh=`set -e\nsource "$1"\nLOCK_ROOT="$2"; LOCK_DIR="$2/SERIAL.lock"; LOCK_TTL_SECONDS=1\nnormalize_run_id(){ print -r -- "$1"; }\nrequire_run_id(){ [[ -n "$1" ]]; }\nsame_run_lock(){ [[ "$1" == "$2" ]]; }\nlock_is_stale(){ return 0; }\ndie(){ print -u2 -- REFUSED; return 1; }\nlock_acquire foreign_run compatible`;
  const attempted=spawnSync('/bin/zsh',['-f','-c',zsh,'fixture',lib,dir],{encoding:'utf8'});assert.notEqual(attempted.status,0);assert.equal(readFileSync(join(dir,'SERIAL.lock/owner'),'utf8').trim(),'fresh_fixture');assert.equal(readFileSync(join(dir,'SERIAL.lock/preflight_epoch'),'utf8').trim(),'00000000-0000-4000-8000-000000000001');assert.equal(readFileSync(join(dir,'SERIAL.lock/standalone_review_required'),'utf8').trim(),'fresh_fixture');
 });

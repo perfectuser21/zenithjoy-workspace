@@ -357,12 +357,12 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import {spawnSync} from 'node:child_process';
-          import {readFileSync,realpathSync,statSync} from 'node:fs';
+          import {readFileSync,realpathSync,statSync,appendFileSync} from 'node:fs';
           import {resolve,isAbsolute} from 'node:path';
           import {createHash} from 'node:crypto';
           const hash=b=>createHash('sha256').update(b).digest('hex');
           const env={PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:process.env.RUNNER_TEMP,TMPDIR:process.env.RUNNER_TEMP,LANG:'en_US.UTF-8',...(process.env.DEVELOPER_DIR?{DEVELOPER_DIR:process.env.DEVELOPER_DIR}:{})};
-          const call=(command,args,input='')=>spawnSync(command,args,{env,input,encoding:'utf8',timeout:10000,maxBuffer:65536});
+          const call=(command,args,input='',selectedEnv=env)=>spawnSync(command,args,{env:selectedEnv,input,encoding:'utf8',timeout:10000,maxBuffer:65536});
           const report=(name,result)=>console.log(JSON.stringify({name,code:result.status,signal:result.signal,error_code:result.error?.code||null,stderr_bytes:Buffer.byteLength(result.stderr||''),stderr_sha256:hash(result.stderr||''),stderr_classes:['xcrun','Operation not permitted','PermissionError','Resource temporarily unavailable','No such file'].filter(s=>(result.stderr||'').includes(s)),stdout:result.stdout?.slice(0,1000)}));
           const discover=call('/usr/bin/python3',['-I','-S','-c','import sys;print(sys.executable)']);report('system-python-discovery',discover);
           const helper=resolve('services/phone-adb-controller/preflight-local-step.py'),input='<hierarchy><node text="抖音号：fixture"/><node text="编辑主页"/></hierarchy>',args=['-I','-S',helper,'ui'],profile='(version 1)(allow default)(deny process-fork)';
@@ -373,6 +373,14 @@ jobs:
             const canonical=realpathSync(physical);console.log(JSON.stringify({name:'physical-python-identity',path:physical,realpath:canonical,sha256:hash(readFileSync(canonical))}));
             report('physical-python-sandbox-helper',call('/usr/bin/sandbox-exec',['-p',profile,canonical,...args],input));
             report('physical-python-fork-negative',call('/usr/bin/sandbox-exec',['-p',profile,canonical,'-I','-S','-c','import os;os.fork()']));
+            const {DEVELOPER_DIR:_sdk,...minimalEnv}=env;
+            report('minimal-env-system-python-plain-helper',call('/usr/bin/python3',args,input,minimalEnv));
+            report('minimal-env-system-python-sandbox-helper',call('/usr/bin/sandbox-exec',['-p',profile,'/usr/bin/python3',...args],input,minimalEnv));
+            const positive=call('/usr/bin/sandbox-exec',['-p',profile,canonical,...args],input,minimalEnv),negative=call('/usr/bin/sandbox-exec',['-p',profile,canonical,'-I','-S','-c','import os;os.fork()'],'',minimalEnv);
+            report('minimal-env-physical-python-sandbox-helper',positive);report('minimal-env-physical-python-fork-negative',negative);
+            if(positive.status!==0||positive.signal||JSON.parse(positive.stdout).account?.douyin_id!=='fixture'||negative.status!==1||negative.signal||!/Operation not permitted|Resource temporarily unavailable/.test(negative.stderr||''))throw Error('PHYSICAL_TEST_PYTHON_NOFORK_UNVERIFIED');
+            if(/[\r\n]/.test(canonical))throw Error('PHYSICAL_TEST_PYTHON_PATH_INVALID');
+            if(process.env.GITHUB_ENV)appendFileSync(process.env.GITHUB_ENV,'PREFLIGHT_TEST_PYTHON_BIN='+canonical+'\n');
           }
           NODE
       - name: Run preflight native lifecycle tests on Darwin
