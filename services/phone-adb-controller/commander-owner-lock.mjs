@@ -69,6 +69,8 @@ for line in iter(lambda:sys.stdin.buffer.readline(4*1024*1024+1),b''):
  except Exception: result={'id':q.get('id'),'ok':False}
  print(json.dumps(result),flush=True)
 `;
+// The bounded observer uses the identical lock-holder protocol and mutations.
+export const COMMANDER_OWNER_LOCK_PYTHON=helper;
 const unknown=()=>Object.assign(Error('COMMANDER_OWNER_TURN_UNRESOLVED'),{executionStopped:false});
 export async function acquireOwnerLock(file){
  const guard=file+'.guard',fd=openSync(guard,constants.O_RDWR|constants.O_CREAT|constants.O_NOFOLLOW,0o600),stat=fstatSync(fd);

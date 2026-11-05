@@ -33,7 +33,7 @@ export {workflowCommanderSession,reserveWorkflowCommanderTurn,assertWorkflowOwne
 import {workflowCommanderSession,reserveWorkflowCommanderTurn,ownerPending} from './commander-owner-state.mjs';
 export {reconcileWorkflowCommanderTurn} from './commander-owner-reconcile.mjs';
 
-export function openClawCommander({ agent = 'work-commander', model, timeoutMs = 60000, execute = exec,home=homedir() } = {}) {
+export function openClawCommander({ agent = 'work-commander', model, timeoutMs = 60000, execute = exec,home=homedir(),reserveOwner=reserveWorkflowCommanderTurn } = {}) {
   if(agent!=='work-commander')throw Error('COMMANDER_OWNER_AGENT_INVALID');
   return async receipt => {
     const key = workflowCommanderSession(receipt);
@@ -44,7 +44,7 @@ export function openClawCommander({ agent = 'work-commander', model, timeoutMs =
       modelRun:true,idempotencyKey:requestId,message:workflowProgressRule+prompt};
     if(model)params.model=model;
     const args=['gateway','call','agent','--expect-final','--json','--timeout',String(timeoutMs+5000),'--params',JSON.stringify(params)];
-    const reservation=await reserveWorkflowCommanderTurn(receipt,{home});
+    const reservation=await reserveOwner(receipt,{home});
     const started=performance.now();let status='transport_error';
     try {
       await reservation.check();
