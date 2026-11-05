@@ -43,3 +43,19 @@ sys.stdin=io.StringIO(sys.argv[2]);sys.argv=['fixed','lock'];m.main()
  const denied=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)','/usr/bin/python3','-I','-S','-c',code,helper,JSON.stringify(request)],{encoding:'utf8'});assert.notEqual(denied.status,0);
  const doc=JSON.parse(readFileSync(request.receipt.path));assert.equal(doc.events.length,2);assert.equal(doc.latest.result,'fail');assert.equal(doc.latest.readback_owner,'fresh_fixture');
 });
+
+test('fresh scoped release requires the same epoch and emits original release receipt',t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'preflight-lock-release-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ assert.equal(invoke(dir,'acquire').status,0);
+ assert.equal(invoke(dir,'release','fresh_fixture','00000000-0000-4000-8000-000000000002').status,2);
+ assert.equal(readFileSync(join(dir,'SERIAL.lock/owner'),'utf8').trim(),'fresh_fixture');
+ const path=join(dir,'fresh_fixture-lock-release.json'),receipt={path,run:'fresh_fixture',profile:'fixture',serial:'SERIAL'};
+ const released=invoke(dir,'release','fresh_fixture',undefined,receipt);assert.equal(released.status,0,released.stderr);
+ assert.equal(JSON.parse(released.stdout).lock,'released');assert.equal(existsSync(join(dir,'SERIAL.lock')),false);
+ const doc=JSON.parse(readFileSync(path));assert.equal(doc.schema,'lock_receipt_v1');assert.equal(doc.latest.result,'ok');assert.equal(doc.latest.readback_owner,'none');
+});
+
+test('scoped release refuses a changed inventory before removing any owner field',t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'preflight-lock-extra-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));assert.equal(invoke(dir,'acquire').status,0);
+ writeFileSync(join(dir,'SERIAL.lock/foreign-evidence'),'preserve');assert.equal(invoke(dir,'release').status,2);assert.equal(readFileSync(join(dir,'SERIAL.lock/owner'),'utf8').trim(),'fresh_fixture');
+});

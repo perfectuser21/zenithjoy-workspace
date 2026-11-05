@@ -20,3 +20,7 @@ test('actual pinned C leaf cannot fork then setsid escape; failure never yields 
 test('actual exit1 is a returned host leaf, not evidence of an unclosed OS domain',{skip:process.platform!=='darwin'},async t=>{
  const r=await rig(t);await assert.rejects(()=>r.domain.adb('shell','exit-one'),/PREFLIGHT_ADB_REQUEST_FAILED/);const closed=await r.domain.close();assert.equal(closed.execution_stopped,true);assert.equal(closed.command_failures,1);
 });
+
+test('returned parser refusal closes the complete host scope while preserving command failure',{skip:process.platform!=='darwin'},async t=>{
+ const r=await rig(t);await assert.rejects(()=>r.domain.local('ui','not XML'),/PREFLIGHT_LOCAL_REQUEST_FAILED/);const closed=await r.domain.close();assert.equal(closed.execution_stopped,true);assert.equal(closed.command_failures,1);assert.equal(closed.local.leaves[0].code,2);
+});

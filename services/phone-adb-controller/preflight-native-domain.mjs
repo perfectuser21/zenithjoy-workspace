@@ -1,10 +1,10 @@
 // Proof domain: only this parent's local nofork leaves, not Android/PG/sshd service OS domains.
-import {createConnection} from 'node:net';import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';import {startPreflightLocalLeaves} from './preflight-local-leaves.mjs';
+import {createConnection} from 'node:net';import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';import {startPreflightLocalLeaves,preflightLocalLeafReturned} from './preflight-local-leaves.mjs';
 const records=new WeakMap(),returnedErrors=new WeakSet();
 export function preflightDomainClosure(domain){const r=records.get(domain);return r?.proof?.execution_stopped===true?r.capability:null;}
 export async function startPreflightNativeDomain({root,directory,sourceFiles,python,policy,serial,workerDeadlineMs,receiptDeadlineMs,env=process.env}){
  if(!Number.isSafeInteger(workerDeadlineMs)||!Number.isSafeInteger(receiptDeadlineMs)||workerDeadlineMs>=receiptDeadlineMs||Date.now()>=workerDeadlineMs)throw Error('PREFLIGHT_NATIVE_DEADLINE');
- const local=await startPreflightLocalLeaves({root,directory,sourceFiles,python,deadlineMs:workerDeadlineMs,env});let adb;
+ const local=await startPreflightLocalLeaves({root,directory,sourceFiles,python,deadlineMs:workerDeadlineMs,receiptDeadlineMs,env});let adb;
  try{
   if(Date.now()>=workerDeadlineMs)throw Error('PREFLIGHT_NATIVE_DEADLINE');
   adb=await startCollectionLeafProducer({directory,policy,serial,deadlineMs:receiptDeadlineMs,admissionDeadlineMs:workerDeadlineMs,env});
@@ -24,8 +24,9 @@ export async function startPreflightNativeDomain({root,directory,sourceFiles,pyt
   });}catch(error){if(returnedErrors.has(error))commandFailures++;else failed=true;throw error;}finally{pending--;}
  };
  const domain={
+  desktop:async(launcher,xml)=>{if(sealed||Date.now()>=receiptDeadlineMs)throw Error('PREFLIGHT_NATIVE_CLOSED');pending++;try{return await local.desktop(launcher,xml);}catch(error){if(preflightLocalLeafReturned(error))commandFailures++;else failed=true;throw error;}finally{pending--;}},
   adb:async(...args)=>{const argv=args.length===1&&args[0]==='version'?args:['-H','127.0.0.1','-P',policy.endpoint.split(':').at(-1),'-s',serial,...args];return (await request(argv)).toString('utf8');},
-  local:async(operation,input)=>{active();pending++;try{return await local.run(operation,input);}catch(error){failed=true;throw error;}finally{pending--;}}
+  local:async(operation,input)=>{active();pending++;try{return await local.run(operation,input);}catch(error){if(preflightLocalLeafReturned(error))commandFailures++;else failed=true;throw error;}finally{pending--;}}
  };
  const r={capability:Object.freeze({}),proof:null};records.set(domain,r);
  domain.close=()=>closing??=(async()=>{

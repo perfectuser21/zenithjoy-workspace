@@ -7,14 +7,14 @@ import {createHandlers} from '../leadgen-handlers.mjs';
 import {digest} from '../runtime-definition.mjs';
 
 // Catches the unsafe branch that dispatches an unclosed RPC outer before phone admission.
-function rig(t,{metadataError,metadataGate,completePrepare=false}={}){
+function rig(t,{metadataError,metadataGate,completePrepare=false,runtime}={}){
   const dir=mkdtempSync(join(tmpdir(),'preflight-metadata-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const source='a'.repeat(40),task='42e1439e-c7d3-47b5-8239-3308bcad32a7';
   const body={execution_mode:'agent',deployment:{source_commit:source},files:{}};
   writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
   const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'metadata_fixture',WFR_RUN_ID:'douyin_video_processing-metadata_fixture',WFR_ATTEMPT:'a1',P:'fixture',SERIAL:'fixture-serial',LEADGEN_LINE:'yuesheng',LEADGEN_SOURCE_RUN:'source101',LEADGEN_LIMIT:'2',WF_BRAIN_WORKFLOW:'douyin_video_processing'};
   const calls=[];
-  const h=createHandlers({root:dir,env,sourceCommit:source,taskId:task,
+  const h=createHandlers({root:dir,env,sourceCommit:source,taskId:task,preflightRuntime:runtime,
     centralLease:{async verifyTask(){},async acquire(){calls.push('central-acquire');},async ensure(){},async verifyHeld(){}},
     rpc:async()=>{throw Error('FORBIDDEN_PREFLIGHT_RPC_OUTER');},
     preflightMetadata:async input=>{
@@ -63,4 +63,12 @@ test('worker company_config reads the already verified parent snapshot without r
  const r=rig(t,{completePrepare:true}),tools=await r.h.createAgentTools({key:'preflight'},r.scope);await tools.prepare();const count=r.calls.length;
  const result=await tools.business('company_config',{});assert.equal(result.device_binding.douyin_id,'expected-account');assert.equal(result.run_id,'metadata_fixture');
  assert.equal(r.calls.length,count);assert.equal(r.h.state.account??null,null);
+});
+test('real provider never hides generic nativeStopUnproven behind successful business facts',async t=>{
+ const r=rig(t,{completePrepare:true}),tools=await r.h.createAgentTools({key:'preflight'},r.scope);await tools.prepare();
+ assert.equal(r.h.state.nativeStopUnproven,true);assert.equal(tools.getResult().execution_stopped,false);assert.equal(tools.getResult().native_stop_unproven,true);
+});
+
+test('a JSON or Agent supplied supports declaration cannot authorize a primary native scope',t=>{
+ const r=rig(t,{runtime:{supports:()=>true,kind:'preflight',closed:true}});assert.equal(r.h.agentSupportsNativeScope({key:'preflight'}),false);assert.equal(r.h.agentSupportsNativeScope({key:'scoring'}),false);assert.deepEqual(r.calls,[]);
 });

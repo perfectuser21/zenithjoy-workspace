@@ -10326,3 +10326,107 @@ tests:
     status: active
     product: 获客
     note: Fixed official tarballs, full private-file verification, scoped Pool import, atomic completion marker and source/observation binding; no phone or business DB operation.
+
+  - id: phone-preflight-calibration-deadline
+    path: services/phone-adb-controller/__tests__/preflight-calibration-deadline.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-control-scope
+    path: services/phone-adb-controller/__tests__/preflight-control-scope.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-judge
+    path: services/phone-adb-controller/__tests__/preflight-judge.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-local-leaves
+    path: services/phone-adb-controller/__tests__/preflight-local-leaves.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-local-lock
+    path: services/phone-adb-controller/__tests__/preflight-local-lock.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-local-step
+    path: services/phone-adb-controller/__tests__/preflight-local-step.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-metadata-boundary
+    path: services/phone-adb-controller/__tests__/preflight-metadata-boundary.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-metadata
+    path: services/phone-adb-controller/__tests__/preflight-metadata.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-native-domain
+    path: services/phone-adb-controller/__tests__/preflight-native-domain.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-pg-stream
+    path: services/phone-adb-controller/__tests__/preflight-pg-stream.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-phone-driver
+    path: services/phone-adb-controller/__tests__/preflight-phone-driver.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-recorder
+    path: services/phone-adb-controller/__tests__/preflight-recorder.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Parent preflight scoped lifecycle regression; standard phone Node test glob. Local fixtures do not certify physical device or production business completion.
+
+  - id: phone-preflight-phone-scope
+    path: services/phone-adb-controller/__tests__/preflight-phone-scope.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Actual nofork local phone/parser/lock fixtures; central identity boundaries remain controlled fixtures, not live device acceptance.

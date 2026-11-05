@@ -181,6 +181,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   };
   let prepared=false;
   return {business,phone,canReadback,
+    ...(typeof primitives.closeNativeScope==='function'?{closeNativeScope:proof=>primitives.closeNativeScope(proof,scope)}:{}),
     heartbeat:async()=>{if(unresolved().length)return {deferred:true,commit_unknown:true};try{return await lifecycle('resource_heartbeat',()=>primitives.heartbeat?.(scope));}catch(error){primitives.resourceUnknown?.(error,scope);error.executionStopped=false;throw error;}},
     inspect:async()=>({scope:structuredClone(scope),phone_capabilities:scope.serial==='none'?[]:[...readPhone,...phoneBySlot[scope.activity]],business_capabilities:[...slots[scope.activity]],
       pending_write_readbacks:unresolved().map(row=>({operation:row.value.operation,readback_operations:readbackFor[row.value.operation]||[]})),...await primitives.inspect?.(scope)}),

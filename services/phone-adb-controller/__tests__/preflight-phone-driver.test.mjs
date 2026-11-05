@@ -50,7 +50,7 @@ test('cleanup domain only closes its app and verifies actual resolved HOME focus
 });
 test('snapshot evidence is pulled by owned primitives into the bound run path, invalid PNG refuses',async t=>{
  const {createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs');const dir=mkdtempSync(join(tmpdir(),'preflight-png-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
- const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082','hex');let bad=false;
+ const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082','hex');let bad=false;
  const driver=createPreflightPhoneDriver({purpose:'cleanup',adb:async(...a)=>{if(a[0]==='pull')writeFileSync(a[2],bad?Buffer.from('invalid'):png);return '';},local:{},evidenceRoot:dir,owner:'fixture_run',deadlineMs:Date.now()+10000,assertResources:async()=>{}});
  const path=await driver.run('snapshot-evidence','fixture_run-desktop');assert.equal(path.trim(),join(dir,'fixture_run-desktop.png'));assert.deepEqual(readFileSync(path.trim()),png);
  bad=true;await assert.rejects(()=>driver.run('snapshot-evidence','fixture_run-invalid'),/PREFLIGHT_PNG_INVALID/);
@@ -59,4 +59,13 @@ test('open-app is an explicit checked operation; account reader never silently l
  const {createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs'),calls=[];
  const driver=createPreflightPhoneDriver({adb:async(...a)=>{calls.push(a);return a[0]==='get-state'?'device\n':a.includes('getprop')?'MODEL\n':a.includes('dumpsys')?'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}\n':'';},local:{},evidenceRoot:'/unused',owner:'fixture_run',profile:'fixture',serial:'SERIAL',model:'MODEL',deadlineMs:Date.now()+10000,assertResources:async()=>{}});
  assert.match(await driver.run('open-app'),/foreground=.*com.ss.android.ugc.aweme/);assert.deepEqual(calls.filter(a=>a.includes('monkey')),[['shell','monkey','-p','com.ss.android.ugc.aweme','-c','android.intent.category.LAUNCHER','1']]);
+});
+test('cleanup rejects a historical launcher name when the actual current package is another app',async()=>{
+ const {createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs');
+ const driver=createPreflightPhoneDriver({purpose:'cleanup',adb:async(...a)=>a[0]==='get-state'?'device\n':a.includes('getprop')?'MODEL\n':a.includes('resolve-activity')?'com.hihonor.android.launcher/.Home\n':a.includes('dumpsys')?'mCurrentFocus=Window{current u0 com.other.app/.Screen}\noldWindow com.hihonor.android.launcher/.Home\n':'',local:{},evidenceRoot:'/unused',owner:'fixture_run',model:'MODEL',deadlineMs:Date.now()+10000,assertResources:async()=>{}});
+ await assert.rejects(()=>driver.run('return-safe-desktop'),/PREFLIGHT_CLEANUP_HOME/);
+});
+test('new preflight PNG validation rejects intact signatures with corrupted CRC or truncated image rows',async()=>{
+ const {assertPreflightPng}=await import('../preflight-phone-driver.mjs');
+ const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082','hex');assert.deepEqual(assertPreflightPng(png),{width:1,height:1});const bad=Buffer.from(png);bad[48]^=1;assert.throws(()=>assertPreflightPng(bad),/PREFLIGHT_PNG_INVALID/);
 });

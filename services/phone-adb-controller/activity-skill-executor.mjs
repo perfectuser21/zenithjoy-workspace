@@ -7,6 +7,8 @@ import {assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
 import {safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {startPrimaryActivityBroker} from './activity-skill-primary-broker.mjs';
 
+const notLaunched=new WeakMap();
+export const skillLaunchDidNotStart=(proof,scope)=>Boolean(proof&&scope&&notLaunched.get(proof)===scope);
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const noLaunch=message=>Object.assign(Error(message),{executionStopped:true});
@@ -71,7 +73,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
    commander_guidance:Array.isArray(guidance)?guidance.filter(value=>typeof value==='string').map(value=>safeExecutionDiagnostic(value,env).slice(0,16000)).slice(0,4):[]};
   writeFileSync(join(directory,'launch-intent.json'),JSON.stringify({scope,request}),{flag:'wx',mode:0o600});
-  let broker,receipt,stopped=false,lastProgress=Date.now(),heartbeatError=null;
+  let broker,receipt,caughtError,dispatched=false,stopped=false,lastProgress=Date.now(),heartbeatError=null;
   let heartbeat,stall,heartbeatJob=Promise.resolve(),stallJob=Promise.resolve(),abortJob=Promise.resolve(),heartbeatBusy=false,stallBusy=false;
   const stop=async reason=>{
    try{return (await rpc({kind:'activity_skill_stop',request,reason},{timeoutMs:Math.max(1,Math.min(48000,deadline-Date.now()))})).result;}
@@ -94,7 +96,8 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     stallJob=Promise.resolve().then(async()=>{await broker.report({type:'stall',elapsed_ms:Date.now()-lastProgress});})
      .catch(async error=>{heartbeatError=error;await broker.abort('event_sink_failed');}).finally(()=>{lastProgress=Date.now();stallBusy=false;});
    },Math.min(1000,stallMs));stall.unref();
-   receipt=(await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,rpcDeadline-Date.now())})).result;
+   if(signal?.aborted||Date.now()>=workerDeadline)throw Error('AGENT_PRIMARY_DEADLINE_EXHAUSTED_BEFORE_DISPATCH');
+   dispatched=true;receipt=(await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,rpcDeadline-Date.now())})).result;
    // Revoke the capability synchronously before any await can admit a late
    // authorized call. A live request includes its Commander/log/reply tail.
    const sealed=broker.seal();
@@ -120,6 +123,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    return {status:['failed','partial','paused','needs_review'].includes(actual.result.status)?'partial':actual.result.status==='empty'?'empty':'completed',
     execution_stopped:true,result:actual.result,commander_status:actual.commander_status,skill_receipt:receipt};
   }catch(error){
+   caughtError=error;
    if(broker&&!stopped){
     const sealed=broker.seal();
     // A child-only stop acknowledgement never proves that its parent returned.
@@ -133,6 +137,12 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   finally{
    signal?.removeEventListener('abort',abort);clearInterval(heartbeat);clearInterval(stall);await heartbeatJob;await stallJob;await abortJob;
    if(broker)await broker.close();
+   if(typeof tools.closeNativeScope==='function'){
+    let proof={execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
+    if(!dispatched){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,scope);}
+    try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;}
+    catch{if(caughtError)caughtError.executionStopped=false;else throw Object.assign(Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED'),{executionStopped:false});}
+   }
   }
  };
 }

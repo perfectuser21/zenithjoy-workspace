@@ -74,7 +74,7 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
                     handle.write(value+'\n');handle.flush();os.fsync(handle.fileno())
             succeeded = True
             return {'lock': 'acquired', 'owner': owner, 'epoch': epoch, 'readback_owner': (lock / 'owner').read_text().strip(), 'readback_epoch': (lock / 'preflight_epoch').read_text().strip()}
-        if operation != 'refresh' or lock.is_symlink() or not lock.is_dir() or (lock / 'standalone_review_required').exists():
+        if operation not in ('refresh', 'release') or lock.is_symlink() or not lock.is_dir() or (lock / 'standalone_review_required').exists():
             raise ValueError('PREFLIGHT_LOCK_NOT_RENEWABLE')
         out = os.open(lock / 'owner', os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(out) as handle:
@@ -84,6 +84,21 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
         with os.fdopen(epoch_fd) as handle:
             if handle.read(1024).strip() != epoch:
                 raise ValueError('PREFLIGHT_LOCK_EPOCH')
+        if operation == 'release':
+            names = {'owner', 'preflight_epoch', 'acquired_at'}
+            if {p.name for p in lock.iterdir()} != names:
+                raise ValueError('PREFLIGHT_LOCK_INVENTORY')
+            for name in names:
+                info = (lock / name).lstat()
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600:
+                    raise ValueError('PREFLIGHT_LOCK_INVENTORY')
+            for name in names:
+                (lock / name).unlink()
+            lock.rmdir()
+            if lock.exists() or lock.is_symlink():
+                raise ValueError('PREFLIGHT_LOCK_RELEASE_READBACK')
+            succeeded = True
+            return {'lock': 'released', 'owner': owner, 'epoch': epoch, 'readback_owner': 'none', 'readback_epoch': 'none'}
         out = os.open(lock / 'acquired_at', os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
         with os.fdopen(out, 'w') as handle:
             handle.write(str(int(time.time()))+'\n');handle.flush();os.fsync(handle.fileno())
@@ -93,20 +108,20 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
         try:
             if receipt is not None:
                 path = Path(receipt['path'])
-                kind = 'acquire' if operation == 'acquire' else 'refresh'
+                kind = operation if operation in ('acquire', 'release') else 'refresh'
                 if not path.is_absolute() or path.name != owner+'-lock-'+kind+'.json' or receipt['run'] != owner or receipt['serial'] != serial:
                     raise ValueError('PREFLIGHT_LOCK_RECEIPT_SCOPE')
-                readback_owner = 'unknown'
+                readback_owner = 'none' if succeeded and operation == 'release' else 'unknown'
                 if (root / (serial+'.lock')).is_dir():
                     owner_fd = os.open(root / (serial+'.lock') / 'owner', os.O_RDONLY | os.O_NOFOLLOW)
                     with os.fdopen(owner_fd) as handle:
                         readback_owner = handle.read(1024).strip()
-                state = 'held' if readback_owner != 'unknown' else 'unknown'
+                state = 'none' if readback_owner == 'none' else 'held' if readback_owner != 'unknown' else 'unknown'
                 old_argv = sys.argv
                 try:
                     sys.argv = [__file__, 'lock-receipt', str(path), kind, owner, owner+'-lock-'+kind,
                                 'command=lock-'+operation, 'requested_owner='+owner, 'rc='+str(0 if succeeded else 2),
-                                'receipt=lock='+('acquired' if operation=='acquire' else 'refreshed')+' owner='+owner if succeeded else 'receipt=',
+                                'receipt=lock='+('acquired' if operation=='acquire' else 'released' if operation=='release' else 'refreshed')+' owner='+owner if succeeded else 'receipt=',
                                 'stderr=' if succeeded else 'stderr=PREFLIGHT_LOCK_REFUSED',
                                 'readback=lock='+state+' owner='+readback_owner, 'profile='+receipt['profile'], 'serial='+serial,
                                 'pid='+str(os.getpid()), 'epoch='+epoch]

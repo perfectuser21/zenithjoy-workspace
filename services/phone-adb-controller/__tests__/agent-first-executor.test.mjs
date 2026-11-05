@@ -297,3 +297,9 @@ test('actual generic provider native uncertainty reaches executor even behind a 
  let dispatched=0;const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,nativeState:h.agentNativeState,createTools:async()=>{dispatched++;return tools;},rpc:async()=>{dispatched++;throw Error('must not launch');}});
  const result=await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});assert.equal(result.not_started,true);assert.equal(result.execution_stopped,false);assert.equal(result.resource_unverified,true);assert.equal(dispatched,0);
 });
+
+test('prepare失败仍关闭已创建native域，未派发证明不可从JSON克隆',async t=>{
+ assert.equal(api.skillLaunchDidNotStart(undefined,undefined),false);const f=fixture(t);let dispatches=0,closed=0,scope;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async(_activity,s)=>{scope=s;return {prepare:async()=>{throw Error('PREPARE_SEMANTIC_REFUSED');},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>null,closeNativeScope:async proof=>{closed++;assert.equal(api.skillLaunchDidNotStart(proof,scope),true);assert.equal(api.skillLaunchDidNotStart(structuredClone(proof),scope),false);return {execution_stopped:true};}};},rpc:async()=>{dispatches++;throw Error('MUST_NOT_DISPATCH');}});
+ await assert.rejects(()=>execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}}),error=>{assert.equal(error.message,'PREPARE_SEMANTIC_REFUSED');assert.equal(error.executionStopped,true);return true;});assert.equal(closed,1);assert.equal(dispatches,0);
+});

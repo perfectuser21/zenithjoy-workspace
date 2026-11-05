@@ -21,3 +21,21 @@ test('route is inspected by the fixed nofork helper without launching a managed-
  const result=JSON.parse(await producer.run('route',JSON.stringify({config,policy,serial:'SERIAL'})));assert.equal(result.port,server.address().port);
  assert.equal((await producer.seal()).execution_stopped,true);
 });
+
+test('semantic parser refusal has a returned native leaf and does not erase OS closure',{skip:process.platform!=='darwin'},async t=>{
+ const {startPreflightLocalLeaves,preflightLocalLeafReturned}=await import('../preflight-local-leaves.mjs');
+ const directory=mkdtempSync(join(tmpdir(),'preflight-local-refusal-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const producer=await startPreflightLocalLeaves({root,directory,python:{path:'/usr/bin/python3',sha256:hash('/usr/bin/python3')},sourceFiles:{'preflight-local-step.py':hash(join(root,'preflight-local-step.py'))},deadlineMs:Date.now()+10000});t.after(()=>producer.close());
+ let refused;try{await producer.run('ui','not XML');}catch(error){refused=error;}
+ assert.ok(refused);assert.equal(preflightLocalLeafReturned(refused),true);assert.equal(preflightLocalLeafReturned(Error('PREFLIGHT_LOCAL_REQUEST_FAILED')),false);
+ const proof=await producer.close();assert.equal(proof.execution_stopped,true);assert.equal(proof.leaves[0].code,2);assert.equal(proof.leaves[0].signal,null);
+});
+
+test('desktop packages use the original parser inside the owned nofork leaf before seal',{skip:process.platform!=='darwin'},async t=>{
+ const {startPreflightLocalLeaves}=await import('../preflight-local-leaves.mjs');
+ const directory=mkdtempSync(join(tmpdir(),'preflight-desktop-parser-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const producer=await startPreflightLocalLeaves({root,directory,python:{path:'/usr/bin/python3',sha256:hash('/usr/bin/python3')},sourceFiles:Object.fromEntries(['preflight-local-step.py','discovery-cleanup-readback.mjs'].map(p=>[p,hash(join(root,p))])),deadlineMs:Date.now()+10000});t.after(()=>producer.close());
+ const packages=JSON.parse(await producer.desktop('com.android.launcher','<hierarchy><node package="com.android.launcher"/></hierarchy>'));
+ assert.deepEqual(packages,['com.android.launcher']);assert.equal((await producer.close()).execution_stopped,true);
+ await assert.rejects(()=>producer.desktop('com.android.launcher','<hierarchy/>'),/PREFLIGHT_LOCAL_CLOSED/);
+});
