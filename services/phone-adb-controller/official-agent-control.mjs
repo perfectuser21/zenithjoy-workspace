@@ -42,6 +42,11 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  let descriptor,identity;
  if(fixed.execution_transport!==undefined)rawGate();
  try{
+  // The authority HTTP pipeline exists before any raw turn intent. Never infer
+  // its req/res/socket return from an empty turn set or a previous JSON result.
+  if(readdirSync(journalDirectory).some(name=>/^official-authority-.*\.jsonl$/.test(name)))previousCallerUnknown=true;
+  try{durableRaw('caller-lifecycle-'+hash(canonical(fixed))+'.intent.json',{protocol:'official-caller-lifecycle/v1',request_sha256:hash(canonical(fixed)),source_commit:fixed.source_commit});}
+  catch(error){if(error.code==='EEXIST')previousCallerUnknown=true;else throw error;}
   descriptor=openSync(ledger,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);identity=fstatSync(descriptor);
   const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);
   try{fsyncSync(parent);}finally{closeSync(parent);}
@@ -49,7 +54,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   if(descriptor!==undefined)try{closeSync(descriptor);}catch{}
   throw failure('OFFICIAL_CONTROL_JOURNAL');
  }
- const snapshot=()=>{const outstanding=[...rawTurns.values()].some(r=>r.dispatched&&!r.officialTerminal);const value=Object.freeze({sealed,pending:jobs.size,execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed&&!outstanding&&!previousCallerUnknown,caller_execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed,execution_unknown:tainted||jobs.size>0||outstanding||externalEffectUnknown,external_effect_unknown:externalEffectUnknown,previous_caller_stop_unproven:previousCallerUnknown});privateSnapshots.add(value);return value;};
+ const snapshot=()=>{const outstanding=[...rawTurns.values()].some(r=>r.dispatched&&!r.officialTerminal);const value=Object.freeze({sealed,pending:jobs.size,execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed&&!outstanding&&!previousCallerUnknown,caller_execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed,execution_unknown:tainted||jobs.size>0||outstanding||externalEffectUnknown||previousCallerUnknown,external_effect_unknown:externalEffectUnknown,previous_caller_stop_unproven:previousCallerUnknown});privateSnapshots.add(value);return value;};
  const record=value=>{try{
   const current=lstatSync(ledger),opened=fstatSync(descriptor);
   if(journalClosed||!current.isFile()||current.isSymbolicLink()||current.dev!==identity.dev||current.ino!==identity.ino||opened.dev!==identity.dev||opened.ino!==identity.ino||current.nlink!==1||current.uid!==process.getuid()||(current.mode&0o777)!==0o600)throw Error();
@@ -57,7 +62,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   while(offset<bytes.length){const written=writeSync(descriptor,bytes,offset,bytes.length-offset);if(written<1)throw Error();offset+=written;}
   fsyncSync(descriptor);
  }catch{tainted=true;throw failure('OFFICIAL_CONTROL_JOURNAL');}};
- const guard=e=>{if(tainted)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(sealed||e!==epoch)throw failure('OFFICIAL_CONTROL_CLOSED');if(Date.now()>=deadlineMs)throw failure('OFFICIAL_CONTROL_DEADLINE');};
+ const guard=e=>{if(previousCallerUnknown)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(tainted)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(sealed||e!==epoch)throw failure('OFFICIAL_CONTROL_CLOSED');if(Date.now()>=deadlineMs)throw failure('OFFICIAL_CONTROL_DEADLINE');};
  function verify(){
   const own=fixedSource.files?.filter(file=>file.path==='official-agent-control.mjs');
   if(own?.length!==1||hash(readFileSync(join(runtimeRoot,own[0].path)))!==own[0].sha256)throw failure('OFFICIAL_CONTROL_SOURCE');
