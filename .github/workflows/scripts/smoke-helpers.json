@@ -3,9 +3,9 @@
   "helpers": [
     {
       "name": "remote-adb.sh",
-      "reason": "ADB argv transport over an explicitly configured SSH host; not a standalone test and must never be invoked without the bounded device workflow context.",
+      "reason": "ADB argv transport over an explicitly configured SSH host; not a standalone test and must never be invoked without the bounded device workflow context. Historical Kotlin caller is archived and does not run in CI.",
       "consumers": [
-        ".github/workflows/e2e-line02-android-collect.yml"
+        "docs/ci/retired-workflows/e2e-line02-android-collect-kotlin.yml"
       ]
     },
     {
@@ -18,23 +18,23 @@
     },
     {
       "name": "line02-android-cancel-candidate-setup.sh",
-      "reason": "Creates the device workflow's isolated candidate identity/API binding; requires the explicit E2E database, APK and device context.",
+      "reason": "Creates the device workflow's isolated candidate identity/API binding; requires the explicit E2E database, APK and device context. Historical Kotlin caller is archived and does not run in CI.",
       "consumers": [
-        ".github/workflows/e2e-line02-android-collect.yml"
+        "docs/ci/retired-workflows/e2e-line02-android-collect-kotlin.yml"
       ]
     },
     {
       "name": "remote-android-install.sh",
-      "reason": "Transferred and run explicitly by the bounded Android E2E job to install its isolated APK; never a no-argument Ubuntu smoke.",
+      "reason": "Transferred and run explicitly by the bounded Android E2E job to install its isolated APK; never a no-argument Ubuntu smoke. Historical Kotlin caller is archived and does not run in CI.",
       "consumers": [
-        ".github/workflows/e2e-line02-android-collect.yml"
+        "docs/ci/retired-workflows/e2e-line02-android-collect-kotlin.yml"
       ]
     },
     {
       "name": "line02-android-cancel-candidate-cleanup.sh",
-      "reason": "Explicit E2E teardown can restore accessibility, uninstall the isolated APK, remove the bounded tenant fixture and stop its API. Without that owned context it only prints PASS, so it is not a standalone test.",
+      "reason": "Explicit E2E teardown can restore accessibility, uninstall the isolated APK, remove the bounded tenant fixture and stop its API. Without that owned context it only prints PASS, so it is not a standalone test. Historical Kotlin caller is archived and does not run in CI.",
       "consumers": [
-        ".github/workflows/e2e-line02-android-collect.yml"
+        "docs/ci/retired-workflows/e2e-line02-android-collect-kotlin.yml"
       ]
     }
   ]

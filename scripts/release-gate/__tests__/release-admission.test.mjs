@@ -36,3 +36,18 @@ test('最近同SHA失败不会被更早成功运行遮住',async()=>{
  const api=path=>path.includes('/compare/')?{status:'ahead'}:{workflow_runs:[run(),{...run(),id:124,conclusion:'failure'}]};
  assert.throws(()=>verifyStaging({sha,targets:['api'],api}),/未通过/);
 });
+
+test('retired Kotlin and Windows nightly lanes cannot serve as physical release evidence',async()=>{
+ const {readFileSync,existsSync}=await import('node:fs');
+ const workflow=readFileSync(new URL('../../../.github/workflows/release-admission.yml',import.meta.url),'utf8');
+ assert.equal(existsSync(new URL('../../../.github/workflows/nightly-real-machine-staging.yml',import.meta.url)),false);
+ assert.equal(existsSync(new URL('../../../.github/workflows/e2e-line02-android-collect.yml',import.meta.url)),false);
+ assert.doesNotMatch(workflow,/nightly-evidence\.mjs|nightly-real-machine-staging/);
+ assert.match(workflow,/node scripts\/release-gate\/staging-evidence\.mjs/);
+ assert.match(workflow,/scripts\/release-gate\/acceptance-record\.mjs/);
+ assert.match(workflow,/no Skill or Android physical acceptance is implied/);
+ for(const key of ['S2-c1','S3-c1']){
+  const x=receipt();x.checks.find(c=>c.check_key===key).result='无法验证';
+  assert.throws(()=>validateAcceptance(x,options),/验收未通过/);
+ }
+});

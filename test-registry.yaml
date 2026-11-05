@@ -8676,9 +8676,7 @@ tests:
   - {"id":"inventory-43299fe18e16b38f","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.db-ssh-host-default.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d2bbe4522f61fdc6","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.dbquery-retry.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-04d62e4317ff4c4c","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.envbind.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-e5c2ce7724953790","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.envfail-red.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d605d6570ee350c5","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.heartbeat-align.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-439bd6df96003733","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.promote-job-granularity.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-d5f05018fb9aaa9c","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.relaunch-after-install.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c1ce95862813c860","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.ssh-hostkey.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b730bbb6b7d6077d","path":".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.terminal-assert.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -8686,7 +8684,6 @@ tests:
   - {"id":"inventory-8879e9c18a9ada9d","path":".github/workflows/scripts/__tests__/adb-target.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-97a8a2112494a258","path":".github/workflows/scripts/__tests__/agent-cmd-executor-smoke.diagnostics.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-dc97890859721001","path":".github/workflows/scripts/__tests__/android-cancel-realmachine-smoke.launch-entrypoint.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-48b8719dfbec19af","path":".github/workflows/scripts/__tests__/android-cancel-workflow.real-fixture.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-5c2de12996ab93f6","path":".github/workflows/scripts/__tests__/audit-gate.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b4b9041e00e7aadf","path":".github/workflows/scripts/__tests__/auto-version-publication.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:.github/workflows/scripts/__tests__/auto-version-publication.test.mjs. Removed root-only auto-version workflow has no runtime version consumer; API uses own package/Git SHA, Agent and Android own versions. Active authoring and release version guards remain."}
   - {"id":"inventory-a73c892e1d181810","path":".github/workflows/scripts/__tests__/browser-dod-scope.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -8703,7 +8700,7 @@ tests:
   - {"id":"inventory-49b9f3958ebe046e","path":".github/workflows/scripts/__tests__/line02-android-collect-realmachine-smoke.agent-id.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-33b11efec8ebe60b","path":".github/workflows/scripts/__tests__/line02-android-collect-realmachine-smoke.ui-bounds.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-457545ac1e0b6ff5","path":".github/workflows/scripts/__tests__/line02-candidate-gate.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-6af223734c6b32a1","path":".github/workflows/scripts/__tests__/line02-interactive-contract.test.mjs","type":"contract","ci":"L3","status":"active","product":"unclassified","execution":"ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs","note":"Retired web Douyin checks absent; Android nightly reporting and remaining interactive process safety tested with isolated fixtures."}
+  - {"id":"inventory-6af223734c6b32a1","path":".github/workflows/scripts/__tests__/line02-interactive-contract.test.mjs","type":"contract","ci":"L3","status":"active","product":"unclassified","execution":"ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs","note":"Retired Windows and Kotlin workflows absent; remaining interactive process safety tested with isolated fixtures."}
   - {"id":"inventory-0709ac11b1cbb0ec","path":".github/workflows/scripts/__tests__/line02-keyword-comment-smoke.diagnostics.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c1435ddec957616b","path":".github/workflows/scripts/__tests__/line02-process-job.test.ps1","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-7dca2d22e1944071","path":".github/workflows/scripts/__tests__/lint-feature-has-smoke.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -8763,7 +8760,6 @@ tests:
   - {"id":"inventory-d9b8a9ccdb75ce61","path":"scripts/release-gate/__tests__/create-release-acceptance.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-03227d06ee8564f1","path":"scripts/release-gate/__tests__/frontend-release.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-00ec8aba7058be5f","path":"scripts/release-gate/__tests__/frontend-staging.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-660b5043d1f0351e","path":"scripts/release-gate/__tests__/nightly-evidence.test.mjs","type":"unit","ci":"L1","status":"active","product":"unclassified","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"Retired web Douyin is not a prerequisite; generic Android original warning policy, distinct two main runs/36h/full job identity and fail-closed cases retained."}
   - {"id":"inventory-c13a3377edd30b31","path":"scripts/release-gate/__tests__/process-and-business-gates.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-50112f6769a93c25","path":"scripts/release-gate/__tests__/production-backup.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b1da779048d91a09","path":"scripts/release-gate/__tests__/release-admission.test.mjs","type":"contract","ci":"L1","status":"active","product":"unclassified","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"Actual mandatory Brain workflow shell and stdin validation module run with SSH/fetch transports isolated; frozen same-SHA S2/S3 required. No real Brain/network/credentials/device/message operations."}
@@ -10318,12 +10314,3 @@ tests:
     status: active
     product: 基础设施
     note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.
-
-  - id: nightly-github-checkout-proxy
-    path: .github/workflows/scripts/__tests__/nightly-checkout-proxy.test.mjs
-    type: contract
-    ci: L3
-    status: active
-    product: 基础设施
-    execution: ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs
-    note: Executes both real nightly proxy steps with isolated fake curl and Git environment; no device or live checkout acceptance is implied.

@@ -290,16 +290,12 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      # account-scan 真机脚本的 shell 行为回归测试（含 heartbeat-align/apk-fetch/relaunch/
-      # terminal-assert 等）+ lint-smoke-mock-honesty 自身测试，此前无任何 CI job 跑它们，
-      # 是孤儿测试——正是本 sprint 要防的"守卫写了但从不 fire"。glob 跑全，未来新增自动覆盖。
+      # 保留现役共享真机安全和 mock-honesty 合同；旧 Kotlin account-scan 不再进入 CI。
       - name: Run 真机车道 + mock-honesty 全部回归测试（proven-to-fire — 任一红即门禁红）
         run: |
           set -e
           FOUND=0
-          for t in .github/workflows/scripts/__tests__/account-scan-realmachine-smoke.*.test.sh \
-                   .github/workflows/scripts/__tests__/android-cancel-workflow.real-fixture.test.sh \
-                   .github/workflows/scripts/__tests__/windows-cancel-workflow.evidence-correlation.test.sh \
+          for t in .github/workflows/scripts/__tests__/windows-cancel-workflow.evidence-correlation.test.sh \
                    .github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh \
                    .github/workflows/scripts/__tests__/lint-realmachine-unverified-ratchet.test.sh \
                    .github/workflows/scripts/__tests__/dm-send-realmachine-smoke.test.sh \
