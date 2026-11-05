@@ -9,6 +9,7 @@ import {canonical} from './runtime-definition.mjs';
 import {verifyRpcSource} from './leadgen-rpc.mjs';
 import {verifyCommanderWorkspace,verifySkillRequest,skillAuthority,skillExecutionIdentity} from './leadgen-skill-agent.mjs';
 
+const continuationCapabilities=new WeakMap();
 const failure=code=>Object.assign(Error(code),{code});
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 function defaultCredential(){
@@ -20,7 +21,7 @@ function defaultCredential(){
  if(!value||/[\r\n]/.test(value))throw failure('OFFICIAL_CONTROL_CREDENTIAL');return value;
 }
 
-export function createOfficialAgentControl({source,runtimeRoot,request,home=homedir(),journalDirectory,deadlineMs,cleanupDeadlineMs=deadlineMs,credential=defaultCredential,httpRequest=requestHttp,gatewayDependencies,gatewayCredential}={}){
+export function createOfficialAgentControl({source,runtimeRoot,request,home=homedir(),journalDirectory,deadlineMs,cleanupDeadlineMs=deadlineMs,credential=defaultCredential,httpRequest=requestHttp,gatewayDependencies,gatewayCredential,continuationCapability}={}){
  const fixed=structuredClone(request),fixedSource=structuredClone(source);
  if(fixed?.mode!=='execute'||fixed.broker_host!=='mmv'||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(fixed.workflow_key)
   ||fixed.protocol!=='leadgen-activity-v1'||!/^[a-f0-9]{48}$/.test(fixed.nonce||'')||!/^\w[\w.-]{0,150}$/.test(fixed.run_id||'')
@@ -32,7 +33,12 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  const stat=lstatSync(journalDirectory);
  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)||realpathSync(journalDirectory)!==resolve(journalDirectory))throw failure('OFFICIAL_CONTROL_JOURNAL');
  const ledger=join(journalDirectory,'official-authority-'+randomUUID()+'.jsonl');
- let sealed=false,epoch=0,tainted=false,journalClosed=false,closing;const jobs=new Set(),rawTurns=new Map(),turnReceipts=new WeakMap(),intentPermits=new WeakMap(),stopReceipts=new WeakMap(),privateSnapshots=new WeakSet();const rawPrefix='raw-'+hash(canonical([fixed.run_id,fixed.task_id,fixed.binding_id,fixed.nonce,fixed.activity_key,fixed.source_commit])).slice(0,32);let externalEffectUnknown=false,rawEpoch=0,nextTurn=0,rawRevoked=false,recoveryScanned=false,previousCallerUnknown=false,deliveryPermit;
+ let sealed=false,epoch=0,tainted=false,journalClosed=false,closing;const jobs=new Set(),rawTurns=new Map(),turnReceipts=new WeakMap(),intentPermits=new WeakMap(),stopReceipts=new WeakMap(),privateSnapshots=new WeakSet();const rawPrefix='raw-'+hash(canonical([fixed.run_id,fixed.task_id,fixed.binding_id,fixed.nonce,fixed.activity_key,fixed.source_commit])).slice(0,32);let externalEffectUnknown=false,rawEpoch=0,nextTurn=0,rawRevoked=false,recoveryScanned=false,previousCallerUnknown=false,deliveryPermit,controlAcceptance=false;
+ const continuation=continuationCapability===undefined?null:continuationCapabilities.get(continuationCapability);
+ if(continuationCapability!==undefined&&(!continuation||continuation.used||continuation.request!==canonical(fixed)||continuation.source!==canonical(fixedSource)||continuation.directory!==journalDirectory))throw failure('OFFICIAL_CONTROL_CONTINUATION');
+ if(continuation){continuation.used=true;nextTurn=continuation.startIndex;}
+ let continuationIssued=false;
+ const turnCeiling=continuation?continuation.startIndex+1:fixed.max_turns;
  let descriptor,identity;
  if(fixed.execution_transport!==undefined)rawGate();
  try{
@@ -178,14 +184,39 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));job.cancelRead?.();};
   job.done=(async()=>{const timer=setTimeout(()=>job.cancel('OFFICIAL_CONTROL_DEADLINE'),Math.max(1,(cleanup?cleanupDeadlineMs:deadlineMs)-Date.now()));try{return await callback(job,e);}finally{clearTimeout(timer);jobs.delete(job);}})();return Promise.race([job.done,interrupted]);
  }
+ // raw promptMode=none does not load either global Commander workspace. These
+ // are the frozen parent Code inputs, not a claim about Gateway workspace state.
+ function verifyRawParentSources(){
+  rawGate();verify();
+  for(const path of ['commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md']){
+   const entries=fixedSource.files?.filter(file=>file.path===path);
+   if(entries?.length!==1||hash(readFileSync(join(runtimeRoot,path)))!==entries[0].sha256)throw failure('OFFICIAL_CONTROL_SOURCE');
+  }
+  return true;
+ }
+ function validateControlTask(response){
+  const task=response?.task??response,payload=task?.payload;
+  if(!payload||Object.hasOwn(payload,'control_scope'))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
+  const declared=payload.scope&&Object.hasOwn(payload.scope,'control_scope');
+  if(!declared){if(Object.hasOwn(fixed,'control_scope'))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');return;}
+  const value=payload.scope.control_scope,expected={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']};
+  if(fixed.workflow_key!=='douyin_comment_scoring'||fixed.activity_key!=='scoring'||canonical(value)!==canonical(expected)||canonical(fixed.control_scope)!==canonical(expected))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
+  for(const key of ['execution_transport','max_turns','run_max_seconds','limit'])if(payload.scope[key]!==fixed[key]||Object.hasOwn(payload,key)&&payload[key]!==fixed[key])throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
+  for(const key of ['execution_transport','max_turns'])if(Object.hasOwn(payload,key))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
+  const claim={claimed_by:task.claimed_by,claimed_at:task.claimed_at};
+  if(typeof claim.claimed_by!=='string'||!claim.claimed_by||typeof claim.claimed_at!=='string'||!Number.isFinite(Date.parse(claim.claimed_at))
+   ||canonical(fixed.control_claim)!==canonical(claim)||Object.hasOwn(payload,'claimed_by')||Object.hasOwn(payload,'claimed_at'))throw failure('OFFICIAL_CONTROL_CONTROL_CLAIM');
+  controlAcceptance=true;
+ }
+ const intentAllowed=op=>!(controlAcceptance||continuation)||op==='inspect';
  async function authorizeParentContext(q){
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
-  return ownedJob(async(job,e)=>{verify();verifyCommanderWorkspace({home});await verifySkillRequest(fixed,{get:path=>readCentral(path,e,job)});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e});return true;});
+  return ownedJob(async(job,e)=>{verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id)validateControlTask(value);return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});return true;});
  }
  function durableRaw(name,value){const path=join(journalDirectory,name),fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{const b=Buffer.from(JSON.stringify(value)+'\n');let n=0;while(n<b.length){const wrote=writeSync(fd,b,n,b.length-n);if(wrote<1)throw failure('OFFICIAL_CONTROL_JOURNAL');n+=wrote;}fsyncSync(fd);}finally{closeSync(fd);}const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}}
  async function rawTurn(body){
   rawGate();guard(epoch);if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_UNKNOWN');
-  if(Object.keys(body).sort().join(',')!=='kind,request,turn'||!sameRequest(body.request)||!body.turn||Object.keys(body.turn).sort().join(',')!=='index,input'||!Number.isSafeInteger(body.turn.index)||body.turn.index<0||body.turn.index>=fixed.max_turns||body.turn.index!==nextTurn||rawTurns.has(body.turn.index))throw failure('OFFICIAL_CONTROL_RAW_REPLAY');
+  if(Object.keys(body).sort().join(',')!=='kind,request,turn'||!sameRequest(body.request)||!body.turn||Object.keys(body.turn).sort().join(',')!=='index,input'||!Number.isSafeInteger(body.turn.index)||body.turn.index<0||body.turn.index>=turnCeiling||body.turn.index!==nextTurn||rawTurns.has(body.turn.index))throw failure('OFFICIAL_CONTROL_RAW_REPLAY');
   const input=structuredClone(body.turn.input),encoded=canonical(input);if(typeof encoded!=='string'||Buffer.byteLength(encoded)>65536)throw failure('OFFICIAL_CONTROL_RAW_INPUT');
   const r={index:body.turn.index,runId:randomUUID(),sessionId:randomUUID(),sessionKey:'agent:skill-factory:leadgen-raw-'+randomUUID(),dispatched:false,officialTerminal:false};rawTurns.set(r.index,r);const re=++rawEpoch;
   return ownedJob(async(job,e)=>{job.rawIndex=r.index;try{
@@ -207,16 +238,16 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   }catch(error){if(r.dispatched&&!r.accepted)externalEffectUnknown=true;throw error;}});
  }
  function verifyTurnReceipt(receipt,{request:q,index}={}){guard(epoch);rawGate();const proof=turnReceipts.get(receipt);if(!proof||proof.epoch!==rawEpoch||proof.index!==index||proof.request!==hash(canonical(q))||!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_RECEIPT');return structuredClone(proof.value);}
- function authorizeIntent(receipt,{request:q,index,op,body}={}){const value=verifyTurnReceipt(receipt,{request:q,index});const proof=turnReceipts.get(receipt);if(value.status!=='ok'||proof.issued||!['inspect','phone','business'].includes(op))throw failure('OFFICIAL_CONTROL_RAW_RECEIPT');proof.issued=true;const permit=Object.freeze({index});intentPermits.set(permit,{epoch:rawEpoch,request:proof.request,index,op,body:hash(canonical(body)),used:false});return permit;}
- async function consumeIntentPermit(permit,{request:q,index,op,body}={}){const p=intentPermits.get(permit);if(!p||p.used||p.epoch!==rawEpoch||p.request!==hash(canonical(q))||!sameRequest(q)||p.index!==index||p.op!==op||p.body!==hash(canonical(body))||rawRevoked||sealed||externalEffectUnknown)return false;p.used=true;await authorizeParentContext(q);guard(epoch);if(p.epoch!==rawEpoch||rawRevoked||externalEffectUnknown)return false;deliveryPermit={...p,used:false};return true;}
- function authorizeBrokerDelivery(q,{op,body}={}){try{guard(epoch);rawGate();verify();}catch{return false;}const p=deliveryPermit;if(!p||p.used||p.epoch!==rawEpoch||p.request!==hash(canonical(q))||!sameRequest(q)||p.op!==op||p.body!==hash(canonical(body))||rawRevoked||sealed||externalEffectUnknown)return false;p.used=true;return true;}
+ function authorizeIntent(receipt,{request:q,index,op,body}={}){if(!intentAllowed(op))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');const value=verifyTurnReceipt(receipt,{request:q,index});const proof=turnReceipts.get(receipt);if(value.status!=='ok'||proof.issued||!['inspect','phone','business'].includes(op))throw failure('OFFICIAL_CONTROL_RAW_RECEIPT');proof.issued=true;const permit=Object.freeze({index});intentPermits.set(permit,{epoch:rawEpoch,request:proof.request,index,op,body:hash(canonical(body)),used:false});return permit;}
+ async function consumeIntentPermit(permit,{request:q,index,op,body}={}){const p=intentPermits.get(permit);if(!intentAllowed(op)||!p||p.used||p.epoch!==rawEpoch||p.request!==hash(canonical(q))||!sameRequest(q)||p.index!==index||p.op!==op||p.body!==hash(canonical(body))||rawRevoked||sealed||externalEffectUnknown)return false;p.used=true;await authorizeParentContext(q);guard(epoch);if(p.epoch!==rawEpoch||rawRevoked||externalEffectUnknown)return false;deliveryPermit={...p,used:false};return true;}
+ function authorizeBrokerDelivery(q,{op,body}={}){try{guard(epoch);rawGate();verify();}catch{return false;}const p=deliveryPermit;if(!intentAllowed(op)||!p||p.used||p.epoch!==rawEpoch||p.request!==hash(canonical(q))||!sameRequest(q)||p.op!==op||p.body!==hash(canonical(body))||rawRevoked||sealed||externalEffectUnknown)return false;p.used=true;return true;}
  function seal(q){if(q!==undefined&&!sameRequest(q))throw failure('OFFICIAL_CONTROL_SCOPE');if(!sealed){sealed=true;rawRevoked=true;rawEpoch++;epoch++;deliveryPermit=undefined;for(const job of jobs)job.cancel('OFFICIAL_CONTROL_CLOSED');}return snapshot();}
  async function rawStop(body){
   rawGate();if(Object.keys(body).sort().join(',')!=='kind,request,turn_index'||!sameRequest(body.request)||!Number.isSafeInteger(body.turn_index))throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
   const r=rawTurns.get(body.turn_index);if(!r)throw failure('OFFICIAL_CONTROL_RAW_IDENTITY');
   rawRevoked=true;rawEpoch++;deliveryPermit=undefined;for(const job of jobs)if(job.rawIndex===r.index)job.cancel('OFFICIAL_CONTROL_CLOSED');
   if(r.stopPromise)return r.stopPromise;
-  r.stopPromise=ownedJob(async(job,e)=>{verify();verifyCommanderWorkspace({home});const policy={scopes:['operator.read','operator.write'],cleanup:true,beforeDispatch:async gatewayVersion=>{const {verifyOfficialGatewayRuntime}=await import('./official-gateway-runtime.mjs');verifyOfficialGatewayRuntime({runtimeRoot,source:fixedSource,gatewayVersion});}};
+  r.stopPromise=ownedJob(async(job,e)=>{verifyRawParentSources();const policy={scopes:['operator.read','operator.write'],cleanup:true,beforeDispatch:async gatewayVersion=>{const {verifyOfficialGatewayRuntime}=await import('./official-gateway-runtime.mjs');verifyOfficialGatewayRuntime({runtimeRoot,source:fixedSource,gatewayVersion});}};
    if(r.dispatched){
     if(!r.abortDispatched){
      let reserved=false;try{durableRaw(rawPrefix+'-turn-'+r.index+'.abort-intent.json',{request_sha256:hash(canonical(fixed)),index:r.index,run_id:r.runId,session_key:r.sessionKey});reserved=true;}catch(error){if(error.code!=='EEXIST')throw error;}
@@ -231,6 +262,17 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   },{cleanup:true});return r.stopPromise;
  }
  function verifySealedExecution(value,{request:q}={}){if(!privateSnapshots.has(value)||!sameRequest(q))return false;const current=snapshot();return value.sealed===true&&value.pending===0&&value.execution_stopped===true&&value.execution_unknown===false&&current.sealed&&current.pending===0&&current.execution_stopped&&!current.execution_unknown;}
+ function createReadOnlyContinuation({request:q,snapshot:value,startIndex}={}){
+  if(continuation||continuationIssued||!verifySealedExecution(value,{request:q})||!Number.isSafeInteger(startIndex)||startIndex!==nextTurn||startIndex<1||startIndex>=fixed.max_turns||Date.now()>=Math.min(fixed.worker_deadline_ms??deadlineMs,deadlineMs))throw failure('OFFICIAL_CONTROL_CONTINUATION');
+  const st=lstatSync(journalDirectory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||realpathSync(journalDirectory)!==resolve(journalDirectory))throw failure('OFFICIAL_CONTROL_CONTINUATION');
+  // Registration is irreversible even if subsequent private allocation fails.
+  try{durableRaw(rawPrefix+'-readonly-continuation.intent.json',{request_sha256:hash(canonical(fixed)),start_index:startIndex,max_turns:1,deadline_ms:fixed.deadline_ms});}catch{throw failure('OFFICIAL_CONTROL_CONTINUATION');}
+  continuationIssued=true;
+  const directory=join(journalDirectory,'readonly-continuation-'+randomUUID());mkdirSync(directory,{mode:0o700});
+  const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}
+  const capability=Object.freeze({});continuationCapabilities.set(capability,{used:false,request:canonical(fixed),source:canonical(fixedSource),directory,startIndex});
+  return createOfficialAgentControl({source:fixedSource,runtimeRoot,request:fixed,home,journalDirectory:directory,deadlineMs,cleanupDeadlineMs,credential,httpRequest,gatewayDependencies,gatewayCredential,continuationCapability:capability});
+ }
  function verifyStopReceipt(receipt,{request:q,index}={}){const p=stopReceipts.get(receipt);if(!p||!sameRequest(q)||p.request!==hash(canonical(q))||p.index!==index)throw failure('OFFICIAL_CONTROL_RAW_RECEIPT');return structuredClone(p.value);}
 
  async function requestAuthority(body){
@@ -266,7 +308,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   }
   await closing;return snapshot();
  }
- return Object.freeze({request:requestAuthority,snapshot,close,seal,authorizeParentContext,verifyTurnReceipt,verifyStopReceipt,authorizeIntent,consumeIntentPermit,authorizeBrokerDelivery,verifySealedExecution});
+ return Object.freeze({request:requestAuthority,snapshot,close,seal,authorizeParentContext,verifyTurnReceipt,verifyStopReceipt,authorizeIntent,consumeIntentPermit,authorizeBrokerDelivery,verifySealedExecution,createReadOnlyContinuation});
 }
 
 // Only the original frozen runtime module may construct its per-Activity controller.
