@@ -41,13 +41,13 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
    const localRoot=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks');
    const lock=async operation=>{await assertResources();const kind=operation==='acquire'?'acquire':operation==='release'?'release':'refresh',path=join(spec.evidence_root,`${identity.owner}-lock-${kind}.json`);const result=JSON.parse(await domain.local('lock',JSON.stringify({root:localRoot,serial:env.SERIAL,operation,owner:identity.owner,epoch:r.epoch,receipt:{path,run:identity.owner,profile:env.P,serial:env.SERIAL}})));if(result.owner!==identity.owner||result.epoch!==r.epoch||result.readback_owner!==identity.owner)fail('LOCAL_READBACK');appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...identity,epoch:r.epoch,operation,result,at:new Date().toISOString()})+'\n',{mode:0o600});return result;};
    r.stable=stable;r.assertResources=assertResources;r.lockRoot=localRoot;r.lock=lock;const adb=async(...args)=>{await assertResources();r.physicalSequence++;r.desktopCapability=null;return domain.adb(...args);};
-   r.driver=createPreflightPhoneDriver({adb,local:{run:(...args)=>domain.local(...args)},purpose:scope.activity,evidenceRoot:spec.evidence_root,owner:identity.owner,profile:env.P,serial:env.SERIAL,model:profile.model,expectedAccount:spec.expected_account,deadlineMs:scope.worker_deadline_ms,assertResources});
+   r.driver=createPreflightPhoneDriver({adb,local:{run:(...args)=>domain.local(...args)},purpose:scope.activity,evidenceRoot:spec.evidence_root,owner:identity.owner,profile:env.P,serial:env.SERIAL,model:profile.model,width:profile.width,height:profile.height,expectedAccount:spec.expected_account,deadlineMs:scope.worker_deadline_ms,assertResources});
    const handle={identity,activity:scope.activity,async phone(command,...args){if(!r.owned)fail('NO_LOCAL_OWNER');return r.driver.run(command,...args);},async heartbeat(){await lock('refresh');return {renewed:true};},async close(proof,desktop){
      const noLaunch=skillLaunchDidNotStart(proof,scope),stopped=official(proof,identity.source_commit);r.official=stopped;r.noLaunch=noLaunch;
      try{
       if(stopped&&scope.activity==='cleanup'&&desktop){
        await assertResources();const {close_stdout,desktop_stdout,xml,png}=desktop;
-       if(typeof xml!=='string'||!Buffer.isBuffer(png))fail('DESKTOP_INPUT');assertPreflightPng(png);
+       if(typeof xml!=='string'||!Buffer.isBuffer(png))fail('DESKTOP_INPUT');assertPreflightPng(png,{width:profile.width,height:profile.height});
        const launcher=desktop_stdout?.split('\n').find(line=>line.startsWith('launcher='))?.slice(9);if(!/^\w+(?:\.\w+)+$/.test(launcher||''))fail('DESKTOP_LAUNCHER');
        const packages=JSON.parse(await domain.desktop(launcher,xml));if(!Array.isArray(packages)||packages.some(p=>typeof p!=='string'))fail('DESKTOP_PARSE');
        r.desktopCapability={sequence:r.physicalSequence,launcher,close_sha256:hash(close_stdout),desktop_sha256:hash(desktop_stdout),xml_sha256:hash(xml),png_sha256:hash(png),packages:Object.freeze(packages)};
@@ -77,18 +77,18 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
    }});
   },
   async quarantine(){
-   const r=records.get(current);if(!r||r.noResources||r.released||!r.owned&&!r.acquireAttempted)return {verified:!bootstrapUnknown,not_owned:true,physical_actions:0};
+   const r=records.get(current);if(!r)return {verified:false,not_owned:true,physical_actions:0};if(r.noResources||r.released||!r.owned&&!r.acquireAttempted)return {verified:!bootstrapUnknown,not_owned:true,physical_actions:0};
    r.stable();const deadline=Date.now()+20000; // Existing protective quarantine window; never reopens business/phone admission.
    const local=await startPreflightLocalLeaves({root,directory:join(env.WFR_RUN_DIR,'preflight-native-scopes'),sourceFiles:r.sourceFiles,python:r.spec.executables.python,deadlineMs:deadline,env});let result;
    try{const path=join(r.spec.evidence_root,`${r.identity.owner}-lock-quarantine.json`);result=JSON.parse(await local.run('lock',JSON.stringify({root:r.lockRoot,serial:env.SERIAL,operation:'quarantine',owner:r.identity.owner,epoch:r.epoch,receipt:{path,run:r.identity.owner,profile:env.P,serial:env.SERIAL}})));appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,epoch:r.epoch,operation:'quarantine',authority_domain:'local-resource-protection-only',result,at:new Date().toISOString()})+'\n',{mode:0o600});}
    finally{const proof=await local.close();if(proof.execution_stopped!==true)fail('QUARANTINE_NATIVE_UNKNOWN');}
-   return {verified:result.lock==='quarantined'&&result.readback_owner===r.identity.owner&&result.readback_epoch===r.epoch,physical_actions:0};
+   return {verified:result.lock==='quarantined'&&result.review_required===true&&result.readback_owner===r.identity.owner&&result.readback_epoch===r.epoch,physical_actions:0};
   },
   async release(){
    const r=records.get(current);
    if(r?.noResources){
     if(r.released||!r.closed||!r.noLaunch||r.unknown||Date.now()>=r.scope.receipt_deadline_ms||!runtime.canFinalizeNoLocal(r.scope))fail('RELEASE_AUTHORITY');
-    r.released=true;appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,operation:'not_acquired_no_local_release',physical_actions:0,observed_at:new Date().toISOString()})+'\n',{mode:0o600});return {local_resources_released:1,physical_cleanup_not_required:true};
+    r.released=true;appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,operation:'not_acquired_no_local_release',physical_actions:0,observed_at:new Date().toISOString()})+'\n',{mode:0o600});return {local_resources_released:1,physical_cleanup_not_required:true,lock_released:0,no_lock:false};
    }
    runtime.desktopVerificationOptions();
    if(r.released||!r.owned||Date.now()>=r.scope.receipt_deadline_ms)fail('RELEASE_AUTHORITY');await r.assertResources();

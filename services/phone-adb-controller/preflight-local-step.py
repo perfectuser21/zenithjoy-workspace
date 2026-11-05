@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fixed preflight local leaf: pure parsing; no subprocess or executable dispatch."""
 import json
-import importlib.util
+import types
 import contextlib
 import io
 import os
@@ -142,9 +142,14 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
 
 
 def peer(name):
-    spec = importlib.util.spec_from_file_location('preflight_' + name.replace('-', '_'), Path(__file__).parent / (name + '.py'))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    if name not in ('phone-lock-root', 'phone-lock-helper', 'adb-existing-route'):
+        raise ValueError('PREFLIGHT_PEER_SCOPE')
+    path = Path(__file__).parent / (name + '.py')
+    module = types.ModuleType('preflight_' + name.replace('-', '_'))
+    module.__file__ = str(path)
+    # The parent pins these exact source files. Never substitute a timestamp-valid
+    # bytecode cache which is outside the frozen source inventory.
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
     return module
 
 

@@ -1,7 +1,7 @@
 // Parent executes the preflight sequence; only fixed ADB/local leaves cross the native boundary.
 import {readFileSync,writeFileSync,lstatSync,renameSync,chmodSync} from 'node:fs';import {join} from 'node:path';import {randomUUID} from 'node:crypto';import {inflateSync} from 'node:zlib';
 const packageName='com.ss.android.ugc.aweme';
-export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile,serial,model,expectedAccount,deadlineMs,assertResources,purpose='preflight'}){
+export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile,serial,model,width,height,expectedAccount,deadlineMs,assertResources,purpose='preflight'}){
  let sealed=false;
  const active=async()=>{if(sealed||Date.now()>=deadlineMs)throw Error('PREFLIGHT_PHONE_CLOSED');await assertResources();if(sealed||Date.now()>=deadlineMs)throw Error('PREFLIGHT_PHONE_CLOSED');};
  const call=async(...args)=>{await active();return adb(...args);};
@@ -28,9 +28,10 @@ export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile
    if(args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');const screen=await capture(args[0]),path=evidence(args[0])+'.xml';renameSync(screen.path,path);return path+'\n';
   }
   if(command==='snapshot-evidence'){
+   if(!Number.isSafeInteger(width)||width<1||!Number.isSafeInteger(height)||height<1)throw Error('PREFLIGHT_PROFILE_DIMENSIONS_UNVERIFIED');
    if(args.length!==1)throw Error('PREFLIGHT_PHONE_COMMAND');const path=evidence(args[0])+'.png',temp=path+'.'+randomUUID()+'.tmp',remote='/sdcard/preflight-'+randomUUID()+'.png';
    await call('shell','screencap','-p',remote);await call('pull',remote,temp);await active();const st=lstatSync(temp);if(!st.isFile()||st.isSymbolicLink()||st.size>12*1024*1024)throw Error('PREFLIGHT_PNG_INVALID');
-   const png=readFileSync(temp);assertPreflightPng(png);chmodSync(temp,0o600);renameSync(temp,path);return path+'\n';
+   const png=readFileSync(temp);assertPreflightPng(png,{width,height});chmodSync(temp,0o600);renameSync(temp,path);return path+'\n';
   }
   if(command==='open-app'&&purpose==='preflight'){
    if(args.length)throw Error('PREFLIGHT_PHONE_COMMAND');await target();await call('shell','monkey','-p',packageName,'-c','android.intent.category.LAUNCHER','1');
@@ -71,14 +72,14 @@ export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile
 }
 
 
-export function assertPreflightPng(png){
+export function assertPreflightPng(png,expectedDimensions){
  const invalid=()=>{throw Error('PREFLIGHT_PNG_INVALID');};
  try{
   if(!Buffer.isBuffer(png)||png.length<45||png.length>12*1024*1024||!png.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')))invalid();
   const crc=bytes=>{let value=0xffffffff;for(const byte of bytes){value^=byte;for(let i=0;i<8;i++)value=(value>>>1)^((value&1)?0xedb88320:0);}return (value^0xffffffff)>>>0;};
   let at=8,width,height,channels,phase=0,ended=false;const compressed=[];
   while(at<png.length){
-   if(at+12>png.length)invalid();const size=png.readUInt32BE(at),kind=png.subarray(at+4,at+8).toString('ascii');if(size>png.length-at-12||!/[A-Za-z]{4}/.test(kind))invalid();
+   if(at+12>png.length)invalid();const size=png.readUInt32BE(at),kindBytes=png.subarray(at+4,at+8);if(!kindBytes.every(b=>b>=65&&b<=90||b>=97&&b<=122)||kindBytes[2]&32)invalid();const kind=kindBytes.toString('latin1');if(size>png.length-at-12)invalid();
    const bytes=png.subarray(at+8,at+8+size);if(crc(png.subarray(at+4,at+8+size))!==png.readUInt32BE(at+8+size))invalid();
    if(kind==='IHDR'){
     if(at!==8||size!==13)invalid();width=bytes.readUInt32BE(0);height=bytes.readUInt32BE(4);channels=bytes[9]===2?3:bytes[9]===6?4:0;
@@ -88,6 +89,6 @@ export function assertPreflightPng(png){
    else{if(!width||kind[0]===kind[0].toUpperCase()&&kind!=='PLTE')invalid();if(phase===1)phase=2;}
    at+=size+12;if(ended)break;
   }
-  if(!ended)invalid();const row=width*channels+1,expected=row*height,raw=inflateSync(Buffer.concat(compressed),{maxOutputLength:expected+1});if(raw.length!==expected)invalid();for(let y=0;y<height;y++)if(raw[y*row]>4)invalid();return {width,height};
- }catch{invalid();}
+  if(!ended)invalid();if(expectedDimensions!==undefined&&(Object.keys(expectedDimensions).sort().join(',')!=='height,width'||!Number.isSafeInteger(expectedDimensions.width)||!Number.isSafeInteger(expectedDimensions.height)||expectedDimensions.width!==width||expectedDimensions.height!==height))throw Error('PREFLIGHT_PNG_DIMENSIONS');const row=width*channels+1,expected=row*height,raw=inflateSync(Buffer.concat(compressed),{maxOutputLength:expected+1});if(raw.length!==expected)invalid();for(let y=0;y<height;y++)if(raw[y*row]>4)invalid();return {width,height};
+ }catch(error){if(error?.message==='PREFLIGHT_PNG_DIMENSIONS')throw error;invalid();}
 }

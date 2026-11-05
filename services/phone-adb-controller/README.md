@@ -276,7 +276,7 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 
 ### Agent 预检的受控执行域（42e）
 
-当前源码的预检工厂仍默认不声明支持，完成独立审查前不会启动手机。其它尚无完整原生域的 Activity 继续在工具分配和 Worker 派发前返回 `not_started / needs_review`，不能把这个安全修复当作 101→102→103 已跑通。
+当前源码的预检工厂仍不声明支持。正式 activity_skill / authority / stop 的 Caller 仍有普通 SSH、远端 shell 或本地 Node outer，尚无完整受支持执行域；官方 Agent 会话双停不能替这些 Caller 签停止证明。本组件的独立审查也不构成启用资格，必须由后续正式 Caller 修复闭合后再审。其它尚无完整原生域的 Activity 继续在工具分配和 Worker 派发前返回 `not_started / needs_review`，不能把这个安全修复当作 101→102→103 已跑通。
 
 101/102 Agent 预检使用父进程内的原关键词、公司冻结函数及独立 Judge、记录函数。物理操作只有固定、来源绑定的 nofork ADB/Python 叶，不再启动旧 controller shell。PG 控制面、本机物理叶和官方 Commander/Worker 双停分别留证：本机叶关闭不证明远端 PG 服务或 Android 应用进程全集停止；PG 提交未知仍保留未知，官方停证也不能由本机证明代替。
 

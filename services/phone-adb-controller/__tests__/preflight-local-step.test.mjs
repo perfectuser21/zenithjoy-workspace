@@ -15,3 +15,20 @@ test('local lock endpoint rejects a caller-selected unverified root without crea
  const p=spawnSync('/usr/bin/python3',['-I','-S',helper,'lock'],{input:JSON.stringify({root:'/tmp/untrusted-preflight-root',serial:'SERIAL',operation:'acquire',owner:'fixture_run',epoch:'00000000-0000-4000-8000-000000000001',receipt:{}}),encoding:'utf8'});
  assert.notEqual(p.status,0);assert.equal(p.stdout,'');assert.equal(p.stderr,'PREFLIGHT_LOCAL_INVALID\n');
 });
+
+test('fixed peer executes its pinned source bytes even when an otherwise valid timestamp pycache disagrees',()=>{
+ const code=`from pathlib import Path
+import tempfile,shutil,importlib.util,marshal,struct,sys
+root=Path(tempfile.mkdtemp(prefix='preflight-cache-boundary-'))
+try:
+ helper=root/'preflight-local-step.py';helper.write_bytes(Path(sys.argv[1]).read_bytes())
+ peer=root/'phone-lock-root.py';peer.write_text("VALUE='source'\\n")
+ cached=Path(importlib.util.cache_from_source(str(peer)));cached.parent.mkdir()
+ cached.write_bytes(importlib.util.MAGIC_NUMBER+struct.pack('<III',0,int(peer.stat().st_mtime),peer.stat().st_size)+marshal.dumps(compile("VALUE='unbound-cache'\\n",str(peer),'exec')))
+ spec=importlib.util.spec_from_file_location('fixed',helper);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+ assert m.peer('phone-lock-root').VALUE=='source'
+ assert peer.read_text()=="VALUE='source'\\n"
+finally:shutil.rmtree(root)
+`;
+ const p=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)','/usr/bin/python3','-I','-S','-c',code,helper],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);
+});
