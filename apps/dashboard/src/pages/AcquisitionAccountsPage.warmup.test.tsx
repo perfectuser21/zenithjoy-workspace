@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import AcquisitionAccountsPage, { WarmupLivenessPanel } from './AcquisitionAccountsPage';
 
 afterEach(() => {
@@ -57,7 +57,7 @@ describe('WarmupLivenessPanel — Line02 养号验活展示', () => {
 });
 
 describe('AcquisitionAccountsPage — 整页集成', () => {
-  it('渲染小号表 + 该设备验活面板 + 绑定名校验', async () => {
+  it('展示历史小号和验活，隐藏旧版绑定与扫描', async () => {
     global.fetch = mockFetchByUrl({
       '/api/agent/burner/sessions': {
         success: true,
@@ -82,10 +82,9 @@ describe('AcquisitionAccountsPage — 整页集成', () => {
     // 该 agent 的养号验活面板（分组渲染 + 昵称）
     await waitFor(() => expect(screen.getByText(/养号验活/)).toBeTruthy());
     expect(screen.getByText(/大湖/)).toBeTruthy();
-    // 绑定名校验分支：输入 default → 报错
-    const input = screen.getByPlaceholderText(/account_label/);
-    fireEvent.change(input, { target: { value: 'default' } });
-    expect(screen.getByText(/不能用 default/)).toBeTruthy();
+    expect(screen.getByText(/旧版获客已停用/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /开始绑定|立即扫描/ })).toBeNull();
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => String(url).includes('/account-scan/trigger') || String(url).includes('/qr-bind'))).toBe(false);
   });
 
   it('needs_rebind 小号 → 顶部登录过期告警', async () => {

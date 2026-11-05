@@ -3,11 +3,6 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AcquisitionTasksPage from './AcquisitionTasksPage';
 
-const BURNER_SESSIONS = [
-  { account_label: 'burner-1', role: 'burner', status: 'active', bound_at: null, created_at: null, account_nickname: '小号A', hostname: 'ROG-PC', nickname: '西安ROG' },
-  { account_label: 'burner-2', role: 'burner', status: 'expired', bound_at: null, created_at: null, account_nickname: '小号B(过期)', hostname: 'XIAN-PC', nickname: null },
-];
-
 function mockFetchByUrl(handlers: Record<string, unknown>) {
   return vi.fn((url: string, _init?: RequestInit) => {
     for (const [pattern, body] of Object.entries(handlers)) {
@@ -29,83 +24,33 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () => {
-  it('"使用账号"下拉只列 active session（过滤掉 expired）', async () => {
-    global.fetch = mockFetchByUrl({
-      '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
-      '/api/agent/burner/sessions': { success: true, data: { sessions: BURNER_SESSIONS } },
-      '/api/agent/machines': { success: true, data: [{ id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG', machine_role: 'main', status: 'online', version: '1.0', last_seen: '', session_count: 0 }] },
-    }) as unknown as typeof fetch;
-
-    render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
-
-    await waitFor(() => {
-      expect(screen.getByText(/小号A/)).toBeTruthy();
-    });
-    expect(screen.queryByText(/小号B/)).toBeNull();
-  });
-
-  it('选中账号后显示"将在 XX 上运行"', async () => {
-    global.fetch = mockFetchByUrl({
-      '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
-      '/api/agent/burner/sessions': { success: true, data: { sessions: BURNER_SESSIONS } },
-      '/api/agent/machines': { success: true, data: [{ id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG', machine_role: 'main', status: 'online', version: '1.0', last_seen: '', session_count: 0 }] },
-    }) as unknown as typeof fetch;
-
-    render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
-    // 等待 burner session 选项渲染完毕再 select，避免 sessions 未加载时 selectedSession 为空
-    await screen.findByText(/小号A/);
-    const select = screen.getByLabelText(/使用账号/);
-    fireEvent.change(select, { target: { value: 'burner-1' } });
-
-    await waitFor(() => {
-      expect(screen.getByText(/将在.*西安ROG.*运行|将在.*ROG-PC.*运行/)).toBeTruthy();
-    });
-  });
-
-  it('提交时 body 带 account_label', async () => {
+describe('AcquisitionTasksPage — 旧版采集退役', () => {
+  it('展示退役说明和历史任务，不提供新采集入口', async () => {
     const fetchMock = mockFetchByUrl({
-      '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
-      '/api/agent/burner/sessions': { success: true, data: { sessions: BURNER_SESSIONS } },
-      '/api/agent/machines': { success: true, data: [{ id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG', machine_role: 'main', status: 'online', version: '1.0', last_seen: '', session_count: 0 }] },
-      '/api/acquisition/collect/start': { success: true, data: { task_id: 't-1' } },
+      '/api/agent/machines': { success: true, data: [] },
+      '/api/agent/burner/sessions': { success: true, data: { sessions: [] } },
+      '/api/acquisition/collect-tasks': { success: true, data: { tasks: [{ id: 'old-1', keywords: ['历史关键词'], status: 'done', video_count: 2, lead_count_raw: 1, created_at: null, cancel_phase: null, cooldown_remaining_seconds: 0 }] } },
     });
     global.fetch = fetchMock as unknown as typeof fetch;
-
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
-    await screen.findByText(/小号A/);
-    const select = screen.getByLabelText(/使用账号/);
-    fireEvent.change(select, { target: { value: 'burner-1' } });
-
-    const input = screen.getByPlaceholderText(/关键词/);
-    fireEvent.change(input, { target: { value: '美甲' } });
-    const btn = screen.getByText('开始采集');
-    fireEvent.click(btn);
-
-    await waitFor(() => {
-      const startCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/collect/start'));
-      expect(startCall).toBeTruthy();
-      const body = JSON.parse((startCall![1] as RequestInit).body as string);
-      expect(body.account_label).toBe('burner-1');
-    });
+    expect(await screen.findByText('历史关键词')).toBeTruthy();
+    expect(screen.getByText(/旧版获客已停用/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /开始采集/ })).toBeNull();
+    expect(screen.getByText('查看详情').getAttribute('href')).toBe('/area/acquisition/tasks/old-1');
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/collect/start'))).toBe(false);
   });
 
-  it('无在线机器 → 红色警告 + 禁止创建任务', async () => {
-    global.fetch = mockFetchByUrl({
-      '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
+  it('保留运行中旧任务的取消入口', async () => {
+    const fetchMock = mockFetchByUrl({
+      '/api/agent/machines': { success: true, data: [] },
       '/api/agent/burner/sessions': { success: true, data: { sessions: [] } },
-      '/api/agent/machines': { success: true, data: [{ id: 'm-c', agent_id: 'agent-c', hostname: 'MAC-M4', nickname: null, machine_role: 'sub', status: 'offline', version: '1.0', last_seen: '', session_count: 0 }] },
-    }) as unknown as typeof fetch;
-
-    render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
-
-    await waitFor(() => {
-      expect(screen.getByText(/无在线机器/)).toBeTruthy();
+      '/api/acquisition/collect/cancel': { success: true },
+      '/api/acquisition/collect-tasks': { success: true, data: { tasks: [{ id: 'old-running', keywords: ['待取消'], status: 'running', video_count: 0, lead_count_raw: 0, created_at: null, cancel_phase: null, cooldown_remaining_seconds: 0 }] } },
     });
-    const input = screen.getByPlaceholderText(/关键词/);
-    fireEvent.change(input, { target: { value: '美甲' } });
-    const btn = screen.getByText('开始采集') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: '放弃' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/collect/cancel') && JSON.parse((c[1] as RequestInit).body as string).task_id === 'old-running')).toBe(true));
   });
 });
 
