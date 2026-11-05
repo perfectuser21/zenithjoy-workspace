@@ -27,8 +27,8 @@ export function createBoundedCommanderOwner({runtimeRoot,source,python,deadlineM
   const stat=lstatSync(py.path);if(!stat.isFile()||(stat.mode&0o022)||sha(readFileSync(py.path))!==py.sha256)throw fail();
  };
  verify();
- let sealed=false,unknown=false,calibration,calibrating,closing;const leaves=[];
- const active=()=>{if(sealed||Date.now()>=deadlineMs)throw fail();verify();};
+ let sealed=false,unknown=false,calibration,calibrating,closing,identityKey;const leaves=[];
+ const active=()=>{if(sealed||unknown||Date.now()>=deadlineMs)throw fail();verify();};
  function launch(args,{purpose,fd=null,guard,runDeadline=deadlineMs,closeDeadline=cleanupDeadlineMs,probe=false}={}){
   const state={purpose,pid:null,ready:false,process_closed:false,stdin_closed:false,stdout_closed:false,stderr_closed:false,
    fd_closed:fd===null,closing:probe,unknown:false,code:null,signal:null};
@@ -132,6 +132,8 @@ export function createBoundedCommanderOwner({runtimeRoot,source,python,deadlineM
  return Object.freeze({
   reserveOwner:async(scope,options)=>{
    active();if(scope?.source_commit!==fixed.commit||scope.commander_role!=='observer')throw fail();
+   const key=JSON.stringify(['workflow_key','run_id','binding_id','source_commit','task_id','commander_role'].map(name=>scope[name]??null));
+   if(identityKey!==undefined&&identityKey!==key)throw fail();identityKey=key;
    return reserveWorkflowCommanderTurn(scope,{...options,acquireLock});
   },snapshot,
   close:()=>closing??=(async()=>{sealed=true;await Promise.all(leaves.map(leaf=>leaf.shutdown()));return snapshot();})(),
