@@ -353,6 +353,28 @@ jobs:
         run: |
           brew install postgresql@17
           echo "PREFLIGHT_TEST_PG_BIN=$(brew --prefix postgresql@17)/bin" >> "$GITHUB_ENV"
+      - name: Diagnose pinned preflight Python startup without credentials or phone
+        run: |
+          node --input-type=module <<'NODE'
+          import {spawnSync} from 'node:child_process';
+          import {readFileSync,realpathSync,statSync} from 'node:fs';
+          import {resolve,isAbsolute} from 'node:path';
+          import {createHash} from 'node:crypto';
+          const hash=b=>createHash('sha256').update(b).digest('hex');
+          const env={PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:process.env.RUNNER_TEMP,TMPDIR:process.env.RUNNER_TEMP,LANG:'en_US.UTF-8',...(process.env.DEVELOPER_DIR?{DEVELOPER_DIR:process.env.DEVELOPER_DIR}:{})};
+          const call=(command,args,input='')=>spawnSync(command,args,{env,input,encoding:'utf8',timeout:10000,maxBuffer:65536});
+          const report=(name,result)=>console.log(JSON.stringify({name,code:result.status,signal:result.signal,error_code:result.error?.code||null,stderr_bytes:Buffer.byteLength(result.stderr||''),stderr_sha256:hash(result.stderr||''),stderr_classes:['xcrun','Operation not permitted','PermissionError','Resource temporarily unavailable','No such file'].filter(s=>(result.stderr||'').includes(s)),stdout:result.stdout?.slice(0,1000)}));
+          const discover=call('/usr/bin/python3',['-I','-S','-c','import sys;print(sys.executable)']);report('system-python-discovery',discover);
+          const helper=resolve('services/phone-adb-controller/preflight-local-step.py'),input='<hierarchy><node text="抖音号：fixture"/><node text="编辑主页"/></hierarchy>',args=['-I','-S',helper,'ui'],profile='(version 1)(allow default)(deny process-fork)';
+          report('system-python-plain-helper',call('/usr/bin/python3',args,input));
+          report('system-python-sandbox-helper',call('/usr/bin/sandbox-exec',['-p',profile,'/usr/bin/python3',...args],input));
+          const physical=discover.stdout?.trim();
+          if(discover.status===0&&isAbsolute(physical||'')&&!/[\r\n]/.test(physical)&&statSync(physical).isFile()){
+            const canonical=realpathSync(physical);console.log(JSON.stringify({name:'physical-python-identity',path:physical,realpath:canonical,sha256:hash(readFileSync(canonical))}));
+            report('physical-python-sandbox-helper',call('/usr/bin/sandbox-exec',['-p',profile,canonical,...args],input));
+            report('physical-python-fork-negative',call('/usr/bin/sandbox-exec',['-p',profile,canonical,'-I','-S','-c','import os;os.fork()']));
+          }
+          NODE
       - name: Run preflight native lifecycle tests on Darwin
         run: node --test --test-concurrency=1 services/phone-adb-controller/__tests__/preflight-*.test.mjs
       - name: Require real Darwin kernel tests
