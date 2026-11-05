@@ -12,7 +12,7 @@ function fixture(fn,{target='xian-m4',profile='yueshengyun-work',serial='e6c7ef3
  const home=mkdtempSync(join(tmpdir(),'e6-source-scope-'));
  try{
   mkdirSync(join(home,'config'));const bytes=readFileSync(new URL('../config/collection-phone-hosts.json',import.meta.url));
-  const config=JSON.parse(bytes);for(const h of config.hosts)delete h.evidence_alias;
+  const config=JSON.parse(bytes);for(const h of config.hosts)if(h.target==='xian-m4')delete h.evidence_alias;
   // The production alias itself is checked on the actual host. This fixture
   // cannot manufacture that filesystem; all other fixed source bytes are used.
   const raw=Buffer.from(JSON.stringify(config));writeFileSync(join(home,'config/collection-phone-hosts.json'),raw);
