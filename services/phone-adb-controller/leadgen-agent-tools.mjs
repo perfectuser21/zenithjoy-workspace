@@ -187,7 +187,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     prepare:async()=>{if(prepared)return;const result=await lifecycle('resource_prepare',()=>primitives.prepare?.(scope));if(!result?.deferred)prepared=true;return result;},
     settle:async proof=>{if(proof?.execution_stopped!==true||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});await guard();if(typeof primitives.settle!=='function')throw Error('AGENT_TOOL_RESULT_ADAPTER_UNAVAILABLE');result=await primitives.settle({scope,receipts:structuredClone(receipts),proof});settled=true;return result;},
     release:async proof=>{if(proof?.execution_stopped!==true||!settled||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');if(scope.activity!=='cleanup')throw Error('AGENT_TOOL_RELEASE_NOT_CLEANUP');const released=await lifecycle('resource_release',()=>primitives.release?.(proof,scope));if(!object(released))throw Error('AGENT_TOOL_RELEASE_UNVERIFIED');result={...result,...released};return released;},
-    getResult:()=>result,
+    getResult:()=>{const state=primitives.executionState?.()||{};return state.native_stop_unproven===true||state.execution_unknown===true?{...(result||{}),execution_stopped:false,...(state.native_stop_unproven===true?{native_stop_unproven:true}:{})}:result;},
   };
 }
 

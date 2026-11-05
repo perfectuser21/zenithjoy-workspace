@@ -207,6 +207,8 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 在原正式启动输入上设置 `LEADGEN_EXECUTION_MODE=agent`，可选择 101、102、103 的 Agent 主执行路径。执行模式、任务身份、输入范围与预算冻结到本 run，不能在续跑时切换为 Code，也不适用于 104。原 Code 路径保持独立。
 
+Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行域能力检查。当前 Provider 尚未声明支持完整执行域，101–103 的 Agent 活动会返回 `needs_review`、`not_started=true`，不会开始手机或业务操作；这不代表业务完成，也不会自动切换为 Code。环境变量、Agent 返回内容或 JSON 标记不能开启此能力。旧执行的停止状态若仍未证明，必须保留 `execution_stopped=false`，不能因为本次没有启动 Worker 就覆盖它。
+
 Agent 主执行时，每个 Activity 加载自己的冻结 Skill，通过当前活动允许的手机、录音、提交和读回原语完成工作；不会调用原业务 handler 或 `resume`。底层控制器、事务、资源管理和规则校验仍由代码提供。`inspect`、`phone`、`business` 只使用本次原请求给出的入口，Agent 不创建绑定或直接调用内部队列。
 
 Agent 路径沿公共 Runner 的实际剩余时间设置一次绝对截止，在原 Activity 与整轮预算内为 Worker、父会话返回、精确停止读证和终检留时间；阶段字段只能缩短截止，预算不足不启动。Worker 截止限制新业务准入及官方子会话超时，不代表原生执行域已停止；此前已发起的操作仍需独立终止证明。普通超时也请求停止同一绑定对象，缺父子双方终态证明仍隔离。Parent 只负责官方派发，Child 分页读取同一冻结方法、支持材料和合同，完整原件保留。

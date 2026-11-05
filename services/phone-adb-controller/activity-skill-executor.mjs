@@ -28,7 +28,7 @@ const uncertainty=(actual,receipt,request)=>{
  return {unknown_reasons:[...reasons],owner_execution_stopped:sourceMatches&&receipt?.owner_execution_stopped===true,child_execution_stopped:sourceMatches&&receipt?.child_execution_stopped===true};
 };
 
-export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,createTools,deadlineFor}){
+export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,createTools,deadlineFor,supportsNativeScope=()=>false,nativeState=()=>({})}){
  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
  assertAgentInput(frozen,env);
  if(typeof createTools!=='function'||typeof rpc!=='function'||typeof deadlineFor!=='function')throw noLaunch('AGENT_PRIMARY_DEPENDENCY_UNAVAILABLE');
@@ -37,9 +37,11 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   const fixed=assertAgentInput(frozen,env);
   const directory=join(runDir,'skill-primary',activity.key);
   if(existsSync(directory))throw Object.assign(Error('SKILL_PRIMARY_ALREADY_REQUESTED_TERMINATION_UNVERIFIED'),{executionStopped:false});
+  const known=nativeState();if(known.native_stop_unproven===true||known.execution_unknown===true)return {status:'needs_review',not_started:true,execution_stopped:false,reason:'AGENT_PRIMARY_PREVIOUS_NATIVE_UNVERIFIED',resource_unverified:true};
   if(signal?.aborted)throw noLaunch('AGENT_PRIMARY_CANCELLED_BEFORE_START');
   const taskId=fixed.task_id;
   if(context.task_id!=null&&context.task_id!==taskId||binding.task_id!=null&&binding.task_id!==taskId||!uuid.test(taskId||'')||!uuid.test(binding.id||''))throw noLaunch('AGENT_PRIMARY_TASK_BINDING_REQUIRED');
+  if(await supportsNativeScope(activity)!==true)return {status:'needs_review',not_started:true,execution_stopped:true,reason:'AGENT_PRIMARY_NATIVE_DOMAIN_UNSUPPORTED'};
   const method=frozenMethod(frozen,activity.key,runDir),outerDeadline=Math.min(deadlineFor(activity),runnerDeadline??Infinity);
   const available=Math.floor(outerDeadline-Date.now()),checkReserve=Math.min(10000,Math.floor(available/10)),stopReserve=Math.min(48000,Math.floor(available/5)),ownerReserve=Math.min(10000,Math.floor(available/10));
   if(!Number.isSafeInteger(outerDeadline)||available<100)throw noLaunch('AGENT_PRIMARY_DEADLINE_EXHAUSTED');
