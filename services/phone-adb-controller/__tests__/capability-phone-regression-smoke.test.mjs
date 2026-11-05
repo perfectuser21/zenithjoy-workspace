@@ -116,3 +116,15 @@ test('正式Step34拒绝缺失真正的判定或详情函数定义',t=>{
   const r=runCanonicalStep34(t,ctl);assert.equal(r.status,1,r.stderr);
  }
 });
+
+test('retired Kotlin model gate is absent without claiming Skill acceptance', () => {
+ const smoke=readFileSync(gp2Smoke,'utf8');
+ assert.doesNotMatch(smoke,/^echo "▶ Step (?:8(?:[a-d])?|23(?:[a-c])?):/m,'retired Kotlin model steps must not run');
+ assert.doesNotMatch(smoke,/\b(?:S8_TMP|S23A_TMP|S23B_TMP|S23C_TMP)\b/,'retired resources must not be referenced even during cleanup');
+ for (const endpoint of ['/collect/start','/account-scan/trigger','/build-assignments','/dispatch/build','/dispatch/run']) {
+  assert.equal(smoke.includes('/api/acquisition'+endpoint),false,`retired endpoint ${endpoint} must not be called by shared smoke`);
+ }
+ assert.match(smoke,/SKILL_DEVICE_ACCEPTANCE=not_verified/,'legacy cleanup cannot claim new Skill/device acceptance');
+ assert.match(smoke,/# Step 34：/,'current phone result-page guard remains');
+ assert.match(smoke,/# Step 41：/,'current company isolation guard remains');
+});
