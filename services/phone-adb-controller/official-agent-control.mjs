@@ -1,4 +1,4 @@
-// Parent-only authority transport. Launch, stop and Worker execution remain unsupported.
+// Parent-only official SDK control. Legacy child authority stays separate from explicit raw turns.
 import {request as requestHttp} from 'node:http';
 import {readFileSync,lstatSync,realpathSync,openSync,closeSync,fstatSync,writeSync,fsyncSync,constants,readdirSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join,resolve,dirname} from 'node:path';
