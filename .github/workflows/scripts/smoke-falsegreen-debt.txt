@@ -9,20 +9,14 @@ agent-identity-dedup-smoke.sh
 agent-installpack-url-burn-smoke.sh
 agent-v110-stale-recovery-smoke.sh
 agent-version-display-smoke.sh
-ai-video-pipeline-local-smoke.sh
-ai-video-pipeline-smoke.sh
-ai-video-pipeline-ws1-smoke.sh
-analyze-transcript-smoke.sh
 android-collect-protocol-v2-smoke.sh
 auth-smoke.sh
-clips-output-binding-smoke.sh
 credits-smoke.sh
 cross-line-seam-smoke.sh
 dashboard-auth-ui-smoke.sh
 dashboard-license-smoke.sh
 deploy-version-selfcheck-smoke.sh
 device-readiness-smoke.sh
-dynamic-template-compose-smoke.sh
 fleet-wechat-status-col-smoke.sh
 geoai-legal-pages-smoke.sh
 golden-path-1-douyin-smoke.sh
@@ -30,7 +24,6 @@ golden-path-1-smoke.sh
 golden-path-2-b1-smoke.sh
 golden-path-2-smoke.sh
 golden-path-4-smoke.sh
-golden-path-7-video-remake-smoke.sh
 installer-env-reset-smoke.sh
 knowledge-hub-path1-smoke.sh
 license-smoke.sh
@@ -52,4 +45,3 @@ skill-registry-smoke.sh
 sprint-2-1a-type-route-smoke.sh
 step6-dispatch-chain-smoke.sh
 work-performance-smoke.sh
-ws2-three-template-builders-smoke.sh
