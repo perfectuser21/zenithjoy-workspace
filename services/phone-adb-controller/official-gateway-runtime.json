@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "gateway_version": "2026.9.8",
   "package_root": "/opt/homebrew/lib/node_modules/openclaw",
   "files": [
@@ -30,7 +30,36 @@
     {
       "path": "dist/tool-surface-bridge-CgDvORRC.mjs",
       "sha256": "7061972bbe3bdde0387a314f827e1945d941ff8bb4e2119d59fd4b48aa4277c1"
+    },
+    {
+      "path": "dist/agent-job-COe8i8Fi.mjs",
+      "sha256": "f668acbf48e736db7e80f6757269a68b6a9b7a42cef1d55cb3956229df3c3db2"
+    },
+    {
+      "path": "dist/agent-command-DUhFGJSr.mjs",
+      "sha256": "44bc71ce41cafb7963cd9ea2273e8df00a3ad433bee0263e39db747aa96db6f9"
+    },
+    {
+      "path": "dist/run-entry-D1FBcMwF.mjs",
+      "sha256": "d76af93ff1762d8212ed7e60ea721c51056ca798e76e4aa1b39feb7af66e7f4c"
+    },
+    {
+      "path": "dist/agent-run-terminal-reply-DV0cZr9u.mjs",
+      "sha256": "938a8ff1cde20a62c086eca29ec8e573d31a77196bdf719c2ea0f6269efae0d1"
+    },
+    {
+      "path": "dist/agent-run-terminal-outcome-BGbjspLO.mjs",
+      "sha256": "c8aef052369a1499b51fc10539da85465cd45b62ce92a683246cb263fb261859"
+    },
+    {
+      "path": "dist/agent-run-terminal-outcome-merge-DXNYLPhQ.mjs",
+      "sha256": "e22a1b71bf72d9935fc822cee4ae4a6b8fc8f5ab3da4a4cb2aa35b5e5039d076"
+    },
+    {
+      "path": "dist/agent-dedupe-HXQNHjQs.mjs",
+      "sha256": "4e88b16fc028aa3e78866c4506fbbf24517192fb7fc13ba23f11e9aa0525a42d"
     }
   ],
-  "agent_config_path": "/Users/administrator/.openclaw/openclaw.json"
+  "agent_config_path": "/Users/administrator/.openclaw/openclaw.json",
+  "terminal_policy": "direct-final-plus-run-wait/v1"
 }
