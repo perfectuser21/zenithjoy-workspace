@@ -92,6 +92,8 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
   './activity-skill-executor.mjs':{createActivitySkillExecutor:()=>{throw Error('Agent executor after Code stop');}},
   './preflight-phone-scope.mjs':{createPreflightRuntime:()=>{throw Error('Agent preflight after Code stop');}},
   './preflight-judge.mjs':{judgePreflightInProcess:()=>{throw Error('Agent judge after Code stop');}},
+  './runner-official-commander.mjs':{runnerCommanderPreparation:()=>{throw Error('raw Observer preparation after Code stop');},runnerCommanderClosureKnown:()=>{throw Error('raw Observer close after Code stop');}},
+  './control-acceptance-tools.mjs':{validateControlScope:()=>{throw Error('raw control scope after Code stop');},validateFrozenControlAcceptance:value=>{assert.equal(value.control_scope,undefined);assert.equal(value.control_claim,undefined);return null;},createControlAcceptanceHandlers:()=>{throw Error('raw control handlers after Code stop');}},
   './runtime-receipts.mjs':{markActivityStart:()=>{throw Error('Agent recorder after Code stop');}},
   './ledger.mjs':{setLedgerStage:()=>{throw Error('Agent ledger after Code stop');}},
   './runtime-definition.mjs':{readFrozen:()=>frozen,assertCommentSampling:()=>{},assertOutreachScope:()=>{},assertExecutionMode:()=> 'code',assertAgentInput:()=>null},
