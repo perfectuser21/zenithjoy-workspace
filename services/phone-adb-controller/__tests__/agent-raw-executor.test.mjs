@@ -5,7 +5,9 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {agentInput,canonical} from '../runtime-definition.mjs';
-import {createWorkflowExecution} from '../leadgen-workflow.mjs';
+import * as workflow from '../leadgen-workflow.mjs';
+const {createWorkflowExecution}=workflow;
+import {RPC_FILES} from '../leadgen-client.mjs';
 import {rawModelScopeStopped} from '../activity-skill-parent-loop.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -40,4 +42,60 @@ test('actual workflow factory runs the declared raw Skill through one broker and
  const actual=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000,onEvent:async event=>event.operation==='business'?{action:'steer',text:'Keep the original scoring policy.'}:{action:'none'}});
  assert.equal(actual.status,'completed');assert.equal(actual.execution_stopped,true);assert.equal(actual.result.scored,1);assert.deepEqual(actual.result.ids,['55555555-5555-4555-8555-555555555555']);
  assert.deepEqual([prepared,controllers,settled,legacy],[1,1,1,0]);assert.equal(actual.skill_receipt.owner_execution_stopped,undefined);assert.equal(actual.skill_receipt.child_run_id,undefined);
+});
+
+test('actual control Task selects zero-capability handlers, pure recorder and a failing business Judge without legacy RPC',async t=>{
+ const f=fixture(t);Object.assign(f.env,{P:'mmv-scoring',LEADGEN_LIMIT:'1',WF_RUN_MAX_SECONDS:'300',LEADGEN_MAX_TURNS:'8'});delete f.env.LEADGEN_SOURCE_RUN;
+ f.frozen.agent_input=agentInput(f.env);Object.assign(f.frozen,{max_turns:8,control_scope:{protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']},control_claim:{claimed_by:'headed-control-fixture',claimed_at:'2026-11-05T00:00:00.000Z'}});
+ assert.equal(typeof workflow.createWorkflowHandlers,'function');
+ const rpc=async()=>{throw Error('CONTROL_MUST_NOT_CONSTRUCT_LEGACY_RPC');};
+ const handlers=workflow.createWorkflowHandlers({...f,root:join(f.runDir,'runtime'),rpc});
+ const wired=createWorkflowExecution({...f,handlers,rpc,createOfficialControl:async({request})=>{assert.deepEqual(request.control_scope,f.frozen.control_scope);assert.deepEqual(request.control_claim,f.frozen.control_claim);return officialFixture(request,{onTurn:async index=>index===0?{type:'inspect',progress:'Inspect only, no business.'}:{type:'finish'}});}});
+ const actual=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000});
+ assert.equal(actual.status,'partial');assert.equal(actual.execution_stopped,true);assert.equal(actual.result.business_pass,false);assert.equal(actual.result.physical_actions,0);assert.equal(actual.result.pg_connections,0);
+ const judged=await workflow.readbackActivityChecks({executionMode:'agent',activity:f.activities[0],root:join(f.runDir,'runtime'),frozen:f.frozen,env:f.env,metrics:actual.result,rpc});
+ assert.equal(judged.result.gate.verdict,'fail');
+ await workflow.recordActivityBookkeeping({phase:'start',activity:'scoring'},{root:join(f.runDir,'runtime'),env:{...f.env,WFR_RUN_DIR:f.runDir,WFR_ATTEMPT:'a1'},executionMode:'agent',controlScope:f.frozen.control_scope,execute:rpc});
+ assert.ok(readFileSync(join(f.runDir,'span-start.a1.scoring.1'),'utf8'));
+});
+
+test('actual Runner checks twice around exactly one Code-owned raw read-only continuation with Commander guidance',async t=>{
+ const f=fixture(t),turns=[],guidance=[];let checks=0,continuations=0;
+ const handlers={state:{},agentSupportsNativeScope:()=>true,agentNativeState:()=>({}),createAgentTools:async(_a,scope)=>({prepare:async()=>{},inspect:async()=>({phone_capabilities:[],business_capabilities:[]}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_WRITE');},getResult:()=>({scored:0}),settle:async proof=>assert.equal(rawModelScopeStopped(proof.raw_model_proof,scope),true),closeNativeScope:async proof=>({execution_stopped:rawModelScopeStopped(proof.raw_model_proof,scope)})})};
+ const createControl=({request})=>{
+  const make=()=>officialFixture(request,{onTurn:async(index,input)=>{turns.push(index);if(index===0)return {type:'finish'};guidance.push(...input.context.commander_guidance);return {type:'inspect',progress:'Read back the original failed check only.'};}});
+  const first=make();first.createReadOnlyContinuation=({request:q,snapshot,startIndex})=>{assert.equal(first.verifySealedExecution(snapshot,{request:q}),true);assert.equal(startIndex,1);continuations++;assert.equal(continuations,1);return make();};return first;
+ };
+ const wired=createWorkflowExecution({...f,handlers,rpc:async()=>{throw Error('NO_LEGACY_RPC');},createOfficialControl:createControl});
+ const out=await workflow.runWorkflow({activities:f.activities,context:{execution_mode:'agent',workflow_key:f.env.WF_BRAIN_WORKFLOW,task_id:f.taskId,run_id:f.binding.run_id,source_commit:f.frozen.deployment.source_commit},executeAgent:wired.executeAgent,
+  commander:async event=>event.phase==='recovery'?{action:'steer',text:'Read the failed scoring check; do not change any score.'}:{action:'none'},verify:async()=>{checks++;return {verified:false,reason:'zero_scored'};}});
+ assert.equal(checks,2);assert.equal(continuations,1);assert.deepEqual(turns,[0,1]);assert.ok(guidance.includes('Read the failed scoring check; do not change any score.'));
+ assert.equal(out.status,'needs_review');assert.equal(out.results[0].recovery_read_only,true);assert.equal(out.results[0].rescued,false);assert.equal(out.results[0].code_failures,0);
+});
+
+test('main prepares the fixed observer authority before any worker, native tool or legacy RPC is started',async t=>{
+ const f=fixture(t);let effects=0;
+ const wired=createWorkflowExecution({...f,handlers:{state:{},createAgentTools:async()=>{effects++;throw Error('NO_WORKER_PREPARE');},agentSupportsNativeScope:()=>false},rpc:async()=>{effects++;throw Error('NO_LEGACY');},createOfficialControl:async()=>{effects++;throw Error('NO_WORKER_CONTROL');}});
+ assert.equal(typeof wired.executeAgent.prepareObserverRequest,'function');
+ const deadline=Date.now()+10000,q=wired.executeAgent.prepareObserverRequest(f.activities[0],{deadline_ms:deadline,context:{task_id:f.taskId}});
+ assert.equal(q.execution_transport,'raw-model-v1');assert.equal(q.task_id,f.taskId);assert.equal(q.method.name,'douyin-leadgen-activity-103-scoring');assert.ok(q.deadline_ms<deadline);assert.ok(q.worker_deadline_ms<q.receipt_deadline_ms);assert.equal(effects,0);assert.equal(existsSync(join(f.runDir,'skill-primary')),false);
+});
+
+test('actual main selects SDK Observer before bridge wake and never falls back to legacy Commander RPC for raw control',async t=>{
+ const f=fixture(t);Object.assign(f.env,{LEADGEN_LIMIT:'1',LEADGEN_MAX_TURNS:'8',WF_RUN_MAX_SECONDS:'300'});delete f.env.LEADGEN_SOURCE_RUN;f.frozen.agent_input=agentInput(f.env);Object.assign(f.frozen,{max_turns:8,control_scope:{protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']},control_claim:{claimed_by:'fixture',claimed_at:'2026-11-05T00:00:00Z'}});
+ for(const name of RPC_FILES)f.frozen.files['runtime/'+name]=sha(readFileSync(new URL('../'+name,import.meta.url)));
+ assert.equal(typeof workflow.prepareWorkflowCommander,'function');let prepared=0,observed=0;
+ const observer=await workflow.prepareWorkflowCommander({...f,context:{commander_skill:{}},executeAgent:{prepareObserverRequest:()=>({activity_key:'scoring',task_id:f.taskId})},rpc:async()=>{throw Error('NO_OLD_COMMANDER_RPC');},createObserver:async options=>{assert.equal(options.request.task_id,f.taskId);prepared++;return{commander:async()=>{assert.equal(prepared,1);observed++;return{action:'none'};},close:async()=>({execution_stopped:true})};}});
+ const out=await workflow.runWorkflow({activities:f.activities,context:{execution_mode:'agent',workflow_key:f.env.WF_BRAIN_WORKFLOW,task_id:f.taskId,run_id:f.binding.run_id},executeAgent:async()=>({status:'completed',execution_stopped:true,result:{}}),verify:async()=>({verified:true}),commander:observer.commander});
+ assert.equal(out.status,'completed');assert.ok(observed>=2);assert.equal((await observer.close()).execution_stopped,true);
+});
+
+test('unknown first raw execution and forged Judge evidence cannot open a continuation or a second model turn',async t=>{
+ const {certifyRawCheckFailure}=await import('../activity-skill-executor.mjs');assert.equal(certifyRawCheckFailure({execution_stopped:true,raw_continuation:{}},{verified:false}),null);
+ const f=fixture(t);let turns=0,continued=0,checks=0;
+ const handlers={state:{},agentSupportsNativeScope:()=>true,agentNativeState:()=>({}),createAgentTools:async(_a,scope)=>({prepare:async()=>{},inspect:async()=>({}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_PG');},getResult:()=>null,settle:async()=>{throw Error('UNKNOWN_MUST_NOT_SETTLE');},closeNativeScope:async proof=>({execution_stopped:rawModelScopeStopped(proof.raw_model_proof,scope)})})};
+ const wired=createWorkflowExecution({...f,handlers,rpc:async()=>{throw Error('NO_LEGACY');},createOfficialControl:async({request})=>{const c=officialFixture(request,{onTurn:async()=>{turns++;throw Error('LOST_ACK');}});c.createReadOnlyContinuation=()=>{continued++;throw Error('UNKNOWN_MUST_NOT_RECOVER');};return c;}});
+ await assert.rejects(wired.executeAgent.recoverAfterCheck(f.activities[0],{failureProof:{kind:'code-judge-failure/v1'}}),/RAW_READONLY_RECOVERY_UNAVAILABLE/);
+ const out=await workflow.runWorkflow({activities:f.activities,context:{execution_mode:'agent',workflow_key:f.env.WF_BRAIN_WORKFLOW,task_id:f.taskId,run_id:f.binding.run_id},executeAgent:wired.executeAgent,commander:async()=>({action:'steer',text:'Cannot override unknown.'}),verify:async()=>{checks++;return{verified:false};}});
+ assert.equal(out.status,'needs_review');assert.equal(out.results[0].execution_stopped,false);assert.equal(turns,1);assert.equal(continued,0);assert.equal(checks,0);
 });

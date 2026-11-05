@@ -9855,6 +9855,70 @@ tests:
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition#step3；纯Skill主执行、受控原语与原件验收；无设备测试不代表实机通过"
 
+  - id: phone-control-acceptance-tools
+    path: services/phone-adb-controller/__tests__/control-acceptance-tools.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-runner-official-commander
+    path: services/phone-adb-controller/__tests__/runner-official-commander.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-commander-bounded-owner
+    path: services/phone-adb-controller/__tests__/commander-bounded-owner.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-commander-sdk
+    path: services/phone-adb-controller/__tests__/official-commander-sdk.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-control
+    path: services/phone-adb-controller/__tests__/official-gateway-control.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-dependencies
+    path: services/phone-adb-controller/__tests__/official-gateway-dependencies.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-raw
+    path: services/phone-adb-controller/__tests__/official-gateway-raw.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
+  - id: phone-official-gateway-runtime
+    path: services/phone-adb-controller/__tests__/official-gateway-runtime.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
+
   - id: phone-official-agent-control
     path: services/phone-adb-controller/__tests__/official-agent-control.test.mjs
     type: integration

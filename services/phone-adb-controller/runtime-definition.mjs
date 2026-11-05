@@ -1,4 +1,5 @@
 import {prepareFrozenPreflightPg} from './preflight-pg-dependencies.mjs';
+import {controlAcceptanceFromTask,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
 import outreachScope from './leadgen-outreach-scope.js';
 import lineRoutes from './line-routes.js';
@@ -37,6 +38,7 @@ export function frozenExecutionMode(snapshot){
  const mode=Object.hasOwn(snapshot,'execution_mode')?snapshot.execution_mode:'code';
  if(!['code','agent'].includes(mode)||mode==='agent'&&!agentWorkflows.has(snapshot.workflow_version?.payload?.key))throw Error('EXECUTION_MODE_FROZEN_INVALID');
  transportPair(snapshot,mode,snapshot.workflow_version?.payload?.key);
+ validateFrozenControlAcceptance(snapshot);
  return mode;
 }
 export function assertExecutionMode(snapshot,env){
@@ -248,6 +250,11 @@ export async function freezeDefinition(o) {
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
   const fixedAgentInput=executionMode==='agent'?validateAgentInput(o.agentInput):null;
   const executionTransport=fixedAgentInput?transportPair(fixedAgentInput,executionMode,o.workflowKey):null;
+  const loadControlAuthority=async sourceCommit=>{
+    if(!executionTransport)return null;
+    const response=await o.get('/api/brain/tasks/'+fixedAgentInput.task_id);
+    return controlAcceptanceFromTask({task:response?.task??response,input:fixedAgentInput,sourceCommit});
+  };
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(transportPair(readFrozen(o.runDir),executionMode,o.workflowKey))!==canonical(executionTransport))throw Error('EXECUTION_TRANSPORT_RESUME_MISMATCH');
   const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null||o.preflightProfile!=null;
   if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null)||canonical(old.preflight_profile||null)!==canonical(o.preflightProfile||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
@@ -272,11 +279,15 @@ export async function freezeDefinition(o) {
     if(canonical(checked)!==canonical(q)||q.workflow_key!==o.workflowKey)throw Error('冻结采样输入scope/schema非法');
     if(o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==q[k==='tag'?'run_tag':k]))throw Error('冻结采样输入运行身份不符');
   }
-  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(canonical(frozen.collection_phone_scope||null)!==canonical(o.collectionPhoneScope||null))throw Error('collection phone scope续跑输入与冻结请求不符');if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
+  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(canonical(frozen.collection_phone_scope||null)!==canonical(o.collectionPhoneScope||null))throw Error('collection phone scope续跑输入与冻结请求不符');
+    const control=await loadControlAuthority(frozen.deployment.source_commit),oldControl=frozen.control_scope?{control_scope:frozen.control_scope,control_claim:frozen.control_claim}:null;
+    if(canonical(control)!==canonical(oldControl))throw Error('CONTROL_ACCEPTANCE_RESUME_MISMATCH');
+    if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   assertDeploymentAdmission(o.deploymentRoot);
   const manifestPath=o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json');
   const originalManifest=readFileSync(manifestPath);
   const manifest=JSON.parse(originalManifest);
+  const controlAuthority=await loadControlAuthority(manifest.source_commit);
   const fixed=(o.releaseId||manifest.release_id||o.requireRelease)?await loadRuntimeRelease(o,manifest,digest):null;
   let version;
   if(fixed){assertRuntimeHost(fixed.release,manifest);version=fixed.version;}
@@ -342,7 +353,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{})}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
+    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
@@ -361,6 +372,7 @@ export async function freezeDefinition(o) {
     writeFileSync(resolve(staging,'run-definition.json'),JSON.stringify(snapshot,null,2));
     assertDeploymentAdmission(o.deploymentRoot);
     if(!readFileSync(manifestPath).equals(originalManifest))throw Error('冻结期间部署声明发生变化');
+    if(canonical(await loadControlAuthority(manifest.source_commit))!==canonical(controlAuthority))throw Error('CONTROL_ACCEPTANCE_TASK_CHANGED');
     mkdirSync(dirname(o.runDir),{recursive:true}); renameSync(staging,o.runDir);
   } finally {rmSync(staging,{recursive:true,force:true});}
   return snapshot;

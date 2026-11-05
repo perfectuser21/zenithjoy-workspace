@@ -8,7 +8,12 @@ import {safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {startPrimaryActivityBroker} from './activity-skill-primary-broker.mjs';
 import {runActivitySkillParentLoop,rawModelScopeStopped} from './activity-skill-parent-loop.mjs';
 
-const notLaunched=new WeakMap();
+const notLaunched=new WeakMap(),rawRecoveryStates=new WeakMap(),failedRawChecks=new WeakMap();
+export function certifyRawCheckFailure(evidence,verification){
+ const state=rawRecoveryStates.get(evidence?.raw_continuation);
+ if(!state||!state.ready||state.used||evidence.execution_stopped!==true||verification?.verified!==false||Date.now()>=state.request.worker_deadline_ms)return null;
+ const proof=Object.freeze({kind:'code-judge-failure/v1'});failedRawChecks.set(proof,{state,verification:structuredClone(verification)});return proof;
+}
 export const skillLaunchDidNotStart=(proof,scope)=>Boolean(proof&&scope&&notLaunched.get(proof)===canonical(scope));
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
@@ -35,17 +40,9 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
  assertAgentInput(frozen,env);
  if(typeof createTools!=='function'||typeof rpc!=='function'||typeof deadlineFor!=='function')throw noLaunch('AGENT_PRIMARY_DEPENDENCY_UNAVAILABLE');
- return async(activity,{context={},guidance=[],signal,deadline_ms:runnerDeadline,onEvent=async()=>({action:'none'})}={})=>{
-  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
-  const fixed=assertAgentInput(frozen,env);
-  const transport=assertExecutionTransport(frozen,env);
-  const directory=join(runDir,'skill-primary',activity.key);
-  if(existsSync(directory))throw Object.assign(Error('SKILL_PRIMARY_ALREADY_REQUESTED_TERMINATION_UNVERIFIED'),{executionStopped:false});
-  const known=nativeState();if(known.native_stop_unproven===true||known.execution_unknown===true)return {status:'needs_review',not_started:true,execution_stopped:false,reason:'AGENT_PRIMARY_PREVIOUS_NATIVE_UNVERIFIED',resource_unverified:true};
-  if(signal?.aborted)throw noLaunch('AGENT_PRIMARY_CANCELLED_BEFORE_START');
-  const taskId=fixed.task_id;
+ const plan=(activity,{context={},runnerDeadline,guidance=[]}={})=>{
+  const fixed=assertAgentInput(frozen,env),transport=assertExecutionTransport(frozen,env),taskId=fixed.task_id,directory=join(runDir,'skill-primary',activity.key);
   if(context.task_id!=null&&context.task_id!==taskId||binding.task_id!=null&&binding.task_id!==taskId||!uuid.test(taskId||'')||!uuid.test(binding.id||''))throw noLaunch('AGENT_PRIMARY_TASK_BINDING_REQUIRED');
-  if(await supportsNativeScope(activity)!==true)return {status:'needs_review',not_started:true,execution_stopped:true,reason:'AGENT_PRIMARY_NATIVE_DOMAIN_UNSUPPORTED'};
   const method=frozenMethod(frozen,activity.key,runDir),outerDeadline=Math.min(deadlineFor(activity),runnerDeadline??Infinity);
   const available=Math.floor(outerDeadline-Date.now()),checkReserve=Math.min(10000,Math.floor(available/10)),stopReserve=Math.min(48000,Math.floor(available/5)),ownerReserve=Math.min(10000,Math.floor(available/10));
   if(!Number.isSafeInteger(outerDeadline)||available<100)throw noLaunch('AGENT_PRIMARY_DEADLINE_EXHAUSTED');
@@ -62,23 +59,37 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    profile:fixed.profile,serial:fixed.serial,line:fixed.line,source_run:fixed.source_run,
    limit:fixed.limit,comment_limit:fixed.comment_limit,discovery_filters:structuredClone(fixed.discovery_filters),collection_budget_s:fixed.collection_budget_s,
    run_start_ts:fixed.run_start_ts,run_max_seconds:fixed.run_max_seconds,deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,
-   ...(transport?{...transport,agent_nonce:rawNonce}:{})};
-  const tools=await createTools(activity,scope);
-  if(!tools||['inspect','phone','business','getResult','prepare','settle'].some(key=>typeof tools[key]!=='function')
-    ||activity.key==='cleanup'&&typeof tools.release!=='function'||transport&&typeof tools.closeNativeScope!=='function')throw noLaunch('AGENT_PRIMARY_TOOLS_UNAVAILABLE');
-  // This durable directory reserves one launch, including an ambiguous RPC result.
-  mkdirSync(directory,{recursive:true,mode:0o700});
-  let request={protocol:'leadgen-activity-v1',mode:'execute',run_id:binding.run_id,task_id:taskId,binding_id:binding.id,
+   ...(transport?{...transport,agent_nonce:rawNonce}:{}),...(frozen.control_scope?{control_scope:structuredClone(frozen.control_scope),control_claim:structuredClone(frozen.control_claim)}:{})};
+  const request={protocol:'leadgen-activity-v1',mode:'execute',run_id:binding.run_id,task_id:taskId,binding_id:binding.id,
    workflow_key:scope.workflow,run_tag:scope.run,profile:scope.profile,serial:scope.serial,line:scope.line,
    source_run:fixed.source_run,limit:fixed.limit,comment_limit:fixed.comment_limit,run_max_seconds:fixed.run_max_seconds,
    discovery_filters:structuredClone(fixed.discovery_filters),discovery_input:structuredClone(frozen.discovery_input||null),
    activity_key:activity.key,nonce:rawNonce||randomBytes(24).toString('hex'),deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,source_commit:scope.source_commit,...(transport||{}),
+   ...(frozen.control_scope?{control_scope:structuredClone(frozen.control_scope),control_claim:structuredClone(frozen.control_claim)}:{}),
    workflow_definition_version_id:frozen.workflow_version.id,runtime_snapshot_sha256:frozen.snapshot_sha256,
    release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,method,broker_host:frozen.deployment.target,
    broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
    commander_guidance:Array.isArray(guidance)?guidance.filter(value=>typeof value==='string').map(value=>safeExecutionDiagnostic(value,env).slice(0,16000)).slice(0,4):[]};
+  return {scope,request,directory,deadline,workerDeadline,receiptDeadline,rpcDeadline,available,transport};
+ };
+ const execute=async(activity,{context={},guidance=[],signal,deadline_ms:runnerDeadline,onEvent=async()=>({action:'none'})}={})=>{
+  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
+  const fixed=assertAgentInput(frozen,env);
+  const transport=assertExecutionTransport(frozen,env);
+  const directory=join(runDir,'skill-primary',activity.key);
+  if(existsSync(directory))throw Object.assign(Error('SKILL_PRIMARY_ALREADY_REQUESTED_TERMINATION_UNVERIFIED'),{executionStopped:false});
+  const known=nativeState();if(known.native_stop_unproven===true||known.execution_unknown===true)return {status:'needs_review',not_started:true,execution_stopped:false,reason:'AGENT_PRIMARY_PREVIOUS_NATIVE_UNVERIFIED',resource_unverified:true};
+  if(signal?.aborted)throw noLaunch('AGENT_PRIMARY_CANCELLED_BEFORE_START');
+  const taskId=fixed.task_id;
+  if(context.task_id!=null&&context.task_id!==taskId||binding.task_id!=null&&binding.task_id!==taskId||!uuid.test(taskId||'')||!uuid.test(binding.id||''))throw noLaunch('AGENT_PRIMARY_TASK_BINDING_REQUIRED');
+  if(await supportsNativeScope(activity)!==true)return {status:'needs_review',not_started:true,execution_stopped:true,reason:'AGENT_PRIMARY_NATIVE_DOMAIN_UNSUPPORTED'};
+  const {scope,request,deadline,workerDeadline,receiptDeadline,rpcDeadline,available}=plan(activity,{context,runnerDeadline,guidance});
+  const tools=await createTools(activity,scope);
+  if(!tools||['inspect','phone','business','getResult','prepare','settle'].some(key=>typeof tools[key]!=='function')
+    ||activity.key==='cleanup'&&typeof tools.release!=='function'||transport&&typeof tools.closeNativeScope!=='function')throw noLaunch('AGENT_PRIMARY_TOOLS_UNAVAILABLE');
+  mkdirSync(directory,{recursive:true,mode:0o700});
   writeFileSync(join(directory,'launch-intent.json'),JSON.stringify({scope,request}),{flag:'wx',mode:0o600});
-  let broker,receipt,caughtError,dispatched=false,stopped=false,lastProgress=Date.now(),heartbeatError=null,rawControl,rawProof,rawLastIndex=null,rawControlKnown=false;
+  let broker,receipt,caughtError,dispatched=false,stopped=false,lastProgress=Date.now(),heartbeatError=null,rawControl,rawProof,rawLastIndex=null,rawControlKnown=false,rawState;
   let heartbeat,stall,heartbeatJob=Promise.resolve(),stallJob=Promise.resolve(),abortJob=Promise.resolve(),heartbeatBusy=false,stallBusy=false;
   const stop=async reason=>{
    if(transport){
@@ -142,7 +153,10 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     stopped=true;
     if(actual.commander_aborted)return {status:'needs_review',execution_stopped:true,reason:'Commander请求中止，等待复核',skill_receipt:receipt,commander_status:actual.commander_status};
     if(raw.reason!=='agent_finished'||!object(actual.result))return {status:'partial',execution_stopped:true,reason:'raw Agent未交付可独立验收的完整工具结果',skill_receipt:receipt,commander_status:actual.commander_status};
-    return {status:['failed','partial','paused','needs_review'].includes(actual.result.status)?'partial':actual.result.status==='empty'?'empty':'completed',execution_stopped:true,result:actual.result,skill_receipt:receipt,commander_status:actual.commander_status};
+    const ticket=Object.freeze({kind:'raw-readonly-continuation/v1'});
+    rawState={request:structuredClone(request),scope:structuredClone(scope),control:rawControl,directory,snapshot:rawControl.snapshot(),usedCount:raw.turn_count,result:structuredClone(actual.result),ready:false,used:false};
+    rawRecoveryStates.set(ticket,rawState);
+    return {status:['failed','partial','paused','needs_review'].includes(actual.result.status)?'partial':actual.result.status==='empty'?'empty':'completed',execution_stopped:true,result:actual.result,skill_receipt:receipt,commander_status:actual.commander_status,raw_continuation:ticket};
    }
    dispatched=true;receipt=(await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,rpcDeadline-Date.now())})).result;
    // Revoke the capability synchronously before any await can admit a late
@@ -188,9 +202,33 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    if(typeof tools.closeNativeScope==='function'){
     let proof=transport?{execution_stopped:rawControlKnown&&rawModelScopeStopped(rawProof,scope),raw_model_proof:rawProof}:{execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
     if(!dispatched&&(!transport||!rawControl||rawControlKnown)){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
-    try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;}
+    try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;if(rawState&&rawControlKnown)rawState.ready=true;}
     catch{if(caughtError)caughtError.executionStopped=false;else throw Object.assign(Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED'),{executionStopped:false});}
    }
   }
  };
+ execute.recoverAfterCheck=async(activity,{failureProof,guidance=[],signal,onEvent=async()=>({action:'none'})}={})=>{
+  const certified=failedRawChecks.get(failureProof),state=certified?.state;
+  if(!state||!state.ready||state.used||state.request.activity_key!==activity.key||state.usedCount>=state.request.max_turns||Date.now()>=state.request.worker_deadline_ms
+    ||state.control.verifySealedExecution(state.snapshot,{request:state.request})!==true||typeof state.control.createReadOnlyContinuation!=='function')throw noLaunch('RAW_READONLY_RECOVERY_UNAVAILABLE');
+  state.used=true;failedRawChecks.delete(failureProof);
+  const directory=join(state.directory,'code-check-recovery');mkdirSync(directory,{mode:0o700});
+  writeFileSync(join(directory,'judge-failure.json'),JSON.stringify({verification:certified.verification,guidance,original_turns:state.usedCount}),{flag:'wx',mode:0o600});
+  const control=await state.control.createReadOnlyContinuation({request:state.request,snapshot:state.snapshot,startIndex:state.usedCount});
+  const request={...state.request,broker_request_path:join(directory,'broker-request.json')};let broker;
+  try{
+   broker=await startPrimaryActivityBroker({directory,request,inspect:async()=>({read_only_recovery:true,failed_check:structuredClone(certified.verification),commander_guidance:guidance,previous_result:structuredClone(state.result),phone_capabilities:[],business_capabilities:[],pending_write_readbacks:[]}),
+    phone:async()=>{throw Error('RAW_RECOVERY_READ_ONLY');},business:async()=>{throw Error('RAW_RECOVERY_READ_ONLY');},getActivityResult:()=>structuredClone(state.result),
+    authorizeParentContext:async()=>await control.authorizeParentContext(state.request)===true,authorize:async(_q,delivery)=>delivery.op==='inspect'&&await control.authorizeBrokerDelivery(state.request,delivery)===true,onEvent,
+    onAbort:async()=>{try{const value=await control.request({kind:'official_agent_stop',request:state.request,turn_index:state.usedCount});return {execution_stopped:!!control.verifyStopReceipt(value,{request:state.request,index:state.usedCount})};}catch{return {execution_stopped:false};}}});
+   const raw=await runActivitySkillParentLoop({request:state.request,brokerRequest:request,scope:state.scope,broker,control,signal,startIndex:state.usedCount,readOnlyContinuation:true});
+   const stopped=rawModelScopeStopped(raw.model_stop_proof,state.scope)&&control.verifySealedExecution(control.snapshot(),{request:state.request})===true;
+   return {status:'partial',execution_stopped:stopped,result:structuredClone(state.result),recovery_read_only:true,reason:stopped?'一次只读恢复已结束，仍由Code第二次检查':'只读恢复终态未知',skill_receipt:{execution_transport:'raw-model-v1',turn_count:raw.turn_count,total_turn_count:state.usedCount+raw.turn_count,reason:raw.reason}};
+  }finally{if(broker)await broker.close();control.seal(state.request);await control.close();}
+ };
+ execute.prepareObserverRequest=(activity,{deadline_ms,context}={})=>{
+  if(!assertExecutionTransport(frozen,env))throw noLaunch('RAW_OBSERVER_TRANSPORT_REQUIRED');
+  return structuredClone(plan(activity,{context,runnerDeadline:deadline_ms}).request);
+ };
+ return execute;
 }

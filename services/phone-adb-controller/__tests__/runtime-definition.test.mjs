@@ -74,6 +74,23 @@ test('raw transport is frozen with its exact turn limit only when every verified
  assert.equal(Object.hasOwn(oldFrozen,'execution_transport'),false);assert.equal(Object.hasOwn(oldFrozen,'max_turns'),false);
  await assert.rejects(freezeDefinition({...old.options,executionMode:'agent',agentInput:{...old.agentInput,execution_transport:'raw-model-v1',max_turns:4}}),/EXECUTION_TRANSPORT|AGENT_INPUT/);
 });
+test('control acceptance scope and claim come only from the live Task and cannot drift on frozen-run continuation',async()=>{
+ const f=primaryFixture({raw:true}),workflow='douyin_comment_scoring',taskId='11111111-1111-4111-8111-111111111111';
+ f.options.workflowKey=workflow;f.routes['/api/brain/workflows'][0].key=workflow;
+ const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;w.payload.activities[0].slot_key='scoring';w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
+ const input=agentInput({LEADGEN_EXECUTION_MODE:'agent',LEADGEN_EXECUTION_TRANSPORT:'raw-model-v1',LEADGEN_MAX_TURNS:'8',WF_BRAIN_WORKFLOW:workflow,WF_BRAIN_TASK_ID:taskId,WFR_TAG:'control_fixture',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_MAX_SECONDS:'300',WF_RUN_START_TS:'1700000000'});
+ const control={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']},claim={claimed_by:'headed-control-fixture',claimed_at:'2026-11-05T00:00:00.000Z'};
+ const task={id:taskId,status:'in_progress',...claim,payload:{source_commit:'a'.repeat(40),workflow_key:workflow,run_tag:input.run_tag,profile:'mmv-scoring',company_line:'yuesheng',scope:{limit:1,score_limit:1,send:0,source_run:null,run_max_seconds:300,execution_transport:'raw-model-v1',max_turns:8,control_scope:control}}};
+ f.routes['/api/brain/tasks/'+taskId]={task};
+ const options={...f.options,executionMode:'agent',agentInput:input},snapshot=await freezeDefinition(options);
+ assert.deepEqual(snapshot.control_scope,control);assert.deepEqual(snapshot.control_claim,claim);
+ assert.equal(snapshot.snapshot_sha256,hash(Object.fromEntries(Object.entries(snapshot).filter(([key])=>key!=='snapshot_sha256'))));
+ const original=readFileSync(join(f.options.runDir,'run-definition.json'),'utf8');
+ for(const change of [()=>{task.claimed_at='2026-11-05T00:00:01.000Z';},()=>{task.claimed_by='foreign';},()=>{task.status='failed';},()=>{delete task.payload.scope.control_scope;task.result={control_scope:control};}]){
+  Object.assign(task,{status:'in_progress',...claim});task.payload.scope.control_scope=control;delete task.result;change();
+  await assert.rejects(freezeDefinition(options),/CONTROL_ACCEPTANCE/);assert.equal(readFileSync(join(f.options.runDir,'run-definition.json'),'utf8'),original);
+ }
+});
 test('真实Agent快照保存完整输入，冻结续跑不能改配额、来源、筛选、任务或预算，也不能撤输入',async()=>{
  const f=primaryFixture(),options={...f.options,executionMode:'agent',agentInput:f.agentInput};
  const first=await freezeDefinition(options);assert.deepEqual(first.agent_input,f.agentInput);
@@ -256,6 +273,8 @@ test('真实部署闭包冻结后导入新handler；缺文件、错hash或冻结
  const deploy=readFileSync(join(source,'deploy.sh'),'utf8'),arrays=deploy.slice(deploy.indexOf('MMV_JS_FILES=('),deploy.indexOf('# 在任何SSH前'));
  const declared=execFileSync('bash',['-c',arrays+'\nprintf "%s\\n" "${MMV_RUNTIME_FILES[@]}"'],{encoding:'utf8'}).trim().split('\n');
  const files=declared.filter(x=>/\.(?:mjs|js|json)$/.test(x));assert.ok(files.includes('leadgen-handlers.mjs'),'official MMV runtime omitted actual handler');
+ for(const name of ['runner-official-commander.mjs','control-acceptance-tools.mjs','official-agent-control.mjs','official-commander-sdk.mjs','commander-bounded-owner.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json','official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'])
+  assert.equal(declared.filter(value=>value===name).length,1,`official raw runtime must include exactly one ${name}`);
  for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js'])
   assert.ok(files.includes(name),`official MMV runtime omitted ${name}`);
  const setup=()=>{

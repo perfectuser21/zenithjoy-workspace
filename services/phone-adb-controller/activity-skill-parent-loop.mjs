@@ -12,7 +12,8 @@ const stoppedModelScopes=new WeakMap();
 export const rawModelScopeStopped=(proof,scope)=>Boolean(proof&&scope&&stoppedModelScopes.get(proof)===canonical(scope));
 const boundScope=(scope,q)=>object(scope)&&scope.execution_transport==='raw-model-v1'&&scope.max_turns===q.max_turns&&scope.agent_nonce===q.nonce
  &&['task_id','binding_id','run_id','source_commit','deadline_ms','worker_deadline_ms','receipt_deadline_ms','profile','serial','line','source_run','limit','comment_limit'].every(key=>scope[key]===q[key])
- &&scope.run===q.run_tag&&scope.workflow===q.workflow_key&&scope.activity===q.activity_key&&scope.snapshot_sha256===q.runtime_snapshot_sha256;
+ &&scope.run===q.run_tag&&scope.workflow===q.workflow_key&&scope.activity===q.activity_key&&scope.snapshot_sha256===q.runtime_snapshot_sha256
+ &&canonical(scope.control_scope??null)===canonical(q.control_scope??null)&&canonical(scope.control_claim??null)===canonical(q.control_claim??null);
 const immutable=value=>{
  if(object(value)||Array.isArray(value)){for(const item of Object.values(value))immutable(item);Object.freeze(value);}
  return value;
@@ -38,7 +39,7 @@ function bounded(promise,deadline,signal){
   Promise.resolve(promise).then(value=>done(null,value),error=>done(error));
  });
 }
-export async function runActivitySkillParentLoop({request,scope,broker,control,signal,canReadback=()=>false}={}){
+export async function runActivitySkillParentLoop({request,scope,broker,control,signal,canReadback=()=>false,startIndex=0,readOnlyContinuation=false,brokerRequest}={}){
  const q=immutable(JSON.parse(JSON.stringify(request??null)));
  if(q?.mode!=='execute'||q.execution_transport!=='raw-model-v1'||q.transport_generation!==undefined
   ||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(q.workflow_key)
@@ -48,7 +49,10 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   ||q.worker_deadline_ms>=q.receipt_deadline_ms||q.receipt_deadline_ms>=q.deadline_ms)throw Error('PARENT_LOOP_REQUEST_INVALID');
  if(!broker||['readParentContext','getResult','seal'].some(key=>typeof broker[key]!=='function')
   ||!control||['request','verifyTurnReceipt','verifyStopReceipt','authorizeIntent','consumeIntentPermit','seal','close','snapshot','verifySealedExecution'].some(key=>typeof control[key]!=='function'))throw Error('PARENT_LOOP_DEPENDENCY_UNAVAILABLE');
- const directory=join(dirname(q.broker_request_path),'parent-loop');
+ if(!Number.isSafeInteger(startIndex)||startIndex<0||startIndex>=q.max_turns||readOnlyContinuation!==false&&readOnlyContinuation!==true||startIndex!==0&&!readOnlyContinuation)throw Error('PARENT_LOOP_CONTINUATION_INVALID');
+ const deliveryRequest=brokerRequest?immutable(JSON.parse(JSON.stringify(brokerRequest))):q;
+ if(canonical({...deliveryRequest,broker_request_path:q.broker_request_path})!==canonical(q))throw Error('PARENT_LOOP_BROKER_SCOPE_INVALID');
+ const directory=join(dirname(deliveryRequest.broker_request_path),'parent-loop');
  try{mkdirSync(directory,{mode:0o700});}catch(error){if(error.code==='EEXIST')throw Error('PARENT_LOOP_ALREADY_STARTED');throw error;}
  const directoryParent=openSync(dirname(directory),constants.O_RDONLY);try{fsyncSync(directoryParent);}finally{closeSync(directoryParent);}
  const record=(name,value)=>{
@@ -57,12 +61,12 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   const parent=openSync(directory,constants.O_RDONLY);try{fsyncSync(parent);}finally{closeSync(parent);}
  };
  let permit=null,currentIndex=null,reason='turn_limit',turnCount=0,officialStopped=true,modelUnknown=false,controlSeal;
- const client=createActivitySkillBrokerClient({request:q,requestPath:q.broker_request_path,canReadback,
-  authorize:(fixed,{op,body})=>control.consumeIntentPermit(permit,{request:fixed,index:currentIndex,op,body})});
+ const client=createActivitySkillBrokerClient({request:deliveryRequest,requestPath:deliveryRequest.broker_request_path,canReadback,
+  authorize:(fixed,{op,body})=>control.consumeIntentPermit(permit,{request:q,index:currentIndex,op,body})});
  const history=[],runIds=new Set();
  const active=()=>{if(signal?.aborted)throw Error('PARENT_LOOP_ABORTED');if(Date.now()>=q.worker_deadline_ms)throw Error('PARENT_LOOP_DEADLINE');};
  try{
-  for(let index=0;index<q.max_turns;index++){
+  for(let index=startIndex;index<Math.min(q.max_turns,readOnlyContinuation?startIndex+1:q.max_turns);index++){
    active();
    const context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
    if(context.commander_abort===true){reason='commander_aborted';break;}
@@ -95,6 +99,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
    }
    record(`turn-${index}-intent`,selected);
    if(selected.op==='finish'){reason='agent_finished';break;}
+   if(readOnlyContinuation&&selected.op!=='inspect'){reason='read_only_intent_rejected';break;}
    permit=control.authorizeIntent(receipt,{request:q,index,op:selected.op,body:selected.body});
    let exchange;
    try{exchange={intent:selected,response:await client.call(selected.op,selected.body)};}

@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {runWorkflow} from './activity-commander.mjs';
 import {createPreflightRuntime} from './preflight-phone-scope.mjs';
+import {createControlAcceptanceHandlers,validateControlScope,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
 import {collectionEvidenceProof,collectionCleanupEvidence} from './collection-phone-scope.mjs';
@@ -25,6 +26,9 @@ export async function invokeNativeActivity(execute,state){
   }
 }
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
+export function createWorkflowHandlers(options){
+ return validateFrozenControlAcceptance(options.frozen)?createControlAcceptanceHandlers(options):createHandlers(options);
+}
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
 import {readFrozen,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
@@ -91,10 +95,12 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
    nativeState:()=>handlers.agentNativeState?.()||{execution_unknown:true},
    supportsNativeScope:activity=>handlers.agentSupportsNativeScope?.(activity)===true,
    createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});
-  return {executionMode,execution:{},executeAgent:async(activity,options)=>{
+  const executeAgent=async(activity,options)=>{
    if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',execution_stopped:true,result:{status:'partial',reason:'已收到停止请求'}};
    return execute(activity,options);
-  }};
+  };
+  if(frozen.execution_transport==='raw-model-v1'){executeAgent.recoverAfterCheck=execute.recoverAfterCheck;executeAgent.prepareObserverRequest=execute.prepareObserverRequest;}
+  return {executionMode,execution:{},executeAgent};
  }
  const execution=Object.fromEntries(activities.map(activity=>[activity.key,async options=>{
   deadlineFor(activity);
@@ -106,8 +112,9 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  return {executionMode,execution};
 }
 
-export async function recordActivityBookkeeping(r,{root,env,executionMode,execute=execInput}){
-  const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,execute=execInput}){
+    const control=controlScope===undefined?null:validateControlScope(controlScope);
+    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key);
     if(r.phase==='start'){
       if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
       else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
@@ -123,11 +130,24 @@ export async function recordActivityBookkeeping(r,{root,env,executionMode,execut
 }
 
 export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal}){
+  if(executionMode==='agent'&&validateFrozenControlAcceptance(frozen)){
+    return {result:{gate:{verdict:'fail',reason:'CONTROL_ACCEPTANCE_IS_NOT_103_OUTPUT'},steps:[],probes:[{name:'actual_103_business_result',pass:false,reason:'control acceptance has no scoring/PG capability'}]}};
+  }
   if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
   }
   return rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
+}
+
+export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver}){
+ if(frozen.execution_transport!=='raw-model-v1')return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},close:async()=>null};
+ if(!validateFrozenControlAcceptance(frozen)||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
+ const activity=activities.find(value=>value.key===frozen.control_scope.activity_key);if(!activity)throw Error('RAW_OBSERVER_ACTIVITY_MISSING');
+ const input=frozen.agent_input,request=executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:(input.run_start_ts+input.run_max_seconds)*1000});
+ const factory=createObserver||(await import('./runner-official-commander.mjs')).createRunnerOfficialCommander;
+ const observer=await factory({runtimeRoot:join(runDir,'runtime'),runDir,source:rpcSource(frozen),request});
+ return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return observer.commander(receipt);},close:observer.close};
 }
 
 async function main(){
@@ -151,7 +171,7 @@ async function main(){
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
-    await recordActivityBookkeeping(r,{root,env,executionMode});
+    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope});
   };
   const activities=frozen.activities.map(a=>({...a.version.payload.contract,key:a.reference.slot_key}));
   const verify=async(activity,result,options={})=>{
@@ -184,11 +204,16 @@ async function main(){
     return {verified,metrics,probes,step_dod:local};
   };
   const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
-  const handlers=createHandlers({preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
+  const handlers=createWorkflowHandlers({runDir:dir,frozen,binding,preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
-  const result=await runWorkflow({activities,context,handlers:execution,executeAgent,recover,quarantine:handlers.quarantineResources,
-    commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
+  let observer;
+  try{observer=await prepareWorkflowCommander({runDir:dir,frozen,activities,executeAgent,context,rpc});}
+  catch{await record({...context,phase:'commander_unavailable',commander_status:'unavailable',reason:'COMMANDER_PREPARATION_UNAVAILABLE'});observer={commander:async()=>{throw Error('COMMANDER_UNAVAILABLE');},close:async()=>null};}
+  let result;
+  try{result=await runWorkflow({activities,context,handlers:execution,executeAgent,recover,quarantine:handlers.quarantineResources,
+    commander:observer.commander,record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});}
+  finally{const closed=await observer.close();if(closed)await record({...context,phase:'commander_domain_closed',evidence:closed});}
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);
     writeFileSync(file,JSON.stringify({...item,observed_at:new Date().toISOString(),metrics:item.verification?.metrics||item.result||{},commander:records.filter(r=>r.activity===item.activity)},null,2));

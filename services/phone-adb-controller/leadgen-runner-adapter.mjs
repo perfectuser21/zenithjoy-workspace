@@ -1,5 +1,6 @@
 // 业务适配只转换输入、结果和读回；执行顺序、恢复次数与路由来自同一公共Runner。
 import {runActivityContract} from './common-runner/activity-runtime.js';
+import {certifyRawCheckFailure} from './activity-skill-executor.mjs';
 import {createCommanderBridge} from './common-runner/runner-commander-bridge.js';
 import {collectionEvidenceProof,collectionReturnedEvidence,collectionCleanupEvidence} from './collection-phone-scope.mjs';
 import {discoveryCleanupEvidence,discoveryFiniteStopEvidence} from './discovery-phone-scope.mjs';
@@ -11,6 +12,7 @@ const defaults={done:'next',retry:'retry',failed:'stop',empty:'next',partial:'st
 
 export async function runWorkflow({activities,context={},handlers={},executeAgent,commander,record=async()=>{},verify,recover,quarantine,signal,terminationUnverified=()=>false}){
  const agentPrimary=context.execution_mode==='agent';
+ const rawRecovery=agentPrimary&&typeof executeAgent?.recoverAfterCheck==='function',rawFailures=new Map();
  const primaryError=context.execution_mode!==undefined&&!['code','agent'].includes(context.execution_mode)?'AGENT_EXECUTION_MODE_INVALID'
   :agentPrimary&&!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(context.workflow_key)?'AGENT_PRIMARY_WORKFLOW_UNSUPPORTED'
   :agentPrimary&&typeof executeAgent!=='function'?'AGENT_PRIMARY_EXECUTOR_UNAVAILABLE'
@@ -61,7 +63,7 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
  };
  const contract={workflow:context.workflow_key||'leadgen',on_status:routes,activities:activities.map((a,index)=>({key:a.key,order:index+1,budget:{max_duration_s:a.budget?.max_duration_s||3600,heartbeat_s:Math.min(a.budget?.heartbeat_s||30,a.budget?.max_duration_s||3600)},
   failure:{empty_ok:[],retryable:['code_retry'],fatal:['code_failed'],needs_human:{cases:['review']}},
-  runtime:{protocol:'json-stdio-v1',phase:a.runtime?.phase==='finalize'||(context.always_run||['cleanup']).includes(a.key)?'finalize':'source',entry:'leadgen-runner-adapter.mjs',executor_kind:agentPrimary?'agent':a.executor_kind||a.execution?.primary_kind||'code',max_attempts:!agentPrimary&&a.retry_safe===true?2:1,retry_safe:!agentPrimary&&a.retry_safe===true,recovery_safe:!agentPrimary&&!!recover&&a.key!=='cleanup',on_status:a.on_status||a.runtime?.on_status||routes}}))};
+  runtime:{protocol:'json-stdio-v1',phase:a.runtime?.phase==='finalize'||(context.always_run||['cleanup']).includes(a.key)?'finalize':'source',entry:'leadgen-runner-adapter.mjs',executor_kind:agentPrimary?'agent':a.executor_kind||a.execution?.primary_kind||'code',max_attempts:!agentPrimary&&a.retry_safe===true?2:1,retry_safe:!agentPrimary&&a.retry_safe===true,recovery_safe:(rawRecovery||!agentPrimary&&!!recover)&&a.key!=='cleanup',on_status:a.on_status||a.runtime?.on_status||routes}}))};
  await bridge.wake();let receipt;
  try{
   receipt=await runActivityContract(contract,{run_tag},{signal,commander:bridge,executeActivity,
@@ -73,6 +75,7 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
     if(agentPrimary){
      if(!['completed','empty','partial','skipped'].includes(evidence.status)||!evidence.result)return {verdict:'fail',reason:'agent_execution_failed'};
      evidence.verification=await verify(activity,evidence,{deadline_ms:Math.min(activityDeadlines.get(a.key),Math.floor(Date.now()+remaining_ms)),signal:checkSignal});
+     if(rawRecovery){const proof=certifyRawCheckFailure(evidence,evidence.verification);if(proof)rawFailures.set(a.key,proof);}
      await record({...context,activity:a.key,phase:'verification',evidence:structuredClone(evidence)});
      return {verdict:evidence.verification?.verified===true?'pass':'fail',verification:evidence.verification};
     }
@@ -84,7 +87,12 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
     await record({...context,activity:a.key,phase:'verification',evidence:structuredClone(evidence)});
     return {verdict:evidence.verification?.verified===true?'pass':'fail',verification:evidence.verification};
    },
-   recoverActivity:!agentPrimary&&recover?async(a,input,{failure,guidance,...opts})=>{
+   recoverActivity:rawRecovery?async(a,input,{guidance,...opts})=>{
+    const proof=rawFailures.get(a.key);rawFailures.delete(a.key);
+    const candidate=await executeAgent.recoverAfterCheck(byKey.get(a.key),{failureProof:proof,guidance,signal:opts.signal,onEvent:opts.onAgentEvent});
+    await record({...context,activity:a.key,phase:'skill_execution',evidence:structuredClone(candidate)});
+    return standard(byKey.get(a.key),candidate);
+   }:!agentPrimary&&recover?async(a,input,{failure,guidance,...opts})=>{
     const activity=byKey.get(a.key);let original=failure.adapter_result||native.get(a.key);
     if(captureFailure(original)||discoveryCleanupEvidence(original,scope(a.key))||collectionCleanupEvidence(original,scope(a.key))&&!collectionReturnedEvidence(original,scope(a.key)))throw Object.assign(Error('SKILL_HANDOFF_POLICY_BLOCKED'),{executionStopped:true});
     if(original.verification?.verified===false)original={...original,status:'failed'};

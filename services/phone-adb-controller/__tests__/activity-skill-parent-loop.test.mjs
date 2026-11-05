@@ -159,3 +159,12 @@ test('a cloned sealed snapshot cannot substitute for the official controller pri
  const out=await module.runActivitySkillParentLoop(state);
  assert.equal(out.official_execution_stopped,false);assert.equal(out.model_execution_unknown,true);assert.equal(out.reason,'official_control_seal_failed');assert.equal(out.model_stop_proof,null);
 });
+
+test('a read-only continuation keeps the original turn index and rejects phone before any broker delivery',async t=>{
+ const state=await fixture(t,{turns:async()=>({type:'phone',command:'account-current',args:[]})});
+ const original=state.control.request.bind(state.control);let index;
+ state.control.request=async q=>{index=q.turn.index;const receipt=await original({...q,turn:{...q.turn,index:0}});return receipt;};
+ const verify=state.control.verifyTurnReceipt.bind(state.control);state.control.verifyTurnReceipt=(receipt,opts)=>verify(receipt,{...opts,index:0});
+ const actual=await module.runActivitySkillParentLoop({...state,startIndex:2,readOnlyContinuation:true});
+ assert.equal(index,2);assert.equal(actual.reason,'read_only_intent_rejected');assert.equal(actual.turn_count,1);assert.deepEqual(state.effects,[]);
+});
