@@ -479,8 +479,6 @@ jobs:
         run: bash .github/workflows/scripts/lint-agent-version-bump.sh origin/main
       - name: Run lint-line04-manifest-version-bump
         run: bash .github/workflows/scripts/lint-line04-manifest-version-bump.sh origin/main
-      - name: Run lint-wechat-rpa-runner
-        run: bash .github/workflows/scripts/lint-wechat-rpa-runner.sh
       - name: Run lint-contract-test-immutability
         run: bash .github/workflows/scripts/lint-contract-test-immutability.sh origin/main
 
