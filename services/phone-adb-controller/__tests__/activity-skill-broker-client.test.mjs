@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
+import {createServer} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {startPrimaryActivityBroker} from '../activity-skill-primary-broker.mjs';
@@ -65,4 +66,53 @@ test('Commander abort is visible through the original inspection and prevents a 
  assert.equal((await client.call('inspect')).result.commander_abort,true);
  await assert.rejects(client.call('business',{operation:'lookup',input:{}}),/SKILL_PRIMARY_EXECUTION_BLOCKED/);
  assert.deepEqual(effects,[]);
+});
+
+test('a tool acknowledgement arriving after parent seal is recorded as uncertain and cannot restart the loop',async t=>{
+ let release,entered;
+ const started=new Promise(resolve=>{entered=resolve;});
+ const {client,effects}=await fixture(t,{onEvent:async()=>{entered();return new Promise(resolve=>{release=resolve;});}});
+ const pending=client.call('business',{operation:'lookup',input:{}});
+ await started;client.seal();release({action:'steer',text:'Too late to start anything.'});
+ await assert.rejects(pending,/PARENT_BROKER_SEALED/);
+ assert.equal(client.snapshot().execution_unknown,true);
+ await assert.rejects(client.call('phone',{command:'account-current',args:[]}),/PARENT_BROKER_SEALED/);
+ assert.deepEqual(effects,[{operation:'lookup',input:{}}]);
+});
+
+test('a changed private broker scope is rejected before authorization or delivery',async t=>{
+ const {client,broker,effects}=await fixture(t);
+ const stored=JSON.parse(readFileSync(broker.requestPath));stored.binding_id='33333333-3333-4333-8333-333333333333';
+ writeFileSync(broker.requestPath,JSON.stringify(stored),{mode:0o600});
+ await assert.rejects(client.call('business',{operation:'lookup',input:{}}),/PARENT_BROKER_SCOPE_MISMATCH/);
+ assert.deepEqual(effects,[]);
+});
+
+test('expiry during official authorization sends no tool request and single-flight rejects overlap',async t=>{
+ let release,entered;
+ const started=new Promise(resolve=>{entered=resolve;});
+ const {client,request,effects}=await fixture(t,{authorize:async()=>{entered();return new Promise(resolve=>{release=resolve;});}});
+ const pending=client.call('phone',{command:'account-current',args:[]});
+ await started;
+ await assert.rejects(client.call('business',{operation:'lookup',input:{}}),/PARENT_BROKER_BUSY/);
+ t.mock.method(Date,'now',()=>request.deadline_ms+1);release(true);
+ await assert.rejects(pending,/PARENT_BROKER_EXPIRED/);
+ assert.deepEqual(effects,[]);
+ assert.equal(client.snapshot().execution_unknown,false);
+});
+
+test('a real socket loses its acknowledgement after the effect and the parent never resends it',async t=>{
+ const {request,broker}=await fixture(t);
+ await broker.close();
+ const socket=join(tmpdir(),'parent-lost-ack-'+process.pid+'-'+Date.now()+'.sock');
+ let effects=0;
+ const server=createServer({allowHalfOpen:true},client=>{client.resume();client.on('end',()=>{effects++;client.end();});});
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socket,resolve);});
+ t.after(()=>new Promise(resolve=>server.close(resolve)));
+ writeFileSync(broker.requestPath,JSON.stringify({...request,socket}),{mode:0o600});
+ const client=module.createActivitySkillBrokerClient({request,requestPath:broker.requestPath,authorize:async()=>true});
+ await assert.rejects(client.call('business',{operation:'lookup',input:{}}));
+ assert.equal(effects,1);assert.equal(client.snapshot().execution_unknown,true);
+ await assert.rejects(client.call('business',{operation:'lookup',input:{}}),/PARENT_BROKER_DELIVERY_UNKNOWN/);
+ assert.equal(effects,1);
 });
