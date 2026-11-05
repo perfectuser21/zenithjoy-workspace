@@ -10361,3 +10361,11 @@ tests:
     status: active
     product: AI员工
     note: "真实 Vitest 文件选择核验取消回执仅在必需 business PG 套件运行，不得漏测。"
+
+  - id: retired-acquisition-account-history-browser
+    path: apps/dashboard/e2e/retired-acquisition-account-history.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "专用 PR 浏览器作业：隔离 HTTP 响应验证历史账号、绑定机器与读取错误；不是线上后端、设备或真实账号验收。"
