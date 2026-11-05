@@ -7,7 +7,7 @@ import {readFileSync,writeFileSync,mkdirSync,lstatSync,realpathSync,readdirSync,
 import {dirname,resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const HERE=dirname(fileURLToPath(import.meta.url));
-const LOCK_SHA='38cfd7e7ce6e47f2ac6abd408f1ca52d94bb59c2167a87b32fd87adf141c8eb7';
+const LOCK_SHA='a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c';
 const need=(v,code)=>{if(!v)throw Error('PREFLIGHT_PG_'+code);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const decodeJson=(bytes,reason)=>{try{return JSON.parse(bytes);}catch{throw Error('PREFLIGHT_PG_'+reason);}};
