@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {mkdtempSync,mkdirSync,copyFileSync,readFileSync,writeFileSync,rmSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,copyFileSync,readFileSync,writeFileSync,rmSync,symlinkSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {WebSocketServer} from 'ws';
 
 const base=fileURLToPath(new URL('../',import.meta.url));
 const paths=['official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'];
@@ -15,7 +16,7 @@ const api=await import('../official-gateway-dependencies.mjs').catch(error=>{
 });
 async function using(fn){
  assert.equal(typeof api.loadOfficialGatewayDependencies,'function','cold runtime must load the frozen official SDK without global/node_modules fallback');
- const root=mkdtempSync(join(tmpdir(),'official-gateway-sdk-'));
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'official-gateway-sdk-')));
  try{
   for(const path of paths){mkdirSync(dirname(join(root,path)),{recursive:true,mode:0o700});copyFileSync(join(base,path),join(root,path));}
   const source={commit:'a'.repeat(40),files:paths.map(path=>({path,sha256:hash(readFileSync(join(root,path)))}))};
@@ -53,4 +54,24 @@ test('symlinked artifact is rejected even when its bytes match',()=>using(async(
 test('a different runtime root cannot borrow the loaded source identity',()=>using(async({root,source,load})=>{
  const other=join(root,'other');mkdirSync(other,{mode:0o700});
  await assert.rejects(load({runtimeRoot:other,source}),/OFFICIAL_GATEWAY_DEPENDENCIES/);
+}));
+test('cold-loaded official WebSocket uses real TCP and closes its request, WebSocket and socket',()=>using(async({root,source,load})=>{
+ const sdk=await load({runtimeRoot:root,source}),server=new WebSocketServer({host:'127.0.0.1',port:0});
+ await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+ let ws;
+ try{
+  const closed={request:false,websocket:false,socket:false};
+  ws=new sdk.WebSocket('ws://127.0.0.1:'+server.address().port,{followRedirects:false,perMessageDeflate:false});
+  ws._req.once('close',()=>{closed.request=true;});
+  ws._req.once('socket',socket=>socket.once('close',()=>{closed.socket=true;}));
+  await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('fixture WebSocket did not close')),2000);
+   ws.once('error',reject);ws.once('open',()=>ws.close());
+   ws.once('close',()=>{closed.websocket=true;clearTimeout(timer);resolve();});
+  });
+  for(let i=0;i<20&&!Object.values(closed).every(Boolean);i++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.deepEqual(closed,{request:true,websocket:true,socket:true});
+ }finally{
+  ws?.terminate();for(const client of server.clients)client.terminate();await new Promise(resolve=>server.close(resolve));
+ }
 }));
