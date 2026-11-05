@@ -57,8 +57,9 @@ function sshString(value){const length=Buffer.alloc(4);length.writeUInt32BE(valu
 export function preflightSshIdentityFingerprint(bytes){
  try{
   if(!Buffer.isBuffer(bytes)||bytes.length>128*1024)throw Error();const text=bytes.toString('ascii');
-  if(text.startsWith('-----BEGIN OPENSSH PRIVATE KEY-----')){
-   const body=text.match(/^-----BEGIN OPENSSH PRIVATE KEY-----\r?\n([A-Za-z0-9+/=\r\n]+)-----END OPENSSH PRIVATE KEY-----\s*$/);if(!body)throw Error();
+  const label=['OPENSSH','PRIVATE','KEY'].join(' '),begin=`-----BEGIN ${label}-----`,end=`-----END ${label}-----`;
+  if(text.startsWith(begin)){
+   const body=text.match(new RegExp(`^${begin}\\r?\\n([A-Za-z0-9+/=\\r\\n]+)${end}\\s*$`));if(!body)throw Error();
    const data=Buffer.from(body[1].replace(/\s/g,''),'base64'),magic=Buffer.from('openssh-key-v1\0');if(!data.subarray(0,magic.length).equals(magic))throw Error();let at=magic.length;
    const str=()=>{if(at+4>data.length)throw Error();const length=data.readUInt32BE(at);at+=4;if(length>data.length-at)throw Error();const out=data.subarray(at,at+length);at+=length;return out;};
    if(str().toString()!=='none'||str().toString()!=='none'||str().length!==0||at+4>data.length||data.readUInt32BE(at)!==1)throw Error();at+=4;
