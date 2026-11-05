@@ -32,6 +32,21 @@ jobs:
     env:
       SMOKE_KW: '美甲'
     steps:
+      - name: Verify GitHub checkout proxy
+        shell: bash
+        run: |
+          # Job-only Git config; never alter the shared machine routing or global Git config.
+          # Verify the existing proxy with normal TLS before allowing checkout.
+          curl --proxy http://127.0.0.1:7890 --noproxy '' --connect-timeout 3 --max-time 10 -fsSI https://github.com/ -o /dev/null || { echo 'GitHub checkout proxy unavailable' >&2; exit 1; }
+          count=${GIT_CONFIG_COUNT:-0}
+          case "$count" in ''|*[!0-9]*) echo 'Invalid inherited Git config count' >&2; exit 1;; esac
+          if [ "${#count}" -gt 9 ]; then echo 'Invalid inherited Git config count' >&2; exit 1; fi
+          count=$((10#$count))
+          {
+            printf 'GIT_CONFIG_KEY_%s=http.https://github.com/.proxy\n' "$count"
+            printf 'GIT_CONFIG_VALUE_%s=http://127.0.0.1:7890\n' "$count"
+            printf 'GIT_CONFIG_COUNT=%s\n' "$((count + 1))"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -78,6 +93,21 @@ jobs:
       DB_SSH_PORT: '6443'
       DB_SSH_KEY: /c/actions-runner/.ssh/zjdb_ed25519
     steps:
+      - name: Verify GitHub checkout proxy
+        shell: bash
+        run: |
+          # Job-only Git config; never alter the shared machine routing or global Git config.
+          # Verify the existing proxy with normal TLS before allowing checkout.
+          curl --proxy http://127.0.0.1:7890 --noproxy '' --connect-timeout 3 --max-time 10 -fsSI https://github.com/ -o /dev/null || { echo 'GitHub checkout proxy unavailable' >&2; exit 1; }
+          count=${GIT_CONFIG_COUNT:-0}
+          case "$count" in ''|*[!0-9]*) echo 'Invalid inherited Git config count' >&2; exit 1;; esac
+          if [ "${#count}" -gt 9 ]; then echo 'Invalid inherited Git config count' >&2; exit 1; fi
+          count=$((10#$count))
+          {
+            printf 'GIT_CONFIG_KEY_%s=http.https://github.com/.proxy\n' "$count"
+            printf 'GIT_CONFIG_VALUE_%s=http://127.0.0.1:7890\n' "$count"
+            printf 'GIT_CONFIG_COUNT=%s\n' "$((count + 1))"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
