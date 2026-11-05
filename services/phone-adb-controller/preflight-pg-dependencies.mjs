@@ -92,6 +92,19 @@ export function verifyPreflightPg({runtimeRoot,frozen}){
  }
  need(JSON.stringify(actualPaths)===JSON.stringify(expected.sort()),'EXTRA_FILES');need(JSON.stringify(files.sort((a,b)=>a.path.localeCompare(b.path)))===JSON.stringify(manifest.files),'MANIFEST_FILES');return {manifest,manifest_sha256:sha(regular(join(dest,'manifest.json')))};
 }
+// Explicit offline handoff from a source-verified candidate into this run's
+// private frozen tree. Runtime never searches the candidate or downloads packages.
+export async function prepareFrozenPreflightPg({sourceRuntimeRoot,runtimeRoot,frozen,expectedDeployment}){
+ const canonical=value=>JSON.stringify(value,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+ need(realpathSync(sourceRuntimeRoot)!==realpathSync(runtimeRoot),'FREEZE_ROOT');
+ const sourceCommit=frozen?.deployment?.source_commit,verified=verifyPreflightPg({runtimeRoot:sourceRuntimeRoot,frozen});
+ const observed=preflightPgDeployment({runtimeRoot:sourceRuntimeRoot,sourceCommit});need(expectedDeployment&&canonical(observed)===canonical(expectedDeployment),'FREEZE_DEPLOYMENT');
+ const tarballs=new Map(verified.manifest.packages.map(e=>[e.name,regular(join(target(sourceRuntimeRoot),'tarballs',tarName(e)),4*1024*1024)]));
+ need(tarballs.size===verified.manifest.packages.length,'FREEZE_TARBALLS');
+ await installPreflightPg({runtimeRoot,sourceCommit,tarballs});
+ const installed=preflightPgDeployment({runtimeRoot,sourceCommit});need(canonical(installed)===canonical(observed),'FREEZE_COPY');
+ need(canonical(preflightPgDeployment({runtimeRoot:sourceRuntimeRoot,sourceCommit}))===canonical(observed),'FREEZE_SOURCE_CHANGED');return installed;
+}
 export function loadPreflightPg({runtimeRoot,frozen}){
  verifyPreflightPg({runtimeRoot,frozen});need(!process.env.NODE_PG_FORCE_NATIVE&&!process.env.NODE_PATH,'ENVIRONMENT_ROUTE');const dest=target(realpathSync(runtimeRoot)),require=createRequire(join(dest,'package.json'));
  need(require.resolve('pg')===join(dest,'node_modules/pg/lib/index.js'),'MODULE_ROUTE');const {Pool}=require('pg');need(typeof Pool==='function','POOL_EXPORT');return Object.freeze({Pool});

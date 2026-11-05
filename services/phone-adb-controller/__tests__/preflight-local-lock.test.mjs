@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync,realpathSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {spawnSync} from 'node:child_process';
+import test from 'node:test';import assert from 'node:assert/strict';import {mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync,realpathSync,symlinkSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {spawnSync} from 'node:child_process';
 const helper=new URL('../preflight-local-step.py',import.meta.url).pathname;
 function invoke(root,operation,owner='fresh_fixture',epoch='00000000-0000-4000-8000-000000000001',receipt=null){
  const code=`import importlib.util,sys,json\ns=importlib.util.spec_from_file_location('fixed',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ntry: print(json.dumps(m.lock_record(sys.argv[2], 'SERIAL',sys.argv[3],sys.argv[4],sys.argv[5],receipt=json.loads(sys.argv[6]))))\nexcept Exception: sys.exit(2)\n`;
@@ -58,4 +58,11 @@ test('fresh scoped release requires the same epoch and emits original release re
 test('scoped release refuses a changed inventory before removing any owner field',t=>{
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'preflight-lock-extra-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));assert.equal(invoke(dir,'acquire').status,0);
  writeFileSync(join(dir,'SERIAL.lock/foreign-evidence'),'preserve');assert.equal(invoke(dir,'release').status,2);assert.equal(readFileSync(join(dir,'SERIAL.lock/owner'),'utf8').trim(),'fresh_fixture');
+});
+
+test('quarantine only writes this exact owner epoch marker and never releases or renews it',t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'preflight-lock-quarantine-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));assert.equal(invoke(dir,'acquire').status,0);
+ assert.equal(invoke(dir,'quarantine','foreign_fixture').status,2);const alias=dir+'-alias';symlinkSync(dir,alias);t.after(()=>rmSync(alias,{force:true}));assert.equal(invoke(alias,'quarantine').status,2);
+ assert.equal(invoke(dir,'quarantine','fresh_fixture','00000000-0000-4000-8000-000000000002').status,2);assert.equal(existsSync(join(dir,'SERIAL.lock/standalone_review_required')),false);
+ const ts=readFileSync(join(dir,'SERIAL.lock/acquired_at'),'utf8'),result=invoke(dir,'quarantine');assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).lock,'quarantined');assert.equal(readFileSync(join(dir,'SERIAL.lock/standalone_review_required'),'utf8').trim(),'fresh_fixture');assert.equal(readFileSync(join(dir,'SERIAL.lock/acquired_at'),'utf8'),ts);assert.equal(invoke(dir,'release').status,2);
 });

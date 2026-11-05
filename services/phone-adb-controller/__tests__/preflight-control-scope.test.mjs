@@ -12,3 +12,12 @@ test('control scope freezes independent source pins/central route without secret
  const frozen={execution_mode:'agent',workflow_version:{payload:{key:env.WF_BRAIN_WORKFLOW}},deployment:{source_commit:'a'.repeat(40),target:'xian-m4'},runtime_transport:transport,preflight_control_scope:scope,files:{'runtime/config/preflight-control-hosts.json':sha(bytes)}};
  assert.doesNotThrow(()=>assertPreflightControlScope({root,env,frozen}));writeFileSync(join(home,'.ssh/known_hosts'),'changed');assert.throws(()=>assertPreflightControlScope({root,env,frozen}),/PREFLIGHT_CONTROL/);
 });
+
+test('owned local PG pool enforces the original absolute deadline without closing an independent connection',async t=>{
+ const {privatePgSsh}=await import('./helpers/preflight-private-pg-ssh.mjs');
+ const f=await privatePgSsh(t),{createRequire}=await import('node:module'),{Pool}=createRequire(import.meta.url)('pg');
+ const {createPreflightLocalPool}=await import('../preflight-control-scope.mjs');const uri=`postgresql://preflight_fixture@127.0.0.1:${f.connection.port}/postgres`,start=Date.now();
+ const owned=createPreflightLocalPool({Pool,connectionString:uri,deadlineMs:start+200});f.beforeStop(()=>owned.transport.close());
+ await assert.rejects(()=>owned.pool.query('SELECT pg_sleep(2)'));const proof=await owned.transport.close();assert.equal(proof.execution_stopped,false);assert.equal(proof.deadline_exceeded,true);assert.equal(owned.pool.ended,true);assert.ok(Date.now()-start<1500);
+ const separate=new Pool(f.connection);try{assert.equal((await separate.query('SELECT 1 AS actual')).rows[0].actual,1);}finally{await separate.end();}
+});

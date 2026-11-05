@@ -262,9 +262,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const quarantineResources=async()=>{
     const proof={verified:false,device:{verified:serial==='none',applicable:serial!=='none'},videos:[],claim_receipt_unknown:state.qualificationClaimUnknown===true};
     if(serial!=='none')try{
+      if(trustedPreflight)proof.device={applicable:true,...await preflightRuntime.quarantine()};else{
       const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
       const r=await execute(ctl,['--profile',profile,'lock-quarantine',run],{timeoutMs:20000,env:{...env}});
-      proof.device={applicable:true,verified:r.code===0&&r.stdout.trim()===`lock=quarantined owner=${run} review_required=true`,receipt:safeExecutionDiagnostic(r.stdout,env)};
+      proof.device={applicable:true,verified:r.code===0&&r.stdout.trim()===`lock=quarantined owner=${run} review_required=true`,receipt:safeExecutionDiagnostic(r.stdout,env)};}
     }catch(error){proof.device={applicable:true,verified:false,reason:safeExecutionDiagnostic(error.message,env)};}
     for(const video of leased)try{
       const r=(await rpc({kind:'queue',request:{op:'quarantine_video',line,run,video_id:video.video_id}},{timeoutMs:30000})).result;
@@ -287,6 +288,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     if(needsCentralLock){
       await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
       if(locked){await getCentral().ensure();await getCentral().verifyHeld();}
+      else if(scope.activity==='cleanup'&&trustedPreflight&&preflightRuntime.canFinalizeNoLocal(scope)){await getCentral().verifyHeld();}
       else if(scope.activity!=='preflight'&&!agent.facts.released)throw Error('AGENT_PRIMARY_RESOURCE_NOT_HELD');
       if(!readOnly&&leased.length&&scope.activity!=='cleanup'){
         const rows=await queue('inspect_videos',{video_ids:leased.map(v=>v.video_id)});
@@ -343,7 +345,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     if(scope.activity==='collect_videos')discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,verifyPhoneAssociation});
     if(scope.activity==='collection'&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation});
     if(scope.activity==='cleanup'){
-      if(trustedPreflight){preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});return;}
+      if(trustedPreflight){preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});return preflightScope.snapshot().no_resources?{native_cleanup_not_required:true}:undefined;}
       if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
       if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
     }
@@ -715,6 +717,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         return {...marked,bridge,mark_leads_readback_failures:readback.failures||0,bridge_readback_failures:(bridgeReadback.failures||0)+(bridge.verified===false?1:0),...(bridge.verified===false?{status:'partial'}:{})};
       }
       if(activity.key==='cleanup'){
+        if(trustedPreflight&&preflightScope.snapshot().no_resources){await preflightScope.close(proof);return {status:'needs_review',physical_cleanup_not_required:true,close_app_attempts:0,safe_desktop_visible:0,lock_released:0};}
         if(trustedPreflight){await preflightScope.close(proof,{close_stdout:agent.facts.close_stdout,desktop_stdout:agent.facts.desktop_stdout,xml:readNative(agent.facts.cleanup_xml),png:readFileSync(agent.facts.cleanup_png)});}
         const nativeOptions=trustedPreflight?preflightRuntime.desktopVerificationOptions():undefined;
         if(!agent.facts.close_stdout||!agent.facts.desktop_stdout||!agent.facts.cleanup_png||!agent.facts.cleanup_xml)throw Error('AGENT_PRIMARY_CLEANUP_NATIVE_MISSING');
@@ -735,7 +738,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       throw Error('AGENT_PRIMARY_RESULT_ADAPTER_UNAVAILABLE');
     };
     const release=async()=>{
-      if(activity.key!=='cleanup'||state.executionUnknown||!agent.facts.cleanup_proof&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')throw Error('AGENT_PRIMARY_CLEANUP_UNVERIFIED');
+      if(activity.key!=='cleanup'||state.executionUnknown||!agent.facts.cleanup_proof&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!(trustedPreflight&&preflightScope.snapshot().no_resources))throw Error('AGENT_PRIMARY_CLEANUP_UNVERIFIED');
       for(const v of leased){const r=await queue('release_video',{video_id:v.video_id});if(r.released!==true)throw Error('AGENT_PRIMARY_VIDEO_RELEASE_UNVERIFIED');}
       if(trustedPreflight)await preflightRuntime.release();else{const raw=await phone('lock-release',run);if(!raw.startsWith('lock=released'))throw Error('AGENT_PRIMARY_LOCK_RELEASE_UNVERIFIED');}locked=false;
       const centralReleased=await getCentral().release();if(!centralReleased)throw Error('AGENT_PRIMARY_CENTRAL_RELEASE_UNVERIFIED');
@@ -743,7 +746,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       await discoveryScope?.close();discoveryScope=null;await collectionScope?.close();collectionScope=null;agent.facts.released=true;
       return {lock_released:1,no_lock:true,central_lock_released:1,central_lock_task_id:taskId,central_lock_run_id:state.run_id,...(agent.facts.cleanup_proof?{cleanup_readback_digest:agent.facts.cleanup_proof.digest}:{})};
     };
-    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{...(trustedPreflight?{closeNativeScope:proof=>preflightRuntime.current()?.close(proof)||{execution_stopped:true}}:{}),assertResources:assertAgentScope,executionState:()=>({native_stop_unproven:state.nativeStopUnproven===true,execution_unknown:state.executionUnknown===true||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
+    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{...(trustedPreflight?{closeNativeScope:proof=>preflightRuntime.current()?.close(proof)||{execution_stopped:!preflightRuntime.nativeState().execution_unknown}}:{}),assertResources:assertAgentScope,executionState:()=>({native_stop_unproven:state.nativeStopUnproven===true,execution_unknown:state.executionUnknown===true||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
       native_video_candidates:[...agent.native.values()].map(({metrics,...video})=>({...video,metrics:{likes:metrics.likes,comment_total:metrics.comment_total,comment_tier:metrics.comment_tier}})),
       native_comment_receipts:[...agent.comments].map(([native_receipt,p])=>({native_receipt,video_id:p.video_id,douyin_id:p.row.douyinId,nickname:p.row.nickname,comment_body:p.row.commentBody,historical_verified:!!p.history})),
       panel_session_available:!!agent.panelSession&&agent.panelSession.video_id===agent.currentVideo?.video_id,verified_detail_video_id:agent.detailIdentity?.video_id||null,

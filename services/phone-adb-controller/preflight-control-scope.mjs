@@ -46,10 +46,19 @@ export function createPreflightPoolFactory({runtimeRoot,frozen,env}){
    const {createPreflightPgStream}=await import('./preflight-pg-stream.mjs');transport=await createPreflightPgStream({directory:env.WFR_RUN_DIR,policy:scope.ssh,deadlineMs});
    pool=new Pool({connectionString:uri,max:1,stream:transport.stream,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'});
   }else{
-   pool=new Pool({connectionString:uri,max:1,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'});
-   // No process is spawned by the local PG driver. Network/commit state stays a separate metadata fact.
-   transport={seal:async()=>({domain:'parent-pg-no-native-process-v1',execution_stopped:pool.ended===true}),close:async()=>{if(!pool.ending)await pool.end();return {execution_stopped:pool.ended===true};}};
+   ({pool,transport}=createPreflightLocalPool({Pool,connectionString:uri,deadlineMs}));
   }
   return {pool,transport,expectedIdentity:structuredClone(scope.database_identity)};
  };
+}
+
+// One private Pool per admitted metadata request. Ending its owned clients is
+// transport closure only; the metadata caller preserves all commit uncertainty.
+export function createPreflightLocalPool({Pool,connectionString,deadlineMs}){
+ if(!Number.isSafeInteger(deadlineMs)||Date.now()>=deadlineMs)throw Error('PREFLIGHT_CONTROL_DEADLINE');
+ const pool=new Pool({connectionString,max:1,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),query_timeout:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'}),clients=new Set();let timedOut=false,closed=false,closing;
+ pool.on('connect',client=>{clients.add(client);if(closed||Date.now()>=deadlineMs){timedOut=true;void client.end().catch(()=>{});}});pool.on('remove',client=>clients.delete(client));
+ const close=()=>closing??=(async()=>{closed=true;clearTimeout(timer);if(Date.now()>=deadlineMs)timedOut=true;await Promise.allSettled([...clients].map(client=>client.end()));if(!pool.ending)await pool.end();return {domain:'parent-pg-no-native-process-v1',execution_stopped:pool.ended===true&&!timedOut,deadline_exceeded:timedOut};})();
+ const timer=setTimeout(()=>{timedOut=true;void close().catch(()=>{});},Math.max(1,deadlineMs-Date.now()));timer.unref();
+ return {pool,transport:{seal:close,close}};
 }

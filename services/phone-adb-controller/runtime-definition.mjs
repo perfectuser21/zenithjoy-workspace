@@ -1,3 +1,4 @@
+import {prepareFrozenPreflightPg} from './preflight-pg-dependencies.mjs';
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
 import outreachScope from './leadgen-outreach-scope.js';
 import lineRoutes from './line-routes.js';
@@ -200,6 +201,9 @@ export async function freezeDefinition(o) {
   const executionMode=executionModeInput({WF_BRAIN_WORKFLOW:o.workflowKey,...(Object.hasOwn(o,'executionMode')?{LEADGEN_EXECUTION_MODE:o.executionMode}:{})});
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
   const fixedAgentInput=executionMode==='agent'?validateAgentInput(o.agentInput):null;
+  const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null;
+  if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
+  if(hasPreflight&&(executionMode!=='agent'||!['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey)||!o.preflightPg||!o.preflightControlScope||Object.keys(o.preflightPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.preflightPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('PREFLIGHT_INPUT_MODE_INVALID');
   if(executionMode==='code'&&o.agentInput!=null)throw Error('AGENT_INPUT_MODE_INVALID');
   if(fixedAgentInput&&(fixedAgentInput.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(key=>o.runIdentity[key]!==fixedAgentInput[key==='tag'?'run_tag':key])))throw Error('AGENT_INPUT_FREEZE_SCOPE_INVALID');
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).agent_input||null)!==canonical(fixedAgentInput))throw Error('AGENT_INPUT_RESUME_MISMATCH');
@@ -285,7 +289,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput)}:{}),
+    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
@@ -294,6 +298,10 @@ export async function freezeDefinition(o) {
     for(const file of checked.values()){
       const target=resolve(staging,'runtime',file.deployed_path);mkdirSync(dirname(target),{recursive:true});
       writeFileSync(target,file.bytes,{mode:file.mode});
+    }
+    if(hasPreflight||manifest.dependencies?.preflight_pg){
+      const dependency=manifest.dependencies?.preflight_pg,dependencyScope=hasPreflight?snapshot:{...snapshot,preflight_pg:{lock_sha256:dependency?.lock_sha256,package_lock_sha256:dependency?.package_lock_sha256}};
+      await prepareFrozenPreflightPg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:dependencyScope,expectedDeployment:dependency});
     }
     writeFileSync(resolve(staging,'runtime/deployment-manifest.json'),manifestBytes,{mode:0o600});
     writeFileSync(resolve(staging,'workflow.plan'),plan);writeFileSync(resolve(staging,'step-dod.json'),steps);

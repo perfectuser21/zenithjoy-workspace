@@ -110,6 +110,7 @@ const modules={
  './activity-skill-executor.mjs':await import(pathToFileURL(root+'activity-skill-executor.mjs')),
  './runtime-receipts.mjs':await import(pathToFileURL(root+'runtime-receipts.mjs')),
  './ledger.mjs':await import(pathToFileURL(root+'ledger.mjs')),
+ './preflight-phone-scope.mjs':await import(pathToFileURL(root+'preflight-phone-scope.mjs')),
  './preflight-judge.mjs':await import(pathToFileURL(root+'preflight-judge.mjs')),
  './collection-phone-scope.mjs':await import(pathToFileURL(root+'collection-phone-scope.mjs')),
  './discovery-phone-scope.mjs':await import(pathToFileURL(root+'discovery-phone-scope.mjs')),

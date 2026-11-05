@@ -168,6 +168,10 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/preflight-pg-lock.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-runner-adapter.mjs
         revision: contract
       - kind: code

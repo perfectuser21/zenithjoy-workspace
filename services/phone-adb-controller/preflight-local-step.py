@@ -74,7 +74,7 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
                     handle.write(value+'\n');handle.flush();os.fsync(handle.fileno())
             succeeded = True
             return {'lock': 'acquired', 'owner': owner, 'epoch': epoch, 'readback_owner': (lock / 'owner').read_text().strip(), 'readback_epoch': (lock / 'preflight_epoch').read_text().strip()}
-        if operation not in ('refresh', 'release') or lock.is_symlink() or not lock.is_dir() or (lock / 'standalone_review_required').exists():
+        if operation not in ('refresh', 'release', 'quarantine') or lock.is_symlink() or not lock.is_dir() or operation != 'quarantine' and (lock / 'standalone_review_required').exists():
             raise ValueError('PREFLIGHT_LOCK_NOT_RENEWABLE')
         out = os.open(lock / 'owner', os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(out) as handle:
@@ -84,6 +84,14 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
         with os.fdopen(epoch_fd) as handle:
             if handle.read(1024).strip() != epoch:
                 raise ValueError('PREFLIGHT_LOCK_EPOCH')
+        if operation == 'quarantine':
+            marker = lock / 'standalone_review_required'
+            out = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(out, 'w') as handle:
+                handle.write(owner+'\n');handle.flush();os.fsync(handle.fileno())
+            succeeded = True
+            return {'lock': 'quarantined', 'owner': owner, 'epoch': epoch, 'review_required': True,
+                    'readback_owner': (lock / 'owner').read_text().strip(), 'readback_epoch': (lock / 'preflight_epoch').read_text().strip()}
         if operation == 'release':
             names = {'owner', 'preflight_epoch', 'acquired_at'}
             if {p.name for p in lock.iterdir()} != names:
@@ -108,7 +116,7 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
         try:
             if receipt is not None:
                 path = Path(receipt['path'])
-                kind = operation if operation in ('acquire', 'release') else 'refresh'
+                kind = operation if operation in ('acquire', 'release', 'quarantine') else 'refresh'
                 if not path.is_absolute() or path.name != owner+'-lock-'+kind+'.json' or receipt['run'] != owner or receipt['serial'] != serial:
                     raise ValueError('PREFLIGHT_LOCK_RECEIPT_SCOPE')
                 readback_owner = 'none' if succeeded and operation == 'release' else 'unknown'
@@ -121,7 +129,7 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
                 try:
                     sys.argv = [__file__, 'lock-receipt', str(path), kind, owner, owner+'-lock-'+kind,
                                 'command=lock-'+operation, 'requested_owner='+owner, 'rc='+str(0 if succeeded else 2),
-                                'receipt=lock='+('acquired' if operation=='acquire' else 'released' if operation=='release' else 'refreshed')+' owner='+owner if succeeded else 'receipt=',
+                                'receipt=lock='+('acquired' if operation=='acquire' else 'released' if operation=='release' else 'quarantined' if operation=='quarantine' else 'refreshed')+' owner='+owner if succeeded else 'receipt=',
                                 'stderr=' if succeeded else 'stderr=PREFLIGHT_LOCK_REFUSED',
                                 'readback=lock='+state+' owner='+readback_owner, 'profile='+receipt['profile'], 'serial='+serial,
                                 'pid='+str(os.getpid()), 'epoch='+epoch]

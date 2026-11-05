@@ -3,6 +3,7 @@ import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {runWorkflow} from './activity-commander.mjs';
+import {createPreflightRuntime} from './preflight-phone-scope.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
 import {collectionEvidenceProof,collectionCleanupEvidence} from './collection-phone-scope.mjs';
@@ -82,7 +83,7 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  };
  if(executionMode==='agent'){
   if(typeof handlers.createAgentTools!=='function')throw Object.assign(Error('AGENT_PRIMARY_TOOLS_UNAVAILABLE'),{executionStopped:true});
-  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});
+  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,nativeState:()=>handlers.agentNativeState?.()||{execution_unknown:true},supportsNativeScope:activity=>handlers.agentSupportsNativeScope?.(activity)===true,createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});
   return {executionMode,execution:{},executeAgent:async(activity,options)=>{
    if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',execution_stopped:true,result:{status:'partial',reason:'已收到停止请求'}};
    return execute(activity,options);
@@ -99,7 +100,7 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
 }
 
 export async function recordActivityBookkeeping(r,{root,env,executionMode,execute=execInput}){
-  const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&r.activity==='preflight'&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+  const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
     if(r.phase==='start'){
       if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
       else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
@@ -115,7 +116,7 @@ export async function recordActivityBookkeeping(r,{root,env,executionMode,execut
 }
 
 export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal}){
-  if(executionMode==='agent'&&activity.key==='preflight'&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
+  if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
   }
@@ -151,7 +152,7 @@ async function main(){
     const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>0&&receipts.every(r=>r.commander_status==='available'))};
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
       const valid=result.result?.cleanup_readback_verified===1&&verifyCleanupReadback({runDir:dir,digest:result.result.cleanup_readback_digest,
-        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL}});
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL},nativeOptions:preflightRuntime?.desktopVerificationOptions()});
       metrics.close_app_attempts=metrics.safe_desktop_visible=Number(valid);
     }
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
@@ -175,7 +176,8 @@ async function main(){
     const verified=workflowReadbackPassed({probes,steps,expected});
     return {verified,metrics,probes,step_dod:local};
   };
-  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
+  const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
+  const handlers=createHandlers({preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
   const result=await runWorkflow({activities,context,handlers:execution,executeAgent,recover,quarantine:handlers.quarantineResources,

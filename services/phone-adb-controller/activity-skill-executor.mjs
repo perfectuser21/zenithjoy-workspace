@@ -3,12 +3,12 @@ import {existsSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {frozenMethod} from './activity-skill-recovery.mjs';
-import {assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
+import {assertExecutionMode,assertAgentInput,canonical} from './runtime-definition.mjs';
 import {safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {startPrimaryActivityBroker} from './activity-skill-primary-broker.mjs';
 
 const notLaunched=new WeakMap();
-export const skillLaunchDidNotStart=(proof,scope)=>Boolean(proof&&scope&&notLaunched.get(proof)===scope);
+export const skillLaunchDidNotStart=(proof,scope)=>Boolean(proof&&scope&&notLaunched.get(proof)===canonical(scope));
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const noLaunch=message=>Object.assign(Error(message),{executionStopped:true});
@@ -81,7 +81,14 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   };
   const abort=()=>{abortJob=Promise.resolve(broker?.abort('runner_cancelled')).catch(()=>{});};
   try{
-   await tools.prepare();
+   const preparation=await tools.prepare();
+   if(activity.key==='cleanup'&&preparation?.native_cleanup_not_required===true){
+    const proof=Object.freeze({agent_not_launched:true,execution_stopped:true});notLaunched.set(proof,canonical(scope));
+    if(typeof tools.closeNativeScope!=='function'||(await tools.closeNativeScope(proof))?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');
+    await tools.settle(proof);await tools.release(proof);const result=tools.getResult();
+    if(result?.execution_stopped===false)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');
+    return {status:'partial',not_started:true,execution_stopped:true,result,reason:'未持有本地设备资源，未启动清理Worker；原验收条件仍需复核'};
+   }
    broker=await startPrimaryActivityBroker({directory,request,inspect:tools.inspect,phone:tools.phone,business:tools.business,
     isReadOnlyBusinessOperation:(operation,input)=>tools.canReadback?.(operation,input)===true,
     getActivityResult:tools.getResult,onEvent:async event=>{if(event.type==='progress')lastProgress=Date.now();return onEvent(event);},onAbort:stop,
@@ -139,7 +146,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    if(broker)await broker.close();
    if(typeof tools.closeNativeScope==='function'){
     let proof={execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
-    if(!dispatched){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,scope);}
+    if(!dispatched){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
     try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;}
     catch{if(caughtError)caughtError.executionStopped=false;else throw Object.assign(Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED'),{executionStopped:false});}
    }

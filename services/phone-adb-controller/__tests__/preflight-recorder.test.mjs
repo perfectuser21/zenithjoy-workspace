@@ -22,3 +22,9 @@ test('real workflow recorder dispatch keeps agent preflight entirely in parent f
  await workflow.recordActivityBookkeeping({phase:'execution',activity:'preflight',evidence:{status:'completed'}},options);
  assert.ok(readFileSync(join(dir,'span-start.a1.preflight.1'),'utf8'));assert.equal(JSON.parse(readFileSync(join(dir,'ledger.json'))).stages.preflight.status,'completed');
 });
+
+test('direct failure cleanup records the same occurrence and failed ledger in parent without outer',async t=>{
+ const dir=directory(t),workflow=await import('../leadgen-workflow.mjs'),options={root:new URL('../',import.meta.url).pathname,env:{WFR_RUN_DIR:dir,WFR_ATTEMPT:'a1',WF_BRAIN_WORKFLOW:'douyin_video_processing'},executionMode:'agent',execute:async()=>{throw Error('UNCONTROLLED_CLEANUP_RECORDER_OUTER');}};
+ await workflow.recordActivityBookkeeping({phase:'start',activity:'cleanup'},options);await workflow.recordActivityBookkeeping({phase:'verification',activity:'cleanup',evidence:{status:'failed'}},options);
+ assert.ok(readFileSync(join(dir,'span-start.a1.cleanup.1'),'utf8'));assert.equal(JSON.parse(readFileSync(join(dir,'ledger.json'))).stages.cleanup.status,'failed');
+});

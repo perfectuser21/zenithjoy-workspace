@@ -17,3 +17,10 @@ test('real workflow preflight readback dispatch does not reopen the old Judge RP
  const result=await workflow.readbackActivityChecks({executionMode:'agent',activity:{key:'preflight'},root:f.base,frozen,env:{WF_BRAIN_WORKFLOW:'douyin_video_discovery',WFR_TAG:'fixture',LEADGEN_LINE:'yuesheng'},metrics:{device_verified:1,account_verified:1,call_state_idle:1,lock_acquired:1},rpc:async()=>{throw Error('UNCONTROLLED_JUDGE_OUTER');},deadline_ms:Date.now()+10000});
  assert.equal(result.result.gate.verdict,'pass');
 });
+
+test('direct failure cleanup uses original metric Judge in parent and retains missing desktop failure',async t=>{
+ const f=fixture(t),workflow=await import('../leadgen-workflow.mjs'),frozen={deployment:{source_commit:f.source.commit},files:Object.fromEntries(f.source.files.map(x=>['runtime/'+x.path,x.sha256]))};
+ const options={executionMode:'agent',activity:{key:'cleanup'},root:f.base,frozen,env:{WF_BRAIN_WORKFLOW:'douyin_video_discovery',WFR_TAG:'fixture',LEADGEN_LINE:'yuesheng'},rpc:async()=>{throw Error('UNCONTROLLED_CLEANUP_JUDGE_OUTER');},deadline_ms:Date.now()+10000};
+ const pass=await workflow.readbackActivityChecks({...options,metrics:{close_app_attempts:1,lock_released:1,safe_desktop_visible:1}});assert.equal(pass.result.gate.verdict,'pass');
+ const fail=await workflow.readbackActivityChecks({...options,metrics:{close_app_attempts:0,lock_released:1,safe_desktop_visible:0}});assert.equal(fail.result.gate.verdict,'fail');
+});

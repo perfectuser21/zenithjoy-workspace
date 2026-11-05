@@ -22,6 +22,18 @@ test('官方固定闭包可在私有候选安装并载入Pool，篡改模块后�
    if ('native' in pg) throw Error('optional native capability must not escape'); const pool=new pg.Pool({max:1}); console.log(typeof pool.query); await pool.end();`;
   const frozen={deployment:{source_commit:'a'.repeat(40)},preflight_pg:identity.frozen};
   const launch=(env={},scope=frozen)=>spawnSync(process.execPath,['--input-type=module','-e',code,root,JSON.stringify(scope)],{encoding:'utf8',timeout:10000,env:{...process.env,NODE_PATH:'',NODE_PG_FORCE_NATIVE:'',...env}});
+  {const {prepareFrozenPreflightPg,preflightPgDeployment,loadPreflightPg}=await import('../preflight-pg-dependencies.mjs'),runRoot=join(root,'run-runtime');mkdirSync(runRoot,{mode:0o700});
+  const expectedDeployment=preflightPgDeployment({runtimeRoot:root,sourceCommit:frozen.deployment.source_commit});
+  const https=createRequire(import.meta.url)('node:https'),originalGet=https.get;let networkCalls=0;https.get=()=>{networkCalls++;throw Error('FROZEN_INSTALL_MUST_BE_OFFLINE');};syncBuiltinESMExports();
+  try{await prepareFrozenPreflightPg({sourceRuntimeRoot:root,runtimeRoot:runRoot,frozen,expectedDeployment});}finally{https.get=originalGet;syncBuiltinESMExports();}assert.equal(networkCalls,0);
+  assert.deepEqual(preflightPgDeployment({runtimeRoot:runRoot,sourceCommit:frozen.deployment.source_commit}),expectedDeployment);
+  const ownPool=new (loadPreflightPg({runtimeRoot:runRoot,frozen}).Pool)({max:1});await ownPool.end();
+  await assert.rejects(prepareFrozenPreflightPg({sourceRuntimeRoot:root,runtimeRoot:runRoot,frozen,expectedDeployment}),/EEXIST/);
+  const refused=join(root,'refused-runtime');mkdirSync(refused,{mode:0o700});await assert.rejects(prepareFrozenPreflightPg({sourceRuntimeRoot:root,runtimeRoot:refused,frozen,expectedDeployment:{...expectedDeployment,manifest_sha256:'0'.repeat(64)}}),/DEPLOYMENT/);assert.equal(existsSync(join(refused,'_dependencies')),false);
+  const archive=join(root,'_dependencies/preflight-pg/tarballs/pg-8.18.0.tgz'),originalArchive=readFileSync(archive);writeFileSync(archive,Buffer.from('tampered candidate'));
+  try{const independent=new (loadPreflightPg({runtimeRoot:runRoot,frozen}).Pool)({max:1});await independent.end();const other=join(root,'refused-source-runtime');mkdirSync(other,{mode:0o700});await assert.rejects(prepareFrozenPreflightPg({sourceRuntimeRoot:root,runtimeRoot:other,frozen,expectedDeployment}),/PREFLIGHT_PG/);assert.equal(existsSync(join(other,'_dependencies')),false);}finally{writeFileSync(archive,originalArchive);}
+  const runEntry=join(runRoot,'_dependencies/preflight-pg/node_modules/pg/lib/index.js'),originalEntry=readFileSync(runEntry);writeFileSync(runEntry,'throw Error("run module tampered")');assert.throws(()=>loadPreflightPg({runtimeRoot:runRoot,frozen}),/PREFLIGHT_PG/);writeFileSync(runEntry,originalEntry);
+  }
   assert.equal(launch().status,0);
   assert.equal(launch({},{...frozen,preflight_pg:{package_lock_sha256:identity.frozen.package_lock_sha256,lock_sha256:identity.frozen.lock_sha256}}).status,0);
   chmodSync(join(root,'_dependencies/preflight-pg'),0o755);assert.notEqual(launch().status,0);chmodSync(join(root,'_dependencies/preflight-pg'),0o700);
