@@ -285,7 +285,7 @@ acquisitionRouter.get('/collect-tasks/:id/videos', acquisitionHistoryAuth, async
         video_count: taskRow.video_count ?? 0,
       },
     });
-  } catch (err) {
+  } catch {
     return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
@@ -325,7 +325,7 @@ acquisitionRouter.get('/videos/:videoId/leads', acquisitionHistoryAuth, async (r
     }));
 
     return ok(res, { leads, total: leads.length });
-  } catch (err) {
+  } catch {
     return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
