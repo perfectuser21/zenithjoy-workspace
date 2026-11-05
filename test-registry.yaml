@@ -10369,3 +10369,11 @@ tests:
     status: active
     product: 智能获客历史
     note: "专用 PR 浏览器作业：隔离 HTTP 响应验证历史账号、绑定机器与读取错误；不是线上后端、设备或真实账号验收。"
+
+  - id: acquisition-history-and-retired-rate-limits
+    path: apps/api/src/routes/acquisition-rate-limit.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 智能获客历史
+    note: "Express真实请求逐路验证认证前IP限流、隔离预算和429；不代表真实设备验收。"

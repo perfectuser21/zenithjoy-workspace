@@ -21,12 +21,19 @@ import { writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
 import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
-import { simpleRateLimit } from '../middleware/simple-rate-limit';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
 // CodeQL js/missing-rate-limiting：/account-scan-result 无 tenantContext（鉴权靠 body.agent_id
 // 直接反查），且本次 account_label 语义统一 sprint 大幅改写了该 handler，触发静态分析对
 // "改动过的代码"重新计入告警。按 agent_id 限流——真机心跳循环~30s一次、dashboard 手动触发已由
 // accountScanTriggerRateLimit（acquisition.ts）单独限流 1次/60s，这里给足并发/连续调用余量。
+// Isolated IP limits protect auth/DB before the retired entry points are rejected.
+// They do not affect device result callbacks or the active /sessions bridge.
+const retiredQrBindRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredCrawlRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredDmRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyWarmupRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+
 const accountScanResultRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
@@ -135,7 +142,7 @@ async function getFeishuBinding(tenantId: string) {
 // ── 1. POST /qr-bind — 派 burner 绑定 task ──
 // architecture（2026-05-10 hotfix）：tenantContext + agentContext 自动 resolve
 // frontend / lead 自验仅传 { account_label } 即可；body explicit tenant_id/agent_id 仍兼容
-router.post('/qr-bind', tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+router.post('/qr-bind', retiredQrBindRateLimit, tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const { account_label } = req.body || {};
   // middleware 注入或 body 显式（agentContext 内部已处理 body 优先）
   const tenant_id = req.body?.tenant_id || req.tenantId;
@@ -406,7 +413,7 @@ router.post('/sessions/invalidate', agentContext, async (req: Request, res: Resp
 
 // ── 4. POST /crawl-comments — 派抓评论 task ──
 // architecture（2026-05-10 hotfix）：同 qr-bind，tenantContext + agentContext 自动 resolve
-router.post('/crawl-comments', tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+router.post('/crawl-comments', retiredCrawlRateLimit, tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const { account_label, video_url } = req.body || {};
   const tenant_id = req.body?.tenant_id || req.tenantId;
   const agent_id = req.body?.agent_id || req.agentId;
@@ -602,7 +609,7 @@ router.get('/crawl-tasks/:task_id', async (req: Request, res: Response) => {
 const DM_SESSION_KILLERS = ['SESSION_EXPIRED', 'RISK'];
 
 // ── 7. POST /dm-outreach — 派私信触达单 ──
-router.post('/dm-outreach', tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+router.post('/dm-outreach', retiredDmRateLimit, tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const { account_label, profile_url, message } = req.body || {};
   const tenant_id = req.body?.tenant_id || req.tenantId;
   const agent_id = req.body?.agent_id || req.agentId;
@@ -1140,7 +1147,7 @@ router.post('/warmup-result', async (req: Request, res: Response) => {
 
 // ── warmup 验活状态查询（dashboard）——某 agent 最近每号活/掉线 ──
 // 租户隔离：只能查本租户名下 agent（JOIN agents 校验归属，防跨租户读小号昵称/粉丝）。
-router.get('/warmup-liveness', acquisitionHistoryAuth, async (req: Request, res: Response) => {
+router.get('/warmup-liveness', historyWarmupRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const agentId = String(req.query.agent_id || '');

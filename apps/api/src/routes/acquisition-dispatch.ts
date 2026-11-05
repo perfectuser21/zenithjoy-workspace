@@ -16,6 +16,7 @@ import { acquisitionHistoryAuth } from '../middleware/acquisition-history-auth';
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { enqueueWarmupTasks } from '../services/warmup-dispatch';
 import {
@@ -30,6 +31,13 @@ import {
 } from '../services/acquisition-dispatch';
 
 export const acquisitionDispatchRouter = Router();
+
+// Keep independent IP budgets so one history or retired path cannot starve another.
+const retiredDispatchBuildRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredDispatchRunRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredWarmupRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const outreachHistoryRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const dispatchOutreachHistoryRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
 
 const ERR = (code: string, message: string) => ({
   success: false,
@@ -68,7 +76,7 @@ acquisitionDispatchRouter.put('/config', tenantContextOptional, async (req: Requ
 });
 
 // ── POST /dispatch/build — scoreLeads + buildAssignments ──
-acquisitionDispatchRouter.post('/dispatch/build', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+acquisitionDispatchRouter.post('/dispatch/build', retiredDispatchBuildRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const { scored } = await scoreLeads(pool, tenantId);
@@ -77,7 +85,7 @@ acquisitionDispatchRouter.post('/dispatch/build', tenantContextOptional, legacyA
 });
 
 // ── POST /dispatch/run — dispatchDue ──
-acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+acquisitionDispatchRouter.post('/dispatch/run', retiredDispatchRunRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const result = await dispatchDue(pool, tenantId, new Date());
@@ -85,7 +93,7 @@ acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, legacyAcq
 });
 
 // ── POST /warmup/run — 手动触发 enqueueWarmupTasks（staging 真机 + smoke 用；每日自动走 scheduler cron）──
-acquisitionDispatchRouter.post('/warmup/run', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+acquisitionDispatchRouter.post('/warmup/run', retiredWarmupRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   // 手动触发可显式指定收尾要切回的操作号昵称（staging 真机验证切号用）；不传则空串=不切。
@@ -164,8 +172,8 @@ async function outreachHistoryHandler(req: Request, res: Response) {
     return res.status(503).json(ERR('HISTORY_UNAVAILABLE', '触达历史暂时不可用，请稍后重试'));
   }
 }
-acquisitionDispatchRouter.get('/outreach-history', acquisitionHistoryAuth, outreachHistoryHandler);
-acquisitionDispatchRouter.get('/dispatch/outreach-history', acquisitionHistoryAuth, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/outreach-history', outreachHistoryRateLimit, acquisitionHistoryAuth, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/dispatch/outreach-history', dispatchOutreachHistoryRateLimit, acquisitionHistoryAuth, outreachHistoryHandler);
 
 // ── GET /cookie-health — 各号健康分类 + 需重扫项 ──
 acquisitionDispatchRouter.get('/cookie-health', tenantContextOptional, async (req: Request, res: Response) => {

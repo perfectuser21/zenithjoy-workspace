@@ -99,6 +99,15 @@ const accountScanTriggerRateLimit = simpleRateLimit({
   max: 1,
 });
 
+// Per-route IP budgets apply before session/tenant resolution and do not share
+// counters with device callbacks or the Skill bridge.
+const historyTasksRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyVideosRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyVideoLeadsRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyLeadsRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredBuildRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredAccountScanIpRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+
 const collectStartRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 30,
@@ -177,7 +186,7 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
 });
 
 // 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
-acquisitionRouter.get('/collect-tasks', acquisitionHistoryAuth, async (req: Request, res: Response) => {
+acquisitionRouter.get('/collect-tasks', historyTasksRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
@@ -229,7 +238,7 @@ acquisitionRouter.get('/collect-tasks', acquisitionHistoryAuth, async (req: Requ
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GET /api/acquisition/collect-tasks/:id/videos — 该任务下的视频卡片列表（TasksPage 二级视图）
-acquisitionRouter.get('/collect-tasks/:id/videos', acquisitionHistoryAuth, async (req: Request, res: Response) => {
+acquisitionRouter.get('/collect-tasks/:id/videos', historyVideosRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const taskId = req.params.id;
@@ -291,7 +300,7 @@ acquisitionRouter.get('/collect-tasks/:id/videos', acquisitionHistoryAuth, async
 });
 
 // GET /api/acquisition/videos/:videoId/leads — 某视频下命中的评论/leads（TasksPage 二级视图展开）
-acquisitionRouter.get('/videos/:videoId/leads', acquisitionHistoryAuth, async (req: Request, res: Response) => {
+acquisitionRouter.get('/videos/:videoId/leads', historyVideoLeadsRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const videoId = req.params.videoId;
@@ -534,7 +543,7 @@ acquisitionRouter.get('/pending-collect-tasks', pendingCollectTasksRateLimit, as
   }
 });
 
-acquisitionRouter.get('/leads', acquisitionHistoryAuth, async (req: Request, res: Response) => {
+acquisitionRouter.get('/leads', historyLeadsRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const { grade } = req.query;
 
   if (grade !== undefined && grade !== '') {
@@ -836,6 +845,7 @@ acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOpt
 // 拉取"机制，延迟从最长一小时降到最坏约30秒。
 acquisitionRouter.post(
   '/account-scan/trigger',
+  retiredAccountScanIpRateLimit,
   tenantContextOptional,
   accountScanTriggerRateLimit,
   legacyAcquisitionRetired,
@@ -1697,7 +1707,7 @@ acquisitionRouter.post('/rescore-lead', tenantContextOptional, async (req: Reque
 });
 
 // POST /api/acquisition/build-assignments — 手动触发 DM 指派（commit-4/5）
-acquisitionRouter.post('/build-assignments', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
+acquisitionRouter.post('/build-assignments', retiredBuildRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
 

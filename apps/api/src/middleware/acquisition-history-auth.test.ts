@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { acquisitionHistoryAuth } from './acquisition-history-auth';
+import { simpleRateLimit, ipKeyFn } from './simple-rate-limit';
 import pool from '../db/connection';
 import { auth } from '../auth';
 
@@ -9,7 +10,7 @@ vi.mock('../db/connection', () => ({ default: { query: vi.fn() } }));
 vi.mock('../auth', () => ({ auth: { api: { getSession: vi.fn() } } }));
 
 const app = express();
-app.get('/history', acquisitionHistoryAuth, (req, res) => {
+app.get('/history', simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn }), acquisitionHistoryAuth, (req, res) => {
   res.json({ tenant: req.tenantId });
 });
 
