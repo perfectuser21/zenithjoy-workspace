@@ -12,6 +12,9 @@ import {runWorkflow} from '../leadgen-runner-adapter.mjs';
 const api=await import('../activity-skill-executor.mjs').catch(error=>{if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;return {};});
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const taskId='11111111-1111-4111-8111-111111111111',bindingId='22222222-2222-4222-8222-222222222222',childId='33333333-3333-4333-8333-333333333333';
+// These controlled test providers model a supported domain; production handlers
+// do not gain support from this fixture or from an Agent/environment value.
+const supportedNativeFixture={agentSupportsNativeScope:()=>true,agentNativeState:()=>({})};
 function fixture(t){
  const runDir=mkdtempSync(join(tmpdir(),'primary-executor-'));t.after(()=>rmSync(runDir,{recursive:true,force:true}));
  const method='---\nname: douyin-leadgen-activity-103-scoring\nmetadata:\n  version: 0.1.0\n  primary_execution: agent-v1\n  activity_ref: douyin_comment_scoring.scoring\n---\n按原政策评分。',support='已冻结Activity只使用本轮受控工具。';
@@ -19,7 +22,7 @@ function fixture(t){
  const contract={budget:{max_duration_s:30}},frozen={execution_mode:'agent',deployment:{target:'mmv',source_commit:'a'.repeat(40),observation_id:'observation'},release:{id:'release'},snapshot_sha256:'b'.repeat(64),workflow_version:{id:'wv',payload:{key:'douyin_comment_scoring'}},files:{[path]:sha(method),'runtime/skills/leadgen-activity-execution.md':sha(support)},activities:[{reference:{slot_key:'scoring',reference_id:'ref'},version:{id:'av',payload:{definition_key:'douyin_comment_scoring.scoring',contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-103-scoring',version:'0.1.0',path:'services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md'}]}}}]};
  const env={LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WF_BRAIN_TASK_ID:taskId,WFR_TAG:'pure_103',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'2',LEADGEN_SOURCE_RUN:'pure_102',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'1800'};
  frozen.agent_input=agentInput(env);
- return {runDir,frozen,env,binding:{id:bindingId,run_id:'pure_103__a1',task_id:taskId},deadlineFor:()=>Date.now()+10000};
+ return {runDir,frozen,env,supportsNativeScope:()=>true,nativeState:()=>({}),binding:{id:bindingId,run_id:'pure_103__a1',task_id:taskId},deadlineFor:()=>Date.now()+10000};
 }
 function phoneFixture(t,{discovery=false}={}){
  const f=fixture(t);Object.assign(f.env,{WF_BRAIN_WORKFLOW:discovery?'douyin_video_discovery':'douyin_video_processing',WFR_TAG:discovery?'pure_101':'pure_102',P:'xiaolongxia',SERIAL:'ANGYVB4311010223',...(discovery?{}:{LEADGEN_SOURCE_RUN:'pure_101',LEADGEN_COMMENT_LIMIT:'5'})});
@@ -109,7 +112,7 @@ test('官方终态返回时尚有完整工具onEvent管线未结束必须隔离�
 
 for(const unknown of [false,true])test(`真实公共Runner与Primary broker Commander abort：${unknown?'官方停止未知保隔离':'双停确认后needs_review'}`,async t=>{
  const f=fixture(t);let stopCalls=0,settled=0,quarantined=0,next=0;
- const handlers={state:{},scoring:async()=>{throw Error('禁止Code');},mark_leads:async()=>{next++;throw Error('不应继续下一Activity');},createAgentTools:async()=>({prepare:async()=>{},settle:async()=>{settled++;},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>({scored:1})})};
+ const handlers={...supportedNativeFixture,state:{},scoring:async()=>{throw Error('禁止Code');},mark_leads:async()=>{next++;throw Error('不应继续下一Activity');},createAgentTools:async()=>({prepare:async()=>{},settle:async()=>{settled++;},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>({scored:1})})};
  const activities=[{key:'scoring',budget:{max_duration_s:30}},{key:'mark_leads',budget:{max_duration_s:30}}];
  const wired=workflow.createWorkflowExecution({...f,activities,handlers,taskId,rpc:async q=>{
   if(q.kind==='activity_skill_authority')return {authorized:true};
@@ -145,7 +148,7 @@ for(const failure of ['ack_lost','owner_changed'])test(`真实60秒heartbeat ${f
  const abortRead=new Promise(resolve=>{stop=resolve;});
  // Deliberately no legacy nativeStopUnproven/executionUnknown bit: resource
  // uncertainty must independently close the Runner's cleanup admission.
- const handlers={state:{},createAgentTools:async activity=>({prepare:async()=>{if(activity.key==='cleanup')cleanup++;},heartbeat:async()=>{heartbeat++;throw Error(failure==='ack_lost'?'CENTRAL_LOCK_RENEWAL_UNKNOWN':'CENTRAL_LOCK_OWNER_CHANGED');},settle:async()=>{settled++;},release:async()=>{released++;},inspect:async()=>({}),phone:async()=>{phone++;},business:async()=>({}),getResult:()=>({qualified:1})})};
+ const handlers={...supportedNativeFixture,state:{},createAgentTools:async activity=>({prepare:async()=>{if(activity.key==='cleanup')cleanup++;},heartbeat:async()=>{heartbeat++;throw Error(failure==='ack_lost'?'CENTRAL_LOCK_RENEWAL_UNKNOWN':'CENTRAL_LOCK_OWNER_CHANGED');},settle:async()=>{settled++;},release:async()=>{released++;},inspect:async()=>({}),phone:async()=>{phone++;},business:async()=>({}),getResult:()=>({qualified:1})})};
  const activities=[{key:'qualification',budget:{max_duration_s:120}},{key:'cleanup',budget:{max_duration_s:60}}],wired=workflow.createWorkflowExecution({...f,activities,handlers,taskId,rpc:async q=>{
   if(q.kind==='activity_skill_authority')return {authorized:true};
   if(q.kind==='activity_skill_stop'){stop();return {result:{execution_stopped:true}};}
@@ -161,7 +164,7 @@ for(const discovery of [false,true])test(`Agent电话${discovery?'101':'102'}非
  const f=phoneFixture(t,{discovery});Object.assign(f.env,{WF_RUN_START_TS:String(Math.floor(Date.now()/1000)-160),WF_RUN_MAX_SECONDS:'180'});f.frozen.agent_input=agentInput(f.env);
  let business=0,cleanup=0,released=0,cleanupDeadline=0;
  const activities=[{key:'preflight',budget:{max_duration_s:120}},{key:'cleanup',budget:{max_duration_s:60}}];
- const handlers={state:{},createAgentTools:async(activity,scope)=>{if(activity.key==='cleanup'){cleanup++;cleanupDeadline=scope.deadline_ms;}else business++;return {prepare:async()=>{},settle:async()=>{},release:async()=>{released++;},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>({saved:1})};}};
+ const handlers={...supportedNativeFixture,state:{},createAgentTools:async(activity,scope)=>{if(activity.key==='cleanup'){cleanup++;cleanupDeadline=scope.deadline_ms;}else business++;return {prepare:async()=>{},settle:async()=>{},release:async()=>{released++;},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>({saved:1})};}};
  const wired=workflow.createWorkflowExecution({...f,activities,handlers,taskId,rpc:async q=>q.kind==='activity_skill_authority'?{authorized:true}:{result:receipt(q.request)}});
  await assert.rejects(()=>wired.executeAgent(activities[0],{context:{task_id:taskId}}),/DEADLINE/);assert.equal(business,0);
  const actual=await wired.executeAgent(activities[1],{context:{task_id:taskId}});assert.equal(actual.status,'completed');assert.equal(cleanup,1);assert.equal(released,1);
@@ -173,7 +176,7 @@ test('旧Code102不引入Agent预留语义，103纯Skill无手机预算预留',a
  const wired=workflow.createWorkflowExecution({...f,activities:[{key:'preflight',budget:{max_duration_s:120}},{key:'cleanup',budget:{max_duration_s:60}}],handlers:{state:{},preflight:async()=>{code++;return {saved:1};}}});
  await wired.execution.preflight({});assert.equal(code,1);
  const scoring=fixture(t);Object.assign(scoring.env,{WF_RUN_START_TS:String(Math.floor(Date.now()/1000)-160),WF_RUN_MAX_SECONDS:'180'});scoring.frozen.agent_input=agentInput(scoring.env);let started=0;
- const primary=workflow.createWorkflowExecution({...scoring,activities:[{key:'scoring',budget:{max_duration_s:120}}],handlers:{state:{},createAgentTools:async()=>({prepare:async()=>{started++;},settle:async()=>{},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>({scored:1})})},rpc:async q=>q.kind==='activity_skill_authority'?{authorized:true}:{result:receipt(q.request)}});
+ const primary=workflow.createWorkflowExecution({...scoring,activities:[{key:'scoring',budget:{max_duration_s:120}}],handlers:{...supportedNativeFixture,state:{},createAgentTools:async()=>({prepare:async()=>{started++;},settle:async()=>{},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>({scored:1})})},rpc:async q=>q.kind==='activity_skill_authority'?{authorized:true}:{result:receipt(q.request)}});
  const actual=await primary.executeAgent({key:'scoring',budget:{max_duration_s:120}},{context:{task_id:taskId}});assert.equal(actual.status,'completed');assert.equal(started,1);
 });
 
@@ -193,7 +196,7 @@ test('正式workflow执行接点从冻结mode选择Primary工厂，原scoring ha
  assert.equal(typeof workflow.createWorkflowExecution,'function','正式main需要消费同一执行接点');
  const f=fixture(t);
  let original=0,submitted=0;
- const handlers={state:{},scoring:async()=>{original++;throw Error('不允许原scoring');},createAgentTools:async()=>({prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{submitted++;return {};},getResult:()=>submitted?{scored:1}:null})};
+ const handlers={...supportedNativeFixture,state:{},scoring:async()=>{original++;throw Error('不允许原scoring');},createAgentTools:async()=>({prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{submitted++;return {};},getResult:()=>submitted?{scored:1}:null})};
  const wired=workflow.createWorkflowExecution({...f,activities:[{key:'scoring',budget:{max_duration_s:30}}],handlers,taskId,root:join(f.runDir,'runtime'),rpc:async q=>{
   if(q.kind==='activity_skill_authority')return {authorized:true};
   await callActivityTool(q.request.broker_request_path,'business',{operation:'score',input:{}});return {result:receipt(q.request)};
@@ -267,4 +270,42 @@ test('早期stall的Observer异常仅记unavailable，不触发资源未知或�
  const result=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId},onEvent:async()=>{throw Error('observer unavailable');}});
  assert.equal(result.status,'completed');assert.equal(result.execution_stopped,true);assert.equal(stopped,0);
  const row=JSON.parse(readFileSync(join(f.runDir,'skill-primary/scoring/broker-events.jsonl'),'utf8').trim());assert.equal(row.commander_status,'unavailable');assert.equal(row.event.type,'stall');
+});
+
+test('unproved primary slot is not started; no tools, phone, worker or broker launch is attempted',async t=>{
+ const f=fixture(t);let calls=0;
+ const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,createTools:async()=>{calls++;throw Error('must not allocate');},rpc:async()=>{calls++;throw Error('must not dispatch');}});
+ const actual=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,true);assert.equal(calls,0);
+});
+
+test('existing unproved native state remains unknown even when the new launch guard rejects a slot',async t=>{
+ const f=fixture(t);let calls=0;const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,nativeState:()=>({native_stop_unproven:true}),createTools:async()=>{calls++;throw Error('must not prepare');},rpc:async()=>{calls++;throw Error('must not launch');}});
+ const actual=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,false);assert.equal(actual.resource_unverified,true);assert.equal(calls,0);
+});
+test('actual generic provider native uncertainty reaches executor even behind a new not-started guard',async t=>{
+ const f=phoneFixture(t),{createHandlers}=await import('../leadgen-handlers.mjs'),{digest,commentSamplingInput}=await import('../runtime-definition.mjs');
+ const env={...f.env,HOME:f.runDir,WFR_RUN_DIR:f.runDir,WFR_RUN_ID:'douyin_video_processing-'+f.env.WFR_TAG,WFR_ATTEMPT:'a1',DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/fixture/adb'};
+ const body={execution_mode:'agent',deployment:{source_commit:'a'.repeat(40)},files:{},sampling_input:commentSamplingInput(env)};writeFileSync(join(f.runDir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
+ const h=createHandlers({root:f.runDir,env,taskId,sourceCommit:'a'.repeat(40),centralLease:{async verifyTask(){},async acquire(){},async ensure(){},async verifyHeld(){}},rpc:async()=>({result:{company_id:'company',tenant_id:'tenant',version:1,run_id:env.WFR_TAG,device_binding:{company_id:'company',tenant_id:'tenant',version:1,run_id:env.WFR_TAG,profile:env.P,device_serial:env.SERIAL,douyin_id:'expected-account',verification_status:'verified',enabled:true}}}),execute:async(_command,args)=>({code:0,stdout:args[0]?.endsWith('adb-existing-route.py')?'5042\n':args.includes('get-state')?'device\n':args.includes('preflight')?`serial=${env.SERIAL}\n`:args.includes('lock-acquire')?'lock=acquired\n':'mCallState=0\n',stderr:''})});
+ const scope={workflow:env.WF_BRAIN_WORKFLOW,activity:'preflight',run:env.WFR_TAG,run_id:env.WFR_RUN_ID+'__a1',task_id:taskId,binding_id:bindingId,source_commit:'a'.repeat(40),snapshot_sha256:digest(body),profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,source_run:env.LEADGEN_SOURCE_RUN,limit:2,comment_limit:5,deadline_ms:Date.now()+20000};
+ const tools=await h.createAgentTools({key:'preflight'},scope);await tools.prepare();assert.equal(h.state.nativeStopUnproven,true);assert.equal(tools.getResult().execution_stopped,false);
+ let dispatched=0;const execute=api.createActivitySkillExecutor({...f,supportsNativeScope:()=>false,nativeState:h.agentNativeState,createTools:async()=>{dispatched++;return tools;},rpc:async()=>{dispatched++;throw Error('must not launch');}});
+ const result=await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});assert.equal(result.not_started,true);assert.equal(result.execution_stopped,false);assert.equal(result.resource_unverified,true);assert.equal(dispatched,0);
+});
+
+test('正式工作流未声明受信执行能力时在工具分配前停止，JSON和环境标记不能启用',async t=>{
+ const f=fixture(t);let calls=0;
+ const handlers={state:{},agentNativeState:()=>({}),createAgentTools:async()=>{calls++;throw Error('unsupported tools must not allocate');}};
+ const wired=workflow.createWorkflowExecution({...f,env:{...f.env,LEADGEN_NATIVE_SCOPE_SUPPORTED:'true'},activities:[{key:'scoring',budget:{max_duration_s:30}}],handlers,taskId,rpc:async()=>{calls++;throw Error('unsupported worker must not launch');}});
+ const actual=await wired.executeAgent({key:'scoring',native_scope_supported:true,budget:{max_duration_s:30}},{context:{task_id:taskId}});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,true);assert.equal(calls,0);
+});
+
+test('正式工作流保留原Provider未证明状态，不因尚未启动新Worker而报告停止',async t=>{
+ const f=fixture(t);let calls=0;
+ const handlers={state:{nativeStopUnproven:true},agentNativeState:()=>({native_stop_unproven:true}),createAgentTools:async()=>{calls++;throw Error('old unknown must not allocate');}};
+ const wired=workflow.createWorkflowExecution({...f,activities:[{key:'scoring',budget:{max_duration_s:30}}],handlers,taskId,rpc:async()=>{calls++;throw Error('old unknown must not launch');}});
+ const actual=await wired.executeAgent({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId}});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.not_started,true);assert.equal(actual.execution_stopped,false);assert.equal(actual.resource_unverified,true);assert.equal(calls,0);
 });
