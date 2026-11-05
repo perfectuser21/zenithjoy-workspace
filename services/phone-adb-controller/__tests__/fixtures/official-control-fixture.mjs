@@ -19,7 +19,7 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies}={}){
+export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
@@ -54,7 +54,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  });
  server.on('connection',socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const options={source,runtimeRoot,request:q,home,journalDirectory,gatewayDependencies,deadlineMs:(suppressClose||shortDeadline)?Date.now()+500:q.deadline_ms,cleanupDeadlineMs:(suppressClose||shortDeadline)?Date.now()+800:q.deadline_ms,credential:()=> 'fixture-private-token',httpRequest:(opts,callback)=>{
+ const options={source,runtimeRoot,request:q,home,journalDirectory,gatewayDependencies,gatewayCredential,deadlineMs:(suppressClose||shortDeadline)?Date.now()+500:q.deadline_ms,cleanupDeadlineMs:(suppressClose||shortDeadline)?Date.now()+800:q.deadline_ms,credential:()=> 'fixture-private-token',httpRequest:(opts,callback)=>{
   assert.equal(opts.hostname,'127.0.0.1');assert.equal(String(opts.port),'5221');assert.equal(opts.method,'GET');
   const req=requestHttp({...opts,port:server.address().port},callback);
   if(suppressClose){const emit=req.emit;req.emit=function(event,...args){if(event==='close'){replay.push(()=>emit.call(req,event,...args));return false;}return emit.call(req,event,...args);};}
