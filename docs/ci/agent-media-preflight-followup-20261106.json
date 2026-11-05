@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-05T22:02:16.751828+00:00",
+  "task_id": "d59f8dfe-9e5f-4925-ad86-c55b385a09bd",
+  "actor": "zenithjoy-agent-media-preflight-20261106",
+  "base_sha": "e2ac6d1d625f3f7c3b01d7e80add9f3dd47ffb8e",
+  "branch": "cp-1106-agent-media-preflight",
+  "gp_anchor": "none(infra)",
+  "actual_failure": {
+    "pr": 2421,
+    "run_id": 42115422809,
+    "job_id": 127553983109,
+    "job": "Agent Test",
+    "step": "Install real media tools for agent runtime contracts",
+    "step_number": 6,
+    "reason": "The5min step timeout expired during bare AzureAPT ffmpeg dependency download, before Vitest ran.",
+    "new_packages": 99,
+    "archive_size_megabytes": 94.1,
+    "last_logged_package": "libvpx9",
+    "limits": "Not an Agent assertion failure or session predicate regression. No claim that the public mirror is always unhealthy.",
+    "log": {
+      "path": "/private/tmp/zj-pr2421-agent-failed.log",
+      "sha256": "9898fdb5ee1c5a390e9db4545c78d8f51de3863ca64cab03efbf1189a71e2f14"
+    }
+  },
+  "collision_check": {
+    "open_prs": [
+      2061,
+      2062,
+      2063
+    ],
+    "scope": "October1SmokeGlob/package-lock ffmpeg prerequisites on old branches; no ci-l4-runtime Agent caller change. Current main already has stricter signed-source/full-plan-equality helper. Reuse that helper rather than copy older installer or modify unrelated PRs.",
+    "evidence": {
+      "path": "/private/tmp/zj-agent-media-collision.json",
+      "sha256": "b18ad4142df3a572e85403ac173f0fac9f9ab792d57daff73bdb4ec393656f61"
+    }
+  },
+  "fix": [
+    "Agent preparation now invokes one240sGNUtimeout with SIGKILL, while original5minstep and15minjob remain.",
+    "If both ffmpeg and ffprobe exist, execute both real version commands withoutAPT. Either missing invokes bounded original index and existing prepare-openclaw-os-packages.sh for exactffmpeg package.",
+    "Existing helper checks Ubuntu signed source, original/officialInst/Remv package+version equality and no removals, uses owned temporary sources/lists, and never edits hostAPT sources. Shared helper unchanged.",
+    "Index/install/helper failure, absent tool, broken executable or deadline failure remains fatal and cannot emit final preparationDONE or enterVitest."
+  ],
+  "hard_bound_discovery": {
+    "observed": "A controlled TERM-ignoring helper grandchild survived a TERM+kill-after prototype when its directly watched Bash exited early. The fixture timed out and was rejected, not markedgreen.",
+    "response": "Use timeout --signal=KILL240s to kill the command process group at deadline, avoiding cancellation of a laterkillafter when the leader exits. A real GNUtimeout controlled test now covers TERM-ignoring child and slow index/helper.",
+    "cleanup": "Only the exactowned failed-fixture PID and its recorded descendants were killed; no unrelated process was signaled.",
+    "prototype_failure_log": {
+      "path": "/private/tmp/zj-agent-media-green-final.log",
+      "sha256": "283c8c24ea8356a5144f5457a5531ad553320e36993ee17158514bb0a08f74ea"
+    },
+    "scope": "Harddeadline applies to this disposable GHA dependency preparation, not a production install or arbitrary detached services."
+  },
+  "verification": {
+    "red": {
+      "tests": 12,
+      "passed_existing_negative_controls": 5,
+      "failed_regressions": 7,
+      "log": {
+        "path": "/private/tmp/zj-agent-media-red.log",
+        "sha256": "3062961ec17581b5a949e7f0f5be98ba7542fd2a8239d6e48c01cd6bd73e0045"
+      },
+      "note": "Initial prototype used240sTERMdefault; final regression fixes exact240sKILL entry and includes one extraTERM-ignore case."
+    },
+    "preparation_and_existing_apt_contracts": {
+      "files": 5,
+      "tests": 58,
+      "passed": 58,
+      "skipped": 0,
+      "duration_ms": 2394.86425,
+      "command": "PATH=/opt/homebrew/opt/node@20/bin:$PATH node --test .github/workflows/scripts/__tests__/agent-media-dependency-preflight.test.mjs .github/workflows/scripts/__tests__/openclaw-ci-official-apt.test.mjs .github/workflows/scripts/__tests__/openclaw-ci-dependency-preflight.test.mjs .github/workflows/scripts/__tests__/smoke-ci-os-preparation.test.mjs .github/workflows/scripts/__tests__/recording-level-smoke.test.mjs",
+      "log": {
+        "path": "/private/tmp/zj-agent-media-green-kill.log",
+        "sha256": "6588342fb06bee97134271626a4eb21c49bfa761d0d4db532d52a831199bce02"
+      }
+    },
+    "native_existing_tools": {
+      "result": "Real wrapper used installedffmpeg/ffprobe9.0.2and emittedDONE; noAPT/network executed.",
+      "os": "Darwin",
+      "log": {
+        "path": "/private/tmp/zj-agent-media-native-preflight.log",
+        "sha256": "5a380f80ada8707bcb8d0d50e259b05a879043a39aac1e9f0af89cd18317771e"
+      }
+    },
+    "real_decode": {
+      "file": "src/handlers/__tests__/media-rotation-runtime.test.ts",
+      "tests": 8,
+      "passed": 8,
+      "evidence": "Actualffmpeg lavfitestsrc96x64 through production argv rotation; actualffprobe independentlyreads64x96. Shell-looking filename bytes retained.",
+      "log": {
+        "path": "/private/tmp/zj-agent-media-real-decode.log",
+        "sha256": "6f9f92ae131834f0340538188957f6ca90e05bc6fe675e8ddf7cb0d1a5cb0d00"
+      }
+    },
+    "surrounding_media": {
+      "files": 6,
+      "tests": 56,
+      "passed": 56,
+      "log": {
+        "path": "/private/tmp/zj-agent-media-real-ffmpeg.log",
+        "sha256": "8bd4ed67cef9e8da23f359a6ead1d478722b29990bc30793dc4df730ec1cab89"
+      }
+    },
+    "full_agent": {
+      "runner": "own locked services/agentnpmci,Vitest3.2.4,Node20",
+      "files": 102,
+      "tests": 1127,
+      "passed": 1127,
+      "skipped": 0,
+      "duration_seconds": 8.52,
+      "log": {
+        "path": "/private/tmp/zj-agent-media-full-agent.log",
+        "sha256": "a654e18164d9f994c1b473ae3e56362d3f309d9ebd45d72f9245326b8e2fca6b"
+      }
+    },
+    "actionlint": "actionlint .github/workflows/ci-l4-runtime.yml exit0",
+    "bash_syntax": "bash -n .github/workflows/scripts/prepare-agent-media-tools.sh exit0",
+    "product_map": "PASS no drift with fixedskill3bbea5b restored to owncache",
+    "diff_check": "git diff --check exit0"
+  },
+  "seven_dimensions": {
+    "current_value": "Real Agent video contracts require actualffmpeg andffprobe; retain decoding/assertions rather than skip when tool acquisition is slow.",
+    "active_status": "RequiredL4 AgentTest selected forAgent/CI source changes consumes the preparation step immediately before fullVitest.",
+    "real_effect": "ActualPRfailed beforetests due publicAPTdownload. Replacement safely reuses current signedplanhelper and verifies both binaries.",
+    "test_and_blocking": "ActualYAML+realBash subprocesses verify failure propagation, current budgets, package/helper arguments, realGNUdeadline and installed/broken/missing toolcases; fullAgentunchanged.",
+    "duplication_and_obsolescence": "Reuse one main source/plan helper already consumedbyL3/Smoke; no duplicate source-parser/install-policy. Tiny caller wrapper addsAgent-specific2tool readiness.",
+    "runtime_and_maintenance_cost": "Original5minstep/15minjob preserved;240s shelllimit. Both installedtools avoid unnecessary94MBdownload. No benchmarkclaim about future mirror latency.",
+    "retirement_and_dependencies": "No runtime/APIbusinesscode, provider/driver, credential, hostrepo, device or production setting changed. No requiredcontextchange; newtest joins existingL3glob."
+  },
+  "central_wiring": {
+    "new_test_path": ".github/workflows/scripts/__tests__/agent-media-dependency-preflight.test.mjs",
+    "existing_consumer": "ci-l3-code.yml OpenClawnode--test shards glob.github/workflows/scripts/__tests__/*.test.mjs",
+    "registry_update_needed": "Parent owns centralregistry; register thisnewpath as active executable CIdependencycontract. No newrequiredcontext."
+  },
+  "limitations": [
+    "Local validation usedDarwin installedrealtools and isolatedAPTtransport fixtures. It does not prove a freshUbuntupublicnetworkdownload or sameSHAcloudpass.",
+    "NewcandidateAgentTestcloudmust run to establish actualUbuntuacquisition and suite outcome.",
+    "No workflowrerun/dispatch, message/notification, externalaccountlogin, secrets, device, network/proxysetting or serveroperation performed."
+  ]
+}
