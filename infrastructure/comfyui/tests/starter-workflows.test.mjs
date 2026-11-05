@@ -12,3 +12,9 @@ test('uploaded starter sends owned asset identity through selection into Wan',()
  assert.equal(graph.nodes.find(n=>n.type==='ZenithJoyWan').widgets_values_named.request_id,'','uploaded starter graph must use a new request ID');
  assert.ok(graph.links.some(link=>link[5]==='ZENITHJOY_ASSET'),'uploaded graph must connect owned assets');
 });
+test('remake starter ships no reused asset/request identity and requires explicit generation confirmation',()=>{
+ const graph=read('video-remake-wan.json'),node=graph.nodes.find(n=>n.type==='ZenithJoyWanRemake');
+ assert.ok(node);assert.ok(graph.nodes.some(n=>n.type==='SaveVideo'));assert.ok(graph.links.some(link=>link[5]==='VIDEO'));
+ for(const field of ['参考视频ID','产品图片ID','背景图片ID','人脸图片ID','request_id'])assert.equal(node.widgets_values_named[field],'','fresh starter '+field);
+ assert.equal(node.widgets_values_named['确认生成'],false);
+});

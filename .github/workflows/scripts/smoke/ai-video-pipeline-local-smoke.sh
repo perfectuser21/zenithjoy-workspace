@@ -1,60 +1,50 @@
 #!/usr/bin/env bash
-# ai-video-pipeline-local-smoke.sh
-# 验证 /api/ai-video-pipeline 本地优先架构（WS1+ contract behavior）
+# Real mounted API contract, limited to an explicitly disposable loopback fixture.
 set -euo pipefail
-
-BASE_URL="${BASE_URL:-https://autopilot.zenjoymedia.media}"
-LICENSE="${LICENSE:-ZJ-F-FBFYTLFR}"
-echo "🔍 smoke: ai-video-pipeline-local — $BASE_URL"
-
-TMPFILE=$(mktemp)
-trap 'rm -f "$TMPFILE"' EXIT
-
-# 1. createJob 接受 JSON body（local_path），期望返回 201 含 {id,status,original_script,target_aspect}
-HTTP=$(curl -s -o "$TMPFILE" -w "%{http_code}" --max-time 30 \
-  -X POST "$BASE_URL/api/ai-video-pipeline/" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $LICENSE" \
-  -d '{"local_path":"C:\\Users\\test\\video.mp4","topic":"smoke test"}')
-[ "$HTTP" = "201" ] || { echo "❌ createJob expected 201, got $HTTP"; cat "$TMPFILE"; exit 1; }
-RES=$(cat "$TMPFILE")
-echo "createJob response: $RES"
-JOB_ID=$(echo "$RES" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-[ -n "$JOB_ID" ] || { echo "❌ createJob: no id in response"; exit 1; }
-echo "✅ createJob OK — id=$JOB_ID"
-
-# 2. POST 201 必填字段完整性
-for field in id status original_script target_aspect; do
-  echo "$RES" | grep -q "\"$field\"" || { echo "❌ POST 201 缺必填字段: $field"; exit 1; }
-done
-echo "✅ POST 201 必填字段完整"
-
-# 3. GET /api/ai-video-pipeline/{id} 返回 5 个 PRD 必填字段
-GET=$(curl -s -o "$TMPFILE" -w "%{http_code}" --max-time 15 \
-  "$BASE_URL/api/ai-video-pipeline/$JOB_ID" \
-  -H "Authorization: Bearer $LICENSE")
-[ "$GET" = "200" ] || { echo "❌ GET expected 200, got $GET"; cat "$TMPFILE"; exit 1; }
-GET_RES=$(cat "$TMPFILE")
-for field in id status detected_aspect original_script target_aspect; do
-  echo "$GET_RES" | grep -q "\"$field\"" || { echo "❌ GET 缺必填字段: $field"; exit 1; }
-done
-echo "✅ GET 5 字段完整"
-
-# 4. error path — 缺 local_path 返回 400
-ERR_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
-  -X POST "$BASE_URL/api/ai-video-pipeline/" \
-  -H "Content-Type: application/json" \
-  -d '{"topic":"no local_path"}')
-[ "$ERR_CODE" = "400" ] || { echo "❌ 缺 local_path 应返 400，实际 $ERR_CODE"; exit 1; }
-echo "✅ 缺 local_path → 400"
-
-# 5. completeJob 接受 output_dir，返回 200
-HTTP=$(curl -s -o "$TMPFILE" -w "%{http_code}" --max-time 30 \
-  -X PUT "$BASE_URL/api/ai-video-pipeline/$JOB_ID/complete" \
-  -H "Content-Type: application/json" \
-  -d "{\"output_dir\":\"C:\\\\Users\\\\test\\\\zenithjoy-output\\\\$JOB_ID\"}")
-[ "$HTTP" = "200" ] || { echo "❌ completeJob expected 200, got $HTTP"; cat "$TMPFILE"; exit 1; }
-echo "✅ completeJob OK"
-
-echo ""
-echo "✅ ai-video-pipeline-local smoke 全部通过"
+[ "${SMOKE_SCRATCH_API:-}" = 1 ] || { echo 'FAIL: scratch API authorization required' >&2; exit 1; }
+BASE_URL="${BASE_URL:-${API_BASE:-}}"
+node - "$BASE_URL" <<'JS'
+try{
+ const u=new URL(process.argv[2]||'invalid:');
+ if(u.protocol!=='http:'||!['localhost','127.0.0.1','[::1]'].includes(u.hostname)||u.username||u.password||u.pathname!=='/'||u.search||u.hash)throw Error('invalid origin');
+}catch{console.error('FAIL: explicit loopback scratch API origin required');process.exit(1);}
+JS
+BASE_URL="${BASE_URL%/}"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+AUTH=()
+if [ -n "${LICENSE:-}" ]; then AUTH=(-H "Authorization: Bearer $LICENSE"); fi
+request() {
+  local expected=$1 output=$2; shift 2
+  local code
+  code=$(curl --noproxy '*' -sS --max-time 20 -o "$output" -w '%{http_code}' "${AUTH[@]}" "$@")
+  [ "$code" = "$expected" ] || { echo "FAIL: local pipeline expected HTTP $expected, got $code" >&2; exit 1; }
+}
+request 201 "$TMP/create.json" -X POST "$BASE_URL/api/ai-video-pipeline" -H 'Content-Type: application/json' \
+  -d '{"local_path":"/tmp/ci-pipeline-input.mp4","topic":"isolated CI contract","original_script":"CI source script","target_aspect":"9:16"}'
+JOB_ID=$(node - "$TMP/create.json" <<'JS'
+const assert=require('node:assert/strict'),d=JSON.parse(require('node:fs').readFileSync(process.argv[2]));
+assert.deepEqual(Object.keys(d),['job']);assert.match(d.job.id,/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
+assert.equal(d.job.status,'pending');assert.equal(d.job.original_script,'CI source script');assert.equal(d.job.target_aspect,'9:16');assert.equal(d.job.detected_aspect,null);process.stdout.write(d.job.id);
+JS
+)
+request 200 "$TMP/get.json" "$BASE_URL/api/ai-video-pipeline/$JOB_ID"
+node - "$TMP/get.json" "$JOB_ID" <<'JS'
+const a=require('node:assert/strict'),d=JSON.parse(require('node:fs').readFileSync(process.argv[2]));
+a.equal(d.id,process.argv[3]);a.equal(d.status,'pending');a.equal(d.original_script,'CI source script');a.equal(d.target_aspect,'9:16');a.equal(d.detected_aspect,null);
+JS
+request 400 "$TMP/missing.json" -X POST "$BASE_URL/api/ai-video-pipeline" -H 'Content-Type: application/json' -d '{"topic":"missing local path"}'
+node - "$TMP/missing.json" <<'JS'
+require('node:assert/strict').equal(JSON.parse(require('node:fs').readFileSync(process.argv[2])).error,'local_path required');
+JS
+request 200 "$TMP/complete.json" -X PUT "$BASE_URL/api/ai-video-pipeline/$JOB_ID/complete" -H 'Content-Type: application/json' -d '{"output_dir":"/tmp/ci-pipeline-output"}'
+request 200 "$TMP/persisted.json" "$BASE_URL/api/ai-video-pipeline/$JOB_ID"
+node - "$TMP/complete.json" "$TMP/persisted.json" "$JOB_ID" <<'JS'
+const a=require('node:assert/strict'),fs=require('node:fs');
+for(const file of process.argv.slice(2,4)){const d=JSON.parse(fs.readFileSync(file));a.equal(d.id,process.argv[4]);a.equal(d.status,'completed');a.equal(d.progress,100);a.equal(d.output_dir,'/tmp/ci-pipeline-output');}
+JS
+request 404 "$TMP/unknown.json" "$BASE_URL/api/ai-video-pipeline/00000000-0000-4000-8000-000000000000"
+node - "$TMP/unknown.json" <<'JS'
+require('node:assert/strict').equal(JSON.parse(require('node:fs').readFileSync(process.argv[2])).error,'job not found');
+JS
+echo 'PASS: disposable local pipeline create/get/validation/completion persistence/unknown-ID contracts'
