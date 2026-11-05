@@ -2,7 +2,7 @@
 import {openSync,closeSync,fstatSync,lstatSync,readFileSync,realpathSync,constants} from 'node:fs';
 import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 
 const names=['official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'];
 const fail=()=>Object.assign(Error('OFFICIAL_GATEWAY_DEPENDENCIES_UNVERIFIED'),{code:'OFFICIAL_GATEWAY_DEPENDENCIES_UNVERIFIED'});
@@ -39,7 +39,8 @@ export async function loadOfficialGatewayDependencies({runtimeRoot,source}={}){
    ||manifest.package_search!==false||manifest.optional_native_modules!==false)throw fail();
   // Detached import evaluates the bytes just verified, closing pathname TOCTOU.
   // The bundle permits require() only for Node builtins; it has no package fallback.
-  const sdk=await import('data:text/javascript;base64,'+bytes.get(names[2]).toString('base64'));
+  // A separate module instance prevents mutable SDK classes leaking across runs.
+  const sdk=await import('data:text/javascript;base64,'+bytes.get(names[2]).toString('base64')+'#'+source.commit+'-'+randomUUID());
   if(typeof sdk.GatewayProtocolClient!=='function'||typeof sdk.WebSocket!=='function'||typeof sdk.rawDataToString!=='function')throw fail();
   return Object.freeze({GatewayProtocolClient:sdk.GatewayProtocolClient,WebSocket:sdk.WebSocket,rawDataToString:sdk.rawDataToString,
    identity:Object.freeze({gateway_client:manifest.gateway_client,websocket:manifest.websocket,protocol:manifest.protocol,module_sha256:manifest.module_sha256,source_commit:source.commit})});
