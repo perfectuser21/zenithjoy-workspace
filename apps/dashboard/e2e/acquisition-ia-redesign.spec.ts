@@ -16,6 +16,7 @@ test.describe('Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图
   });
 
   test('账号管理页无"抖音昵称"列头，含"绑定机器"列', async ({ page }) => {
+    await page.route('**/api/agent/burner/sessions', route => route.fulfill({ json: { success: true, data: { sessions: [] } } }));
     await page.goto(`${BASE_URL}/area/acquisition/accounts`);
     await page.screenshot({ path: 'sprints/07041249-line02-dashboard-ia-redesign/screenshots/02-accounts-page.png', fullPage: true });
 
@@ -33,6 +34,7 @@ test.describe('Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图
   });
 
   test('触达记录页加载，显示列表或"暂无触达记录"空状态', async ({ page }) => {
+    await page.route('**/api/acquisition/outreach-history', route => route.fulfill({ json: { success: true, data: { items: [], total: 0 } } }));
     await page.goto(`${BASE_URL}/area/acquisition/outreach`);
     await page.screenshot({ path: 'sprints/07041249-line02-dashboard-ia-redesign/screenshots/04-outreach-page.png', fullPage: true });
 
