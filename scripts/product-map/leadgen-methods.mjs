@@ -107,7 +107,11 @@ export function writeMethodsLock(root,{compatibility={}}={}){
   const current=collectMethods(root),read=reader(root),oldBytes=optional(read,LOCK_PATH),old=oldBytes?JSON.parse(oldBytes):null;
   for(const ref of Object.keys(compatibility))if(!current.activities[ref])fail('CODE_COMPATIBILITY_ACTIVITY_UNKNOWN',ref);
   for(const [ref,a] of Object.entries(current.activities)){
-    const assessment=compatibility[ref]??old?.activities?.[ref]?.code_compatibility;
+    const prior=old?.activities?.[ref];
+    // Code-only review belongs to one method identity. A versioned method
+    // upgrade is checked by evolution(), not by its predecessor's approval.
+    const unchanged=prior&&a.method_version===prior.method_version&&a.skill.content_digest===prior.skill.content_digest&&a.activity_version===prior.activity_version&&a.contract_digest===prior.contract_digest;
+    const assessment=compatibility[ref]??(unchanged?prior.code_compatibility:undefined);
     if(assessment)a.code_compatibility=assessment;
   }
   writeFileSync(join(root,LOCK_PATH),JSON.stringify(current,null,2)+'\n');return current;
