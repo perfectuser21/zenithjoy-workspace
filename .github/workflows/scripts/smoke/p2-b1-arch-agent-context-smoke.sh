@@ -1,17 +1,7 @@
 #!/usr/bin/env bash
-# Path 2 Sprint B-1 architecture hotfix — agentContext middleware + mock-agent E2E Smoke
-#
-# 验证：
-#   1. POST /api/_smoke/mock-agent 双门禁：缺 token → 403
-#   2. POST /api/_smoke/mock-agent 正常 → 200 + 返 agent_uuid + agents 表新行 status='online'
-#   3. POST /api/agent/burner/qr-bind 不带 session/header → 401 UNAUTHORIZED (tenantContext 拦)
-#   4. POST /api/agent/burner/qr-bind 带 X-Feishu-User-Id 头但没绑 tenant → 403 NO_TENANT
-#   5. POST /api/agent/burner/qr-bind 带 X-Feishu-User-Id 头 + tenant 但没 agent → 401 NO_AGENT_CONTEXT
-#   6. POST /api/agent/burner/qr-bind 全链路 → 200 + 返 task_id（UUID 格式）
-#   7. POST /api/agent/burner/qr-bind 显式 body { tenant_id, agent_id } 兼容路径 → 200
-#
-# 验证关键 architecture 行为：backend 自动 resolve agent_id (UUID)，frontend 仅传 account_label。
-# 修复证据：postgres uuid.c:141 invalid input syntax for type uuid: "xian-rog-agent" 不再出现。
+# Validate retained tenant/agent authentication before the old QR creation
+# endpoint rejects with 410. Actual pin selection is checked in real-PG tests.
+# This is not Skill or Android device acceptance.
 
 set -euo pipefail
 
@@ -111,27 +101,20 @@ RESP=$(curl -fsS -X POST -H "Content-Type: application/json" -H "X-Smoke-Token: 
   "${API_BASE}/api/_smoke/mock-agent")
 AGENT_UUID_REAL=$(echo "$RESP" | sed -E 's/.*"agent_uuid":"([^"]+)".*/\1/' | head -c 64)
 
-echo "==> [6/7] qr-bind 全链路自动 resolve → 200 + task_id (UUID)"
-RESP=$(curl -fsS -X POST -H "Content-Type: application/json" \
-  -H "X-Feishu-User-Id: ou_smoke_p2b1arch" \
-  -d '{"account_label":"smoke-label-real"}' \
+echo "==> [6/7] tenant and resolved agent reach retirement boundary"
+BEFORE=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE tenant_id='${TENANT_AC_ID}'")
+TMP=$(mktemp); trap 'rm -f "$COOKIE_NA" "$TMP"' EXIT
+CODE=$(curl -s -o "$TMP" -w '%{http_code}' -X POST -H "Content-Type: application/json" \
+  -H "X-Feishu-User-Id: ou_smoke_p2b1arch" -d '{"account_label":"smoke-label-real"}' \
   "${API_BASE}/api/agent/burner/qr-bind")
-TASK_ID=$(echo "$RESP" | sed -E 's/.*"task_id":"([^"]+)".*/\1/' | head -c 64)
-echo "$TASK_ID" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' \
-  || { echo "  FAIL: task_id 不是 UUID  body=$RESP"; exit 1; }
-echo "  OK: task_id=$TASK_ID（backend agentContext 自 resolve UUID）"
-
-echo "==> [7/7] qr-bind 显式 body 兼容 → 200"
-RESP=$(curl -fsS -X POST -H "Content-Type: application/json" \
+[ "$CODE" = 410 ] || { echo "  FAIL: expected 410 got $CODE"; exit 1; }
+node -e 'const fs=require("fs");if(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).error?.code!=="LEGACY_ACQUISITION_RETIRED")process.exit(1)' "$TMP"
+echo "==> [7/7] explicit tenant and agent also refuse old creation"
+CODE=$(curl -s -o "$TMP" -w '%{http_code}' -X POST -H "Content-Type: application/json" \
   -d "{\"tenant_id\":\"${TENANT_AC_ID}\",\"agent_id\":\"${AGENT_UUID_REAL}\",\"account_label\":\"smoke-label-explicit\"}" \
   "${API_BASE}/api/agent/burner/qr-bind")
-TASK_ID2=$(echo "$RESP" | sed -E 's/.*"task_id":"([^"]+)".*/\1/' | head -c 64)
-echo "$TASK_ID2" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' \
-  || { echo "  FAIL: 兼容路径 task_id 不是 UUID  body=$RESP"; exit 1; }
-echo "  OK: 显式 body 兼容路径 task_id=$TASK_ID2"
-
-echo ""
-echo "Path 2 Sprint B-1 architecture hotfix smoke PASS:"
-echo "  - mock-agent 双门禁 OK"
-echo "  - agentContext 5 边界 OK"
-echo "  - backend 自 resolve UUID（不再 invalid input syntax for type uuid 错误）"
+[ "$CODE" = 410 ] || { echo "  FAIL: expected 410 got $CODE"; exit 1; }
+node -e 'const fs=require("fs");if(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).error?.code!=="LEGACY_ACQUISITION_RETIRED")process.exit(1)' "$TMP"
+AFTER=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE tenant_id='${TENANT_AC_ID}'")
+[ "$BEFORE" = "$AFTER" ] || { echo "  FAIL: retired path created task"; exit 1; }
+echo "Agent context boundaries and retirement refusal PASS; Skill/device acceptance not verified"

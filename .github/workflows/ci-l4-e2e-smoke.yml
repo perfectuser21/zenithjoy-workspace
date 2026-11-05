@@ -424,8 +424,8 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
 
-      # ─── Path 2 Sprint B-1 抖音小号绑定 + 评论抓取 smoke ─────────────────────
-      - name: Smoke — Path 2 Sprint B-1 Golden Path (10 Step E2E)
+      # Historical task receipts on disposable DB; old task creation rejects.
+      - name: Smoke — historical burner bind and crawl receipts
         env:
           API_BASE: http://localhost:5200
           DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
@@ -438,8 +438,8 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
 
-      # ─── Path 2 抖音私信主动触达 smoke（fake-agent 派单→回报→飞书回写）─────────
-      - name: Smoke — Path 2 抖音私信主动触达 Golden Path (dm_outreach)
+      # Historical in-flight DM receipts only; no live message is sent.
+      - name: Smoke — historical DM receipts and retirement refusal
         env:
           API_BASE: http://localhost:5200
           DB: postgresql://cecelia:cecelia@localhost:5432/cecelia

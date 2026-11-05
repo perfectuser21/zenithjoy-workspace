@@ -278,17 +278,18 @@ ok "Step 13 ✅ 心跳去重按 tenant_id 查，跨 license 同机正确命中�
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 24: account_label 语义统一——绑号占位/扫描归一/差集标离线全链路"
 
-# 24a：qr-bind 派任务 + qr-bind-result 回调完成 → 落 pending:<task_id> 占位行
+# 24a：旧创建入口已退役；显式构造历史在途任务，真实 HTTP 验证回执和数据库。
 S24_TMP=$(mktemp)
 S24_LABEL="p2-smoke-s24-${RND}"
 S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/agent/burner/qr-bind" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
   -d "{\"agent_id\":\"$AGENT_PK\",\"account_label\":\"$S24_LABEL\"}")
-[ "$S24_HTTP" = "200" ] || fail "Step 24a qr-bind expected 200, got $S24_HTTP: $(cat "$S24_TMP")" 24
-S24_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S24_TMP" 2>/dev/null)
-[ -n "$S24_TASK_ID" ] || fail "Step 24a qr-bind 无 task_id: $(cat "$S24_TMP")" 24
-ok "Step 24a qr-bind → task_id=$S24_TASK_ID"
+[ "$S24_HTTP" = "410" ] || fail "Step 24a retired qr-bind expected 410, got $S24_HTTP: $(cat "$S24_TMP")" 24
+python3 -c "import json,sys; assert json.load(open(sys.argv[1]))['error']['code']=='LEGACY_ACQUISITION_RETIRED'" "$S24_TMP" || fail 'Step 24a retired reason missing' 24
+S24_TASK_ID=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id,agent_id,platform,status,task_type,payload) VALUES ('$TENANT_ID','$AGENT_PK','douyin','queued','qr_bind/douyin_burner',jsonb_build_object('agent_id','$AGENT_PK','account_label','$S24_LABEL')) RETURNING id" | head -1 | tr -d '[:space:]')
+[ -n "$S24_TASK_ID" ] || fail 'Step 24a historical fixture insert failed' 24
+ok "Step 24a old creation refused; historical task seeded for callback"
 
 S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/agent/burner/qr-bind-result" \

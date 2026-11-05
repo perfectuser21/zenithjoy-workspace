@@ -79,6 +79,35 @@ async function bindCs(d:Awaited<ReturnType<typeof device>>) {
 }
 
 describe('agent event, account scan and Android warmup — actual producer SQL',()=>{
+ it('real agentContext selects a fresh pinned agent and falls back when its heartbeat is stale',async()=>{
+  const d=await device();
+  const other=(await pool.query("INSERT INTO zenithjoy.agents(tenant_id,agent_id,hostname,status,last_heartbeat_at) VALUES($1,$2,$3,'online',now()) RETURNING id",[d.tenant,`fixture-other-${randomUUID()}`,`fixture-other-${randomUUID()}`])).rows[0].id;
+  await pool.query('UPDATE zenithjoy.licenses SET pinned_agent_id=$1,updated_at=now() WHERE tenant_id=$2',[d.agent,d.tenant]);
+  await pool.query("UPDATE zenithjoy.agents SET last_heartbeat_at=now()-interval '1 minute' WHERE id=$1",[d.agent]);
+  const express=(await import('express')).default;const {agentContext}=await import('../../../src/middleware/agent-context');
+  const probe=express();probe.use(express.json());probe.post('/fixture',(req,_res,next)=>{req.tenantId=d.tenant;next();},agentContext,(req,res)=>res.json({agent_id:req.agentId}));
+  const pinned=await request(probe).post('/fixture').send({});expect(pinned.status).toBe(200);expect(pinned.body.agent_id).toBe(d.agent);
+  await pool.query("UPDATE zenithjoy.agents SET last_heartbeat_at=now()-interval '6 minutes' WHERE id=$1",[d.agent]);
+  const fallback=await request(probe).post('/fixture').send({});expect(fallback.status).toBe(200);expect(fallback.body.agent_id).toBe(other);
+ });
+ it('historical qr-bind receipt closes the seeded in-flight task and persists its session',async()=>{
+  const d=await device();
+  const task=(await pool.query("INSERT INTO zenithjoy.publish_tasks(agent_id,tenant_id,platform,status,task_type,payload) VALUES($1,$2,'douyin','queued','qr_bind/douyin_burner',$3::jsonb) RETURNING id",[d.agent,d.tenant,JSON.stringify({agent_id:d.agent,account_label:'fixture-qr'})])).rows[0].id;
+  const response=await request(app).post('/api/agent/burner/qr-bind-result').send({task_id:task,agent_id:d.agent,qr_login:'success'});
+  expect(response.status).toBe(200);expect(response.body.data.sessions_updated).toBe(1);
+  expect((await pool.query('SELECT status FROM zenithjoy.publish_tasks WHERE id=$1',[task])).rows).toEqual([{status:'done'}]);
+  expect((await pool.query("SELECT role,status FROM zenithjoy.agent_platform_sessions WHERE agent_id=$1 AND account_label=$2",[d.agent,`pending:${task}`])).rows).toEqual([{role:'burner',status:'active'}]);
+  expect((await request(app).post('/api/agent/burner/qr-bind-result').send({task_id:randomUUID(),agent_id:d.agent,qr_login:'success'})).status).toBe(404);
+ });
+ it('historical crawl receipt stores real task status and tenant-scoped leads',async()=>{
+  const d=await device();const video=`https://www.douyin.com/video/${randomUUID()}`;
+  const task=(await pool.query("INSERT INTO zenithjoy.publish_tasks(agent_id,tenant_id,platform,status,task_type,payload) VALUES($1,$2,'douyin','queued','crawl_comments/douyin',$3::jsonb) RETURNING id",[d.agent,d.tenant,JSON.stringify({video_url:video})])).rows[0].id;
+  const response=await request(app).post('/api/agent/burner/crawl-comments-result').send({task_id:task,video_url:video,comments:[{commenter_id:'/user/fixture-user',text:'fixture comment'}]});
+  expect(response.status).toBe(200);expect(response.body.data).toMatchObject({comment_count:1,inserted:1,lead_write_status:'local_only'});
+  expect((await pool.query('SELECT status,response FROM zenithjoy.publish_tasks WHERE id=$1',[task])).rows[0]).toMatchObject({status:'done',response:{comment_count:1,lead_write_status:'local_only'}});
+  expect((await pool.query('SELECT sec_uid,comment_text FROM zenithjoy.acquisition_leads WHERE tenant_id=$1 AND sec_uid=$2',[d.tenant,'fixture-user'])).rows).toEqual([{sec_uid:'fixture-user',comment_text:'fixture comment'}]);
+  expect((await request(app).post('/api/agent/burner/crawl-comments-result').send({task_id:randomUUID(),comments:[]})).status).toBe(404);
+ });
  it('single/batch events persist license-derived tenant, and machine events reject another tenant',async()=>{
   const d=await device();
   const payload={agent_id:d.agent,kind:'log',level:'info',message:'business fixture event'};
