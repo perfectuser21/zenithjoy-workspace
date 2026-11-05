@@ -28,6 +28,7 @@ if(!inspector&&scenario==='late-watcher'){
   setTimeout(()=>{},3500);
  }
  let delay=mode==='children'?120:0;
+ if(['slow-spawn','expired-spawn'].includes(scenario)&&mode==='children')delay=2600;
  if(scenario==='pending-start'&&mode==='identity')delay=350;
  if(scenario==='slow-identity'&&mode==='identity')delay=2600;
  setTimeout(()=>{
@@ -45,7 +46,7 @@ if(!inspector&&scenario==='late-watcher'){
 }
 `;
 const fixture=String.raw`import assert from 'node:assert/strict';
-import fs from 'node:fs';import {spawn} from 'node:child_process';import {join} from 'node:path';import {performance} from 'node:perf_hooks';
+import fs from 'node:fs';import childProcess,{spawn} from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';import {join} from 'node:path';import {performance} from 'node:perf_hooks';
 const {beginNativeOperation,receiptPath}=await import(process.env.NATIVE_OBSERVER_URL);
 const dir=process.env.NATIVE_RACE_DIR,scenario=process.env.NATIVE_RACE_CASE;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -57,6 +58,20 @@ const closed=new Promise(r=>root.once('close',r));let rootClosed=false;void clos
 const ready=new Promise((resolve,reject)=>{root.stdout.once('data',resolve);root.once('error',reject);});
 const op=beginNativeOperation({runDir:dir,operationId:'synthetic-race',runId:'synthetic__a1',taskId:'synthetic-only',profile:'synthetic',serial:'NO-DEVICE',sourceCommit:'a'.repeat(40),owner:'synthetic-owner',activity:'preflight'});
 let elapsed,terminalStable=false,startReturned=false,stopReturned=false,proof,maxChildren=0,scanCount=0,terminalBytes,stopElapsed;
+let spawnPaused=false;
+if(['slow-spawn','expired-spawn'].includes(scenario)){
+ const originalSpawn=childProcess.spawn;
+ childProcess.spawn=(command,args,options)=>{
+  const child=originalSpawn(command,args,options);
+  // A real owned observer is already alive. Model time spent returning from
+  // OS process creation while that observer withholds its response.
+  if(command==='python3'&&args.at(-1)==='children'&&!spawnPaused&&fs.existsSync(join(dir,'stop-marker'))){
+   spawnPaused=true;Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,scenario==='expired-spawn'?1100:900);
+  }
+  return child;
+ };
+ syncBuiltinESMExports();
+}
 const stopOnce=async()=>{const start=performance.now();const value=await op.stop(null,0,null);stopElapsed=performance.now()-start;proof=value;stopReturned=true;terminalBytes??=fs.readFileSync(receiptPath(dir,'synthetic-race'));
  if(scenario==='late-watcher'){
   assert.ok(Number.isFinite(Date.parse(value.ended_at)),'release requires the real terminal receipt');
@@ -96,7 +111,7 @@ try{
   if(e.event==='start'){active.add(e.observer_pid);scanCount++;maxChildren=Math.max(maxChildren,active.size);}else active.delete(e.observer_pid);
  }
  const lateWatcher=events().some(e=>e.kind==='watcher'&&e.event==='end'&&e.at>Date.parse(proof.ended_at));
- console.log(JSON.stringify({scenario,lateWatcher,stopElapsed,startReturned,stopReturned,elapsed,terminalStable,maxChildren,scanCount,status:proof.status,execution_stopped:proof.execution_stopped,rootClosed}));
+ console.log(JSON.stringify({scenario,lateWatcher,spawnPaused,stopElapsed,startReturned,stopReturned,elapsed,terminalStable,maxChildren,scanCount,status:proof.status,execution_stopped:proof.execution_stopped,rootClosed}));
 }finally{
  if(!rootClosed)root.kill('SIGKILL');await closed;
  // Stop owns observer cancellation; no broad kill or arbitrary process-group kill.
@@ -113,10 +128,12 @@ async function runCase(scenario){
   const timer=setTimeout(()=>c.kill('SIGKILL'),12000);c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.once('error',reject);c.once('close',(code,signal)=>{clearTimeout(timer);if(code!==0||signal)reject(Error('fixture failed '+code+'/'+signal+': '+err));else{try{resolve(JSON.parse(out.trim()));}catch(e){reject(e);}}});
  });}finally{rmSync(dir,{recursive:true,force:true});}
 }
-for(const scenario of ['singleflight','pending-start','late-watcher','malformed','slow-identity','held-pipe'])test('真实合成原生观察竞态：'+scenario,{timeout:15000},async()=>{
+for(const scenario of ['singleflight','pending-start','late-watcher','malformed','slow-identity','held-pipe','slow-spawn','expired-spawn'])test('真实合成原生观察竞态：'+scenario,{timeout:15000},async t=>{
  const r=await runCase(scenario);assert.equal(r.startReturned,true);assert.equal(r.stopReturned,true);assert.equal(r.rootClosed,true);assert.equal(r.terminalStable,true);assert.equal(r.status,'unknown');assert.equal(r.execution_stopped,false);
+ t.diagnostic('host-only '+scenario+': stop='+r.stopElapsed.toFixed(1)+'ms, elapsed='+r.elapsed.toFixed(1)+'ms');
  assert.ok(r.elapsed<6000,'bounded observation must not hang: '+r.elapsed);
  if(scenario==='late-watcher')assert.equal(r.lateWatcher,true,'late READY/EXIT must actually happen after terminal receipt');
- if(['pending-start','late-watcher','held-pipe'].includes(scenario))assert.ok(r.stopElapsed<1500,'original1s tail plus scheduling tolerance remains bounded');
+ if(['slow-spawn','expired-spawn'].includes(scenario))assert.equal(r.spawnPaused,true,'the actual OS-spawn boundary must be exercised');
+ if(['pending-start','late-watcher','held-pipe','slow-spawn','expired-spawn'].includes(scenario))assert.ok(r.stopElapsed<1500,'original1s tail plus scheduling tolerance remains bounded: '+r.stopElapsed+'ms');
  if(scenario==='singleflight'){assert.ok(r.scanCount>=2,'actual slow scans must be reached');assert.equal(r.maxChildren,1,'poller cannot overlap children inspections before stop');}
 });
