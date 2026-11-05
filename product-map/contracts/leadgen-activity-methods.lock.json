@@ -325,7 +325,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -552,13 +552,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "89d5bbe34e10d7f22cccb901cb0b630237d7b5b4854660a5f335df3e8080f025",
+      "code_digest": "992ba354f6c9d5f3c6f1364d4e4481ac5f8d28c81ce66d124484b5e7534fea0d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "35e526e8db035085cda8dd8a93856725152438bacf73dff5b22fe541d0539740",
-        "current_code_digest": "89d5bbe34e10d7f22cccb901cb0b630237d7b5b4854660a5f335df3e8080f025"
+        "previous_code_digest": "89d5bbe34e10d7f22cccb901cb0b630237d7b5b4854660a5f335df3e8080f025",
+        "current_code_digest": "992ba354f6c9d5f3c6f1364d4e4481ac5f8d28c81ce66d124484b5e7534fea0d"
       }
     },
     "douyin_video_processing.preflight": {
@@ -927,7 +927,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -1137,13 +1137,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c11ad8b694a5ddc015c56b98d769eee7aef113d3ecf524ed00e657e26fbe2cd5",
+      "code_digest": "8c41d08c3c95db6461fa24e4803578892be9c8d11b5f0ac687966d448c1b48e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "13ddf6c7ca1e1d56d8afba7e99c4061964ade0817402bc5e4b0066f09579e923",
-        "current_code_digest": "c11ad8b694a5ddc015c56b98d769eee7aef113d3ecf524ed00e657e26fbe2cd5"
+        "previous_code_digest": "c11ad8b694a5ddc015c56b98d769eee7aef113d3ecf524ed00e657e26fbe2cd5",
+        "current_code_digest": "8c41d08c3c95db6461fa24e4803578892be9c8d11b5f0ac687966d448c1b48e0"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1477,7 +1477,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -1690,13 +1690,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "2d4169e2269106f58084eea3d410adc964d77b07e44468a270bdb2e3ec6c7925",
+      "code_digest": "461087dfb9d6e9177613951091066af7bd11bcff4ac22de3e8bab1bb61307633",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "f4269ba59d0e32652bc33f5b8ff8085fb0f033c02a2061e97d79cf2e317a7fe0",
-        "current_code_digest": "2d4169e2269106f58084eea3d410adc964d77b07e44468a270bdb2e3ec6c7925"
+        "previous_code_digest": "2d4169e2269106f58084eea3d410adc964d77b07e44468a270bdb2e3ec6c7925",
+        "current_code_digest": "461087dfb9d6e9177613951091066af7bd11bcff4ac22de3e8bab1bb61307633"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2058,7 +2058,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -2327,13 +2327,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "cc0d5c903b4179d97fee116d7361bc6dd8a5b2e37657bde7bc2af88e2e5e679a",
+      "code_digest": "39765d00af2faa33125abce662609900ce1d47d6cc75819adeb63e29e452519a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "e42897e409485c62586bc642c5bebd52f42f18e91625f7385c47b7999a550971",
-        "current_code_digest": "cc0d5c903b4179d97fee116d7361bc6dd8a5b2e37657bde7bc2af88e2e5e679a"
+        "previous_code_digest": "cc0d5c903b4179d97fee116d7361bc6dd8a5b2e37657bde7bc2af88e2e5e679a",
+        "current_code_digest": "39765d00af2faa33125abce662609900ce1d47d6cc75819adeb63e29e452519a"
       }
     },
     "douyin_video_processing.collection": {
@@ -2667,7 +2667,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -2902,13 +2902,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "ff872658b742a1603f5a5ed1a935d100863da850b4c457f6dc486d67e23c6b8c",
+      "code_digest": "3122cd355beb890737d3bea5552f06811d4f476f53ae089904628888c1c18215",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "8b61e15bcb93bdd1d41762117644fb02254fe57f59da7243620e332d898c52ef",
-        "current_code_digest": "ff872658b742a1603f5a5ed1a935d100863da850b4c457f6dc486d67e23c6b8c"
+        "previous_code_digest": "ff872658b742a1603f5a5ed1a935d100863da850b4c457f6dc486d67e23c6b8c",
+        "current_code_digest": "3122cd355beb890737d3bea5552f06811d4f476f53ae089904628888c1c18215"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -3263,7 +3263,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -3472,13 +3472,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5d4bdadbb38bd7a7659d8b4abbcf1ff17b1751f6a8a902a93a38755eb60f047f",
+      "code_digest": "01aedcc2f822eb9a8d6205a137dddd7c3f3e414e4972b4bad84a61b460698691",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "1eb32811f3354344ebc3894f8c4c74ed2ea2895f02267094599b450b7c48bcf9",
-        "current_code_digest": "5d4bdadbb38bd7a7659d8b4abbcf1ff17b1751f6a8a902a93a38755eb60f047f"
+        "previous_code_digest": "5d4bdadbb38bd7a7659d8b4abbcf1ff17b1751f6a8a902a93a38755eb60f047f",
+        "current_code_digest": "01aedcc2f822eb9a8d6205a137dddd7c3f3e414e4972b4bad84a61b460698691"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3805,7 +3805,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -4025,13 +4025,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "07af68b00eac6ed09981111d2e85813995597ba0c5fd47efed9540af79ded9f3",
+      "code_digest": "a1e5aef32ef20f8055fd1ffa43502e3d580b0a88691c4ba31ee48227a50cae0c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "06af0ba5da26d4fcd406601cdad6749f25065b727761cbe78b8dc051ba13d8c9",
-        "current_code_digest": "07af68b00eac6ed09981111d2e85813995597ba0c5fd47efed9540af79ded9f3"
+        "previous_code_digest": "07af68b00eac6ed09981111d2e85813995597ba0c5fd47efed9540af79ded9f3",
+        "current_code_digest": "a1e5aef32ef20f8055fd1ffa43502e3d580b0a88691c4ba31ee48227a50cae0c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -4365,7 +4365,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -4620,13 +4620,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c70151688451fe376987b919c97068eb3943fa0b955933dab491343a912c209f",
+      "code_digest": "8a73da926bbf68db597515eeb04058fa2e529d70316d7238145f1bf364b3d3ae",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "f64e0aa22d45cee8bdf9af03fa7c48b5f61e6f74283b343500090829501bfc90",
-        "current_code_digest": "c70151688451fe376987b919c97068eb3943fa0b955933dab491343a912c209f"
+        "previous_code_digest": "c70151688451fe376987b919c97068eb3943fa0b955933dab491343a912c209f",
+        "current_code_digest": "8a73da926bbf68db597515eeb04058fa2e529d70316d7238145f1bf364b3d3ae"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -4918,7 +4918,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -5163,13 +5163,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e97473047b68f8c6481b10a5e950db370ee9ac34ab05393148def340b3f4fd07",
+      "code_digest": "225bebbb6f28bc7e350a014cf6ed977b7fe8a2166f1df81a86874751d35bf7d6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "30216200e325812c10c1264eb870f8dd0509a6db0107c0de0d4eca3bbf16e167",
-        "current_code_digest": "e97473047b68f8c6481b10a5e950db370ee9ac34ab05393148def340b3f4fd07"
+        "previous_code_digest": "e97473047b68f8c6481b10a5e950db370ee9ac34ab05393148def340b3f4fd07",
+        "current_code_digest": "225bebbb6f28bc7e350a014cf6ed977b7fe8a2166f1df81a86874751d35bf7d6"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -5461,7 +5461,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -5681,13 +5681,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "880c00090425c061d356f79f03572f5bcb260c5a6961e669e65d7d7a1c911936",
+      "code_digest": "2c00024d57b7507d709938a3a9f3bf657f101ad569816f4b3bb648d85c97d782",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "7115f5cc5288019f90b634c383bf64c32713ba6b7455984ff32f7280665e8f1e",
-        "current_code_digest": "880c00090425c061d356f79f03572f5bcb260c5a6961e669e65d7d7a1c911936"
+        "previous_code_digest": "880c00090425c061d356f79f03572f5bcb260c5a6961e669e65d7d7a1c911936",
+        "current_code_digest": "2c00024d57b7507d709938a3a9f3bf657f101ad569816f4b3bb648d85c97d782"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -5979,7 +5979,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -6192,13 +6192,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6ab6312511608688a441d14208885ac96444f843fa0c80f5bde13048c4bf49c3",
+      "code_digest": "43a34ac786f619d83dd7fc2b6e8414112fc3f1b4fa9b7ff34e16ac04df26129f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "1749a245cfd0c26b8797d1feb8e9d088396840172bad0f19d4d67eeb0f73d454",
-        "current_code_digest": "6ab6312511608688a441d14208885ac96444f843fa0c80f5bde13048c4bf49c3"
+        "previous_code_digest": "6ab6312511608688a441d14208885ac96444f843fa0c80f5bde13048c4bf49c3",
+        "current_code_digest": "43a34ac786f619d83dd7fc2b6e8414112fc3f1b4fa9b7ff34e16ac04df26129f"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -6490,7 +6490,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
+          "sha256": "7c41ab9df4caeea469a8889b53584473b29367db4d2428a421a0b0833f5704bc"
         },
         {
           "kind": "code",
@@ -6713,13 +6713,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eb771c092a053cb284c33190a87812e3df3c0830a712c7ad497415e33ade6fab",
+      "code_digest": "4abc06f90cf56472ffe506d25c7769c3ae732df69fe5c9f61ab95518554d9e3b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Equivalent OpenSSH delimiters constructed dynamically; parsing and key identity behavior preserved by generated-key tests.",
+        "reason": "Charge observer process creation against the existing deadline; stop budget and fail-closed contract stay unchanged.",
         "reviewed_by": "codex",
-        "previous_code_digest": "10bd50d71d25d9a874a5d5234b1ffcedf2797e1edc76f5702c76cb8b397a7cf2",
-        "current_code_digest": "eb771c092a053cb284c33190a87812e3df3c0830a712c7ad497415e33ade6fab"
+        "previous_code_digest": "eb771c092a053cb284c33190a87812e3df3c0830a712c7ad497415e33ade6fab",
+        "current_code_digest": "4abc06f90cf56472ffe506d25c7769c3ae732df69fe5c9f61ab95518554d9e3b"
       }
     }
   },
