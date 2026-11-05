@@ -186,6 +186,15 @@ export async function runWorkflowWithCommander({frozen,prepareCommander=prepareW
  return result;
 }
 
+export function createWorkflowContext({frozen,binding,env,taskId,executionMode=assertExecutionMode(frozen,env)}){
+ const workflowContract=frozen.workflow_version?.payload?.contract||{};
+ const context={brief:{purpose:workflowContract.name||env.WF_BRAIN_WORKFLOW,done_criteria:{checks:workflowContract.checks,outputs:workflowContract.outputs},boundaries:{resources:workflowContract.resources,recovery:workflowContract.recovery}},rules:workflowContract.rules||[],require_routing:true,workflow_routes:frozen.workflow_version?.payload?.contract?.on_status,always_run:frozen.workflow_version?.payload?.contract?.always_run,sampling_input:frozen.sampling_input||null,run_id:binding.run_id,binding_id:binding.id,task_id:taskId,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:frozen.deployment.source_commit};
+  if(executionMode==='agent')context.execution_mode='agent';
+ const control=validateFrozenControlAcceptance(frozen);
+ if(control){context.control_scope=structuredClone(control.control_scope);context.control_acceptance={purpose:'本次只验证Runner与Commander的inspect/finish控制往返，不授权评分或业务执行；请按真实观察回答或纠偏，不为演示伪造steer。',allowed_intents:[...control.control_scope.allowed_intents],physical_actions:0,pg_connections:0,business_judge:'independent_needs_review',business_boundary:'原业务done_criteria与rules不变；本轮无评分证据，由Code独立输出needs_review，不能声称业务通过。'};}
+ return context;
+}
+
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);assertAgentInput(frozen,env);const executionMode=assertExecutionMode(frozen,env),binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
@@ -199,9 +208,7 @@ async function main(){
   if(resolve(env.WF_HOME)!==root||resolve(fileURLToPath(import.meta.url))!==join(root,'leadgen-workflow.mjs'))throw Error('执行器必须来自本批冻结字节');
   if(frozen.runtime_transport){env.LEADGEN_MMV_HOSTNAME=frozen.runtime_transport.ssh_hostname;env.LEADGEN_MMV_HOSTKEY_ALIAS=frozen.runtime_transport.ssh_hostkey_alias;}
   const rpc=createRpc({frozen,local:env.LEADGEN_LOCAL_RPC==='1',runContext:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,line:env.LEADGEN_LINE}});
-  const workflowContract=frozen.workflow_version?.payload?.contract||{};
-  const context={brief:{purpose:workflowContract.name||env.WF_BRAIN_WORKFLOW,done_criteria:{checks:workflowContract.checks,outputs:workflowContract.outputs},boundaries:{resources:workflowContract.resources,recovery:workflowContract.recovery}},rules:workflowContract.rules||[],require_routing:true,workflow_routes:frozen.workflow_version?.payload?.contract?.on_status,always_run:frozen.workflow_version?.payload?.contract?.always_run,sampling_input:frozen.sampling_input||null,run_id:binding.run_id,binding_id:binding.id,task_id:taskId,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:frozen.deployment.source_commit};
-  if(executionMode==='agent')context.execution_mode='agent';
+  const context=createWorkflowContext({frozen,binding,env,taskId,executionMode});
   try{context.commander_skill=readCommanderSkill(frozen,dir);}catch{context.commander_skill_unavailable=true;}
   writeFileSync(join(dir,'activity.log'),'');
   const records=[];const record=async r=>{

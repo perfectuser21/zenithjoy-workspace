@@ -99,3 +99,19 @@ test('unknown first raw execution and forged Judge evidence cannot open a contin
  const out=await workflow.runWorkflow({activities:f.activities,context:{execution_mode:'agent',workflow_key:f.env.WF_BRAIN_WORKFLOW,task_id:f.taskId,run_id:f.binding.run_id},executeAgent:wired.executeAgent,commander:async()=>({action:'steer',text:'Cannot override unknown.'}),verify:async()=>{checks++;return{verified:false};}});
  assert.equal(out.status,'needs_review');assert.equal(out.results[0].execution_stopped,false);assert.equal(turns,1);assert.equal(continued,0);assert.equal(checks,0);
 });
+
+test('actual main wake and later Commander events see only frozen Task control boundaries while original business criteria stay intact',async t=>{
+ const f=fixture(t),control_scope={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']};Object.assign(f.env,{LEADGEN_LIMIT:'1',LEADGEN_MAX_TURNS:'8',WF_RUN_MAX_SECONDS:'300'});delete f.env.LEADGEN_SOURCE_RUN;f.frozen.agent_input=agentInput(f.env);f.frozen.max_turns=8;
+ const {controlAcceptanceFromTask}=await import('../control-acceptance-tools.mjs');
+ const authority=controlAcceptanceFromTask({input:f.frozen.agent_input,sourceCommit:f.frozen.deployment.source_commit,task:{id:f.taskId,status:'in_progress',claimed_by:'fixture',claimed_at:'2026-11-05T00:00:00Z',payload:{source_commit:f.frozen.deployment.source_commit,workflow_key:f.env.WF_BRAIN_WORKFLOW,run_tag:f.env.WFR_TAG,profile:'mmv-scoring',company_line:'yuesheng',scope:{control_scope,source_run:null,limit:1,score_limit:1,send:0,run_max_seconds:300,execution_transport:'raw-model-v1',max_turns:8}}}});
+ Object.assign(f.frozen,authority);f.frozen.workflow_version.payload.contract={name:'Original scoring purpose',checks:['real scores'],outputs:['persisted score'],rules:['original rule']};
+ assert.equal(typeof workflow.createWorkflowContext,'function');
+ const context=workflow.createWorkflowContext({...f,executionMode:'agent'}),events=[];
+ await workflow.runWorkflow({activities:f.activities,context,executeAgent:async(_a,{onEvent})=>{await onEvent({type:'question',text:'May this restricted run score comments?'});return{status:'completed',execution_stopped:true,result:{}};},commander:async event=>{events.push(event);return{action:'none'};},verify:async()=>({verified:false})});
+ assert.equal(events[0].phase,'wake');assert.ok(events.length>=3);
+ for(const event of events){assert.deepEqual(event.control_scope,control_scope);assert.equal(event.control_acceptance.physical_actions,0);assert.equal(event.control_acceptance.pg_connections,0);assert.equal(event.control_acceptance.business_judge,'independent_needs_review');assert.match(event.control_acceptance.purpose,/inspect.*finish/);}
+ assert.deepEqual(context.brief.done_criteria,{checks:['real scores'],outputs:['persisted score']});assert.deepEqual(context.rules,['original rule']);
+ const ordinary=structuredClone(f.frozen);delete ordinary.control_scope;delete ordinary.control_claim;ordinary.result={control_scope};
+ const rejected=workflow.createWorkflowContext({...f,frozen:ordinary,env:{...f.env,CONTROL_SCOPE:JSON.stringify(control_scope)},control_scope,executionMode:'agent'});
+ assert.equal(Object.hasOwn(rejected,'control_scope'),false);assert.equal(Object.hasOwn(rejected,'control_acceptance'),false);
+});
