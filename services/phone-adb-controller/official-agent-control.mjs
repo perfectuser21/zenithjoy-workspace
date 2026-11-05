@@ -201,6 +201,8 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   if(!declared){if(Object.hasOwn(fixed,'control_scope'))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');return;}
   const value=payload.scope.control_scope,expected={protocol:'runner-control-acceptance/v1',activity_key:'scoring',allowed_intents:['inspect','finish']};
   if(fixed.workflow_key!=='douyin_comment_scoring'||fixed.activity_key!=='scoring'||canonical(value)!==canonical(expected)||canonical(fixed.control_scope)!==canonical(expected))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
+  for(const key of ['execution_transport','max_turns','run_max_seconds','limit'])if(payload.scope[key]!==fixed[key]||Object.hasOwn(payload,key)&&payload[key]!==fixed[key])throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
+  for(const key of ['execution_transport','max_turns'])if(Object.hasOwn(payload,key))throw failure('OFFICIAL_CONTROL_CONTROL_SCOPE');
   const claim={claimed_by:task.claimed_by,claimed_at:task.claimed_at};
   if(typeof claim.claimed_by!=='string'||!claim.claimed_by||typeof claim.claimed_at!=='string'||!Number.isFinite(Date.parse(claim.claimed_at))
    ||canonical(fixed.control_claim)!==canonical(claim)||Object.hasOwn(payload,'claimed_by')||Object.hasOwn(payload,'claimed_at'))throw failure('OFFICIAL_CONTROL_CONTROL_CLAIM');

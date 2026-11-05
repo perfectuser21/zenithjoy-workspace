@@ -46,7 +46,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const task={id:q.task_id,status:'in_progress',claimed_by:'headed-fixture',payload:{workflow_key:q.workflow_key,run_tag:q.run_tag,profile:q.profile,device_serial:q.serial,company_line:q.line,source_commit:commit}};
  if(scoring)delete task.payload.device_serial;
  if(controlAcceptance){task.claimed_at=q.control_claim.claimed_at;}
- if(controlAcceptance)task.payload.scope={control_scope:structuredClone(q.control_scope)};
+ if(controlAcceptance)task.payload.scope={control_scope:structuredClone(q.control_scope),execution_transport:q.execution_transport,max_turns:q.max_turns,run_max_seconds:q.run_max_seconds,limit:q.limit};
  const routes=new Map([['/api/brain/runs/'+q.run_id+'/definition',{binding}],['/api/brain/workflows/w1/versions/wv1',{version:wf}],['/api/brain/tasks/'+q.task_id,task],['/api/brain/activities/a1/versions/av1',{version:av}]]);
  for(const folder of ['.openclaw/commander','openclaw-root/workspaces-root/clawd-work-commander'])for(const file of ['AGENTS.md','skills/workflow-commander/SKILL.md']){
   const target=join(home,folder,file);mkdirSync(resolve(target,'..'),{recursive:true});writeFileSync(target,readFileSync(join(root,'commander',file)));
