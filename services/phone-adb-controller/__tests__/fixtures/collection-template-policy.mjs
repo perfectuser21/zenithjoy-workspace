@@ -69,8 +69,8 @@ try{
   const f=fixture();assert.equal(scope(f,'douyin_video_processing'),undefined,'101 精确新模板不能扩大 102 执行范围');
  }else if(mode==='pins'){
   const strip=t=>{t=structuredClone(t);delete t.hosts[0].policy.endpoint;delete t.hosts[0].policy.forbidden_ports;return t;};
-  assert.deepEqual(strip({hosts:[template.hosts[0]]}),strip({hosts:[old.hosts[0]]}));assert.equal(template.hosts.length,4);assert.deepEqual(template.hosts[2],{...template.hosts[0],profile:'xiaolongxia',serial:'ANGYVB4311010223',expected_account:'90915521618',evidence_root:'/private/tmp/openclaw-phone/evidence/xiaolongxia',workflow_keys:['douyin_video_discovery','douyin_video_processing']});
-  assert.deepEqual(template.hosts.map(x=>[x.target,x.profile,x.serial]),[['xian-m4','legacy','ANGYVB4402004137'],['xian-m4','jinoshengyuan-work','ANGYVB4227006983'],['xian-m4','xiaolongxia','ANGYVB4311010223'],['xian-m4','yueshengyun-work','e6c7ef34']]);
+  assert.deepEqual(strip({hosts:[template.hosts[0]]}),strip({hosts:[old.hosts[0]]}));assert.equal(template.hosts.length,5);assert.deepEqual(template.hosts[2],{...template.hosts[0],profile:'xiaolongxia',serial:'ANGYVB4311010223',expected_account:'90915521618',evidence_root:'/private/tmp/openclaw-phone/evidence/xiaolongxia',workflow_keys:['douyin_video_discovery','douyin_video_processing']});
+  assert.deepEqual(template.hosts.map(x=>[x.target,x.profile,x.serial]),[['xian-m4','legacy','ANGYVB4402004137'],['xian-m4','jinoshengyuan-work','ANGYVB4227006983'],['xian-m4','xiaolongxia','ANGYVB4311010223'],['xian-m4','yueshengyun-work','e6c7ef34'],['mmv','cloud-phone-test','47.100.213.173:10001']]);
   assert.deepEqual(template.hosts[3],{...template.hosts[2],profile:'yueshengyun-work',serial:'e6c7ef34',expected_account:'37358506855',evidence_root:'/private/tmp/openclaw-phone/evidence/yueshengyun-work'});
   const work=template.hosts[1],legacy=template.hosts[0];
   assert.deepEqual({target:work.target,profile:work.profile,serial:work.serial,expected_account:work.expected_account,evidence_root:work.evidence_root,workflow_keys:work.workflow_keys},

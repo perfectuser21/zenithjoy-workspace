@@ -205,6 +205,8 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 ### Runner vs Commander
 
+云手机输入支持规范的 `IPv4:端口` 序列号，身份仍需与冻结的 Task、profile、主机和设备模板精确一致。`cloud-phone-test` 的源码模板绑定 MMV 已有的本机 `5041` ADB 通道及固定解释器摘要，仅用于 101、102。设备语法和模板验收通过后，仍须完成受信执行域、当前原生账号、媒体与真实业务读回验收，才能声明可执行或业务通过。
+
 在原正式启动输入上设置 `LEADGEN_EXECUTION_MODE=agent`，可选择 101、102、103 的 Agent 主执行路径。执行模式、任务身份、输入范围与预算冻结到本 run，不能在续跑时切换为 Code，也不适用于 104。原 Code 路径保持独立。
 
 Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行域能力检查。当前 Provider 尚未声明支持完整执行域，101–103 的 Agent 活动会返回 `needs_review`、`not_started=true`，不会开始手机或业务操作；这不代表业务完成，也不会自动切换为 Code。环境变量、Agent 返回内容或 JSON 标记不能开启此能力。旧执行的停止状态若仍未证明，必须保留 `execution_stopped=false`，不能因为本次没有启动 Worker 就覆盖它。

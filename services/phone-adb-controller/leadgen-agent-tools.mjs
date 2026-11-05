@@ -3,7 +3,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {appendFileSync,openSync,closeSync,writeFileSync,readFileSync,fsyncSync,mkdirSync,lstatSync,readdirSync} from 'node:fs';
 import {join,isAbsolute,resolve,dirname} from 'node:path';
 import {existsSync,realpathSync} from 'node:fs';
-import {readFrozen} from './runtime-definition.mjs';
+import {readFrozen,isCanonicalTcpDeviceSerial} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {verifyProducerDescriptor,verifyProducerCompany} from './producer-descriptor.mjs';
 
@@ -73,7 +73,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     ||!uuid.test(scope.task_id||'')||!uuid.test(scope.binding_id||'')||!/^[a-f0-9]{40}$/.test(scope.source_commit||'')
     ||!/^[a-f0-9]{64}$/.test(scope.snapshot_sha256||'')||!/^[-A-Za-z0-9_]{1,120}$/.test(scope.run||'')
     ||!scope.run_id?.startsWith(scope.workflow+'-'+scope.run+'__')||!/^[-A-Za-z0-9_.]{1,80}$/.test(scope.profile||'')
-    ||!/^[-A-Za-z0-9_.]{1,80}$/.test(scope.serial||'')||!/^[-A-Za-z0-9_]{1,80}$/.test(scope.line||'')
+    ||!(/^[-A-Za-z0-9_.]{1,80}$/.test(scope.serial||'')||isCanonicalTcpDeviceSerial(scope.serial))||!/^[-A-Za-z0-9_]{1,80}$/.test(scope.line||'')
     ||!Number.isSafeInteger(scope.deadline_ms)||!Number.isSafeInteger(scope.limit)||scope.limit<1||scope.limit>50
     ||scope.source_run!==null&&!/^[-A-Za-z0-9_]{1,120}$/.test(scope.source_run||'')
     ||!isAbsolute(runDir)||!object(primitives)||typeof primitives.assertResources!=='function')throw Error('AGENT_TOOL_SCOPE_INVALID');
