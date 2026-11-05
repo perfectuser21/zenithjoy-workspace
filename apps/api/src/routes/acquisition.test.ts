@@ -75,77 +75,13 @@ describe('GET /api/acquisition/overview', () => {
   });
 });
 
-describe('GET /api/acquisition/leads', () => {
-  it('returns 400 for invalid grade', async () => {
-    const res = await request(app).get('/api/acquisition/leads?grade=invalid');
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('INVALID_GRADE');
-  });
-
-  it('VITEST mode: returns empty leads for valid grade', async () => {
-    const res = await request(app).get('/api/acquisition/leads?grade=%E7%B2%BE%E5%87%86');
-    expect(res.status).toBe(200);
-    expect(res.body.leads).toEqual([]);
-    expect(res.body.total).toBe(0);
-  });
-
-  it('VITEST mode: returns empty leads when no grade filter', async () => {
-    const res = await request(app).get('/api/acquisition/leads');
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('leads');
-    expect(res.body).toHaveProperty('total');
-  });
-});
-
-// ────── Bug：GET /leads 无租户隔离，返回全平台数据 [REGRESSION] ──────
-describe('GET /api/acquisition/leads — tenant 隔离 [REGRESSION]', () => {
-  beforeEach(async () => {
-    vi.stubEnv('VITEST', '');
-    vi.clearAllMocks();
-    const { default: db } = await import('../db/connection');
-    (db.query as any).mockReset();
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('无 tenant 上下文 → 401 NO_TENANT，不查库', async () => {
-    const { default: db } = await import('../db/connection');
-    const res = await request(app).get('/api/acquisition/leads');
-    expect(res.status).toBe(401);
-    expect(db.query).not.toHaveBeenCalled();
-  });
-
-  it('查询必须带 tenant_id 过滤，不能返回全平台数据', async () => {
-    const { default: db } = await import('../db/connection');
-    const TENANT_A = 'eeeeeeee-0000-0000-0000-000000000005';
-    (db.query as any).mockResolvedValueOnce({ rows: [] });
-
-    await request(app)
-      .get('/api/acquisition/leads')
-      .set('x-test-tenant-id', TENANT_A);
-
-    const calls = (db.query as any).mock.calls;
-    const [sql, params] = calls[0];
-    expect(sql).toMatch(/l\.tenant_id\s*=\s*\$/);
-    expect(params).toContain(TENANT_A);
-  });
-
-  it('grade + tenant 同时过滤时两个条件都要带上', async () => {
-    const { default: db } = await import('../db/connection');
-    const TENANT_B = 'ffffffff-0000-0000-0000-000000000006';
-    (db.query as any).mockResolvedValueOnce({ rows: [] });
-
-    await request(app)
-      .get('/api/acquisition/leads?grade=%E7%B2%BE%E5%87%86')
-      .set('x-test-tenant-id', TENANT_B);
-
-    const calls = (db.query as any).mock.calls;
-    const [sql, params] = calls[0];
-    expect(sql).toMatch(/l\.grade\s*=\s*\$/);
-    expect(sql).toMatch(/l\.tenant_id\s*=\s*\$/);
-    expect(params).toContain(TENANT_B);
-    expect(params).toContain('精准');
+// Authenticated historical behavior is tested against real sessions and PostgreSQL in
+// tests/integration/business-contracts/outreach-history.pg.test.ts. Never simulate
+// an authenticated tenant by trusting a caller-controlled header in these unit tests.
+describe('GET /api/acquisition/leads authentication', () => {
+  it('rejects anonymous requests before querying historical leads', async () => {
+    const response = await request(app).get('/api/acquisition/leads');
+    expect(response.status).toBe(401);
   });
 });
 
@@ -592,178 +528,12 @@ describe('POST /api/acquisition/collect/report — douyin_id 落库 [REGRESSION:
   });
 });
 
-// ────── Line02 IA 重设计 Track A — collect-tasks/:id/videos + videos/:videoId/leads ──────
-describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  const VALID_TASK_ID = '11111111-1111-1111-1111-111111111111';
-
-  it('无 tenant 上下文 → 401 NO_TENANT', async () => {
-    const res = await request(app).get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`);
-    expect(res.status).toBe(401);
-  });
-
-  it('非法 UUID → 404（不查库、不 500）', async () => {
-    const res = await request(app)
-      .get('/api/acquisition/collect-tasks/not-a-uuid/videos')
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('TASK_NOT_FOUND');
-  });
-
-  it('任务不存在（或不属于本 tenant）→ 404', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // task 查询空
-    const res = await request(app)
-      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('TASK_NOT_FOUND');
-  });
-
-  it('跨 tenant 访问他人任务 → 404（IDOR，不泄露存在性）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // WHERE tenant_id=$2 过滤掉别人的任务
-    const res = await request(app)
-      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
-      .set('x-test-tenant-id', 'tenant-b');
-    expect(res.status).toBe(404);
-  });
-
-  it('本 tenant 任务下有视频 → 200 + videos 数组含 video_id/title/thumbnail_url/publish_date/comment_count', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'done', error_code: null, video_count: 1 }] }) // task 归属校验
-      .mockResolvedValueOnce({
-        rows: [{
-          video_id: '7123456789',
-          task_id: VALID_TASK_ID,
-          title: null,
-          thumbnail_url: null,
-          publish_date: null,
-          comment_count: 3,
-        }],
-      });
-    const res = await request(app)
-      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.videos).toHaveLength(1);
-    const v = res.body.data.videos[0];
-    expect(v).toHaveProperty('video_id', '7123456789');
-    expect(v).toHaveProperty('title');
-    expect(v).toHaveProperty('thumbnail_url');
-    expect(v).toHaveProperty('publish_date');
-    expect(v).toHaveProperty('comment_count', 3);
-    // 禁用字段
-    expect(res.body.data).not.toHaveProperty('videoList');
-    expect(res.body.data).not.toHaveProperty('items');
-  });
-
-  it('videos[] 含 judgment_status/judgment_reason（Seg2 判定字段，供 smoke 断言）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'done', error_code: null, video_count: 1 }] })
-      .mockResolvedValueOnce({
-        rows: [{
-          video_id: '7123456789',
-          task_id: VALID_TASK_ID,
-          title: null,
-          thumbnail_url: null,
-          publish_date: null,
-          comment_count: 3,
-          judgment_status: 'matched',
-          judgment_reason: '目标画像命中',
-        }],
-      });
-    const res = await request(app)
-      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(200);
-    const v = res.body.data.videos[0];
-    expect(v).toHaveProperty('judgment_status', 'matched');
-    expect(v).toHaveProperty('judgment_reason', '目标画像命中');
-  });
-
-  // regression(2026-07-04): 空状态需按任务真实状态判断，不能无条件显示"采集中"
-  it('响应含 task.status/error_code/video_count，供前端区分进行中/失败/真的没抓到 [REGRESSION]', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'failed', error_code: 'NO_VIDEOS_FOUND', video_count: 0 }] })
-      .mockResolvedValueOnce({ rows: [] }); // 无视频记录
-    const res = await request(app)
-      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(200);
-    expect(res.body.data.task).toEqual({ status: 'failed', error_code: 'NO_VIDEOS_FOUND', video_count: 0 });
-    expect(res.body.data.videos).toEqual([]);
-  });
-
-  it('任务终态(done)但视频列表为空 → task.status=done 而不是伪装成进行中 [REGRESSION]', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'stage_1_done', error_code: null, video_count: 2 }] })
-      .mockResolvedValueOnce({ rows: [] }); // acquisition_collect_videos 历史缺口（该表比部分任务晚上线）
-    const res = await request(app)
-      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(200);
-    expect(res.body.data.task.status).toBe('stage_1_done');
-    expect(res.body.data.videos).toEqual([]);
-  });
-});
-
-describe('GET /api/acquisition/videos/:videoId/leads [BEHAVIOR]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  it('无 tenant 上下文 → 401 NO_TENANT', async () => {
-    const res = await request(app).get('/api/acquisition/videos/7123456789/leads');
-    expect(res.status).toBe(401);
-  });
-
-  it('视频不存在（或不属于本 tenant）→ 404', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any).mockResolvedValueOnce({ rows: [] });
-    const res = await request(app)
-      .get('/api/acquisition/videos/no-such-video/leads')
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('VIDEO_NOT_FOUND');
-  });
-
-  it('跨 tenant 访问他人视频 → 404（IDOR）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any).mockResolvedValueOnce({ rows: [] });
-    const res = await request(app)
-      .get('/api/acquisition/videos/7123456789/leads')
-      .set('x-test-tenant-id', 'tenant-b');
-    expect(res.status).toBe(404);
-  });
-
-  it('本 tenant 视频命中 leads → 200 + schema(leads:array,total:number) + entry 字段 + 禁用字段不出现', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ video_id: '7123456789' }] }) // 视频归属校验
-      .mockResolvedValueOnce({
-        rows: [{ sec_uid: 'MS4wXYZ', nickname: '装修达人', comment_text: '怎么联系', grade: '感兴趣' }],
-      });
-    const res = await request(app)
-      .get('/api/acquisition/videos/7123456789/leads')
-      .set('x-test-tenant-id', 'tenant-a');
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(Array.isArray(res.body.data.leads)).toBe(true);
-    expect(typeof res.body.data.total).toBe('number');
-    const l = res.body.data.leads[0];
-    expect(l).toHaveProperty('commenter_id', '装修达人');
-    expect(l).toHaveProperty('comment_text', '怎么联系');
-    expect(l).toHaveProperty('source_video_url', 'https://www.douyin.com/video/7123456789');
-    expect(l).toHaveProperty('grade', '感兴趣');
-    expect(l).toHaveProperty('profile_url', 'https://www.douyin.com/user/MS4wXYZ');
-    expect(res.body.data).not.toHaveProperty('comments');
-    expect(res.body.data).not.toHaveProperty('items');
-    expect(res.body.data).not.toHaveProperty('results');
+// Successful authenticated task/video history and cross-tenant denial use actual
+// better-auth cookies and PostgreSQL in outreach-history.pg.test.ts.
+describe('retained task and video history authentication', () => {
+  it('rejects anonymous task and video detail requests', async () => {
+    expect((await request(app).get('/api/acquisition/collect-tasks/11111111-1111-1111-1111-111111111111/videos')).status).toBe(401);
+    expect((await request(app).get('/api/acquisition/videos/7123456789/leads')).status).toBe(401);
   });
 });
 

@@ -148,4 +148,37 @@ describe('retained acquisition history and cancellation — session-only real SQ
       } finally { fault.mockRestore(); }
     }
   });
+  it('authenticated history preserves task status, video details, lead schema and grade filtering', async () => {
+    const f = await fixtures();
+    const cookie = f.a.cookie;
+    await pool.query("UPDATE zenithjoy.acquisition_collect_videos SET comment_count=3, judgment_status='matched', judgment_reason='目标画像命中' WHERE video_id=$1", [f.videoA]);
+    await pool.query("UPDATE zenithjoy.acquisition_leads SET sec_uid='MS4wXYZ', comment_text='怎么联系', grade='感兴趣' WHERE tenant_id=$1", [f.a.tenant]);
+    const bad = await request(app).get('/api/acquisition/leads?grade=invalid').set('Cookie', cookie);
+    expect(bad.status).toBe(400);
+    const leads = await request(app).get('/api/acquisition/leads').query({ grade: '感兴趣' }).set('Cookie', cookie);
+    expect(leads.status).toBe(200);
+    expect(leads.body.total).toBe(1);
+    expect(leads.body.leads[0]).toMatchObject({ commenter_id: 'tenant-a-lead', grade: '感兴趣', comment_text: '怎么联系', profile_url: 'https://www.douyin.com/user/MS4wXYZ' });
+    expect((await request(app).get('/api/acquisition/leads').query({ grade: '精准' }).set('Cookie', cookie)).body.total).toBe(0);
+    expect((await request(app).get('/api/acquisition/collect-tasks/not-a-uuid/videos').set('Cookie', cookie)).status).toBe(404);
+    expect((await request(app).get(`/api/acquisition/collect-tasks/${randomUUID()}/videos`).set('Cookie', cookie)).status).toBe(404);
+    expect((await request(app).get('/api/acquisition/videos/nonexistent/leads').set('Cookie', cookie)).status).toBe(404);
+    const videos = await request(app).get(`/api/acquisition/collect-tasks/${f.taskA}/videos`).set('Cookie', cookie);
+    expect(videos.body.data.videos[0]).toMatchObject({ video_id: f.videoA, title: 'tenant-a-video', thumbnail_url: null, publish_date: null, comment_count: 3, judgment_status: 'matched', judgment_reason: '目标画像命中' });
+    expect(videos.body.data).not.toHaveProperty('items');
+    expect(videos.body.data).not.toHaveProperty('videoList');
+    const videoLeads = await request(app).get(`/api/acquisition/videos/${f.videoA}/leads`).set('Cookie', cookie);
+    expect(videoLeads.body.data).toMatchObject({ total: 1, leads: [{ commenter_id: 'tenant-a-lead', comment_text: '怎么联系', source_video_url: `https://www.douyin.com/video/${f.videoA}`, grade: '感兴趣', profile_url: 'https://www.douyin.com/user/MS4wXYZ' }] });
+    for (const key of ['comments', 'items', 'results']) expect(videoLeads.body.data).not.toHaveProperty(key);
+    await pool.query('DELETE FROM zenithjoy.acquisition_collect_videos WHERE video_id=$1', [f.videoA]);
+    for (const [status, errorCode, count] of [['failed', 'NO_VIDEOS_FOUND', 0], ['stage_1_done', null, 2]] as const) {
+      await pool.query('UPDATE zenithjoy.acquisition_collect_tasks SET status=$2, error_code=$3, video_count=$4 WHERE id=$1', [f.taskA, status, errorCode, count]);
+      const result = await request(app).get(`/api/acquisition/collect-tasks/${f.taskA}/videos`).set('Cookie', cookie);
+      expect(result.body.data).toMatchObject({ task: { status, error_code: errorCode, video_count: count }, videos: [] });
+    }
+    const warmup = await request(app).get('/api/agent/burner/warmup-liveness').query({agent_id:f.agentA}).set('Cookie', cookie);
+    expect(warmup.body.data.liveness).toMatchObject([{nickname:'tenant-a-warm',alive:true}]);
+    expect((await request(app).get('/api/agent/burner/warmup-liveness').set('Cookie', cookie)).status).toBe(400);
+  });
+
 });

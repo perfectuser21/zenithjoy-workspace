@@ -178,9 +178,6 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
 
 // 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
 acquisitionRouter.get('/collect-tasks', acquisitionHistoryAuth, async (req: Request, res: Response) => {
-  if (process.env.VITEST && !process.env.DATABASE_URL) {
-    return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
-  }
   const tenantId = req.tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
@@ -546,9 +543,6 @@ acquisitionRouter.get('/leads', acquisitionHistoryAuth, async (req: Request, res
     }
   }
 
-  if (process.env.VITEST) {
-    return res.status(200).json({ leads: [], total: 0 });
-  }
 
   const tenantId = req.tenantId;
   if (!tenantId) {

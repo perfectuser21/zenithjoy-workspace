@@ -168,7 +168,7 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "R16 真机回归：heartbeat UUID 身份、取消 command 收敛、未分配 pending 防 500"
+    note: "真实 PostgreSQL + 登录 session 模拟 Android heartbeat UUID、取消 command 收敛、未分配 pending 防 500；不代表真机验收"
 
   - id: acquisition-cancel-integration
     path: sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts

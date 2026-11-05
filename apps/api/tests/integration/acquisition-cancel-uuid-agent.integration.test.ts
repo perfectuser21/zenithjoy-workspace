@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import app from '../../src/app';
-import { addTenantMember, createTestTenant, testPool } from './helpers';
+import { testPool } from './helpers';
 
 /**
  * Regression for the production Android identity transition:
@@ -13,7 +13,7 @@ import { addTenantMember, createTestTenant, testPool } from './helpers';
  */
 describe('Android cancel receipt accepts heartbeat UUID identity', () => {
   const run = randomUUID().replace(/-/g, '').slice(0, 8);
-  const userId = `cancel-uuid-${run}`;
+  let cookie: string[] = [];
   const runtimeAgentId = `agent-cancel-uuid-${run}`;
   const licenseKey = `ZJ-B-${run.toUpperCase()}`;
   const machineId = `cancel-uuid-machine-${run}`;
@@ -23,8 +23,10 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
   let taskId = '';
 
   beforeAll(async () => {
-    tenantId = (await createTestTenant(`cancel-uuid-${run}`)).id;
-    await addTenantMember(tenantId, userId, 'owner');
+    const signup = await request(app).post('/api/auth/sign-up/email').send({ email: `cancel-${run}@example.test`, password: 'Local-test-password-123', name: 'Cancel fixture' });
+    expect(signup.status).toBe(200);
+    cookie = signup.headers['set-cookie'] as string[];
+    tenantId = (await testPool.query('SELECT tenant_id FROM zenithjoy.tenant_members WHERE feishu_user_id=$1', [signup.body.user.id])).rows[0].tenant_id;
 
     const license = await testPool.query<{ id: string }>(
       `INSERT INTO zenithjoy.licenses
@@ -71,7 +73,7 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
   it('keeps ordinary video and comment reports cancelling until the physical receipt', async () => {
     const cancel = await request(app)
       .post('/api/acquisition/collect/cancel')
-      .set('X-Feishu-User-Id', userId)
+      .set('Cookie', cookie)
       .send({ task_id: taskId });
     expect(cancel.status).toBe(200);
 
@@ -129,7 +131,7 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
   it('reports cancelled with the UUID persisted from heartbeat', async () => {
     const cancel = await request(app)
       .post('/api/acquisition/collect/cancel')
-      .set('X-Feishu-User-Id', userId)
+      .set('Cookie', cookie)
       .send({ task_id: taskId });
     expect(cancel.status).toBe(200);
 
@@ -144,7 +146,7 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
         agent_uuid: agentUuid,
         machine_id: machineId,
       });
-    expect(heartbeat.status).toBe(200);
+    expect(heartbeat.status, JSON.stringify(heartbeat.body)).toBe(200);
     expect(heartbeat.body.agent_id).toBe(agentUuid);
 
     const report = await request(app)
@@ -188,7 +190,7 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
     // the existing cancellation receipt and identity checks remain exercised.
     const cooldownStart = await request(app)
       .post('/api/acquisition/collect/start')
-      .set('X-Feishu-User-Id', userId)
+      .set('Cookie', cookie)
       .send({ keywords: ['装修'], agent_id: agentUuid });
     expect(cooldownStart.status).toBe(410);
     expect(cooldownStart.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
@@ -242,7 +244,7 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
 
     const response = await request(app)
       .post('/api/acquisition/collect/cancel')
-      .set('X-Feishu-User-Id', userId)
+      .set('Cookie', cookie)
       .send({ task_id: pending.rows[0].id });
 
     expect(response.status).toBe(409);

@@ -81,29 +81,11 @@ describe('POST /api/agent/burner/warmup-result', () => {
   });
 });
 
+// Successful authenticated and cross-tenant reads are exercised with real cookies
+// and PostgreSQL in tests/integration/business-contracts/outreach-history.pg.test.ts.
 describe('GET /api/agent/burner/warmup-liveness', () => {
-  it('返回该租户名下 agent 最近每号验活', async () => {
-    q.mockResolvedValueOnce({ rows: [
-      { nickname: 'A', alive: true, followers: 1196, reason: 'ok', checked_at: '2026-07-07T00:00:00Z' },
-      { nickname: 'B', alive: false, followers: null, reason: 'x', checked_at: '2026-07-07T00:00:00Z' },
-    ] });
-    const r = await request(app).get('/api/agent/burner/warmup-liveness?agent_id=a1').set('x-test-tenant-id', 't1');
-    expect(r.status).toBe(200);
-    expect(r.body.data.liveness.length).toBe(2);
-    expect(r.body.data.liveness[1].alive).toBe(false);
-    // 查询按 tenant 过滤（JOIN agents ... tenant_id=$2）
-    const sql = String(q.mock.calls[0][0]);
-    expect(/JOIN zenithjoy\.agents/.test(sql)).toBe(true);
-    expect(String(q.mock.calls[0][1])).toContain('t1');
-  });
-
-  it('缺租户上下文 → 401（不跨租户读）', async () => {
+  it('rejects anonymous requests', async () => {
     const r = await request(app).get('/api/agent/burner/warmup-liveness?agent_id=a1');
     expect(r.status).toBe(401);
-  });
-
-  it('agent_id 缺失 → 400', async () => {
-    const r = await request(app).get('/api/agent/burner/warmup-liveness').set('x-test-tenant-id', 't1');
-    expect(r.status).toBe(400);
   });
 });
