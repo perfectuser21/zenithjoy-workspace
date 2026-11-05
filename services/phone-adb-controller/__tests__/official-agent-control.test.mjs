@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer,request as requestHttp} from 'node:http';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,realpathSync,cpSync,readdirSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -19,9 +19,12 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-async function using(fn,{delay=false}={}){
+async function using(fn,{delay=false,suppressClose=false,shortDeadline=false}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
- const directory=mkdtempSync(join(tmpdir(),'official-control-')),home=join(directory,'home'),journalDirectory=join(directory,'journal');
+ const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
+ cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
+ const localControl=await import(new URL('./runtime/official-agent-control.mjs',new URL('file://'+copied+'/')).href);
+ const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-control-'))),home=join(directory,'home'),journalDirectory=join(directory,'journal');
  mkdirSync(journalDirectory,{mode:0o700});
  const methodName='douyin-leadgen-activity-101-collect-videos',text=readFileSync(join(root,'skills',methodName,'SKILL.md'),'utf8');
  const version=parse(text.match(/^---\n([\s\S]*?)\n---/)[1]).metadata.version;
@@ -41,6 +44,7 @@ async function using(fn,{delay=false}={}){
  const childRun='33333333-3333-4333-8333-333333333333',childKey='agent:skill-factory:subagent:fixture';
  const records={'activity-request.json':q,'agent-request.json':agent,'spawn-claimed.json':{...agent,source_commit:commit},'agent-binding.json':{...agent,child_run_id:childRun,child_session_key:childKey},'spawn-receipt.json':{runId:childRun,childSessionKey:childKey,resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'}};
  for(const [name,value]of Object.entries(records))writeFileSync(join(runDir,name),JSON.stringify(value),{mode:0o600});
+ writeFileSync(join(runtimeRoot,'deployment-manifest.json'),JSON.stringify({source_commit:commit}));
  const source={commit,files:[...RPC_FILES,'official-agent-control.mjs'].map(path=>({path,sha256:sha(readFileSync(join(root,path)))}))};
  let dispatches=0;const sockets=new Set();let arrived;const firstRequest=new Promise(r=>{arrived=r;});
  const server=createServer((req,res)=>{
@@ -50,13 +54,16 @@ async function using(fn,{delay=false}={}){
  });
  server.on('connection',socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const options={source,runtimeRoot:root,request:q,home,journalDirectory,deadlineMs:q.deadline_ms,credential:()=> 'fixture-private-token',httpRequest:(opts,callback)=>{
+ const options={source,runtimeRoot,request:q,home,journalDirectory,deadlineMs:(suppressClose||shortDeadline)?Date.now()+500:q.deadline_ms,cleanupDeadlineMs:(suppressClose||shortDeadline)?Date.now()+800:q.deadline_ms,credential:()=> 'fixture-private-token',httpRequest:(opts,callback)=>{
   assert.equal(opts.hostname,'127.0.0.1');assert.equal(String(opts.port),'5221');assert.equal(opts.method,'GET');
-  return requestHttp({...opts,port:server.address().port},callback);
+  const req=requestHttp({...opts,port:server.address().port},callback);
+  if(suppressClose){const emit=req.emit;req.emit=function(event,...args){if(event==='close'){replay.push(()=>emit.call(req,event,...args));return false;}return emit.call(req,event,...args);};}
+  return req;
  }};
+ const replay=[];
  let instance;
- try{instance=control.createOfficialAgentControl(options);await fn({instance,q,source,options,routes,firstRequest,count:()=>dispatches,journalDirectory,runDir});}
- finally{if(instance)await instance.close();for(const socket of sockets)socket.destroy();await new Promise(r=>server.close(r));rmSync(directory,{recursive:true,force:true});}
+ try{instance=localControl.createOfficialAgentControl(options);await fn({instance,q,source,options,routes,firstRequest,count:()=>dispatches,journalDirectory,runDir,replay,runtimeRoot});}
+ finally{for(const callback of replay)callback();if(instance)await instance.close();for(const socket of sockets)socket.destroy();await new Promise(r=>server.close(r));rmSync(directory,{recursive:true,force:true});rmSync(copied,{recursive:true,force:true});}
 }
 
 test('原真实Skill/中央绑定/私有official原件经本机只读HTTP授权，无outer Node或SSH',async()=>using(async({instance,q,count})=>{
@@ -79,8 +86,37 @@ test('中央Task错身份仍沿原校验拒绝，不借本地transport获得权�
 }));
 test('seal取消在途读；真实request/socket关闭前保留pending，晚回调不发第二GET',async()=>using(async({instance,q,firstRequest,count})=>{
  const work=instance.request({kind:'activity_skill_authority',request:q});const rejected=assert.rejects(work,/OFFICIAL_CONTROL_CLOSED/);
- await firstRequest;assert.equal(instance.snapshot().pending,1);
+ await Promise.race([firstRequest,work.then(()=>{throw Error('authority returned before fixture request');})]);assert.equal(instance.snapshot().pending,1);
  const closed=instance.close();await rejected;await closed;
  assert.equal(count(),1);assert.equal(instance.snapshot().pending,0);assert.equal(instance.snapshot().execution_stopped,true);
  await assert.rejects(()=>instance.request({kind:'activity_skill_authority',request:q}),/OFFICIAL_CONTROL_CLOSED/);
 },{delay:true}));
+
+test('缺失request close回执不得卡死收尾或伪停止；真实socket虽关仍保unknown',async()=>using(async({instance,q,firstRequest})=>{
+ const work=instance.request({kind:'activity_skill_authority',request:q});const rejected=assert.rejects(work,/OFFICIAL_CONTROL_CLOSED/);
+ await Promise.race([firstRequest,work]);
+ const result=await Promise.race([instance.close(),new Promise(r=>setTimeout(()=>r('unbounded'),1000))]);
+ assert.notEqual(result,'unbounded','close必须在receipt预算内返回unknown，不能无限等close事件');
+ assert.equal(result.execution_stopped,false);assert.equal(result.execution_unknown,true);assert.equal(result.pending,1);
+ await rejected;
+},{delay:true,suppressClose:true}));
+
+test('绝对deadline取消真实挂起HTTP，之后无新GET且本机关闭可证',async()=>using(async({instance,q,firstRequest,count})=>{
+ const work=instance.request({kind:'activity_skill_authority',request:q});const rejected=assert.rejects(work,/OFFICIAL_CONTROL_DEADLINE/);
+ await Promise.race([firstRequest,work]);await rejected;await instance.close();
+ assert.equal(count(),1);assert.equal(instance.snapshot().execution_stopped,true);
+},{delay:true,shortDeadline:true}));
+test('日志ACL被改时在HTTP前拒绝并保unknown，close不洗掉记录失败',async()=>using(async({instance,q,count,journalDirectory})=>{
+ const file=readdirSync(journalDirectory).find(x=>x.endsWith('.jsonl'));chmodSync(join(journalDirectory,file),0o644);
+ await assert.rejects(()=>instance.request({kind:'activity_skill_authority',request:q}),/OFFICIAL_CONTROL_JOURNAL/);assert.equal(count(),0);
+ await instance.close();assert.equal(instance.snapshot().execution_stopped,false);assert.equal(instance.snapshot().execution_unknown,true);
+}));
+test('依赖原件被改仍由原source verifier拒绝；不为了本机调用绕过摘要',async()=>using(async({instance,q,count,runtimeRoot})=>{
+ const file=join(runtimeRoot,'leadgen-rpc.mjs');writeFileSync(file,readFileSync(file,'utf8')+'\n');
+ await assert.rejects(()=>instance.request({kind:'activity_skill_authority',request:q}),/OFFICIAL_CONTROL_SOURCE/);assert.equal(count(),0);
+}));
+test('错误模型的私有spawn原件不可获得authority，凭据不进入记录',async()=>using(async({instance,q,runDir,journalDirectory})=>{
+ const file=join(runDir,'spawn-receipt.json'),receipt=JSON.parse(readFileSync(file));receipt.resolvedModel='different';writeFileSync(file,JSON.stringify(receipt));
+ assert.deepEqual(await instance.request({kind:'activity_skill_authority',request:q}),{ok:true,authorized:false});
+ for(const name of readdirSync(journalDirectory))assert.equal(readFileSync(join(journalDirectory,name),'utf8').includes('fixture-private-token'),false);
+}));
