@@ -10,3 +10,15 @@ for(const closeFails of [false,true])test('raw main Commander prepares before wa
  const action=await observer.commander({phase:'wake',workflow_key:'douyin_comment_scoring',run_id:'run',binding_id:'binding',source_commit:q.source_commit,task_id:'task',commander_role:'observer'});assert.equal(action.action,'steer');assert.equal(calls,1);
  const actual=await observer.close();assert.equal(actual.execution_stopped,!closeFails);assert.ok(closed.indexOf('sdk')<closed.indexOf('control'));assert.ok(closed.includes('owner'));
 });
+
+for(const failure of ['read','source','unknown'])test('main only continues after private unopened-and-closed Observer availability proof: '+failure,async t=>{
+ const {runWorkflowWithCommander}=await import('../leadgen-workflow.mjs');
+ const root=mkdtempSync(join(tmpdir(),'runner-observer-unavailable-'));t.after(()=>rmSync(root,{recursive:true,force:true}));mkdirSync(join(root,'config'));const bytes=Buffer.from(JSON.stringify({hosts:[{target:'mmv',executables:{python:{path:'/fixture/python',sha256:'d'.repeat(64)}}}]}));writeFileSync(join(root,'config/collection-phone-hosts.json'),bytes);
+ const q={mode:'execute',execution_transport:'raw-model-v1',run_id:'run',task_id:'task',binding_id:'binding',workflow_key:'douyin_comment_scoring',activity_key:'scoring',source_commit:'a'.repeat(40),broker_host:'mmv',worker_deadline_ms:Date.now()+8000,receipt_deadline_ms:Date.now()+9000,deadline_ms:Date.now()+10000};let workers=0,allocated=0;
+ const control={authorizeParentContext:async()=>{throw Object.assign(Error('safe classification'),{code:failure==='source'?'OFFICIAL_CONTROL_SOURCE':'OFFICIAL_CONTROL_READ'});},seal(){},close:async()=>{},snapshot:()=>({}),verifySealedExecution:()=>failure!=='unknown'};
+ const prepareCommander=()=>implementation.createRunnerOfficialCommander({runtimeRoot:root,runDir:root,request:q,source:{commit:q.source_commit,files:[{path:'config/collection-phone-hosts.json',sha256:createHash('sha256').update(bytes).digest('hex')}]},factories:{createControl:async()=>control,createSdk:()=>{allocated++;throw Error('NO_SDK');},createOwner:()=>{allocated++;throw Error('NO_OWNER');}}});
+ const running=runWorkflowWithCommander({frozen:{execution_transport:'raw-model-v1'},context:{execution_mode:'agent',run_id:q.run_id,task_id:q.task_id,binding_id:q.binding_id,source_commit:q.source_commit,workflow_key:q.workflow_key},activities:[{key:'scoring',budget:{max_duration_s:5}}],executeAgent:async()=>{workers++;return{status:'completed',execution_stopped:true,result:{}};},verify:async()=>({verified:true}),quarantine:async()=>({verified:true}),prepareCommander});
+ if(failure==='source'){await assert.rejects(running,error=>error.code==='RUNNER_OFFICIAL_COMMANDER_AUTHORITY_INVALID');assert.equal(workers,0);assert.equal(allocated,0);return;}
+ const out=await running;
+ assert.equal(allocated,0);assert.equal(workers,failure==='read'?1:0);assert.equal(out.status,failure==='read'?'completed':'needs_review');if(failure!=='read')assert.equal(out.execution_stopped,false);
+});

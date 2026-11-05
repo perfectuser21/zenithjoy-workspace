@@ -9863,6 +9863,14 @@ tests:
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；官方raw控制/零业务验收的来源、终态、封权与失败收口；不代表真实Agent或获客已通过"
 
+  - id: phone-runner-workflow-lifecycle
+    path: services/phone-adb-controller/__tests__/runner-workflow-lifecycle.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际main消费Observer私有闭域、未知禁止Worker及独立Judge不被覆盖"
+
   - id: phone-runner-official-commander
     path: services/phone-adb-controller/__tests__/runner-official-commander.test.mjs
     type: integration

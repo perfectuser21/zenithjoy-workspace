@@ -112,6 +112,8 @@ const modules={
  './ledger.mjs':await import(pathToFileURL(root+'ledger.mjs')),
  './preflight-phone-scope.mjs':await import(pathToFileURL(root+'preflight-phone-scope.mjs')),
  './preflight-judge.mjs':await import(pathToFileURL(root+'preflight-judge.mjs')),
+ './runner-official-commander.mjs':await import(pathToFileURL(root+'runner-official-commander.mjs')),
+ './control-acceptance-tools.mjs':await import(pathToFileURL(root+'control-acceptance-tools.mjs')),
  './collection-phone-scope.mjs':await import(pathToFileURL(root+'collection-phone-scope.mjs')),
  './discovery-phone-scope.mjs':await import(pathToFileURL(root+'discovery-phone-scope.mjs')),
  './commander-model-receipt.mjs':await import(pathToFileURL(root+'commander-model-receipt.mjs')),

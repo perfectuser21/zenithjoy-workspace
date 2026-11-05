@@ -3,6 +3,11 @@ import {readFileSync,mkdirSync} from 'node:fs';import {join} from 'node:path';im
 import {createOfficialAgentControlFactory} from './official-agent-control.mjs';import {createOfficialCommanderExecute} from './official-commander-sdk.mjs';
 import {createBoundedCommanderOwner} from './commander-bounded-owner.mjs';import {openClawCommander} from './activity-commander.mjs';import {canonical} from './runtime-definition.mjs';
 const fail=()=>Error('RUNNER_OFFICIAL_COMMANDER_UNAVAILABLE');
+const preparations=new WeakMap(),closures=new WeakMap();
+const identity=value=>canonical(['run_id','task_id','binding_id','source_commit','workflow_key'].map(key=>value?.[key]??null));
+export const runnerCommanderClosureKnown=(value,scope)=>closures.get(value)===identity(scope);
+export function runnerCommanderPreparation(error,scope){const facts=preparations.get(error);return facts?.identity===identity(scope)?{unavailable:facts.unavailable,closed:facts.closed}:null;}
+
 export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,request,factories={}}={}){
  const q=structuredClone(request);
  if(q?.execution_transport!=='raw-model-v1'||q.mode!=='execute'||q.source_commit!==source?.commit||!Number.isSafeInteger(q.worker_deadline_ms)||q.worker_deadline_ms>=q.receipt_deadline_ms||q.receipt_deadline_ms>=q.deadline_ms)throw fail();
@@ -21,8 +26,9 @@ export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,r
   try{control.seal(q);await control.close();controlFacts=control.snapshot();}catch{failed=true;}
   try{ownerFacts=owner?await owner.close():null;}catch{failed=true;}
   let known=false;try{known=!failed&&(!sdk||sdk.verifySealedExecution(sdkFacts)===true)&&control.verifySealedExecution(controlFacts,{request:q})===true&&(!owner||ownerFacts?.execution_stopped===true&&ownerFacts.execution_unknown!==true);}catch{known=false;}
-  return {domain:'runner-official-observer/v1',execution_stopped:known,execution_unknown:!known,sdk:sdkFacts,control:controlFacts,owner:ownerFacts};
+  const facts=Object.freeze({domain:'runner-official-observer/v1',execution_stopped:known,execution_unknown:!known,sdk:sdkFacts,control:controlFacts,owner:ownerFacts});if(known)closures.set(facts,identity(q));return facts;
  })();
+ const dispatchSafety=()=>{try{const values=[sdk,control,owner].map(domain=>domain.snapshot()),pending=values.reduce((sum,value)=>sum+value.pending,0),unknown=values.some(value=>value.execution_unknown===true);return {safe:!closing&&!unknown&&pending===0,pending,execution_unknown:unknown};}catch{return {safe:false,pending:null,execution_unknown:true};}};
  try{
   if(await control.authorizeParentContext(q)!==true)throw fail();
   sdk=(factories.createSdk||createOfficialCommanderExecute)({control,request:q,source,runtimeRoot,directory:sdkDirectory});
@@ -34,6 +40,6 @@ export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,r
    const timeoutMs=Math.min(60000,Math.floor((q.worker_deadline_ms-Date.now())/1000)*1000);
    if(timeoutMs<1000)throw fail();
    return openClawCommander({timeoutMs,execute:sdk.execute,reserveOwner:owner.reserveOwner})(receipt);
-  },close});
- }catch(error){await close();throw error;}
+  },dispatchSafety,canDispatchWorker:()=>dispatchSafety().safe,close});
+ }catch(cause){const closed=await close();const error=fail();const unavailable=cause?.code==='OFFICIAL_CONTROL_READ';if(!unavailable)error.code='RUNNER_OFFICIAL_COMMANDER_AUTHORITY_INVALID';preparations.set(error,{identity:identity(q),closed:runnerCommanderClosureKnown(closed,q),unavailable});throw error;}
 }

@@ -36,7 +36,7 @@ const uncertainty=(actual,receipt,request)=>{
  return {unknown_reasons:[...reasons],owner_execution_stopped:sourceMatches&&receipt?.owner_execution_stopped===true,child_execution_stopped:sourceMatches&&receipt?.child_execution_stopped===true};
 };
 
-export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,createTools,createOfficialControl,deadlineFor,supportsNativeScope=()=>false,nativeState=()=>({})}){
+export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,createTools,createOfficialControl,deadlineFor,beforeRawTurn,supportsNativeScope=()=>false,nativeState=()=>({})}){
  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
  assertAgentInput(frozen,env);
  if(typeof createTools!=='function'||typeof rpc!=='function'||typeof deadlineFor!=='function')throw noLaunch('AGENT_PRIMARY_DEPENDENCY_UNAVAILABLE');
@@ -134,7 +134,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    if(signal?.aborted||Date.now()>=workerDeadline)throw Error('AGENT_PRIMARY_DEADLINE_EXHAUSTED_BEFORE_DISPATCH');
    if(transport){
     const control=new Proxy(rawControl,{get(target,key){if(key==='request')return message=>{if(message.kind==='official_agent_turn'){dispatched=true;rawLastIndex=message.turn.index;}return target.request(message);};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});
-    const raw=await runActivitySkillParentLoop({request,scope,broker,control,signal,canReadback:(operation,input)=>tools.canReadback?.(operation,input)===true});
+    const raw=await runActivitySkillParentLoop({request,scope,broker,control,signal,beforeTurn:beforeRawTurn,canReadback:(operation,input)=>tools.canReadback?.(operation,input)===true});
     rawProof=raw.model_stop_proof;rawControlKnown=rawControl.verifySealedExecution(rawControl.snapshot(),{request})===true;
     receipt={execution_transport:transport.execution_transport,source_commit:request.source_commit,reason:raw.reason,turn_count:raw.turn_count,
      official_execution_stopped:raw.official_execution_stopped,model_execution_unknown:raw.model_execution_unknown,broker_execution_unknown:raw.broker_execution_unknown};
@@ -221,7 +221,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     phone:async()=>{throw Error('RAW_RECOVERY_READ_ONLY');},business:async()=>{throw Error('RAW_RECOVERY_READ_ONLY');},getActivityResult:()=>structuredClone(state.result),
     authorizeParentContext:async()=>await control.authorizeParentContext(state.request)===true,authorize:async(_q,delivery)=>delivery.op==='inspect'&&await control.authorizeBrokerDelivery(state.request,delivery)===true,onEvent,
     onAbort:async()=>{try{const value=await control.request({kind:'official_agent_stop',request:state.request,turn_index:state.usedCount});return {execution_stopped:!!control.verifyStopReceipt(value,{request:state.request,index:state.usedCount})};}catch{return {execution_stopped:false};}}});
-   const raw=await runActivitySkillParentLoop({request:state.request,brokerRequest:request,scope:state.scope,broker,control,signal,startIndex:state.usedCount,readOnlyContinuation:true});
+   const raw=await runActivitySkillParentLoop({request:state.request,brokerRequest:request,scope:state.scope,broker,control,signal,beforeTurn:beforeRawTurn,startIndex:state.usedCount,readOnlyContinuation:true});
    const stopped=rawModelScopeStopped(raw.model_stop_proof,state.scope)&&control.verifySealedExecution(control.snapshot(),{request:state.request})===true;
    return {status:'partial',execution_stopped:stopped,result:structuredClone(state.result),recovery_read_only:true,reason:stopped?'一次只读恢复已结束，仍由Code第二次检查':'只读恢复终态未知',skill_receipt:{execution_transport:'raw-model-v1',turn_count:raw.turn_count,total_turn_count:state.usedCount+raw.turn_count,reason:raw.reason}};
   }finally{if(broker)await broker.close();control.seal(state.request);await control.close();}

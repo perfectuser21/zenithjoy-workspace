@@ -39,7 +39,7 @@ function bounded(promise,deadline,signal){
   Promise.resolve(promise).then(value=>done(null,value),error=>done(error));
  });
 }
-export async function runActivitySkillParentLoop({request,scope,broker,control,signal,canReadback=()=>false,startIndex=0,readOnlyContinuation=false,brokerRequest}={}){
+export async function runActivitySkillParentLoop({request,scope,broker,control,signal,canReadback=()=>false,startIndex=0,readOnlyContinuation=false,brokerRequest,beforeTurn}={}){
  const q=immutable(JSON.parse(JSON.stringify(request??null)));
  if(q?.mode!=='execute'||q.execution_transport!=='raw-model-v1'||q.transport_generation!==undefined
   ||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(q.workflow_key)
@@ -70,6 +70,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
    active();
    const context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
    if(context.commander_abort===true){reason='commander_aborted';break;}
+   if(beforeTurn&&await beforeTurn()!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();
    const input={protocol:'leadgen-parent-turn/v1',index,context,history:structuredClone(history)};
    if(Buffer.byteLength(JSON.stringify(input))>256*1024){reason='input_limit';break;}
    record(`turn-${index}-request`,{request_sha256:hash(JSON.stringify(q)),input});

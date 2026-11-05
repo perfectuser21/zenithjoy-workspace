@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {runWorkflow} from './activity-commander.mjs';
 import {createPreflightRuntime} from './preflight-phone-scope.mjs';
+import {runnerCommanderPreparation,runnerCommanderClosureKnown} from './runner-official-commander.mjs';
 import {createControlAcceptanceHandlers,validateControlScope,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
@@ -65,7 +66,7 @@ export function activityExecutionDeadline({activity,env,previous,now=Date.now(),
 
 // Main and tests consume this same mode/deadline boundary. It never downgrades
 // an Agent-first request into the original Code implementation.
-export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,activities,taskId,createOfficialControl}){
+export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,activities,taskId,createOfficialControl,beforeRawTurn}){
  const executionMode=assertExecutionMode(frozen,env),activityDeadlines=new Map();
  const fixedAgentInput=assertAgentInput(frozen,env);
  if(fixedAgentInput&&taskId!=null&&taskId!==fixedAgentInput.task_id)throw Object.assign(Error('AGENT_INPUT_TASK_CONFLICT'),{executionStopped:true});
@@ -87,7 +88,7 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  };
  if(executionMode==='agent'){
   if(typeof handlers.createAgentTools!=='function')throw Object.assign(Error('AGENT_PRIMARY_TOOLS_UNAVAILABLE'),{executionStopped:true});
-  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,
+  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,beforeRawTurn,
    createOfficialControl:createOfficialControl|| (async options=>{
     const {createOfficialAgentControlFactory}=await import('./official-agent-control.mjs');
     return createOfficialAgentControlFactory({runtimeRoot:join(runDir,'runtime'),source:rpcSource(frozen)})(options);
@@ -147,7 +148,31 @@ export async function prepareWorkflowCommander({runDir,frozen,activities,execute
  const input=frozen.agent_input,request=executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:(input.run_start_ts+input.run_max_seconds)*1000});
  const factory=createObserver||(await import('./runner-official-commander.mjs')).createRunnerOfficialCommander;
  const observer=await factory({runtimeRoot:join(runDir,'runtime'),runDir,source:rpcSource(frozen),request});
- return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return observer.commander(receipt);},close:observer.close};
+ return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return observer.commander(receipt);},dispatchSafety:observer.dispatchSafety,canDispatchWorker:observer.canDispatchWorker,close:observer.close};
+}
+
+export async function runWorkflowWithCommander({frozen,prepareCommander=prepareWorkflowCommander,observerSafety,...options}){
+ const raw=frozen.execution_transport==='raw-model-v1',record=options.record|| (async()=>{});let observer,safetyUnknown=false;
+ const quarantine=async()=>{try{return options.quarantine?await options.quarantine():{verified:false,reason:'quarantine unavailable'};}catch{return {verified:false,reason:'quarantine failed'};}};
+ try{observer=await prepareCommander({...options,frozen});}
+ catch(error){
+  const facts=raw?runnerCommanderPreparation(error,options.context):null;
+  await record({...options.context,phase:raw&&facts?.closed&&!facts.unavailable?'commander_authority_rejected':'commander_unavailable',commander_status:'unavailable'});
+  if(raw&&facts?.closed&&!facts.unavailable)throw error;
+  if(raw&&(!facts?.unavailable||facts.closed!==true)){
+   const resource_quarantine=await quarantine();return {status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine,results:options.activities.map(activity=>({activity:activity.key,status:'blocked',not_started:true,execution_stopped:false,reason:'Observer authority or lifecycle not verified'}))};
+  }
+  observer={commander:async()=>{throw Error('COMMANDER_UNAVAILABLE');},canDispatchWorker:()=>true,close:async()=>null};
+ }
+ const allowed=()=>{if(!raw)return true;const facts=observer.dispatchSafety?.()||{safe:observer.canDispatchWorker?.()===true,execution_unknown:observer.canDispatchWorker?.()!==true};if(facts.execution_unknown===true)safetyUnknown=true;return facts.safe===true;};
+ if(observerSafety)observerSafety.safe=allowed;
+ const guarded=options.executeAgent&& (async(activity,input)=>{if(!allowed())throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
+ if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!allowed())throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
+ let result;
+ try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}
+ finally{let closed;try{closed=await observer.close();}catch{safetyUnknown=true;}if(closed){await record({...options.context,phase:'commander_domain_closed',evidence:closed});if(raw&&!runnerCommanderClosureKnown(closed,options.context))safetyUnknown=true;}}
+ if(safetyUnknown){result={...result,status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine:await quarantine()};}
+ return result;
 }
 
 async function main(){
@@ -205,15 +230,11 @@ async function main(){
   };
   const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
   const handlers=createWorkflowHandlers({runDir:dir,frozen,binding,preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
-  const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId});
+  const observerSafety={};
+  const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:()=>observerSafety.safe?.()===true});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
-  let observer;
-  try{observer=await prepareWorkflowCommander({runDir:dir,frozen,activities,executeAgent,context,rpc});}
-  catch{await record({...context,phase:'commander_unavailable',commander_status:'unavailable',reason:'COMMANDER_PREPARATION_UNAVAILABLE'});observer={commander:async()=>{throw Error('COMMANDER_UNAVAILABLE');},close:async()=>null};}
-  let result;
-  try{result=await runWorkflow({activities,context,handlers:execution,executeAgent,recover,quarantine:handlers.quarantineResources,
-    commander:observer.commander,record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});}
-  finally{const closed=await observer.close();if(closed)await record({...context,phase:'commander_domain_closed',evidence:closed});}
+  const result=await runWorkflowWithCommander({runDir:dir,frozen,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,quarantine:handlers.quarantineResources,
+    record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);
     writeFileSync(file,JSON.stringify({...item,observed_at:new Date().toISOString(),metrics:item.verification?.metrics||item.result||{},commander:records.filter(r=>r.activity===item.activity)},null,2));

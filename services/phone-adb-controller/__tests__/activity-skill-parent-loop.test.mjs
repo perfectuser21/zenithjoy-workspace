@@ -168,3 +168,10 @@ test('a read-only continuation keeps the original turn index and rejects phone b
  const actual=await module.runActivitySkillParentLoop({...state,startIndex:2,readOnlyContinuation:true});
  assert.equal(index,2);assert.equal(actual.reason,'read_only_intent_rejected');assert.equal(actual.turn_count,1);assert.deepEqual(state.effects,[]);
 });
+
+test('a Code Observer safety guard stops the next raw turn after an inspect exchange without claiming the stopped worker model is unknown',async t=>{
+ let safe=true;
+ const state=await fixture(t,{turns:async()=>({type:'inspect',progress:'Read original evidence.'}),onEvent:async()=>{safe=false;return{action:'none'};}});
+ const out=await module.runActivitySkillParentLoop({...state,beforeTurn:()=>safe});
+ assert.equal(state.inputs.length,1);assert.equal(out.official_execution_stopped,true);assert.equal(out.model_execution_unknown,false);assert.equal(out.turn_count,1);assert.equal(out.reason,'parent_loop_failed');assert.deepEqual(state.effects,[]);
+});
