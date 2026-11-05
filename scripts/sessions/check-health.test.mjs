@@ -21,3 +21,16 @@ test('real decision logic distinguishes valid, unauthorized, login redirect, mal
   let calls=0;const r=await run(cookies,{request:async(url,cookie)=>{calls++;assert.equal(url,p.healthUrl);assert.equal(cookie,'sessionid=synthetic');return response;}});assert.equal(r.status,status);assert.equal(calls,1);
  }
 });
+
+test('Weibo/Zhihu main and subaccounts share the known error-envelope rejection', async () => {
+ const accounts=PLATFORMS.filter(p=>/^(WEIBO|ZHIHU)_(COOKIES|SUB_[123])$/.test(p.secretEnv));
+ assert.equal(accounts.length,8);
+ for(const platform of accounts){
+  for(const body of ['{"error":{"message":"failed"},"id":"fixture"}', '<html>login required</html>']){
+   let calls=0;
+   const result=await checkPlatform(platform,{env:{[platform.secretEnv]:JSON.stringify([{name:platform.keyCookies[0],value:'synthetic'}])},skipHttpCheck:false,
+    request:async(url,cookie)=>{calls++;assert.equal(url,platform.healthUrl);assert.equal(cookie,platform.keyCookies[0]+'=synthetic');return {status:200,body};}});
+   assert.equal(result.status,'unknown',platform.secretEnv+': '+body);assert.equal(calls,1);
+  }
+ }
+});

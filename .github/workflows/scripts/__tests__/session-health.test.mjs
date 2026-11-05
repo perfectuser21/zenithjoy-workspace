@@ -362,3 +362,26 @@ for (const [name, body, configuredCookies] of [
   assert.equal(result.updates.length, 1);
   assert.equal(result.updates[0].status, 'active');
 });
+
+// The exact health identity schemas remain unproven. These tests assert only
+// existing provider error-envelope/JSON rejection, not authenticated identity.
+for (const account of ['WEIBO_COOKIES', 'ZHIHU_COOKIES']) {
+  for (const body of ['<html>login required</html>', '{broken', '', 'null', '[]', 'true',
+    '{"error":"未登录，请先登录"}', '{"error":{"message":"failed"},"id":"fixture"}']) {
+    test(`HTTP-only health rejects known error or unrecognized JSON for ${account}: ${body}`, () => {
+      const result = runHealth({ body, required: account, configuredCookies: [account], apiKeysMissing: true, noAlerts: true });
+      assert.equal(result.report.find(row => row.secretEnv === account).status, 'unknown');
+      assert.notEqual(result.status, 0, result.stdout + result.stderr);
+      assert.equal(result.updates.length, 0, 'failed/unrecognized response must not write active');
+      assert.doesNotMatch(result.stdout, /全部正常|已检查账号通过/);
+    });
+  }
+  for (const body of ['{"id":"fixture"}', '{"data":{"description":"请登录"},"error":null}']) {
+    test(`HTTP-only health retains prior non-error JSON handling for ${account}: ${body}`, () => {
+      const result = runHealth({ body, required: account, configuredCookies: [account], apiKeysMissing: true, noAlerts: true });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      assert.equal(result.updates.length, 1);
+      assert.equal(result.updates[0].status, 'active');
+    });
+  }
+}
