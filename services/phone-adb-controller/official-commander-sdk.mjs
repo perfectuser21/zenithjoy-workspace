@@ -1,7 +1,7 @@
 // Explicit raw parent Code transport for the existing Commander execute seam.
 // It does not install or claim that Gateway loaded the packaged Commander workspace.
 import {createHash,randomUUID} from 'node:crypto';
-import {readFileSync,lstatSync,realpathSync,openSync,closeSync,fsyncSync,writeSync,constants} from 'node:fs';
+import {readFileSync,lstatSync,readdirSync,realpathSync,openSync,closeSync,fsyncSync,writeSync,constants} from 'node:fs';
 import {join,resolve,dirname} from 'node:path';import {fileURLToPath} from 'node:url';import {homedir} from 'node:os';
 import {canonical} from './runtime-definition.mjs';import {verifyRpcSource} from './leadgen-rpc.mjs';import {workflowCommanderSession} from './commander-owner-state.mjs';import {verifyOfficialGatewayRuntime} from './official-gateway-runtime.mjs';
 const fail=code=>Object.assign(Error('OFFICIAL_COMMANDER_'+code),{code:'OFFICIAL_COMMANDER_'+code});const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -9,11 +9,11 @@ function token(){const path=join(homedir(),'.credentials/mmv-official-gateway.en
 export function createOfficialCommanderExecute({control,request,source,runtimeRoot,directory,gatewayDependencies,gatewayCredential=token}={}){
  const q=structuredClone(request),fixedSource=structuredClone(source);if(q?.execution_transport!=='raw-model-v1'||q.mode!=='execute'||q.broker_host!=='mmv'||q.source_commit!==fixedSource?.commit||!Number.isSafeInteger(q.deadline_ms)||typeof control?.authorizeParentContext!=='function'||typeof gatewayCredential!=='function')throw fail('SCOPE');
  if(realpathSync(runtimeRoot)!==realpathSync(dirname(fileURLToPath(import.meta.url))))throw fail('SOURCE');const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||realpathSync(directory)!==resolve(directory))throw fail('JOURNAL');
- let sealed=false,unknown=false,active=null;const snapshots=new WeakSet(),runs=new Set();
+ const previousCallerUnknown=readdirSync(directory).length!==0;let sealed=false,unknown=previousCallerUnknown,active=null;const snapshots=new WeakSet(),runs=new Set();
  const verify=()=>{const own=fixedSource.files?.filter(f=>f.path==='official-commander-sdk.mjs');if(own?.length!==1||sha(readFileSync(join(runtimeRoot,own[0].path)))!==own[0].sha256)throw fail('SOURCE');try{verifyRpcSource(fixedSource,{base:runtimeRoot});}catch{throw fail('SOURCE');}};
  const guard=deadline=>{if(sealed)throw fail('CLOSED');if(unknown)throw fail('UNKNOWN');if(Date.now()>=Math.min(q.deadline_ms,deadline))throw fail('DEADLINE');verify();};
  const record=(name,value)=>{const current=lstatSync(directory);if(!current.isDirectory()||current.isSymbolicLink()||current.uid!==process.getuid()||(current.mode&0o077)||current.dev!==st.dev||current.ino!==st.ino||realpathSync(directory)!==resolve(directory))throw fail('JOURNAL');const fd=openSync(join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{const b=Buffer.from(JSON.stringify(value)+'\n');let n=0;while(n<b.length){const k=writeSync(fd,b,n,b.length-n);if(k<1)throw fail('JOURNAL');n+=k;}fsyncSync(fd);}finally{closeSync(fd);}const parent=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}};
- const snapshot=()=>{const value=Object.freeze({sealed,pending:active?1:0,execution_unknown:unknown||!!active,external_effect_unknown:unknown,execution_stopped:sealed&&!active&&!unknown});snapshots.add(value);return value;};
+ const snapshot=()=>{const value=Object.freeze({sealed,pending:active?1:0,execution_unknown:unknown||!!active,external_effect_unknown:unknown,previous_caller_stop_unproven:previousCallerUnknown,execution_stopped:sealed&&!active&&!unknown});snapshots.add(value);return value;};
  async function rpc(method,params,job,{expectFinal=false}={}){
   guard(job.deadline);await control.authorizeParentContext(q);guard(job.deadline);const deps=gatewayDependencies??await(await import('./official-gateway-dependencies.mjs')).loadOfficialGatewayDependencies({runtimeRoot,source:fixedSource});guard(job.deadline);const credential=gatewayCredential();if(typeof credential!=='string'||!credential||/[\r\n]/.test(credential))throw fail('CREDENTIAL');
   let ws,req,socket,client,allocated=false,requestClosed=false,websocketClosed=false,socketClosed=false,resolveHello,rejectHello,resolveClosed,frameId;const hello=new Promise((r,j)=>{resolveHello=r;rejectHello=j;}),closed=new Promise(r=>resolveClosed=r);
