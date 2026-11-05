@@ -50,6 +50,14 @@ const validateXhs = (text) => {
       && (d.code === 0 || d.success === true);
   } catch { return false; }
 };
+// Negative-only guard from the existing Weibo/Zhihu response consumers.
+// This is not a complete /profile/me or /api/v4/me identity schema.
+const validateJsonWithoutError = (text) => {
+  try {
+    const body = JSON.parse(text);
+    return body !== null && typeof body === 'object' && !Array.isArray(body) && !body.error;
+  } catch { return false; }
+};
 const validateTrue = () => true;
 
 // ── 平台定义（8×4=32 平台账号 + 3 API key = 35 条目）────────────────
@@ -81,15 +89,15 @@ export const PLATFORMS = [
   { platform: '头条小号2', secretEnv: 'TOUTIAO_SUB_2', healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
   { platform: '头条小号3', secretEnv: 'TOUTIAO_SUB_3', healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
   // ── 微博（4 账号）────────────────────────────────────────────────
-  { platform: '微博主号',  secretEnv: 'WEIBO_COOKIES',  healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
-  { platform: '微博小号1', secretEnv: 'WEIBO_SUB_1', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
-  { platform: '微博小号2', secretEnv: 'WEIBO_SUB_2', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
-  { platform: '微博小号3', secretEnv: 'WEIBO_SUB_3', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
+  { platform: '微博主号',  secretEnv: 'WEIBO_COOKIES',  healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateJsonWithoutError },
+  { platform: '微博小号1', secretEnv: 'WEIBO_SUB_1', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateJsonWithoutError },
+  { platform: '微博小号2', secretEnv: 'WEIBO_SUB_2', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateJsonWithoutError },
+  { platform: '微博小号3', secretEnv: 'WEIBO_SUB_3', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateJsonWithoutError },
   // ── 知乎（4 账号）────────────────────────────────────────────────
-  { platform: '知乎主号',  secretEnv: 'ZHIHU_COOKIES',  healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
-  { platform: '知乎小号1', secretEnv: 'ZHIHU_SUB_1', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
-  { platform: '知乎小号2', secretEnv: 'ZHIHU_SUB_2', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
-  { platform: '知乎小号3', secretEnv: 'ZHIHU_SUB_3', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
+  { platform: '知乎主号',  secretEnv: 'ZHIHU_COOKIES',  healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateJsonWithoutError },
+  { platform: '知乎小号1', secretEnv: 'ZHIHU_SUB_1', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateJsonWithoutError },
+  { platform: '知乎小号2', secretEnv: 'ZHIHU_SUB_2', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateJsonWithoutError },
+  { platform: '知乎小号3', secretEnv: 'ZHIHU_SUB_3', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateJsonWithoutError },
   // ── 公众号（4 账号）──────────────────────────────────────────────
   { platform: '公众号主号',  secretEnv: 'GONGZHONGHAO_COOKIES',  healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
   { platform: '公众号小号1', secretEnv: 'GONGZHONGHAO_SUB_1', healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
