@@ -19,7 +19,7 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,controlAcceptance=false}={}){
+export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,controlAcceptance=false,terminalPolicy}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
@@ -37,7 +37,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
   q.execution_transport='raw-model-v1';q.max_turns=4;
   assert.match(q.method.text,/execution_transports:\n\s+- raw-model-v1/,'raw fixture must use actual distributed new Skill bytes');
   const policy=JSON.parse(readFileSync(join(runtimeRoot,'official-gateway-runtime.json'))),pkg=join(directory,'gateway-fixture');mkdirSync(join(pkg,'dist'),{recursive:true});writeFileSync(join(pkg,'package.json'),JSON.stringify({version:policy.gateway_version}));
-  policy.package_root=pkg;policy.agent_config_path=join(directory,'agent-config.json');writeFileSync(policy.agent_config_path,JSON.stringify({agents:{entries:Object.fromEntries(['skill-factory','work-commander'].map(a=>[a,{model:{primary:'openai/gpt-6.1-sol',fallbacks:[]}}]))}}),{mode:0o600});for(const f of policy.files){const bytes='synthetic future runtime policy fixture '+f.path;writeFileSync(join(pkg,f.path),bytes);f.sha256=sha(bytes);}writeFileSync(join(runtimeRoot,'official-gateway-runtime.json'),JSON.stringify(policy));
+  if(terminalPolicy!==undefined){policy.schema_version=2;policy.terminal_policy=terminalPolicy;}policy.package_root=pkg;policy.agent_config_path=join(directory,'agent-config.json');writeFileSync(policy.agent_config_path,JSON.stringify({agents:{entries:Object.fromEntries(['skill-factory','work-commander'].map(a=>[a,{model:{primary:'openai/gpt-6.1-sol',fallbacks:[]}}]))}}),{mode:0o600});for(const f of policy.files){const bytes='synthetic future runtime policy fixture '+f.path;writeFileSync(join(pkg,f.path),bytes);f.sha256=sha(bytes);}writeFileSync(join(runtimeRoot,'official-gateway-runtime.json'),JSON.stringify(policy));
 
  }
  const binding={id:q.binding_id,run_id:q.run_id,workflow_id:'w1',workflow_definition_version_id:'wv1',release_id:'r1',observation_id:'o1',runtime_snapshot_sha256:q.runtime_snapshot_sha256,external_origin:'zenithjoy:mmv',actor:'runtime:phone-adb-controller:agent-v1',task_id:q.task_id};
