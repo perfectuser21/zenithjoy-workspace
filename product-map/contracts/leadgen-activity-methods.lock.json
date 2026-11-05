@@ -262,7 +262,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -559,13 +559,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "8564ca1b3c12e529bbcb3012ccf6d2568156a8be72b86cfc54a953fb18205e07",
+      "code_digest": "5cd5d576b61cd42b9beaf144fdfa490070a592e13c1685e57db88358b4101c21",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "09713bda1ea325bc4102dadc96b774ab7bfb557cc5a6bfcf7c085443a0398da6",
-        "current_code_digest": "8564ca1b3c12e529bbcb3012ccf6d2568156a8be72b86cfc54a953fb18205e07"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "8564ca1b3c12e529bbcb3012ccf6d2568156a8be72b86cfc54a953fb18205e07",
+        "current_code_digest": "5cd5d576b61cd42b9beaf144fdfa490070a592e13c1685e57db88358b4101c21"
       }
     },
     "douyin_video_processing.preflight": {
@@ -871,7 +871,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -1151,13 +1151,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c11aa21469f108d9f4d5260ea67e36f35c8360716e36b8d552c8752e18a4fe97",
+      "code_digest": "4fe3f83fb8e3c94377a55019360f1ad90daf1eeacb4e66f557192efe6a6db937",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "e8b86113a07ba8a6da712517b22c9220e89f050227f8b2378e2e1099b6598416",
-        "current_code_digest": "c11aa21469f108d9f4d5260ea67e36f35c8360716e36b8d552c8752e18a4fe97"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "c11aa21469f108d9f4d5260ea67e36f35c8360716e36b8d552c8752e18a4fe97",
+        "current_code_digest": "4fe3f83fb8e3c94377a55019360f1ad90daf1eeacb4e66f557192efe6a6db937"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1428,7 +1428,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -1711,13 +1711,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "0bea29ec1b4efe4299135a02e573da5f7b8e5452388eb222b7175f034d25f09b",
+      "code_digest": "305a68e5a679b4b8fcd6b93baee31e38a4a567395141433e560bf7de90997616",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "118cec400f176736af40d646ddbd606ddf271663f52c0c383ff86a5a9656d009",
-        "current_code_digest": "0bea29ec1b4efe4299135a02e573da5f7b8e5452388eb222b7175f034d25f09b"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "0bea29ec1b4efe4299135a02e573da5f7b8e5452388eb222b7175f034d25f09b",
+        "current_code_digest": "305a68e5a679b4b8fcd6b93baee31e38a4a567395141433e560bf7de90997616"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2016,7 +2016,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -2355,13 +2355,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "070f51d4e12a4e919fb6edbac8c220f6fe16da5e5b1a4b694db149b733b68ef6",
+      "code_digest": "de8d84b964898499b6eebc2b9be85488b1dde65c03b70c52c369b6366fa53a73",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "e236e03f4c83d2582ad3f6c1b38ffd569d5ea77a751bbe586ca8423625645e01",
-        "current_code_digest": "070f51d4e12a4e919fb6edbac8c220f6fe16da5e5b1a4b694db149b733b68ef6"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "070f51d4e12a4e919fb6edbac8c220f6fe16da5e5b1a4b694db149b733b68ef6",
+        "current_code_digest": "de8d84b964898499b6eebc2b9be85488b1dde65c03b70c52c369b6366fa53a73"
       }
     },
     "douyin_video_processing.collection": {
@@ -2632,7 +2632,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -2937,13 +2937,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "9c3e5c88dc33dca0ddc28172c225601a020699adb14687f45f35cfb4f4db4961",
+      "code_digest": "f0f34375027d477941d3b69176fe29d057551282633e9f356d7e914289907c9a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "ee042ee0d24690b5fce9bb870772b548763cfe6401fb77a45db9735264faf1b0",
-        "current_code_digest": "9c3e5c88dc33dca0ddc28172c225601a020699adb14687f45f35cfb4f4db4961"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "9c3e5c88dc33dca0ddc28172c225601a020699adb14687f45f35cfb4f4db4961",
+        "current_code_digest": "f0f34375027d477941d3b69176fe29d057551282633e9f356d7e914289907c9a"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -3235,7 +3235,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -3514,13 +3514,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1b412e6f17c5485cb29fa5ae56c57d6c9646a2ba2b43420d9813f4c25ca601c2",
+      "code_digest": "82a6b31afcbe2f91cc4b9cae91d707754ea5fc85a44a215557a879d402fb0347",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "d470daf2252193040f9986a3cac387002cc8b4c956e92ee82ff1fe055a783395",
-        "current_code_digest": "1b412e6f17c5485cb29fa5ae56c57d6c9646a2ba2b43420d9813f4c25ca601c2"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "1b412e6f17c5485cb29fa5ae56c57d6c9646a2ba2b43420d9813f4c25ca601c2",
+        "current_code_digest": "82a6b31afcbe2f91cc4b9cae91d707754ea5fc85a44a215557a879d402fb0347"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3784,7 +3784,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -4074,13 +4074,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "0ba1e7cdb33ce4b0fb3104cbecae5fd5d9f2aebaa52e171c7cac3a71f0134426",
+      "code_digest": "51de74bd5add68aa250ffc4d01248ae8eca0155e9e159d6ab80b51a50485735c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "f4f7973bc4aad361ea60794af085515ef720c88bfcdfbac19f7a9d1d664f5032",
-        "current_code_digest": "0ba1e7cdb33ce4b0fb3104cbecae5fd5d9f2aebaa52e171c7cac3a71f0134426"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "0ba1e7cdb33ce4b0fb3104cbecae5fd5d9f2aebaa52e171c7cac3a71f0134426",
+        "current_code_digest": "51de74bd5add68aa250ffc4d01248ae8eca0155e9e159d6ab80b51a50485735c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -4351,7 +4351,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "0a4f221f701abb1d446b315e82687811287d7e805322284204c0d06789cf0731"
+          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
         },
         {
           "kind": "code",
@@ -4676,13 +4676,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "48f006e9f6f5b28409adf639c2c7cbf624592845b4d2a0da32b854f12b57d90d",
+      "code_digest": "704c4630069323da863b3804859338bd7bcee3ed2e9327bbcec8480d408b36fb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Charge observer creation against the existing deadline; stop budget and fail-closed behavior are preserved by real process tests.",
-        "reviewed_by": "codex",
-        "previous_code_digest": "c9fbe892e101d5865b3c0d886f52ae00f574bb751aef97e07e766756acba147e",
-        "current_code_digest": "48f006e9f6f5b28409adf639c2c7cbf624592845b4d2a0da32b854f12b57d90d"
+        "reason": "独立核验base0b2→1358：保持本Activity/Skill/方法版本和业务合同，仅将raw父循环对官方冻结Caller的非法Proxy.get替换为独立冻结composition facade。原Caller未解冻或改写，所有方法以Reflect.apply转发原receiver与原实参，原WeakMap回执/一次性授权/authority/epoch/停止校验仍由原Caller执行；只在派发前保持原dispatched与同turn index追踪，异常/abort/unknown仍走同index stop及原finally seal/close，unknown不settle。旧child/104/模型协议/预算/独立Judge均未更改，属于同强度方法等价实现，非仅日志变更；不证明实机、真实steer或业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "48f006e9f6f5b28409adf639c2c7cbf624592845b4d2a0da32b854f12b57d90d",
+        "current_code_digest": "704c4630069323da863b3804859338bd7bcee3ed2e9327bbcec8480d408b36fb"
       }
     },
     "douyin_lead_outreach.preflight": {
