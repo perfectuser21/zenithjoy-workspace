@@ -19,9 +19,9 @@ function run(body,{status=0,count,existing={}}={}){
   return {result,output:readFileSync(envfile,'utf8'),args:readFileSync(join(dir,'args'),'utf8')};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
-test('both live nightly jobs run identical proxy check before checkout',()=>{
- assert.equal(blocks.length,2);assert.equal(blocks[0],blocks[1]);
- for(const job of ['douyin-read','account-scan']){
+test('Android nightly runs proxy check before checkout',()=>{
+ assert.equal(blocks.length,1);
+ for(const job of ['account-scan']){
   const section=workflow.split(`  ${job}:`)[1].split(/\n  [a-z][a-z-]+:/)[0];
   assert.ok(section.indexOf('Verify GitHub checkout proxy')<section.indexOf('uses: actions/checkout@v4'));
  }
