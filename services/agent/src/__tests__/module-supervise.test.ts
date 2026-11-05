@@ -77,24 +77,19 @@ describe('ModuleManager — 长驻模块保活（supervise）', () => {
     const root = mkRoot();
     installModule(root);
 
-    // 每个 fork 出来的子进程一注册 exit handler 就立即崩溃（模拟"起来就死"的连环崩溃），
-    // 配合 setTimeoutImpl 立即执行重启 → 链式触发，观察退避序列。
-    const crashOnExit = () => {
-      const child = {
-        on: (ev: string, cb: (...a: unknown[]) => void) => {
-          if (ev === 'exit') setTimeout(() => cb(1), 0); // 异步崩溃，避开重入
-        },
-        send: vi.fn(),
-        kill: vi.fn(),
-        connected: true,
-      } as unknown as import('node:child_process').ChildProcess;
-      return child;
-    };
-    const forkImpl = vi.fn(() => crashOnExit());
+    // Manually deliver each child exit and its scheduled restart. This models
+    // the same crash chain without relying on the host to run three timers in 20ms.
+    const children: Array<ReturnType<typeof makeFakeChild>> = [];
+    const forkImpl = vi.fn(() => {
+      const next = makeFakeChild();
+      children.push(next);
+      return next.child;
+    });
+    const scheduled: Array<() => void> = [];
     const delays: number[] = [];
     const setTimeoutImpl = vi.fn((fn: () => void, ms?: number) => {
+      scheduled.push(fn);
       delays.push(ms ?? 0);
-      if (delays.length < 4) fn(); // 触发前几次重启即可观察退避增长
       return 0 as unknown as ReturnType<typeof setTimeout>;
     });
 
@@ -110,13 +105,18 @@ describe('ModuleManager — 长驻模块保活（supervise）', () => {
     });
 
     await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.0' } });
-    // 等首个子进程异步崩溃事件 + 链式重启完成
-    await new Promise((r) => setTimeout(r, 20));
+    expect(forkImpl).toHaveBeenCalledTimes(1);
 
-    // 退避序列必须指数增长：1000, 2000, 4000 ...
-    expect(delays[0]).toBe(1000);
-    expect(delays[1]).toBe(2000);
-    expect(delays[2]).toBe(4000);
+    for (let i = 0; i < 3; i++) {
+      expect(children[i]).toBeDefined();
+      children[i].emit(1);
+      expect(setTimeoutImpl).toHaveBeenCalledTimes(i + 1);
+      if (i < 2) {
+        scheduled[i]();
+        expect(forkImpl).toHaveBeenCalledTimes(i + 2);
+      }
+    }
+    expect(delays).toEqual([1000, 2000, 4000]);
   });
 
   it('退避不超过上限 restartMaxDelayMs', async () => {
