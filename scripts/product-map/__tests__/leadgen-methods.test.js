@@ -211,3 +211,8 @@ for(const name of ['commander-owner-state.mjs','commander-owner-lock.mjs','comma
   assert.equal(after.activities[ref].contract_digest,method.contract_digest);assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
  }
 });
+
+for(const name of ['preflight-judge.mjs','preflight-local-leaves.mjs','preflight-local-step.py','preflight-metadata.mjs','preflight-native-domain.mjs','preflight-pg-stream.mjs','preflight-phone-driver.mjs','preflight-control-scope.mjs','preflight-phone-scope.mjs','config/preflight-control-hosts.json','preflight-pg-dependencies.mjs','preflight-pg-lock.json','phone-lock-root.py'])test('preflight shared source byte pin includes '+name,t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/'+name;put(root,path,readFileSync(join(source,path)));const before=collectMethods(root);put(root,path,Buffer.concat([readFileSync(join(root,path)),Buffer.from('\n')]));const after=collectMethods(root);
+ for(const [ref,method] of Object.entries(before.activities)){assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted shared source '+name);assert.equal(after.activities[ref].contract_digest,method.contract_digest);assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);}
+});

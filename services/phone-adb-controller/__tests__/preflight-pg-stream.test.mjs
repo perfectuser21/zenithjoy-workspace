@@ -66,9 +66,19 @@ test('parent metadata runs the original company freeze and independently reads t
 for(const mismatch of ['host-key','identity'])test('real SSH refuses mismatched '+mismatch+' with no fallback or second leaf',{skip:!supported},async t=>{
  const {readFileSync}=await import('node:fs'),{createHash}=await import('node:crypto');const f=await privatePgSsh(t),{createPreflightPgStream}=await import('../preflight-pg-stream.mjs');
  const hash=path=>createHash('sha256').update(readFileSync(path)).digest('hex');let policy={...f.policy};
- if(mismatch==='host-key'){const path=join(f.directory,'wrong_hosts');writeFileSync(path,'preflight_fixture '+readFileSync(join(f.directory,'identity.pub'),'utf8'),{mode:0o600});policy={...policy,known_hosts:path,known_hosts_sha256:hash(path)};}
+ if(mismatch==='host-key'){const path=join(f.directory,'wrong_hosts');writeFileSync(path,'preflight_fixture '+readFileSync(join(f.directory,'identity.pub'),'utf8'),{mode:0o600});policy={...policy,known_hosts:path,known_hosts_sha256:hash(path),host_key_fingerprint:'SHA256:'+createHash('sha256').update(Buffer.from(readFileSync(join(f.directory,'identity.pub'),'utf8').trim().split(/\s+/)[1],'base64')).digest('base64').replace(/=+$/,'')};}
  else policy={...policy,identity:join(f.directory,'host'),identity_sha256:hash(join(f.directory,'host'))};
  const transport=await createPreflightPgStream({directory:f.directory,policy,deadlineMs:Date.now()+5000});t.after(()=>transport.close());
  const pool=new Pool({...f.connection,max:1,stream:transport.stream});t.after(()=>pool.ended?undefined:pool.end());
  await assert.rejects(()=>pool.query('SELECT 1'));await pool.end();const proof=await transport.seal();assert.equal(proof.leaves.length,1);assert.equal(proof.leaves[0].code,255);
+});
+
+test('actual SSH rejects another globally listed alias key when only the source-pinned fingerprint is permitted',{skip:!supported},async t=>{
+ const {readFileSync}=await import('node:fs'),{createHash}=await import('node:crypto'),{spawnSync}=await import('node:child_process'),f=await privatePgSsh(t),other=await f.otherHost(),{createPreflightPgStream}=await import('../preflight-pg-stream.mjs');
+ const known=f.policy.known_hosts;writeFileSync(known,readFileSync(known,'utf8')+'preflight_fixture '+other.publicKey+'\n',{mode:0o600});
+ // Real baseline authentication using the old whole-file trust set: no PG bytes/SQL.
+ const baseline=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)','/usr/bin/ssh','-F','/dev/null','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','IdentityAgent=none','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+known,'-o','GlobalKnownHostsFile=/dev/null','-o','HostKeyAlias=preflight_fixture','-o','HostKeyAlgorithms=ssh-ed25519','-i',f.policy.identity,'-p',String(other.port),'-l',f.policy.user,'-W','127.0.0.1:'+f.connection.port,'127.0.0.1'],{input:'',encoding:'utf8',timeout:5000});assert.equal(baseline.status,0,baseline.stderr);
+ const policy={...f.policy,port:other.port,known_hosts_sha256:createHash('sha256').update(readFileSync(known)).digest('hex')};
+ const transport=await createPreflightPgStream({directory:f.directory,policy,deadlineMs:Date.now()+5000});f.beforeStop(()=>transport.close());const stream=transport.stream();stream.on('error',()=>{});stream.once('connect',()=>stream.end());stream.resume();stream.connect();
+ const proof=await transport.seal();assert.equal(proof.leaves.length,1);assert.equal(proof.leaves[0].code,255);assert.equal(proof.leaves[0].host_key_fingerprint,f.policy.host_key_fingerprint);assert.equal(proof.leaves[0].host_key_algorithms,'ssh-ed25519');
 });

@@ -2,6 +2,7 @@
 """Fixed preflight local leaf: pure parsing; no subprocess or executable dispatch."""
 import json
 import types
+import tempfile
 import contextlib
 import io
 import os
@@ -46,9 +47,13 @@ def ui_facts(text):
 
 
 
+def is_canonical_tcp_serial(value):
+    return peer('phone-lock-root').is_canonical_tcp_serial(value)
+
+
 def lock_record(root, serial, operation, owner, epoch, receipt=None, precondition=None):
     """Caller validates migrated root; all writers share the existing fcntl guard."""
-    if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', serial) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{1,119}', owner) or re.fullmatch(r'(?:a|attempt)[0-9]+', owner):
+    if not (re.fullmatch(r'[A-Za-z0-9._-]{1,80}', serial) or is_canonical_tcp_serial(serial)) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{1,119}', owner) or re.fullmatch(r'(?:a|attempt)[0-9]+', owner):
         raise ValueError('PREFLIGHT_LOCK_SCOPE')
     if not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', epoch):
         raise ValueError('PREFLIGHT_LOCK_EPOCH')
@@ -65,44 +70,84 @@ def lock_record(root, serial, operation, owner, epoch, receipt=None, preconditio
         lock = root / (serial+'.lock')
         if operation == 'acquire' and precondition is not None:
             precondition()
+        def sync_dir(path):
+            directory_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+
+        def private_value(path):
+            field_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(field_fd) as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 1024:
+                    raise ValueError('PREFLIGHT_LOCK_FIELD')
+                return handle.read(1024).strip()
+
         if operation == 'acquire':
-            # Fresh means fresh: no adoption, stale reap or old review marker removal.
-            lock.mkdir(mode=0o700)
-            for name, value in [('owner', owner), ('preflight_epoch', epoch), ('acquired_at', str(int(time.time())))]:
-                out = os.open(lock / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-                with os.fdopen(out, 'w') as handle:
-                    handle.write(value+'\n');handle.flush();os.fsync(handle.fileno())
+            # Publish all fields and the persistent old-reader barrier together.
+            # A parent crash must never expose an apparently reclaimable lock.
+            if lock.exists() or lock.is_symlink():
+                raise FileExistsError('PREFLIGHT_LOCK_EXISTS')
+            staged = Path(tempfile.mkdtemp(prefix='.preflight-stage-', dir=root))
+            try:
+                fields = [('standalone_review_required', owner), ('owner', owner), ('preflight_epoch', epoch),
+                          ('preflight_proof_required', epoch), ('acquired_at', str(int(time.time())))]
+                for name, value in fields:
+                    out = os.open(staged / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                    with os.fdopen(out, 'w') as handle:
+                        handle.write(value+'\n');handle.flush();os.fsync(handle.fileno())
+                sync_dir(staged)
+                if lock.exists() or lock.is_symlink():
+                    raise FileExistsError('PREFLIGHT_LOCK_EXISTS')
+                os.rename(staged, lock)
+                sync_dir(root)
+            finally:
+                if staged.exists():
+                    for path in staged.iterdir():
+                        path.unlink()
+                    staged.rmdir()
             succeeded = True
-            return {'lock': 'acquired', 'owner': owner, 'epoch': epoch, 'readback_owner': (lock / 'owner').read_text().strip(), 'readback_epoch': (lock / 'preflight_epoch').read_text().strip()}
-        if operation not in ('refresh', 'release', 'quarantine') or lock.is_symlink() or not lock.is_dir() or operation != 'quarantine' and (lock / 'standalone_review_required').exists():
+            return {'lock': 'acquired', 'owner': owner, 'epoch': epoch, 'readback_owner': private_value(lock / 'owner'), 'readback_epoch': private_value(lock / 'preflight_epoch')}
+        if operation not in ('refresh', 'release', 'quarantine') or lock.is_symlink() or not lock.is_dir():
             raise ValueError('PREFLIGHT_LOCK_NOT_RENEWABLE')
-        out = os.open(lock / 'owner', os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(out) as handle:
-            if handle.read(1024).strip() != owner:
-                raise ValueError('PREFLIGHT_LOCK_OWNER')
-        epoch_fd = os.open(lock / 'preflight_epoch', os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(epoch_fd) as handle:
-            if handle.read(1024).strip() != epoch:
-                raise ValueError('PREFLIGHT_LOCK_EPOCH')
+        if private_value(lock / 'owner') != owner:
+            raise ValueError('PREFLIGHT_LOCK_OWNER')
+        if private_value(lock / 'preflight_epoch') != epoch or private_value(lock / 'preflight_proof_required') != epoch:
+            raise ValueError('PREFLIGHT_LOCK_EPOCH')
+        if private_value(lock / 'standalone_review_required') != owner:
+            raise ValueError('PREFLIGHT_LOCK_MARKER')
+        quarantine = lock / 'preflight_quarantined'
         if operation == 'quarantine':
-            marker = lock / 'standalone_review_required'
-            out = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(out, 'w') as handle:
-                handle.write(owner+'\n');handle.flush();os.fsync(handle.fileno())
+            if quarantine.exists():
+                if private_value(quarantine) != epoch:
+                    raise ValueError('PREFLIGHT_LOCK_QUARANTINE_EPOCH')
+            else:
+                out = os.open(quarantine, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                with os.fdopen(out, 'w') as handle:
+                    handle.write(epoch+'\n');handle.flush();os.fsync(handle.fileno())
+                sync_dir(lock)
             succeeded = True
             return {'lock': 'quarantined', 'owner': owner, 'epoch': epoch, 'review_required': True,
-                    'readback_owner': (lock / 'owner').read_text().strip(), 'readback_epoch': (lock / 'preflight_epoch').read_text().strip()}
+                    'readback_owner': private_value(lock / 'owner'), 'readback_epoch': private_value(lock / 'preflight_epoch')}
+        if quarantine.exists() or quarantine.is_symlink():
+            raise ValueError('PREFLIGHT_LOCK_QUARANTINED')
         if operation == 'release':
-            names = {'owner', 'preflight_epoch', 'acquired_at'}
+            names = {'owner', 'preflight_epoch', 'acquired_at', 'standalone_review_required', 'preflight_proof_required'}
             if {p.name for p in lock.iterdir()} != names:
                 raise ValueError('PREFLIGHT_LOCK_INVENTORY')
             for name in names:
                 info = (lock / name).lstat()
                 if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600:
                     raise ValueError('PREFLIGHT_LOCK_INVENTORY')
+            retired = Path(tempfile.mkdtemp(prefix='.preflight-release-', dir=root))
+            os.rename(lock, retired)
+            sync_dir(root)
             for name in names:
-                (lock / name).unlink()
-            lock.rmdir()
+                (retired / name).unlink()
+            retired.rmdir()
+            sync_dir(root)
             if lock.exists() or lock.is_symlink():
                 raise ValueError('PREFLIGHT_LOCK_RELEASE_READBACK')
             succeeded = True

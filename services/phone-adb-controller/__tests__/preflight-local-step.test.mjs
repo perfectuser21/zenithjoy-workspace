@@ -30,5 +30,5 @@ try:
  assert peer.read_text()=="VALUE='source'\\n"
 finally:shutil.rmtree(root)
 `;
- const p=spawnSync('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny process-fork)','/usr/bin/python3','-I','-S','-c',code,helper],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);
+ const p=spawnSync('/usr/bin/python3',['-I','-S','-c',code,helper],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);
 });

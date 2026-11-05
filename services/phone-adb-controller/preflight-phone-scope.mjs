@@ -9,13 +9,21 @@ function profileFacts(env){
  const path=env.DOUYIN_PHONE_REGISTRY||join(userInfo().homedir,'.config/openclaw/douyin-phone-profiles.tsv'),st=lstatSync(path);if(!st.isFile()||st.isSymbolicLink()||(st.mode&0o022)||st.size>1024*1024)fail('PROFILE');const bytes=readFileSync(path);let columns,rows=[];
  for(const line of bytes.toString('utf8').split(/\r?\n/)){const row=line.split('\t');if(['profile','#profile'].includes(row[0])){columns=Object.fromEntries(row.map((name,i)=>[name.replace(/^#/,''),i]));continue;}if(!line.trim()||line.startsWith('#'))continue;if(row[0]===env.P)rows.push(row);}
  if(rows.length!==1)fail('PROFILE');const row=rows[0],value=name=>row[columns?.[name]]?.trim()||'',serial=columns?value('serial'):row[1],model=columns?value('model'):row[2],width=columns?value('width')||value('screen_w'):String(Number(row[3])+1),height=columns?value('height')||value('screen_h'):String(Number(row[4])+1);
- if(serial!==env.SERIAL||!model||columns&&value('enabled')==='false'||![width,height].every(v=>/^\d+$/.test(v)&&Number(v)>0))fail('PROFILE');return {path,sha256:hash(bytes),model,width:Number(width),height:Number(height)};
+ if(serial!==env.SERIAL||!model||columns&&(value('enabled')||'true')!=='true'||![width,height].every(v=>/^\d+$/.test(v)&&Number(v)>0))fail('PROFILE');return {path,sha256:hash(bytes),model,width:Number(width),height:Number(height)};
 }
 function official(proof,source){const r=proof?.receipt;return proof?.execution_stopped===true&&r?.source_commit===source&&r.execution_stopped===true&&r.owner_execution_stopped===true&&r.child_execution_stopped===true&&r.terminal?.runId===r.child_run_id&&Number.isFinite(r.terminal?.endedAt);}
 export function createPreflightRuntime({root,env,frozen,binding,taskId}){
  const createPool=createPreflightPoolFactory({runtimeRoot:root,frozen,env}),fixed=frozen.agent_input;
  const metadata=createPreflightMetadata({directory:env.WFR_RUN_DIR,source:rpcSource(frozen),scope:{workflow:fixed.workflow_key,run:fixed.run_tag,line:fixed.line,profile:fixed.profile,serial:fixed.serial,source_run:fixed.source_run,limit:fixed.limit,sources:frozen.discovery_input?.sources},createPool});
  let current,previous,bootstrapUnknown=false;
+ async function releaseOwned(r){
+   const local=await startPreflightLocalLeaves({root,directory:join(env.WFR_RUN_DIR,'preflight-native-scopes'),sourceFiles:r.sourceFiles,python:r.spec.executables.python,deadlineMs:r.scope.receipt_deadline_ms,env});
+   try{
+    const path=join(r.spec.evidence_root,`${r.identity.owner}-lock-release.json`),result=JSON.parse(await local.run('lock',JSON.stringify({root:r.lockRoot,serial:env.SERIAL,operation:'release',owner:r.identity.owner,epoch:r.epoch,receipt:{path,run:r.identity.owner,profile:env.P,serial:env.SERIAL}})));
+    if(result.lock!=='released'||result.owner!==r.identity.owner||result.epoch!==r.epoch||result.readback_owner!=='none'||result.readback_epoch!=='none')fail('RELEASE_READBACK');
+    appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,epoch:r.epoch,operation:'release',result,at:new Date().toISOString()})+'\n',{mode:0o600});r.owned=false;r.released=true;
+   }catch(error){r.unknown=true;throw error;}finally{const proof=await local.close();if(proof.execution_stopped!==true){r.unknown=true;fail('RELEASE_NATIVE_UNKNOWN');}}
+ }
  const runtime={metadata,supports:()=>false,nativeState:()=>({execution_unknown:bootstrapUnknown||metadata.snapshot().unknown||Boolean(current&&records.get(current)?.unknown)}),
   async prepare(scope,ctx){
    if(!['preflight','cleanup'].includes(scope.activity))fail('ACTIVITY');
@@ -29,9 +37,9 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
    const stable=()=>{if(readFrozen(env.WFR_RUN_DIR).snapshot_sha256!==frozen.snapshot_sha256||readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen).id!==binding.id||Object.entries(sourceFiles).some(([p,h])=>{const file=join(root,p),s=lstatSync(file);return !s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||hash(readFileSync(file))!==h;}))fail('SOURCE');};stable();
    if(binding.task_id===null){if(typeof ctx.verifyPhoneAssociation!=='function')fail('TASK_ASSOCIATION');await ctx.verifyPhoneAssociation({frozen,binding,scope:spec});}else if(binding.task_id!==taskId)fail('TASK_ASSOCIATION');
    const prior=previous&&records.get(previous);if(scope.activity==='cleanup'&&(metadata.snapshot().unknown||!prior||!prior.closed||!(prior.official||prior.noLaunch)||!preflightDomainClosure(prior.domain)||prior.used))fail('CLEANUP_AUTHORITY');if(scope.activity==='cleanup')prior.used=true;
-   if(scope.activity==='cleanup'&&!prior.owned&&!prior.acquireAttempted){
-    const r={identity,scope,ctx,prior,noResources:true,closed:false,noLaunch:false,unknown:false,released:false,owned:false};
-    const handle={identity,activity:'cleanup',phone:async()=>fail('NO_LOCAL_RESOURCE'),heartbeat:async()=>({renewed:true,no_local_resource:true}),async close(proof){if(!skillLaunchDidNotStart(proof,scope)){r.unknown=true;fail('NO_LAUNCH_AUTHORITY');}r.closed=true;r.noLaunch=true;return {domain:'parent-preflight-no-local-actions-v1',execution_stopped:true,physical_cleanup_required:false};},snapshot:()=>({closed:r.closed,official:false,owned:false,unknown:r.unknown,no_resources:true,facts:{physical_cleanup_not_required:true}})};
+   if(scope.activity==='cleanup'&&(prior.noLaunch||!prior.owned&&!prior.acquireAttempted)){
+    const r={identity,scope,ctx,prior,resourceOnlyCleanup:true,closed:false,noLaunch:false,unknown:false,released:false,owned:prior.owned,epoch:prior.epoch,spec:prior.spec,sourceFiles:prior.sourceFiles,lockRoot:prior.lockRoot,stable:prior.stable,assertResources:prior.assertResources};
+    const handle={identity,activity:'cleanup',phone:async()=>fail('NO_LOCAL_RESOURCE'),heartbeat:async()=>({renewed:false,physical_actions:0,resource_only_cleanup:true}),async close(proof){if(!skillLaunchDidNotStart(proof,scope)){r.unknown=true;fail('NO_LAUNCH_AUTHORITY');}r.closed=true;r.noLaunch=true;return {domain:'parent-preflight-no-local-actions-v1',execution_stopped:true,physical_cleanup_required:false};},snapshot:()=>({closed:r.closed,official:false,owned:r.owned,unknown:r.unknown,resource_only_cleanup:true,facts:{physical_cleanup_not_required:true}})};
     r.handle=handle;records.set(handle,r);current=handle;return handle;
    }
    const profile=profileFacts(env),directory=join(env.WFR_RUN_DIR,'preflight-native-scopes',randomUUID());mkdirSync(directory,{recursive:true,mode:0o700});
@@ -60,14 +68,14 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
      if(!stopped&&!noLaunch){r.unknown=true;fail('OFFICIAL_STOP');}return r.proof;
     },snapshot:()=>({closed:r.closed,official:r.official,owned:r.owned,epoch:r.epoch,unknown:r.unknown,facts:structuredClone(r.facts||{})})};r.handle=handle;records.set(handle,r);current=handle;
    if(scope.activity==='preflight'){
-    previous=handle;const version=await adb('version');if(!/Android Debug Bridge version 1\.0\.41/.test(version))fail('ADB_VERSION');
+    previous=handle;r.acquireAttempted=true;await lock('acquire');r.owned=true;const version=await adb('version');if(!/Android Debug Bridge version 1\.0\.41/.test(version))fail('ADB_VERSION');
     await domain.local('route',JSON.stringify({config:env.ZJ_ADB_HOST_CONFIG||join(userInfo().homedir,'.config/zenithjoy/adb-service.json'),policy:spec.policy,serial:env.SERIAL}));
-    const inspected=await r.driver.run('preflight');if(!inspected.split('\n').includes('serial='+env.SERIAL))fail('DEVICE');r.acquireAttempted=true;await lock('acquire');r.owned=true;r.facts={device_verified:true,lock_acquired:true,call_state_idle:true};
+    const inspected=await r.driver.run('preflight');if(!inspected.split('\n').includes('serial='+env.SERIAL))fail('DEVICE');r.facts={device_verified:true,lock_acquired:true,call_state_idle:true};
    }
    return handle;
   },
   canFinalizeNoLocal(scope){
-   const p=previous&&records.get(previous);return Boolean(!bootstrapUnknown&&!metadata.snapshot().unknown&&p?.closed&&(p.official||p.noLaunch)&&!p.unknown&&!p.owned&&!p.acquireAttempted&&preflightDomainClosure(p.domain)&&['task_id','run_id','binding_id','source_commit','profile','serial'].every(k=>scope[k]===p.identity[k]));
+   const p=previous&&records.get(previous);return Boolean(!bootstrapUnknown&&!metadata.snapshot().unknown&&p?.closed&&(p.official||p.noLaunch)&&!p.unknown&&(p.noLaunch&&p.owned||!p.owned&&!p.acquireAttempted)&&preflightDomainClosure(p.domain)&&['task_id','run_id','binding_id','source_commit','profile','serial'].every(k=>scope[k]===p.identity[k]));
   },
   desktopVerificationOptions(){
    const r=records.get(current),cap=r?.desktopCapability;
@@ -77,7 +85,7 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
    }});
   },
   async quarantine(){
-   const r=records.get(current);if(!r)return {verified:false,not_owned:true,physical_actions:0};if(r.noResources||r.released||!r.owned&&!r.acquireAttempted)return {verified:!bootstrapUnknown,not_owned:true,physical_actions:0};
+   const r=records.get(current);if(!r)return {verified:false,not_owned:true,physical_actions:0};if(r.resourceOnlyCleanup&&!r.owned||r.released||!r.owned&&!r.acquireAttempted)return {verified:!bootstrapUnknown,not_owned:true,physical_actions:0};
    r.stable();const deadline=Date.now()+20000; // Existing protective quarantine window; never reopens business/phone admission.
    const local=await startPreflightLocalLeaves({root,directory:join(env.WFR_RUN_DIR,'preflight-native-scopes'),sourceFiles:r.sourceFiles,python:r.spec.executables.python,deadlineMs:deadline,env});let result;
    try{const path=join(r.spec.evidence_root,`${r.identity.owner}-lock-quarantine.json`);result=JSON.parse(await local.run('lock',JSON.stringify({root:r.lockRoot,serial:env.SERIAL,operation:'quarantine',owner:r.identity.owner,epoch:r.epoch,receipt:{path,run:r.identity.owner,profile:env.P,serial:env.SERIAL}})));appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,epoch:r.epoch,operation:'quarantine',authority_domain:'local-resource-protection-only',result,at:new Date().toISOString()})+'\n',{mode:0o600});}
@@ -86,18 +94,14 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId}){
   },
   async release(){
    const r=records.get(current);
-   if(r?.noResources){
+   if(r?.resourceOnlyCleanup){
     if(r.released||!r.closed||!r.noLaunch||r.unknown||Date.now()>=r.scope.receipt_deadline_ms||!runtime.canFinalizeNoLocal(r.scope))fail('RELEASE_AUTHORITY');
+    if(r.owned){await r.assertResources();await releaseOwned(r);return {local_resources_released:1,physical_cleanup_not_required:true,lock_released:1,no_lock:true};}
     r.released=true;appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,operation:'not_acquired_no_local_release',physical_actions:0,observed_at:new Date().toISOString()})+'\n',{mode:0o600});return {local_resources_released:1,physical_cleanup_not_required:true,lock_released:0,no_lock:false};
    }
    runtime.desktopVerificationOptions();
    if(r.released||!r.owned||Date.now()>=r.scope.receipt_deadline_ms)fail('RELEASE_AUTHORITY');await r.assertResources();
-   const local=await startPreflightLocalLeaves({root,directory:join(env.WFR_RUN_DIR,'preflight-native-scopes'),sourceFiles:r.sourceFiles,python:r.spec.executables.python,deadlineMs:r.scope.receipt_deadline_ms,env});
-   try{
-    const path=join(r.spec.evidence_root,`${r.identity.owner}-lock-release.json`),result=JSON.parse(await local.run('lock',JSON.stringify({root:r.lockRoot,serial:env.SERIAL,operation:'release',owner:r.identity.owner,epoch:r.epoch,receipt:{path,run:r.identity.owner,profile:env.P,serial:env.SERIAL}})));
-    if(result.lock!=='released'||result.owner!==r.identity.owner||result.epoch!==r.epoch||result.readback_owner!=='none'||result.readback_epoch!=='none')fail('RELEASE_READBACK');
-    appendFileSync(join(env.WFR_RUN_DIR,'preflight-lock-events.jsonl'),JSON.stringify({...r.identity,epoch:r.epoch,operation:'release',result,at:new Date().toISOString()})+'\n',{mode:0o600});r.owned=false;r.released=true;
-   }catch(error){r.unknown=true;throw error;}finally{const proof=await local.close();if(proof.execution_stopped!==true){r.unknown=true;fail('RELEASE_NATIVE_UNKNOWN');}}
+   await releaseOwned(r);
    return {lock_released:1,no_lock:true};
   },current:()=>current};
  runtimes.add(runtime);return Object.freeze(runtime);

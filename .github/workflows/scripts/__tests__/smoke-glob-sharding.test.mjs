@@ -374,3 +374,8 @@ exec /usr/bin/seq "$@"
  const sleeps=existsSync(join(root,'sleep.trace'))?readFileSync(join(root,'sleep.trace'),'utf8').trim().split('\n'):[];
  assert.ok(sleeps.length<=30);if(mode==='not-ready')assert.equal(sleeps.length,30);assert.ok(sleeps.every(n=>n==='0.5'));
 });
+
+test('Darwin gate executes preflight lifecycle regressions with its own PostgreSQL17 binary and no shared service start',()=>{
+ const doc=parse(readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8')),job=doc.jobs['collection-phone-darwin-test'];assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],10);
+ const run=job.steps.filter(s=>s.run).map(s=>s.run).join('\n');assert.match(run,/brew install postgresql@17/);assert.match(run,/PREFLIGHT_TEST_PG_BIN/);assert.match(run,/services\/phone-adb-controller\/__tests__\/preflight-\*\.test\.mjs/);assert.doesNotMatch(run,/brew services start|pg_ctl.*start/);
+});

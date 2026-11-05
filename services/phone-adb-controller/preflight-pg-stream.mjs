@@ -1,7 +1,8 @@
 // One request, one parent-owned SSH leaf. No remote command or local listening socket.
+import {preflightPinnedKnownHosts} from './preflight-metadata.mjs';
 import {spawn} from 'node:child_process';
 import {Duplex} from 'node:stream';
-import {readFileSync,realpathSync,lstatSync,statSync,appendFileSync} from 'node:fs';
+import {readFileSync,realpathSync,lstatSync,statSync,appendFileSync,openSync,writeFileSync,fsyncSync,closeSync,constants} from 'node:fs';
 import {isAbsolute,join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 const sandbox='/usr/bin/sandbox-exec',profile='(version 1)(allow default)(deny process-fork)';
@@ -27,7 +28,13 @@ export async function createPreflightPgStream({directory,policy,deadlineMs,env=p
  if(policy?.ssh_bin!=='/usr/bin/ssh'||!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(policy.hostname||'')||policy.hostname.split('.').some(n=>Number(n)>255)
    ||!/^[-a-zA-Z0-9_.]{1,200}$/.test(policy.hostkey_alias||'')||!/^[-a-zA-Z0-9_]{1,64}$/.test(policy.user||'')
    ||![policy.port,policy.pg_port].every(p=>Number.isSafeInteger(p)&&p>0&&p<=65535))throw Error('PREFLIGHT_TRANSPORT_POLICY');
- const binary=pin(policy.ssh_bin,policy.ssh_sha256),identity=pin(policy.identity,policy.identity_sha256,{secret:true}),known=pin(policy.known_hosts,policy.known_hosts_sha256);
+ const binary=pin(policy.ssh_bin,policy.ssh_sha256),identity=pin(policy.identity,policy.identity_sha256,{secret:true}),sourceKnown=pin(policy.known_hosts,policy.known_hosts_sha256);
+ const keyAlgorithms={'ssh-ed25519':'ssh-ed25519','ecdsa-sha2-nistp256':'ecdsa-sha2-nistp256','ssh-rsa':'rsa-sha2-512,rsa-sha2-256'}[policy.host_key_kind];if(!keyAlgorithms)throw Error('PREFLIGHT_TRANSPORT_HOST_KEY');
+ const directoryInfo=lstatSync(directory);if(!directoryInfo.isDirectory()||directoryInfo.isSymbolicLink()||directoryInfo.uid!==process.getuid()||(directoryInfo.mode&0o077))throw Error('PREFLIGHT_TRANSPORT_DIRECTORY');
+ const knownBytes=preflightPinnedKnownHosts(readFileSync(sourceKnown,'utf8'),policy.hostkey_alias,policy.host_key_fingerprint,policy.host_key_kind),known=join(directory,'preflight-known-hosts-'+randomUUID());
+ const knownFd=openSync(known,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeFileSync(knownFd,knownBytes);fsyncSync(knownFd);}finally{closeSync(knownFd);}const dirFd=openSync(directory,constants.O_RDONLY|constants.O_NOFOLLOW);try{fsyncSync(dirFd);}finally{closeSync(dirFd);}
+ const knownSha=hash(knownBytes),fileIdentity=path=>{const st=lstatSync(path,{bigint:true});return [st.dev,st.ino,st.uid,st.mode].map(String).join(':');},sourceIdentity=fileIdentity(sourceKnown),derivedIdentity=fileIdentity(known);
+ const checkKnown=()=>{pin(sourceKnown,policy.known_hosts_sha256);pin(known,knownSha,{secret:true});if(fileIdentity(sourceKnown)!==sourceIdentity||fileIdentity(known)!==derivedIdentity)throw Error('PREFLIGHT_TRANSPORT_PIN');};
  const clean={...env};for(const key of Object.keys(clean))if(/^(DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$|SSH_|GIT_SSH|DISPLAY$)/.test(key))delete clean[key];
  const positive=await probe(['/usr/bin/true'],clean,deadlineMs),negative=await probe(['/bin/sh','-c','/usr/bin/true & wait'],clean,deadlineMs);
  if(positive.code!==0||positive.signal||negative.code===0||negative.signal||!/fork: (Operation not permitted|Resource temporarily unavailable)/.test(negative.stderr))throw Error('PREFLIGHT_NOFORK_UNVERIFIED');
@@ -38,7 +45,7 @@ export async function createPreflightPgStream({directory,policy,deadlineMs,env=p
  const snapshot=()=>({sealed,execution_stopped:sealed&&!unknown&&(!used||Boolean(leaf?.ended_at)),leaves:leaf?[structuredClone(leaf)]:[],ledger});
  const streamFactory=()=>{
   assertActive();if(used)throw Error('PREFLIGHT_TRANSPORT_RECONNECT_FORBIDDEN');used=true;
-  const options=['BatchMode=yes','IdentitiesOnly=yes','IdentityAgent=none','StrictHostKeyChecking=yes',`UserKnownHostsFile=${known}`,'GlobalKnownHostsFile=/dev/null',`HostKeyAlias=${policy.hostkey_alias}`,'ProxyCommand=none','ProxyJump=none','LocalCommand=none','PermitLocalCommand=no','ControlMaster=no','ControlPath=none','ControlPersist=no','ForwardAgent=no','ForwardX11=no','ClearAllForwardings=yes','CanonicalizeHostname=no','UpdateHostKeys=no','AddKeysToAgent=no','RequestTTY=no','EscapeChar=none','PKCS11Provider=none','PasswordAuthentication=no','KbdInteractiveAuthentication=no'];
+  const options=['BatchMode=yes','IdentitiesOnly=yes','IdentityAgent=none','StrictHostKeyChecking=yes',`HostKeyAlgorithms=${keyAlgorithms}`,'KnownHostsCommand=none','ForkAfterAuthentication=no',`UserKnownHostsFile=${known}`,'GlobalKnownHostsFile=/dev/null',`HostKeyAlias=${policy.hostkey_alias}`,'ProxyCommand=none','ProxyJump=none','LocalCommand=none','PermitLocalCommand=no','ControlMaster=no','ControlPath=none','ControlPersist=no','ForwardAgent=no','ForwardX11=no','ClearAllForwardings=yes','CanonicalizeHostname=no','UpdateHostKeys=no','AddKeysToAgent=no','RequestTTY=no','EscapeChar=none','PKCS11Provider=none','PasswordAuthentication=no','KbdInteractiveAuthentication=no'];
   const args=['-F','/dev/null',...options.flatMap(v=>['-o',v]),'-i',identity,'-p',String(policy.port),'-l',policy.user,'-W',`127.0.0.1:${policy.pg_port}`,policy.hostname];
   returned=new Promise(r=>{resolveReturned=r;});let connecting=false,timer;
   stream=new Duplex({read(){child?.stdout.resume();},write(b,enc,done){if(!child||sealed)return done(Error('PREFLIGHT_TRANSPORT_CLOSED'));child.stdin.write(b,enc,done);},final(done){child?.stdin.end();done();},destroy(error,done){if(child&&!leaf?.ended_at)child.kill('SIGKILL');done(error);}});
@@ -47,8 +54,8 @@ export async function createPreflightPgStream({directory,policy,deadlineMs,env=p
   stream.connect=()=>{
    if(connecting)throw Error('PREFLIGHT_TRANSPORT_RECONNECT_FORBIDDEN');assertActive();connecting=true;
    // Recheck sensitive pins at first spawn; no SSH/config helper is permitted outside this leaf.
-   pin(binary,policy.ssh_sha256);pin(identity,policy.identity_sha256,{secret:true});pin(known,policy.known_hosts_sha256);
-   leaf={id:randomUUID(),kernel_nofork:true,started_at:null,ended_at:null};record({event:'intent',...leaf});
+   pin(binary,policy.ssh_sha256);pin(identity,policy.identity_sha256,{secret:true});checkKnown();
+   leaf={id:randomUUID(),kernel_nofork:true,host_key_fingerprint:policy.host_key_fingerprint,host_key_algorithms:keyAlgorithms,source_known_hosts_sha256:policy.known_hosts_sha256,known_hosts_sha256:knownSha,started_at:null,ended_at:null};record({event:'intent',...leaf});
    assertActive();
    child=spawn(sandbox,['-p',profile,binary,...args],{env:clean,stdio:['pipe','pipe','pipe']});
    timer=setTimeout(()=>{unknown=true;child.kill('SIGKILL');},Math.max(1,deadlineMs-Date.now()));
@@ -57,7 +64,7 @@ export async function createPreflightPgStream({directory,policy,deadlineMs,env=p
    child.stdin.on('error',error=>{if(!stream.destroyed)stream.destroy(error);});
    let stderrBytes=0;child.stderr.on('data',b=>{stderrBytes+=b.length;if(stderrBytes>32000){unknown=true;child.kill('SIGKILL');}});
    child.once('error',()=>{unknown=true;stream.destroy(Error('PREFLIGHT_SSH_SPAWN_FAILED'));});
-   child.once('close',(code,signal)=>{clearTimeout(timer);leaf.ended_at=new Date().toISOString();leaf.code=code;leaf.signal=signal;try{record({event:'returned',...leaf});}catch{}resolveReturned();if(code!==0&&!stream.destroyed)stream.destroy(Error('PREFLIGHT_SSH_REQUEST_FAILED'));});
+   child.once('close',(code,signal)=>{clearTimeout(timer);leaf.ended_at=new Date().toISOString();leaf.code=code;leaf.signal=signal;try{checkKnown();}catch{unknown=true;}try{record({event:'returned',...leaf});}catch{}resolveReturned();if(code!==0&&!stream.destroyed)stream.destroy(Error('PREFLIGHT_SSH_REQUEST_FAILED'));});
    return stream;
   };return stream;
  };

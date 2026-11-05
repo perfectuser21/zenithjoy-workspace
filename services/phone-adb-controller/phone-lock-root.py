@@ -87,8 +87,15 @@ def verify_root(root):
     verify(root)
 
 
+def is_canonical_tcp_serial(value):
+    if not isinstance(value, str) or len(value) > 21:
+        return False
+    match = re.fullmatch(r'((?:[0-9]{1,3}\.){3}[0-9]{1,3}):([1-9][0-9]{0,4})', value)
+    return bool(match and all(str(int(part)) == part and int(part) <= 255 for part in match[1].split('.')) and int(match[2]) <= 65535)
+
+
 def check_serial(root, serial):
-    require(re.fullmatch(r'[A-Za-z0-9._-]{1,80}', serial) is not None, 'invalid serial')
+    require(re.fullmatch(r'[A-Za-z0-9._-]{1,80}', serial) is not None or is_canonical_tcp_serial(serial), 'invalid serial')
     record = verify(root)
     durable = Path(root) / (serial + '.lock')
     legacy = Path(record['legacy_root']) / (serial + '.lock')

@@ -282,8 +282,12 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 
 101/102 Agent 预检使用父进程内的原关键词、公司冻结函数及独立 Judge、记录函数。物理操作只有固定、来源绑定的 nofork ADB/Python 叶，不再启动旧 controller shell。PG 控制面、本机物理叶和官方 Commander/Worker 双停分别留证：本机叶关闭不证明远端 PG 服务或 Android 应用进程全集停止；PG 提交未知仍保留未知，官方停证也不能由本机证明代替。
 
-正常失败可凭同源码、Task、binding、owner、epoch 的私有能力进入一次独立清理域。桌面解析在该域 seal 前执行原完整解析器，随后只读核验原件摘要和最后物理序号；资源释放后 Judge 仍可核验这份不可变事实，不再启动解析子进程。尚未尝试本地锁且未进行界面操作的失败只归还本人已知资源，跳过关闭应用、Home 和清理 Worker；缺桌面条件仍由原 Judge 判失败，不伪造成功指标。
+正常失败可凭同源码、Task、binding、owner、epoch 的私有能力进入一次独立清理域。桌面解析在该域 seal 前执行原完整解析器，随后只读核验原件摘要和最后物理序号；资源释放后 Judge 仍可核验这份不可变事实，不再启动解析子进程。未派发 Worker 且未进行界面操作的失败只归还本人已知资源，跳过关闭应用、Home 和清理 Worker；缺桌面条件仍由原 Judge 判失败，不伪造成功指标。
 
 Worker 截止后不再准入新业务或手机动作，原 receipt 窗口只用于收口、纯读验收和停证。超时或未知之后，原有独立 20 秒隔离保护窗仅允许固定 nofork 叶核对本人 owner+epoch 并写持久隔离标记；不续租、不释放、不恢复业务，也不把标记当停止证明。整轮后的 span/flush 属于独立交付域，这份预检能力不声称覆盖它们。
 
 若候选 manifest 明确声明 `dependencies.preflight_pg`，冻结事务先完整核验候选实际依赖摘要，再用其 14 个已验证 tarball 离线重建 run 私有依赖并独立读回，零下载、零安装脚本、不建立软链或全局 fallback。Code/104 只获得声明中不可变 artifact 的副本，不新增 Agent 字段或业务能力；原无依赖输入保持原快照格式。
+
+预检在第一次 ADB 请求（包括只读请求）前原子发布带 epoch 与强制审查标记的本人本地锁。普通命令失败与 host 叶子停止证明分开记录；缺停止证明时标记保留，旧 TTL 回收入口不得重领。Worker 从未派发且未做 UI 操作时，仅 Code 私有 NoLaunch 能力可授权释放同 owner/epoch 的资源，原桌面指标保持 0，原 Judge 仍可判 needs_review。
+
+控制面拒绝带 query/hash 或歧义 authority 的数据库 URI，并拒绝非空 PG* 环境覆盖；不改进程全局环境。SSH 只使用由已冻结 known_hosts 提取的唯一期望 key 的 run 私有副本与精确 HostKeyAlgorithms，原全局文件不变。上述证明覆盖本机受控叶子与连接返还，不代表远端 PG 提交结果、Android App 全集或尚未闭合的正式 Caller。

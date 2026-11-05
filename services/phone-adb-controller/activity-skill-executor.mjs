@@ -79,7 +79,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    try{return (await rpc({kind:'activity_skill_stop',request,reason},{timeoutMs:Math.max(1,Math.min(48000,deadline-Date.now()))})).result;}
    catch{return {execution_stopped:false};}
   };
-  const abort=()=>{abortJob=Promise.resolve(broker?.abort('runner_cancelled')).catch(()=>{});};
+  const abort=()=>{if(dispatched)abortJob=Promise.resolve(broker?.abort('runner_cancelled')).catch(()=>{});};
   try{
    const preparation=await tools.prepare();
    if(activity.key==='cleanup'&&preparation?.native_cleanup_not_required===true){
@@ -87,8 +87,9 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     if(typeof tools.closeNativeScope!=='function'||(await tools.closeNativeScope(proof))?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');
     await tools.settle(proof);await tools.release(proof);const result=tools.getResult();
     if(result?.execution_stopped===false)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');
-    return {status:'partial',not_started:true,execution_stopped:true,result,reason:'未持有本地设备资源，未启动清理Worker；原验收条件仍需复核'};
+    return {status:'partial',not_started:true,execution_stopped:true,result,reason:'未启动清理Worker，仅收回本人资源；原验收条件仍需复核'};
    }
+   if(signal?.aborted||Date.now()>=workerDeadline)throw Error('AGENT_PRIMARY_DEADLINE_EXHAUSTED_BEFORE_DISPATCH');
    broker=await startPrimaryActivityBroker({directory,request,inspect:tools.inspect,phone:tools.phone,business:tools.business,
     isReadOnlyBusinessOperation:(operation,input)=>tools.canReadback?.(operation,input)===true,
     getActivityResult:tools.getResult,onEvent:async event=>{if(event.type==='progress')lastProgress=Date.now();return onEvent(event);},onAbort:stop,
@@ -131,8 +132,8 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     execution_stopped:true,result:actual.result,commander_status:actual.commander_status,skill_receipt:receipt};
   }catch(error){
    caughtError=error;
-   if(broker&&!stopped){
-    const sealed=broker.seal();
+   const sealed=broker?.seal();
+   if(broker&&dispatched&&!stopped){
     // A child-only stop acknowledgement never proves that its parent returned.
     error.executionStopped=false;
     const stopReceipt=await stop('execution_failed');

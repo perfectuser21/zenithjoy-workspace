@@ -5,8 +5,12 @@ const path='config/preflight-control-hosts.json',repo='perfectuser21/zenithjoy-w
 const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
 const fail=()=>{throw Error('PREFLIGHT_CONTROL_SCOPE');};
 function privateBytes(file){const st=lstatSync(file);if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||st.size>256*1024)fail();return readFileSync(file);}
+function assertNoAmbientPg(env={}){
+ if([process.env,env].some(values=>Object.entries(values).some(([name,value])=>/^PG[A-Z_]*$/.test(name)&&value!==undefined&&value!=='')))fail();
+}
 function material({root,env,runtimeTransport}){
  try{
+  assertNoAmbientPg(env);
   const manifest=JSON.parse(readFileSync(join(root,'deployment-manifest.json'),'utf8')),entry=manifest.files?.find(x=>x.deployed_path===path),bytes=readFileSync(join(root,path));
   if(manifest.source_repo!==repo||!/^[a-f0-9]{40}$/.test(manifest.source_commit||'')||entry?.path!=='services/phone-adb-controller/'+path||entry.content_sha256!==sha(bytes))fail();
   const policy=JSON.parse(bytes);if(policy.version!==1||!Array.isArray(policy.hosts))fail();const rows=policy.hosts.filter(h=>h.target===manifest.target);if(rows.length!==1)fail();const h=rows[0],home=realpathSync(userInfo().homedir);
@@ -14,7 +18,7 @@ function material({root,env,runtimeTransport}){
   const identity=policy.database_identity;if(!identity?.database||!identity.role||!/^\d{1,30}$/.test(identity.system_identifier||''))fail();
   const credentials=join(home,'.credentials/zenithjoy-db.env'),credentialBytes=privateBytes(credentials),lines=credentialBytes.toString('utf8').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith('#'));
   if(lines.length!==1||!lines[0].startsWith('DATABASE_URL='))fail();let uri=lines[0].slice(13);if(/^(['"]).*\1$/.test(uri))uri=uri.slice(1,-1);const url=new URL(uri);
-  if(!['postgres:','postgresql:'].includes(url.protocol)||url.hostname!=='127.0.0.1'||url.port!=='15532'||decodeURIComponent(url.username)!==identity.role||!url.password||url.pathname!=='/'+identity.database)fail();
+  if(!/^postgres(?:ql)?:\/\/[^\s/@]+@127\.0\.0\.1:15532\/[^?#\s/]+$/.test(uri)||url.search||url.hash||!['postgres:','postgresql:'].includes(url.protocol)||url.hostname!=='127.0.0.1'||url.port!=='15532'||decodeURIComponent(url.username)!==identity.role||!url.password||url.pathname!=='/'+identity.database)fail();
   const scope={version:1,target:manifest.target,source_commit:manifest.source_commit,policy_sha256:sha(bytes),mode:h.mode,credentials_path:credentials,credentials_sha256:sha(credentialBytes),database_identity:structuredClone(identity)};
   if(h.mode==='ssh'){
    const ssh=h.ssh;if(ssh?.ssh_bin!=='/usr/bin/ssh'||!/^[a-f0-9]{64}$/.test(ssh.ssh_sha256||'')||sha(readFileSync(ssh.ssh_bin))!==ssh.ssh_sha256||ssh.port!==22||!/^[-A-Za-z0-9_]+$/.test(ssh.user||''))fail();
@@ -44,7 +48,7 @@ export function createPreflightPoolFactory({runtimeRoot,frozen,env}){
   const {uri}=material({root:runtimeRoot,env,runtimeTransport:frozen.runtime_transport});let transport,pool;
   if(scope.mode==='ssh'){
    const {createPreflightPgStream}=await import('./preflight-pg-stream.mjs');transport=await createPreflightPgStream({directory:env.WFR_RUN_DIR,policy:scope.ssh,deadlineMs});
-   pool=new Pool({connectionString:uri,max:1,stream:transport.stream,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'});
+   assertNoAmbientPg(env);pool=new Pool({connectionString:uri,max:1,stream:transport.stream,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'});
   }else{
    ({pool,transport}=createPreflightLocalPool({Pool,connectionString:uri,deadlineMs}));
   }
@@ -55,6 +59,7 @@ export function createPreflightPoolFactory({runtimeRoot,frozen,env}){
 // One private Pool per admitted metadata request. Ending its owned clients is
 // transport closure only; the metadata caller preserves all commit uncertainty.
 export function createPreflightLocalPool({Pool,connectionString,deadlineMs}){
+ assertNoAmbientPg();
  if(!Number.isSafeInteger(deadlineMs)||Date.now()>=deadlineMs)throw Error('PREFLIGHT_CONTROL_DEADLINE');
  const pool=new Pool({connectionString,max:1,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),query_timeout:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'}),clients=new Set();let timedOut=false,closed=false,closing;
  pool.on('connect',client=>{clients.add(client);if(closed||Date.now()>=deadlineMs){timedOut=true;void client.end().catch(()=>{});}});pool.on('remove',client=>clients.delete(client));

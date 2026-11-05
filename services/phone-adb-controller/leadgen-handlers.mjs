@@ -287,7 +287,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     if(state.executionUnknown)throw Object.assign(Error('AGENT_PRIMARY_NATIVE_UNKNOWN'),{executionStopped:false});
     if(needsCentralLock){
       await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
-      if(locked){await getCentral().ensure();await getCentral().verifyHeld();}
+      if(locked||trustedPreflight&&getCentral().held){await getCentral().ensure();await getCentral().verifyHeld();}
       else if(scope.activity==='cleanup'&&trustedPreflight&&preflightRuntime.canFinalizeNoLocal(scope)){await getCentral().verifyHeld();}
       else if(scope.activity!=='preflight'&&!agent.facts.released)throw Error('AGENT_PRIMARY_RESOURCE_NOT_HELD');
       if(!readOnly&&leased.length&&scope.activity!=='cleanup'){
@@ -345,7 +345,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     if(scope.activity==='collect_videos')discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,verifyPhoneAssociation});
     if(scope.activity==='collection'&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation});
     if(scope.activity==='cleanup'){
-      if(trustedPreflight){preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});return preflightScope.snapshot().no_resources?{native_cleanup_not_required:true}:undefined;}
+      if(trustedPreflight){preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});return preflightScope.snapshot().resource_only_cleanup?{native_cleanup_not_required:true}:undefined;}
       if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
       if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
     }
@@ -717,7 +717,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         return {...marked,bridge,mark_leads_readback_failures:readback.failures||0,bridge_readback_failures:(bridgeReadback.failures||0)+(bridge.verified===false?1:0),...(bridge.verified===false?{status:'partial'}:{})};
       }
       if(activity.key==='cleanup'){
-        if(trustedPreflight&&preflightScope.snapshot().no_resources){await preflightScope.close(proof);return {status:'needs_review',physical_cleanup_not_required:true,close_app_attempts:0,safe_desktop_visible:0,lock_released:0};}
+        if(trustedPreflight&&preflightScope.snapshot().resource_only_cleanup){await preflightScope.close(proof);return {status:'needs_review',physical_cleanup_not_required:true,close_app_attempts:0,safe_desktop_visible:0,lock_released:0};}
         if(trustedPreflight){await preflightScope.close(proof,{close_stdout:agent.facts.close_stdout,desktop_stdout:agent.facts.desktop_stdout,xml:readNative(agent.facts.cleanup_xml),png:readFileSync(agent.facts.cleanup_png)});}
         const nativeOptions=trustedPreflight?preflightRuntime.desktopVerificationOptions():undefined;
         if(!agent.facts.close_stdout||!agent.facts.desktop_stdout||!agent.facts.cleanup_png||!agent.facts.cleanup_xml)throw Error('AGENT_PRIMARY_CLEANUP_NATIVE_MISSING');
@@ -738,7 +738,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       throw Error('AGENT_PRIMARY_RESULT_ADAPTER_UNAVAILABLE');
     };
     const release=async()=>{
-      if(activity.key!=='cleanup'||state.executionUnknown||!agent.facts.cleanup_proof&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!(trustedPreflight&&preflightScope.snapshot().no_resources))throw Error('AGENT_PRIMARY_CLEANUP_UNVERIFIED');
+      if(activity.key!=='cleanup'||state.executionUnknown||!agent.facts.cleanup_proof&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!(trustedPreflight&&preflightScope.snapshot().resource_only_cleanup))throw Error('AGENT_PRIMARY_CLEANUP_UNVERIFIED');
       for(const v of leased){const r=await queue('release_video',{video_id:v.video_id});if(r.released!==true)throw Error('AGENT_PRIMARY_VIDEO_RELEASE_UNVERIFIED');}
       let localRelease={lock_released:1,no_lock:true};if(trustedPreflight)localRelease=await preflightRuntime.release();else{const raw=await phone('lock-release',run);if(!raw.startsWith('lock=released'))throw Error('AGENT_PRIMARY_LOCK_RELEASE_UNVERIFIED');}locked=false;
       const centralReleased=await getCentral().release();if(!centralReleased)throw Error('AGENT_PRIMARY_CENTRAL_RELEASE_UNVERIFIED');

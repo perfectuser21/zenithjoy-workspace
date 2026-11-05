@@ -349,6 +349,12 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --workspaces=false
+      - name: Prepare private preflight PostgreSQL 17 test binary
+        run: |
+          brew install postgresql@17
+          echo "PREFLIGHT_TEST_PG_BIN=$(brew --prefix postgresql@17)/bin" >> "$GITHUB_ENV"
+      - name: Run preflight native lifecycle tests on Darwin
+        run: node --test --test-concurrency=1 services/phone-adb-controller/__tests__/preflight-*.test.mjs
       - name: Require real Darwin kernel tests
         run: |
           node -e "if(process.platform!=='darwin')process.exit(1)"

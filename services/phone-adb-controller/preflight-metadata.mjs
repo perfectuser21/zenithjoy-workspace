@@ -69,7 +69,7 @@ export function preflightSshIdentityFingerprint(bytes){
   return fingerprint(Buffer.concat([sshString(Buffer.from('ssh-rsa')),sshString(mpint('e')),sshString(mpint('n'))]));
  }catch{throw fail('PREFLIGHT_CONTROL_IDENTITY');}
 }
-export function preflightKnownHostKey(text,alias,expected){
+function selectPreflightKnownHostKey(text,alias,expected){
  try{
   const matches=token=>{
    if(token===alias)return true;if(!token.startsWith('|1|'))return false;const parts=token.split('|');if(parts.length!==4)return false;
@@ -81,8 +81,15 @@ export function preflightKnownHostKey(text,alias,expected){
    const marked=fields[0].startsWith('@'),hosts=fields[marked?1:0],kind=fields[marked?2:1],blob=fields[marked?3:2];
    if(!hosts||!blob||!hosts.split(',').some(matches))continue;
    if(fingerprint(Buffer.from(blob,'base64'))!==expected)continue;
-   if(marked||!['ssh-ed25519','ssh-rsa','ecdsa-sha2-nistp256'].includes(kind))throw Error();selected.push(kind);
+   if(marked||!['ssh-ed25519','ssh-rsa','ecdsa-sha2-nistp256'].includes(kind))throw Error();selected.push({kind,blob:Buffer.from(blob,'base64').toString('base64')});
   }
   if(selected.length!==1)throw Error();return selected[0];
  }catch{throw fail('PREFLIGHT_CONTROL_HOST_KEY');}
+}
+
+export function preflightKnownHostKey(text,alias,expected){return selectPreflightKnownHostKey(text,alias,expected).kind;}
+export function preflightPinnedKnownHosts(text,alias,expected,kind){
+ if(!/^[-A-Za-z0-9_.]{1,200}$/.test(alias||''))throw fail('PREFLIGHT_CONTROL_HOST_KEY');
+ const entry=selectPreflightKnownHostKey(text,alias,expected);if(entry.kind!==kind)throw fail('PREFLIGHT_CONTROL_HOST_KEY');
+ return Buffer.from(alias+' '+entry.kind+' '+entry.blob+'\n');
 }
