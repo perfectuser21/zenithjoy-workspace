@@ -174,9 +174,9 @@ tests:
     path: sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts
     type: integration
     ci: L4
-    status: active
+    status: pending-ci
     product: AI员工
-    note: "Sprint 07310943：真 Postgres 验证不可逆取消、心跳、绑定回执与稳定设备冷却"
+    note: "历史合同含已退役 collect/start 成功断言，不能作为现役 CI；独有取消/租户/回执保护待逐项迁移。当前 acquisition-cancel-uuid-agent.integration.test.ts 保留部分真实 PostgreSQL 回执覆盖，不声称全量替代。"
 
   - id: acquisition-cancel-workflow-contract
     path: sprints/07310943-kernel-0e82adad/tests/workflow-cancel-contract.test.ts
@@ -3069,6 +3069,14 @@ tests:
     status: active
     product: 新媒体运营
     note: "ZJ1 Smart Acquisition WS1 — GET /api/acquisition/overview TDD 合同测试"
+
+  - id: legacy-acquisition-retired-writes
+    path: apps/api/src/routes/acquisition-retirement.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Retired Kotlin acquisition endpoints fail closed after tenant resolution; historical reads and in-flight callbacks remain available.
 
   - id: zj1-smart-acquisition-route-unit
     path: apps/api/src/routes/acquisition.test.ts

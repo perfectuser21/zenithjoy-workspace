@@ -19,6 +19,7 @@ import pool from '../db/connection';
 import { writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
+import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
 import { simpleRateLimit } from '../middleware/simple-rate-limit';
 
 // CodeQL js/missing-rate-limiting：/account-scan-result 无 tenantContext（鉴权靠 body.agent_id
@@ -133,7 +134,7 @@ async function getFeishuBinding(tenantId: string) {
 // ── 1. POST /qr-bind — 派 burner 绑定 task ──
 // architecture（2026-05-10 hotfix）：tenantContext + agentContext 自动 resolve
 // frontend / lead 自验仅传 { account_label } 即可；body explicit tenant_id/agent_id 仍兼容
-router.post('/qr-bind', tenantContextOptional, agentContext, async (req: Request, res: Response) => {
+router.post('/qr-bind', tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const { account_label } = req.body || {};
   // middleware 注入或 body 显式（agentContext 内部已处理 body 优先）
   const tenant_id = req.body?.tenant_id || req.tenantId;
@@ -404,7 +405,7 @@ router.post('/sessions/invalidate', agentContext, async (req: Request, res: Resp
 
 // ── 4. POST /crawl-comments — 派抓评论 task ──
 // architecture（2026-05-10 hotfix）：同 qr-bind，tenantContext + agentContext 自动 resolve
-router.post('/crawl-comments', tenantContextOptional, agentContext, async (req: Request, res: Response) => {
+router.post('/crawl-comments', tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const { account_label, video_url } = req.body || {};
   const tenant_id = req.body?.tenant_id || req.tenantId;
   const agent_id = req.body?.agent_id || req.agentId;
@@ -600,7 +601,7 @@ router.get('/crawl-tasks/:task_id', async (req: Request, res: Response) => {
 const DM_SESSION_KILLERS = ['SESSION_EXPIRED', 'RISK'];
 
 // ── 7. POST /dm-outreach — 派私信触达单 ──
-router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Request, res: Response) => {
+router.post('/dm-outreach', tenantContextOptional, agentContext, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const { account_label, profile_url, message } = req.body || {};
   const tenant_id = req.body?.tenant_id || req.tenantId;
   const agent_id = req.body?.agent_id || req.agentId;

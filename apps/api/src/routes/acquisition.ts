@@ -13,9 +13,10 @@ import { tenantContext, tenantContextOptional } from '../middleware/tenant-conte
 import { licenseAuth } from '../middleware/license-auth';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
-import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
+import { buildAssignments, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 import { judgeVideo } from '../services/content-judgment';
+import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
 import { gradeComments } from '../services/comment-grading';
 
 export const acquisitionRouter = Router();
@@ -738,7 +739,7 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
 });
 
 // POST /api/acquisition/collect/start
-acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const keywords: unknown = req.body?.keywords;
@@ -848,6 +849,7 @@ acquisitionRouter.post(
   '/account-scan/trigger',
   tenantContextOptional,
   accountScanTriggerRateLimit,
+  legacyAcquisitionRetired,
   async (req: Request, res: Response) => {
     const tenantId = tenantOf(req, res);
     if (!tenantId) return;
@@ -1494,17 +1496,12 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     );
     await client.query('COMMIT');
 
-    // ── COMMIT 之后：SSE + dispatch（只在本次真进终态且任务有 leads 时点火一次）──
+    // COMMIT 后保留旧任务的 SSE 回执，不再创建或派发新任务。
     afterCommit = () => {
       const ssePayload = { task_id: taskId, status: newStatus, video_count: videoTotal, lead_count_raw: leadCountAfter };
       if (isTerminal) sseService.close(taskId, ssePayload);
       else sseService.emit(taskId, ssePayload);
-      if (s.changed && isTerminal && leadCountAfter > 0) {
-        void scoreLeads(pool, tenantId)
-          .then(() => buildAssignments(pool, tenantId))
-          .then(() => dispatchDue(pool, tenantId))
-          .catch((e: Error) => console.error('[acquisition] collect/report dm-dispatch error:', e.message));
-      }
+
     };
 
     return ok(res, {
@@ -1541,7 +1538,6 @@ export async function sweepCollectTimeouts(): Promise<{ swept: number }> {
     [cutoffMs]
   );
   let swept = 0;
-  const dispatchTenants = new Set<string>();
   for (const t of rows) {
     const s = settleCollectTask({
       currentStatus: t.status,
@@ -1562,16 +1558,7 @@ export async function sweepCollectTimeouts(): Promise<{ swept: number }> {
       [t.id, s.status, s.error_code, t.status]
     );
     swept += r.rows.length;
-    if (r.rows.length > 0 && s.status === 'partial' && t.lead_count > 0 && t.tenant_id) {
-      dispatchTenants.add(t.tenant_id);
-    }
-  }
-  // sweep 收尸为 partial 且有 leads 的任务，补一次 dm-dispatch 链（同租户去重只触发一次）
-  for (const tenantId of dispatchTenants) {
-    void scoreLeads(pool, tenantId)
-      .then(() => buildAssignments(pool, tenantId))
-      .then(() => dispatchDue(pool, tenantId))
-      .catch((e: Error) => console.error('[acquisition] sweep-timeouts dm-dispatch error:', e.message));
+
   }
   return { swept };
 }
@@ -1721,7 +1708,7 @@ acquisitionRouter.post('/rescore-lead', tenantContextOptional, async (req: Reque
 });
 
 // POST /api/acquisition/build-assignments — 手动触发 DM 指派（commit-4/5）
-acquisitionRouter.post('/build-assignments', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.post('/build-assignments', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
 

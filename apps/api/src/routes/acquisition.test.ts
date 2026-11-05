@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { acquisitionRouter } from './acquisition';
 import db from '../db/connection';
-import { scoreLeads } from '../services/acquisition-dispatch';
+import { scoreLeads, buildAssignments, dispatchDue } from '../services/acquisition-dispatch';
 
 const mockClientQuery = vi.fn();
 const mockClientRelease = vi.fn();
@@ -360,128 +360,7 @@ describe('GET /api/acquisition/pending-collect-tasks — Stage2 排除已 reject
   });
 });
 
-describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-  afterEach(() => vi.mocked(db.query).mockReset().mockResolvedValue({ rows: [] } as any));
-
-  it('body 带 agent_id → INSERT 时写入 acquisition_collect_tasks.agent_id', async () => {
-    const mod = await import('../db/connection');
-    collectStartFixture();
-
-    const response = await request(app)
-      .post('/api/acquisition/collect/start')
-      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
-      .send({ keywords: ['装修'], agent_id: 'agent-A' });
-
-    expect(response.status).toBe(200);
-    expect(response.body.data.task_id).toBe('fixture-task');
-    const calls = (mod.default.query as any).mock.calls;
-    const insertCall = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_collect_tasks/.test(c[0]));
-    expect(insertCall).toBeTruthy();
-    const [sql, params] = insertCall;
-    expect(sql).toMatch(/agent_id/);
-    expect(params).toContain('agent-A');
-  });
-});
-
-// Model each real DB operation rather than depending on call order: a configured
-// DATABASE_URL also enables the machine-cooldown read before the session lookup.
-function collectStartFixture(boundAgent: string | null = 'agent-burner-machine') {
-  vi.mocked(db.query).mockReset();
-  vi.mocked(db.query).mockImplementation(async (sql: any) => {
-    const text = String(sql);
-    if (text.includes('JOIN zenithjoy.license_machines')) return { rows: [] } as any;
-    if (text.includes('FROM zenithjoy.agent_platform_sessions'))
-      return { rows: boundAgent ? [{ agent_id: boundAgent }] : [] } as any;
-    if (text.includes('FROM zenithjoy.line02_account_sessions')) return { rows: [] } as any;
-    if (text.includes('INSERT INTO zenithjoy.acquisition_collect_tasks'))
-      return { rows: [{ id: 'fixture-task' }], rowCount: 1 } as any;
-    throw new Error(`Unexpected collect/start DB operation: ${text}`);
-  });
-}
-
-// ────── 方案 D：burner 账号自动路由 ──────
-// 采集任务本质要用某个抖音小号的 cookie session 登录去抓，所以任务必须派到
-// 持有该 session 的机器上；account_label 解析出的 agent_id 覆盖客户端直传的 agent_id
-// （物理约束优先于用户手选的机器）。
-describe('POST /api/acquisition/collect/start — burner account_label 自动路由 [REGRESSION]', () => {
-  afterEach(() => { vi.unstubAllEnvs(); vi.mocked(db.query).mockReset().mockResolvedValue({ rows: [] } as any); });
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  it('account_label 查不到 active burner session → 400 BURNER_SESSION_NOT_FOUND', async () => {
-    collectStartFixture(null);
-
-    const res = await request(app)
-      .post('/api/acquisition/collect/start')
-      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
-      .send({ keywords: ['装修'], account_label: 'burner-not-bound' });
-
-    expect(res.status).toBe(400);
-    expect(res.body?.error?.code).toBe('BURNER_SESSION_NOT_FOUND');
-  });
-
-  it('account_label 命中 active burner session → INSERT 用该 session 的 agent_id（覆盖 body.agent_id）', async () => {
-    const mod = await import('../db/connection');
-    collectStartFixture();
-    vi.stubEnv('DATABASE_URL', 'postgresql://ci:ci@127.0.0.1:1/isolated');
-
-    const response = await request(app)
-      .post('/api/acquisition/collect/start')
-      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
-      .send({ keywords: ['装修'], account_label: 'burner-1', agent_id: 'agent-manually-picked' });
-
-    expect(response.status).toBe(200);
-    expect(response.body.data.task_id).toBe('fixture-task');
-    vi.unstubAllEnvs();
-    const calls = (mod.default.query as any).mock.calls;
-    const insertCall = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_collect_tasks/.test(c[0]));
-    expect(insertCall).toBeTruthy();
-    const [, params] = insertCall;
-    expect(params).toContain('agent-burner-machine');
-    expect(params).not.toContain('agent-manually-picked');
-  });
-
-  it('查 session 时必须限定 role=burner + status=active + 本租户', async () => {
-    const mod = await import('../db/connection');
-    collectStartFixture('agent-x');
-
-    await request(app)
-      .post('/api/acquisition/collect/start')
-      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
-      .send({ keywords: ['装修'], account_label: 'burner-1' });
-
-    const sessionCall = (mod.default.query as any).mock.calls[0];
-    const [sql, sqlParams] = sessionCall;
-    expect(sql).toMatch(/role\s*=\s*'burner'/);
-    expect(sql).toMatch(/status\s*=\s*'active'/);
-    expect(sqlParams).toContain('4807edc7-da2a-4e8d-9223-31f4d25c12c6');
-    expect(sqlParams).toContain('burner-1');
-  });
-});
-
-describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]', () => {
-  afterEach(() => vi.mocked(db.query).mockReset().mockResolvedValue({ rows: [] } as any));
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  it('带 x-test-tenant-id + keywords → 用 session tenant 派单（不拿 body 占位）', async () => {
-    collectStartFixture();
-    const res = await request(app)
-      .post('/api/acquisition/collect/start')
-      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
-      .send({ keywords: ['装修'], tenant_id: 'current' }); // spoofed tenant must be ignored
-    expect(res.status).toBe(200);
-    expect(res.body.data.task_id).toBe('fixture-task');
-    const insert = vi.mocked(db.query).mock.calls.find(([sql]) => String(sql).includes('INSERT INTO zenithjoy.acquisition_collect_tasks'));
-    expect(insert?.[1]).toEqual(['4807edc7-da2a-4e8d-9223-31f4d25c12c6', JSON.stringify(['装修']), null]);
-  });
-
-  it('无 tenant 上下文 → 401 NO_TENANT（不是 400 TENANT_ID_REQUIRED、不崩）', async () => {
-    const res = await request(app)
-      .post('/api/acquisition/collect/start')
-      .send({ keywords: ['装修'] });
-    expect(res.status).toBe(401);
-  });
-});
+// Legacy collect/start creation is retired; the denial contract is tested in acquisition-retirement.test.ts.
 
 describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION: Bug-D]', () => {
   beforeEach(() => {
@@ -1213,13 +1092,15 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
     expect(res.body.data.status).toBe('running');
   });
 
-  it('stage_1_done 最后一个视频回完（无 terminal）→ 服务端自动 done + dispatch 点火一次', async () => {
+  it('stage_1_done 收到最终回执后保留 done，但不再创建或派发旧任务', async () => {
     mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'stage_1_done', lead_count_raw: 4 }), { total: 2, done: 2 }));
     const res = await request(app).post('/api/acquisition/collect/report')
       .send({ task_id: TASK_ID, video_id: 'v2', commenters: [{ nickname: 'n9' }] });
     expect(res.body.data.status).toBe('done');
     await new Promise((r) => setTimeout(r, 20));
-    expect(vi.mocked(scoreLeads)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
+    expect(vi.mocked(buildAssignments)).not.toHaveBeenCalled();
+    expect(vi.mocked(dispatchDue)).not.toHaveBeenCalled();
   });
 
   it('未进终态的回报不点火 dispatch', async () => {
@@ -1324,7 +1205,7 @@ describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [
     expect(statuses).toContain('failed');
   });
 
-  it('sweep 收尸 partial 且有 leads → 补点火 dm-dispatch 链（同租户只触发一次）', async () => {
+  it('sweep 收敛 partial 且保留 leads，但不再创建或派发旧任务', async () => {
     vi.mocked(db.query).mockReset();
     vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
       const s = String(sql);
@@ -1340,9 +1221,10 @@ describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [
       .set('X-Smoke-Token', 'smoke-secret-2026').send({});
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 20));
-    // task-a 结算为 partial 且 lead_count=3>0 → 点火一次；task-b 结算为 failed → 不点火
-    expect(vi.mocked(scoreLeads)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(scoreLeads)).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
+    expect(res.body.data.swept).toBe(2);
+    expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
+    expect(vi.mocked(buildAssignments)).not.toHaveBeenCalled();
+    expect(vi.mocked(dispatchDue)).not.toHaveBeenCalled();
   });
 });
 
@@ -1569,87 +1451,7 @@ describe('POST /api/acquisition/judge-video — x-agent-id 反查 tenant [REGRES
   });
 });
 
-describe('POST /api/acquisition/account-scan/trigger', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('无在线 android 设备 → 400 NO_ONLINE_ANDROID_AGENT', async () => {
-    const { default: db } = await import('../db/connection');
-    (db.query as any).mockResolvedValueOnce({ rows: [] }); // 查在线 android agent 为空
-
-    const res = await request(app)
-      .post('/api/acquisition/account-scan/trigger')
-      .set('x-test-tenant-id', 'tenant-1')
-      .send({});
-
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('NO_ONLINE_ANDROID_AGENT');
-  });
-
-  it('有在线 android 设备 → 200，写入 publish_tasks(task_type=account_scan)', async () => {
-    const { default: db } = await import('../db/connection');
-    (db.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'agent-uuid-1' }] }) // 查在线 android agent
-      .mockResolvedValueOnce({ rows: [{ id: 'task-uuid-1' }] }); // INSERT publish_tasks
-
-    // 用独立租户 id（而非上一个用例的 'tenant-1'）：本路由挂了 max=1/60s 的按租户限流
-    // 中间件，express-rate-limit 的计数器是模块级单例、跨同文件内的用例持久存在，且
-    // 默认对所有响应状态码计数（无 skipFailedRequests）。若复用 'tenant-1'，上一个
-    // 用例（400 NO_ONLINE_ANDROID_AGENT）会先占满这个租户 60 秒内仅有的 1 次配额，
-    // 导致本用例被限流命中 429 而非验证到位的 200——用独立租户隔离两个用例互不干扰。
-    const res = await request(app)
-      .post('/api/acquisition/account-scan/trigger')
-      .set('x-test-tenant-id', 'tenant-account-scan-success')
-      .send({});
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.task_id).toBe('task-uuid-1');
-
-    const insertCall = (db.query as any).mock.calls[1];
-    expect(insertCall[0]).toContain('publish_tasks');
-    expect(insertCall[0]).toContain('account_scan');
-
-    // 真机链路关键点：walking-skeleton.ts 心跳拉取端点只把 payload JSON 列内容
-    // 透传给设备，DB COLUMN task_type 从不下发。payload 里必须自带 task_type，
-    // 否则设备端 AgentService.kt 读不到 task.payload["task_type"]，任务写进库
-    // 但设备永远不会识别执行（对照 agent-burner.ts dm_outreach 的写法）。
-    const payloadParam = insertCall[1].find(
-      (p: unknown) => typeof p === 'string' && p.includes('task_type'),
-    );
-    expect(payloadParam).toBeDefined();
-    expect(JSON.parse(payloadParam)).toMatchObject({ task_type: 'account_scan' });
-  });
-
-  it('缺租户上下文 → 401 NO_TENANT', async () => {
-    const res = await request(app)
-      .post('/api/acquisition/account-scan/trigger')
-      .send({});
-
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('NO_TENANT');
-  });
-
-  it('60秒内重复触发同一租户 → 第二次 429 RATE_LIMITED', async () => {
-    const { default: db } = await import('../db/connection');
-    (db.query as any).mockResolvedValue({ rows: [{ id: 'agent-uuid-1' }] });
-
-    const first = await request(app)
-      .post('/api/acquisition/account-scan/trigger')
-      .set('x-test-tenant-id', 'tenant-rate-limit-test')
-      .send({});
-    expect(first.status).toBe(200);
-
-    const second = await request(app)
-      .post('/api/acquisition/account-scan/trigger')
-      .set('x-test-tenant-id', 'tenant-rate-limit-test')
-      .send({});
-    expect(second.status).toBe(429);
-    expect(second.body.error.code).toBe('RATE_LIMITED');
-  });
-});
+// Legacy account-scan creation is retired; the denial contract is tested in acquisition-retirement.test.ts.
 
 // ────── Android 信号上报 sprint Task5 — 最小消费验证端点 ──────
 describe('GET /api/acquisition/leads/:id/signal-status [BEHAVIOR]', () => {

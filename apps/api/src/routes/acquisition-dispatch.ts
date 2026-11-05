@@ -13,6 +13,7 @@
  */
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
+import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { enqueueWarmupTasks } from '../services/warmup-dispatch';
 import {
@@ -65,7 +66,7 @@ acquisitionDispatchRouter.put('/config', tenantContextOptional, async (req: Requ
 });
 
 // ── POST /dispatch/build — scoreLeads + buildAssignments ──
-acquisitionDispatchRouter.post('/dispatch/build', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionDispatchRouter.post('/dispatch/build', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const { scored } = await scoreLeads(pool, tenantId);
@@ -74,7 +75,7 @@ acquisitionDispatchRouter.post('/dispatch/build', tenantContextOptional, async (
 });
 
 // ── POST /dispatch/run — dispatchDue ──
-acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const result = await dispatchDue(pool, tenantId, new Date());
@@ -82,7 +83,7 @@ acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, async (re
 });
 
 // ── POST /warmup/run — 手动触发 enqueueWarmupTasks（staging 真机 + smoke 用；每日自动走 scheduler cron）──
-acquisitionDispatchRouter.post('/warmup/run', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionDispatchRouter.post('/warmup/run', tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   // 手动触发可显式指定收尾要切回的操作号昵称（staging 真机验证切号用）；不传则空串=不切。

@@ -100,13 +100,13 @@ describe('agent event, account scan and Android warmup — actual producer SQL',
   const fail=await request(app).post('/api/agent/burner/account-scan-result').send({agent_id:d.agent,request_id:'periodic-fixture-request',ok:false,account_ids:[],error_code:'SCREEN_LOCKED',version_name:'2.1.20',stage:'lock_check',foreground_package:'com.android.systemui'});expect(fail.status).toBe(200);
   expect((await pool.query('SELECT error_code,detail FROM zenithjoy.agent_scan_failures WHERE agent_id=$1',[d.agent])).rows[0]).toMatchObject({error_code:'SCREEN_LOCKED',detail:{version_name:'2.1.20',stage:'lock_check',foreground_package:'com.android.systemui'}});
  });
- it('warmup enqueues one Android job, preserves operator nickname, stores real result fields and duplicate HTTP success',async()=>{
+ it('retired warmup rejects new jobs but stores existing result fields and duplicate HTTP success',async()=>{
   const d=await device();
   await pool.query("INSERT INTO zenithjoy.agent_platform_sessions(agent_id,platform,account_label,role,status,device_type) VALUES($1,'douyin','fixture-warmup','burner','active','android')",[d.agent]);
   const run=()=>request(app).post('/api/acquisition/warmup/run').set('Cookie',d.cookie).send({operator_nickname:'fixture-operator'});
-  const first=await run();expect(first.status).toBe(200);expect(first.body.data.enqueued).toBe(1);
-  const second=await run();expect(second.status).toBe(200);expect(second.body.data.enqueued).toBe(0);
-  const tasks=(await pool.query("SELECT id,status,payload FROM zenithjoy.publish_tasks WHERE agent_id=$1 AND task_type='warmup'",[d.agent])).rows;expect(tasks).toHaveLength(1);expect(tasks[0]).toMatchObject({status:'queued',payload:{task_type:'warmup',operator_nickname:'fixture-operator'}});
+  const first=await run();expect(first.status).toBe(410);
+  expect((await pool.query("SELECT id FROM zenithjoy.publish_tasks WHERE agent_id=$1 AND task_type='warmup'",[d.agent])).rows).toHaveLength(0);
+  const tasks=(await pool.query("INSERT INTO zenithjoy.publish_tasks(agent_id,tenant_id,platform,status,task_type,payload) VALUES($1,$2,'douyin','queued','warmup',$3::jsonb) RETURNING id",[d.agent,d.tenant,JSON.stringify({task_type:'warmup',operator_nickname:'fixture-operator'})])).rows;
   const result=await request(app).post('/api/agent/burner/warmup-result').send({task_id:tasks[0].id,device_id:'isolated-fixture',results:[{nickname:'alive',alive:true,followers:1196},{nickname:'offline',alive:false,followers:null}],error_code:''});expect(result.status).toBe(200);expect(result.body.data).toMatchObject({task_status:'done',written:2});
   const repeat=await request(app).post('/api/agent/burner/warmup-result').send({task_id:tasks[0].id,results:[{nickname:'must-not-be-added',alive:true}]});expect(repeat.status).toBe(200);expect(repeat.body.data.idempotent).toBe(true);
   expect((await pool.query('SELECT nickname,alive,followers FROM zenithjoy.agent_warmup_liveness WHERE agent_id=$1 ORDER BY nickname',[d.agent])).rows).toEqual([{nickname:'alive',alive:true,followers:1196},{nickname:'offline',alive:false,followers:null}]);
@@ -200,22 +200,41 @@ describe('current acquisition pipeline against PostgreSQL with isolated provider
    const second=await judge();expect(second.status).toBe(200);expect(second.body.data).toMatchObject({judgment_status:'matched',cache_hit:true});expect(provider).toHaveBeenCalledTimes(1);
   } finally {vi.unstubAllEnvs();}
  });
- it('build schedules only a live Android burner; run creates one real dm job and receipts remain idempotent',async()=>{
+ it('retired dispatch creates no new work; existing dm receipts and history remain idempotent',async()=>{
   const d=await device();await pool.query("UPDATE zenithjoy.agents SET capabilities=ARRAY['android'] WHERE id=$1",[d.agent]);
   await pool.query("INSERT INTO zenithjoy.agent_platform_sessions(agent_id,platform,account_label,role,status,device_type,bound_at) VALUES($1,'douyin','fixture-dm','burner','active','android',now())",[d.agent]);
   const config=await request(app).put('/api/acquisition/config').set('Cookie',d.cookie).send({burner_count:1,dm_per_hour:10,dm_per_day:30,dm_active_start:'00:00',dm_active_end:'23:59',dm_interval_min_sec:1,dm_interval_max_sec:2,dm_message:'fixture message'});expect(config.status).toBe(200);
   const lead=(await pool.query("INSERT INTO zenithjoy.acquisition_leads(tenant_id,nickname,profile_url,douyin_id,relevance_score,outreach_eligible) VALUES($1,'fixture dm lead','https://www.douyin.com/user/fixture','fixture-dm-target',90,true) RETURNING id",[d.tenant])).rows[0].id;
-  const build=await request(app).post('/api/acquisition/dispatch/build').set('Cookie',d.cookie).send({});expect(build.status).toBe(200);expect(build.body.data.assigned).toBe(1);expect(build.body.data.burners).toEqual(['fixture-dm']);
-  const assignment=(await pool.query('SELECT id,status FROM zenithjoy.dm_assignments WHERE tenant_id=$1 AND lead_id=$2',[d.tenant,lead])).rows[0];expect(assignment.status).toBe('queued');
-  await pool.query("UPDATE zenithjoy.dm_assignments SET scheduled_for=now()-interval '1 minute' WHERE id=$1",[assignment.id]);
-  const run=await request(app).post('/api/acquisition/dispatch/run').set('Cookie',d.cookie).send({});expect(run.status).toBe(200);expect(run.body.data.dispatched).toBe(1);
-  const jobs=(await pool.query("SELECT id,payload FROM zenithjoy.publish_tasks WHERE agent_id=$1 AND task_type='dm_outreach'",[d.agent])).rows;expect(jobs).toHaveLength(1);expect(jobs[0].payload).toMatchObject({device_platform:'android',douyin_id:'fixture-dm-target',message:'fixture message',dm_assignment_id:assignment.id});
-  const result={task_id:jobs[0].id,agent_id:d.agent,account_label:'fixture-dm',status:'sent',dm_assignment_id:assignment.id};
+  const build=await request(app).post('/api/acquisition/dispatch/build').set('Cookie',d.cookie).send({});expect(build.status).toBe(410);expect(build.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+  const run=await request(app).post('/api/acquisition/dispatch/run').set('Cookie',d.cookie).send({});expect(run.status).toBe(410);expect(run.body.error.code).toBe('LEGACY_ACQUISITION_RETIRED');
+  expect((await pool.query('SELECT id FROM zenithjoy.dm_assignments WHERE tenant_id=$1 AND lead_id=$2',[d.tenant,lead])).rows).toEqual([]);
+  expect((await pool.query("SELECT id FROM zenithjoy.publish_tasks WHERE agent_id=$1 AND task_type='dm_outreach'",[d.agent])).rows).toEqual([]);
+  // An already dispatched task can still report a terminal receipt after retirement.
+  const assignment=(await pool.query("INSERT INTO zenithjoy.dm_assignments(tenant_id,lead_id,account_label,status) VALUES($1,$2,'fixture-dm','dispatched') RETURNING id",[d.tenant,lead])).rows[0];
+  await pool.query("INSERT INTO zenithjoy.dm_outreach_log(tenant_id,account_label,lead_id,status,assignment_id) VALUES($1,'fixture-dm',$2,'dispatched',$3)",[d.tenant,lead,assignment.id]);
+  const job=(await pool.query("INSERT INTO zenithjoy.publish_tasks(agent_id,tenant_id,platform,status,task_type,payload) VALUES($1,$2,'douyin','queued','dm_outreach',$3::jsonb) RETURNING id",[d.agent,d.tenant,JSON.stringify({device_platform:'android',douyin_id:'fixture-dm-target',message:'fixture message',dm_assignment_id:assignment.id})])).rows[0];
+  const result={task_id:job.id,agent_id:d.agent,account_label:'fixture-dm',status:'sent',dm_assignment_id:assignment.id};
   for(let i=0;i<2;i++)expect((await request(app).post('/api/agent/burner/dm-outreach-result').send(result)).status).toBe(200);
   expect((await pool.query('SELECT status FROM zenithjoy.dm_assignments WHERE id=$1',[assignment.id])).rows).toEqual([{status:'sent'}]);
   expect((await pool.query('SELECT status FROM zenithjoy.dm_outreach_log WHERE assignment_id=$1',[assignment.id])).rows).toEqual([{status:'sent'}]);
   const history=await request(app).get('/api/acquisition/dispatch/outreach-history').set('Cookie',d.cookie);expect(history.status).toBe(200);expect(history.body.data.items.some((r:any)=>r.id===assignment.id&&r.status==='sent')).toBe(true);
  });
+
+ it('in-flight failed dm receipt persists all three diagnostic fields and repeat cannot overwrite them',async()=>{
+  const d=await device();
+  const lead=(await pool.query("INSERT INTO zenithjoy.acquisition_leads(tenant_id,nickname,profile_url) VALUES($1,'failure fixture','https://www.douyin.com/user/fixture') RETURNING id",[d.tenant])).rows[0].id;
+  const assignment=(await pool.query("INSERT INTO zenithjoy.dm_assignments(tenant_id,lead_id,account_label,status) VALUES($1,$2,'fixture-dm','dispatched') RETURNING id",[d.tenant,lead])).rows[0].id;
+  await pool.query("INSERT INTO zenithjoy.dm_outreach_log(tenant_id,account_label,lead_id,status,assignment_id) VALUES($1,'fixture-dm',$2,'dispatched',$3)",[d.tenant,lead,assignment]);
+  const task=(await pool.query("INSERT INTO zenithjoy.publish_tasks(agent_id,tenant_id,platform,status,task_type,payload) VALUES($1,$2,'douyin','queued','dm_outreach',$3::jsonb) RETURNING id",[d.agent,d.tenant,JSON.stringify({account_label:'fixture-dm',dm_assignment_id:assignment})])).rows[0].id;
+  const body={task_id:task,agent_id:d.agent,account_label:'fixture-dm',status:'failed',dm_assignment_id:assignment,error_code:'NO_SEARCH_INPUT',foreground_pkg:'fixture.foreground',failure_diag:'fixture diagnosis'};
+  const first=await request(app).post('/api/agent/burner/dm-outreach-result').send(body);expect(first.status).toBe(200);
+  const read=async()=>(await pool.query('SELECT status,error_code,foreground_pkg,failure_diag FROM zenithjoy.dm_outreach_log WHERE assignment_id=$1',[assignment])).rows;
+  const expected=[{status:'failed',error_code:'NO_SEARCH_INPUT',foreground_pkg:'fixture.foreground',failure_diag:'fixture diagnosis'}];
+  expect(await read()).toEqual(expected);
+  const repeat=await request(app).post('/api/agent/burner/dm-outreach-result').send({...body,status:'sent',error_code:'CHANGED',foreground_pkg:'other',failure_diag:'overwritten'});expect(repeat.status).toBe(200);
+  expect(await read()).toEqual(expected);
+ });
+
 });
 
 it('orphan legacy license fails with an actionable 4xx and creates no partial machine binding',async()=>{
