@@ -133,7 +133,12 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    },Math.min(1000,stallMs));stall.unref();
    if(signal?.aborted||Date.now()>=workerDeadline)throw Error('AGENT_PRIMARY_DEADLINE_EXHAUSTED_BEFORE_DISPATCH');
    if(transport){
-    const control=new Proxy(rawControl,{get(target,key){if(key==='request')return message=>{if(message.kind==='official_agent_turn'){dispatched=true;rawLastIndex=message.turn.index;}return target.request(message);};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});
+    // Compose a separate facade: the official Caller has frozen own methods,
+    // so a Proxy get trap cannot replace request or return bound replacements.
+    const control=Object.freeze(Object.fromEntries(Reflect.ownKeys(rawControl).map(key=>{
+     const value=Reflect.get(rawControl,key,rawControl);
+     return [key,typeof value==='function'?(...args)=>{const message=args[0];if(key==='request'&&message?.kind==='official_agent_turn'){dispatched=true;rawLastIndex=message.turn.index;}return Reflect.apply(value,rawControl,args);}:value];
+    })));
     const raw=await runActivitySkillParentLoop({request,scope,broker,control,signal,beforeTurn:beforeRawTurn,canReadback:(operation,input)=>tools.canReadback?.(operation,input)===true});
     rawProof=raw.model_stop_proof;rawControlKnown=rawControl.verifySealedExecution(rawControl.snapshot(),{request})===true;
     receipt={execution_transport:transport.execution_transport,source_commit:request.source_commit,reason:raw.reason,turn_count:raw.turn_count,

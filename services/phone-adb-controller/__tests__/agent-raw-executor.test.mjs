@@ -115,3 +115,28 @@ test('actual main wake and later Commander events see only frozen Task control b
  const rejected=workflow.createWorkflowContext({...f,frozen:ordinary,env:{...f.env,CONTROL_SCOPE:JSON.stringify(control_scope)},control_scope,executionMode:'agent'});
  assert.equal(Object.hasOwn(rejected,'control_scope'),false);assert.equal(Object.hasOwn(rejected,'control_acceptance'),false);
 });
+
+// The production Caller freezes own non-configurable/non-writable methods.
+// Keep the original receiver and WeakMap brands; mutable doubles miss Proxy invariants.
+function frozenOfficialFixture(request,{onTurn,unknown=false}={}){
+ const calls=[],stops=new WeakMap(),control=officialFixture(request,{onTurn});
+ const original={...control};control.request=async function(message){calls.push({method:'request',kind:message.kind,index:message.turn?.index??message.turn_index});if(message.kind==='official_agent_stop'){assert.equal(canonical(message.request),canonical(request));const receipt=Object.freeze({});stops.set(receipt,message.turn_index);return receipt;}return original.request.call(control,message);};
+ control.verifyStopReceipt=function(receipt,{request:q,index}){assert.equal(canonical(q),canonical(request));if(!stops.has(receipt)||stops.get(receipt)!==index)throw Error('FROZEN_STOP_BRAND');return{official_execution_stopped:true,status:'aborted'};};
+ control.verifySealedExecution=function(value,args){return !unknown&&original.verifySealedExecution.call(control,value,args);};
+ for(const key of Object.keys(control)){const method=control[key];control[key]=function(...args){assert.equal(this,control,'original Caller receiver: '+key);calls.push({method:key});return method.apply(control,args);};}
+ Object.freeze(control);assert.equal(Object.isFrozen(control),true);assert.equal(Object.getOwnPropertyDescriptor(control,'request').configurable,false);assert.equal(Object.getOwnPropertyDescriptor(control,'request').writable,false);return{control,calls};
+}
+test('frozen official Caller actual main/broker reaches first turn and preserves authorize/receipt/seal brands and receiver',async t=>{
+ const f=fixture(t);let caller,closed=0,settled=0,turns=0;
+ const serverResult={test_server_evidence:'read-only-original'},handlers={state:{},agentSupportsNativeScope:()=>true,agentNativeState:()=>({}),createAgentTools:async(_a,scope)=>({prepare:async()=>{},inspect:async()=>({phone_capabilities:[],business_capabilities:[]}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_PG');},getResult:()=>serverResult,settle:async proof=>{assert.equal(rawModelScopeStopped(proof.raw_model_proof,scope),true);settled++;},closeNativeScope:async proof=>{closed++;return{execution_stopped:rawModelScopeStopped(proof.raw_model_proof,scope)};}})};
+ const wired=createWorkflowExecution({...f,handlers,rpc:async()=>{throw Error('NO_LEGACY');},createOfficialControl:async({request})=>{caller=frozenOfficialFixture(request,{onTurn:async(index,input)=>{turns++;if(index===0)return{type:'inspect',question:'Read-only next step?'};assert.deepEqual(input.context.commander_guidance,['Keep read-only.']);return{type:'finish'};}});return caller.control;}});
+ const actual=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000,onEvent:async e=>e.operation==='inspect'?{action:'steer',text:'Keep read-only.'}:{action:'none'}});
+ assert.equal(actual.status,'completed');assert.equal(actual.execution_stopped,true);assert.deepEqual(actual.result,serverResult);assert.equal(turns,2);assert.equal(settled,1);assert.equal(closed,1);assert.deepEqual(caller.calls.filter(x=>x.kind==='official_agent_turn').map(x=>x.index),[0,1]);for(const name of ['authorizeParentContext','verifyTurnReceipt','authorizeIntent','consumeIntentPermit','authorizeBrokerDelivery','snapshot','seal','close','verifySealedExecution'])assert.ok(caller.calls.some(x=>x.method===name),name);assert.equal(Object.isFrozen(caller.control),true);
+});
+for(const mode of ['throw','abort','unknown'])test('frozen official Caller actual main '+mode+' stops same index and always closes without settling unknown',async t=>{
+ const f=fixture(t),signal=new AbortController();let caller,turns=0,closed=0,settled=0;
+ const handlers={state:{},agentSupportsNativeScope:()=>true,agentNativeState:()=>({}),createAgentTools:async()=>({prepare:async()=>{},inspect:async()=>({phone_capabilities:[],business_capabilities:[]}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_PG');},getResult:()=>null,settle:async()=>{settled++;},closeNativeScope:async()=>{closed++;return{execution_stopped:true};}})};
+ const wired=createWorkflowExecution({...f,handlers,rpc:async()=>{throw Error('NO_LEGACY');},createOfficialControl:async({request})=>{caller=frozenOfficialFixture(request,{unknown:mode==='unknown',onTurn:async()=>{turns++;if(mode==='abort')signal.abort();throw Error('TURN_REJECTED');}});return caller.control;}});
+ const actual=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000,signal:signal.signal});
+ assert.equal(actual.status,'needs_review');assert.equal(actual.execution_stopped,false);assert.equal(turns,1);assert.equal(settled,0);assert.equal(closed,1);const stopCalls=caller.calls.filter(x=>x.kind==='official_agent_stop');assert.ok(stopCalls.length>=1);assert.ok(stopCalls.every(x=>x.index===0));for(const name of ['verifyStopReceipt','seal','close','snapshot','verifySealedExecution'])assert.ok(caller.calls.some(x=>x.method===name),name);assert.equal(Object.isFrozen(caller.control),true);
+});
