@@ -1,6 +1,9 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import express from 'express';
 import {createServer} from 'node:http';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
 import request from 'supertest';
 // Only session lookup is an isolated identity boundary. Router, service and SQL are real.
 vi.mock('../../../src/auth',()=>({auth:{api:{getSession:async()=>null}}}));
@@ -8,7 +11,7 @@ import pool from '../../../src/db/connection';
 import pipeline from '../../../src/routes/ai-video-pipeline';
 import aiVideo from '../../../src/routes/ai-video';
 import { AiVideoPipelineService } from '../../../src/services/ai-video-pipeline.service';
-const app=express();app.use(express.json());app.use('/api/ai-video/jobs',pipeline);app.use('/api/ai-video',aiVideo);
+const app=express();app.use(express.json());app.use('/api/ai-video/jobs',pipeline);app.use('/api/ai-video-pipeline',pipeline);app.use('/api/ai-video',aiVideo);
 app.use((err:any,_req:any,res:any,_next:any)=>res.status(500).json({error:err.message}));
 const ids:Record<string,string>={};
 beforeAll(async()=>{
@@ -30,6 +33,25 @@ describe('real HTTP + PostgreSQL pipeline lifecycle and isolation',()=>{
   const id=await create('a');const result=await request(app).get(`/api/ai-video/jobs/${id}`);
   expect(result.status).toBe(200);expect(result.body).toMatchObject({id,original_script:'原文',target_aspect:'9:16',detected_aspect:null,license_id:ids.a});
   expect(result.body).not.toHaveProperty('raw_script');expect(result.body).not.toHaveProperty('originalScript');
+ });
+ it.each(['current','flat-envelope','false-completion'])('executes the real local smoke against disposable HTTP/SQL and rejects %s response drift',async(mode)=>{
+  const boundary=express();boundary.use(express.json());
+  if(mode==='flat-envelope')boundary.use((req,res,next)=>{if(req.method==='POST'&&req.path==='/api/ai-video-pipeline'){const json=res.json.bind(res);res.json=((body:any)=>json(body.job??body))as any;}next();});
+  if(mode==='false-completion')boundary.put('/api/ai-video-pipeline/:id/complete',(_req,res)=>res.json({status:'pending',progress:0}));
+  boundary.use(app);const server=createServer(boundary);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+  const existing=(await pool.query("SELECT id FROM zenithjoy.ai_video_pipeline_jobs WHERE topic='isolated CI contract'")).rows.map((row:any)=>row.id);
+  try{
+   const env={...process.env,BASE_URL:`http://127.0.0.1:${(server.address()as any).port}`,SMOKE_SCRATCH_API:'1',LICENSE:'a'};
+   const run=promisify(execFile)('bash',[fileURLToPath(new URL('../../../../../.github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh',import.meta.url))],{env,timeout:12000});
+   if(mode==='current'){
+    expect((await run).stdout).toContain('PASS: disposable local pipeline');
+    const rows=(await pool.query("SELECT * FROM zenithjoy.ai_video_pipeline_jobs WHERE topic='isolated CI contract' AND NOT(id=ANY($1::uuid[]))",[existing])).rows;
+    expect(rows).toHaveLength(1);expect(rows[0]).toMatchObject({status:'completed',progress:100,license_id:ids.a,original_script:'CI source script',target_aspect:'9:16',output_dir:'/tmp/ci-pipeline-output'});
+   }else await expect(run).rejects.toMatchObject({code:1});
+  }finally{
+   await pool.query("DELETE FROM zenithjoy.ai_video_pipeline_jobs WHERE topic='isolated CI contract' AND NOT(id=ANY($1::uuid[]))",[existing]);
+   server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));
+  }
  });
  it('returns exact separate pending sets for two licenses and anonymous compatibility',async()=>{
   await pool.query('TRUNCATE zenithjoy.ai_video_pipeline_jobs');
