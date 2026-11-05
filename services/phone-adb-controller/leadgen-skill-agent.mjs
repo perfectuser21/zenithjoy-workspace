@@ -201,6 +201,11 @@ export function skillAuthority(q,{home=homedir(),verifyWorkspace=verifyCommander
  if(Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json'))||existsSync(join(dir,'generation-revoked.json')))return false;
  try{official(q,dir);return true;}catch{return false;}
 }
+// Parent Code readback uses exactly the same validated legacy official binding.
+export function skillExecutionIdentity(q,{home=homedir()}={}){
+ if(!skillAuthority(q,{home}))throw Error('RPC_SKILL_OFFICIAL_IDENTITY_UNAVAILABLE');
+ return structuredClone(official(q,directory(q,home)));
+}
 // Both official surfaces target the same MMV; never infer a route from a name suffix.
 export function activityToolInvocation(dir,op,surface,body={},timeoutSeconds=30){
  if(!/^\/[A-Za-z0-9_./-]+$/.test(dir)||dir.split('/').includes('..')||!['inspect','phone','resume','business'].includes(op)||!['gateway_exec','exec_gateway'].includes(surface)||!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>16384||!Number.isSafeInteger(timeoutSeconds)||timeoutSeconds<1||timeoutSeconds>2400)throw Error('RPC_SKILL_SURFACE_INPUT_INVALID');
