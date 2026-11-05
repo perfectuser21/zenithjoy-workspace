@@ -731,7 +731,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       await discoveryScope?.close();discoveryScope=null;await collectionScope?.close();collectionScope=null;agent.facts.released=true;
       return {lock_released:1,no_lock:true,central_lock_released:1,central_lock_task_id:taskId,central_lock_run_id:state.run_id,...(agent.facts.cleanup_proof?{cleanup_readback_digest:agent.facts.cleanup_proof.digest}:{})};
     };
-    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{assertResources:assertAgentScope,prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
+    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{assertResources:assertAgentScope,executionState:()=>({native_stop_unproven:state.nativeStopUnproven===true,execution_unknown:state.executionUnknown===true}),prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
       native_video_candidates:[...agent.native.values()].map(({metrics,...video})=>({...video,metrics:{likes:metrics.likes,comment_total:metrics.comment_total,comment_tier:metrics.comment_tier}})),
       native_comment_receipts:[...agent.comments].map(([native_receipt,p])=>({native_receipt,video_id:p.video_id,douyin_id:p.row.douyinId,nickname:p.row.nickname,comment_body:p.row.commentBody,historical_verified:!!p.history})),
       panel_session_available:!!agent.panelSession&&agent.panelSession.video_id===agent.currentVideo?.video_id,verified_detail_video_id:agent.detailIdentity?.video_id||null,
@@ -749,7 +749,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       }}});
     agent.tools.set(activity.key,tools);return tools;
   };
-  return {state,preflight,createAgentTools,quarantineResources,beginCollectionReadback:async evidence=>{
+  return {state,preflight,createAgentTools,agentNativeState:()=>({native_stop_unproven:state.nativeStopUnproven===true,execution_unknown:state.executionUnknown===true}),quarantineResources,beginCollectionReadback:async evidence=>{
       collectionScope=await startCollectionReturnedScope({evidence,context:returnedContext(),purpose:'readback'});
       return async()=>{try{await collectionScope.close();}finally{collectionScope=null;}};
     },handoffPhone:async(command,...args)=>{
