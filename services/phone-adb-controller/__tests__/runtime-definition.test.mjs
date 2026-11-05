@@ -389,3 +389,23 @@ test('真实HTTP prepare仅取精确MMV活记录，全量不可用仍冻结路�
  assert.ok(!seen.includes('/api/brain/machines'),'不回退全库存或缓存');
  assert.ok(seen.every(path=>path==='/api/brain/machines/mac-mini-m4-us'||path==='/api/brain/releases/'+release.id),'无别名/任意机器fallback');
 });
+
+const cloudAgentEnv=()=>({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_BRAIN_TASK_ID:'11111111-1111-4111-8111-111111111111',WFR_TAG:'cloud101',P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'2',WF_RUN_MAX_SECONDS:'1800',WF_RUN_START_TS:'1700000000'});
+test('云手机原生序列号可冻结并读回；续跑不可换同IP的端口或其他身份',async()=>{
+ const {validateAgentInput,assertAgentInput}=await import('../runtime-definition.mjs');
+ const env=cloudAgentEnv(),input=agentInput(env),snapshot={execution_mode:'agent',workflow_version:{payload:{key:env.WF_BRAIN_WORKFLOW}},agent_input:input};
+ assert.equal(input.serial,env.SERIAL);assert.deepEqual(validateAgentInput(input),input);assert.deepEqual(assertAgentInput(snapshot,env),input);
+ for(const change of [{SERIAL:'47.100.213.173:10002'},{SERIAL:'47.100.213.174:10001'},{P:'other'},{WF_BRAIN_TASK_ID:'22222222-2222-4222-8222-222222222222'}])assert.throws(()=>assertAgentInput(snapshot,{...env,...change}),/AGENT_INPUT/);
+ for(const key of ['WFR_TAG','P','LEADGEN_LINE'])assert.throws(()=>agentInput({...env,[key]:'47.100.213.173:10001'}),/AGENT_INPUT/);
+});
+test('TCP设备身份只认规范IPv4和十进制端口，不接受主机名、参数或歧义表示',()=>{
+ const env=cloudAgentEnv();
+ for(const serial of ['cloud.example:10001','047.100.213.173:10001','47.100.213.256:10001','47.100.213.173:010001','47.100.213.173:0','47.100.213.173:65536','47.100.213.173:10001 -H remote','47.100.213.173:10001\n','[::1]:10001','47.100.213.173:1:2'])assert.throws(()=>agentInput({...env,SERIAL:serial}),/AGENT_INPUT/);
+ for(const serial of ['ANGYVB4311010223','e6c7ef34'])assert.equal(agentInput({...env,SERIAL:serial}).serial,serial);
+});
+test('101来源输入保留规范云serial；普通标签语法保持原限制',async()=>{
+ const {validateDiscoveryInput}=await import('../runtime-definition.mjs');
+ const input={schema_version:2,workflow_key:'douyin_video_discovery',run_tag:'cloud101',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',max_attempts:2,max_screens:1,source_kind:'keyword',sources:['悦升'],source_sha256:'a'.repeat(64)};
+ assert.deepEqual(validateDiscoveryInput(input),input);
+ for(const change of [{serial:'47.100.213.173:010001'},{profile:'47.100.213.173:10001'},{line:'yuesheng:10001'}])assert.throws(()=>validateDiscoveryInput({...input,...change}),/DISCOVERY_INPUT/);
+});
