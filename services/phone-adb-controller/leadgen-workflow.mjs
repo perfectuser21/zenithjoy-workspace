@@ -152,26 +152,37 @@ export async function prepareWorkflowCommander({runDir,frozen,activities,execute
 }
 
 export async function runWorkflowWithCommander({frozen,prepareCommander=prepareWorkflowCommander,observerSafety,...options}){
- const raw=frozen.execution_transport==='raw-model-v1',record=options.record|| (async()=>{});let observer,safetyUnknown=false;
+ const raw=frozen.execution_transport==='raw-model-v1',record=options.record|| (async()=>{});let observer,safetyUnknown=false,preparedAlreadyClosed=false;
  const quarantine=async()=>{try{return options.quarantine?await options.quarantine():{verified:false,reason:'quarantine unavailable'};}catch{return {verified:false,reason:'quarantine failed'};}};
  try{observer=await prepareCommander({...options,frozen});}
  catch(error){
   const facts=raw?runnerCommanderPreparation(error,options.context):null;
-  await record({...options.context,phase:raw&&facts?.closed&&!facts.unavailable?'commander_authority_rejected':'commander_unavailable',commander_status:'unavailable'});
-  if(raw&&facts?.closed&&!facts.unavailable)throw error;
+  let recordError;
+  try{await record({...options.context,phase:raw&&facts?.closed&&!facts.unavailable?'commander_authority_rejected':'commander_unavailable',commander_status:'unavailable'});}catch(cause){recordError=cause;}
+  if(raw&&facts?.closed&&!facts.unavailable)throw recordError||error;
   if(raw&&(!facts?.unavailable||facts.closed!==true)){
-   const resource_quarantine=await quarantine();return {status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine,results:options.activities.map(activity=>({activity:activity.key,status:'blocked',not_started:true,execution_stopped:false,reason:'Observer authority or lifecycle not verified'}))};
+   const resource_quarantine=await quarantine();
+   if(recordError){recordError.executionStopped=false;recordError.commanderExecutionUnknown=true;recordError.resourceQuarantine=resource_quarantine;throw recordError;}
+   return {status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine,results:options.activities.map(activity=>({activity:activity.key,status:'blocked',not_started:true,execution_stopped:false,reason:'Observer authority or lifecycle not verified'}))};
   }
+  if(recordError)throw recordError;
+  preparedAlreadyClosed=raw&&facts?.closed===true;
   observer={commander:async()=>{throw Error('COMMANDER_UNAVAILABLE');},canDispatchWorker:()=>true,close:async()=>null};
  }
  const allowed=()=>{if(!raw)return true;const facts=observer.dispatchSafety?.()||{safe:observer.canDispatchWorker?.()===true,execution_unknown:observer.canDispatchWorker?.()!==true};if(facts.execution_unknown===true)safetyUnknown=true;return facts.safe===true;};
  if(observerSafety)observerSafety.safe=allowed;
  const guarded=options.executeAgent&& (async(activity,input)=>{if(!allowed())throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
  if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!allowed())throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
- let result;
- try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}
- finally{let closed;try{closed=await observer.close();}catch{safetyUnknown=true;}if(closed){await record({...options.context,phase:'commander_domain_closed',evidence:closed});if(raw&&!runnerCommanderClosureKnown(closed,options.context))safetyUnknown=true;}}
- if(safetyUnknown){result={...result,status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine:await quarantine()};}
+ let result,runError,closed,resourceQuarantine;
+ try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}catch(error){runError=error;}
+ // Safety work is independent of both the executor and the Recorder. In
+ // particular, a failed close record cannot bypass persistent isolation.
+ try{closed=await observer.close();}catch{safetyUnknown=true;}
+ if(raw&&!preparedAlreadyClosed&&!runnerCommanderClosureKnown(closed,options.context))safetyUnknown=true;
+ if(safetyUnknown)resourceQuarantine=await quarantine();
+ if(closed)try{await record({...options.context,phase:'commander_domain_closed',evidence:closed});}catch(error){runError??=error;}
+ if(runError){if(safetyUnknown){runError.executionStopped=false;runError.commanderExecutionUnknown=true;runError.resourceQuarantine=resourceQuarantine;}throw runError;}
+ if(safetyUnknown)result={...result,status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine:resourceQuarantine};
  return result;
 }
 
