@@ -91,6 +91,7 @@ jobs:
       BETTER_AUTH_URL: 'http://localhost:3000'
       BETTER_AUTH_SECRET: 'ci-only-secret-32-chars-min-not-prod-123'
       E2E_CANCEL_DISPOSABLE_DB: '1'
+      E2E_ORPHAN_DISPOSABLE_DB: '1'
 
     steps:
       - uses: actions/checkout@v4
