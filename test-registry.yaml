@@ -3070,6 +3070,22 @@ tests:
     product: 新媒体运营
     note: "ZJ1 Smart Acquisition WS1 — GET /api/acquisition/overview TDD 合同测试"
 
+  - id: acquisition-history-auth-pairing
+    path: apps/api/src/middleware/acquisition-history-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Session-derived tenant, unauthenticated and ambiguous memberships, and membership lookup failures; auth and DB boundaries mocked.
+
+  - id: legacy-acquisition-retired-guard-pairing
+    path: apps/api/src/routes/legacy-acquisition-retired.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Retired guard rejects missing tenant or stops authenticated work before downstream handler.
+
   - id: legacy-acquisition-retired-writes
     path: apps/api/src/routes/acquisition-retirement.test.ts
     type: integration
