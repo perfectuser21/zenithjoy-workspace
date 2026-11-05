@@ -30,7 +30,8 @@ interface WarmupLiveness {
 async function fetchSessions(): Promise<BurnerSession[]> {
   const r = await fetch('/api/agent/burner/sessions');
   const j = await r.json();
-  return j?.data?.sessions ?? [];
+  if (!r.ok || j?.success !== true || !Array.isArray(j?.data?.sessions)) throw new Error('账号历史读取失败，请稍后重试');
+  return j.data.sessions;
 }
 
 /**
@@ -41,16 +42,20 @@ async function fetchSessions(): Promise<BurnerSession[]> {
 export function WarmupLivenessPanel({ agentId, hostname }: { agentId: string; hostname?: string | null }) {
   const [rows, setRows] = useState<WarmupLiveness[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    setLoaded(false);
+    setError(false);
     (async () => {
       try {
         const r = await fetch(`/api/agent/burner/warmup-liveness?agent_id=${encodeURIComponent(agentId)}`);
         const j = await r.json();
-        if (alive) setRows(j?.data?.liveness ?? []);
+        if (!r.ok || j?.success !== true || !Array.isArray(j?.data?.liveness)) throw new Error('invalid response');
+        if (alive) setRows(j.data.liveness);
       } catch {
-        if (alive) setRows([]);
+        if (alive) { setRows([]); setError(true); }
       } finally {
         if (alive) setLoaded(true);
       }
@@ -58,7 +63,9 @@ export function WarmupLivenessPanel({ agentId, hostname }: { agentId: string; ho
     return () => { alive = false; };
   }, [agentId]);
 
-  if (!loaded || rows.length === 0) return null;
+  if (!loaded) return null;
+  if (error) return <div role="alert" className="mt-3 text-sm text-red-600">验活历史读取失败，请稍后重试</div>;
+  if (rows.length === 0) return null;
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
@@ -130,7 +137,7 @@ export default function AcquisitionAccountsPage() {
       ) : null}
 
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-        <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">历史账号（{sessions.length}）</h3>
+        <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">历史账号{error ? '' : `（${sessions.length}）`}</h3>
 
         {sessions.some((s) => s.status === 'needs_rebind') && (
           <div className="mb-3 rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-3">
@@ -143,7 +150,7 @@ export default function AcquisitionAccountsPage() {
 
         {loading ? (
           <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
-        ) : (
+        ) : error ? null : (
           <>
             <table className="w-full text-sm">
               <thead>

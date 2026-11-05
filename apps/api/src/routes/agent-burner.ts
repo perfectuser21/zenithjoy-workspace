@@ -1,3 +1,4 @@
+import { acquisitionHistoryAuth } from '../middleware/acquisition-history-auth';
 /**
  * Path 2 Sprint B-1 WS3 — 中台 burner 路由
  *
@@ -1139,11 +1140,12 @@ router.post('/warmup-result', async (req: Request, res: Response) => {
 
 // ── warmup 验活状态查询（dashboard）——某 agent 最近每号活/掉线 ──
 // 租户隔离：只能查本租户名下 agent（JOIN agents 校验归属，防跨租户读小号昵称/粉丝）。
-router.get('/warmup-liveness', tenantContextOptional, async (req: Request, res: Response) => {
+router.get('/warmup-liveness', acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const agentId = String(req.query.agent_id || '');
   if (!agentId) return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
+  try {
   const r = await pool.query(
     `SELECT l.nickname, l.alive, l.followers, l.reason, l.checked_at
        FROM zenithjoy.agent_warmup_liveness l
@@ -1152,6 +1154,9 @@ router.get('/warmup-liveness', tenantContextOptional, async (req: Request, res: 
     [agentId, tenantId],
   );
   return res.json(OK({ liveness: r.rows }));
+  } catch {
+    return res.status(503).json(ERR('HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试'));
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════

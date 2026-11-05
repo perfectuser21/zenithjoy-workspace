@@ -1,3 +1,4 @@
+import { acquisitionHistoryAuth } from '../middleware/acquisition-history-auth';
 import { Router, Request, Response, NextFunction } from 'express';
 import { lookupAgentIdentity } from '../services/agent-identity-lookup';
 import { randomUUID } from 'crypto';
@@ -20,12 +21,6 @@ import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
 import { gradeComments } from '../services/comment-grading';
 
 export const acquisitionRouter = Router();
-
-// Keep route registration lazy so legacy tests that partially mock this module can
-// still import unrelated acquisition endpoints. Authentication remains delegated
-// to the production tenantContext middleware when the cancel endpoint is called.
-const collectCancelTenantContext = (req: Request, res: Response, next: NextFunction) =>
-  tenantContext(req, res, next);
 
 // FR-2: error_code 白名单（新枚举 + 历史值向后兼容）
 // 定义在文件顶部，供 collect/report-videos 和 collect/report 两个 handler 共用。
@@ -182,7 +177,7 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
 });
 
 // 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
-acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/collect-tasks', acquisitionHistoryAuth, async (req: Request, res: Response) => {
   if (process.env.VITEST && !process.env.DATABASE_URL) {
     return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
   }
@@ -230,14 +225,14 @@ acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Reque
     return res.status(200).json({ success: true, data: { tasks, total: tasks.length }, timestamp: new Date().toISOString() });
   } catch (err) {
     console.error('[acquisition] collect-tasks error:', (err as Error).message);
-    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: (err as Error).message }, timestamp: new Date().toISOString() });
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GET /api/acquisition/collect-tasks/:id/videos — 该任务下的视频卡片列表（TasksPage 二级视图）
-acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/collect-tasks/:id/videos', acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const taskId = req.params.id;
@@ -294,12 +289,12 @@ acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async 
       },
     });
   } catch (err) {
-    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
 // GET /api/acquisition/videos/:videoId/leads — 某视频下命中的评论/leads（TasksPage 二级视图展开）
-acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/videos/:videoId/leads', acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const videoId = req.params.videoId;
@@ -334,7 +329,7 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
 
     return ok(res, { leads, total: leads.length });
   } catch (err) {
-    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
@@ -542,7 +537,7 @@ acquisitionRouter.get('/pending-collect-tasks', pendingCollectTasksRateLimit, as
   }
 });
 
-acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/leads', acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const { grade } = req.query;
 
   if (grade !== undefined && grade !== '') {
@@ -588,7 +583,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
               l.outreach_eligible,
               t.keywords AS task_keywords
          FROM zenithjoy.acquisition_leads l
-         LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
+         LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id AND t.tenant_id = l.tenant_id
         WHERE l.tenant_id = $1
         ${gradeClause}
         ORDER BY l.created_at DESC
@@ -618,7 +613,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
     return res.status(200).json({ leads, total: leads.length });
   } catch (err) {
     console.error('[acquisition] leads error:', (err as Error).message);
-    return res.status(200).json({ leads: [], total: 0 });
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
@@ -885,7 +880,7 @@ acquisitionRouter.post(
 );
 
 // POST /api/acquisition/collect/cancel
-acquisitionRouter.post('/collect/cancel', collectCancelRateLimit, collectCancelTenantContext, async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/cancel', collectCancelRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   const taskId = req.body?.task_id;
   if (!tenantId) return;

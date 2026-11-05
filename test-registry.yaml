@@ -10329,3 +10329,11 @@ tests:
     status: active
     product: 智能获客历史
     note: "历史触达页面的授权请求、记录展示和读取错误明确显示。"
+
+  - id: dashboard-retired-acquisition-history-errors
+    path: apps/dashboard/src/pages/__tests__/retired-history-errors.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客历史
+    note: "账号、验活、任务和线索历史的网络及 HTTP 失败不得显示为空记录。"

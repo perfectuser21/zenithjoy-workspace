@@ -164,7 +164,7 @@ function TaskListView() {
         <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">历史任务</h3>
         {loading ? (
           <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
-        ) : tasks.length === 0 ? (
+        ) : error ? null : tasks.length === 0 ? (
           <div className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
             暂无历史任务
           </div>
@@ -344,7 +344,7 @@ function TaskDetailView({ taskId }: { taskId: string }) {
 
       {loading ? (
         <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
-      ) : !videos || videos.length === 0 ? (
+      ) : error ? null : !videos || videos.length === 0 ? (
         <div className="text-sm text-gray-500 dark:text-gray-400 py-10 text-center rounded-xl border border-slate-200 dark:border-slate-700">
           {emptyStateMessage(taskStatus)}
         </div>

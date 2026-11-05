@@ -1,3 +1,4 @@
+import { acquisitionHistoryAuth } from '../middleware/acquisition-history-auth';
 /**
  * 智能获客「分析+指派」中台路由（刀1）
  * 契约：scratchpad/dispatch-engine-contract.md「API 端点」节
@@ -15,7 +16,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
-import { tenantContext, tenantContextOptional } from '../middleware/tenant-context';
+import { tenantContextOptional } from '../middleware/tenant-context';
 import { enqueueWarmupTasks } from '../services/warmup-dispatch';
 import {
   getConfig,
@@ -163,8 +164,8 @@ async function outreachHistoryHandler(req: Request, res: Response) {
     return res.status(503).json(ERR('HISTORY_UNAVAILABLE', '触达历史暂时不可用，请稍后重试'));
   }
 }
-acquisitionDispatchRouter.get('/outreach-history', tenantContext, outreachHistoryHandler);
-acquisitionDispatchRouter.get('/dispatch/outreach-history', tenantContext, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/outreach-history', acquisitionHistoryAuth, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/dispatch/outreach-history', acquisitionHistoryAuth, outreachHistoryHandler);
 
 // ── GET /cookie-health — 各号健康分类 + 需重扫项 ──
 acquisitionDispatchRouter.get('/cookie-health', tenantContextOptional, async (req: Request, res: Response) => {
