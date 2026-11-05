@@ -464,7 +464,7 @@
       "code_digest": "b9572072542383aa4bb5a01c51bb9be0f8aa971d2b5852cf8fd26e32e7e2e2b3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "f20ffcda1c33ac5c20c9249e9197591e2c6860b9f68201ee36eb77921f2b07e7",
         "current_code_digest": "b9572072542383aa4bb5a01c51bb9be0f8aa971d2b5852cf8fd26e32e7e2e2b3"
@@ -633,14 +633,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "e959e58ca786ef052b78bb6d58240c1eaea0a1c68d4dd3c3b1e856ca0d91a13d"
+          "sha256": "1e644f11ae2942a9629829c5b4752e3160eaf968ca7fbc418cd1127f2eaaf6fb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "80b6c9fc650967b32f8f7f9d82d22af727b880e8bbba239fd846d2b3bb1de63e"
+          "sha256": "e387cb2814f951e254503fd1ad7ebe087b06ca5122ba9c28274139a2f314ed52"
         },
         {
           "kind": "code",
@@ -955,13 +955,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8c96722b82070ef5a406b97cbc2301037a002c5abdbf7343fedda1753412b6ed",
+      "code_digest": "5285d4f111444e1ec34be075211d9fde45ad9ced54952f23d8cdb447f87ac9b5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "e3266fc87f67e4e51b834037ea3ddd0e64d40bd4b617e36d9b2a3af3371913e7",
-        "current_code_digest": "8c96722b82070ef5a406b97cbc2301037a002c5abdbf7343fedda1753412b6ed"
+        "current_code_digest": "5285d4f111444e1ec34be075211d9fde45ad9ced54952f23d8cdb447f87ac9b5"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1420,7 +1420,7 @@
       "code_digest": "0c3dc6c40e1719a93496935a3cfef178a51b0ac4951e5b27e57921559b54cce0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "04fdb8c45a1d48885f172ba35159d0d8fc10b6afe5b853d82ad11972400588fe",
         "current_code_digest": "0c3dc6c40e1719a93496935a3cfef178a51b0ac4951e5b27e57921559b54cce0"
@@ -1966,7 +1966,7 @@
       "code_digest": "dc20f566254c2c5f06cbcdfc8303931ea51b2948db2c6555f3aaf16ffa15bd61",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "ad3a92753db78a20a45599e4be13731e9cd51b737b135fccfaab52834490b4b3",
         "current_code_digest": "dc20f566254c2c5f06cbcdfc8303931ea51b2948db2c6555f3aaf16ffa15bd61"
@@ -2450,7 +2450,7 @@
       "code_digest": "bba3c6d3c3e40131229760cc5fb075c2be92c44820c316e3f9e6219b6be72bde",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "703d3274a4b37b9ff37d344c83fda0f6e804a9d3bf4e7814d702ca750c688384",
         "current_code_digest": "bba3c6d3c3e40131229760cc5fb075c2be92c44820c316e3f9e6219b6be72bde"
@@ -2619,14 +2619,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "e959e58ca786ef052b78bb6d58240c1eaea0a1c68d4dd3c3b1e856ca0d91a13d"
+          "sha256": "1e644f11ae2942a9629829c5b4752e3160eaf968ca7fbc418cd1127f2eaaf6fb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "80b6c9fc650967b32f8f7f9d82d22af727b880e8bbba239fd846d2b3bb1de63e"
+          "sha256": "e387cb2814f951e254503fd1ad7ebe087b06ca5122ba9c28274139a2f314ed52"
         },
         {
           "kind": "code",
@@ -2926,13 +2926,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eb4d33dee8ca9fd57d96743444dbbae71bfa8305113364e187455995301e1db7",
+      "code_digest": "0d65df2d0c2c4a86579bca39743a87f0a77ac57a28fd16fa9523d355a4842087",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；新增同源私有PG与nofork本地/ADB子域、纯Recorder/Judge、首phone前持久owner-epoch保护、原计数/桌面判据与同epoch资源归还，并补全实际import/freeze的code bindings。仅封闭preflight/directcleanup组件，生产supports仍false，Caller未闭域不启用；不把请求域/OS子域证明扩为Android/PG服务或整个Agent全域停止。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "ce8869082153c497796d5f96ba7d9a15aa34f066df1e1a102c2110c64e808aa0",
-        "current_code_digest": "eb4d33dee8ca9fd57d96743444dbbae71bfa8305113364e187455995301e1db7"
+        "current_code_digest": "0d65df2d0c2c4a86579bca39743a87f0a77ac57a28fd16fa9523d355a4842087"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3391,7 +3391,7 @@
       "code_digest": "e36d65e4cd6222b7ffb5eaef956709274d35d865c33ce4b0d9f3f16b029de597",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "aa9ef121e96ac49769bde5e08886e779da674e6ec93ccca4b714684f26dc36eb",
         "current_code_digest": "e36d65e4cd6222b7ffb5eaef956709274d35d865c33ce4b0d9f3f16b029de597"
@@ -3895,7 +3895,7 @@
       "code_digest": "41d1bfb2b8a7c7d9b08d456438e0e1e3e861cc582e8b06e04efedeef11ae127e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：Skill正文/Activity业务合同及版本不变；code digest变化来自共享preflight/纯Recorder-Judge/依赖冻结import与source绑定闭包，未扩大本slot操作、模型、SQL或设备权限。新物理/PG路径仅101102的preflight/directcleanup组件，当前本slot与所有生产Agent仍supportsfalse；精确内部兼容不等于完整101/102/103可运行或业务通过。 新增preflight_profile将registry规范路径、全文件hash与所选profile/serial/model/dimensions/enabled共同冻结并逐动作复核；C7证据按扩展名排他/fsync发布，保随机原件，不覆盖、不重发；不变更账号核验或业务判据。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "4531ae42b30cef492eb08f96fcd7de6a794e5c7d10559d8e8d069c763bbf086f",
         "current_code_digest": "41d1bfb2b8a7c7d9b08d456438e0e1e3e861cc582e8b06e04efedeef11ae127e"
@@ -4347,7 +4347,7 @@
       "code_digest": "2e190790a0b80f81659c540de762bc859655f511838d1b0427536e7acca73072",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "8d96cc688733c9a69af7a8be025efd402be5c9a2008cf8ba0c5ce41ebabaf73b",
         "current_code_digest": "2e190790a0b80f81659c540de762bc859655f511838d1b0427536e7acca73072"
@@ -4774,7 +4774,7 @@
       "code_digest": "69a827b5d7285845fd0ded1d73eba5b367682d64c1037c23cc898d0d3fd6e580",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "1a4f0d01f65923dcdbc58b7f0b55333a00a59d2f120c98decc9b77fd45cdba3d",
         "current_code_digest": "69a827b5d7285845fd0ded1d73eba5b367682d64c1037c23cc898d0d3fd6e580"
@@ -5194,7 +5194,7 @@
       "code_digest": "5ae833bf7fc74711e29ea8a399dbc55e2db380d53ba444593c693b09086e935b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "27be7ea3bde7b0b0c5e20e42b6cbfb927f589ebfa79991d337fc827776cda18c",
         "current_code_digest": "5ae833bf7fc74711e29ea8a399dbc55e2db380d53ba444593c693b09086e935b"
@@ -5624,7 +5624,7 @@
       "code_digest": "ce36ccc289300ac9be38466818ab069d6f614780227c833df8354ee56f52c9f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实际base9784012至d57e：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。",
+        "reason": "实际base9784012至f9b9：104 Skill/Activity业务合同、版本及原发送/订单锁/未知不重发语义不变；变化为共享preflight依赖/纯记账与源码闭包声明、同源私有14包不可变包装复制及通用serial输入校验。104不构造Agent preflight工厂、不调用新phone/PG控制域，生产supports仍false；本评估只批准精确code digest的内部兼容，不授设备或发送能力。 本次追加profile冻结仅Agent101/102，Code/104不含preflight_profile；C7排他发布仅新preflight Driver，不改104发送入口。 后续运行时只补discovery-cleanup-readback.mjs原已审桌面reader进RPC_FILES及部署RPC静态清单，固定源覆盖更完整，不增phone/SQL/发送操作；4plan只更新正式合同SHA/refs，原命令不变。 补充差分仅CI在测试前用最小环境正/负nofork probe显式预选物理Python及fixtures取该路径hashpin，不改任何生产.mjs/.py；4份steps仅正式contract_sha256元数据单字段更新，业务readback/阈值/预算不变；安全扫描仅已核精确历史grammar fingerprint豁免。",
         "reviewed_by": "/root/review_discovery_recovery",
         "previous_code_digest": "44caa0f85230a200bf41ca1554713dadadcdfad91ddc20dc2aee0d5e27e27076",
         "current_code_digest": "ce36ccc289300ac9be38466818ab069d6f614780227c833df8354ee56f52c9f3"
