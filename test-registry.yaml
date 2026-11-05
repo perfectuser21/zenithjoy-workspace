@@ -3469,10 +3469,10 @@ tests:
   - id: line01-kuaishou-sprint-ws4
     path: sprints/tests/ws4/kuaishou-e2e-workflow.test.ts
     type: e2e
-    ci: L4
-    status: active
+    ci: unverified
+    status: deprecated
     product: 新媒体运营
-    note: "Line 01 Sprint WS4 TDD Red/Green — .github/workflows/kuaishou-e2e.yml GHA windows-latest + 截图 artifact + KUAISHOU_COOKIES secret"
+    retirement: "2026-11-05 obsolete Windows web Kuaishou dry-run workflow retired at business direction; historical source retained in Git commit 9784012af142f8095dc11cf162bf3f60576f1706. Android publishing and shared session credentials remain unchanged."
   - id: line01-kuaishou-three-mode-ws1
     path: sprints/zj-kuaishou-three-mode/tests/ws1/kuaishou-image-dryrun.test.ts
     type: unit
@@ -3490,10 +3490,10 @@ tests:
   - id: line01-kuaishou-three-mode-ws3
     path: sprints/zj-kuaishou-three-mode/tests/ws3/kuaishou-gha-workflow.test.ts
     type: e2e
-    ci: L4
-    status: active
+    ci: unverified
+    status: deprecated
     product: 新媒体运营
-    note: "Line 01 Sprint zj-kuaishou-three-mode WS3 — .github/workflows/kuaishou-e2e.yml GHA windows-latest E2E"
+    retirement: "2026-11-05 obsolete Windows web Kuaishou dry-run workflow retired at business direction; historical source retained in Git commit 9784012af142f8095dc11cf162bf3f60576f1706. Android publishing and shared session credentials remain unchanged."
   - id: line05-ai-video-pipeline-ws1
     path: sprints/run-20260527-1934/tests/ws1/original-script-fields.test.ts
     type: unit
