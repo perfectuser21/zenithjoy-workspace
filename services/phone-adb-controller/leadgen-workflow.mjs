@@ -83,7 +83,10 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  };
  if(executionMode==='agent'){
   if(typeof handlers.createAgentTools!=='function')throw Object.assign(Error('AGENT_PRIMARY_TOOLS_UNAVAILABLE'),{executionStopped:true});
-  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,nativeState:()=>handlers.agentNativeState?.()||{execution_unknown:true},supportsNativeScope:activity=>handlers.agentSupportsNativeScope?.(activity)===true,createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});
+  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,
+   nativeState:()=>handlers.agentNativeState?.()||{execution_unknown:true},
+   supportsNativeScope:activity=>handlers.agentSupportsNativeScope?.(activity)===true,
+   createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});
   return {executionMode,execution:{},executeAgent:async(activity,options)=>{
    if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',execution_stopped:true,result:{status:'partial',reason:'已收到停止请求'}};
    return execute(activity,options);

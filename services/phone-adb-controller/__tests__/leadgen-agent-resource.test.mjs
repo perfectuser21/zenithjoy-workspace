@@ -177,7 +177,9 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
     r.control.centralOwnerLost=true;await assert.rejects(()=>tools.business('sample_readback',{...input,rows:[]}),/CENTRAL_OWNER_CHANGED/);assert.equal(r.calls.length,beforeSql);r.control.centralOwnerLost=false;
     const before=nativeCalls;await assert.rejects(()=>tools.phone('ui-evidence'),/UNKNOWN/);assert.equal(nativeCalls,before);
     const writesBefore=writes.length;await assert.rejects(()=>tools.business('collect',{...input,comments:refs,history:[]}),/UNKNOWN/);assert.equal(writes.length,writesBefore);
-    await assert.rejects(()=>tools.settle({execution_stopped:true}),/UNKNOWN/);await assert.rejects(()=>tools.release({execution_stopped:true}),/TERMINATION/);assert.equal(r.control.centralReleases,0);assert.equal(tools.getResult(),null);return;
+    await assert.rejects(()=>tools.settle({execution_stopped:true}),/UNKNOWN/);await assert.rejects(()=>tools.release({execution_stopped:true}),/TERMINATION/);assert.equal(r.control.centralReleases,0);
+    // No business result is available; native uncertainty must remain visible.
+    assert.deepEqual(tools.getResult(),{execution_stopped:false,native_stop_unproven:true});return;
   }
   await tools.business('collect',{...input,comments:refs,history:[]});
   await tools.business('sample_readback',{...input,rows:[]});await tools.business('comment_history_readback',{...input,history:[]});await tools.settle({execution_stopped:true});
