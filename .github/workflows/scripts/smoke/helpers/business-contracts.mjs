@@ -19,7 +19,29 @@ try{
   const local=path.join(root,cwd,'node_modules/vitest/vitest.mjs'),binary=existsSync(local)?local:path.join(root,'node_modules/vitest/vitest.mjs');
   const output=path.join(temp,group+'.json');const env={...process.env};for(const key of Object.keys(env))if(/(API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY)/i.test(key))delete env[key];
   const result=spawnSync(process.execPath,[binary,'run',...files,'--reporter=json','--outputFile='+output],{cwd:path.join(root,cwd),env,stdio:'inherit'});
-  if(result.status!==0)throw new Error(`Business ${group} exited ${result.status}`);
+  if(result.status!==0){
+   // The JSON-only reporter is otherwise deleted by finally, hiding the actual
+   // failing assertion from Smoke Glob's retained job log and retry output.
+   if(existsSync(output)){
+    try{
+     const failed=JSON.parse(readFileSync(output,'utf8'));
+     console.error(`Business ${group} report: failed tests=${failed.numFailedTests}, failed suites=${failed.numFailedTestSuites}`);
+     for(const suite of failed.testResults??[])if(suite.status!=='passed'){
+      const file=files.find(file=>suite.name?.replaceAll('\\','/').endsWith('/'+file))??'[unrecognized suite]';
+      console.error('Failed business test file:',file);
+      for(const test of suite.assertionResults??[])if(test.status==='failed'){
+       const name=String(test.fullName??test.title??'[unnamed assertion]');
+       const label=/[\r\n{}]|(?:authorization|cookie|password|secret|token|api[_ -]?key)\s*[:=]/i.test(name)?'[dynamic assertion label omitted]':name.slice(0,200);
+       // Raw messages/stacks may contain request headers, credentials or HTTP
+       // bodies. Keep only a static reason and the bounded assertion label.
+       console.error('Failed assertion:',label,'(assertion failed; raw details omitted)');
+      }
+     }
+     if(failed.unhandledErrors?.length)console.error('Unhandled error count:',failed.unhandledErrors.length);
+    }catch{console.error('Cannot read failed business report (raw details omitted)');}
+   }else console.error(`Business ${group} did not produce its JSON report`);
+   throw new Error(`Business ${group} exited ${result.status}`);
+  }
   const report=JSON.parse(readFileSync(output,'utf8'));verifyReport(report,files);
   console.log(`business ${group}: executed files=${files.length} tests=${report.numPassedTests}, skipped=0`);
  }
