@@ -11,7 +11,11 @@ mkdirSync(screenshots, { recursive: true });
 
 test('真实后端显示 requested、sent、confirmed 与 cooldown', async ({ page }) => {
   const suffix = randomUUID().slice(0, 8);
-  const userId = `cancel-e2e-${suffix}`;
+  const dbUrl = new URL(process.env.DATABASE_URL ?? '');
+  if (process.env.E2E_CANCEL_DISPOSABLE_DB !== '1' || !['localhost', '127.0.0.1'].includes(dbUrl.hostname) || !['/zenithjoy_test', '/cecelia'].includes(dbUrl.pathname) || new URL(apiUrl).hostname !== 'localhost' || new URL(baseUrl).hostname !== 'localhost') {
+    throw new Error('Cancellation E2E requires an explicitly disposable local test database and localhost services');
+  }
+  let userId: string | undefined;
   const machineId = `cancel-machine-${suffix}`;
   const runtimeAgentId = `cancel-agent-${suffix}`;
   const licenseKey = `ZJ-B-CANCEL-E2E-${suffix.toUpperCase()}`;
@@ -21,7 +25,6 @@ test('真实后端显示 requested、sent、confirmed 与 cooldown', async ({ pa
     [`cancel-e2e-${suffix}`, licenseKey],
   );
   const tenantId = tenant.rows[0].id;
-  await db.query(`INSERT INTO zenithjoy.tenant_members(tenant_id,feishu_user_id,role) VALUES($1,$2,'owner')`, [tenantId, userId]);
   const license = await db.query<{ id: string }>(
     `INSERT INTO zenithjoy.licenses(license_key,tier,max_machines,status,expires_at,tenant_id)
      VALUES($1,'basic',1,'active',NOW()+interval '1 day',$2) RETURNING id`, [licenseKey, tenantId],
@@ -42,9 +45,22 @@ test('真实后端显示 requested、sent、confirmed 与 cooldown', async ({ pa
   );
 
   try {
-    await page.setExtraHTTPHeaders({ 'X-Feishu-User-Id': userId });
+    const anonymous = await page.request.get(`${apiUrl}/api/acquisition/collect-tasks`);
+    expect(anonymous.status()).toBe(401);
+    const signup = await page.request.post(`${apiUrl}/api/auth/sign-up/email`, { data: {
+      email: `cancel-e2e-${suffix}@example.test`, password: 'Local-test-password-123', name: 'Cancel E2E', license_key: licenseKey,
+    } });
+    expect(signup.status()).toBe(200);
+    userId = (await signup.json()).user.id;
+    const membership = await db.query('SELECT tenant_id FROM zenithjoy.tenant_members WHERE feishu_user_id=$1', [userId]);
+    expect(membership.rows.map(row => row.tenant_id)).toEqual([tenantId]);
     await page.goto(`${baseUrl}/area/acquisition/tasks`);
-    await page.getByRole('button', { name: '放弃' }).first().click();
+    const [cancelResponse] = await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/acquisition/collect/cancel') && r.request().method() === 'POST'),
+      page.getByRole('button', { name: '放弃' }).first().click(),
+    ]);
+    expect(cancelResponse.status()).toBe(200);
+    await page.reload();
     const requested = page.getByTestId('cancel-requested').first();
     await expect(requested).toBeDisabled();
     await expect(requested).toContainText('取消中');
@@ -68,7 +84,7 @@ test('真实后端显示 requested、sent、confirmed 与 cooldown', async ({ pa
     });
     expect(report.ok()).toBeTruthy();
     await page.reload();
-    await expect(page.getByText('已取消').first()).toBeVisible();
+    await expect(page.getByTestId('cancel-confirmed').first()).toHaveText('已取消');
     await page.screenshot({ path: `${screenshots}/cancel-confirmed.png` });
     await expect(page.getByText(/设备冷却中，还需等待/).first()).toBeVisible();
     await page.screenshot({ path: `${screenshots}/cancel-cooldown.png` });
@@ -80,6 +96,7 @@ test('真实后端显示 requested、sent、confirmed 与 cooldown', async ({ pa
     await db.query('DELETE FROM zenithjoy.licenses WHERE id=$1', [license.rows[0].id]);
     await db.query('DELETE FROM zenithjoy.tenant_members WHERE tenant_id=$1', [tenantId]);
     await db.query('DELETE FROM zenithjoy.tenants WHERE id=$1', [tenantId]);
+    if (userId) await db.query('DELETE FROM "user" WHERE id=$1', [userId]);
     await db.end();
   }
 });

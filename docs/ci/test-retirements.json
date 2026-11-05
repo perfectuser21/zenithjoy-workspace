@@ -878,6 +878,78 @@
         ".github/workflows/scripts/smoke/helpers/media-extra-contracts.mjs"
       ],
       "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj-kuaishou-three-mode/tests/ws3/kuaishou-gha-workflow.test.ts",
+      "source_commit": "9784012af142f8095dc11cf162bf3f60576f1706",
+      "source_blob": "1537e11ce71ccf50609ec8d2fd444cc0f3d52ae3",
+      "source_sha256": "35acbe7e08b3c358a7f7baf5b0bf9abe90d477de08655422a4d1f383b7a768b0",
+      "reason": "The user retired PC publishing; this historical contract only asserts the retired Windows Kuaishou web dryrun workflow structure.",
+      "dimensions": {
+        "current_value": "The PC web dryrun is retired by the user; Android phone publishing remains in scope.",
+        "active_status": "The contract only reads the retired Kuaishou web workflow; product code and shared session components remain.",
+        "real_effect": "It asserts workflow strings for cookies, dryruns and screenshots; it does not verify a phone publication.",
+        "test_and_blocking": "This static contract is not a substitute for Android acceptance; physical delivery remains unverified.",
+        "duplication_and_obsolescence": "The sole subject is the explicitly retired PC web workflow and it has no unique Android guarantee.",
+        "runtime_and_maintenance_cost": "Remove the obsolete static workflow contract; no runtime saving is asserted.",
+        "retirement_and_dependencies": "Retain business implementation, secrets and shared notification/session code; original test bytes remain recoverable in Git."
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        "product-map/generated/product-map.md",
+        "test-registry.yaml"
+      ],
+      "historical_obligation_evidence": "This contract asserts the structure of a PC workflow the user explicitly retired. Git retains its exact contents; no unique current Android obligation follows from the retired workflow structure."
+    },
+    {
+      "path": "sprints/zj-ai-video-ws1-ws3-ws4/tests/ws3/e2e-spec-coverage.test.ts",
+      "source_commit": "8dbe7c39bf240344c61e8896356852e1f9652123",
+      "source_blob": "5277ea53e081167eca985b10d4988889429dd1a2",
+      "source_sha256": "91b03c748e7a5b9fa8464fd58e5513cb1d249100e6213fb0b93fc32eef5245ab",
+      "reason": "Historical sprint snapshot asserts hard-coded version of the retired Windows video-agent workflow and strings in its old desktop E2E; it never executes video behavior and is not an active CI consumer.",
+      "dimensions": {
+        "current_value": "The user retained video editing but retired the Windows client. Current value is real video processing and observable results, not old workflow-version string assertions.",
+        "active_status": "Registry labels this pending-ci; no current workflow or executable caller was found. The former Windows video workflow was manual dispatch and is being retired.",
+        "real_effect": "Seven static assertions read old E2E/workflow text, do not create or render video. The old real Playwright video E2E source stays unchanged but has no current Windows workflow runner.",
+        "test_and_blocking": "This pending-ci snapshot is not a blocking real video test. The current L4 API smoke is retained, but API contracts do not prove real rendering or a completed physical business run.",
+        "duplication_and_obsolescence": "Two assertions demand obsolete static 1.1.29 defaults; the other five inspect strings in an old Windows E2E, including W-G text that its present implementation does not contain.",
+        "runtime_and_maintenance_cost": "Removing an unexecuted static snapshot avoids a stale pending-CI contract; no runtime or cost saving is asserted.",
+        "retirement_and_dependencies": "Exact historical bytes and metadata are retained in Git; preserve the old E2E source, all live video code and API tests. Real retained-path video acceptance remains open and needs separate evidence."
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        "e2e/agent-video-pipeline.spec.js",
+        ".github/workflows/ci-l4-e2e-smoke.yml",
+        "test-registry.yaml"
+      ],
+      "historical_obligation_evidence": "The user explicitly retired Windows clients. This sprint snapshot only checked source text and is not an active CI runner; no unique real-video execution is removed by this snapshot deletion. The former manual Windows E2E runner is separately retired, and actual retained-path video processing remains unverified; neither retained API smoke nor these evidence files is claimed as an equivalent replacement."
+    },
+    {
+      "path": "sprints/07041249-line02-dashboard-ia-redesign/tests/line02-outreach-api.test.ts",
+      "source_commit": "9784012af142f8095dc11cf162bf3f60576f1706",
+      "source_blob": "5cf9ea80d4dc89396a4576d143fee90f281affdb",
+      "source_sha256": "c2800d4f8ab8b3a81fd6619506db6098fe9a8e511ecabc9ba17027477ba7b5c1",
+      "reason": "旧获客发起入口已按用户决定退役，原不可变快照要求继续出现旧绑定文案；保留的历史读取义务迁至执行真实路由与浏览器合同。",
+      "dimensions": {
+        "current_value": "旧创建与 PC 绑定不再需要；历史账号、线索和触达记录仍需授权读取。",
+        "active_status": "旧文案不再对应用户指定的产品路径；历史读取由现有 dashboard 与 API 使用。",
+        "real_effect": "原测试只搜索源码文字，不能验证租户隔离、实际返回内容或数据库故障；实际 HTTP 加 PostgreSQL 合同现在核验。",
+        "test_and_blocking": "新的真实 PG 双租户与错误负例在 L4 business PG 中执行；dashboard 组件合同和 Chromium E2E 检查历史入口与内容。",
+        "duplication_and_obsolescence": "原 Hub 旧绑定文字要求与已退役行为冲突；导航、表格及历史数据义务转移到现役行为测试。",
+        "runtime_and_maintenance_cost": "去除只依赖旧源码文本的不可变快照，复用现有业务 PG 与页面测试；不声称额外耗时节省。",
+        "retirement_and_dependencies": "保留完整 Git 内容、旧数据、历史 URL、授权校验和取消能力；账号与触达历史仍可读，旧创建不再开放。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/integration/business-contracts/outreach-history.pg.test.ts",
+        "apps/dashboard/src/pages/AcquisitionOutreachPage.test.tsx",
+        "apps/dashboard/src/pages/__tests__/AcquisitionHubPage.test.tsx",
+        "apps/dashboard/e2e/acquisition-ia-redesign.spec.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/vitest.business-pg.config.ts",
+        ".github/workflows/ci-l4-integration.yml"
+      ],
+      "historical_obligation_evidence": "用户确认旧获客不用；历史读取与租户隔离迁入真实可执行合同，不将新 Skill 视为已上线。"
     }
   ]
 }

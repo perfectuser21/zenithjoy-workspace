@@ -1,17 +1,7 @@
 #!/usr/bin/env bash
-# 身份统一 — agents 表按 (tenant_id, hostname) 去重 E2E Smoke
-#
-# 根因（真机 XX-ROG）：同一台机器在 agents 表裂成两行（心跳 ws1-<hash> + WS 连接 agent-env-<ts>），
-# 派单投一行、agent 收任务用另一行 → qr-bind 任务卡 queued。
-#
-# 本 smoke 验证：
-#   1. 同 hostname 用两个不同 agent_id_text 各 upsert 一次 → agents 表只剩 1 行（不裂）
-#   2. 两次 mock-agent 返回的 agent_uuid 相同（收敛到同一去重行）
-#   3. 不同 hostname 同 tenant → 各自一行（不误并）
-#   4. 不同 tenant 同 hostname → 各自一行（tenant 隔离）
-#   5. qr-bind 自动 resolve 的派单 agent_id = 心跳/me-status 的 pinned_agent_id（投递对齐）
-#
-# 修复证据：qr-bind publish_tasks.agent_id 与 license.pinned_agent_id 一致 → 任务不再卡 queued。
+# Verify agent identity deduplication and tenant/host isolation using an isolated
+# PostgreSQL/API fixture; old QR creation must now return 410 without new work.
+# Real pinned-agent selection is exercised by the required real-PG suite.
 
 set -euo pipefail
 
@@ -65,7 +55,7 @@ echo "==> [1/5] 同 hostname 两个不同 agent_id_text → agents 只剩 1 行"
 UUID1=$(mock_agent "$TENANT_A" "ws1-${TS}-heartbeat" "$HOST_ROG")
 UUID2=$(mock_agent "$TENANT_A" "agent-env-${TS}-ws" "$HOST_ROG")
 ROW_CNT=$(psql_q "SELECT count(*) FROM zenithjoy.agents WHERE tenant_id='${TENANT_A}' AND hostname='${HOST_ROG}';")
-[ "$ROW_CNT" = "1" ] || { echo "  FAIL: 期望 1 行, 实际 $ROW_CNT（裂行未修）"; exit 1; }
+[ "$ROW_CNT" = "1" ] || { echo "  FAIL: 期望 1 行, 实际 ${ROW_CNT}（裂行未修）"; exit 1; }
 echo "  OK: 同 hostname 去重为 1 行"
 
 echo "==> [2/5] 两次返回的 agent_uuid 收敛为同一行"
@@ -87,30 +77,14 @@ TOTAL_ROG=$(psql_q "SELECT count(*) FROM zenithjoy.agents WHERE hostname='${HOST
 [ "$TOTAL_ROG" = "2" ] || { echo "  FAIL: 同 hostname 跨2 tenant 期望 2 行, 实际 $TOTAL_ROG"; exit 1; }
 echo "  OK: tenant 隔离成立"
 
-echo "==> [5/5] 投递对齐：pin tenant_A 到去重行 → qr-bind 派单 agent_id 与 pinned 一致"
-psql_q "UPDATE zenithjoy.licenses SET pinned_agent_id='${UUID1}' WHERE tenant_id='${TENANT_A}';" >/dev/null
-# tenant_member 让 tenantContext 命中
-PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=1 <<EOF
-INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role)
-VALUES ('${TENANT_A}', 'ou_identity_dedup_${TS}', 'owner')
-ON CONFLICT (tenant_id, feishu_user_id) DO NOTHING;
--- 让去重行成为唯一 online（pinned 应被 agentContext 选中）
-UPDATE zenithjoy.agents SET status='offline' WHERE tenant_id='${TENANT_A}' AND id<>'${UUID1}';
-EOF
-RESP=$(curl -fsS -X POST -H "Content-Type: application/json" \
-  -H "X-Feishu-User-Id: ou_identity_dedup_${TS}" \
-  -d '{"account_label":"dedup-burner"}' \
+echo "==> [5/5] 旧 qr-bind 创建必须拒绝，不新增任务"
+BEFORE=$(psql_q "SELECT count(*) FROM zenithjoy.publish_tasks WHERE tenant_id='${TENANT_A}'")
+TMP=$(mktemp); trap 'rm -f "$TMP"' EXIT
+CODE=$(curl -s -o "$TMP" -w '%{http_code}' -X POST -H "Content-Type: application/json" \
+  -H "X-Tenant-Id: ${TENANT_A}" -d "{\"agent_id\":\"${UUID1}\",\"account_label\":\"dedup-burner\"}" \
   "${API_BASE}/api/agent/burner/qr-bind")
-TASK_ID=$(echo "$RESP" | sed -E 's/.*"task_id":"([^"]+)".*/\1/' | head -c 64)
-echo "$TASK_ID" | grep -qE '^[0-9a-f-]{36}$' || { echo "  FAIL: 没拿到 task_id body=$RESP"; exit 1; }
-TASK_AGENT=$(psql_q "SELECT agent_id FROM zenithjoy.publish_tasks WHERE id='${TASK_ID}';")
-PINNED=$(psql_q "SELECT pinned_agent_id FROM zenithjoy.licenses WHERE tenant_id='${TENANT_A}';")
-[ "$TASK_AGENT" = "$PINNED" ] && [ "$TASK_AGENT" = "$UUID1" ] \
-  || { echo "  FAIL: 派单 agent_id($TASK_AGENT) ≠ pinned($PINNED)/去重行($UUID1)"; exit 1; }
-echo "  OK: 派单 agent_id = pinned = 去重行 → 任务不卡 queued"
-
-echo ""
-echo "agent-identity-dedup smoke PASS:"
-echo "  - 同 (tenant,hostname) 去重为单行，agent_uuid 收敛一致"
-echo "  - hostname / tenant 双向隔离不误并"
-echo "  - qr-bind 派单与 pinned_agent_id 对齐（投递落到同一去重行）"
+[ "$CODE" = 410 ] || { echo "FAIL: retired qr-bind expected 410, got $CODE"; exit 1; }
+node -e 'const fs=require("fs");if(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).error?.code!=="LEGACY_ACQUISITION_RETIRED")process.exit(1)' "$TMP"
+AFTER=$(psql_q "SELECT count(*) FROM zenithjoy.publish_tasks WHERE tenant_id='${TENANT_A}'")
+[ "$BEFORE" = "$AFTER" ] || { echo "FAIL: retired creation inserted task"; exit 1; }
+echo "agent identity isolation and retired creation refusal PASS; Skill/device acceptance not verified"

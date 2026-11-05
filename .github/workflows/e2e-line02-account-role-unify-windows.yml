@@ -7,6 +7,7 @@ on:
       - 'apps/api/src/routes/agent-burner.ts'
       - 'apps/dashboard/src/pages/AcquisitionAccountsPage.tsx'
       - 'apps/dashboard/e2e/line02-account-role-unify.spec.ts'
+      - 'apps/dashboard/e2e/retired-acquisition-account-history.spec.ts'
       - 'sprints/07032332-line02-account-role-unify/**'
   workflow_dispatch:
     inputs:
@@ -64,7 +65,7 @@ jobs:
         working-directory: apps/dashboard
         env:
           E2E_BASE_URL: 'http://localhost:5174'
-        run: npx playwright test e2e/line02-account-role-unify.spec.ts --reporter=list
+        run: npx playwright test e2e/retired-acquisition-account-history.spec.ts --reporter=list
 
       - name: Upload artifacts on failure
         if: failure()

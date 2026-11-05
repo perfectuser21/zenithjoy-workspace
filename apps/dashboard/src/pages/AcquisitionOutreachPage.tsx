@@ -28,7 +28,7 @@ export default function AcquisitionOutreachPage() {
         if (alive) setItems(result.items);
       })
       .catch(() => {
-        if (alive) setError(null);
+        if (alive) setError('加载触达记录失败，请稍后重试');
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -51,7 +51,7 @@ export default function AcquisitionOutreachPage() {
 
       {loading ? (
         <p className="text-sm text-gray-500">加载中…</p>
-      ) : items.length === 0 ? (
+      ) : error ? null : items.length === 0 ? (
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 py-12 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">暂无触达记录，触达任务运行后将在此显示</p>
         </div>

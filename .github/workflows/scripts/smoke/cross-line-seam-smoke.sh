@@ -35,7 +35,7 @@ if ! curl -fs "$API_BASE/health" >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "== [1/5] 种子：租户 A/B + 成员 + 客服机 + 采集任务 =="
+echo "== [1/5] 种子：租户 A/B + 成员 + 客服机 + 历史在途任务 =="
 TENANT_A=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('ci-cross-a-$RUN_ID','lk_cross_a_$RUN_ID') RETURNING id")
 TENANT_B=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('ci-cross-b-$RUN_ID','lk_cross_b_$RUN_ID') RETURNING id")
 USER_A="ci-cross-a-$RUN_ID"
@@ -43,17 +43,10 @@ USER_B="ci-cross-b-$RUN_ID"
 psql_q "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ('$TENANT_A','$USER_A','admin'),('$TENANT_B','$USER_B','admin')" >/dev/null
 CS_WX="wx_cs_ci_$RUN_ID"
 psql_q "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$TENANT_A','ci-machine-$RUN_ID','$CS_WX')" >/dev/null
-# 2026-07-18（孤岛清理 PR）：种子任务改走现役 /collect/start（写 acquisition_collect_tasks），
-# 已下线的 /comment-score-result 曾用的 acquisition_keyword_tasks 直插种子法一并淘汰。
-CS_TMP=$(mktemp)
-CS_HTTP=$(curl -s -o "$CS_TMP" -w "%{http_code}" \
-  -X POST "$API_BASE/api/acquisition/collect/start" \
-  -H 'Content-Type: application/json' -H "X-Tenant-Id: $TENANT_A" \
-  -d '{"keywords":["护肤"]}')
-[ "$CS_HTTP" = "200" ] || fail "collect/start 种子失败: $(cat "$CS_TMP")"
-CT_ID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CS_TMP','utf8')).data.task_id)" 2>/dev/null)
-rm -f "$CS_TMP"
-[ -n "$TENANT_A" ] && [ -n "$TENANT_B" ] && [ -n "$CT_ID" ] || fail "种子失败"
+# 旧创建入口已停用；显式种一条历史在途任务，只验证现存回执/CRM隔离。
+# 这不代表新 Skill 任务创建或真机接缝已验证。
+CT_ID=$(psql_q "INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id,keywords,status) VALUES ('$TENANT_A','[\"护肤\"]'::jsonb,'pending') RETURNING id" | head -1)
+[ -n "$TENANT_A" ] && [ -n "$TENANT_B" ] && [ -n "$CT_ID" ] || fail "historical fixture failed"
 ok "tenant A=$TENANT_A / B=$TENANT_B / collect_task=$CT_ID"
 
 echo "== [2/5] Line02 写侧：真 API 上报评论 → acquisition_leads =="
@@ -69,7 +62,7 @@ LEAD_TENANT=$(psql_q "SELECT tenant_id FROM zenithjoy.acquisition_leads WHERE se
 # 本闸只守"写侧调用后任务状态确实从 pending 推进了"，等价替代旧版"keyword_task 未标 done"回归（PR#1186 类）。
 CT_STATUS=$(psql_q "SELECT status FROM zenithjoy.acquisition_collect_tasks WHERE id='$CT_ID'")
 [ "$CT_STATUS" != "pending" ] || fail "collect_task 状态卡在 pending 未推进（回归 PR#1186 类新链路等价）: '$CT_STATUS'"
-ok "lead 落库 tenant=A，collect_task 状态=$CT_STATUS（已从 pending 推进）"
+ok "lead 落库 tenant=A，collect_task 状态=${CT_STATUS}（已从 pending 推进）"
 
 echo "== [3/5] [SIMULATED-JOIN] ⚠️ 模拟人工加微链路（私信引导加企微→真人加好友→agent 扫好友入册），非真实 RPA 接缝 =="
 CONTACT="crossline-customer-$RUN_ID"
@@ -96,4 +89,4 @@ LEAK=$(psql_q "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE sec_uid='$
 [ "$LEAK" = "0" ] || fail "lead 泄漏到其他租户"
 ok "隔离双向成立（B 不可见 A / 无头 401 / lead 无泄漏）"
 
-echo "🎉 跨 Line 接缝 E2E 全部通过（第 3 步为 SIMULATED-JOIN 模拟，非真机 RPA）"
+echo "🎉 历史回执和 CRM 隔离通过；人工接缝为模拟，Skill 和真机未验证"

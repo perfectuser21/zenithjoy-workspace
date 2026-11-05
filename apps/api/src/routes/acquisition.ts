@@ -1,3 +1,4 @@
+import { acquisitionHistoryAuth } from '../middleware/acquisition-history-auth';
 import { Router, Request, Response, NextFunction } from 'express';
 import { lookupAgentIdentity } from '../services/agent-identity-lookup';
 import { randomUUID } from 'crypto';
@@ -13,18 +14,13 @@ import { tenantContext, tenantContextOptional } from '../middleware/tenant-conte
 import { licenseAuth } from '../middleware/license-auth';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
-import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
+import { buildAssignments, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 import { judgeVideo } from '../services/content-judgment';
+import { legacyAcquisitionRetired } from './legacy-acquisition-retired';
 import { gradeComments } from '../services/comment-grading';
 
 export const acquisitionRouter = Router();
-
-// Keep route registration lazy so legacy tests that partially mock this module can
-// still import unrelated acquisition endpoints. Authentication remains delegated
-// to the production tenantContext middleware when the cancel endpoint is called.
-const collectCancelTenantContext = (req: Request, res: Response, next: NextFunction) =>
-  tenantContext(req, res, next);
 
 // FR-2: error_code 白名单（新枚举 + 历史值向后兼容）
 // 定义在文件顶部，供 collect/report-videos 和 collect/report 两个 handler 共用。
@@ -102,6 +98,15 @@ const accountScanTriggerRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 1,
 });
+
+// Per-route IP budgets apply before session/tenant resolution and do not share
+// counters with device callbacks or the Skill bridge.
+const historyTasksRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyVideosRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyVideoLeadsRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const historyLeadsRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredBuildRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+const retiredAccountScanIpRateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
 
 const collectStartRateLimit = simpleRateLimit({
   windowMs: 60_000,
@@ -181,10 +186,7 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
 });
 
 // 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
-acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Request, res: Response) => {
-  if (process.env.VITEST && !process.env.DATABASE_URL) {
-    return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
-  }
+acquisitionRouter.get('/collect-tasks', historyTasksRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
@@ -229,14 +231,14 @@ acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Reque
     return res.status(200).json({ success: true, data: { tasks, total: tasks.length }, timestamp: new Date().toISOString() });
   } catch (err) {
     console.error('[acquisition] collect-tasks error:', (err as Error).message);
-    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: (err as Error).message }, timestamp: new Date().toISOString() });
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GET /api/acquisition/collect-tasks/:id/videos — 该任务下的视频卡片列表（TasksPage 二级视图）
-acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/collect-tasks/:id/videos', historyVideosRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const taskId = req.params.id;
@@ -292,13 +294,13 @@ acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async 
         video_count: taskRow.video_count ?? 0,
       },
     });
-  } catch (err) {
-    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  } catch {
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
 // GET /api/acquisition/videos/:videoId/leads — 某视频下命中的评论/leads（TasksPage 二级视图展开）
-acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/videos/:videoId/leads', historyVideoLeadsRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const videoId = req.params.videoId;
@@ -332,8 +334,8 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
     }));
 
     return ok(res, { leads, total: leads.length });
-  } catch (err) {
-    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  } catch {
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
@@ -541,7 +543,7 @@ acquisitionRouter.get('/pending-collect-tasks', pendingCollectTasksRateLimit, as
   }
 });
 
-acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/leads', historyLeadsRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const { grade } = req.query;
 
   if (grade !== undefined && grade !== '') {
@@ -550,9 +552,6 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
     }
   }
 
-  if (process.env.VITEST) {
-    return res.status(200).json({ leads: [], total: 0 });
-  }
 
   const tenantId = req.tenantId;
   if (!tenantId) {
@@ -587,7 +586,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
               l.outreach_eligible,
               t.keywords AS task_keywords
          FROM zenithjoy.acquisition_leads l
-         LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
+         LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id AND t.tenant_id = l.tenant_id
         WHERE l.tenant_id = $1
         ${gradeClause}
         ORDER BY l.created_at DESC
@@ -617,7 +616,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
     return res.status(200).json({ leads, total: leads.length });
   } catch (err) {
     console.error('[acquisition] leads error:', (err as Error).message);
-    return res.status(200).json({ leads: [], total: 0 });
+    return fail(res, 503, 'HISTORY_UNAVAILABLE', '历史记录暂时不可用，请稍后重试');
   }
 });
 
@@ -738,7 +737,7 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
 });
 
 // POST /api/acquisition/collect/start
-acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const keywords: unknown = req.body?.keywords;
@@ -846,8 +845,10 @@ acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOpt
 // 拉取"机制，延迟从最长一小时降到最坏约30秒。
 acquisitionRouter.post(
   '/account-scan/trigger',
+  retiredAccountScanIpRateLimit,
   tenantContextOptional,
   accountScanTriggerRateLimit,
+  legacyAcquisitionRetired,
   async (req: Request, res: Response) => {
     const tenantId = tenantOf(req, res);
     if (!tenantId) return;
@@ -883,7 +884,7 @@ acquisitionRouter.post(
 );
 
 // POST /api/acquisition/collect/cancel
-acquisitionRouter.post('/collect/cancel', collectCancelRateLimit, collectCancelTenantContext, async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/cancel', collectCancelRateLimit, acquisitionHistoryAuth, async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   const taskId = req.body?.task_id;
   if (!tenantId) return;
@@ -1494,17 +1495,12 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     );
     await client.query('COMMIT');
 
-    // ── COMMIT 之后：SSE + dispatch（只在本次真进终态且任务有 leads 时点火一次）──
+    // COMMIT 后保留旧任务的 SSE 回执，不再创建或派发新任务。
     afterCommit = () => {
       const ssePayload = { task_id: taskId, status: newStatus, video_count: videoTotal, lead_count_raw: leadCountAfter };
       if (isTerminal) sseService.close(taskId, ssePayload);
       else sseService.emit(taskId, ssePayload);
-      if (s.changed && isTerminal && leadCountAfter > 0) {
-        void scoreLeads(pool, tenantId)
-          .then(() => buildAssignments(pool, tenantId))
-          .then(() => dispatchDue(pool, tenantId))
-          .catch((e: Error) => console.error('[acquisition] collect/report dm-dispatch error:', e.message));
-      }
+
     };
 
     return ok(res, {
@@ -1541,7 +1537,6 @@ export async function sweepCollectTimeouts(): Promise<{ swept: number }> {
     [cutoffMs]
   );
   let swept = 0;
-  const dispatchTenants = new Set<string>();
   for (const t of rows) {
     const s = settleCollectTask({
       currentStatus: t.status,
@@ -1562,16 +1557,7 @@ export async function sweepCollectTimeouts(): Promise<{ swept: number }> {
       [t.id, s.status, s.error_code, t.status]
     );
     swept += r.rows.length;
-    if (r.rows.length > 0 && s.status === 'partial' && t.lead_count > 0 && t.tenant_id) {
-      dispatchTenants.add(t.tenant_id);
-    }
-  }
-  // sweep 收尸为 partial 且有 leads 的任务，补一次 dm-dispatch 链（同租户去重只触发一次）
-  for (const tenantId of dispatchTenants) {
-    void scoreLeads(pool, tenantId)
-      .then(() => buildAssignments(pool, tenantId))
-      .then(() => dispatchDue(pool, tenantId))
-      .catch((e: Error) => console.error('[acquisition] sweep-timeouts dm-dispatch error:', e.message));
+
   }
   return { swept };
 }
@@ -1721,7 +1707,7 @@ acquisitionRouter.post('/rescore-lead', tenantContextOptional, async (req: Reque
 });
 
 // POST /api/acquisition/build-assignments — 手动触发 DM 指派（commit-4/5）
-acquisitionRouter.post('/build-assignments', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.post('/build-assignments', retiredBuildRateLimit, tenantContextOptional, legacyAcquisitionRetired, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
 

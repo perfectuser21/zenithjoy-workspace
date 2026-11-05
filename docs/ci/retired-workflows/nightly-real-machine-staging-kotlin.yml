@@ -1,7 +1,7 @@
 name: Nightly Real-Machine Regression (staging)
 
-# Current nightly lanes: approved Line02 Douyin read-side and the original generic
-# Android account-scan lane. Neither is Android customer-service delivery proof.
+# Current nightly lane: generic Android account-scan. This is not Android
+# customer-service delivery proof. The obsolete web Douyin check is retired.
 # API releases separately require same-SHA frozen Brain business acceptance S2/S3.
 # Android customer-service CI's 83 offline cases are not physical acceptance.
 # Two completed main runs / 36h / complete jobs remain release evidence policy.
@@ -20,60 +20,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 真抖音保留原批准测试profile、同SHA候选和与独立F06的桌面互斥。
-  douyin-read:
-    name: 真抖音 — keyword→comment 读侧 full check
-    if: always()
-    runs-on: [self-hosted, wechat-capable]
-    concurrency:
-      group: zj-rog-desktop
-      cancel-in-progress: false
-    timeout-minutes: 15
-    env:
-      SMOKE_KW: '美甲'
-    steps:
-      - name: Verify GitHub checkout proxy
-        shell: bash
-        run: |
-          # Job-only Git config; never alter the shared machine routing or global Git config.
-          # Verify the existing proxy with normal TLS before allowing checkout.
-          curl --proxy http://127.0.0.1:7890 --noproxy '' --connect-timeout 3 --max-time 10 -fsSI https://github.com/ -o /dev/null || { echo 'GitHub checkout proxy unavailable' >&2; exit 1; }
-          count=${GIT_CONFIG_COUNT:-0}
-          case "$count" in ''|*[!0-9]*) echo 'Invalid inherited Git config count' >&2; exit 1;; esac
-          if [ "${#count}" -gt 9 ]; then echo 'Invalid inherited Git config count' >&2; exit 1; fi
-          count=$((10#$count))
-          {
-            printf 'GIT_CONFIG_KEY_%s=http.https://github.com/.proxy\n' "$count"
-            printf 'GIT_CONFIG_VALUE_%s=http://127.0.0.1:7890\n' "$count"
-            printf 'GIT_CONFIG_COUNT=%s\n' "$((count + 1))"
-          } >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          sparse-checkout: |
-            .github/workflows/scripts
-            services/agent/publishers
-            services/agent/package.json
-            services/agent/package-lock.json
-          sparse-checkout-cone-mode: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Prepare candidate dependencies from lockfile
-        shell: powershell
-        working-directory: services/agent
-        run: npm ci --ignore-scripts --omit=dev --workspaces=false
-      - name: Run fixed candidate with approved interactive test user
-        shell: powershell
-        run: .\.github\workflows\scripts\run-line02-candidate.ps1
-      - name: Retain actual candidate receipt and output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: line02-candidate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: line02-candidate-evidence/
-          if-no-files-found: warn
-
   # ─── 真安卓 account-scan 真机验证车道 full check（刀D，2026-07-30 接入）───
   # envfail(exit 3,环境未就绪)与真机 bug 同级计红（decision 2f11ae25，supersede 07292330
   # 合同 infra-skip 条款）：exit_code 仍写 job output 供 nightly-report 区分标签，
@@ -129,7 +75,7 @@ jobs:
   # ─── 汇总 + 红→自动开 Issue（值班闭环最小版）───
   nightly-report:
     name: Nightly 真机回归汇总（红→开 Issue）
-    needs: [douyin-read, account-scan]
+    needs: [account-scan]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -138,11 +84,10 @@ jobs:
     steps:
       - name: Summarize and open issue on failure
         run: |
-          DOUYIN="${{ needs.douyin-read.result }}"
           ACCOUNT_SCAN="${{ needs.account-scan.result }}"
           ACCOUNT_SCAN_CODE="${{ needs.account-scan.outputs.exit_code }}"
           TODAY=$(TZ=Asia/Shanghai date +%F)
-          echo "douyin-read=$DOUYIN account-scan=$ACCOUNT_SCAN(code=$ACCOUNT_SCAN_CODE)"
+          echo "account-scan=$ACCOUNT_SCAN(code=$ACCOUNT_SCAN_CODE)"
 
           ACCOUNT_SCAN_LABEL="$ACCOUNT_SCAN"
           if [ "$ACCOUNT_SCAN_CODE" = "3" ]; then
@@ -154,19 +99,18 @@ jobs:
             echo ""
             echo "| 真机能力 | 结果 |"
             echo "|---|---|"
-            echo "| 真抖音 keyword→comment 读侧 | $DOUYIN |"
             echo "| 真安卓 account-scan 真机验证车道 | $ACCOUNT_SCAN_LABEL |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$DOUYIN" != "success" ] || [ "$ACCOUNT_SCAN" != "success" ]; then
-            TITLE="[nightly-red] 真机回归失败 $TODAY (抖音=$DOUYIN account-scan=$ACCOUNT_SCAN_LABEL)"
+          if [ "$ACCOUNT_SCAN" != "success" ]; then
+            TITLE="[nightly-red] 真机回归失败 $TODAY (account-scan=$ACCOUNT_SCAN_LABEL)"
             # 同日去重：已有同标题 open issue 则不重复开
             EXIST=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
               --search "in:title [nightly-red] $TODAY" --json number --jq 'length')
             if [ "$EXIST" = "0" ]; then
               gh issue create --repo "$GITHUB_REPOSITORY" \
                 --title "$TITLE" \
-                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| douyin-read | %s |\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。account-scan=envfail(环境未就绪) 同样要处理——车道瘫痪不是噪音（decision 2f11ae25）。' "$DOUYIN" "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。account-scan=envfail(环境未就绪) 同样要处理——车道瘫痪不是噪音（decision 2f11ae25）。' "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
               echo "issue created"
             else
               echo "same-day nightly-red issue already open, skip"

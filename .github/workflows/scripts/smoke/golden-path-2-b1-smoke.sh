@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Path 2 Sprint B-1 — Golden Path E2E smoke
-# 客户已绑飞书 → 绑抖音小号 → 抓视频评论 → 写飞书 Lead 表 → dashboard 查状态
-#
-# 落地合同 contract-dod.md 的 E2E 段全文（10 Step + 4 ENV 自检 + 时间窗口 SELECT count）
+# Retired burner binding/crawl creation must reject; isolated PostgreSQL seeds
+# historical in-flight tasks and exercises the retained HTTP receipts/readback.
+# This is not Skill or Android device acceptance.
+
 set -euo pipefail
 
 # 自检前置 ENV
@@ -20,24 +20,16 @@ curl -fsS -X GET "$API_BASE/api/feishu/oauth/status" -H "X-Tenant-Id: $TENANT_ID
   | jq -e '.data.bound == true' >/dev/null \
   || { echo "FAIL Step 1: 飞书 binding 状态非 bound"; exit 1; }
 
-echo "=== Step 2: 派 burner 绑定 task ==="
+echo "=== Step 2: 旧绑定创建拒绝 + 种历史在途任务 ==="
 AGENT_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status) VALUES ('$TENANT_ID', 'mac-b1-${RANDOM}', 'rog-test', 'online') RETURNING id" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-RESP=$(curl -fsS -X POST "$API_BASE/api/agent/burner/qr-bind" \
-  -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"装修小号1\"}")
-TASK_ID_NEW=$(echo "$RESP" | jq -r '.data.task_id')
-[ -n "$TASK_ID_NEW" ] && [ "$TASK_ID_NEW" != "null" ] || { echo "FAIL Step 2: 未返 task_id"; exit 1; }
-
-# 验证 publish_tasks 写入（带时间窗口防造假）
-COUNT=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE task_type='qr_bind/douyin_burner' AND created_at > NOW() - interval '60 seconds'")
-[ "$COUNT" -ge "1" ] || { echo "FAIL Step 2: tasks 表未写入 (count=$COUNT)"; exit 1; }
-
-# 错误路径：缺 account_label
-ERR_HTTP=$(curl -s -o /tmp/err-step2.json -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/qr-bind" \
-  -H "Content-Type: application/json" -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\"}")
-[ "$ERR_HTTP" = "400" ] || { echo "FAIL Step 2 错误路径: 缺 account_label 应返 400 got $ERR_HTTP"; exit 1; }
-jq -e '.error.code == "MISSING_ACCOUNT_LABEL"' /tmp/err-step2.json >/dev/null \
-  || { echo "FAIL Step 2 错误路径: 错码非 MISSING_ACCOUNT_LABEL"; exit 1; }
+# Old creation is retired; seed a pre-existing task in disposable PG and
+# test the retained HTTP callback without pretending a new task was dispatched.
+RFILE=$(mktemp); trap 'rm -f "$RFILE"' EXIT
+CODE=$(curl -s -o "$RFILE" -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/qr-bind" \
+ -H 'Content-Type: application/json' -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"装修小号1\"}")
+[ "$CODE" = 410 ] && jq -e '.error.code == "LEGACY_ACQUISITION_RETIRED"' "$RFILE" >/dev/null || { echo "FAIL: retired qr-bind expected 410"; exit 1; }
+TASK_ID_NEW=$(psql "$DB" -At -c "INSERT INTO zenithjoy.publish_tasks (tenant_id,agent_id,platform,status,task_type,payload) VALUES ('$TENANT_ID','$AGENT_ID','douyin','queued','qr_bind/douyin_burner',jsonb_build_object('tenant_id','$TENANT_ID','agent_id','$AGENT_ID','account_label','装修小号1')) RETURNING id" | head -1)
+[ -n "$TASK_ID_NEW" ] || { echo "FAIL historical bind fixture"; exit 1; }
 
 echo "=== Step 3: fake-agent 模拟 chrome launched ==="
 curl -fsS -X POST "$API_BASE/api/_smoke/fake-agent-burner-progress" \
@@ -47,7 +39,7 @@ curl -fsS -X POST "$API_BASE/api/_smoke/fake-agent-burner-progress" \
 PHASE=$(psql "$DB" -t -A -c "SELECT response->>'phase' FROM zenithjoy.publish_tasks WHERE id='$TASK_ID_NEW' AND updated_at > NOW() - interval '60 seconds'" | tr -d ' ')
 [ "$PHASE" = "chrome_launched" ] || { echo "FAIL Step 3: task phase != chrome_launched got '$PHASE'"; exit 1; }
 
-echo "=== Step 4: fake-agent 模拟扫码完成 ==="
+echo "=== Step 4: 模拟历史扫码任务回执 ==="
 curl -fsS -X POST "$API_BASE/api/agent/burner/qr-bind-result" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
   -d "{\"task_id\":\"$TASK_ID_NEW\",\"agent_id\":\"$AGENT_ID\",\"qr_login\":\"success\",\"cookie_local_path\":\"/tmp/zj-burner/sessions/douyin/burner/装修小号1.json\",\"account_nickname\":\"装修达人小号\"}" >/dev/null
@@ -78,17 +70,16 @@ curl -fsS "$API_BASE/api/agent/burner/sessions" -H "X-Tenant-Id: $TENANT_ID" \
   | jq -e '.data.sessions | length >= 1' >/dev/null \
   || { echo "FAIL Step 6: 无 burner sessions"; exit 1; }
 
-echo "=== Step 7: 派抓评论 task ==="
-RESP=$(curl -fsS -X POST "$API_BASE/api/agent/burner/crawl-comments" \
-  -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"装修小号1\",\"video_url\":\"https://www.douyin.com/video/7000000000000000001\"}")
-CRAWL_TASK_ID=$(echo "$RESP" | jq -r '.data.task_id')
-[ -n "$CRAWL_TASK_ID" ] && [ "$CRAWL_TASK_ID" != "null" ] || { echo "FAIL Step 7: 未返 crawl task_id"; exit 1; }
+echo "=== Step 7: 旧采集创建拒绝 + 种历史在途任务 ==="
+# Old collection creation is retired; simulate only an in-flight historical
+# row. The result callback and persisted status/leads remain real HTTP+PG.
+CODE=$(curl -s -o "$RFILE" -w '%{http_code}' -X POST "$API_BASE/api/agent/burner/crawl-comments" \
+ -H 'Content-Type: application/json' -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\"}")
+[ "$CODE" = 410 ] && jq -e '.error.code == "LEGACY_ACQUISITION_RETIRED"' "$RFILE" >/dev/null || { echo "FAIL: retired crawl expected 410"; exit 1; }
+CRAWL_TASK_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.publish_tasks (tenant_id,agent_id,platform,status,task_type,payload) VALUES ('$TENANT_ID','$AGENT_ID','douyin','queued','crawl_comments/douyin',jsonb_build_object('video_url','https://www.douyin.com/video/7000000000000000001')) RETURNING id" | head -1)
+[ -n "$CRAWL_TASK_ID" ] || { echo "FAIL historical crawl fixture"; exit 1; }
 
-CRAWL_COUNT=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE id='$CRAWL_TASK_ID' AND task_type='crawl_comments/douyin' AND created_at > NOW() - interval '60 seconds'")
-[ "$CRAWL_COUNT" = "1" ] || { echo "FAIL Step 7: crawl task 未写入"; exit 1; }
-
-echo "=== Step 8: fake-agent 上报 5 条评论 ==="
+echo "=== Step 8: 上报历史采集任务的 5 条评论 ==="
 COMMENTS_JSON='[{"commenter_id":"@douyin_user_001","text":"求联系方式","publish_time":"2026-05-10T10:00:00Z"},{"commenter_id":"@douyin_user_002","text":"装修预算多少","publish_time":"2026-05-10T10:01:00Z"},{"commenter_id":"@douyin_user_003","text":"小户型适用吗","publish_time":"2026-05-10T10:02:00Z"},{"commenter_id":"@douyin_user_004","text":"想看完整方案","publish_time":"2026-05-10T10:03:00Z"},{"commenter_id":"@douyin_user_005","text":"在哪个城市","publish_time":"2026-05-10T10:04:00Z"}]'
 curl -fsS -X POST "$API_BASE/api/agent/burner/crawl-comments-result" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
@@ -111,4 +102,4 @@ curl -fsS "$API_BASE/api/agent/burner/crawl-tasks/$CRAWL_TASK_ID" \
   | jq -e '.data.status == "done" and .data.comment_count == 5 and .data.lead_write_status == "local_only"' >/dev/null \
   || { echo "FAIL Step 10: crawl task 状态查询不匹配"; exit 1; }
 
-echo "✅ Path 2 Sprint B-1 Golden Path E2E 全 10 步通过"
+echo "✅ 旧创建已拒绝；历史绑定/采集回执及数据库测试通过；Skill/真机未验收"

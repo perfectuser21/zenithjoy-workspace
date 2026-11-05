@@ -281,8 +281,8 @@ for(const mode of ['wildcard','unknown','duplicate','missing-file','missing-cons
  writeFileSync(file,JSON.stringify(manifest));const r=run(root,0);assert.notEqual(r.status,0,r.stdout+r.stderr);assert.equal(existsSync(join(r.output,'trace')),false);
 });
 
-test('explicit device workflow stays bounded and keeps all four helper consumers',()=>{
- const source=readFileSync(new URL('../../e2e-line02-android-collect.yml',import.meta.url),'utf8');
+test('archived Kotlin device workflow retains bounded helper provenance',()=>{
+ const source=readFileSync(new URL('../../../../docs/ci/retired-workflows/e2e-line02-android-collect-kotlin.yml',import.meta.url),'utf8');
  const job=Object.values(parse(source).jobs).find(j=>JSON.stringify(j.steps).includes('remote-adb.sh'));
  assert.ok(Number.isInteger(job?.['timeout-minutes'])&&job['timeout-minutes']>0&&job['timeout-minutes']<=25,'explicit device caller retains finite job budget');
  for(const name of ['remote-adb.sh','remote-android-install.sh','line02-android-cancel-candidate-setup.sh'])assert.ok(JSON.stringify(job.steps).includes(name));
