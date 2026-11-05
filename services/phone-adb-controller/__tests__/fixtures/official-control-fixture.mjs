@@ -19,7 +19,7 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential}={}){
+export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
@@ -31,6 +31,11 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const support=readFileSync(join(root,'skills/leadgen-activity-execution.md'),'utf8');
  const contract={budget:{max_duration_s:30}},contractSha=jsonHash(contract),commit='a'.repeat(40);
  const q={protocol:'leadgen-activity-v1',run_id:'douyin_video_discovery-official_fixture__a1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',workflow_key:'douyin_video_discovery',run_tag:'official_fixture',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',source_commit:commit,workflow_definition_version_id:'wv1',release_id:'r1',observation_id:'o1',runtime_snapshot_sha256:'b'.repeat(64),activity_key:'collect_videos',broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,mode:'execute',source_run:null,limit:2,comment_limit:null,run_max_seconds:1800,discovery_filters:{sort:'comprehensive',time_layer:'one_week',location:'unlimited'},discovery_input:null,method:{reference_id:'ref1',activity_version_id:'av1',name:methodName,version,sha256:sha(text),text,support:{text:support,sha256:sha(support)},contract:{activity_version_id:'av1',definition_key:'douyin_video_discovery.collect_videos',payload:contract,sha256:contractSha}}};
+ if(rawTransport){
+  q.execution_transport='raw-model-v1';q.max_turns=4;
+  q.method.text=q.method.text.replace('metadata:\n','metadata:\n  execution_transports:\n    - raw-model-v1\n');q.method.sha256=sha(q.method.text);
+  writeFileSync(join(runtimeRoot,'skills',methodName,'SKILL.md'),q.method.text);
+ }
  const binding={id:q.binding_id,run_id:q.run_id,workflow_id:'w1',workflow_definition_version_id:'wv1',release_id:'r1',observation_id:'o1',runtime_snapshot_sha256:q.runtime_snapshot_sha256,external_origin:'zenithjoy:mmv',actor:'runtime:phone-adb-controller:agent-v1',task_id:q.task_id};
  const wf={source_commit:commit,payload:{key:q.workflow_key,activities:[{slot_key:q.activity_key,reference_id:'ref1',activity_id:'a1',activity_version_id:'av1'}]}};
  const av={contract_sha256:contractSha,payload:{definition_key:q.method.contract.definition_key,contract,implementation_bindings:[{kind:'skill',status:'verified',repo:'perfectuser21/zenithjoy-workspace',revision:commit,name:methodName,version,content_sha256:q.method.sha256}]}};
@@ -45,7 +50,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const records={'activity-request.json':q,'agent-request.json':agent,'spawn-claimed.json':{...agent,source_commit:commit},'agent-binding.json':{...agent,child_run_id:childRun,child_session_key:childKey},'spawn-receipt.json':{runId:childRun,childSessionKey:childKey,resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'}};
  for(const [name,value]of Object.entries(records))writeFileSync(join(runDir,name),JSON.stringify(value),{mode:0o600});
  writeFileSync(join(runtimeRoot,'deployment-manifest.json'),JSON.stringify({source_commit:commit}));
- const source={commit,files:[...RPC_FILES,'official-agent-control.mjs'].map(path=>({path,sha256:sha(readFileSync(join(root,path)))}))};
+ const source={commit,files:[...RPC_FILES,'official-agent-control.mjs'].map(path=>({path,sha256:sha(readFileSync(join(runtimeRoot,path)))}))};
  let dispatches=0;const sockets=new Set();let arrived;const firstRequest=new Promise(r=>{arrived=r;});
  const server=createServer((req,res)=>{
   dispatches++;assert.equal(req.headers['x-internal-token'],'fixture-private-token');arrived();
