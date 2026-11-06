@@ -164,7 +164,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -185,7 +185,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -262,14 +262,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -458,7 +458,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -559,13 +559,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "cb4a3c6e9d371d4d88ca127ea7295ddb3aed0f21de6199a35bf7704037c4ad05",
+      "code_digest": "c1d47d2a5b96554e104e666f26f5e57461762ecdf6e1fe28a8fa2f2464d4b8f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "5cd5d576b61cd42b9beaf144fdfa490070a592e13c1685e57db88358b4101c21",
-        "current_code_digest": "cb4a3c6e9d371d4d88ca127ea7295ddb3aed0f21de6199a35bf7704037c4ad05"
+        "previous_code_digest": "cb4a3c6e9d371d4d88ca127ea7295ddb3aed0f21de6199a35bf7704037c4ad05",
+        "current_code_digest": "c1d47d2a5b96554e104e666f26f5e57461762ecdf6e1fe28a8fa2f2464d4b8f3"
       }
     },
     "douyin_video_processing.preflight": {
@@ -773,7 +773,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -794,7 +794,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -871,14 +871,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -1078,7 +1078,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -1151,13 +1151,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "32fb5a6133925d4386a8ec61c431a318f4cb9b58f1be23900d9e9612e05fd669",
+      "code_digest": "eb28a5df1d93096e04bb036daad313ac05492070f29580cf592490c6a9e60c4d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "4fe3f83fb8e3c94377a55019360f1ad90daf1eeacb4e66f557192efe6a6db937",
-        "current_code_digest": "32fb5a6133925d4386a8ec61c431a318f4cb9b58f1be23900d9e9612e05fd669"
+        "previous_code_digest": "32fb5a6133925d4386a8ec61c431a318f4cb9b58f1be23900d9e9612e05fd669",
+        "current_code_digest": "eb28a5df1d93096e04bb036daad313ac05492070f29580cf592490c6a9e60c4d"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1330,7 +1330,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -1351,7 +1351,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -1428,14 +1428,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -1624,7 +1624,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -1711,13 +1711,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "02e0dbe1037117f2701f6bf3fd9dd5d0838201346eaacd046e7be15492a8d187",
+      "code_digest": "737660f39cd45460875b608dcfb7c6e3ba4c245c76d014a190d6eede702f35ba",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "305a68e5a679b4b8fcd6b93baee31e38a4a567395141433e560bf7de90997616",
-        "current_code_digest": "02e0dbe1037117f2701f6bf3fd9dd5d0838201346eaacd046e7be15492a8d187"
+        "previous_code_digest": "02e0dbe1037117f2701f6bf3fd9dd5d0838201346eaacd046e7be15492a8d187",
+        "current_code_digest": "737660f39cd45460875b608dcfb7c6e3ba4c245c76d014a190d6eede702f35ba"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1918,7 +1918,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -1939,7 +1939,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -2016,14 +2016,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -2212,7 +2212,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -2355,13 +2355,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "b599d9a0fe83bbc0d0dc9364aa585b6530d7ca5cffef7d0a2583faaaf241606d",
+      "code_digest": "c7643147b13dd6aa9a35dab8755f0df8a79035346205a2c1ef05ab5ac8be3948",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "de8d84b964898499b6eebc2b9be85488b1dde65c03b70c52c369b6366fa53a73",
-        "current_code_digest": "b599d9a0fe83bbc0d0dc9364aa585b6530d7ca5cffef7d0a2583faaaf241606d"
+        "previous_code_digest": "b599d9a0fe83bbc0d0dc9364aa585b6530d7ca5cffef7d0a2583faaaf241606d",
+        "current_code_digest": "c7643147b13dd6aa9a35dab8755f0df8a79035346205a2c1ef05ab5ac8be3948"
       }
     },
     "douyin_video_processing.collection": {
@@ -2534,7 +2534,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -2555,7 +2555,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -2632,14 +2632,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -2836,7 +2836,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -2937,13 +2937,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "2ed04cda184d4a7905e848f151af362d6936aa724149fee8ce19d85a965e07be",
+      "code_digest": "689506afd5e72288d71ced61e4b5385b4b1d1d61a3f625eb5832b064517028dc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "f0f34375027d477941d3b69176fe29d057551282633e9f356d7e914289907c9a",
-        "current_code_digest": "2ed04cda184d4a7905e848f151af362d6936aa724149fee8ce19d85a965e07be"
+        "previous_code_digest": "2ed04cda184d4a7905e848f151af362d6936aa724149fee8ce19d85a965e07be",
+        "current_code_digest": "689506afd5e72288d71ced61e4b5385b4b1d1d61a3f625eb5832b064517028dc"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -3137,7 +3137,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -3158,7 +3158,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -3235,14 +3235,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -3434,7 +3434,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -3514,13 +3514,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4e7ac49bc2fb307d6b2e394dc2d7a41d675169db7842b7976be3c0a907743207",
+      "code_digest": "fe81b9dfe3d1390b75cdcf670d391fa556745eef41d778aa4aa4a9ee5906ae43",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "82a6b31afcbe2f91cc4b9cae91d707754ea5fc85a44a215557a879d402fb0347",
-        "current_code_digest": "4e7ac49bc2fb307d6b2e394dc2d7a41d675169db7842b7976be3c0a907743207"
+        "previous_code_digest": "4e7ac49bc2fb307d6b2e394dc2d7a41d675169db7842b7976be3c0a907743207",
+        "current_code_digest": "fe81b9dfe3d1390b75cdcf670d391fa556745eef41d778aa4aa4a9ee5906ae43"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3686,7 +3686,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -3707,7 +3707,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -3784,14 +3784,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -3952,7 +3952,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -4074,13 +4074,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "51b9d2fbf4adc8f82875994a21add48a371e7251c8a491e9372a7aeba726dac1",
+      "code_digest": "d8804773476c9e08adf12b7a4b5244acada13b74ade25ef6e65dc1d3ead407a3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "51de74bd5add68aa250ffc4d01248ae8eca0155e9e159d6ab80b51a50485735c",
-        "current_code_digest": "51b9d2fbf4adc8f82875994a21add48a371e7251c8a491e9372a7aeba726dac1"
+        "previous_code_digest": "51b9d2fbf4adc8f82875994a21add48a371e7251c8a491e9372a7aeba726dac1",
+        "current_code_digest": "d8804773476c9e08adf12b7a4b5244acada13b74ade25ef6e65dc1d3ead407a3"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -4253,7 +4253,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -4274,7 +4274,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -4351,14 +4351,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "f250f6d0e9ef4e0608194557b2a2b67e0f3c0e9e3ca18984fa5db0c25f791cf1"
+          "sha256": "e8a7486b412dc99edd52303711fbd2ddba348180a55cf3b9fa2772628fc622c4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-primary-broker.mjs",
           "revision": "contract",
-          "sha256": "5a59a73aaf7ed31afde4f4927ef5e34fb7ed025da6872ac16647dd3f3f1bf553"
+          "sha256": "d949bd309d15948712ab5a3ab75411abb5daaf1d97f9c54d6b677de06db4f83a"
         },
         {
           "kind": "code",
@@ -4519,7 +4519,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -4676,13 +4676,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ee567e2fdedf1d9b5642f494c13a88603b59687d81c90f6c652b87fb916069c6",
+      "code_digest": "6f25a986a5b609589f35e1723ec3c43a72af53c2ba1cf5faa445ffa90933686d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：本方法/Skill/Activity版本/业务合同不变，rawTurn仅将既有gatewayToken函数统一传给performOfficialModelTurn，使未注入reader时沿原600/同UID/非软链/唯一声明的默认读取路径，与既有stop/gatewayRead一致。注入仍优先使用原reader；无新凭据源、endpoint、模型、权限、ID、截止或停止证据规则。真实隔离HOME假token+loopback阳阴测试覆盖正常turn和同index精确stop，缺失/644/软链/重复声明首connect为0；原opaque品牌及三close不变。这是受保护默认接线的等强度方法实现修复，非仅日志，也不证明实机控制已通过。",
+        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "704c4630069323da863b3804859338bd7bcee3ed2e9327bbcec8480d408b36fb",
-        "current_code_digest": "ee567e2fdedf1d9b5642f494c13a88603b59687d81c90f6c652b87fb916069c6"
+        "previous_code_digest": "ee567e2fdedf1d9b5642f494c13a88603b59687d81c90f6c652b87fb916069c6",
+        "current_code_digest": "6f25a986a5b609589f35e1723ec3c43a72af53c2ba1cf5faa445ffa90933686d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -4708,7 +4708,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -4729,7 +4729,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -5125,7 +5125,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -5226,13 +5226,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e8475cf8cebc4d71c89ce8cfc5ba47c223b2d69d717fc84187a68f0b7eca8af2",
+      "code_digest": "23494b94aa9fff93658bbc88cc86336d4325a6b5ad2b7a100a72c168f5b00e12",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：104原方法/Skill/Activity版本/业务合同与发送、订单、权限、原legacy代码逐字不变；共享official-agent-control文件仅raw正常turn分支把可选gatewayCredential参数换为同模块既有gatewayToken受保护reader。104原mode不允许该raw执行分支，不新增凭据读取/发送/释放能力。共享闭包摘要变化需精确记录，不是104行为修改或仅日志；旧未知记录与原stop合同不升级。",
+        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "9549797ee9dbcbeaa64460a52aa4aed10544f8f742e22ca538575b7c2714e657",
-        "current_code_digest": "e8475cf8cebc4d71c89ce8cfc5ba47c223b2d69d717fc84187a68f0b7eca8af2"
+        "previous_code_digest": "e8475cf8cebc4d71c89ce8cfc5ba47c223b2d69d717fc84187a68f0b7eca8af2",
+        "current_code_digest": "23494b94aa9fff93658bbc88cc86336d4325a6b5ad2b7a100a72c168f5b00e12"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -5258,7 +5258,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -5279,7 +5279,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -5664,7 +5664,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -5751,13 +5751,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0f0afde1f8e705e6149b2b20dddd3b4f1da2a0a609641679caa5e9bde331af99",
+      "code_digest": "9cf4756a5ee375c6fa2ac102c921f4795a5d78089f1eaba29755dffc3b51b846",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：104原方法/Skill/Activity版本/业务合同与发送、订单、权限、原legacy代码逐字不变；共享official-agent-control文件仅raw正常turn分支把可选gatewayCredential参数换为同模块既有gatewayToken受保护reader。104原mode不允许该raw执行分支，不新增凭据读取/发送/释放能力。共享闭包摘要变化需精确记录，不是104行为修改或仅日志；旧未知记录与原stop合同不升级。",
+        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "093b991523d100d51545c78629962f0f14ddc89ddb88a239565fe063480c01f5",
-        "current_code_digest": "0f0afde1f8e705e6149b2b20dddd3b4f1da2a0a609641679caa5e9bde331af99"
+        "previous_code_digest": "0f0afde1f8e705e6149b2b20dddd3b4f1da2a0a609641679caa5e9bde331af99",
+        "current_code_digest": "9cf4756a5ee375c6fa2ac102c921f4795a5d78089f1eaba29755dffc3b51b846"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -5783,7 +5783,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -5804,7 +5804,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -6189,7 +6189,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -6269,13 +6269,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8f585ee471449035a188aa533b0d2acc9400c6abeda5c75a00df306c2cfa4ebf",
+      "code_digest": "ad5b2e82bc1e68ddc061ee9004ea02a7d3791fed48ef9048a27638ac681add95",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：104原方法/Skill/Activity版本/业务合同与发送、订单、权限、原legacy代码逐字不变；共享official-agent-control文件仅raw正常turn分支把可选gatewayCredential参数换为同模块既有gatewayToken受保护reader。104原mode不允许该raw执行分支，不新增凭据读取/发送/释放能力。共享闭包摘要变化需精确记录，不是104行为修改或仅日志；旧未知记录与原stop合同不升级。",
+        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "2a393ba8d121c3d038f1b0691b3853a3920bc297e20cef80074df685c5fd413d",
-        "current_code_digest": "8f585ee471449035a188aa533b0d2acc9400c6abeda5c75a00df306c2cfa4ebf"
+        "previous_code_digest": "8f585ee471449035a188aa533b0d2acc9400c6abeda5c75a00df306c2cfa4ebf",
+        "current_code_digest": "ad5b2e82bc1e68ddc061ee9004ea02a7d3791fed48ef9048a27638ac681add95"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -6301,7 +6301,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "1d557fd209fdcdcba973422f19f9f2b6d5a2a05414a537817350a378ac9c03bd"
+          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
         },
         {
           "kind": "code",
@@ -6322,7 +6322,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "d1ff34bded8d297780126d59eb31f027c9cb81676cfb13d7b96952b01499321d"
+          "sha256": "a8883cbf476fd14f8187f616372b1e767d5e74a007f82de6b9f25f54096511be"
         },
         {
           "kind": "code",
@@ -6710,7 +6710,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b2de841f58a512d2c7f8bf85adf1bcfc44992d811c038143938b6ff959a542ca"
+          "sha256": "0fbed5d7210a7d7a5d7974d808e754fc47cce00a3b91fb77b122c5e9ba312b19"
         },
         {
           "kind": "code",
@@ -6797,13 +6797,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "fe3525a434e8499cb4033ce99dbf1c063a38eb4b09fff94b18f7ddd5b83a30c9",
+      "code_digest": "0a5ea1fdee889fcd62e68e8a3f0a0cbd6d79749566288fa38dc776a252612763",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseb79→3d2：104原方法/Skill/Activity版本/业务合同与发送、订单、权限、原legacy代码逐字不变；共享official-agent-control文件仅raw正常turn分支把可选gatewayCredential参数换为同模块既有gatewayToken受保护reader。104原mode不允许该raw执行分支，不新增凭据读取/发送/释放能力。共享闭包摘要变化需精确记录，不是104行为修改或仅日志；旧未知记录与原stop合同不升级。",
+        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "07ebdb27aa64efc8a389b6e68253bdfba6fb515b79d3eb0745e75d02c767d566",
-        "current_code_digest": "fe3525a434e8499cb4033ce99dbf1c063a38eb4b09fff94b18f7ddd5b83a30c9"
+        "previous_code_digest": "fe3525a434e8499cb4033ce99dbf1c063a38eb4b09fff94b18f7ddd5b83a30c9",
+        "current_code_digest": "0a5ea1fdee889fcd62e68e8a3f0a0cbd6d79749566288fa38dc776a252612763"
       }
     }
   },

@@ -122,7 +122,7 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
   const panelBase=readFileSync(new URL('./fixtures/honor-e1b-recipient/returned.xml',import.meta.url),'utf8');
   let panelBad=false,wrongVideo=false,nativeCalls=0,panelOpen=false,position=0,shareCount=0,openCount=0;const scrollCalls=[];
   const panel=()=>{if(panelBad)return '<hierarchy/>';let xml=panelBase.replaceAll('测试评论人','测试人'+screen).replaceAll('测试完整评论 首评','在哪里报名'+screen);if(footer){const last=xml.lastIndexOf('</node>'),index=xml.lastIndexOf('</node>',last-1);xml=xml.slice(0,index)+`<node package="${pkg}" text="暂时没有更多了"/>`+xml.slice(index);}return xml;};
-  const timeoutEvidence=[],captureTimes=new Map(),fileClockFacts=[];let freshnessChecked=false;
+  const timeoutEvidence=[],captureTimes=new Map(),fileClockFacts=[];let freshnessChecked=false,stalePanelProbe=false;
   // 显式模拟内核mtime与采证时钟不同步；这不宣称已还原CI遗失的stat。
   const writeCapturedXml=(file,xml,{simulateCoarseClock=false}={})=>{
     const capturedAt=Date.now();writeFileSync(file,xml,{mode:0o600});
@@ -158,7 +158,15 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
   },onPhone:async(op,args,{dir,vid,opts})=>{
     nativeCalls++;if(op==='swipe-evidence'){assert.equal(panelOpen,true,'分享取链后评论panel实际关闭');position+=Number(args[1])>Number(args[3])?1:-1;scrollCalls.push(args);return 'swiped=1';}
     if(op==='open-video'||op==='back-evidence'){panelOpen=false;position=0;}
-    if(op==='open-comments'){panelOpen=true;position=0;openCount++;const evidence=join(dir,args[0]+'-panel.xml');writeFileSync(evidence,panel(),{mode:0o600});return 'comments_opened=1\nevidence='+evidence+'\n';}
+    if(op==='open-comments'){
+      panelOpen=true;position=0;openCount++;const evidence=join(dir,args[0]+'-panel.xml');
+      writeCapturedXml(evidence,panel(),{simulateCoarseClock:footer});
+      const capturedAt=captureTimes.get(evidence);
+      // The negative probe remains stale; normal reads retain this capture's timestamp.
+      if(stalePanelProbe)utimesSync(evidence,Math.floor(capturedAt/1000)-1,Math.floor(capturedAt/1000)-1);
+      fileClockFacts.push({kind:'panel',captured_at_ms:capturedAt,adopted_mtime_ms:statSync(evidence).mtimeMs,read_at_ms:Date.now(),stale_probe:stalePanelProbe});
+      return 'comments_opened=1\nevidence='+evidence+'\n';
+    }
     if(['ui-evidence','commenter-identity'].includes(op)){assert.ok(opts.timeoutMs>440000&&opts.timeoutMs<=450000,op+' must use frozen remaining deadline; got '+opts.timeoutMs);timeoutEvidence.push(op);}
     if(op==='current-video-link'){shareCount++;panelOpen=false;const observed=wrongVideo?'9999999999999999':vid;return `content_type=video\nvideo_id=${observed}\nresolved_url=https://www.douyin.com/video/${observed}\n`;}
     if(op==='ui-evidence'){const file=join(dir,args[0]+'.xml');writeFileSync(file,panelOpen?panel():'<hierarchy><node package="com.ss.android.ugc.aweme" text="视频详情"/></hierarchy>',{mode:0o600});return file;}
@@ -185,7 +193,9 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
     const native=await tools.phone('commenter-identity','111','1258',Buffer.from('测试人'+screen).toString('base64'));refs.push({native_receipt:native.native_receipt});assert.equal(native.navigation.panel_session_available,false);const afterIdentity=nativeCalls;await assert.rejects(()=>tools.phone('swipe-evidence','up'),/PANEL_SESSION/);assert.equal(nativeCalls,afterIdentity);
     await tools.business('collect_partial',{...input,comments:[refs.at(-1)],history:[]});
   }
-  screen=2;footer=true;await tools.phone('open-comments');await tools.phone('ui-evidence');
+  screen=2;footer=true;stalePanelProbe=true;
+  await assert.rejects(()=>tools.phone('open-comments'),/AGENT_PRIMARY_PANEL_SESSION_UNVERIFIED/,'原handler494仍必须拒绝旧一秒panel证据');
+  stalePanelProbe=false;await tools.phone('open-comments');await tools.phone('ui-evidence');
   if(lostAck){
     await assert.rejects(()=>tools.business('collect',{...input,comments:refs,history:[]}),/UNKNOWN/);
     assert.equal((await tools.heartbeat()).deferred,true);

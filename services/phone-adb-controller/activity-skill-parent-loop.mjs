@@ -19,6 +19,8 @@ const immutable=value=>{
  return value;
 };
 const code=error=>/^(?:SKILL_PRIMARY_|PARENT_BROKER_)[A-Z0-9_]+$/.test(error?.message||'')?error.message:'PARENT_LOOP_TOOL_FAILED';
+const failureCodes=new Set(['PARENT_LOOP_ABORTED','PARENT_LOOP_DEADLINE','PARENT_LOOP_OBSERVER_UNVERIFIED','RUNNER_OBSERVER_DRAIN_DEADLINE','RUNNER_OBSERVER_DRAIN_ABORTED','RUNNER_OBSERVER_EXECUTION_UNKNOWN']);
+const safeFailure=error=>failureCodes.has(error?.code)?error.code:failureCodes.has(error?.message)?error.message:'PARENT_LOOP_UNCLASSIFIED';
 function intent(text){
  if(typeof text!=='string'||Buffer.byteLength(text)>65536)throw Error('PARENT_LOOP_INTENT_INVALID');
  let value;try{value=JSON.parse(text);}catch{throw Error('PARENT_LOOP_INTENT_INVALID');}
@@ -47,7 +49,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   ||!methodAllowsExecutionTransport(q.method?.text,q.execution_transport)
   ||!Number.isSafeInteger(q.worker_deadline_ms)||!Number.isSafeInteger(q.receipt_deadline_ms)||!Number.isSafeInteger(q.deadline_ms)
   ||q.worker_deadline_ms>=q.receipt_deadline_ms||q.receipt_deadline_ms>=q.deadline_ms)throw Error('PARENT_LOOP_REQUEST_INVALID');
- if(!broker||['readParentContext','getResult','seal'].some(key=>typeof broker[key]!=='function')
+ if(!broker||['readParentContext','isParentContextCurrent','getResult','seal'].some(key=>typeof broker[key]!=='function')
   ||!control||['request','verifyTurnReceipt','verifyStopReceipt','authorizeIntent','consumeIntentPermit','seal','close','snapshot','verifySealedExecution'].some(key=>typeof control[key]!=='function'))throw Error('PARENT_LOOP_DEPENDENCY_UNAVAILABLE');
  if(!Number.isSafeInteger(startIndex)||startIndex<0||startIndex>=q.max_turns||readOnlyContinuation!==false&&readOnlyContinuation!==true||startIndex!==0&&!readOnlyContinuation)throw Error('PARENT_LOOP_CONTINUATION_INVALID');
  const deliveryRequest=brokerRequest?immutable(JSON.parse(JSON.stringify(brokerRequest))):q;
@@ -60,7 +62,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}
   const parent=openSync(directory,constants.O_RDONLY);try{fsyncSync(parent);}finally{closeSync(parent);}
  };
- let permit=null,currentIndex=null,reason='turn_limit',turnCount=0,officialStopped=true,modelUnknown=false,controlSeal;
+ let permit=null,currentIndex=null,reason='turn_limit',turnCount=0,officialStopped=true,modelUnknown=false,controlSeal,failureCode;
  const client=createActivitySkillBrokerClient({request:deliveryRequest,requestPath:deliveryRequest.broker_request_path,canReadback,
   authorize:(fixed,{op,body})=>control.consumeIntentPermit(permit,{request:q,index:currentIndex,op,body})});
  const history=[],runIds=new Set();
@@ -68,16 +70,26 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
  try{
   for(let index=startIndex;index<Math.min(q.max_turns,readOnlyContinuation?startIndex+1:q.max_turns);index++){
    active();
-   const context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
+   const drain=async phase=>{let waited=false;if(beforeTurn&&await bounded(Promise.resolve().then(()=>beforeTurn({deadlineMs:q.worker_deadline_ms,signal,index,phase,onDrained:()=>{waited=true;}})),q.worker_deadline_ms,signal)!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();return waited;};
+   await drain('before_context');
+   let context;const guidance=[];
+   do{
+    context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
+    if(Array.isArray(context.commander_guidance))guidance.push(...context.commander_guidance);
+    await drain('before_dispatch');
+    // Pending work may have already finished while the context read awaited.
+    // Check the original private snapshot after drain, then synchronously
+    // build/dispatch. Refresh reads only, never replay a tool or reset budget.
+   }while(!broker.isParentContextCurrent(context));
+   if(guidance.length)context={...context,commander_guidance:guidance};
    if(context.commander_abort===true){reason='commander_aborted';break;}
-   if(beforeTurn&&await beforeTurn()!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();
    const input={protocol:'leadgen-parent-turn/v1',index,context,history:structuredClone(history)};
    if(Buffer.byteLength(JSON.stringify(input))>256*1024){reason='input_limit';break;}
    record(`turn-${index}-request`,{request_sha256:hash(JSON.stringify(q)),input});
    currentIndex=index;officialStopped=false;turnCount++;
    let receipt,verified;
    try{
-    receipt=await bounded(Promise.resolve().then(()=>{active();return control.request({kind:'official_agent_turn',request:q,turn:{index,input}});}),q.worker_deadline_ms,signal);
+    active();receipt=await bounded(control.request({kind:'official_agent_turn',request:q,turn:{index,input}}),q.worker_deadline_ms,signal);
     verified=control.verifyTurnReceipt(receipt,{request:q,index});
     if(!object(verified)||typeof verified.official_run_id!=='string'||runIds.has(verified.official_run_id))throw Error('PARENT_LOOP_OFFICIAL_RECEIPT_INVALID');
     runIds.add(verified.official_run_id);officialStopped=true;
@@ -111,7 +123,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   }
  }catch(error){
   reason=error?.message==='PARENT_LOOP_ABORTED'?'runner_aborted':error?.message==='PARENT_LOOP_DEADLINE'?'worker_deadline':'parent_loop_failed';
-  record('loop-failure',{reason});
+  failureCode=safeFailure(error);record('loop-failure',{reason,failure_code:failureCode});
  }finally{
   permit=null;client.seal();broker.seal();
   try{
@@ -127,7 +139,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
  if(officialStopped&&!modelUnknown&&!client.snapshot().execution_unknown&&actual.sealed===true&&actual.pending===0&&actual.active===0&&!actual.execution_unknown&&boundScope(scope,q)){
   modelStopProof=Object.freeze({domain:'raw-model-turns-v1'});stoppedModelScopes.set(modelStopProof,canonical(scope));
  }
- return {reason,turn_count:turnCount,official_execution_stopped:officialStopped,model_execution_unknown:modelUnknown,
+ return {reason,...(failureCode?{failure_code:failureCode}:{}),turn_count:turnCount,official_execution_stopped:officialStopped,model_execution_unknown:modelUnknown,
   broker_execution_unknown:actual.execution_unknown===true||client.snapshot().execution_unknown,
   model_stop_proof:modelStopProof,activity_result:actual.result};
 }

@@ -22,3 +22,40 @@ for(const failure of ['read','source','unknown'])test('main only continues after
  const out=await running;
  assert.equal(allocated,0);assert.equal(workers,failure==='read'?1:0);assert.equal(out.status,failure==='read'?'completed':'needs_review');if(failure!=='read')assert.equal(out.execution_stopped,false);
 });
+
+async function ownedFixture(t,{execute}={}){
+ const root=mkdtempSync(join(tmpdir(),'owned-observer-'));t.after(()=>rmSync(root,{recursive:true,force:true}));mkdirSync(join(root,'config'));const bytes=Buffer.from(JSON.stringify({hosts:[{target:'mmv',executables:{python:{path:'/fixture/python',sha256:'d'.repeat(64)}}}]}));writeFileSync(join(root,'config/collection-phone-hosts.json'),bytes);
+ const q={mode:'execute',execution_transport:'raw-model-v1',run_id:'run',task_id:'task',binding_id:'binding',workflow_key:'douyin_comment_scoring',activity_key:'scoring',source_commit:'a'.repeat(40),broker_host:'mmv',worker_deadline_ms:Date.now()+8000,receipt_deadline_ms:Date.now()+9000,deadline_ms:Date.now()+10000};
+ const state={active:0,calls:0,maxActive:0,unknown:false,ownerActive:0};
+ const control={authorizeParentContext:async()=>true,seal(){},close:async()=>{},snapshot:()=>({pending:0,execution_unknown:false}),verifySealedExecution:()=>true};
+ const sdk={execute:async(_c,args)=>{state.active++;state.calls++;state.maxActive=Math.max(state.maxActive,state.active);try{const params=JSON.parse(args[8]);const decision=await execute?.(state.calls,params);return{stdout:JSON.stringify({runId:params.idempotencyKey,status:'ok',result:{payloads:[{text:JSON.stringify(decision??{action:'none'})}]}})};}finally{state.active--;}} ,seal(){},close:async()=>({}),snapshot:()=>({pending:state.active,execution_unknown:state.unknown||state.active>0,external_effect_unknown:state.unknown}),verifySealedExecution:()=>!state.unknown&&state.active===0};
+ const owner={reserveOwner:async()=>{state.ownerActive++;return{check:async()=>{},returned:async()=>{},close:async()=>{state.ownerActive--;}};},snapshot:()=>({pending:state.ownerActive,execution_unknown:false}),close:async()=>({execution_stopped:state.ownerActive===0,execution_unknown:false})};
+ const observer=await implementation.createRunnerOfficialCommander({runtimeRoot:root,runDir:root,request:q,source:{commit:q.source_commit,files:[{path:'config/collection-phone-hosts.json',sha256:createHash('sha256').update(bytes).digest('hex')}]},factories:{createControl:async()=>control,createSdk:()=>sdk,createOwner:()=>owner}});
+ return{observer,state,q,receipt:phase=>({...q,phase,commander_role:'observer'})};
+}
+
+test('owned Observer calls serialize and waitForIdle waits through reservation close before Worker admission',async t=>{
+ let release,arrive;const held=new Promise(r=>{release=r;}),started=new Promise(r=>{arrive=r;});const f=await ownedFixture(t,{execute:async call=>{if(call===1){arrive();await held;}return{action:'steer',text:'Use original evidence.'};}});
+ const queued=f.receipt('recovery'),first=f.observer.commander(f.receipt('event')),second=f.observer.commander(queued);queued.run_id='mutated-after-enqueue';first.catch(()=>{});second.catch(()=>{});
+ try{await started;assert.equal(f.state.calls,1);assert.equal(f.observer.canDispatchWorker(),false);assert.equal(typeof f.observer.waitForIdle,'function');let ready=false;const drained=f.observer.waitForIdle({deadlineMs:f.q.worker_deadline_ms}).then(value=>{ready=value;});await new Promise(r=>setTimeout(r,10));assert.equal(ready,false);release();await Promise.all([first,second,drained]);assert.equal(ready,true);assert.equal(f.state.maxActive,1);assert.equal(f.state.ownerActive,0);assert.equal(f.observer.canDispatchWorker(),true);}finally{release();await Promise.allSettled([first,second]);await f.observer.close();}
+});
+
+test('owned drain never extends current Activity deadline or signal and never clears real sticky unknown',async t=>{
+ let release,arrive;const held=new Promise(r=>{release=r;}),started=new Promise(r=>{arrive=r;});const f=await ownedFixture(t,{execute:async()=>{arrive();await held;return{action:'none'};}}),work=f.observer.commander(f.receipt('event'));work.catch(()=>{});
+ try{await started;assert.equal(typeof f.observer.waitForIdle,'function');await assert.rejects(f.observer.waitForIdle({deadlineMs:Date.now()+25}),/RUNNER_OBSERVER_DRAIN_DEADLINE/);const abort=new AbortController();abort.abort();await assert.rejects(f.observer.waitForIdle({deadlineMs:f.q.worker_deadline_ms,signal:abort.signal}),/RUNNER_OBSERVER_DRAIN_ABORTED/);release();await work;f.state.unknown=true;assert.equal(await f.observer.waitForIdle({deadlineMs:f.q.worker_deadline_ms}),false);}finally{release();await work.catch(()=>{});await f.observer.close();}
+});
+
+test('queued Observer never dispatches after an earlier owned job leaves real unknown',async t=>{
+ let release,arrive;const held=new Promise(r=>{release=r;}),started=new Promise(r=>{arrive=r;});let f;f=await ownedFixture(t,{execute:async()=>{arrive();await held;f.state.unknown=true;return{action:'none'};}});
+ const first=f.observer.commander(f.receipt('event')),second=f.observer.commander(f.receipt('event'));first.catch(()=>{});const refused=assert.rejects(second,/RUNNER_OBSERVER_EXECUTION_UNKNOWN/);
+ try{await started;release();await first;await refused;assert.equal(f.state.calls,1);}finally{release();await Promise.allSettled([first,second]);await f.observer.close();}
+});
+
+test('actual main drains legitimate pending Observer before readiness sampling without sticky split unknown',async t=>{
+ const {runWorkflowWithCommander}=await import('../leadgen-workflow.mjs');let release,arrive;const held=new Promise(r=>{release=r;}),started=new Promise(r=>{arrive=r;});const f=await ownedFixture(t,{execute:async(_call,params)=>{if(params.message.includes('\"phase\":\"owned_stall\"')){arrive();await held;return{action:'steer',text:'Inspect original evidence.'};}return{action:'none'};}}),observerSafety={};let workers=0;
+ const out=await runWorkflowWithCommander({frozen:{execution_transport:'raw-model-v1'},context:{execution_mode:'agent',...f.q},activities:[{key:'scoring',budget:{max_duration_s:5}}],observerSafety,prepareCommander:async()=>f.observer,quarantine:async()=>({verified:true}),verify:async()=>({verified:true}),executeAgent:async()=>{
+  workers++;const stall=f.observer.commander(f.receipt('owned_stall'));stall.catch(()=>{});await started;setTimeout(release,20);
+  try{assert.equal(typeof observerSafety.ready,'function');assert.equal(await observerSafety.ready({deadlineMs:f.q.worker_deadline_ms}),true);assert.equal(f.state.ownerActive,0);return{status:'completed',execution_stopped:true,result:{}};}finally{release();await stall;}
+ }});
+ assert.equal(workers,1);assert.equal(out.status,'completed');assert.notEqual(out.commander_execution_unknown,true);assert.notEqual(out.execution_stopped,false);
+});
