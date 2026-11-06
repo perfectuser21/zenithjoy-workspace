@@ -2,7 +2,7 @@
 // ledger.mjs —— crontab 获客流水线账本（基座 1/7）。一个 run 一个目录，<run-dir>/ledger.json。
 // 用法:
 //   node ledger.mjs init --run-dir D --run-id R [--hash H] [--profile P] [--serial S] [--hostkey K]
-//   node ledger.mjs set  --run-dir D --stage S --status <completed|blocked|failed|running|pending> [--note T] [--n K --word W]
+//   node ledger.mjs set  --run-dir D --stage S --status <completed|empty|blocked|failed|running|pending> [--note T] [--n K --word W]
 //   node ledger.mjs show --run-dir D
 //   node ledger.mjs next-attempt --run-dir D      # 进入 batch2 前调用：分配 attempt，导出续跑 skip_words
 import fs from "fs";
@@ -24,7 +24,7 @@ function parseArgs(argv) {
 
 // 6b133a81: 触达进账本(outreach-tick 每 tick 一个 run),与契约 8 活动同序
 const STAGES = ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"];
-const STATUSES = ["pending", "running", "completed", "blocked", "failed"];
+const STATUSES = ["pending", "running", "completed", "empty", "blocked", "failed"];
 const emptyStage = () => ({ status: "pending", note: "", updated_at: null, items: [] });
 
 function ledgerPath(runDir) { return path.join(runDir, "ledger.json"); }
