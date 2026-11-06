@@ -1,12 +1,12 @@
 import {createHash} from 'node:crypto';
 import test from 'node:test';import assert from 'node:assert/strict';import {createServer} from 'node:http';
 import WS,{WebSocketServer} from 'ws';import {GatewayProtocolClient} from '@openclaw/gateway-client/browser';import {rawDataToString} from '@openclaw/gateway-client/websocket-data';
-import {using} from './fixtures/official-control-fixture.mjs';import {rmSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';import {join} from 'node:path';
+import {using} from './fixtures/official-control-fixture.mjs';import {rmSync,readFileSync,writeFileSync,readdirSync,mkdtempSync,mkdirSync,symlinkSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
 const hiddenSession=run=>'internal-session-effects-'+run+'-'+createHash('sha256').update(run).digest('hex').slice(0,16);
-async function rawGateway(t,{loseLaunchAck=false,status='ok',waitUntilAbort=false,terminalIdentity,waitReceiptAbsent=false,sessionGone=false,producerForeignSession=false}={}){
+async function rawGateway(t,{loseLaunchAck=false,status='ok',waitUntilAbort=false,terminalIdentity,waitReceiptAbsent=false,sessionGone=false,producerForeignSession=false,expectedToken='fixture'}={}){
  const http=createServer(),wss=new WebSocketServer({server:http}),sockets=new Set(),frames=[];let current,aborted=false,waitSeen,connections=0;const waiting=new Promise(r=>waitSeen=r);
  wss.on('connection',ws=>{connections++;sockets.add(ws);ws.on('close',()=>sockets.delete(ws));ws.send(JSON.stringify({type:'event',event:'connect.challenge',payload:{nonce:'fixture',ts:Date.now()}}));ws.on('message',raw=>{const f=JSON.parse(raw);frames.push(f);let payload;
-  if(f.method==='connect'){assert.deepEqual(f.params.scopes,['operator.read','operator.write']);payload={protocol:4,server:{version:'2026.9.8'},auth:{role:'operator',scopes:['operator.read','operator.write']}};}
+  if(f.method==='connect'){assert.equal(f.params.auth.token,expectedToken);assert.deepEqual(f.params.scopes,['operator.read','operator.write']);payload={protocol:4,server:{version:'2026.9.8'},auth:{role:'operator',scopes:['operator.read','operator.write']}};}
   else if(f.method==='agent'){assert.equal(f.params.modelRun,true);assert.equal(f.params.deliver,false);if(f.params.provider!==undefined||f.params.model!==undefined){ws.send(JSON.stringify({type:'res',id:f.id,ok:false,error:{code:'FORBIDDEN',message:'model override requires operator.admin'}}));return;}current={runId:f.params.idempotencyKey,key:f.params.sessionKey,sessionId:f.params.sessionId};if(loseLaunchAck){ws.terminate();return;}ws.send(JSON.stringify({type:'res',id:f.id,ok:true,payload:{runId:current.runId,status:'accepted'}}));payload={runId:current.runId,status,result:{payloads:[{text:'{\"op\":\"inspect\",\"body\":{}}'}],meta:{agentMeta:{sessionId:hiddenSession(current.runId),agentHarnessId:'openclaw',provider:'openai',model:'gpt-6.1-sol',terminalReceipt:{runId:current.runId,sessionId:hiddenSession(current.runId),turnId:'actual-fixture-turn',requested:{provider:'openai',model:'gpt-6.1-sol'},effective:{provider:'openai',model:'gpt-6.1-sol'},successfulToolNames:[],rerouted:false}}}}};}
   else if(f.method==='agent.wait'){assert.equal(f.params.runId,current.runId);waitSeen();if(waitUntilAbort&&!aborted)return;payload={runId:current.runId,status:aborted?'aborted':status,startedAt:Date.now()-10,endedAt:Date.now(),terminalReply:{text:'{"op":"inspect","body":{}}'},terminalReceipt:{runId:current.runId,sessionId:hiddenSession(current.runId),turnId:'actual-fixture-turn',requested:{provider:'openai',model:'gpt-6.1-sol'},successfulToolNames:[],rerouted:false,effective:{provider:'openai',model:'gpt-6.1-sol'}}};}
   else if(f.method==='sessions.list'){payload={ts:Date.now(),sessions:sessionGone?[]:[{key:current.key,sessionId:current.sessionId}]};}
@@ -63,3 +63,49 @@ test('新成功协议Worker消费真实agent final而非accepted ACK，raw sessi
 test('producer meta和receipt即使自洽也不能替换Worker原Code sessionId',async t=>{const g=await rawGateway(t,{waitReceiptAbsent:true,sessionGone:true,producerForeignSession:true});await using(async({instance,q})=>{await assert.rejects(instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{brief:'fixture only'}}}),/RAW_TERMINAL/);const closed=await instance.close();assert.equal(closed.execution_unknown,true);assert.equal(g.frames.filter(f=>f.method==='agent').length,1);assert.equal(g.frames.filter(f=>f.method==='sessions.list').length,0);},{rawTransport:true,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'});});
 
 test('新raw journal双身份不能混成旧ID或接受非UUID source；旧重建始终unknown',async t=>{const g=await rawGateway(t);await using(async({instance,q,options,createControl,journalDirectory})=>{const receipt=await instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{}}});const verified=instance.verifyTurnReceipt(receipt,{request:q,index:0}),path=join(journalDirectory,readdirSync(journalDirectory).find(n=>/^raw-.*-turn-0.intent.json$/.test(n))),original=readFileSync(path,'utf8'),intent=JSON.parse(original);assert.equal(intent.schema_version,2);assert.equal(intent.session_identity,'internal-session-effects-run/v1');assert.equal(intent.source_session_id,g.frames.find(f=>f.method==='agent').params.sessionId);assert.equal(intent.session_id,hiddenSession(verified.official_run_id));assert.notEqual(intent.source_session_id,intent.session_id);assert.equal(intent.source_session_key,g.frames.find(f=>f.method==='agent').params.sessionKey);await instance.close();try{for(const change of [v=>v.session_id=v.source_session_id,v=>v.schema_version=1,v=>v.session_identity='other',v=>v.source_session_id='-'.repeat(36)]){const wrong=structuredClone(intent);change(wrong);writeFileSync(path,JSON.stringify(wrong));assert.throws(()=>createControl(options),/RAW_JOURNAL/);}writeFileSync(path,original);const rebuilt=createControl(options);try{assert.equal(rebuilt.snapshot().previous_caller_stop_unproven,true);await assert.rejects(rebuilt.request({kind:'official_agent_turn',request:q,turn:{index:1,input:{}}}),/UNKNOWN/);assert.equal(g.frames.filter(f=>f.method==='agent').length,1);}finally{await rebuilt.close();}}finally{writeFileSync(path,original);}},{rawTransport:true,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'});});
+
+// This file's tests are serial. Only these cases replace HOME, and restore it
+// after Caller.close; no default reader can reach the operator's real cache.
+async function isolatedDefaultCredential(mode,fn){
+ const root=mkdtempSync(join(tmpdir(),'official-default-credential-')),previous=process.env.HOME;
+ const dir=join(root,'.credentials'),file=join(dir,'mmv-official-gateway.env');mkdirSync(dir,{mode:0o700});
+ const value='OPENCLAW_GATEWAY_TOKEN=fixture-default-only\n';
+ if(mode!=='missing'){
+  if(mode==='symlink'){const target=join(root,'fixture-token');writeFileSync(target,value,{mode:0o600});symlinkSync(target,file);}
+  else writeFileSync(file,mode==='duplicate'?value+value:value,{mode:mode==='permissions'?0o644:0o600});
+ }
+ process.env.HOME=root;
+ try{return await fn();}finally{if(previous===undefined)delete process.env.HOME;else process.env.HOME=previous;rmSync(root,{recursive:true,force:true});}
+}
+test('default credential reader runs real Caller raw turn without injected gatewayCredential',async t=>{
+ await isolatedDefaultCredential('valid',async()=>{const g=await rawGateway(t,{expectedToken:'fixture-default-only'});
+  await using(async({instance,q})=>{
+   const receipt=await instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{brief:'isolated fake credential'}}});
+   assert.equal(instance.verifyTurnReceipt(receipt,{request:q,index:0}).status,'ok');
+   assert.equal(g.frames.filter(f=>f.method==='agent').length,1);
+   assert.equal(g.frames.filter(f=>f.method==='agent.wait').length,1);
+   const closed=await instance.close();assert.equal(instance.verifySealedExecution(closed,{request:q}),true);
+  },{rawTransport:true,gatewayDependencies:g.dependencies});
+ });
+});
+test('default credential reader also covers sealed exact-run stop without injected reader',async t=>{
+ await isolatedDefaultCredential('valid',async()=>{const g=await rawGateway(t,{expectedToken:'fixture-default-only',waitUntilAbort:true});
+  await using(async({instance,q})=>{
+   const work=instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{}}});const rejected=assert.rejects(work,/CLOSED/);rejected.catch(()=>{});
+   await Promise.race([g.waiting,work]);instance.seal(q);
+   const receipt=await instance.request({kind:'official_agent_stop',request:q,turn_index:0});await rejected;
+   assert.equal(instance.verifyStopReceipt(receipt,{request:q,index:0}).official_execution_stopped,true);
+   assert.equal(g.frames.filter(f=>f.method==='sessions.abort').length,1);
+   const closed=await instance.close();assert.equal(instance.verifySealedExecution(closed,{request:q}),true);
+  },{rawTransport:true,gatewayDependencies:g.dependencies});
+ });
+});
+test('default credential missing, non600, symlink and duplicate declaration reject before first Gateway connection',async t=>{
+ for(const mode of ['missing','permissions','symlink','duplicate'])await isolatedDefaultCredential(mode,async()=>{
+  const g=await rawGateway(t,{expectedToken:'fixture-default-only'});
+  await using(async({instance,q})=>{
+   await assert.rejects(instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{}}}));
+   assert.equal(g.connections(),0,mode);assert.equal(g.frames.length,0,mode);
+  },{rawTransport:true,gatewayDependencies:g.dependencies});
+ });
+});
