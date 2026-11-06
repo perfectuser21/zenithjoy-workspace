@@ -8,6 +8,17 @@ import {createHash} from 'node:crypto';
 import {canonical} from '../runtime-definition.mjs';
 import {using} from './fixtures/official-control-fixture.mjs';
 
+test('deadline取消同步异常不逃出定时器，收尾保留unknown',async()=>using(async({q,options,createControl,firstRequest,journalDirectory})=>{
+ const directory=join(journalDirectory,'deadline-throw');fs.mkdirSync(directory,{mode:0o700});let actualDestroy,throws=0;
+ const started=Date.now(),control=createControl({...options,journalDirectory:directory,deadlineMs:started+250,cleanupDeadlineMs:started+700,httpRequest:(...args)=>{
+  const req=options.httpRequest(...args);actualDestroy=req.destroy.bind(req);req.destroy=(...x)=>{if(throws++===0)throw Error('FIXTURE_DEADLINE_CANCEL_THROW');return actualDestroy(...x);};return req;
+ }});
+ const work=control.request({kind:'activity_skill_authority',request:q});work.catch(()=>{});
+ try{await firstRequest;await assert.rejects(work,/OFFICIAL_CONTROL_DEADLINE/);await new Promise(resolve=>setImmediate(resolve));
+  const closed=await control.close();assert.ok(throws>0);assert.equal(closed.execution_unknown,true);assert.equal(closed.execution_stopped,false);
+ }finally{actualDestroy?.();await work.catch(()=>{});await control.close();}
+},{delay:true}));
+
 test('同步取消抛错仍关闭其余执行域，重复close在原预算内归还unknown',async()=>using(async({q,options,createControl,firstRequest,journalDirectory})=>{
  const directory=join(journalDirectory,'cancel-throw');fs.mkdirSync(directory,{mode:0o700});let actualDestroy,throws=0,timer;
  const started=Date.now(),control=createControl({...options,journalDirectory:directory,deadlineMs:started+400,cleanupDeadlineMs:started+600,httpRequest:(...args)=>{
