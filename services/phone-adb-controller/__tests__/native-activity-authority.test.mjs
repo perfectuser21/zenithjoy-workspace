@@ -3,7 +3,7 @@ const sha=b=>createHash('sha256').update(b).digest('hex');
 test('separate real Code Caller retains only Task claim reads after Worker Caller is sealed; exact claim and physical closure remain mandatory',async()=>using(async f=>{
  const module=await import(pathToFileURL(join(f.runtimeRoot,'native-activity-authority.mjs')));assert.equal(typeof module.createNativeActivityAuthority,'function');
  Object.assign(f.q,{worker_deadline_ms:Date.now()+10000,receipt_deadline_ms:Date.now()+15000});const task=f.routes.get('/api/brain/tasks/'+f.q.task_id);task.claimed_at='2026-11-06T00:00:00.000Z';const claim={claimed_by:task.claimed_by,claimed_at:task.claimed_at};
- f.source.files.push({path:'native-activity-authority.mjs',sha256:sha(readFileSync(join(f.runtimeRoot,'native-activity-authority.mjs')))});
+ const original=f.source.files.filter(file=>file.path==='native-activity-authority.mjs');assert.equal(original.length,1,'正式RPC清单必须原生携带唯一authority模块');assert.equal(original[0].sha256,sha(readFileSync(join(f.runtimeRoot,'native-activity-authority.mjs'))));
  const directory=join(f.journalDirectory,'business-owner');mkdirSync(directory,{mode:0o700});
  const authority=module.createNativeActivityAuthority({runtimeRoot:f.runtimeRoot,source:f.source,request:f.q,frozen:{native_claim:claim,snapshot_sha256:f.q.runtime_snapshot_sha256,deployment:{source_commit:f.q.source_commit}},directory,createControl:({directory:d})=>{const journalDirectory=join(d,'caller');mkdirSync(journalDirectory,{mode:0o700});return f.createControl({...f.options,request:f.q,journalDirectory});}});
  try{
