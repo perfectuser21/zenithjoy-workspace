@@ -10,6 +10,14 @@ const {createWorkflowExecution}=workflow;
 import {RPC_FILES} from '../leadgen-client.mjs';
 import {rawModelScopeStopped} from '../activity-skill-parent-loop.mjs';
 
+test('actual executor waits its owned stall report through broker guidance before next raw turn',async t=>{
+ const f=fixture(t);f.activities[0].budget.stall_s=1;let stalls=0,turns=0,closed=0;const result={test_server_evidence:'inspect-only'};
+ const handlers={state:{},agentSupportsNativeScope:()=>true,agentNativeState:()=>({}),createAgentTools:async(_a,scope)=>({prepare:async()=>{},inspect:async()=>({phone_capabilities:[],business_capabilities:[]}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_PG');},getResult:()=>result,settle:async()=>{},closeNativeScope:async proof=>{closed++;return{execution_stopped:rawModelScopeStopped(proof.raw_model_proof,scope)};}})};
+ const wired=createWorkflowExecution({...f,handlers,rpc:async()=>{throw Error('NO_LEGACY');},beforeRawTurn:async()=>true,createOfficialControl:async({request})=>officialFixture(request,{onTurn:async(index,input)=>{turns++;if(index===0){await new Promise(r=>setTimeout(r,1200));return{type:'inspect',progress:'Inspect original state only.'};}assert.ok(input.context.commander_guidance?.includes('Wait for the owned Observer report.'));return{type:'finish'};}})});
+ const out=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000,onEvent:async event=>{if(event.type==='stall'){stalls++;await new Promise(r=>setTimeout(r,500));return{action:'steer',text:'Wait for the owned Observer report.'};}return{action:'none'};}});
+ assert.equal(out.status,'completed');assert.equal(out.execution_stopped,true);assert.equal(turns,2);assert.equal(stalls,1);assert.equal(closed,1);
+});
+
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function officialFixture(request,{onTurn}={}){
  const receipts=new WeakMap(),permits=new WeakMap(),snapshots=new WeakSet();let delivery,sealed=false,closed=false;
