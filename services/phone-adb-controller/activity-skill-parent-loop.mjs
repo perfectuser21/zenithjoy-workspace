@@ -49,7 +49,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   ||!methodAllowsExecutionTransport(q.method?.text,q.execution_transport)
   ||!Number.isSafeInteger(q.worker_deadline_ms)||!Number.isSafeInteger(q.receipt_deadline_ms)||!Number.isSafeInteger(q.deadline_ms)
   ||q.worker_deadline_ms>=q.receipt_deadline_ms||q.receipt_deadline_ms>=q.deadline_ms)throw Error('PARENT_LOOP_REQUEST_INVALID');
- if(!broker||['readParentContext','getResult','seal'].some(key=>typeof broker[key]!=='function')
+ if(!broker||['readParentContext','isParentContextCurrent','getResult','seal'].some(key=>typeof broker[key]!=='function')
   ||!control||['request','verifyTurnReceipt','verifyStopReceipt','authorizeIntent','consumeIntentPermit','seal','close','snapshot','verifySealedExecution'].some(key=>typeof control[key]!=='function'))throw Error('PARENT_LOOP_DEPENDENCY_UNAVAILABLE');
  if(!Number.isSafeInteger(startIndex)||startIndex<0||startIndex>=q.max_turns||readOnlyContinuation!==false&&readOnlyContinuation!==true||startIndex!==0&&!readOnlyContinuation)throw Error('PARENT_LOOP_CONTINUATION_INVALID');
  const deliveryRequest=brokerRequest?immutable(JSON.parse(JSON.stringify(brokerRequest))):q;
@@ -76,9 +76,11 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
    do{
     context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
     if(Array.isArray(context.commander_guidance))guidance.push(...context.commander_guidance);
-    // Only Code-owned work actually drained during this read invalidates its
-    // guidance snapshot. Refresh reads, never replay a tool or reset a budget.
-   }while(await drain('before_dispatch'));
+    await drain('before_dispatch');
+    // Pending work may have already finished while the context read awaited.
+    // Check the original private snapshot after drain, then synchronously
+    // build/dispatch. Refresh reads only, never replay a tool or reset budget.
+   }while(!broker.isParentContextCurrent(context));
    if(guidance.length)context={...context,commander_guidance:guidance};
    if(context.commander_abort===true){reason='commander_aborted';break;}
    const input={protocol:'leadgen-parent-turn/v1',index,context,history:structuredClone(history)};

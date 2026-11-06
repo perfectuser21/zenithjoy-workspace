@@ -30,10 +30,11 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
   let closed=false,sealed=false,pending=0,active=0,executionUnknown=false,commanderAborted=false,abortUnknown=false;
   const unknownReasons=new Set();
   const markUnknown=reason=>{executionUnknown=true;unknownReasons.add(reason);};
-  const guidance=[],observerRecordingFailures=[];let observerStatus='not_requested';
+  const guidance=[],observerRecordingFailures=[],parentContexts=new WeakMap();let observerStatus='not_requested',parentRevision=0;
+  const appendGuidance=text=>{guidance.push(text.slice(0,16000));parentRevision++;};
   const abort=async reason=>{
     if(commanderAborted)return {execution_stopped:!executionUnknown&&!abortUnknown&&active===0};
-    commanderAborted=true;
+    commanderAborted=true;parentRevision++;
     try{const stopped=await onAbort(String(reason||'commander_abort').slice(0,1000));abortUnknown=stopped?.execution_stopped!==true||active>0;if(abortUnknown)unknownReasons.add('abort_stop_unknown');return stopped;}
     catch{abortUnknown=true;unknownReasons.add('abort_stop_unknown');return {execution_stopped:false};}
   };
@@ -108,7 +109,7 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
       try{
         appendFileSync(join(directory,'broker-events.jsonl'),JSON.stringify({at:new Date().toISOString(),run_id:request.run_id,activity:request.activity_key,event,
           input:q?{op:q.op,operation:q.operation,input:q.input,command:q.command,args:q.args}:null,response:out,commander_action:action,commander_status:commanderStatus})+'\n',{mode:0o600});
-        if(['answer','steer'].includes(action?.action)&&typeof action.text==='string')guidance.push(action.text.slice(0,16000));
+        if(['answer','steer'].includes(action?.action)&&typeof action.text==='string')appendGuidance(action.text);
         if(action?.action==='abort')await abort(action.reason);
       }catch{markUnknown('event_delivery_unknown');out={ok:false,error:'SKILL_PRIMARY_EVENT_DELIVERY_UNKNOWN'};}
       client.end(JSON.stringify(out)+'\n');
@@ -138,15 +139,19 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
         if(await authorizeParentContext(JSON.parse(parentRequest))!==true)throw Error('SKILL_PRIMARY_PARENT_CONTEXT_UNAUTHORIZED');
         admit();
         if(!object(context))throw Error('SKILL_PRIMARY_INSPECT_INVALID');
-        return {...context,...(guidance.length?{commander_guidance:guidance.splice(0)}:{}),...(commanderAborted?{commander_abort:true}:{})};
+        const value={...context,...(guidance.length?{commander_guidance:guidance.splice(0)}:{}),...(commanderAborted?{commander_abort:true}:{})};
+        parentContexts.set(value,parentRevision);return value;
       }finally{pending--;}
     },
+    // Code-only watermark for the exact snapshot object. It is not a socket
+    // operation or serialized authorization and cannot be rebuilt from JSON.
+    isParentContextCurrent:value=>!sealed&&!closed&&Date.now()<request.deadline_ms&&JSON.stringify(request)===parentRequest&&parentContexts.has(value)&&parentContexts.get(value)===parentRevision,
     report:async event=>{
       const {action,commanderStatus}=await observe(event,!sealed&&!closed);
       const apply=!sealed&&!closed;
       appendFileSync(join(directory,'broker-events.jsonl'),JSON.stringify({at:new Date().toISOString(),run_id:request.run_id,activity:request.activity_key,event,response:null,commander_action:action,commander_status:commanderStatus,action_applied:apply})+'\n',{mode:0o600});
       if(!apply)return {action:'none'};
-      if(['answer','steer'].includes(action?.action)&&typeof action.text==='string')guidance.push(action.text.slice(0,16000));
+      if(['answer','steer'].includes(action?.action)&&typeof action.text==='string')appendGuidance(action.text);
       if(action?.action==='abort')await abort(action.reason);
       return action;
     },
