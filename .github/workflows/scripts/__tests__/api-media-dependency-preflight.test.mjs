@@ -48,7 +48,7 @@ function invoke(t,{present=[],failed='',broken='',absent='',slow='',font='ready'
  [ "$MEDIA_SLOW" != helper-ignore-term ] || { trap '' TERM; while :; do /bin/sleep 10; done; }
  ${createTools}
  if [ "$MEDIA_AFTER_FONT" != missing-file ]; then printf 'installed fixture font bytes' > "$MEDIA_FONT_FILE"; fi
- /bin/touch "$MEDIA_BIN/installed"
+ : > "$MEDIA_BIN/installed"
  ;; *) exec /bin/bash "$@";; esac`);
  // After installation fontconfig reads the modeled post-install state.
  const fc=toolScript('fc-match').replace('[ "$MEDIA_BROKEN"', '[ ! -e "$MEDIA_BIN/installed" ] || MEDIA_FONT="$MEDIA_AFTER_FONT"\n[ "$MEDIA_BROKEN"');
