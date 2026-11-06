@@ -147,6 +147,7 @@ export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLo
   if(!taskScope||typeof taskScope!=='object'||Array.isArray(taskScope))invalid();
   const match=(key,expected)=>{for(const source of [payload,taskScope])if(Object.hasOwn(source,key)&&source[key]!==expected)invalid();};
   match('limit',q.limit);match('send',0);match('run_max_seconds',q.run_max_seconds);
+  match('execution_transport',q.execution_transport);match('max_turns',q.max_turns);
   match(q.workflow_key==='douyin_comment_scoring'?'score_limit':'video_limit',q.limit);
   if(q.workflow_key!=='douyin_video_discovery')match('source_run',q.source_run);
   if(q.workflow_key==='douyin_video_processing')match('comment_limit',q.comment_limit);
