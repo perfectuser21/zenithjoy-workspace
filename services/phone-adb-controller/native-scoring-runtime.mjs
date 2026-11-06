@@ -42,7 +42,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
    ||(s?.source_run??null)!==fixed.source_run||s.limit!==fixed.limit)))throw fail('AUTHORITY');
   const actual=[task.claimed_by,task.claimed_at];if(claim&&!same(claim,actual))throw fail('CLAIM_CHANGED');claim??=actual;active(readOnly);
  };
- function durable(name,value){const file=join(directory,name),fd=openSync(file,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}const parent=openSync(directory,'r');try{fsyncSync(parent);}finally{closeSync(parent);}issued.set(name,sha(readFileSync(file)));return file;}
+ function durable(name,value){const file=join(directory,name),bytes=Buffer.from(JSON.stringify(value)),expected=sha(bytes),fd=openSync(file,'wx',0o600);try{writeFileSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}const parent=openSync(directory,'r');try{fsyncSync(parent);}finally{closeSync(parent);}if(sha(readFileSync(file))!==expected)throw fail('JOURNAL');issued.set(name,expected);return file;}
  async function prepare(){
   verify();if(fixed?.workflow!=='douyin_comment_scoring'||fixed.profile!=='mmv-scoring'||fixed.serial!=='none'||fixed.source_commit!==src.commit||!Number.isSafeInteger(fixed.limit)||fixed.limit<1||fixed.limit>50||typeof createPool!=='function'||typeof assertAuthority!=='function')throw fail('DEPENDENCY');
   const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||readdirSync(directory).length)throw fail('PREVIOUS_CALLER_UNKNOWN');
@@ -78,6 +78,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   const id=randomUUID(),write=writes.has(op);if(write)durable(id+'.intent.json',{id,op,request,scope:fixed,activity_scope:current});
   const job={id};pending.add(job);let allocation,writeSent=false,commitSent=false;
   try{
+   active(readOnly);verify();active(readOnly);
    try{allocation=await createPool({deadlineMs:current.deadline_ms,cleanupDeadlineMs:current.receipt_deadline_ms??fixed.receipt_deadline_ms});}catch{taint('allocation_unknown');throw fail('RESOURCE_UNKNOWN');}
    active(readOnly);const expected=allocation?.expectedIdentity;if(!expected?.database||!expected.role||!allocation.pool?.connect||!allocation.transport?.close||!allocation.transport?.seal){taint('allocation_unverified');throw fail('RESOURCE_UNKNOWN');}
    const ownClient=async()=>{
