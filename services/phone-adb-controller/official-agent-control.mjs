@@ -216,9 +216,14 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   controlAcceptance=true;
  }
  const intentAllowed=op=>!(controlAcceptance||continuation)||op==='inspect';
- async function authorizeParentContext(q){
+ function authorizeParentContext(q){return authorizeParent(q,false);}
+ function readAuthorizedTaskClaim(q){return authorizeParent(q,true);}
+ async function authorizeParent(q,projectClaim){
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
-  return ownedJob(async(job,e)=>{verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id)validateControlTask(value);return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});return true;});
+  return ownedJob(async(job,e)=>{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
+   if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
+   const claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});record({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))});return claim;
+  });
  }
  function durableRaw(name,value,onCreated){const path=join(journalDirectory,name),fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);const b=Buffer.from(JSON.stringify(value)+'\n');let writtenIdentity;try{onCreated?.(fstatSync(fd));let n=0;while(n<b.length){const wrote=writeSync(fd,b,n,b.length-n);if(wrote<1)throw failure('OFFICIAL_CONTROL_JOURNAL');n+=wrote;}fsyncSync(fd);writtenIdentity=fstatSync(fd);}finally{closeSync(fd);}const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}durableArtifacts.set(name,{sha256:hash(b),bytes:b.length,identity:writtenIdentity});}
  function verifyJournalDirectory(){const current=lstatSync(journalDirectory);if(!current.isDirectory()||current.isSymbolicLink()||current.uid!==process.getuid()||(current.mode&0o077)||current.dev!==stat.dev||current.ino!==stat.ino||realpathSync(journalDirectory)!==resolve(journalDirectory))throw failure('OFFICIAL_CONTROL_JOURNAL');}
@@ -355,7 +360,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   await closing;return snapshot();
  }
 
- return Object.freeze({request:requestAuthority,snapshot,close,seal,authorizeParentContext,verifyTurnReceipt,verifyStopReceipt,authorizeIntent,consumeIntentPermit,authorizeBrokerDelivery,verifySealedExecution,createReadOnlyContinuation});
+ return Object.freeze({request:requestAuthority,snapshot,close,seal,authorizeParentContext,readAuthorizedTaskClaim,verifyTurnReceipt,verifyStopReceipt,authorizeIntent,consumeIntentPermit,authorizeBrokerDelivery,verifySealedExecution,createReadOnlyContinuation});
 }
 
 // Only the original frozen runtime module may construct its per-Activity controller.

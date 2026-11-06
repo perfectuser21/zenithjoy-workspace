@@ -17,14 +17,15 @@ test('Code claim投影来自同次完整授权的真实Task读取，不补造lea
  assert.equal(Object.hasOwn(proof,'lease_until'),false);assert.equal(Object.hasOwn(proof,'lease_expires_at'),false);
  assert.ok(Number.isSafeInteger(proof.observed_at));assert.ok(Number.isSafeInteger(proof.authorized_at));assert.ok(proof.authorized_at>=proof.observed_at);
  await assert.rejects(()=>instance.readAuthorizedTaskClaim({...q,nonce:'d'.repeat(48)}),/SCOPE/);assert.equal(count(),4);
- await instance.close();await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/CLOSED/);assert.equal(count(),4);
+ await instance.close();await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_RAW_SCOPE/);assert.equal(count(),4);
 },{rawTransport:true}));
 
 test('Code claim读取拒绝缺失归属，旧bool授权接口仍保持原行为',async()=>using(async({instance,q,routes})=>{
  assert.equal(typeof instance.readAuthorizedTaskClaim,'function');
  assert.equal(await instance.authorizeParentContext(q),true);
+ await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_TASK_CLAIM/);
  const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_by=null;task.claimed_at=null;
- await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/TASK_CLAIM/);
+ await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID/);
 },{rawTransport:true}));
 
 test('deadline取消同步异常不逃出定时器，收尾保留unknown',async()=>using(async({q,options,createControl,firstRequest,journalDirectory})=>{
