@@ -175,3 +175,18 @@ test('a Code Observer safety guard stops the next raw turn after an inspect exch
  const out=await module.runActivitySkillParentLoop({...state,beforeTurn:()=>safe});
  assert.equal(state.inputs.length,1);assert.equal(out.official_execution_stopped,true);assert.equal(out.model_execution_unknown,false);assert.equal(out.turn_count,1);assert.equal(out.reason,'parent_loop_failed');assert.deepEqual(state.effects,[]);
 });
+
+test('owned pending stall must drain and apply guidance BEFORE the next real broker context is read',async t=>{
+ let calls=0;
+ const state=await fixture(t,{turns:async(index,input)=>{
+  if(index===0)return {type:'inspect',progress:'Read original evidence.'};
+  if(index===1)return {type:'inspect',question:'Which evidence should I inspect next?'};
+  assert.ok(input.context.commander_guidance?.includes('Inspect the original fixed evidence next.'));return {type:'finish'};
+ },onEvent:async event=>event.type==='stall'?(await new Promise(r=>setTimeout(r,25)),{action:'steer',text:'Inspect the original fixed evidence next.'}):event.type==='question'?{action:'answer',text:'Use the fixed evidence only.'}:{action:'none'}});
+ const out=await module.runActivitySkillParentLoop({...state,beforeTurn:async()=>{
+  if(calls++===2)await state.broker.report({type:'stall',elapsed_ms:1000});return true;
+ }});
+ assert.equal(out.reason,'agent_finished');assert.equal(out.turn_count,3);assert.equal(out.model_execution_unknown,false);assert.deepEqual(state.effects,[]);
+ const events=readFileSync(join(state.directory,'broker-events.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(events.filter(e=>e.event.type==='stall').length,1);assert.equal(events.find(e=>e.event.type==='stall').action_applied,true);
+});
