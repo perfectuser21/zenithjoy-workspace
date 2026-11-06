@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,readdirSync,chmodSync,statSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync,chmodSync,statSync,renameSync} from 'node:fs';
 import {join} from 'node:path';
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import {createHash} from 'node:crypto';
 import {canonical} from '../runtime-definition.mjs';
 import {using} from './fixtures/official-control-fixture.mjs';
@@ -73,4 +75,49 @@ test('Caller close publishes one durable safe final snapshot tied to its exact r
  assert.deepEqual(value.raw_turns,[]);assert.equal(value.ledger.sha256,sha(readFileSync(join(journalDirectory,value.ledger.file))));assert.equal(value.ledger.bytes,statSync(join(journalDirectory,value.ledger.file)).size);
  assert.ok(!bytes.includes(Buffer.from('fixture-private-token')));assert.equal(instance.verifySealedExecution(value.snapshot,{request:q}),false,'disk JSON is never a private stop brand');
  await Promise.all([instance.close(),instance.close()]);assert.deepEqual(finalFiles(journalDirectory),names);assert.deepEqual(readFileSync(path),bytes);
+}));
+
+test('final unknown preserves pending and missing request-close despite subsequent replay; no second final',async()=>using(async({instance,q,firstRequest,journalDirectory,replay})=>{
+ const work=instance.request({kind:'activity_skill_authority',request:q}),rejected=assert.rejects(work,/CLOSED/);await firstRequest;
+ const closed=await instance.close();await rejected;const file=join(journalDirectory,finalFiles(journalDirectory)[0]),bytes=readFileSync(file),final=JSON.parse(bytes);
+ assert.equal(final.snapshot.pending,1);assert.equal(final.snapshot.execution_stopped,false);assert.equal(final.snapshot.execution_unknown,true);assert.deepEqual(final.snapshot,closed);
+ for(const callback of replay)callback();await instance.close();assert.deepEqual(readFileSync(file),bytes);assert.equal(instance.snapshot().execution_stopped,false);
+},{delay:true,suppressClose:true}));
+for(const fault of ['open','write','fsync'])test(`final ${fault} failure taints close forever and cannot leave a valid positive final name`,async()=>using(async({instance,q,journalDirectory})=>{
+ const original={openSync:fs.openSync,writeSync:fs.writeSync,fsyncSync:fs.fsyncSync};let finalFd,attempts=0;
+ fs.openSync=(path,...args)=>{if(String(path).includes('official-caller-final-')){attempts++;if(fault==='open')throw Error('fixture-sensitive-error');const fd=original.openSync(path,...args);finalFd=fd;return fd;}return original.openSync(path,...args);};
+ fs.writeSync=(fd,...args)=>{if(fd===finalFd&&fault==='write')throw Error('fixture-sensitive-error');return original.writeSync(fd,...args);};
+ fs.fsyncSync=fd=>{if(fd===finalFd&&fault==='fsync')throw Error('fixture-sensitive-error');return original.fsyncSync(fd);};syncBuiltinESMExports();let closed;
+ try{closed=await instance.close();}finally{Object.assign(fs,original);syncBuiltinESMExports();}
+ assert.equal(closed.execution_stopped,false);assert.equal(closed.execution_unknown,true);assert.equal(instance.verifySealedExecution(closed,{request:q}),false);assert.deepEqual(finalFiles(journalDirectory),[]);
+ const names=readdirSync(journalDirectory);await Promise.all([instance.close(),instance.close()]);assert.deepEqual(readdirSync(journalDirectory),names);assert.equal(attempts,1);assert.equal(instance.snapshot().execution_stopped,false);
+}));
+for(const change of ['ledger-replaced','ledger-edited-in-place','source-drift','directory-mode'])test(`final ${change} cannot attest the original Caller`,async()=>using(async({instance,journalDirectory,runtimeRoot})=>{
+ if(change==='ledger-replaced'){const path=join(journalDirectory,readdirSync(journalDirectory).find(n=>n.endsWith('.jsonl')));renameSync(path,path+'.original');writeFileSync(path,'forged ledger\n',{mode:0o600});}
+ else if(change==='ledger-edited-in-place')writeFileSync(join(journalDirectory,readdirSync(journalDirectory).find(n=>n.endsWith('.jsonl'))),'forged same-inode ledger\n');
+ else if(change==='source-drift')writeFileSync(join(runtimeRoot,'leadgen-rpc.mjs'),'source drift');else chmodSync(journalDirectory,0o755);
+ const closed=await instance.close();assert.equal(closed.execution_stopped,false);assert.equal(closed.execution_unknown,true);
+ for(const file of finalFiles(journalDirectory)){const value=JSON.parse(readFileSync(join(journalDirectory,file)));assert.equal(value.evidence_complete,false);assert.equal(value.snapshot.execution_stopped,false);}
+}));
+test('recreated Caller final remains independent unknown and disk final never restores prior authority',async()=>using(async({instance,q,options,createControl,journalDirectory})=>{
+ await instance.close();const first=finalFiles(journalDirectory);assert.equal(first.length,1);const bytes=readFileSync(join(journalDirectory,first[0]));
+ const next=createControl(options);const closed=await next.close();assert.equal(closed.previous_caller_stop_unproven,true);assert.equal(closed.execution_unknown,true);assert.equal(closed.execution_stopped,false);
+ assert.equal(finalFiles(journalDirectory).length,2);assert.deepEqual(readFileSync(join(journalDirectory,first[0])),bytes);assert.equal(next.verifySealedExecution(JSON.parse(bytes).snapshot,{request:q}),false);
+}));
+
+for(const fault of ['rename-fails','foreign-winner'])test(`failed final ${fault} stays unknown without overwriting an external path`,async()=>using(async({instance,journalDirectory})=>{
+ const original={openSync:fs.openSync,writeSync:fs.writeSync,renameSync:fs.renameSync};let finalFd,path,renames=0;
+ fs.openSync=(name,...args)=>{const fd=original.openSync(name,...args);if(String(name).includes('official-caller-final-')){path=String(name);finalFd=fd;}return fd;};
+ fs.writeSync=(fd,...args)=>{const n=original.writeSync(fd,...args);if(fd===finalFd){if(fault==='foreign-winner'){original.renameSync(path,path+'.owned');const winner=original.openSync(path,'wx',0o600);try{original.writeSync(winner,Buffer.from('FOREIGN_WINNER'));}finally{fs.closeSync(winner);}}throw Error('fixture-sensitive-output');}return n;};
+ fs.renameSync=(...args)=>{renames++;if(fault==='rename-fails')throw Error('fixture-rename-denied');return original.renameSync(...args);};syncBuiltinESMExports();let closed;
+ try{closed=await instance.close();}finally{Object.assign(fs,original);syncBuiltinESMExports();}
+ assert.equal(closed.execution_stopped,false);assert.equal(closed.execution_unknown,true);assert.equal(closed.final_record_failed,true);
+ if(fault==='foreign-winner'){assert.equal(renames,0);assert.equal(readFileSync(path,'utf8'),'FOREIGN_WINNER');}else assert.equal(renames,1);
+ const names=readdirSync(journalDirectory);await instance.close();assert.deepEqual(readdirSync(journalDirectory),names);
+}));
+
+test('close reentry during descriptor cleanup shares the same pipeline and final record',async()=>using(async({instance,journalDirectory})=>{
+ const original=fs.closeSync;let second,entered=false;fs.closeSync=fd=>{if(!entered){entered=true;second=instance.close();}return original(fd);};syncBuiltinESMExports();let first;
+ try{first=await instance.close();await second;}finally{fs.closeSync=original;syncBuiltinESMExports();}
+ assert.equal(first.execution_stopped,true);assert.equal(finalFiles(journalDirectory).length,1);assert.equal(instance.snapshot().execution_unknown,false);
 }));
