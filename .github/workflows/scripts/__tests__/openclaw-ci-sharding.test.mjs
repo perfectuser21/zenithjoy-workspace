@@ -6,6 +6,7 @@ import {join, dirname} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 import {runCodeGate} from './helpers/run-code-gate.mjs';
+import {openclawStep,captureNodeArgs} from './helpers/openclaw-selection.mjs';
 
 const workflow = YAML.parse(readFileSync(new URL('../../ci-l3-code.yml', import.meta.url), 'utf8'));
 const globs = [
@@ -13,10 +14,11 @@ const globs = [
   'services/phone-adb-controller/__tests__/*.test.mjs',
   '.github/workflows/scripts/__tests__/*.test.mjs',
   'scripts/product-map/__tests__/leadgen-workflow-skill.test.js',
+  'scripts/ci/__tests__/native-103-ci-contract.test.mjs',
 ];
 const original = 'node --test ' + globs.join(' ');
 function command(w = workflow) {
-  return w.jobs['openclaw-scripts-test'].steps.find(s => s.run?.startsWith('node --test'))?.run;
+  return openclawStep(w).run;
 }
 function validate(w) {
   const job = w.jobs['openclaw-scripts-test'];
@@ -24,7 +26,12 @@ function validate(w) {
   assert.equal(job['continue-on-error'], undefined);
   assert.equal(job['timeout-minutes'], 10);
   assert.deepEqual(job.strategy, {'fail-fast': false, matrix: {shard: [1, 2, 3]}});
-  assert.equal(command(w), 'node --test --test-shard=${{ matrix.shard }}/3 ' + globs.join(' '));
+  const step=openclawStep(w);assert.equal(step.if,undefined);assert.equal(step['continue-on-error'],undefined);
+  const actual=captureNodeArgs(command(w));
+  assert.deepEqual(actual.filter(arg=>arg.startsWith('--')),['--test','--test-shard=1/3']);
+  const baseline=captureNodeArgs('node --test --test-shard=1/3 '+globs.join(' '));
+  const darwinOnly=/\/native-103-(transaction|public-executor|producers)\.test\.mjs$/;
+  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract');
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');
@@ -41,6 +48,7 @@ function fixture(t) {
     '.github/workflows/scripts/__tests__/one.test.mjs',
     '.github/workflows/scripts/__tests__/two.test.mjs',
     'scripts/product-map/__tests__/leadgen-workflow-skill.test.js',
+    'scripts/ci/__tests__/native-103-ci-contract.test.mjs',
   ];
   for (const file of files) {
     mkdirSync(dirname(join(root, file)), {recursive: true});
@@ -102,9 +110,9 @@ test('missing or duplicate shards, filters, larger timeout and detached aggregat
     j => {j.strategy['fail-fast'] = true;},
     j => {j['timeout-minutes'] = 11;},
     j => {j.if = 'false';},
-    j => {j.steps.find(s => s.run?.startsWith('node --test')).run = original;},
-    j => {j.steps.find(s => s.run?.startsWith('node --test')).run += ' --test-name-pattern=one';},
-    j => {j.steps.find(s => s.run?.startsWith('node --test')).run += ' --test-skip-pattern=two';},
+    j => {j.steps.find(s => s.name===openclawStep(workflow).name).run = original;},
+    j => {j.steps.find(s => s.name===openclawStep(workflow).name).run += ' --test-name-pattern=one';},
+    j => {j.steps.find(s => s.name===openclawStep(workflow).name).run += ' --test-skip-pattern=two';},
   ]) {
     const w = structuredClone(workflow);
     // Shape mutations also remain meaningful before the RED implementation.
@@ -160,7 +168,7 @@ function matrixExecutions(f, w, name, failed = '') {
   const job = w.jobs['openclaw-scripts-test'];
   return job.strategy.matrix.shard.map(shard => {
     const scripts = job.steps
-      .filter(step => step.run?.startsWith('node --test'))
+      .filter(step => step===openclawStep(w)||step.run?.startsWith('node --test'))
       .filter(step => step.if === undefined ||
         Function('matrix', 'return (' + step.if + ')')({shard}))
       .map(step => step.run.replaceAll('$' + '{{ matrix.shard }}', String(shard)));
