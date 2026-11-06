@@ -20,7 +20,7 @@ async function using(t,respond,options={}){
  const deadlineMs=Date.now()+(options.duration??2000),receiptDeadlineMs=deadlineMs+1000;
  const requestImpl=(url,opts,callback)=>httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname+new URL(url).search,method:opts.method,headers:opts.headers,agent:false},callback);
  const readSource=(path,...args)=>path===join(root,'deployment-manifest.json')?JSON.stringify({source_commit:source.commit}):readFileSync(path,...args);
- const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python:pins[0],deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token',assertAuthority:options.assertAuthority});
+ const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python:pins[0],deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token',assertAuthority:options.assertAuthority,readOnly:options.readOnly});
  t.after(()=>producer.close());return {producer,scope,deadlineMs,receiptDeadlineMs};
 }
 test('原Jev HTTP seam：真正请求/响应/socket归还后才消费；URL/model固定，错目标零IO',async t=>{
@@ -73,4 +73,10 @@ test('原sample readProof同冻结sourceRun三次受控GET，保原身份归并�
 test('HTTP producer每次真实dispatch与消费前核Code authority，迟到授权/seal不得发HTTP',async t=>{
  let authorizeCount=0,hits=0;const f=await using(t,(_q,r)=>{hits++;r.end('{}');},{assertAuthority:async()=>{authorizeCount++;return true;}});await f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key');assert.equal(hits,1);assert.equal(authorizeCount,2);
  let entered,release;const wait=new Promise(r=>entered=r),blocked=new Promise(r=>release=r);const second=await using(t,(_q,r)=>{hits++;r.end('{}');},{assertAuthority:async()=>{entered();await blocked;return true;}});const work=second.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key');await wait;second.producer.seal();release();await assert.rejects(work,/CLOSED|UNKNOWN/);const closed=await second.producer.close();assert.equal(hits,1);assert.equal(closed.pending,0);assert.equal(closed.external_effect,'none');
+});
+
+test('Code Judge readonly producer rejects every POST before HTTP intent while fixed Task GET remains available',async t=>{
+ let hits=0;const f=await using(t,(q,r)=>{hits++;r.end(JSON.stringify({task:{id:'fixture'}}));},{readOnly:true});
+ await assert.rejects(()=>f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture'),/NATIVE_103_READONLY_POST/);
+ assert.equal(hits,0);assert.equal(f.producer.snapshot().external_effect,'none');await f.producer.readTask();assert.equal(hits,1);
 });
