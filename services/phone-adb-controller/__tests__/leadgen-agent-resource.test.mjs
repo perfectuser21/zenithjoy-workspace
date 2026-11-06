@@ -160,9 +160,10 @@ for(const lostAck of [false,true])test('完整factory原生receipt两partial最�
     if(op==='open-video'||op==='back-evidence'){panelOpen=false;position=0;}
     if(op==='open-comments'){
       panelOpen=true;position=0;openCount++;const evidence=join(dir,args[0]+'-panel.xml');
-      const capturedAt=Date.now();writeFileSync(evidence,panel(),{mode:0o600});
-      // Deterministic fixture-only coarse clock, not a claim about lost CI stat.
-      if(footer)utimesSync(evidence,Math.floor(capturedAt/1000)-1,Math.floor(capturedAt/1000)-1);
+      writeCapturedXml(evidence,panel(),{simulateCoarseClock:footer});
+      const capturedAt=captureTimes.get(evidence);
+      // The negative probe remains stale; normal reads retain this capture's timestamp.
+      if(stalePanelProbe)utimesSync(evidence,Math.floor(capturedAt/1000)-1,Math.floor(capturedAt/1000)-1);
       fileClockFacts.push({kind:'panel',captured_at_ms:capturedAt,adopted_mtime_ms:statSync(evidence).mtimeMs,read_at_ms:Date.now(),stale_probe:stalePanelProbe});
       return 'comments_opened=1\nevidence='+evidence+'\n';
     }
