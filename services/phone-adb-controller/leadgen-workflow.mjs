@@ -116,9 +116,9 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  return {executionMode,execution};
 }
 
-export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,execute=execInput}){
+export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,nativeScoring,execute=execInput}){
     const control=controlScope===undefined?null:validateControlScope(controlScope);
-    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key);
+    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key||env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&isNativeScoringWorkflow(nativeScoring)&&nativeScoring.snapshot().prepared===true&&['scoring','mark_leads'].includes(r.activity));
     if(r.phase==='start'){
       if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
       else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
@@ -230,7 +230,7 @@ async function main(){
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
-    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope});
+    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope,nativeScoring:handlers.nativeScoringRuntime});
   };
   const activities=frozen.activities.map(a=>({...a.version.payload.contract,key:a.reference.slot_key}));
   const verify=async(activity,result,options={})=>{

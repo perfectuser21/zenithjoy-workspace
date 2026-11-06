@@ -250,7 +250,7 @@ export function nativeClaimFromTask({task,input,sourceCommit}){
  const fail=()=>{throw Error('NATIVE_CLAIM_SCOPE');};const p=task?.payload;
  if(!task||task.id!==input?.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!p||p.workflow_key!==input.workflow_key||p.source_commit!==sourceCommit||p.run_tag!==input.run_tag||p.profile!==input.profile||p.company_line!==input.line||(input.serial==='none'?p.device_serial!=null:p.device_serial!==input.serial))fail();
  if(!p.scope||typeof p.scope!=='object'||Array.isArray(p.scope)||p.scope.limit!==input.limit||(p.scope.source_run??null)!==input.source_run)fail();
- for(const [key,value]of [['limit',input.limit],['source_run',input.source_run]])if(Object.hasOwn(p,key)&&p[key]!==value)fail();
+ for(const [key,value]of [['limit',input.limit],['source_run',input.source_run],...(input.execution_transport==='raw-model-v1'?[['execution_transport',input.execution_transport],['max_turns',input.max_turns],['run_max_seconds',input.run_max_seconds]]:[])]){if(input.execution_transport==='raw-model-v1'&&['execution_transport','max_turns','run_max_seconds'].includes(key)&&p.scope[key]!==value)fail();if(Object.hasOwn(p,key)&&p[key]!==value)fail();}
  return {claimed_by:task.claimed_by,claimed_at:task.claimed_at};
 }
 export async function freezeDefinition(o) {

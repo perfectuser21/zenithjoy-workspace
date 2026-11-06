@@ -63,12 +63,12 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   active(readOnly);await authorize(readOnly);
   const ownedDependencies=nativeScoringDependenciesMatch(queueDependencies,src);
   if((['score','policy_review','mark_leads','bridge_outreach'].includes(op))&&!ownedDependencies)throw fail('DEPENDENCY');
-  for(const k of ['line','run','source_run','limit','source_commit','task_id'])if(Object.hasOwn(input,k)&&input[k]!==({line:fixed.line,run:fixed.run,source_run:fixed.source_run,limit:fixed.limit,source_commit:src.commit,task_id:fixed.task_id})[k])throw fail('SCOPE');
+  for(const k of ['line','run','source_run','limit','source_commit','task_id'])if(Object.hasOwn(input,k)&&input[k]!==({line:fixed.line,run:fixed.run,source_run:fixed.source_run,limit:op==='score'?1:fixed.limit,source_commit:src.commit,task_id:fixed.task_id})[k])throw fail('SCOPE');
   const request={...structuredClone(input),op,line:fixed.line,run:fixed.run,source_run:fixed.source_run,limit:fixed.limit};
   if(op==='company_config'){if(Object.keys(input).some(k=>k!=='step')||input.step!=='103')throw fail('SCOPE');}
   if(['score','score_readback','score_exclusion_readback','policy_review'].includes(op)){
    if(!scoreScope||!Array.isArray(input.ids)||new Set(input.ids).size!==input.ids.length||input.ids.some(id=>!scoreScope.ids.includes(id)))throw fail('IDS');
-   request.sources=Object.fromEntries(input.ids.map(id=>[id,scoreScope.sources[id]]));request.limit=Math.min(fixed.limit,input.ids.length);
+   request.sources=Object.fromEntries(input.ids.map(id=>[id,scoreScope.sources[id]]));request.limit=op==='score'?1:Math.min(fixed.limit,input.ids.length);
    if(op==='score')request.budget_max=fixed.limit;
    if(op==='policy_review'){request.claim=fixed.run;request.require_dual_review=true;}
   }
