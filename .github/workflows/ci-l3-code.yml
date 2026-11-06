@@ -343,6 +343,8 @@ jobs:
     name: Native 103 Darwin PostgreSQL Test
     runs-on: macos-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Restore pinned skill sources

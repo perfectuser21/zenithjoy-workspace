@@ -36,7 +36,7 @@ test('原Jev HTTP seam：真正请求/响应/socket归还后才消费；URL/mode
 });
 test('正式父Task读取仅固定scope任务；GET也需req/res/socketclose且不调用模型',async t=>{
  assert.equal(typeof module.startNativeScoringProducers,'function');let path,authorization;
- const f=await using(t,(req,res)=>{path=req.url;authorization=req.headers.authorization;res.setHeader('Connection','close');res.end(JSON.stringify({task:{id:req.url.split('/').at(-1),status:'in_progress'}}));});
+ const f=await using(t,(req,res)=>{path=req.url;authorization=req.headers.authorization;res.setHeader('Connection','close');res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('X-Content-Type-Options','nosniff');res.end(JSON.stringify({task:{id:req.url.split('/').at(-1),status:'in_progress'}}));});
  assert.equal(typeof f.producer.readTask,'function','缺Code-owned authority HTTP，不得用global fetch冒闭域');
  const task=await f.producer.readTask();assert.equal(task.id,f.scope.task_id);assert.equal(path,'/api/brain/tasks/'+f.scope.task_id);assert.equal(authorization,'Bearer fixture-brain-token');
  const proof=await f.producer.close();assert.equal(proof.external_effect,'none');assert.equal(proof.execution_stopped,true);assert.ok(proof.http.every(x=>!x.post&&x.request_closed&&x.response_closed&&x.socket_closed));
