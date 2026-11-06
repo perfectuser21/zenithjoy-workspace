@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {getEventListeners} from 'node:events';
 import {createServer,request as httpRequest} from 'node:http';
 import {readFileSync,mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -33,6 +34,20 @@ test('原Jev HTTP seam：真正请求/响应/socket归还后才消费；URL/mode
  assert.equal(hits,1);
  const closed=await f.producer.close();assert.equal(closed.execution_stopped,true);assert.equal(closed.external_effect,'observed');
  assert.ok(closed.http.every(row=>row.request_closed&&row.response_closed&&row.socket_closed));
+});
+for(const closeFirst of [false,true])test(`completed POST ignores its old abort signal ${closeFirst?'after':'before'} producer close`,async t=>{
+ let hits=0;const f=await using(t,(req,res)=>{hits++;req.resume();req.on('end',()=>{res.setHeader('Connection','close');res.end(JSON.stringify({id:'known-completed-post'}));});});
+ const controller=new AbortController(),response=await f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key',{signal:controller.signal});
+ assert.equal(response.id,'known-completed-post');assert.equal(getEventListeners(controller.signal,'abort').length,0);if(closeFirst)await f.producer.close();
+ const before=f.producer.snapshot();assert.equal(before.pending,0);assert.equal(before.external_effect,'observed');assert.ok(before.http.every(row=>row.request_closed&&row.response_closed&&row.socket_closed));
+ controller.abort();await new Promise(setImmediate);assert.deepEqual(f.producer.snapshot(),before,'a terminal callback cannot turn a fully returned POST into a new unknown');
+ const stopped=await f.producer.close();assert.equal(stopped.execution_stopped,true);assert.equal(stopped.external_effect,'observed');assert.equal(hits,1);
+});
+test('in-flight POST abort keeps the original external effect unknown and never resends',async t=>{
+ let arrived,hits=0;const seen=new Promise(resolve=>arrived=resolve),f=await using(t,req=>{hits++;req.resume();req.on('end',arrived);}),controller=new AbortController();
+ const call=f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key',{signal:controller.signal});await seen;controller.abort();await assert.rejects(call,/NATIVE_103_HTTP_CLOSED|NATIVE_103_HTTP_UNKNOWN/);
+ const stopped=await f.producer.close();assert.equal(stopped.pending,0);assert.equal(stopped.external_effect,'unknown');assert.equal(hits,1);assert.equal(getEventListeners(controller.signal,'abort').length,0);
+ controller.abort();assert.equal(f.producer.snapshot().external_effect,'unknown');
 });
 test('正式父Task读取仅固定scope任务；GET也需req/res/socketclose且不调用模型',async t=>{
  assert.equal(typeof module.startNativeScoringProducers,'function');let path,authorization;

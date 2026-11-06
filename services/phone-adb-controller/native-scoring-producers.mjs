@@ -82,10 +82,10 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
   const method=opts.method||'GET',body=opts.body===undefined?undefined:JSON.parse(opts.body);permit(url,method,body);check();if(effectUnknown&&method!=='GET')throw fail('HTTP_UNKNOWN');
   const r={id:randomUUID(),post:method==='POST',dispatched:false,not_started:false,request_closed:false,response_closed:true,socket_closed:true,response_received:false};http.push(r);
   let req,res,socket,output='',ended=false,final=false,completing=false,resolveDone,rejectDone;
-  const done=new Promise((resolve,reject)=>{resolveDone=resolve;rejectDone=reject;}),token={cancel(){if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();if(!final){final=true;rejectDone(fail('HTTP_CLOSED'));}}};pending.add(token);
+  const done=new Promise((resolve,reject)=>{resolveDone=resolve;rejectDone=reject;}),token={cancel(){if(final)return;final=true;opts.signal?.removeEventListener('abort',token.cancel);if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();rejectDone(fail('HTTP_CLOSED'));}};pending.add(token);
   const authority=async()=>{if(assertAuthority!==undefined&&await assertAuthority()!==true)throw fail('AUTHORITY');};
   const finish=()=>{if(completing||!(r.request_closed&&r.response_closed&&r.socket_closed))return;completing=true;
-   (async()=>{try{if(!ended)throw fail('HTTP_UNKNOWN');await authority();check();if(final)return;const value=JSON.parse(output);final=true;resolveDone({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,body:value});}catch{if(r.post&&r.dispatched)effectUnknown=true;if(!final){final=true;rejectDone(fail('HTTP_UNKNOWN'));}}finally{clearTimeout(timer);clearTimeout(hard);pending.delete(token);}})();
+   (async()=>{try{if(!ended)throw fail('HTTP_UNKNOWN');await authority();check();if(final)return;const value=JSON.parse(output);final=true;resolveDone({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,body:value});}catch{if(r.post&&r.dispatched)effectUnknown=true;if(!final){final=true;rejectDone(fail('HTTP_UNKNOWN'));}}finally{opts.signal?.removeEventListener('abort',token.cancel);clearTimeout(timer);clearTimeout(hard);pending.delete(token);}})();
   };
   const bad=()=>{if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();};
   const timer=setTimeout(token.cancel,Math.max(1,deadlineMs-Date.now())),hard=setTimeout(()=>{if(pending.has(token)){unknown=true;token.cancel();}},Math.max(1,receiptDeadlineMs-Date.now()));
