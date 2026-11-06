@@ -391,3 +391,9 @@ test('exactIDs格式/重复/上限在真实mark和bridge任何查询前拒绝',a
   await assert.rejects(queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',comment_ids:bad},{lock:async()=>{throw Error('不得取锁');}}),/BRIDGE_COMMENT_IDS/);
  }
 });
+test('103 bridge只读回包消费显式原native parser接缝，默认104不借该接缝',async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),id='33333333-3333-4333-8333-333333333333',payload={line_key:'yuesheng',run:'fixture_mark103',scoring_run:'fixture_score103',source_run:'fixture_source102',comment_run:'fixture_source102',comment_id:cid,lead_id:lid,target_douyin_id:'fixture-user',nickname:'fixture-nick',profile_url:'https://www.douyin.com/user/fixture-user',source_video_url:'https://www.douyin.com/video/7617837149999841201',comment_body:'fixture-comment',lead_identity:{id:lid,line_key:'yuesheng',douyin_id:'fixture-user'},qualification:{status:'passed'},recipient_evidence:{}};
+ const row={id,line_key:'yuesheng',run_tag:payload.run,source_run:payload.source_run,payload,payload_sha256:bridge.digest(payload),qualification_status:'passed',state:'confirmed',feishu_record_id:'recFixture123',fields:{},fields_sha256:bridge.digest({})};let calls=0;
+ const pool={query:async()=>({rows:[row]})},input={op:'bridge_readback',line:'yuesheng',run:payload.run,source_run:payload.source_run,ids:[id]},deps={verifyRecipient:()=>{calls++;return true;}};
+ assert.equal((await queueRequest(pool,input,deps)).verified,true);assert.equal(calls,1);assert.equal((await bridge.readbackBridge(pool,input)).verified,false,'不注入接缝时仍必须原native验证，不能把缺原件当真');
+});
