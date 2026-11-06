@@ -23,6 +23,14 @@ test('远端由核验来源重算原文、数值和digest，不接受调用者�
  assert.throws(()=>validateObservation({...m,digest:'f'.repeat(64)},scope),/METRICS_DIGEST_MISMATCH/);
 });
 
+test('Code-owned native parser依赖沿用原计数与摘要规则，缺原件或解析异常不可回退同步子进程',()=>{
+ const {buildObservation,validateObservation}=require('../discovery-metrics.js'),xml=tree('1.2万','501');let calls=0;
+ const nativeMetrics={parseDescriptions(actual){assert.equal(actual,xml);calls++;return ['未点赞，喜欢1.2万，按钮','评论501，按钮'];}};
+ const expected=buildObservation({...scope,xml}),actual=buildObservation({...scope,xml},nativeMetrics);assert.equal(calls,1);assert.deepEqual(actual,expected);assert.deepEqual(validateObservation(actual,scope,nativeMetrics),expected);assert.equal(calls,2);
+ assert.throws(()=>buildObservation({...scope,xml},{parseDescriptions(){throw Error('NATIVE_METRICS_MISSING_ISSUED_XML');}}),/NATIVE_METRICS_MISSING_ISSUED_XML/);
+ assert.throws(()=>buildObservation({...scope,xml},{parseDescriptions(){return {likes:12000,comment_total:501};}}),/METRICS_NATIVE_INVALID/);
+});
+
 test('成功取链原件封存与最终逐VID读回，路径/原件/权限/ACK不符均拒绝',async()=>{
  const {mkdtempSync,writeFileSync,rmSync,symlinkSync,chmodSync}=await import('node:fs');
  const {tmpdir}=await import('node:os');const {join}=await import('node:path');

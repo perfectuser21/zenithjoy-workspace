@@ -111,6 +111,7 @@ const modules={
  './runtime-receipts.mjs':await import(pathToFileURL(root+'runtime-receipts.mjs')),
  './ledger.mjs':await import(pathToFileURL(root+'ledger.mjs')),
  './preflight-phone-scope.mjs':await import(pathToFileURL(root+'preflight-phone-scope.mjs')),
+ './native-phone-runtime.mjs':await import(pathToFileURL(root+'native-phone-runtime.mjs')),
  './native-scoring-workflow.mjs':await import(pathToFileURL(root+'native-scoring-workflow.mjs')),
  './preflight-judge.mjs':await import(pathToFileURL(root+'preflight-judge.mjs')),
  './runner-official-commander.mjs':await import(pathToFileURL(root+'runner-official-commander.mjs')),

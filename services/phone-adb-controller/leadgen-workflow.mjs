@@ -1,10 +1,11 @@
+import {createNativePhoneRuntime,isNativePhoneRuntime} from './native-phone-runtime.mjs';
 import {createNativeScoringWorkflow,isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {runWorkflow} from './activity-commander.mjs';
-import {createPreflightRuntime} from './preflight-phone-scope.mjs';
+import {createPreflightRuntime,attachNativePhoneRuntime} from './preflight-phone-scope.mjs';
 import {runnerCommanderPreparation,runnerCommanderClosureKnown} from './runner-official-commander.mjs';
 import {createControlAcceptanceHandlers,validateControlScope,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
@@ -31,7 +32,11 @@ export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 export function createWorkflowHandlers(options){
  if(validateFrozenControlAcceptance(options.frozen))return createControlAcceptanceHandlers(options);
  const scoring=options.frozen?.execution_mode==='agent'&&options.env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'?createNativeScoringWorkflow(options):undefined;
- const handlers=createHandlers({...options,scoringRuntime:scoring});return scoring?{...handlers,prepareNativeScoring:()=>scoring.prepare(),nativeScoringRuntime:scoring}:handlers;
+ const phoneMode=options.frozen?.execution_mode==='agent'&&options.frozen.execution_transport==='raw-model-v1'&&options.env.WF_BRAIN_WORKFLOW==='douyin_video_discovery';
+ const preflight=options.preflightRuntime||(phoneMode&&options.frozen.preflight_profile?createPreflightRuntime({...options}):undefined);
+ const phone=phoneMode?createNativePhoneRuntime({root:options.root,env:options.env,frozen:options.frozen,binding:options.binding,taskId:options.taskId,preflightRuntime:preflight,createAuthorityControl:options.createAuthorityControl,poolFactory:options.poolFactory,requestImpl:options.requestImpl,visionCredential:options.visionCredential}):undefined;
+ if(phone&&preflight)attachNativePhoneRuntime(preflight,phone);
+ const handlers=createHandlers({...options,preflightRuntime:preflight,scoringRuntime:scoring,phoneRuntime:phone});return scoring?{...handlers,prepareNativeScoring:()=>scoring.prepare(),nativeScoringRuntime:scoring}:phone?{...handlers,prepareNativePhone:()=>phone.prepare(),nativePhoneRuntime:phone}:handlers;
 }
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
@@ -116,9 +121,9 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  return {executionMode,execution};
 }
 
-export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,nativeScoring,execute=execInput}){
+export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,nativeScoring,nativePhone,execute=execInput}){
     const control=controlScope===undefined?null:validateControlScope(controlScope);
-    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key||env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&isNativeScoringWorkflow(nativeScoring)&&nativeScoring.snapshot().prepared===true&&['scoring','mark_leads'].includes(r.activity));
+    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(isNativePhoneRuntime(nativePhone)&&nativePhone.snapshot().prepared===true&&['preflight','collect_videos','cleanup'].includes(r.activity)||['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key||env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&isNativeScoringWorkflow(nativeScoring)&&nativeScoring.snapshot().prepared===true&&['scoring','mark_leads'].includes(r.activity));
     if(r.phase==='start'){
       if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
       else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
@@ -133,11 +138,12 @@ export async function recordActivityBookkeeping(r,{root,env,executionMode,contro
     }
 }
 
-export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal,nativeScoring}){
+export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal,nativeScoring,nativePhone}){
   if(executionMode==='agent'&&validateFrozenControlAcceptance(frozen)){
     return {result:{gate:{verdict:'fail',reason:'CONTROL_ACCEPTANCE_IS_NOT_103_OUTPUT'},steps:[],probes:[{name:'actual_103_business_result',pass:false,reason:'control acceptance has no scoring/PG capability'}]}};
   }
   if(executionMode==='agent'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'){if(!isNativeScoringWorkflow(nativeScoring))throw Error('NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED');return nativeScoring.readbackChecks(activity.key,{deadlineMs:deadline_ms,signal});}
+  if(executionMode==='agent'&&activity.key==='collect_videos'&&isNativePhoneRuntime(nativePhone))return nativePhone.readbackChecks(activity.key,{metrics,deadlineMs:deadline_ms,signal});
   if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
@@ -145,9 +151,14 @@ export async function readbackActivityChecks({executionMode,activity,root,frozen
   return rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
 }
 
-export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver}){
+export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver,nativePhoneRuntime}){
  if(frozen.execution_transport!=='raw-model-v1')return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},close:async()=>null};
  if(!validateFrozenControlAcceptance(frozen)){
+  if(['douyin_video_discovery','douyin_video_processing'].includes(frozen.workflow_version?.payload?.key)){
+   if(!frozen.native_task_lease||!frozen.preflight_control_scope||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
+   const input=frozen.agent_input,deadline=(input.run_start_ts+input.run_max_seconds)*1000,{createRunnerPhoneCommander}=await import('./runner-official-commander.mjs');
+   return createRunnerPhoneCommander({nativePhoneRuntime,runtimeRoot:join(runDir,'runtime'),runDir,source:rpcSource(frozen),activities,workflowDeadlineMs:deadline,prepareRequest:(activity,options={})=>executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:Math.min(deadline,options.deadline_ms??Infinity)}),...(createObserver?{createObserver}:{})});
+  }
   if(frozen.workflow_version?.payload?.key!=='douyin_comment_scoring'||!frozen.scoring_control_scope||!frozen.scoring_pg||!frozen.native_task_lease||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
   const input=frozen.agent_input,deadline=(input.run_start_ts+input.run_max_seconds)*1000;
   const {createRunnerScoringCommander}=await import('./runner-official-commander.mjs');
@@ -211,6 +222,37 @@ export function createWorkflowContext({frozen,binding,env,taskId,executionMode=a
  return context;
 }
 
+export async function verifyWorkflowActivity({root,runDir:dir,frozen,env,binding,rpc,handlers,preflightRuntime,records=[],executionMode=assertExecutionMode(frozen,env)},activity,result,options={}){
+    const receipts=records.filter(r=>r.activity===activity.key&&r.phase==='commander_exchange');
+    const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>0&&receipts.every(r=>r.commander_status==='available'))};
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
+      const valid=result.result?.cleanup_readback_verified===1&&verifyCleanupReadback({runDir:dir,digest:result.result.cleanup_readback_digest,
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL},nativeOptions:preflightRuntime?.desktopVerificationOptions()});
+      metrics.close_app_attempts=metrics.safe_desktop_visible=Number(valid);
+    }
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
+      metrics.filters_verified=Number(verifyDiscoveryFilterEvidence({runDir:dir,runId:binding.run_id,run:env.WFR_TAG,profile:env.P,sourceCommit:frozen.deployment.source_commit,
+        requested:{sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'},invocations:result.result?.filter_invocations}));
+      if(!handlers.nativePhoneRuntime)metrics.discovery_metrics_verified=Number(await discoveryMetrics.verifyArchivedObservations({videos:result.result?.videos,runDir:dir,
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,source_commit:frozen.deployment.source_commit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key},
+        readback:async video=>(await rpc({kind:'queue',request:{op:'discover_readback',run:env.WFR_TAG,line:env.LEADGEN_LINE,video}},{timeoutMs:60000})).result}));
+    }
+    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,nativeScoring:handlers.nativeScoringRuntime,nativePhone:handlers.nativePhoneRuntime,...options});
+    if(isNativePhoneRuntime(handlers.nativePhoneRuntime)&&response.result.metrics)Object.assign(metrics,response.result.metrics);
+    const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
+    // 多源取证分别按真实source索引检查，不能拿一个来源的截图代替另一个。
+    const phoneEvidence=env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',env.P);
+    const atSteps=spec.steps.filter(s=>(s.at||s.activity)===activity.key);
+    const steps=atSteps.flatMap(step=>judgeSteps({spec:{...spec,steps:[step]},stage:activity.key,remote:response.result.steps,
+      ctx:{metrics,tag:env.WFR_TAG,n:1,word:'',evidenceDir:/identity|readback/.test(step.readback?.glob||'')?dir:phoneEvidence,
+        logFile:join(dir,'activity.log'),tsvFile:join(dir,'comments.tsv'),runDir:dir}}).steps);
+    const local=[{steps}];
+    const probes=response.result.probes||[];
+    const expected=spec.steps.filter(s=>(s.at||s.activity)===activity.key);
+    const verified=workflowReadbackPassed({probes,steps,expected});
+    return {verified,metrics,probes,step_dod:local};
+}
+
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);assertAgentInput(frozen,env);const executionMode=assertExecutionMode(frozen,env),binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
@@ -230,45 +272,18 @@ async function main(){
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
-    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope,nativeScoring:handlers.nativeScoringRuntime});
+    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope,nativeScoring:handlers.nativeScoringRuntime,nativePhone:handlers.nativePhoneRuntime});
   };
   const activities=frozen.activities.map(a=>({...a.version.payload.contract,key:a.reference.slot_key}));
-  const verify=async(activity,result,options={})=>{
-    const receipts=records.filter(r=>r.activity===activity.key&&r.phase==='commander_exchange');
-    const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>0&&receipts.every(r=>r.commander_status==='available'))};
-    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
-      const valid=result.result?.cleanup_readback_verified===1&&verifyCleanupReadback({runDir:dir,digest:result.result.cleanup_readback_digest,
-        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL},nativeOptions:preflightRuntime?.desktopVerificationOptions()});
-      metrics.close_app_attempts=metrics.safe_desktop_visible=Number(valid);
-    }
-    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
-      metrics.filters_verified=Number(verifyDiscoveryFilterEvidence({runDir:dir,runId:binding.run_id,run:env.WFR_TAG,profile:env.P,sourceCommit:frozen.deployment.source_commit,
-        requested:{sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'},invocations:result.result?.filter_invocations}));
-      metrics.discovery_metrics_verified=Number(await discoveryMetrics.verifyArchivedObservations({videos:result.result?.videos,runDir:dir,
-        scope:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,source_commit:frozen.deployment.source_commit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key},
-        readback:async video=>(await rpc({kind:'queue',request:{op:'discover_readback',run:env.WFR_TAG,line:env.LEADGEN_LINE,video}},{timeoutMs:60000})).result}));
-    }
-    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,nativeScoring:handlers.nativeScoringRuntime,...options});
-    const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
-    // 多源取证分别按真实source索引检查，不能拿一个来源的截图代替另一个。
-    const phoneEvidence=env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',env.P);
-    const atSteps=spec.steps.filter(s=>(s.at||s.activity)===activity.key);
-    const steps=atSteps.flatMap(step=>judgeSteps({spec:{...spec,steps:[step]},stage:activity.key,remote:response.result.steps,
-      ctx:{metrics,tag:env.WFR_TAG,n:1,word:'',evidenceDir:/identity|readback/.test(step.readback?.glob||'')?dir:phoneEvidence,
-        logFile:join(dir,'activity.log'),tsvFile:join(dir,'comments.tsv'),runDir:dir}}).steps);
-    const local=[{steps}];
-    const probes=response.result.probes||[];
-    const expected=spec.steps.filter(s=>(s.at||s.activity)===activity.key);
-    const verified=workflowReadbackPassed({probes,steps,expected});
-    return {verified,metrics,probes,step_dod:local};
-  };
+  const verify=(activity,result,options={})=>verifyWorkflowActivity({root,runDir:dir,frozen,env,binding,rpc,handlers,preflightRuntime,records,executionMode},activity,result,options);
   const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
   const handlers=createWorkflowHandlers({runDir:dir,frozen,binding,preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
   if(executionMode==='agent'&&frozen.execution_transport==='raw-model-v1'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&!validateFrozenControlAcceptance(frozen))await handlers.prepareNativeScoring();
+  if(handlers.prepareNativePhone)await handlers.prepareNativePhone();
   const observerSafety={};
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:input=>observerSafety.ready?.(input)});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
-  const result=await runWorkflowWithCommander({runDir:dir,frozen,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,quarantine:handlers.quarantineResources,
+  const result=await runWorkflowWithCommander({runDir:dir,frozen,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,nativePhoneRuntime:handlers.nativePhoneRuntime,quarantine:handlers.quarantineResources,
     record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);

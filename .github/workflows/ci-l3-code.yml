@@ -327,6 +327,7 @@ jobs:
           for path in services/phone-adb-controller/__tests__/*.test.mjs; do
             # These real PG/kernel suites run in the required Darwin job below.
             [[ "$path" =~ /native-103-(transaction|public-executor|producers)\.test\.mjs$ ]] && continue
+            [[ "$path" =~ /native-phone-(adb-read|clip-state|command-source|foreground|integration|link-macros|link-resolver|local-producer|preflight-adapter|public-executor|queue|queue-idle-error|screenshot-wire|search-macros|source-issuer|ui|vision)\.test\.mjs$|/runner-phone-commander\.test\.mjs$ ]] && continue
             phone_tests+=("$path")
           done
           node --test --test-shard=${{ matrix.shard }}/3 scripts/openclaw/**/*.test.js "${phone_tests[@]}" .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js scripts/ci/__tests__/native-103-ci-contract.test.mjs
@@ -359,12 +360,25 @@ jobs:
       - run: npm ci --ignore-scripts --workspaces=false
       - name: Prepare private native 103 PostgreSQL 17 binary
         run: |
-          brew install postgresql@17
+          brew install postgresql@17 python@3.14
           echo "PREFLIGHT_TEST_PG_BIN=$(brew --prefix postgresql@17)/bin" >> "$GITHUB_ENV"
+          test_python="$(brew --prefix python@3.14)/bin/python3.14"
+          physical_python="$("$test_python" -I -S -c 'import os,sys; print(os.path.realpath(sys.executable))')"
+          "$physical_python" -m pip install --disable-pip-version-check --no-input --timeout 30 --retries 1 --only-binary=:all: --no-deps --target "$RUNNER_TEMP/native-phone-pillow" Pillow==12.2.0
+          echo "PREFLIGHT_TEST_PYTHON_BIN=$physical_python" >> "$GITHUB_ENV"
+          echo "PREFLIGHT_TEST_PIL_ROOT=$RUNNER_TEMP/native-phone-pillow/PIL" >> "$GITHUB_ENV"
+          echo "PREFLIGHT_TEST_PHONE_ARTIFACTS=$RUNNER_TEMP/native-phone-fixture-artifacts" >> "$GITHUB_ENV"
       - name: Run native 103 public executor and real transaction failure paths
         run: |
           node --test scripts/ci/__tests__/native-103-ci-lifecycle.test.mjs
           node scripts/ci/native-103-darwin-tests.mjs
+      - name: Preserve failed native phone fixture artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-phone-fixture-failures
+          path: ${{ runner.temp }}/native-phone-fixture-artifacts
+          if-no-files-found: ignore
 
   # 本机内核nofork守卫不能由Linux上的platform skip代替。
   collection-phone-darwin-test:

@@ -5,6 +5,7 @@ import YAML from 'yaml';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {gates,checkGate} from '../required-gate.mjs';
+import {PHONE_DARWIN_SUITES} from '../native-phone-ci-selection.mjs';
 
 test('native 103 PG and Darwin tests have a required owned-fixture CI path',()=>{
  const doc=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
@@ -32,4 +33,31 @@ test('native 103 PG and Darwin tests have a required owned-fixture CI path',()=>
  assert.ok(lifecycle.includes('phone-lock-clean-bootstrap.test.py'));
  assert.match(lifecycle,/ZJ_NATIVE_103_PG_FIXTURE/);
  assert.doesNotMatch(lifecycle,/15532|brew services|process\.kill\(/);
+});
+
+test('native phone 101 runs in the same required Darwin PG owner with pinned Pillow and scoped debug artifacts',()=>{
+ const workflow=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const job=workflow.jobs['native-103-darwin-test'],commands=job.steps.filter(s=>s.run).map(s=>s.run).join('\n');
+ const lifecycle=readFileSync(new URL('../native-103-darwin-tests.mjs',import.meta.url),'utf8');
+ assert.ok(lifecycle.includes('...PHONE_DARWIN_SUITES'),'the actual owned-PG driver must run public 101');
+ assert.ok(PHONE_DARWIN_SUITES.includes('native-phone-public-executor.test.mjs'));
+ assert.equal(PHONE_DARWIN_SUITES.length,18);assert.equal(new Set(PHONE_DARWIN_SUITES).size,18);
+ assert.equal(PHONE_DARWIN_SUITES.some(s=>/audio|source-delivery/.test(s)),false);
+ assert.match(commands,/python@3\.14/);assert.match(commands,/Pillow==12\.2\.0/);assert.match(commands,/PREFLIGHT_TEST_PIL_ROOT/);
+ assert.match(commands,/PREFLIGHT_TEST_PHONE_ARTIFACTS/);
+ assert.ok(job.steps.some(s=>s.uses==='actions/upload-artifact@v4'&&s.if==='failure()'),'CI debug must remain available after a failed phone scenario');
+ const scenario=readFileSync(new URL('../../../services/phone-adb-controller/__tests__/fixtures/native-phone-public-scenario.mjs',import.meta.url),'utf8');
+ assert.doesNotMatch(scenario,/\/Users\/administrator\//,'hosted fixtures cannot write the developer home');
+ const linux=workflow.jobs['openclaw-scripts-test'].steps.find(s=>s.name?.startsWith('node --test scripts/openclaw')).run;
+ const selection=linux.replace(/^node --test.*$/m,'printf "%s\\n" "${phone_tests[@]}"');
+ const selected=spawnSync('/bin/bash',['-c',selection],{cwd:fileURLToPath(new URL('../../../',import.meta.url)),encoding:'utf8'});
+ assert.equal(selected.status,0,selected.stderr);
+ for(const name of PHONE_DARWIN_SUITES)assert.equal(selected.stdout.split('\n').some(path=>path.endsWith('/'+name)),false,name+' must be covered by real Darwin instead of a Linux platform skip');
+ // Root adds this genuine filename in its separate Source commit. Supply only
+ // selector input here; do not invent its policy, implementation or test body.
+ const futureSelection=selection.replace('for path in services/phone-adb-controller/__tests__/*.test.mjs; do','for path in services/phone-adb-controller/__tests__/native-phone-source-delivery.test.mjs services/phone-adb-controller/__tests__/native-phone-public-executor.test.mjs; do');
+ assert.notEqual(futureSelection,selection);
+ const future=spawnSync('/bin/bash',['-c',futureSelection],{cwd:fileURLToPath(new URL('../../../',import.meta.url)),encoding:'utf8'});
+ assert.equal(future.status,0,future.stderr);
+ assert.deepEqual(future.stdout.trim().split('\n'),['services/phone-adb-controller/__tests__/native-phone-source-delivery.test.mjs'],'formal Source packaging keeps Linux selection; public 101 stays in required Darwin');
 });

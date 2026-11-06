@@ -2,11 +2,11 @@
 const {validateObservation}=require('./discovery-metrics.js');
 const {discoverVideo}=require('./leadgen-db-lib.js');
 const {routeOf}=require('./line-routes.js');
-async function discoverMetricsRequest(pool,input,{sourceCommit,execution}={}){
+async function discoverMetricsRequest(pool,input,{sourceCommit,execution,nativeMetrics}={}){
  const {run,op,video}=input,lineKey=routeOf(input.line).key;
  if(!execution||execution.run!==run||routeOf(execution.line).key!==lineKey)throw Error('METRICS_EXECUTION_SCOPE_MISMATCH');
  const videoId=video?.video_id??video?.videoId,videoUrl=video?.video_url??video?.videoUrl;
- const observation=validateObservation(video?.metrics,{run,run_id:execution.run_id,profile:execution.profile,source_commit:sourceCommit,line_key:lineKey,video_id:videoId,video_url:videoUrl});
+ const observation=validateObservation(video?.metrics,{run,run_id:execution.run_id,profile:execution.profile,source_commit:sourceCommit,line_key:lineKey,video_id:videoId,video_url:videoUrl},nativeMetrics);
  if(op==='discover'&&observation.comment_total.value===0)throw Error('DISCOVERY_CONFIRMED_ZERO_COMMENTS');
  const rows=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
    WHERE run_id=$1 AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;

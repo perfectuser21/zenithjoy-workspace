@@ -306,7 +306,7 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 
 ### Agent 预检的受控执行域（42e）
 
-当前源码的预检工厂仍不声明支持。正式 activity_skill / authority / stop 的 Caller 仍有普通 SSH、远端 shell 或本地 Node outer，尚无完整受支持执行域；官方 Agent 会话双停不能替这些 Caller 签停止证明。本组件的独立审查也不构成启用资格，必须由后续正式 Caller 修复闭合后再审。其它尚无完整原生域的 Activity 继续在工具分配和 Worker 派发前返回 `not_started / needs_review`，不能把这个安全修复当作 101→102→103 已跑通。
+101 的正常 `raw-model-v1` 入口接入同一公共 Runner 和生产 Judge，按 preflight → collect_videos → cleanup 原槽序运行。Code 创建手机与数据库执行域，沿原搜索筛选、nonce 取链、同视频指标和队列持久化方法执行；结束检查另建只读调用域，复核原筛选证据、三个硬 SQL probe 与原步骤检查。`checkpoint` 仍只记录，未知执行或硬检查失败仍阻断。102 尚未完成完整录制、资格与评论执行域，继续在派发前拒绝；源码支持和隔离测试不等于真实 101→102→103 已跑通。
 
 101/102 Agent 预检使用父进程内的原关键词、公司冻结函数及独立 Judge、记录函数。物理操作只有固定、来源绑定的 nofork ADB/Python 叶，不再启动旧 controller shell。PG 控制面、本机物理叶和官方 Commander/Worker 双停分别留证：本机叶关闭不证明远端 PG 服务或 Android 应用进程全集停止；PG 提交未知仍保留未知，官方停证也不能由本机证明代替。
 
@@ -323,3 +323,7 @@ Worker 截止后不再准入新业务或手机动作，原 receipt 窗口只用�
 Agent 101/102 的 `preflight_profile` 在正式 prepare 阶段冻结规范 registry 路径、全文件摘要及唯一所选 profile/serial/model/尺寸/enabled。运行和续跑逐项复核，缺字段的旧 Agent 快照不能绑定当前表补齐。MMV 云入口必须显式传入既有 `DOUYIN_PHONE_REGISTRY=$HOME/.config/openclaw/cloud-phone-test-profiles.tsv`；不新建或修改全局表，这份静态元数据也不代表本轮账号或媒体验证已通过。
 
 采证的同一公开 ID+扩展名仅允许提交一次，重复文件、目录或悬空链接均在新手机操作前拒绝；XML/PNG 可以同 ID 各一次配对。提交采用排他/no-follow写入并 fsync，随机采证原件同时保留，竞争失败不删除赢家、不重发手机动作。
+
+101 的云手机命令来源固定在 `config/native-phone-command-sources.json`：当前仅声明 MMV 的 cloud-phone-test / Android 12 SDK31。有限编译命令绑定真实系统入口和直接 Java 依赖原件，Pillow 配置固定与该机 Python 3.14 匹配的完整既有文件清单；Worker 不能指定程序、路径或来源凭据。来源吻合不是停止证明，shell-v2 EXIT、真实 EOF、所有原生域和 Caller 关闭须分别验证；断线、未知提交或未决输入恢复不得重放或释放手机。
+
+101 的独立协议验收使用合成设备页面与私有 PostgreSQL，沿同一生产裁判覆盖完整三槽及未启动模型的 always_run 清理。真实视频、评论、评分的业务验收仍须以同一候选、真实账号与独立读回结果为准；这些隔离测试不生成或授权104触达。
