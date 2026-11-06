@@ -183,12 +183,20 @@ test('owned pending stall must drain and apply guidance BEFORE the next real bro
   if(index===1)return {type:'inspect',question:'Which evidence should I inspect next?'};
   assert.ok(input.context.commander_guidance?.includes('Inspect the original fixed evidence next.'));return {type:'finish'};
  },onEvent:async event=>event.type==='stall'?(await new Promise(r=>setTimeout(r,25)),{action:'steer',text:'Inspect the original fixed evidence next.'}):event.type==='question'?{action:'answer',text:'Use the fixed evidence only.'}:{action:'none'}});
- const out=await module.runActivitySkillParentLoop({...state,beforeTurn:async()=>{
-  if(calls++===2)await state.broker.report({type:'stall',elapsed_ms:1000});return true;
+ const out=await module.runActivitySkillParentLoop({...state,beforeTurn:async({index,phase})=>{
+  calls++;if(index===2&&phase==='before_context')await state.broker.report({type:'stall',elapsed_ms:1000});return true;
  }});
  assert.equal(out.reason,'agent_finished');assert.equal(out.turn_count,3);assert.equal(out.model_execution_unknown,false);assert.deepEqual(state.effects,[]);
  const events=readFileSync(join(state.directory,'broker-events.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
  assert.equal(events.filter(e=>e.event.type==='stall').length,1);assert.equal(events.find(e=>e.event.type==='stall').action_applied,true);
+});
+
+test('a stall starting DURING parent context authority is drained before dispatch and spliced guidance is retained exactly once',async t=>{
+ let start,finish,held,report,first=true;
+ const state=await fixture(t,{turns:async(index,input)=>{if(index===0)return {type:'inspect',question:'Use the original context?'};assert.deepEqual(input.context.commander_guidance,['Original answer.','Steer after the in-context stall.']);return {type:'finish'};},onEvent:async event=>{if(event.type==='stall'){start();await held;return{action:'steer',text:'Steer after the in-context stall.'};}return event.type==='question'?{action:'answer',text:'Original answer.'}:{action:'none'};}});
+ held=new Promise(r=>{finish=r;});const started=new Promise(r=>{start=r;}),read=state.broker.readParentContext;
+ state.broker.readParentContext=async()=>{const value=await read();if(first&&state.inputs.length===1){first=false;report=state.broker.report({type:'stall',elapsed_ms:1000});await started;}return value;};
+ try{const out=await module.runActivitySkillParentLoop({...state,beforeTurn:async({onDrained})=>{if(report){onDrained();finish();await report;report=null;}return true;}});assert.equal(out.reason,'agent_finished');assert.equal(out.turn_count,2);assert.deepEqual(state.effects,[]);}finally{finish();await report?.catch(()=>{});}
 });
 
 test('Observer admission uses the original worker deadline and persists only a fixed failure code',async t=>{
