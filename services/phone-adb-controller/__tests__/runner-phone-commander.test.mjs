@@ -13,6 +13,7 @@ import {createHash} from 'node:crypto';
 import WS,{WebSocketServer} from 'ws';
 import {GatewayProtocolClient} from '@openclaw/gateway-client/browser';
 import {rawDataToString} from '@openclaw/gateway-client/websocket-data';
+import fs from 'node:fs';import {execFileSync} from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
 
 // Real copied Caller, SDK and bounded owner. Only the central HTTP authority
 // and model server are isolated fixtures; positive closure is never fabricated.
@@ -28,14 +29,14 @@ async function realPhone(fn,{processing=false,cloneClosure=false,gateway,nativeR
   const original=f.routes.get('/api/brain/activities/a1/versions/av1').version;
   wf.payload.activities=keys.map((key,i)=>({slot_key:key,reference_id:'ref'+i,activity_id:'a'+i,activity_version_id:'av'+i}));
   const requests=keys.map((key,i)=>{const r=structuredClone(q);r.activity_key=key;r.nonce=String(i+1).repeat(48);r.worker_deadline_ms=Date.now()+12000;r.receipt_deadline_ms=Date.now()+16000;r.deadline_ms=Date.now()+19000;r.method.reference_id='ref'+i;r.method.activity_version_id='av'+i;r.method.contract.activity_version_id='av'+i;r.method.contract.definition_key=q.workflow_key+'.'+key;const av=structuredClone(original);av.payload.definition_key=r.method.contract.definition_key;f.routes.set('/api/brain/activities/a'+i+'/versions/av'+i,{version:av});return r;});
-  const activities=keys.map(key=>({key,version:'fixture-v1'})),allocated=[],proofs=[];
+  const activities=keys.map(key=>({key,version:'fixture-v1'})),allocated=[],proofs=[],ownerPins=[];
   const createObserver=async options=>{
-   const observer=await cold.createRunnerOfficialCommander({...options,factories:{createControl:({request,directory})=>f.createControl({...f.options,request,journalDirectory:directory,deadlineMs:request.worker_deadline_ms,cleanupDeadlineMs:request.deadline_ms}),createSdk:options=>sdk.createOfficialCommanderExecute({...options,...(gateway?{gatewayDependencies:gateway.dependencies,gatewayCredential:()=> 'fixture'}:{})}),createOwner:options=>{const actual=owner.createBoundedCommanderOwner(options);return {...actual,reserveOwner:(scope,options)=>actual.reserveOwner(scope,{...options,home:f.options.home})};}}});
+   const observer=await cold.createRunnerOfficialCommander({...options,factories:{createControl:({request,directory})=>f.createControl({...f.options,request,journalDirectory:directory,deadlineMs:request.worker_deadline_ms,cleanupDeadlineMs:request.deadline_ms}),createSdk:options=>sdk.createOfficialCommanderExecute({...options,...(gateway?{gatewayDependencies:gateway.dependencies,gatewayCredential:()=> 'fixture'}:{})}),createOwner:options=>{ownerPins.push(structuredClone(options.python));const actual=owner.createBoundedCommanderOwner(options);return {...actual,reserveOwner:(scope,options)=>actual.reserveOwner(scope,{...options,home:f.options.home})};}}});
    allocated.push(options.request.activity_key);
    return {...observer,close:async()=>{const proof=await observer.close();proofs.push(proof);assert.equal(cold.runnerCommanderClosureKnown(proof,options.request),true);return cloneClosure?{...proof}:proof;}};
   };
   const nativePhoneRuntime=nativeRuntimeFactory?nativeRuntimeFactory(await import('file://'+join(f.runtimeRoot,'native-phone-runtime.mjs'))):undefined;
-  let router;try{router=await cold.createRunnerPhoneCommander({runtimeRoot:f.runtimeRoot,source:f.source,runDir:f.runDir,activities,nativePhoneRuntime,workflowDeadlineMs:q.deadline_ms,prepareRequest:activity=>requests.find(r=>r.activity_key===activity.key),createObserver});await fn({router,cold,q,keys,activities,requests,allocated,proofs});}finally{await router?.close();}
+  let router;try{router=await cold.createRunnerPhoneCommander({runtimeRoot:f.runtimeRoot,source:f.source,runDir:f.runDir,activities,nativePhoneRuntime,workflowDeadlineMs:q.deadline_ms,prepareRequest:activity=>requests.find(r=>r.activity_key===activity.key),createObserver});await fn({router,cold,q,keys,activities,requests,allocated,proofs,ownerPins,owner,runtimeRoot:f.runtimeRoot,source:f.source});}finally{await router?.close();}
  },{rawTransport:true});
 }
 for(const processing of [false,true])test('真实私有close后顺序分配所有Phone AV，隔离Caller/SDK且不授业务权 '+(processing?'102':'101'),async()=>{
@@ -43,6 +44,23 @@ for(const processing of [false,true])test('真实私有close后顺序分配所�
   for(let i=1;i<keys.length;i++){await router.selectActivity(activities[i]);assert.equal(proofs.length,i);assert.deepEqual(allocated,keys.slice(0,i+1));}
   const closure=await router.close();assert.equal(closure.domain,'runner-phone-observer/v1');assert.equal(cold.runnerCommanderClosureKnown(closure,q),true);assert.equal(cold.runnerCommanderClosureKnown({...closure},q),false);assert.equal(closure.activities.length,keys.length);
  },{processing});
+});
+test('Phone fixture binds a different legitimate physical Python before Source freeze; production pin absence and hash drift never bypass owner proof',async t=>{
+ const policy=JSON.parse(fs.readFileSync(new URL('../config/collection-phone-hosts.json',import.meta.url))),production=policy.hosts.find(row=>row.target==='mmv').executables.python;
+ const actualRealpath=fs.realpathSync,python=actualRealpath(execFileSync('/usr/bin/python3',['-I','-S','-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim());
+ assert.notEqual(python,production.path,'the test must exercise a genuinely different physical interpreter');
+ const pin={path:python,sha256:createHash('sha256').update(fs.readFileSync(python)).digest('hex')},before=process.env.PREFLIGHT_TEST_PYTHON_BIN;
+ process.env.PREFLIGHT_TEST_PYTHON_BIN=python;t.after(()=>{if(before===undefined)delete process.env.PREFLIGHT_TEST_PYTHON_BIN;else process.env.PREFLIGHT_TEST_PYTHON_BIN=before;t.mock.restoreAll();syncBuiltinESMExports();});
+ t.mock.method(fs,'realpathSync',(path,...args)=>{if(path===production.path)throw Object.assign(Error('simulated hosted runner missing the production MMV interpreter'),{code:'ENOENT'});return actualRealpath(path,...args);});syncBuiltinESMExports();
+ const gateway=await loopbackGateway(t);gateway.release();
+ await realPhone(async({router,q,ownerPins,owner,runtimeRoot,source})=>{
+  assert.deepEqual(ownerPins[0],pin,'only the explicitly selected physical test Python belongs in fixture Source');
+  const count=gateway.frames.length;await assert.rejects(router.commander({...q,commander_role:'observer',phase:'event',activity:'preflight',broker_host:'foreign-host'}),/PHONE_OBSERVER_SCOPE/);assert.equal(gateway.frames.length,count);
+  assert.throws(()=>owner.createBoundedCommanderOwner({runtimeRoot,source,python:{...pin,sha256:'0'.repeat(64)},deadlineMs:Date.now()+3000,cleanupDeadlineMs:Date.now()+4000}),/COMMANDER_OWNER_BOUNDED_UNVERIFIED/);
+  assert.equal((await router.commander({...q,commander_role:'observer',phase:'event',activity:'preflight'})).action,'none');
+  const closed=await router.close();assert.equal(closed.execution_stopped,true);assert.ok(closed.activities[0].evidence.owner.leaves.length>=2);
+  for(const leaf of closed.activities[0].evidence.owner.leaves)for(const key of ['process_closed','stdin_closed','stdout_closed','stderr_closed','fd_closed'])assert.equal(leaf[key],true);
+ },{gateway});
 });
 test('越序、离开后重复slot及活动metadata漂移拒绝且不新建域',async()=>{
  await realPhone(async({router,activities,allocated})=>{
