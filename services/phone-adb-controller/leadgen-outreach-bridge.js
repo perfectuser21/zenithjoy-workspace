@@ -126,7 +126,7 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPo
   for(const row of rows){try{
    if(scope?!matchesOutbox(scope,row):rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
    const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
-   const p=nativeIntent(row,{companyBinding,verifyRecipient});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
+   const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
      {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
    if(policy.status!=='pass')continue;

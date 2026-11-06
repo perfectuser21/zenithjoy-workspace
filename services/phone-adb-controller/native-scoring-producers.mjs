@@ -9,7 +9,7 @@ const fail=reason=>Object.assign(Error('NATIVE_103_'+reason),{code:'NATIVE_103_'
 const sha=b=>createHash('sha256').update(b).digest('hex'),canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort().map(k=>[k,x[k]])):x);
 const dependencyBrands=new WeakMap();export const nativeScoringDependenciesMatch=(value,source)=>dependencyBrands.get(value)===canonical(source);
 const sandbox='(version 1)(allow default)(deny process-fork)';
-export async function startNativeScoringProducers({root,source,scope,directory,python,deadlineMs,receiptDeadlineMs,requestImpl=(url,options,callback)=>(new URL(url).protocol==='http:'?httpRequest:httpsRequest)(url,options,callback),readSource,brainCredential,deferNative=false}={}){
+export async function startNativeScoringProducers({root,source,scope,directory,python,deadlineMs,receiptDeadlineMs,requestImpl=(url,options,callback)=>(new URL(url).protocol==='http:'?httpRequest:httpsRequest)(url,options,callback),readSource,brainCredential,assertAuthority,deferNative=false}={}){
  const src=structuredClone(source),fixed=structuredClone(scope),py=structuredClone(python),route=routes.routeOf(fixed?.line);
  if(realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||src?.commit!==fixed?.source_commit||fixed?.serial!=='none'||fixed?.profile!=='mmv-scoring'||!fixed.task_id||!fixed.binding_id||!Number.isSafeInteger(deadlineMs)||deadlineMs>=receiptDeadlineMs||Date.now()>=deadlineMs)throw fail('PRODUCER_SCOPE');
  const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||readdirSync(directory).length)throw fail('PRODUCER_PREVIOUS_UNKNOWN');
@@ -23,7 +23,7 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
  const check=()=>{if(sealed||Date.now()>=deadlineMs)throw fail('HTTP_CLOSED');if(unknown)throw fail('PRODUCER_UNKNOWN');verify();if(readFileSync(log,'utf8')!==text)throw fail('PRODUCER_JOURNAL');if(sealed||Date.now()>=deadlineMs)throw fail('HTTP_CLOSED');};
  record({event:'create',task_id:fixed.task_id,binding_id:fixed.binding_id,source_commit:src.commit});
  const nativeClosed=r=>r.process_closed&&r.stdin_closed&&r.stdout_closed&&r.stderr_closed;
- const snapshot=()=>Object.freeze({domain:'native-103-producers/v1',sealed,pending:pending.size,execution_stopped:sealed&&!unknown&&pending.size===0&&http.every(r=>r.request_closed&&r.response_closed&&r.socket_closed)&&native.every(nativeClosed),execution_unknown:unknown||pending.size>0,external_effect:effectUnknown?'unknown':http.some(r=>r.post)?'observed':'none',http:http.map(r=>({...r})),native:native.map(r=>({...r})),calibration:calibration&&{...calibration}});
+ const snapshot=()=>Object.freeze({domain:'native-103-producers/v1',sealed,pending:pending.size,execution_stopped:sealed&&!unknown&&pending.size===0&&http.every(r=>r.request_closed&&r.response_closed&&r.socket_closed)&&native.every(nativeClosed),execution_unknown:unknown||pending.size>0,external_effect:effectUnknown?'unknown':http.some(r=>r.post&&r.dispatched)?'observed':'none',http:http.map(r=>({...r})),native:native.map(r=>({...r})),calibration:calibration&&{...calibration}});
  function leaf(program,args,input,{readyLine=null,probe=false}={}){
   check();const id=randomUUID(),r={id,pid:null,process_closed:false,stdin_closed:false,stdout_closed:false,stderr_closed:false,code:null,signal:null,ready:false};native.push(r);
   let child,out='',err='',resolveDone,rejectReady,resolveReady,settled=false,ending=false;
@@ -79,21 +79,27 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
  }
  async function jsonRequest(url,opts={}){
   const method=opts.method||'GET',body=opts.body===undefined?undefined:JSON.parse(opts.body);permit(url,method,body);check();if(effectUnknown&&method!=='GET')throw fail('HTTP_UNKNOWN');
-  const r={id:randomUUID(),post:method==='POST',request_closed:false,response_closed:true,socket_closed:true,response_received:false};http.push(r);
-  let req,res,socket,output='',ended=false,final=false,resolveDone,rejectDone;
-  const done=new Promise((resolve,reject)=>{resolveDone=resolve;rejectDone=reject;}),token={cancel(){if(r.post)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();if(!final){final=true;rejectDone(fail('HTTP_CLOSED'));}}};pending.add(token);
-  const finish=()=>{if(!(r.request_closed&&r.response_closed&&r.socket_closed))return;clearTimeout(timer);clearTimeout(hard);pending.delete(token);if(final)return;final=true;if(!ended){if(r.post)effectUnknown=true;rejectDone(fail('HTTP_UNKNOWN'));return;}try{check();resolveDone({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,body:JSON.parse(output)});}catch{if(r.post)effectUnknown=true;rejectDone(fail('HTTP_UNKNOWN'));}};
-  const bad=()=>{if(r.post)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();};
+  const r={id:randomUUID(),post:method==='POST',dispatched:false,not_started:false,request_closed:false,response_closed:true,socket_closed:true,response_received:false};http.push(r);
+  let req,res,socket,output='',ended=false,final=false,completing=false,resolveDone,rejectDone;
+  const done=new Promise((resolve,reject)=>{resolveDone=resolve;rejectDone=reject;}),token={cancel(){if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();if(!final){final=true;rejectDone(fail('HTTP_CLOSED'));}}};pending.add(token);
+  const authority=async()=>{if(assertAuthority!==undefined&&await assertAuthority()!==true)throw fail('AUTHORITY');};
+  const finish=()=>{if(completing||!(r.request_closed&&r.response_closed&&r.socket_closed))return;completing=true;
+   (async()=>{try{if(!ended)throw fail('HTTP_UNKNOWN');await authority();check();if(final)return;const value=JSON.parse(output);final=true;resolveDone({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,body:value});}catch{if(r.post&&r.dispatched)effectUnknown=true;if(!final){final=true;rejectDone(fail('HTTP_UNKNOWN'));}}finally{clearTimeout(timer);clearTimeout(hard);pending.delete(token);}})();
+  };
+  const bad=()=>{if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();};
   const timer=setTimeout(token.cancel,Math.max(1,deadlineMs-Date.now())),hard=setTimeout(()=>{if(pending.has(token)){unknown=true;token.cancel();}},Math.max(1,receiptDeadlineMs-Date.now()));
   record({event:'http-intent',id:r.id,method,origin:new URL(url).origin,path:new URL(url).pathname,body_sha256:opts.body?sha(opts.body):null});
-  check();
-  try{
+  (async()=>{try{
+   await authority();check();if(final)throw fail('HTTP_CLOSED');
+   // Last check follows durable intent and awaited authority; no late dispatch.
+   check();r.dispatched=true;
    req=requestImpl(url,{method,headers:{Connection:'close',...(opts.headers||{})},agent:false},response=>{res=response;r.response_received=true;r.response_closed=false;res.once('close',()=>{r.response_closed=true;finish();});res.on('error',bad);res.on('data',chunk=>{output+=chunk;if(Buffer.byteLength(output)>2*1024*1024)bad();});res.once('end',()=>{ended=true;finish();});});
    req.once('socket',s=>{socket=s;r.socket_closed=false;s.once('close',()=>{r.socket_closed=true;finish();});});
    req.once('close',()=>{r.request_closed=true;finish();});req.once('error',bad);opts.signal?.addEventListener('abort',token.cancel,{once:true});if(opts.signal?.aborted)token.cancel();else req.end(opts.body);
-  }catch{unknown=true;token.cancel();}
+  }catch{if(!r.dispatched){r.not_started=true;r.request_closed=true;clearTimeout(timer);clearTimeout(hard);pending.delete(token);if(!final){final=true;rejectDone(fail('HTTP_CLOSED'));}}else{unknown=true;if(!req){r.request_closed=true;finish();}token.cancel();}}})();
   return done;
  }
+
  const httpPost=async(url,body,key,options={})=>{const r=await jsonRequest(url,{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:options?.signal});return {...r.body,...(!r.ok?{error:r.body.error||{code:r.status,message:'upstream rejected'}}:{})};};
  const fetcher=async(url,options)=>{const r=await jsonRequest(url,options);return {ok:r.ok,status:r.status,json:async()=>structuredClone(r.body),text:async()=>JSON.stringify(r.body)};};
  const readTask=async()=>{check();if(typeof brainCredential!=='function')throw fail('DEPENDENCY');const key=brainCredential();if(typeof key!=='string'||!key||/[\r\n]/.test(key))throw fail('DEPENDENCY');const result=await jsonRequest('http://127.0.0.1:5221/api/brain/tasks/'+fixed.task_id,{headers:{Authorization:'Bearer '+key}});if(!result.ok)throw fail('HTTP_UNKNOWN');return structuredClone(result.body.task??result.body);};
