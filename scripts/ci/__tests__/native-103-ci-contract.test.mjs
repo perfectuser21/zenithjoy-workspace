@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import YAML from 'yaml';
+import {gates,checkGate} from '../required-gate.mjs';
+
+test('native 103 PG and Darwin tests have a required owned-fixture CI path',()=>{
+ const doc=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const job=doc.jobs['native-103-darwin-test'];
+ assert.ok(job,'normal 103 must run on a real Darwin kernel with its own PG');
+ assert.equal(job['runs-on'],'macos-latest');
+ const commands=job.steps.filter(s=>s.run).map(s=>s.run).join('\n');
+ assert.match(commands,/brew install postgresql@17/);
+ assert.match(commands,/scripts\/ci\/native-103-darwin-tests\.mjs/);
+ assert.ok(doc.jobs['l3-passed'].needs.includes('native-103-darwin-test'));
+ assert.ok(gates.code.always.includes('native-103-darwin-test'));
+ const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}]))};
+ assert.doesNotThrow(()=>checkGate('code',needs));
+ needs['native-103-darwin-test']={result:'skipped'};
+ assert.throws(()=>checkGate('code',needs),/native-103-darwin-test=skipped/);
+ const linux=doc.jobs['openclaw-scripts-test'].steps.find(s=>s.name.startsWith('node --test scripts/openclaw')).run;
+ assert.match(linux,/native-103-\(transaction\|public-executor\|producers\)\.test\.mjs/);
+ const lifecycle=readFileSync(new URL('../native-103-darwin-tests.mjs',import.meta.url),'utf8');
+ for(const suite of ['native-103-public-executor','native-103-transaction','native-103-producers','native-103-claim','native-103-control-scope','native-103-public','native-activity-authority','native-task-lease'])assert.ok(lifecycle.includes(suite+'.test.mjs'),suite);
+ assert.ok(lifecycle.includes('phone-lock-clean-bootstrap.test.py'));
+ assert.match(lifecycle,/ZJ_NATIVE_103_PG_FIXTURE/);
+ assert.doesNotMatch(lifecycle,/15532|brew services|process\.kill\(/);
+});
