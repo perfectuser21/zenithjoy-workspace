@@ -12,7 +12,7 @@ const require=createRequire(import.meta.url),{queueRequest}=require('./leadgen-q
 const receiptPackets=new WeakMap();
 const runtimes=new WeakSet(),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=b=>createHash('sha256').update(b).digest('hex');
 const fail=code=>Object.assign(Error('NATIVE_103_'+code),{code:'NATIVE_103_'+code});
-const operations={scoring:new Set(['company_config','score_scope','score','score_readback','score_exclusion_readback','policy_review']),mark_leads:new Set(['mark_leads','mark_readback','bridge_outreach','bridge_readback'])};
+const operations={scoring:new Set(['company_config','score_scope','score','score_recovery','score_readback','score_exclusion_readback','policy_review']),mark_leads:new Set(['mark_leads','mark_readback','bridge_outreach','bridge_readback'])};
 const writes=new Set(['company_config','score','mark_leads','bridge_outreach']);
 const readbacks={company_config:[],score:['score_readback','score_exclusion_readback'],mark_leads:['mark_readback'],bridge_outreach:['bridge_readback']};
 export const isNativeScoringRuntime=value=>runtimes.has(value);
@@ -65,8 +65,8 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   if((['score','policy_review','mark_leads','bridge_outreach'].includes(op))&&!ownedDependencies)throw fail('DEPENDENCY');
   for(const k of ['line','run','source_run','limit','source_commit','task_id'])if(Object.hasOwn(input,k)&&(k==='source_run'?(input[k]??null):input[k])!==({line:fixed.line,run:fixed.run,source_run:fixed.source_run,limit:op==='score'?1:fixed.limit,source_commit:src.commit,task_id:fixed.task_id})[k])throw fail('SCOPE');
   const request={...structuredClone(input),op,line:fixed.line,run:fixed.run,source_run:fixed.source_run,limit:fixed.limit};
-  if(op==='company_config'){if(Object.keys(input).some(k=>k!=='step')||input.step!=='103')throw fail('SCOPE');}
-  if(['score','score_readback','score_exclusion_readback','policy_review'].includes(op)){
+  if(op==='company_config'){if(Object.keys(input).some(k=>!['step','line','run','source_run','limit','source_commit','task_id'].includes(k))||input.step!=='103')throw fail('SCOPE');}
+  if(['score','score_recovery','score_readback','score_exclusion_readback','policy_review'].includes(op)){
    if(!scoreScope||!Array.isArray(input.ids)||new Set(input.ids).size!==input.ids.length||input.ids.some(id=>!scoreScope.ids.includes(id)))throw fail('IDS');
    request.sources=Object.fromEntries(input.ids.map(id=>[id,scoreScope.sources[id]]));request.limit=op==='score'?1:Math.min(fixed.limit,input.ids.length);
    if(op==='score')request.budget_max=fixed.limit;
