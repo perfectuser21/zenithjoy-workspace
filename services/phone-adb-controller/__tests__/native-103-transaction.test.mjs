@@ -29,6 +29,7 @@ async function fixture(t){
  company.policy_id=company.runtime_config.policy_id;
  await admin.query(`INSERT INTO ${schema}.tenant_company_profiles VALUES($1,$2,1,'enabled',$3)`,[company.company_id,company.tenant_id,company.runtime_config]);
  await admin.query(`INSERT INTO ${schema}.company_config_runs VALUES($1,$2,1,'source102',$3,'{}',null)`,[company.company_id,company.tenant_id,company]);
+ await admin.query(`CREATE TABLE ${schema}.company_config_versions(company_id uuid,tenant_id uuid,version integer,snapshot jsonb)`);await admin.query(`INSERT INTO ${schema}.company_config_versions VALUES($1,$2,1,$3)`,[company.company_id,company.tenant_id,company]);
  const id=randomUUID(),url='https://www.douyin.com/video/7617837149999841201';
  await admin.query(`INSERT INTO ${schema}.leadgen_videos(line_key,video_id,video_url,title,harvest_batch,process_status,judgment_status) VALUES('yuesheng','7617837149999841201',$1,'人工智能报名','source102','评论已采','matched')`,[url]);
  await admin.query(`INSERT INTO ${schema}.leadgen_comments(id,line_key,dedup_key,harvest_batch,source_video,source_video_url,comment_body) VALUES($1,'yuesheng','one','source102','人工智能报名',$2,'在哪里报名')`,[id,url]);
@@ -156,3 +157,7 @@ test('两Activity完整业务fixture：原评分双审/原生parser/标人事务
  assert.equal(requests.filter(q=>q.method==='POST'&&q.path.endsWith('/records')).length,1);
  assert.equal(requests.some(q=>q.path.includes('im/v1/messages')),false,'103是CRM配送，不能发聊天或运行104');
 });
+
+ test('原普通source_run=null独立消费固定server来源，不把空来源误判为来源串线',async t=>{
+ const f=await fixture(t);f.scope.source_run=null;f.task.payload.scope.source_run=null;delete f.task.lease_until;const r=runtime.createNativeScoringRuntime(f);await r.prepare();await r.begin({...f.scope,activity:'scoring'});await r.queue('company_config',{step:'103'});const selected=await r.queue('score_scope',{});assert.deepEqual(selected.ids,[f.id]);assert.equal(selected.sources[f.id],'source102');await r.closeActivity();r.seal();assert.equal(r.snapshot().execution_stopped,true);
+ });
