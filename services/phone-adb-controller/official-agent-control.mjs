@@ -63,6 +63,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   while(offset<bytes.length){const written=writeSync(descriptor,bytes,offset,bytes.length-offset);if(written<1)throw Error();offset+=written;}
   fsyncSync(descriptor);ledgerHash.update(bytes);ledgerBytes+=bytes.length;
  }catch{tainted=true;throw failure('OFFICIAL_CONTROL_JOURNAL');}};
+ function stopOwnedResources(...actions){for(const action of actions){try{action();}catch{tainted=true;}}}
  const guard=e=>{if(previousCallerUnknown)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(tainted)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(sealed||e!==epoch)throw failure('OFFICIAL_CONTROL_CLOSED');if(Date.now()>=deadlineMs)throw failure('OFFICIAL_CONTROL_DEADLINE');};
  function verify(){
   const own=fixedSource.files?.filter(file=>file.path==='official-agent-control.mjs');
@@ -85,7 +86,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
      record({event:'read_returned',path,epoch:e,bytes});resolveRead(value);
     }catch(cause){rejectRead(cause);}
    };
-   const abort=cause=>{error??=cause;res?.destroy();socket?.destroy();req?.destroy();};
+   const abort=cause=>{error??=cause;stopOwnedResources(()=>res?.destroy(),()=>socket?.destroy(),()=>req?.destroy());};
    job.cancelRead=()=>abort(failure('OFFICIAL_CONTROL_CLOSED'));
    try{
     req=httpRequest({protocol:'http:',hostname:'127.0.0.1',port:5221,method:'GET',path,agent:false,headers:{'X-Internal-Token':token,Connection:'close'}},response=>{
@@ -127,7 +128,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   let resolveHello,rejectHello,resolveClosed;const hello=new Promise((r,j)=>{resolveHello=r;rejectHello=j;}),closed=new Promise(r=>resolveClosed=r);
   const marks=()=>({request_closed:requestClosed,websocket_closed:websocketClosed,socket_closed:socketClosed});
   const checkClosed=()=>{if(Object.values(marks()).every(Boolean))resolveClosed();};
-  const abort=()=>{rejectHello(failure('OFFICIAL_CONTROL_CLOSED'));client?.stop();ws?.terminate();request?.destroy();socket?.destroy();};job.cancelRead=abort;
+  const abort=()=>{rejectHello(failure('OFFICIAL_CONTROL_CLOSED'));stopOwnedResources(()=>client?.stop(),()=>ws?.terminate(),()=>request?.destroy(),()=>socket?.destroy());};job.cancelRead=abort;
   record({event:'gateway_read_intent',method,epoch:e});
   let value,error;
   try{
@@ -154,7 +155,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
    await policy.beforeDispatch?.(accepted.server?.version);check();value=await client.request(method,params,{timeoutMs:Math.max(1,rpcEnd-Date.now())});check();
   }catch(cause){error=/^OFFICIAL_CONTROL_/.test(cause?.code||'')?cause:failure('OFFICIAL_CONTROL_GATEWAY_READ');}
   finally{
-   client?.stop();if(ws&&!websocketClosed)ws.terminate();
+   stopOwnedResources(()=>client?.stop(),()=>{if(ws&&!websocketClosed)ws.terminate();});
    if(created){let timer;const returned=await Promise.race([closed.then(()=>true),new Promise(r=>{timer=setTimeout(()=>r(false),Math.max(0,cleanupDeadlineMs-Date.now()));})]);clearTimeout(timer);if(!returned){tainted=true;error??=failure('OFFICIAL_CONTROL_UNKNOWN');}}
    job.cancelRead=null;const proof={method,request_id:applicationRequestId,...marks()};(job.gatewayProofs??=[]).push(proof);record({event:'gateway_read_closed',epoch:e,...proof});
   }
@@ -163,7 +164,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  async function readOfficial(body){
   guard(epoch);if(body?.operation!=='sessions.list')throw failure('OFFICIAL_CONTROL_UNSUPPORTED');
   if(Object.keys(body).sort().join(',')!=='kind,operation,request'||canonical(body.request)!==canonical(fixed))throw failure('OFFICIAL_CONTROL_SCOPE');
-  verify();const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));job.cancelRead?.();};
+  verify();const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
   job.done=(async()=>{const timer=setTimeout(()=>job.cancel('OFFICIAL_CONTROL_DEADLINE'),Math.max(1,deadlineMs-Date.now()));
    try{await verifySkillRequest(fixed,{get:path=>readCentral(path,e,job)});guard(e);verify();const bound=skillExecutionIdentity(fixed,{home});guard(e);
     const started=Date.now(),result=await gatewayRead('sessions.list',{agentId:'skill-factory',search:bound.child_session_key,limit:5,archived:'all',includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false},e,job);guard(e);
@@ -187,7 +188,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  const sameRequest=q=>canonical(q)===canonical(fixed);
  function ownedJob(callback,{cleanup=false}={}){
   if(cleanup){if(Date.now()>=cleanupDeadlineMs||journalClosed||tainted)throw failure('OFFICIAL_CONTROL_CLOSED');}else guard(epoch);
-  const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));job.cancelRead?.();};
+  const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
   job.done=(async()=>{const timer=setTimeout(()=>job.cancel('OFFICIAL_CONTROL_DEADLINE'),Math.max(1,(cleanup?cleanupDeadlineMs:deadlineMs)-Date.now()));try{return await callback(job,e);}finally{clearTimeout(timer);jobs.delete(job);}})();return Promise.race([job.done,interrupted]);
  }
  // raw promptMode=none does not load either global Commander workspace. These
@@ -322,7 +323,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   if(!body||Object.keys(body).sort().join(',')!=='kind,request'||canonical(body.request)!==canonical(fixed))throw failure('OFFICIAL_CONTROL_SCOPE');
   verify();guard(epoch);const e=epoch,job={cancelRead:null};jobs.add(job);
   let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});
-  job.cancel=code=>{interrupt(failure(code));job.cancelRead?.();};
+  job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
   job.done=(async()=>{
    const timer=setTimeout(()=>{job.cancel('OFFICIAL_CONTROL_DEADLINE');},Math.max(1,deadlineMs-Date.now()));
    try{
