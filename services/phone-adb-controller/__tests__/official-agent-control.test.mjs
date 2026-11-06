@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,readdirSync,chmodSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync,chmodSync,statSync} from 'node:fs';
 import {join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {canonical} from '../runtime-definition.mjs';
 import {using} from './fixtures/official-control-fixture.mjs';
 
 test('原真实Skill/中央绑定/私有official原件经本机只读HTTP授权，无outer Node或SSH',async()=>using(async({instance,q,count})=>{
@@ -57,4 +59,18 @@ test('错误模型的私有spawn原件不可获得authority，凭据不进入记
  const file=join(runDir,'spawn-receipt.json'),receipt=JSON.parse(readFileSync(file));receipt.resolvedModel='different';writeFileSync(file,JSON.stringify(receipt));
  assert.deepEqual(await instance.request({kind:'activity_skill_authority',request:q}),{ok:true,authorized:false});
  for(const name of readdirSync(journalDirectory))assert.equal(readFileSync(join(journalDirectory,name),'utf8').includes('fixture-private-token'),false);
+}));
+
+const finalFiles=directory=>readdirSync(directory).filter(name=>/^official-caller-final-.*\.json$/.test(name));
+const sha=value=>createHash('sha256').update(value).digest('hex');
+test('Caller close publishes one durable safe final snapshot tied to its exact request and closed ledger',async()=>using(async({instance,q,journalDirectory})=>{
+ await instance.request({kind:'activity_skill_authority',request:q});assert.deepEqual(finalFiles(journalDirectory),[]);
+ const closed=await instance.close(),names=finalFiles(journalDirectory);assert.equal(names.length,1,'Caller requires an independent durable final record');
+ const path=join(journalDirectory,names[0]),bytes=readFileSync(path),value=JSON.parse(bytes);
+ assert.equal(statSync(path).mode&0o777,0o600);assert.equal(value.protocol,'official-caller-final/v1');
+ assert.equal(value.request_sha256,sha(canonical(q)));assert.equal(value.task_id,q.task_id);assert.equal(value.run_id,q.run_id);assert.equal(value.nonce,q.nonce);assert.equal(value.source_commit,q.source_commit);
+ assert.deepEqual(value.snapshot,closed);assert.equal(value.journal_closed,true);assert.equal(value.snapshot.caller_execution_stopped,true);assert.equal(value.snapshot.execution_stopped,true);assert.equal(value.snapshot.execution_unknown,false);
+ assert.deepEqual(value.raw_turns,[]);assert.equal(value.ledger.sha256,sha(readFileSync(join(journalDirectory,value.ledger.file))));assert.equal(value.ledger.bytes,statSync(join(journalDirectory,value.ledger.file)).size);
+ assert.ok(!bytes.includes(Buffer.from('fixture-private-token')));assert.equal(instance.verifySealedExecution(value.snapshot,{request:q}),false,'disk JSON is never a private stop brand');
+ await Promise.all([instance.close(),instance.close()]);assert.deepEqual(finalFiles(journalDirectory),names);assert.deepEqual(readFileSync(path),bytes);
 }));
