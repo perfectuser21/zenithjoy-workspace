@@ -60,7 +60,13 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
  if(!deferNative)await prepareNative();
  function permit(url,method,body){
   const u=new URL(url);if(u.hash||u.username||u.password)throw fail('HTTP_SCOPE');
-  if(u.origin==='http://127.0.0.1:5221'&&method==='GET'&&u.pathname==='/api/brain/tasks/'+fixed.task_id&&!u.search)return;
+  if(u.origin==='http://127.0.0.1:5221'&&method==='GET'){
+   if(u.pathname==='/api/brain/tasks/'+fixed.task_id&&!u.search)return;
+   if(typeof fixed.source_run==='string'&&/^[-A-Za-z0-9_]{1,120}$/.test(fixed.source_run)){
+    const prefix='/api/brain/runs/douyin_video_processing-'+fixed.source_run+'__a1';
+    if([prefix+'/definition',prefix+'/reconciliation'].includes(u.pathname)&&!u.search||u.pathname===prefix&&u.search==='?include=spans')return;
+   }
+  }
   if(u.port)throw fail('HTTP_SCOPE');
   if(u.origin==='https://openrouter.ai'&&method==='POST'&&((u.pathname==='/api/alpha/decisions'&&body?.model==='typesafe/jev-1.13')||(u.pathname==='/api/v1/chat/completions'&&body?.model==='google/gemini-2.5-flash'))&&!u.search)return;
   if(u.origin==='https://open.feishu.cn'){
@@ -117,7 +123,11 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
   const client=Object.fromEntries(['all','fields','post','get'].map(method=>[method,async(...args)=>(await originalClient())[method](...args)]));
   const deps={judgeComment:(...args)=>model.judgeComment(...args.slice(0,3),{...args[3],apiKey,httpPost}),judgePolicy:(comment,video,profile,reason,options)=>model.judgeCommander(comment,video,profile,reason,{...options,apiKey,httpPost}),qualifyRecipient:(comment,config,options)=>recipient.qualifyRecipient(comment,config,{...options,apiKey,httpPost,verifyRecipient}),verifyRecipient,client,lock:(line,fn)=>withOrderLock(line,fn,{directory:orderDirectory}),stageRows};
   deps.reviewPolicy=(...args)=>require('./leadgen-queue.js').reviewBoundComment(...args,deps);
-  deps.sampledAdmission={verifyRecipient,readProof:()=>{throw fail('SOURCE_PROOF_UNSUPPORTED');}};
+  deps.sampledAdmission={verifyRecipient,readProof:async sourceRun=>{
+   check();if(typeof sourceRun!=='string'||sourceRun!==fixed.source_run||!/^[-A-Za-z0-9_]{1,120}$/.test(sourceRun))throw fail('SOURCE_PROOF_SCOPE');
+   if(typeof brainCredential!=='function')throw fail('DEPENDENCY');const key=brainCredential();if(typeof key!=='string'||!key||/[\r\n]/.test(key))throw fail('DEPENDENCY');
+   return require('./leadgen-sampled-admission.js').readRunProof(sourceRun,{read:async path=>{const result=await jsonRequest('http://127.0.0.1:5221/api/brain'+path,{headers:{Authorization:'Bearer '+key}});if(!result.ok)throw fail('SOURCE_PROOF_UNAVAILABLE');return structuredClone(result.body);}});
+  }};
   deps.snapshot=snapshot;deps.close=close;
   deps.assertActive=({readOnly=false}={})=>{check();if(!readOnly&&effectUnknown)throw fail('HTTP_UNKNOWN');if(heldLock&&nativeClosed(heldLock.r)){unknown=true;throw fail('ORDER_LOCK_STOP_UNKNOWN');}};
   dependencyBrands.set(deps,canonical(src));return Object.freeze(deps);
