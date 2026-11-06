@@ -8,6 +8,21 @@ import {createHash} from 'node:crypto';
 import {canonical} from '../runtime-definition.mjs';
 import {using} from './fixtures/official-control-fixture.mjs';
 
+test('同步取消抛错仍关闭其余执行域，重复close在原预算内归还unknown',async()=>using(async({q,options,createControl,firstRequest,journalDirectory})=>{
+ const directory=join(journalDirectory,'cancel-throw');fs.mkdirSync(directory,{mode:0o700});let actualDestroy,throws=0,timer;
+ const started=Date.now(),control=createControl({...options,journalDirectory:directory,deadlineMs:started+400,cleanupDeadlineMs:started+600,httpRequest:(...args)=>{
+  const req=options.httpRequest(...args);actualDestroy=req.destroy.bind(req);req.destroy=(...x)=>{if(throws++===0)throw Error('FIXTURE_CANCEL_THROW');return actualDestroy(...x);};return req;
+ }});
+ const work=control.request({kind:'activity_skill_authority',request:q});work.catch(()=>{});await firstRequest;
+ try{
+  const first=await control.close().then(value=>({kind:'returned',value}),error=>({kind:'rejected',code:error.message}));
+  const second=await Promise.race([control.close().then(value=>({kind:'returned',value})),new Promise(resolve=>{timer=setTimeout(()=>resolve({kind:'unbounded'}),900);})]);
+  assert.notEqual(second.kind,'unbounded','取消异常不能留下永不完成的closing Promise');
+  assert.equal(first.kind,'returned');assert.equal(second.value.execution_unknown,true);assert.equal(second.value.execution_stopped,false);
+  assert.equal(second.value.sealed,true);assert.ok(readdirSync(directory).some(name=>/^official-caller-final-.*\.json$/.test(name)));
+ }finally{clearTimeout(timer);actualDestroy?.();await work.catch(()=>{});}
+},{delay:true}));
+
 test('原真实Skill/中央绑定/私有official原件经本机只读HTTP授权，无outer Node或SSH',async()=>using(async({instance,q,count})=>{
  const value=await instance.request({kind:'activity_skill_authority',request:q});
  assert.deepEqual(value,{ok:true,authorized:true});assert.equal(count(),4);
