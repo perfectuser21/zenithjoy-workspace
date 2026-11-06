@@ -8,6 +8,25 @@ import {createHash} from 'node:crypto';
 import {canonical} from '../runtime-definition.mjs';
 import {using} from './fixtures/official-control-fixture.mjs';
 
+test('Code claim投影来自同次完整授权的真实Task读取，不补造lease或增加GET',async()=>using(async({instance,q,routes,count})=>{
+ assert.equal(typeof instance.readAuthorizedTaskClaim,'function');
+ const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_at='2026-11-06T00:00:00.000Z';
+ const proof=await instance.readAuthorizedTaskClaim(q);assert.equal(count(),4);assert.equal(Object.isFrozen(proof),true);
+ assert.equal(proof.id,q.task_id);assert.equal(proof.status,'in_progress');assert.equal(proof.claimed_by,'headed-fixture');assert.equal(proof.claimed_at,task.claimed_at);
+ assert.equal(proof.source_commit,q.source_commit);assert.equal(proof.request_sha256,createHash('sha256').update(canonical(q)).digest('hex'));
+ assert.equal(Object.hasOwn(proof,'lease_until'),false);assert.equal(Object.hasOwn(proof,'lease_expires_at'),false);
+ assert.ok(Number.isSafeInteger(proof.observed_at));assert.ok(Number.isSafeInteger(proof.authorized_at));assert.ok(proof.authorized_at>=proof.observed_at);
+ await assert.rejects(()=>instance.readAuthorizedTaskClaim({...q,nonce:'d'.repeat(48)}),/SCOPE/);assert.equal(count(),4);
+ await instance.close();await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/CLOSED/);assert.equal(count(),4);
+},{rawTransport:true}));
+
+test('Code claim读取拒绝缺失归属，旧bool授权接口仍保持原行为',async()=>using(async({instance,q,routes})=>{
+ assert.equal(typeof instance.readAuthorizedTaskClaim,'function');
+ assert.equal(await instance.authorizeParentContext(q),true);
+ const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_by=null;task.claimed_at=null;
+ await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/TASK_CLAIM/);
+},{rawTransport:true}));
+
 test('deadline取消同步异常不逃出定时器，收尾保留unknown',async()=>using(async({q,options,createControl,firstRequest,journalDirectory})=>{
  const directory=join(journalDirectory,'deadline-throw');fs.mkdirSync(directory,{mode:0o700});let actualDestroy,throws=0;
  const started=Date.now(),control=createControl({...options,journalDirectory:directory,deadlineMs:started+250,cleanupDeadlineMs:started+700,httpRequest:(...args)=>{
