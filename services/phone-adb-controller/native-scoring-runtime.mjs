@@ -76,6 +76,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   if(op==='bridge_outreach'){if(!marked)throw fail('IDS');request.comment_ids=[...marked.ids];}
   if(readOnly){const expected=prior[0].request;if(op==='mark_readback'&&!same(input.ids,expected.ids)||op==='bridge_readback'&&!same(input.ids,prior[0].bridge_ids||[])||op.startsWith('score_')&&!same(input.ids,expected.ids))throw fail('READBACK_SCOPE');}
   const id=randomUUID(),write=writes.has(op);if(write)durable(id+'.intent.json',{id,op,request,scope:fixed,activity_scope:current});
+  const cleanupDeadlineMs=Math.min(fixed.receipt_deadline_ms,current.receipt_deadline_ms??fixed.receipt_deadline_ms);
   const job={id};pending.add(job);let allocation,writeSent=false,commitSent=false;
   try{
    active(readOnly);verify();active(readOnly);
@@ -88,7 +89,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
     let txn=false,dirty=false;
     return {release:(...args)=>client.release(...args),async query(text,args){
      const rollback=String(text).trim().toUpperCase()==='ROLLBACK';
-     if(!rollback)await authorize(readOnly);else if(Date.now()>fixed.receipt_deadline_ms)throw fail('CLEANUP_DEADLINE');
+     if(!rollback)await authorize(readOnly);else if(Date.now()>cleanupDeadlineMs)throw fail('CLEANUP_DEADLINE');
      const kind=String(text).trim().split(/\s/)[0].toUpperCase();if(!['SELECT','INSERT','UPDATE','BEGIN','COMMIT','ROLLBACK','WITH'].includes(kind))throw fail('SQL');
      if(readOnly&&!['SELECT','BEGIN','ROLLBACK','COMMIT'].includes(kind))throw fail('READBACK_WRITE');
      if(kind==='COMMIT'&&dirty)commitSent=true;
@@ -110,10 +111,20 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
    return result;
   }catch(error){if(write&&(writeSent||commitSent)){effectUnknown=true;reasons.add('commit_unknown');}if(effectUnknown)throw Object.assign(fail('COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});if(/^NATIVE_103_/.test(error?.message||''))throw error;const safe=fail('OPERATION_FAILED');safe.operation=op;safe.sqlstate=/^[0-9A-Z]{5}$/.test(error?.code||'')?error.code:null;safe.message+=':'+op+':'+(safe.sqlstate||'internal');throw safe;}
   finally{
-   if(allocation)try{await allocation.pool.end();const stopped=await allocation.transport.seal();if(stopped?.execution_stopped!==true)taint('pool_stop_unknown');}catch{taint('pool_stop_unknown');}
-   // Never equate Pool.end() with actual close: each connected socket must return.
-   for(const [stream,closed] of streams)if(!closed&&stream.closed!==true){await new Promise(r=>{const timer=setTimeout(r,Math.max(0,fixed.receipt_deadline_ms-Date.now()));stream.once('close',()=>{clearTimeout(timer);r();});});if(!streams.get(stream))taint('socket_close_unknown');}
-   pending.delete(job);
+   // Receipt timeout bounds this caller, not the lifetime of its owned resources.
+   // Keep the job pending until real acknowledgements and socket close arrive.
+   const closing=(async()=>{
+    if(allocation){
+     try{await allocation.pool.end();}catch{taint('pool_stop_unknown');}
+     try{const stopped=await allocation.transport.seal();if(stopped?.execution_stopped!==true)taint('pool_stop_unknown');}catch{taint('pool_stop_unknown');}
+    }
+    for(const [stream,closed] of streams)if(!closed&&stream.closed!==true)await new Promise(r=>stream.once('close',r));
+   })().finally(()=>pending.delete(job));
+   let timer;
+   const returned=await Promise.race([closing.then(()=>true,()=>{taint('pool_stop_unknown');return true;}),new Promise(r=>{timer=setTimeout(()=>r(false),Math.max(0,cleanupDeadlineMs-Date.now()));})]);
+   clearTimeout(timer);
+   if(!returned){taint('pool_stop_unknown');for(const [stream,closed] of streams)if(!closed&&stream.closed!==true){taint('socket_close_unknown');stream.destroy();}}
+
   }
  }
  async function queue(op,input={}){
