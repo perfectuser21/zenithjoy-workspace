@@ -148,3 +148,15 @@ for(const mode of ['throw','abort','unknown'])test('frozen official Caller actua
  const actual=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000,signal:signal.signal});
  assert.equal(actual.status,'needs_review');assert.equal(actual.execution_stopped,false);assert.equal(turns,1);assert.equal(settled,0);assert.equal(closed,1);const stopCalls=caller.calls.filter(x=>x.kind==='official_agent_stop');assert.ok(stopCalls.length>=1);assert.ok(stopCalls.every(x=>x.index===0));for(const name of ['verifyStopReceipt','seal','close','snapshot','verifySealedExecution'])assert.ok(caller.calls.some(x=>x.method===name),name);assert.equal(Object.isFrozen(caller.control),true);
 });
+
+test('Code-owned authority is bound after real Caller authorization and before native business prepare',async t=>{
+ const f=fixture(t);let bound=0,prepared=0,controller;
+ const result={scored:1};
+ const handlers={state:{},agentSupportsNativeScope:()=>true,agentNativeState:()=>({}),createAgentTools:async(_activity,scope)=>({
+  async bindOfficialAuthority({request,control}){assert.equal(control,controller);assert.equal(request.task_id,f.taskId);assert.equal(await control.authorizeParentContext(request),true);bound++;},
+  prepare:async()=>{assert.equal(bound,1);prepared++;},inspect:async()=>({}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_PG');},getResult:()=>result,settle:async()=>{},closeNativeScope:async proof=>({execution_stopped:rawModelScopeStopped(proof.raw_model_proof,scope)})
+ })};
+ const wired=createWorkflowExecution({...f,handlers,rpc:async()=>{throw Error('NO_LEGACY');},createOfficialControl:async({request})=>controller=officialFixture(request,{onTurn:async()=>({type:'finish'})})});
+ const actual=await wired.executeAgent(f.activities[0],{context:{task_id:f.taskId},deadline_ms:Date.now()+10000});
+ assert.equal(bound,1);assert.equal(prepared,1);assert.equal(actual.status,'completed');assert.equal(actual.execution_stopped,true);
+});

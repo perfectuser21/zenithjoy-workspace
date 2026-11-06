@@ -84,3 +84,7 @@ export function freezePreflightProfile({env}){
 export function assertPreflightProfile({env,frozen}){
  try{const fixed=validatePreflightProfile(frozen.preflight_profile),actual=freezePreflightProfile({env});if(fixed.profile!==frozen.agent_input?.profile||fixed.serial!==frozen.agent_input?.serial||canonical(fixed)!==canonical(actual))throw Error();return fixed;}catch{throw Error('PREFLIGHT_PROFILE_FROZEN_MISMATCH');}
 }
+
+// Shared Code-only material reader; workflow admission remains in its callers.
+// No URI or credential value is serialized into either frozen namespace.
+export function readPgControlMaterial(options){return material(options);}

@@ -1,4 +1,4 @@
-import {prepareFrozenPreflightPg} from './preflight-pg-dependencies.mjs';
+import {prepareFrozenPreflightPg,prepareFrozenScoringPg} from './preflight-pg-dependencies.mjs';
 import {controlAcceptanceFromTask,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
 import outreachScope from './leadgen-outreach-scope.js';
@@ -245,6 +245,13 @@ export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir
  }
  try{lstatSync(marker);throw Error('整包部署或恢复未完成，拒绝新运行冻结');}catch(error){if(error.code!=='ENOENT')throw error;}
 }
+export function nativeClaimFromTask({task,input,sourceCommit}){
+ const fail=()=>{throw Error('NATIVE_CLAIM_SCOPE');};const p=task?.payload;
+ if(!task||task.id!==input?.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isFinite(Date.parse(task.lease_until))||Date.parse(task.lease_until)<=Date.now()||!p||p.workflow_key!==input.workflow_key||p.source_commit!==sourceCommit||p.run_tag!==input.run_tag||p.profile!==input.profile||p.company_line!==input.line||(input.serial==='none'?p.device_serial!=null:p.device_serial!==input.serial))fail();
+ if(!p.scope||typeof p.scope!=='object'||Array.isArray(p.scope)||p.scope.limit!==input.limit||(p.scope.source_run??null)!==input.source_run)fail();
+ for(const [key,value]of [['limit',input.limit],['source_run',input.source_run]])if(Object.hasOwn(p,key)&&p[key]!==value)fail();
+ return {claimed_by:task.claimed_by,claimed_at:task.claimed_at};
+}
 export async function freezeDefinition(o) {
   const executionMode=executionModeInput({WF_BRAIN_WORKFLOW:o.workflowKey,...(Object.hasOwn(o,'executionMode')?{LEADGEN_EXECUTION_MODE:o.executionMode}:{})});
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
@@ -253,9 +260,13 @@ export async function freezeDefinition(o) {
   const loadControlAuthority=async sourceCommit=>{
     if(!executionTransport)return null;
     const response=await o.get('/api/brain/tasks/'+fixedAgentInput.task_id);
-    return controlAcceptanceFromTask({task:response?.task??response,input:fixedAgentInput,sourceCommit});
+    const task=response?.task??response,control=controlAcceptanceFromTask({task,input:fixedAgentInput,sourceCommit});
+    return control||(hasScoring?{native_claim:nativeClaimFromTask({task,input:fixedAgentInput,sourceCommit})}:null);
   };
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(transportPair(readFrozen(o.runDir),executionMode,o.workflowKey))!==canonical(executionTransport))throw Error('EXECUTION_TRANSPORT_RESUME_MISMATCH');
+  const hasScoring=o.scoringPg!=null||o.scoringControlScope!=null;
+  if(hasScoring&&(executionMode!=='agent'||o.workflowKey!=='douyin_comment_scoring'||fixedAgentInput?.profile!=='mmv-scoring'||fixedAgentInput?.serial!=='none'||!o.scoringPg||!o.scoringControlScope||Object.keys(o.scoringPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.scoringPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('SCORING_INPUT_MODE_INVALID');
+  if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.scoring_pg||null)!==canonical(o.scoringPg||null)||canonical(old.scoring_control_scope||null)!==canonical(o.scoringControlScope||null))throw Error('SCORING_INPUT_RESUME_MISMATCH');}
   const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null||o.preflightProfile!=null;
   if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null)||canonical(old.preflight_profile||null)!==canonical(o.preflightProfile||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
   if(hasPreflight&&(executionMode!=='agent'||!['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey)||!o.preflightPg||!o.preflightControlScope||!o.preflightProfile||Object.keys(o.preflightPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.preflightPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('PREFLIGHT_INPUT_MODE_INVALID');
@@ -288,6 +299,8 @@ export async function freezeDefinition(o) {
   const originalManifest=readFileSync(manifestPath);
   const manifest=JSON.parse(originalManifest);
   const controlAuthority=await loadControlAuthority(manifest.source_commit);
+  if(hasScoring&&(controlAuthority?.control_scope||hasPreflight||o.scoringControlScope.source_commit!==manifest.source_commit||o.scoringControlScope.target!==manifest.target))throw Error('SCORING_INPUT_MODE_INVALID');
+  if(executionTransport&&o.workflowKey==='douyin_comment_scoring'&&!controlAuthority?.control_scope&&!hasScoring)throw Error('SCORING_INPUT_REQUIRED');
   const fixed=(o.releaseId||manifest.release_id||o.requireRelease)?await loadRuntimeRelease(o,manifest,digest):null;
   let version;
   if(fixed){assertRuntimeHost(fixed.release,manifest);version=fixed.version;}
@@ -353,7 +366,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
+    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasScoring?{scoring_pg:structuredClone(o.scoringPg),scoring_control_scope:structuredClone(o.scoringControlScope)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
@@ -363,7 +376,8 @@ export async function freezeDefinition(o) {
       const target=resolve(staging,'runtime',file.deployed_path);mkdirSync(dirname(target),{recursive:true});
       writeFileSync(target,file.bytes,{mode:file.mode});
     }
-    if(hasPreflight||manifest.dependencies?.preflight_pg){
+    if(hasScoring){await prepareFrozenScoringPg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:snapshot,expectedDeployment:manifest.dependencies?.preflight_pg});}
+    else if(hasPreflight||manifest.dependencies?.preflight_pg){
       const dependency=manifest.dependencies?.preflight_pg,dependencyScope=hasPreflight?snapshot:{...snapshot,preflight_pg:{lock_sha256:dependency?.lock_sha256,package_lock_sha256:dependency?.package_lock_sha256}};
       await prepareFrozenPreflightPg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:dependencyScope,expectedDeployment:dependency});
     }

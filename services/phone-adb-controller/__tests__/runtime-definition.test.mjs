@@ -454,3 +454,8 @@ test('101来源输入保留规范云serial；普通标签语法保持原限制',
  assert.deepEqual(validateDiscoveryInput(input),input);
  for(const change of [{serial:'47.100.213.173:010001'},{profile:'47.100.213.173:10001'},{line:'yuesheng:10001'}])assert.throws(()=>validateDiscoveryInput({...input,...change}),/DISCOVERY_INPUT/);
 });
+
+test('scoring_pg/control_scope不能注入原Code或非103定义；不同权限命名空间不得混用',async()=>{
+ const f=fixture(),pin={lock_sha256:'a'.repeat(64),package_lock_sha256:'b'.repeat(64)};
+ await assert.rejects(freezeDefinition({...f.options,scoringPg:pin,scoringControlScope:{source_commit:'a'.repeat(40),target:'mmv'}}),/SCORING_INPUT_MODE_INVALID/);
+});

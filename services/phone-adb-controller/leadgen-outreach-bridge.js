@@ -37,13 +37,13 @@ const digest=v=>crypto.createHash('sha256').update(JSON.stringify(canonical(JSON
 function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`;}
 function matchesRequestedSource(row,sourceRun){return sourceRun==null||row.source_run===sourceRun&&row.payload?.source_run===sourceRun&&row.payload?.comment_run===sourceRun;}
 function frozenQualification(p,snapshot){const q=p.qualification;return q?.company_id===snapshot.company_id&&String(q.company_version)===String(snapshot.version)&&typeof q.tenant_id==='string'&&q.tenant_id!==''&&q.tenant_id===snapshot.tenant_id&&typeof q.policy_id==='string'&&q.policy_id!==''&&q.policy_id===(snapshot.policy_id||snapshot.runtime_config?.policy_id);}
-function nativeIntent(row,{companyBinding}={}){
+function nativeIntent(row,{companyBinding,verifyRecipient=evidence.validateEvidence}={}){
  const p=row.payload;
  if(!p||row.line_key!==p.line_key||row.run_tag!==p.run||!p.scoring_run||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
  if(companyBinding&&(p.qualification.company_id!==companyBinding.company_id||p.qualification.tenant_id!==companyBinding.tenant_id))throw Error('BRIDGE_COMPANY_SOURCE_INVALID');
  if(!p.lead_identity||p.lead_identity.id!==p.lead_id||p.lead_identity.line_key!==p.line_key||p.lead_identity.douyin_id!==p.target_douyin_id)throw Error('BRIDGE_LEAD_IDENTITY_INVALID');
  if(!p.profile_url||!/^https:\/\/(?:www|v)\.douyin\.com\/[A-Za-z0-9._/-]+$/.test(p.profile_url))throw Error('BRIDGE_PROFILE_LINK_MISSING');
- evidence.validateEvidence(p.recipient_evidence,{line_key:p.line_key,run:p.comment_run,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body:p.comment_body,comment_body_sha256:evidence.hash(p.comment_body),video_url:p.source_video_url},{companyBinding});
+ verifyRecipient(p.recipient_evidence,{line_key:p.line_key,run:p.comment_run,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body:p.comment_body,comment_body_sha256:evidence.hash(p.comment_body),video_url:p.source_video_url},{companyBinding});
  return p;
 }
 function fieldsMatch(row,record){
@@ -58,7 +58,7 @@ function buildOrderFields(row,route,types,options){
  'IP属地':p.profile_ip||p.region||'','留言时间':p.comment_time||'','业务线':route.line,'关键词层级':route.tier||'','搜索意图':route.intent||'','目标人群':route.audience||'',
  'AI判断理由':`[${p.intent_grade}级] `+(p.judgment_reason||''),'状态':'待触达','发送状态':'未发送','搜索账号':'池转入(自动判定)','采集时间':time,'合规核验状态':bridgeMarker(row)};
 }
-async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,reviewPolicy}={}){
+async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,reviewPolicy,verifyRecipient}={}){
  const exactIds=Object.hasOwn(input,'comment_ids')?input.comment_ids:null;
  if(Object.hasOwn(input,'comment_ids')&&(!Array.isArray(exactIds)||exactIds.length>50||new Set(exactIds).size!==exactIds.length||exactIds.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))))throw Error('BRIDGE_COMMENT_IDS_INVALID');
  if(exactIds?.length===0)return {published:0,protected:0,excluded:0,unknown:0,ids:[],comment_ids:[],verified:true};
@@ -83,7 +83,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,review
      {run:p?.run,scoring_run:p?.scoring_run,source_run:p?.comment_run,source_video:p?.source_video,source_video_url:p?.source_video_url});
    if(policy.status!=='pass'){result.unknown++;result.verified=false;continue;}
    let companyBinding;
-   try{companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);const p=nativeIntent(row,{companyBinding});if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
+   try{companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);const p=nativeIntent(row,{companyBinding,verifyRecipient});if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
    if(!api)api=await outreach.orderClient(route,{deadlineAt});
    let all;try{all=await api.all({deadlineAt});}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));
@@ -95,7 +95,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,review
    if(row.state==='attempted'||row.attempted_at){result.unknown++;result.verified=false;continue;}
    const duplicates=all.filter(r=>txt(r.fields?.['抖音号']).trim().toLowerCase()===String(row.payload.target_douyin_id).toLowerCase()||txt(r.fields?.['抖音昵称'])===row.payload.nickname);
    if(duplicates.length){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='protected',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,duplicates[0].record_id]);result.ids.push(row.id);handled++;result.protected++;continue;}
-   let fields;try{fields=buildOrderFields(row,route,await api.fields(),{companyBinding});}catch{result.unknown++;result.verified=false;continue;}
+   let fields;try{fields=buildOrderFields(row,route,await api.fields(),{companyBinding,verifyRecipient});}catch{result.unknown++;result.verified=false;continue;}
    if(Date.now()>=deadlineAt){result.unknown++;result.verified=false;break;}
    const stored=await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='attempted',fields=$3::jsonb,fields_sha256=$4,attempted_at=now(),updated_at=now() WHERE line_key=$1 AND id=$2 AND state IN ('pending','unknown') AND attempted_at IS NULL RETURNING *",[route.key,row.id,JSON.stringify(fields),digest(fields)]);
    if(stored.rowCount!==1)throw Error('BRIDGE_ATTEMPT_NOT_PERSISTED');
@@ -126,7 +126,7 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPo
   for(const row of rows){try{
    if(scope?!matchesOutbox(scope,row):rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
    const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
-   const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
+   const p=nativeIntent(row,{companyBinding,verifyRecipient});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
      {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
    if(policy.status!=='pass')continue;

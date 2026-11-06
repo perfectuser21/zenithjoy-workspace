@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import * as definition from '../runtime-definition.mjs';
+test('native_claim只来自完整同Task输入与活lease，未claimed/过期/同名result均拒绝',()=>{
+ assert.equal(typeof definition.nativeClaimFromTask,'function','普通native域不能只看非空claimed_by');
+ const input={task_id:'11111111-1111-4111-8111-111111111111',workflow_key:'douyin_comment_scoring',run_tag:'fixture103',profile:'mmv-scoring',serial:'none',line:'yuesheng',limit:1,source_run:'fixture102'};
+ const task={id:input.task_id,status:'in_progress',claimed_by:'fixture-owner',claimed_at:'2026-11-06T00:00:00.000Z',lease_until:new Date(Date.now()+60000).toISOString(),payload:{workflow_key:input.workflow_key,run_tag:input.run_tag,profile:input.profile,company_line:input.line,source_commit:'a'.repeat(40),scope:{limit:input.limit,source_run:input.source_run}}};
+ assert.deepEqual(definition.nativeClaimFromTask({task,input,sourceCommit:'a'.repeat(40)}),{claimed_by:task.claimed_by,claimed_at:task.claimed_at});
+ for(const change of [{status:'failed'},{claimed_at:null},{claimed_by:''},{lease_until:'bad-date'},{lease_until:'2000-01-01T00:00:00Z'},{payload:{...task.payload,source_commit:'b'.repeat(40)}},{payload:{...task.payload,scope:{...task.payload.scope,limit:2}}}])assert.throws(()=>definition.nativeClaimFromTask({task:{...task,...change},input,sourceCommit:'a'.repeat(40)}),/NATIVE_CLAIM/);
+});
