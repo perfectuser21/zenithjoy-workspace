@@ -139,9 +139,14 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
      const value=Reflect.get(rawControl,key,rawControl);
      return [key,typeof value==='function'?(...args)=>{const message=args[0];if(key==='request'&&message?.kind==='official_agent_turn'){dispatched=true;rawLastIndex=message.turn.index;}return Reflect.apply(value,rawControl,args);}:value];
     })));
-    const raw=await runActivitySkillParentLoop({request,scope,broker,control,signal,beforeTurn:beforeRawTurn,canReadback:(operation,input)=>tools.canReadback?.(operation,input)===true});
+    const beforeTurn=async options=>{
+     let owned;do{owned=stallJob;if(stallBusy)options.onDrained?.();await owned;}while(owned!==stallJob);
+     if(heartbeatError)return false;
+     return beforeRawTurn?beforeRawTurn(options):true;
+    };
+    const raw=await runActivitySkillParentLoop({request,scope,broker,control,signal,beforeTurn,canReadback:(operation,input)=>tools.canReadback?.(operation,input)===true});
     rawProof=raw.model_stop_proof;rawControlKnown=rawControl.verifySealedExecution(rawControl.snapshot(),{request})===true;
-    receipt={execution_transport:transport.execution_transport,source_commit:request.source_commit,reason:raw.reason,turn_count:raw.turn_count,
+    receipt={execution_transport:transport.execution_transport,source_commit:request.source_commit,reason:raw.reason,...(raw.failure_code?{failure_code:raw.failure_code}:{}),turn_count:raw.turn_count,
      official_execution_stopped:raw.official_execution_stopped,model_execution_unknown:raw.model_execution_unknown,broker_execution_unknown:raw.broker_execution_unknown};
     writeFileSync(join(directory,'raw-agent-receipt.json'),JSON.stringify(receipt),{flag:'wx',mode:0o600});
     signal?.removeEventListener('abort',abort);clearInterval(heartbeat);clearInterval(stall);await heartbeatJob;await stallJob;await abortJob;

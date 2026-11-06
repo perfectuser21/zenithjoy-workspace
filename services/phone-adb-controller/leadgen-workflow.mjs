@@ -148,7 +148,7 @@ export async function prepareWorkflowCommander({runDir,frozen,activities,execute
  const input=frozen.agent_input,request=executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:(input.run_start_ts+input.run_max_seconds)*1000});
  const factory=createObserver||(await import('./runner-official-commander.mjs')).createRunnerOfficialCommander;
  const observer=await factory({runtimeRoot:join(runDir,'runtime'),runDir,source:rpcSource(frozen),request});
- return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return observer.commander(receipt);},dispatchSafety:observer.dispatchSafety,canDispatchWorker:observer.canDispatchWorker,close:observer.close};
+ return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return observer.commander(receipt);},waitForIdle:observer.waitForIdle,dispatchSafety:observer.dispatchSafety,canDispatchWorker:observer.canDispatchWorker,close:observer.close};
 }
 
 export async function runWorkflowWithCommander({frozen,prepareCommander=prepareWorkflowCommander,observerSafety,...options}){
@@ -170,9 +170,15 @@ export async function runWorkflowWithCommander({frozen,prepareCommander=prepareW
   observer={commander:async()=>{throw Error('COMMANDER_UNAVAILABLE');},canDispatchWorker:()=>true,close:async()=>null};
  }
  const allowed=()=>{if(!raw)return true;const facts=observer.dispatchSafety?.()||{safe:observer.canDispatchWorker?.()===true,execution_unknown:observer.canDispatchWorker?.()!==true};if(facts.execution_unknown===true)safetyUnknown=true;return facts.safe===true;};
- if(observerSafety)observerSafety.safe=allowed;
- const guarded=options.executeAgent&& (async(activity,input)=>{if(!allowed())throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
- if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!allowed())throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
+ const ready=async input=>{
+  if(!raw)return true;
+  try{if(typeof observer.waitForIdle==='function'&&await observer.waitForIdle(input)!==true){allowed();return false;}}
+  catch(error){const facts=observer.dispatchSafety?.();if(!facts||facts.execution_unknown===true||facts.pending>0)safetyUnknown=true;throw error;}
+  return allowed();
+ };
+ if(observerSafety){observerSafety.safe=allowed;observerSafety.ready=ready;}
+ const guarded=options.executeAgent&& (async(activity,input)=>{if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
+ if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!await ready({signal:args[1]?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
  let result,runError,closed,resourceQuarantine;
  try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}catch(error){runError=error;}
  // Safety work is independent of both the executor and the Recorder. In
@@ -249,7 +255,7 @@ async function main(){
   const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
   const handlers=createWorkflowHandlers({runDir:dir,frozen,binding,preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
   const observerSafety={};
-  const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:()=>observerSafety.safe?.()===true});
+  const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:input=>observerSafety.ready?.(input)});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
   const result=await runWorkflowWithCommander({runDir:dir,frozen,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,quarantine:handlers.quarantineResources,
     record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});

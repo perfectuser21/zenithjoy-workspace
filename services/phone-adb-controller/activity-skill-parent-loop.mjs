@@ -70,8 +70,16 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
  try{
   for(let index=startIndex;index<Math.min(q.max_turns,readOnlyContinuation?startIndex+1:q.max_turns);index++){
    active();
-   if(beforeTurn&&await bounded(Promise.resolve().then(()=>beforeTurn({deadlineMs:q.worker_deadline_ms,signal})),q.worker_deadline_ms,signal)!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();
-   const context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
+   const drain=async phase=>{let waited=false;if(beforeTurn&&await bounded(Promise.resolve().then(()=>beforeTurn({deadlineMs:q.worker_deadline_ms,signal,index,phase,onDrained:()=>{waited=true;}})),q.worker_deadline_ms,signal)!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();return waited;};
+   await drain('before_context');
+   let context;const guidance=[];
+   do{
+    context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
+    if(Array.isArray(context.commander_guidance))guidance.push(...context.commander_guidance);
+    // Only Code-owned work actually drained during this read invalidates its
+    // guidance snapshot. Refresh reads, never replay a tool or reset a budget.
+   }while(await drain('before_dispatch'));
+   if(guidance.length)context={...context,commander_guidance:guidance};
    if(context.commander_abort===true){reason='commander_aborted';break;}
    const input={protocol:'leadgen-parent-turn/v1',index,context,history:structuredClone(history)};
    if(Buffer.byteLength(JSON.stringify(input))>256*1024){reason='input_limit';break;}
@@ -79,7 +87,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
    currentIndex=index;officialStopped=false;turnCount++;
    let receipt,verified;
    try{
-    receipt=await bounded(Promise.resolve().then(()=>{active();return control.request({kind:'official_agent_turn',request:q,turn:{index,input}});}),q.worker_deadline_ms,signal);
+    active();receipt=await bounded(control.request({kind:'official_agent_turn',request:q,turn:{index,input}}),q.worker_deadline_ms,signal);
     verified=control.verifyTurnReceipt(receipt,{request:q,index});
     if(!object(verified)||typeof verified.official_run_id!=='string'||runIds.has(verified.official_run_id))throw Error('PARENT_LOOP_OFFICIAL_RECEIPT_INVALID');
     runIds.add(verified.official_run_id);officialStopped=true;
