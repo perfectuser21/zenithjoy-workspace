@@ -1,4 +1,4 @@
-import {createNativeScoringWorkflow} from './native-scoring-workflow.mjs';
+import {createNativeScoringWorkflow,isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -31,7 +31,7 @@ export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 export function createWorkflowHandlers(options){
  if(validateFrozenControlAcceptance(options.frozen))return createControlAcceptanceHandlers(options);
  const scoring=options.frozen?.execution_mode==='agent'&&options.env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'?createNativeScoringWorkflow(options):undefined;
- const handlers=createHandlers({...options,scoringRuntime:scoring});return scoring?{...handlers,prepareNativeScoring:()=>scoring.prepare()}:handlers;
+ const handlers=createHandlers({...options,scoringRuntime:scoring});return scoring?{...handlers,prepareNativeScoring:()=>scoring.prepare(),nativeScoringRuntime:scoring}:handlers;
 }
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
@@ -133,10 +133,11 @@ export async function recordActivityBookkeeping(r,{root,env,executionMode,contro
     }
 }
 
-export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal}){
+export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal,nativeScoring}){
   if(executionMode==='agent'&&validateFrozenControlAcceptance(frozen)){
     return {result:{gate:{verdict:'fail',reason:'CONTROL_ACCEPTANCE_IS_NOT_103_OUTPUT'},steps:[],probes:[{name:'actual_103_business_result',pass:false,reason:'control acceptance has no scoring/PG capability'}]}};
   }
+  if(executionMode==='agent'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'){if(!isNativeScoringWorkflow(nativeScoring))throw Error('NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED');return nativeScoring.readbackChecks(activity.key,{deadlineMs:deadline_ms,signal});}
   if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
@@ -241,7 +242,7 @@ async function main(){
         scope:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,source_commit:frozen.deployment.source_commit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key},
         readback:async video=>(await rpc({kind:'queue',request:{op:'discover_readback',run:env.WFR_TAG,line:env.LEADGEN_LINE,video}},{timeoutMs:60000})).result}));
     }
-    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,...options});
+    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,nativeScoring:handlers.nativeScoringRuntime,...options});
     const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
     // 多源取证分别按真实source索引检查，不能拿一个来源的截图代替另一个。
     const phoneEvidence=env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',env.P);

@@ -1,12 +1,14 @@
 // Public 103 parent integration. Worker JSON never selects a dependency or authority.
 import{readFileSync,lstatSync,realpathSync,mkdirSync}from'node:fs';import{join,dirname}from'node:path';import{fileURLToPath}from'node:url';import{userInfo}from'node:os';import{createHash}from'node:crypto';
+import{readNativeScoringActivity}from'./native-scoring-readback.mjs';
+import{rawModelScopeStopped}from'./activity-skill-parent-loop.mjs';import{skillLaunchDidNotStart}from'./activity-skill-executor.mjs';
 import{assertRuntimeHost}from'./runtime-host.mjs';
 import{assertAgentInput,readFrozen}from'./runtime-definition.mjs';import{rpcSource}from'./leadgen-client.mjs';import{verifyRpcSource}from'./leadgen-rpc.mjs';
 import{assertFrozenNativeTaskLease}from'./native-task-lease.mjs';import{assertScoringControlScope,readScoringCredentials,createScoringPoolFactory}from'./native-scoring-control.mjs';
 import{createNativeScoringRuntime}from'./native-scoring-runtime.mjs';import{startNativeScoringProducers}from'./native-scoring-producers.mjs';import{createNativeActivityAuthority,readNativeAuthorityProjection,nativeAuthorityProjectionMatches}from'./native-activity-authority.mjs';
-const instances=new WeakSet(),sha=b=>createHash('sha256').update(b).digest('hex');const fail=code=>Error('NATIVE_103_'+code);
+const instances=new WeakSet(),sha=b=>createHash('sha256').update(b).digest('hex');const fail=code=>Error('NATIVE_103_'+code);const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort().map(k=>[k,x[k]])):x);
 export const isNativeScoringWorkflow=value=>instances.has(value);
-export const NATIVE_SCORING_FILES=Object.freeze(['native-scoring-workflow.mjs','native-scoring-runtime.mjs','native-scoring-producers.mjs','native-scoring-control.mjs','native-activity-authority.mjs','native-task-lease.mjs']);
+export const NATIVE_SCORING_FILES=Object.freeze(['native-scoring-workflow.mjs','native-scoring-runtime.mjs','native-scoring-producers.mjs','native-scoring-control.mjs','native-activity-authority.mjs','native-task-lease.mjs','native-scoring-readback.mjs']);
 export function nativeScoringSource(frozen){const source=rpcSource(frozen);for(const path of NATIVE_SCORING_FILES){const sha256=frozen.files?.['runtime/'+path];if(!/^[a-f0-9]{64}$/.test(sha256||''))throw fail('SOURCE');const rows=source.files.filter(f=>f.path===path);if(rows.length>1||rows.length&&rows[0].sha256!==sha256)throw fail('SOURCE');if(!rows.length)source.files.push({path,sha256});}return source;}
 export function createNativeScoringWorkflow({root,env,frozen,binding,runDir=env.WFR_RUN_DIR,createAuthorityControl,requestImpl,poolFactory}={}){
  let prepared=false,unsafe=false,source,input,spec,lease,core,makePool,active;const seen=new Set(),entries=[];
@@ -41,17 +43,22 @@ export function createNativeScoringWorkflow({root,env,frozen,binding,runDir=env.
   }catch(e){entry.unknown=true;unsafe=true;throw e;}
  }
  async function assertScope(scope){verify();for(const[k,v]of Object.entries({workflow:input.workflow_key,run:input.run_tag,run_id:binding.run_id,task_id:input.task_id,binding_id:binding.id,source_commit:source.commit,snapshot_sha256:frozen.snapshot_sha256,profile:input.profile,serial:input.serial,line:input.line,source_run:input.source_run,limit:input.limit}))if(scope[k]!==v)throw fail('SCOPE');if(active&&!active.closed)await readClaim(active);return true;}
- async function prepareActivity(scope){if(!active||active.scope.activity!==scope.activity)throw fail('SCOPE');await core.begin({...scope,deadline_ms:scope.worker_deadline_ms});active.begun=true;}
+ async function prepareActivity(scope){if(!active||active.scope.activity!==scope.activity)throw fail('SCOPE');await core.begin({...scope,deadline_ms:scope.worker_deadline_ms,authorized_request_sha256:sha(canonical(active.request))});active.begun=true;}
  async function queue(op,fields){if(!active||active.closed||!active.begun)throw fail('SCOPE');return core.queue(op,fields);}
- async function closeActivity(){
-  const entry=active;if(!entry)return {execution_stopped:!unsafe};entry.closed=true;
+ async function closeActivity(proof){
+  const entry=active;if(!entry)return {execution_stopped:!unsafe};entry.modelStopped=skillLaunchDidNotStart(proof,entry.scope)||proof?.execution_stopped===true&&rawModelScopeStopped(proof.raw_model_proof,entry.scope);entry.closed=true;
   try{await core.closeActivity();}catch{entry.unknown=true;}
   let producerStop=true,authorityStop=true;
   if(entry.producer)try{producerStop=(await entry.producer.close()).execution_stopped===true;}catch{producerStop=false;}
   if(entry.authority)try{const packet=await entry.authority.close();authorityStop=entry.authority.verifyStopped(packet);}catch{authorityStop=false;}
   const state=core.snapshot(),effect=entry.producer?.snapshot().external_effect==='unknown'||state.external_effect==='unknown';
   entry.unknown ||= !producerStop||!authorityStop||state.execution_unknown||state.pending>0;unsafe ||= entry.unknown||effect;active=null;
-  return {domain:'native-103-activity/v1',activity:entry.scope.activity,execution_stopped:!entry.unknown,external_effect:effect?'unknown':'observed',authority_closed:authorityStop,producer_closed:producerStop};
+  entry.stop={domain:'native-103-activity/v1',activity:entry.scope.activity,execution_stopped:!entry.unknown,external_effect:effect?'unknown':'observed',authority_closed:authorityStop,producer_closed:producerStop};return structuredClone(entry.stop);
  }
- const api={prepare,bindOfficialAuthority,assertScope,prepareActivity,queue,closeActivity,source:()=>structuredClone(source),supports(activity){try{verify();return !unsafe&&!active&&!seen.has(activity?.key)&&['scoring','mark_leads'].includes(activity?.key)&&(activity.key==='scoring'||seen.has('scoring'));}catch{return false;}},nativeState:()=>({execution_unknown:unsafe||entries.some(e=>e.unknown),native_stop_unproven:entries.some(e=>e.unknown),external_effect:core?.snapshot().external_effect||'none'}),snapshot:()=>({prepared,unsafe,active:active?.scope.activity||null,core:core?.snapshot()||null})};instances.add(api);return Object.freeze(api);
+ async function readbackChecks(activity,options={}){
+  verify();const entry=entries.find(e=>e.scope.activity===activity);if(active||!entry?.closed||entry.stop?.execution_stopped!==true||!entry.modelStopped)throw fail('JUDGE_PREVIOUS_DOMAIN_UNVERIFIED');
+  entry.readbacks=(entry.readbacks||0)+1;if(entry.readbacks>2)throw fail('JUDGE_BUDGET');const base=join(runDir,'native-103','readbacks');mkdirSync(base,{recursive:true,mode:0o700});const directory=join(base,activity+'-'+entry.readbacks);mkdirSync(directory,{mode:0o700});mkdirSync(join(directory,'producer'),{mode:0o700});
+  const credentials=readScoringCredentials({root,env,frozen});return readNativeScoringActivity({root,source,scope:entry.scope,request:entry.request,frozen,records:core.issuedReceipts(),directory,python:spec.python,credentials,createPool:opts=>poolFactory?poolFactory(opts):makePool(opts),createAuthorityControl,requestImpl,verify,previousEffect:core.snapshot().external_effect,deadlineMs:options.deadlineMs,signal:options.signal});
+ }
+ const api={prepare,bindOfficialAuthority,readbackChecks,assertScope,prepareActivity,queue,closeActivity,source:()=>structuredClone(source),supports(activity){try{verify();return !unsafe&&!active&&!seen.has(activity?.key)&&['scoring','mark_leads'].includes(activity?.key)&&(activity.key==='scoring'||seen.has('scoring'));}catch{return false;}},nativeState:()=>({execution_unknown:unsafe||entries.some(e=>e.unknown),native_stop_unproven:entries.some(e=>e.unknown),external_effect:core?.snapshot().external_effect||'none'}),snapshot:()=>({prepared,unsafe,active:active?.scope.activity||null,core:core?.snapshot()||null})};instances.add(api);return Object.freeze(api);
 }

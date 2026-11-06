@@ -9,7 +9,7 @@ const fail=reason=>Object.assign(Error('NATIVE_103_'+reason),{code:'NATIVE_103_'
 const sha=b=>createHash('sha256').update(b).digest('hex'),canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort().map(k=>[k,x[k]])):x);
 const dependencyBrands=new WeakMap();export const nativeScoringDependenciesMatch=(value,source)=>dependencyBrands.get(value)===canonical(source);
 const sandbox='(version 1)(allow default)(deny process-fork)';
-export async function startNativeScoringProducers({root,source,scope,directory,python,deadlineMs,receiptDeadlineMs,requestImpl=(url,options,callback)=>(new URL(url).protocol==='http:'?httpRequest:httpsRequest)(url,options,callback),readSource,brainCredential,assertAuthority,deferNative=false}={}){
+export async function startNativeScoringProducers({root,source,scope,directory,python,deadlineMs,receiptDeadlineMs,requestImpl=(url,options,callback)=>(new URL(url).protocol==='http:'?httpRequest:httpsRequest)(url,options,callback),readSource,brainCredential,assertAuthority,deferNative=false,readOnly=false}={}){
  const src=structuredClone(source),fixed=structuredClone(scope),py=structuredClone(python),route=routes.routeOf(fixed?.line);
  if(realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||src?.commit!==fixed?.source_commit||fixed?.serial!=='none'||fixed?.profile!=='mmv-scoring'||!fixed.task_id||!fixed.binding_id||!Number.isSafeInteger(deadlineMs)||deadlineMs>=receiptDeadlineMs||Date.now()>=deadlineMs)throw fail('PRODUCER_SCOPE');
  const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||readdirSync(directory).length)throw fail('PRODUCER_PREVIOUS_UNKNOWN');
@@ -59,6 +59,7 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
  }
  if(!deferNative)await prepareNative();
  function permit(url,method,body){
+  if(readOnly&&method!=='GET')throw fail('READONLY_POST');
   const u=new URL(url);if(u.hash||u.username||u.password)throw fail('HTTP_SCOPE');
   if(u.origin==='http://127.0.0.1:5221'&&method==='GET'){
    if(u.pathname==='/api/brain/tasks/'+fixed.task_id&&!u.search)return;
@@ -117,7 +118,7 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
  }
  let heldLock;
  async function withOrderLock(line,fn,{directory:lockDirectory=join(directory,'order-locks')}={}){
-  check();if(!calibration)throw fail('DEPENDENCY');if(line!==route.key||heldLock)throw fail('ORDER_LOCK_SCOPE');mkdirSync(lockDirectory,{recursive:true,mode:0o700});
+  check();if(readOnly)throw fail('READONLY_LOCK');if(!calibration)throw fail('DEPENDENCY');if(line!==route.key||heldLock)throw fail('ORDER_LOCK_SCOPE');mkdirSync(lockDirectory,{recursive:true,mode:0o700});
   const code=readFileSync(join(root,'outreach-order-lock.py'),'utf8'),target=leaf('/usr/bin/sandbox-exec',['-p',sandbox,py.path,'-I','-S','-c',code,lockDirectory,line,String(process.pid),randomUUID()],'',{readyLine:'ORDER_LOCK_READY\n'});heldLock=target;
   try{await target.ready;check();return await fn();}finally{target.end();const result=await target.done;heldLock=null;if(result.code!==0||result.signal||result.unverified){unknown=true;throw fail('ORDER_LOCK_STOP_UNKNOWN');}}
  }
