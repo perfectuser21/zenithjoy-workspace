@@ -2,6 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
+import os from 'node:os';
+import {syncBuiltinESMExports} from 'node:module';
 import {join} from 'node:path';
 import {execFileSync,spawn} from 'node:child_process';
 import {createServer} from 'node:http';
@@ -181,4 +183,13 @@ test('部署CLI从真实controller cwd读取候选固定Skill，二次独立验�
  });
  const accepted=await run(f.acceptanceTaskIds);assert.equal(accepted.status,0,accepted.out);
  const rejected=await run({});assert.notEqual(rejected.status,0);assert.match(rejected.out,/独立Skill/);
+});
+
+test('cold Skill mirror missing rejects before any release API or deployment; ambient key cannot authorize it',async t=>{
+ const f=await fixture(t,{migrated:true}),userInfo=os.userInfo,previous=process.env.SKILLS_SOURCE_SSH_KEY;
+ rmSync(join(f.root,'.skills-source'),{recursive:true});
+ os.userInfo=(...args)=>({...userInfo(...args),homedir:join(f.root,'absent-fake-home')});process.env.SKILLS_SOURCE_SSH_KEY='fixture-env-key-must-not-be-used';syncBuiltinESMExports();
+ try{await assert.rejects(prepareAndDeploy(f),e=>e.message==='SKILL_SOURCE_BOOTSTRAP_KEY_INVALID');}
+ finally{os.userInfo=userInfo;if(previous===undefined)delete process.env.SKILLS_SOURCE_SSH_KEY;else process.env.SKILLS_SOURCE_SSH_KEY=previous;syncBuiltinESMExports();}
+ assert.equal(f.requests.length,0);assert.equal(existsSync(f.marker),false);
 });
