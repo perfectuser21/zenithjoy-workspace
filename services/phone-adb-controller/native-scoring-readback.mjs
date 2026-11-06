@@ -35,7 +35,6 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
   const identity=(await query(allocation.expectedIdentity.system_identifier?'SELECT current_database() AS database, current_user AS role, system_identifier::text FROM pg_control_system()':'SELECT current_database() AS database, current_user AS role')).rows;
   if(identity.length!==1||Object.entries(allocation.expectedIdentity).some(([k,v])=>identity[0][k]!==v))throw fail('IDENTITY');
   if((await query("SELECT current_setting('transaction_read_only') AS readonly")).rows[0]?.readonly!=='on')throw fail('READONLY');
-  const resultFor=op=>{const found=results.filter(r=>r.op===op);if(found.length!==1)throw fail('TARGET_AMBIGUOUS');return found[0].result;};
   let metrics,readbacks;
   if(scope.activity==='scoring'){
    const proof=rows.filter(r=>r.op==='score_scope'&&r.data);if(proof.length!==1)throw fail('SCOPE_TARGET');const fixed=proof[0].data;
@@ -46,9 +45,13 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
    const scores=await queue('score_readback',fields(scored)),exclusions=excluded.length?await queue('score_exclusion_readback',fields(excluded)):{verified:true,failures:0,ids:[]},policy=scored.length?await queue('policy_review',{...fields(scored),claim:scope.run,require_dual_review:true}):{verified:excluded.length>0,rows:[]};
    metrics={scored:scored.length,excluded:excluded.length,scoring_readback_failures:scores.verified===true?scores.failures:Math.max(1,scores.failures||0),exclusion_readback_failures:exclusions.verified===true?exclusions.failures||0:Math.max(1,exclusions.failures||0),policy_review_failures:policy.verified===true?0:1};readbacks={scores,exclusions,policy};
   }else{
-   const marked=resultFor('mark_leads'),bridge=resultFor('bridge_outreach');if(!Array.isArray(marked.ids)||!Array.isArray(marked.lead_ids)||!Array.isArray(bridge.ids)||bridge.verified===false)throw fail('INCOMPLETE');
+   const markResults=results.filter(r=>r.op==='mark_leads'),bridgeResults=results.filter(r=>r.op==='bridge_outreach');if(markResults.length>1||bridgeResults.length>1)throw fail('TARGET_AMBIGUOUS');
+   let marked=markResults[0]?.result,bridge=bridgeResults[0]?.result,observedBridge=[];
+   if(!marked){const issued=intents.filter(r=>r.op==='mark_leads');if(issued.length!==1||!Array.isArray(issued[0].request.ids))throw fail('TARGET_AMBIGUOUS');const ids=issued[0].request.ids,leads=(await query('SELECT id,comment_id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND comment_id=ANY($2::uuid[])',[resolveLineKey(scope.line),ids])).rows;marked={ids,lead_ids:leads.map(r=>r.id),marked:ids.length};originalUnknown=true;}
+   if(!bridge){const issued=intents.filter(r=>r.op==='bridge_outreach');if(issued.length!==1||!Array.isArray(issued[0].request.comment_ids)||issued[0].request.comment_ids.some(id=>!marked.ids.includes(id)))throw fail('TARGET_AMBIGUOUS');observedBridge=(await query('SELECT id,comment_id,lead_id,state,attempted_at FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND run_tag=$2 AND comment_id=ANY($3::uuid[])',[resolveLineKey(scope.line),scope.run,issued[0].request.comment_ids])).rows;bridge={ids:observedBridge.map(r=>r.id),verified:false};originalUnknown=true;}
+   if(!Array.isArray(marked.ids)||!Array.isArray(marked.lead_ids)||!Array.isArray(bridge.ids))throw fail('INCOMPLETE');
    const mark=await queue('mark_readback',{ids:marked.ids,lead_ids:marked.lead_ids}),delivery=await queue('bridge_readback',{ids:bridge.ids});
-   metrics={marked:marked.marked,mark_leads_readback_failures:mark.verified===true?mark.failures||0:Math.max(1,mark.failures||0),bridge_readback_failures:delivery.verified===true?delivery.failures||0:Math.max(1,delivery.failures||0)};readbacks={mark,delivery};
+   metrics={marked:marked.marked,mark_leads_readback_failures:mark.verified===true?mark.failures||0:Math.max(1,mark.failures||0),bridge_readback_failures:(bridge.verified===false?1:0)+(delivery.verified===true?delivery.failures||0:Math.max(1,delivery.failures||0))};readbacks={mark,delivery,observed_bridge:observedBridge};
   }
   // Readback may preserve evidence about an unknown write; it never resolves it.
   const {doc,errors}=loadChecks(join(root,'checks/douyin-comment-scoring.yaml'),join(root,'checks/schema.json')),spec=JSON.parse(readFileSync(join(root,'plans/douyin_comment_scoring.steps.json'),'utf8'));
