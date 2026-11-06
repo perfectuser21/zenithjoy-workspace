@@ -711,11 +711,12 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         const readback=last('score_readback'),review=last('policy_review'),exclusion=last('score_exclusion_readback');
         const ids=[...agent.scored],excluded_ids=[...agent.excluded];
         if(!agent.scoreScope||!readback||readback.verified!==true||ids.some(id=>!readback.ids?.includes(id))||ids.length&&review?.verified!==true||excluded_ids.length&&exclusion?.verified!==true)throw Error('AGENT_PRIMARY_SCORE_READBACK_MISSING');
-        agentSave(`${run}-scoring-readback.json`,readback);agentSave(`${run}-policy-review.json`,review||{verified:excluded_ids.length>0,rows:[]});
+        agentSave(`${run}-scoring-readback.json`,readback);agentSave(`${run}-policy-review.json`,review||{status:'not_applicable',reason:excluded_ids.length?'excluded_scope':'empty_scope',rows:[]});
         if(exclusion)agentSave(`${run}-exclusion-readback.json`,exclusion);
-        return {scored:ids.length,ids,excluded:excluded_ids.length,excluded_ids,scoring_readback_failures:readback.failures||0,exclusion_readback_failures:exclusion?.failures||0,policy_review_failures:review?.verified===true||ids.length===0&&excluded_ids.length>0?0:1,...(!ids.length&&!excluded_ids.length?{status:'empty'}:{})};
+        return {scored:ids.length,ids,excluded:excluded_ids.length,excluded_ids,scoring_readback_failures:readback.failures||0,exclusion_readback_failures:exclusion?.failures||0,policy_review_failures:ids.length===0||review?.verified===true?0:1,...(!ids.length&&!excluded_ids.length?{status:'empty'}:{})};
       }
       if(activity.key==='mark_leads'){
+        if(trustedScoring&&agent.scoreScope?.ids.length===0&&agent.scored.size===0&&agent.excluded.size===0)return scoringRuntime.emptyMarkResult();
         const marked=last('mark_leads'),readback=last('mark_readback'),bridge=last('bridge_outreach'),bridgeReadback=last('bridge_readback');
         if(!marked||readback?.verified!==true||!bridge||bridgeReadback?.verified!==true)throw Error('AGENT_PRIMARY_MARK_READBACK_MISSING');
         agentSave(`${run}-mark_leads-readback.json`,readback);agentSave(`${run}-bridge-readback.json`,bridgeReadback);

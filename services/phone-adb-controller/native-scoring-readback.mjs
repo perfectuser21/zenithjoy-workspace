@@ -4,6 +4,12 @@ import {join,dirname} from 'node:path';import {fileURLToPath} from 'node:url';im
 import {readNativeScoringReceipts} from './native-scoring-runtime.mjs';import {createNativeActivityAuthority,readNativeAuthorityProjection,nativeAuthorityProjectionMatches} from './native-activity-authority.mjs';import {startNativeScoringProducers} from './native-scoring-producers.mjs';import {verifyRpcSource} from './leadgen-rpc.mjs';import {runProbes,runSteps,resolveLineKey} from './verify-step.mjs';
 const require=createRequire(import.meta.url),{queueRequest}=require('./leadgen-queue.js'),{loadChecks}=require('./checks/probes-lib.js');
 const fail=reason=>Error('NATIVE_103_JUDGE_'+reason),sha=b=>createHash('sha256').update(b).digest('hex'),canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort().map(k=>[k,x[k]])):x);
+const emptyReadbacks=new WeakMap();
+export function readNativeEmptyScoringReadback(value,{source,scope}={}){
+ const proof=emptyReadbacks.get(value);if(!proof||proof.content!==canonical(value)||proof.source!==canonical(source)||scope.activity!=='mark_leads')throw fail('EMPTY_HANDOFF');
+ for(const key of ['workflow','run','run_id','task_id','binding_id','source_commit','snapshot_sha256','profile','serial','line','source_run','limit'])if(proof.scope[key]!==scope[key])throw fail('EMPTY_HANDOFF');
+ return structuredClone(proof.evidence);
+}
 const allowed=new Set(['score_readback','score_exclusion_readback','policy_review','mark_readback','bridge_readback']);
 export async function readNativeScoringActivity({root,source,scope,request,frozen,records,directory,python,credentials,createPool,createAuthorityControl,requestImpl,verify,previousEffect,deadlineMs,signal}={}){
  const end=Math.min(request.receipt_deadline_ms,deadlineMs??request.receipt_deadline_ms);let sealed=false,unknown=false,originalUnknown=previousEffect==='unknown',pending=0,allocation,client,stream,streamClosed=false,authority,producer,dependencies,txn=false,output,problem;
@@ -35,15 +41,33 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
   const identity=(await query(allocation.expectedIdentity.system_identifier?'SELECT current_database() AS database, current_user AS role, system_identifier::text FROM pg_control_system()':'SELECT current_database() AS database, current_user AS role')).rows;
   if(identity.length!==1||Object.entries(allocation.expectedIdentity).some(([k,v])=>identity[0][k]!==v))throw fail('IDENTITY');
   if((await query("SELECT current_setting('transaction_read_only') AS readonly")).rows[0]?.readonly!=='on')throw fail('READONLY');
-  let metrics,readbacks;
+  let metrics,readbacks,emptyEvidence;
+  async function readEmptyScope(proof){
+   if(!Array.isArray(proof?.ids)||proof.ids.length||!proof.sources||Object.keys(proof.sources).length)throw fail('EMPTY_SCOPE');
+   const companyRows=checkedRecords.map(r=>r.value).filter(r=>r.op==='company_config'&&r.result&&r.activity_scope?.activity==='scoring');
+   if(!companyRows.length||companyRows.some(r=>canonical(r.result)!==canonical(companyRows[0].result)))throw fail('EMPTY_COMPANY');const company=companyRows[0].result;
+   const configs=(await query('SELECT company_id,tenant_id,version,run_id,source_run,snapshot FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[company.company_id,scope.run])).rows;
+   const c=configs[0],snapshot=c?.snapshot;
+   if(configs.length!==1||c.run_id!==scope.run||(c.source_run??null)!==scope.source_run||c.company_id!==company.company_id||c.tenant_id!==company.tenant_id||c.version!==company.version||snapshot?.company_id!==company.company_id||snapshot.tenant_id!==company.tenant_id||snapshot.version!==company.version||snapshot.runtime_config?.routing?.line_key!==resolveLineKey(scope.line)||snapshot.runtime_config?.policy_id!==company.policy_id)throw fail('EMPTY_COMPANY');
+   require('./company-config-lib.js').runtimeSnapshot(snapshot,'103');
+   const observed=(await query('SELECT id FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])',[resolveLineKey(scope.line),proof.ids])).rows;if(observed.length)throw fail('EMPTY_SCOPE');
+   return {verified:true,ids:[],sources:{},company:{company_id:company.company_id,tenant_id:company.tenant_id,version:company.version,policy_id:company.policy_id},scoring_request_sha256:proof.scoring_request_sha256||sha(canonical(request))};
+  }
   if(scope.activity==='scoring'){
    const proof=rows.filter(r=>r.op==='score_scope'&&r.data);if(proof.length!==1)throw fail('SCOPE_TARGET');const fixed=proof[0].data;
    const scored=results.filter(r=>r.op==='score').flatMap(r=>r.result.ids||[]),excluded=results.filter(r=>r.op==='score').flatMap(r=>r.result.excluded_ids||[]);
    const uncertain=intents.filter(i=>i.op==='score'&&!results.some(r=>r.id===i.id)).flatMap(i=>i.request.ids);if(uncertain.some(id=>!fixed.ids.includes(id)))throw fail('TARGET_SCOPE');if(uncertain.length){const observed=(await query("SELECT id,process_status,judgment_config FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])",[resolveLineKey(scope.line),uncertain])).rows;for(const id of uncertain){const row=observed.find(r=>r.id===id);if(!row||row.judgment_config?.run_id!==scope.run)throw fail('COMMIT_READBACK_UNVERIFIED');(row.process_status==='已排除'?excluded:scored).push(id);}}const all=[...scored,...excluded];
    if(new Set(all).size!==all.length||all.length!==fixed.ids.length||all.some(id=>!fixed.ids.includes(id)))throw fail('INCOMPLETE');
    const fields=ids=>({ids,sources:Object.fromEntries(ids.map(id=>[id,fixed.sources[id]]))});
-   const scores=await queue('score_readback',fields(scored)),exclusions=excluded.length?await queue('score_exclusion_readback',fields(excluded)):{verified:true,failures:0,ids:[]},policy=scored.length?await queue('policy_review',{...fields(scored),claim:scope.run,require_dual_review:true}):{verified:excluded.length>0,rows:[]};
-   metrics={scored:scored.length,excluded:excluded.length,scoring_readback_failures:scores.verified===true?scores.failures:Math.max(1,scores.failures||0),exclusion_readback_failures:exclusions.verified===true?exclusions.failures||0:Math.max(1,exclusions.failures||0),policy_review_failures:policy.verified===true?0:1};readbacks={scores,exclusions,policy};
+   const scores=await queue('score_readback',fields(scored)),exclusions=excluded.length?await queue('score_exclusion_readback',fields(excluded)):{verified:true,failures:0,ids:[]},policy=scored.length?await queue('policy_review',{...fields(scored),claim:scope.run,require_dual_review:true}):{status:'not_applicable',reason:excluded.length?'excluded_scope':'empty_scope',rows:[]};
+   if(!all.length)emptyEvidence=await readEmptyScope(fixed);
+   metrics={scored:scored.length,excluded:excluded.length,scoring_readback_failures:scores.verified===true?scores.failures:Math.max(1,scores.failures||0),exclusion_readback_failures:exclusions.verified===true?exclusions.failures||0:Math.max(1,exclusions.failures||0),policy_review_failures:scored.length===0||policy.verified===true?0:1};readbacks={scores,exclusions,policy,...(emptyEvidence?{empty_scope:emptyEvidence}:{})};
+  }else if(rows.some(r=>r.op==='empty_scope')){
+   const proofs=rows.filter(r=>r.op==='empty_scope'&&r.data);if(proofs.length!==1||intents.length||results.length)throw fail('EMPTY_SCOPE');const proof=proofs[0].data;
+   const originals=checkedRecords.map(r=>r.value).filter(r=>r.op==='score_scope'&&r.data&&r.activity_scope?.activity==='scoring'&&r.activity_scope.authorized_request_sha256===proof.scoring_request_sha256);
+   if(originals.length!==1||originals[0].data.ids?.length!==0||originals[0].data.sources==null||Object.keys(originals[0].data.sources).length)throw fail('EMPTY_HANDOFF');
+   emptyEvidence=await readEmptyScope(proof);if(canonical(emptyEvidence.company)!==canonical(proof.company))throw fail('EMPTY_COMPANY');
+   metrics={marked:0,mark_leads_readback_failures:0,bridge_readback_failures:0};readbacks={empty_scope:emptyEvidence,mark:{verified:true,failures:0,ids:[],lead_ids:[],empty_scope_verified:true},delivery:{status:'not_applicable',reason:'empty_scope',not_requested:true}};
   }else{
    const markResults=results.filter(r=>r.op==='mark_leads'),bridgeResults=results.filter(r=>r.op==='bridge_outreach');if(markResults.length>1||bridgeResults.length>1)throw fail('TARGET_AMBIGUOUS');
    let marked=markResults[0]?.result,bridge=bridgeResults[0]?.result,observedBridge=[];
@@ -72,5 +96,7 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
  }
  const stop={role:'independent-code-judge/v1',execution_stopped:!unknown,execution_unknown:unknown,original_external_effect:previousEffect};
  if(problem||unknown)return {ok:true,result:{...output,stage:scope.activity,gate:{verdict:'unknown',action:'fail_stage'},steps:[],probes:[{key:'independent_readback',pass:null,error:problem?.message||'JUDGE_STOP_UNVERIFIED'}],code_native_readback:stop}};
- return {ok:true,result:{...output,code_native_readback:stop}};
+ const packet={ok:true,result:{...output,code_native_readback:stop}};
+ if(scope.activity==='scoring'&&output?.gate?.verdict==='pass'&&output.readbacks?.empty_scope?.verified===true&&output.metrics.scored===0&&output.metrics.excluded===0)emptyReadbacks.set(packet,{source:canonical(source),scope:structuredClone(scope),content:canonical(packet),evidence:structuredClone(output.readbacks.empty_scope)});
+ return packet;
 }

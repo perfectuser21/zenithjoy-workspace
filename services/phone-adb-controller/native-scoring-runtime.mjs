@@ -1,3 +1,4 @@
+import {readNativeEmptyScoringReadback} from './native-scoring-readback.mjs';
 import {nativeAuthorityProjectionMatches} from './native-activity-authority.mjs';
 // 103父Code业务域；原队列/政策决定业务结果，Agent不能提供SQL/来源/依赖。
 import {createRequire} from 'node:module';
@@ -17,7 +18,7 @@ const writes=new Set(['company_config','score','mark_leads','bridge_outreach']);
 const readbacks={company_config:[],score:['score_readback','score_exclusion_readback'],mark_leads:['mark_readback'],bridge_outreach:['bridge_readback']};
 export const isNativeScoringRuntime=value=>runtimes.has(value);
 export function createNativeScoringRuntime({root,source,scope,directory,createPool,assertAuthority,readSource,queueDependencies={},requireProjectedAuthority=false}={}){
- const fixed=structuredClone(scope),src=structuredClone(source);let prepared=false,sealed=false,unknown=false,effectUnknown=false,current=null,claim=null,scoreScope=null,marked=null;
+ const fixed=structuredClone(scope),src=structuredClone(source);let prepared=false,sealed=false,unknown=false,effectUnknown=false,current=null,claim=null,scoreScope=null,marked=null,emptyScope=null;
  const pending=new Set(),reasons=new Set(),streams=new Map(),issued=new Map();
  const taint=reason=>{unknown=true;reasons.add(reason);};
  const snapshot=()=>Object.freeze({domain:'native-103-parent/v1',prepared,sealed,pending:pending.size,execution_unknown:unknown||pending.size>0,external_effect:effectUnknown?'unknown':'observed',execution_stopped:sealed&&!unknown&&pending.size===0&&[...streams.values()].every(Boolean),unknown_reasons:[...reasons]});
@@ -48,11 +49,16 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||readdirSync(directory).length)throw fail('PREVIOUS_CALLER_UNKNOWN');
   durable('caller.json',{source_commit:src.commit,scope:fixed,caller_id:randomUUID()});prepared=true;
  }
- async function begin(activity){
+ async function begin(activity,{emptyReadback}={}){
   if(current||sealed||unknown||effectUnknown||!operations[activity?.activity])throw fail('SCOPE');
   for(const k of ['workflow','run','run_id','task_id','binding_id','source_commit','profile','serial','line','source_run','limit'])if(activity[k]!==fixed[k])throw fail('SCOPE');
   if(!Number.isSafeInteger(activity.deadline_ms)||activity.deadline_ms>fixed.deadline_ms||Date.now()>=activity.deadline_ms)throw fail('DEADLINE');
-  current=structuredClone(activity);await authorize();
+  current=structuredClone(activity);emptyScope=null;await authorize();
+  if(emptyReadback){
+   if(activity.activity!=='mark_leads'||!scoreScope||scoreScope.ids.length||Object.keys(scoreScope.sources).length)throw fail('EMPTY_HANDOFF');
+   const data=readNativeEmptyScoringReadback(emptyReadback,{source:src,scope:current});
+   const id=randomUUID();durable(id+'.empty-scope.json',{id,op:'empty_scope',scope:fixed,activity_scope:current,data});await authorize();emptyScope=data;
+  }
  }
  async function runQueue(op,input={}){
   if(!current||!operations[current.activity].has(op))throw fail('UNSUPPORTED');
@@ -136,6 +142,10 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   const work=runQueue(op,input).finally(()=>{clearTimeout(timer);pending.delete(admission);});work.catch(()=>{});
   return Promise.race([work,interrupted]);
  }
+ async function emptyResult(){
+  await authorize();if(current.activity!=='mark_leads'||!emptyScope||!scoreScope||scoreScope.ids.length||Object.keys(scoreScope.sources).length)throw fail('EMPTY_HANDOFF');
+  return {status:'empty',marked:0,ids:[],lead_ids:[],bridge:{status:'not_applicable',reason:'empty_scope'},mark_leads_readback_failures:0,bridge_readback_failures:0};
+ }
  async function closeActivity(){if(pending.size||unknown||effectUnknown)throw fail('STOP_UNVERIFIED');current=null;return snapshot();}
  function seal(){sealed=true;for(const job of pending)job.cancel?.();return snapshot();}
  function issuedReceipts(){verify();if(pending.size)throw fail('CLOSED');const checkJournal=()=>{const names=readdirSync(directory);if(names.length!==issued.size||names.some(name=>!issued.has(name)))throw fail('JOURNAL');for(const name of names){const file=join(directory,name),fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);let st,bytes;try{st=fstatSync(fd);bytes=readFileSync(fd);}finally{closeSync(fd);}if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o600||sha(bytes)!==issued.get(name))throw fail('JOURNAL');}return names.map(name=>{const fd=openSync(join(directory,name),constants.O_RDONLY|constants.O_NOFOLLOW);try{const bytes=readFileSync(fd),st=fstatSync(fd);if(!st.isFile()||st.uid!==process.getuid()||(st.mode&0o777)!==0o600||sha(bytes)!==issued.get(name))throw fail('JOURNAL');return {name,sha256:issued.get(name),value:JSON.parse(bytes)};}finally{closeSync(fd);}});};const value=checkJournal();receiptPackets.set(value,{source:JSON.stringify(src),scope:structuredClone(fixed),content:JSON.stringify(value),verify:checkJournal});return value;}
@@ -146,7 +156,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
   if(nativeScoringDependenciesMatch(queueDependencies,src)){const old=queueDependencies.snapshot();if(old.execution_stopped!==true||old.sealed!==true||old.pending!==0||old.execution_unknown||old.external_effect==='unknown')throw fail('PREVIOUS_PRODUCER_UNVERIFIED');}
   queueDependencies=next;
  }
- const api={prepare,begin,queue,closeActivity,seal,snapshot,bindDependencies,issuedReceipts,supports:activity=>prepared&&!sealed&&!unknown&&!effectUnknown&&nativeScoringDependenciesMatch(queueDependencies,src)&&['scoring','mark_leads'].includes(activity?.key)};runtimes.add(api);return Object.freeze(api);
+ const api={prepare,begin,queue,emptyResult,closeActivity,seal,snapshot,bindDependencies,issuedReceipts,supports:activity=>prepared&&!sealed&&!unknown&&!effectUnknown&&nativeScoringDependenciesMatch(queueDependencies,src)&&['scoring','mark_leads'].includes(activity?.key)};runtimes.add(api);return Object.freeze(api);
 }
 
 export function readNativeScoringReceipts(value,{source,scope}={}){const p=receiptPackets.get(value);if(!p||p.source!==JSON.stringify(source)||p.content!==JSON.stringify(value))throw fail('RECEIPTS_UNBRANDED');for(const k of ['workflow','run','run_id','task_id','binding_id','source_commit','snapshot_sha256','profile','serial','line','source_run','limit'])if(p.scope[k]!==scope[k])throw fail('RECEIPTS_SCOPE');p.verify();return structuredClone(value);}
