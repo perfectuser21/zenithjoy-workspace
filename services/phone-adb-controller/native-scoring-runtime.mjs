@@ -123,5 +123,11 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
  }
  async function closeActivity(){if(pending.size||unknown||effectUnknown)throw fail('STOP_UNVERIFIED');current=null;return snapshot();}
  function seal(){sealed=true;for(const job of pending)job.cancel?.();return snapshot();}
- const api={prepare,begin,queue,closeActivity,seal,snapshot,supports:activity=>prepared&&!sealed&&!unknown&&!effectUnknown&&nativeScoringDependenciesMatch(queueDependencies,src)&&['scoring','mark_leads'].includes(activity?.key)};runtimes.add(api);return Object.freeze(api);
+ function bindDependencies(next){
+  if(!prepared||sealed||current||pending.size||unknown||effectUnknown)throw fail('SCOPE');
+  if(!nativeScoringDependenciesMatch(next,src))throw fail('DEPENDENCY');
+  if(nativeScoringDependenciesMatch(queueDependencies,src)){const old=queueDependencies.snapshot();if(old.execution_stopped!==true||old.sealed!==true||old.pending!==0||old.execution_unknown||old.external_effect==='unknown')throw fail('PREVIOUS_PRODUCER_UNVERIFIED');}
+  queueDependencies=next;
+ }
+ const api={prepare,begin,queue,closeActivity,seal,snapshot,bindDependencies,supports:activity=>prepared&&!sealed&&!unknown&&!effectUnknown&&nativeScoringDependenciesMatch(queueDependencies,src)&&['scoring','mark_leads'].includes(activity?.key)};runtimes.add(api);return Object.freeze(api);
 }
