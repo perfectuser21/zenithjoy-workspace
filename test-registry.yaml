@@ -10886,3 +10886,11 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；真实本人PG idle error归属与关闭未知反例，非生产业务验收"
+
+  - id: phone-native-phone-vision-late-terminal
+    path: services/phone-adb-controller/__tests__/native-phone-vision-late-terminal.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实loopback已闭HTTP迟到错误回调保终态，沿Linux原glob执行，非真实手机业务验收"
