@@ -34,7 +34,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
    queueDependencies.assertActive({readOnly});active(readOnly);
   }
   const p=task?.payload,s=p?.scope;
-  if(task?.id!==fixed.task_id||task.status!=='in_progress'||!task.claimed_by||!Number.isFinite(Date.parse(task.claimed_at))||Date.parse(task.lease_until)<=Date.now()
+  if(task?.id!==fixed.task_id||task.status!=='in_progress'||!task.claimed_by||!Number.isFinite(Date.parse(task.claimed_at))
    ||p?.workflow_key!==fixed.workflow||p.source_commit!==src.commit||p.run_tag!==fixed.run||p.profile!==fixed.profile||p.company_line!==fixed.line||p.device_serial!=null
    ||s?.source_run!==fixed.source_run||s.limit!==fixed.limit)throw fail('AUTHORITY');
   const actual=[task.claimed_by,task.claimed_at];if(claim&&!same(claim,actual))throw fail('CLAIM_CHANGED');claim??=actual;active(readOnly);
@@ -100,7 +100,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
    const forbidden=()=>{throw fail('DEPENDENCY');};
    const dependencies=ownedDependencies?queueDependencies:{sampledAdmission:{readProof:forbidden,verifyRecipient:forbidden}};
    const result=await queueRequest(pool,request,{...dependencies,sourceCommit:src.commit});await authorize(readOnly);
-   if(op==='score_scope'){const ids=result.ids.slice(0,fixed.limit);scoreScope={...result,ids,sources:Object.fromEntries(ids.map(id=>[id,result.sources[id]]))};if(ids.some(id=>scoreScope.sources[id]!==fixed.source_run))throw fail('IDS');durable(id+'.scope.json',scoreScope);return structuredClone(scoreScope);}
+   if(op==='score_scope'){const ids=result.ids.slice(0,fixed.limit);scoreScope={...result,ids,sources:Object.fromEntries(ids.map(id=>[id,result.sources[id]]))};if(ids.some(id=>typeof scoreScope.sources[id]!=='string'||!scoreScope.sources[id]||fixed.source_run!==null&&scoreScope.sources[id]!==fixed.source_run))throw fail('IDS');durable(id+'.scope.json',scoreScope);return structuredClone(scoreScope);}
    if(op==='mark_leads')marked=structuredClone(result);
    if(write)durable(id+'.result.json',{id,result});else if(readOnly)durable(id+'.readback.json',{original_intent:prior[0].id,result,continues_execution:false});
    return result;
