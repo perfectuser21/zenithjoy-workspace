@@ -10637,6 +10637,95 @@ tests:
     execution: ci-smoke-glob-runner.yml / smoke-glob-shards / product-delivery-contracts-smoke.sh
     note: The actual local-video smoke must reject unowned/nonloopback origins before transport; positive mounted HTTP/PostgreSQL execution is in media/pipeline.test.ts.
 
+  - id: phone-native-103-claim
+    path: services/phone-adb-controller/__tests__/native-103-claim.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-103-control-scope
+    path: services/phone-adb-controller/__tests__/native-103-control-scope.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-103-producers
+    path: services/phone-adb-controller/__tests__/native-103-producers.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-103-public-executor
+    path: services/phone-adb-controller/__tests__/native-103-public-executor.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-103-public
+    path: services/phone-adb-controller/__tests__/native-103-public.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-103-transaction
+    path: services/phone-adb-controller/__tests__/native-103-transaction.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-activity-authority
+    path: services/phone-adb-controller/__tests__/native-activity-authority.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native-task-lease
+    path: services/phone-adb-controller/__tests__/native-task-lease.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-lock-clean-bootstrap
+    path: services/phone-adb-controller/__tests__/phone-lock-clean-bootstrap.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native103-ci-contract
+    path: scripts/ci/__tests__/native-103-ci-contract.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离来源、授权、真实PG与本机收尾测试；不代表真实手机或生产业务已通过"
+
+  - id: phone-native103-ci-lifecycle
+    path: scripts/ci/__tests__/native-103-ci-lifecycle.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实取消只回收本人临时PG和目录，取消不记成功"
+
+
   - id: canvas-starter-workflows
     path: infrastructure/comfyui/tests/starter-workflows.test.mjs
     type: contract
