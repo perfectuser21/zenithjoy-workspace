@@ -12,6 +12,7 @@ export function createNativeScoringWorkflow({root,env,frozen,binding,runDir=env.
  let prepared=false,unsafe=false,source,input,spec,lease,core,makePool,active;const seen=new Set(),entries=[];
  function verify(){
   if(!prepared||readFrozen(runDir).snapshot_sha256!==frozen.snapshot_sha256||realpathSync(root)!==dirname(fileURLToPath(import.meta.url)))throw fail('SOURCE');
+  if(assertRuntimeHost(frozen.release,frozen.deployment)!=='mmv'||env.WFR_HOSTKEY!=='mmv')throw fail('HOST');
   assertAgentInput(frozen,env);assertScoringControlScope({root,env,frozen});assertFrozenNativeTaskLease(frozen);verifyRpcSource(source,{base:root});
   for(const name of NATIVE_SCORING_FILES){const s=lstatSync(join(root,name)),f=source.files.filter(f=>f.path===name);if(f.length!==1||!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha(readFileSync(join(root,name)))!==f[0].sha256)throw fail('SOURCE');}
  }
