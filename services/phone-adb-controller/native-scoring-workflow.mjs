@@ -30,10 +30,11 @@ export function createNativeScoringWorkflow({root,env,frozen,binding,runDir=env.
   }catch(e){unsafe=true;prepared=false;if(/^NATIVE_103_/.test(e?.message))throw e;throw fail('SOURCE');}
  }
  async function readClaim(entry){if(!entry||entry.closed||unsafe)throw fail('AUTHORITY');verify();const cap=await entry.authority.readClaim(),projection=readNativeAuthorityProjection(cap,{request:entry.request,source});if(!nativeAuthorityProjectionMatches(projection,{source,scope:entry.scope}))throw fail('AUTHORITY');return projection;}
- async function bindOfficialAuthority({request,scope,directory}){
+ async function bindOfficialAuthority({request,control,scope,directory}){
   verify();if(active||unsafe||seen.has(scope.activity)||!['scoring','mark_leads'].includes(scope.activity)||scope.activity==='mark_leads'&&!seen.has('scoring')||scope.deadline_ms>lease.effective_deadline_ms||request.source_commit!==source.commit||request.runtime_snapshot_sha256!==frozen.snapshot_sha256)throw fail('SCOPE');
   for(const[a,b]of [['workflow','workflow_key'],['activity','activity_key'],['run','run_tag'],['run_id','run_id'],['task_id','task_id'],['binding_id','binding_id'],['profile','profile'],['serial','serial'],['line','line'],['source_run','source_run'],['limit','limit']])if(scope[a]!==request[b])throw fail('SCOPE');
-  const entry={scope:structuredClone(scope),request:structuredClone(request),closed:false,unknown:false};active=entry;entries.push(entry);seen.add(scope.activity);
+  if(typeof control?.snapshot!=='function'||typeof control.verifySealedExecution!=='function')throw fail('WORKER_CONTROL');
+  const entry={scope:structuredClone(scope),request:structuredClone(request),workerControl:control,closed:false,unknown:false};active=entry;entries.push(entry);seen.add(scope.activity);
   try{
    entry.authority=createNativeActivityAuthority({runtimeRoot:root,source,request:entry.request,frozen,directory,...(createAuthorityControl?{createControl:createAuthorityControl}:{} )});await readClaim(entry);
    const producerDirectory=join(runDir,'native-103',scope.activity);mkdirSync(producerDirectory,{mode:0o700});const credentials=readScoringCredentials({root,env,frozen});
@@ -46,8 +47,8 @@ export function createNativeScoringWorkflow({root,env,frozen,binding,runDir=env.
  async function prepareActivity(scope){if(!active||active.scope.activity!==scope.activity)throw fail('SCOPE');await core.begin({...scope,deadline_ms:scope.worker_deadline_ms,authorized_request_sha256:sha(canonical(active.request))});active.begun=true;}
  async function queue(op,fields){if(!active||active.closed||!active.begun)throw fail('SCOPE');return core.queue(op,fields);}
  async function closeActivity(proof){
-  const entry=active;if(!entry)return {execution_stopped:!unsafe};entry.modelStopped=skillLaunchDidNotStart(proof,entry.scope)||proof?.execution_stopped===true&&rawModelScopeStopped(proof.raw_model_proof,entry.scope);entry.closed=true;
-  try{await core.closeActivity();}catch{entry.unknown=true;}
+  const entry=active;if(!entry)return {execution_stopped:!unsafe};entry.modelStopped=skillLaunchDidNotStart(proof,entry.scope)||proof?.execution_stopped===true&&rawModelScopeStopped(proof.raw_model_proof,entry.scope);try{entry.modelStopped ||= entry.workerControl.verifySealedExecution(entry.workerControl.snapshot(),{request:entry.request})===true;}catch{}entry.closed=true;
+  try{await core.closeActivity();}catch{const state=core.snapshot();entry.unknown=state.execution_unknown||state.pending>0;}
   let producerStop=true,authorityStop=true;
   if(entry.producer)try{producerStop=(await entry.producer.close()).execution_stopped===true;}catch{producerStop=false;}
   if(entry.authority)try{const packet=await entry.authority.close();authorityStop=entry.authority.verifyStopped(packet);}catch{authorityStop=false;}

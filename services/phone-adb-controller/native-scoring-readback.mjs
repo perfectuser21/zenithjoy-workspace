@@ -6,7 +6,7 @@ const require=createRequire(import.meta.url),{queueRequest}=require('./leadgen-q
 const fail=reason=>Error('NATIVE_103_JUDGE_'+reason),sha=b=>createHash('sha256').update(b).digest('hex'),canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort().map(k=>[k,x[k]])):x);
 const allowed=new Set(['score_readback','score_exclusion_readback','policy_review','mark_readback','bridge_readback']);
 export async function readNativeScoringActivity({root,source,scope,request,frozen,records,directory,python,credentials,createPool,createAuthorityControl,requestImpl,verify,previousEffect,deadlineMs,signal}={}){
- const end=Math.min(request.receipt_deadline_ms,deadlineMs??request.receipt_deadline_ms);let sealed=false,unknown=false,pending=0,allocation,client,stream,streamClosed=false,authority,producer,dependencies,txn=false,output,problem;
+ const end=Math.min(request.receipt_deadline_ms,deadlineMs??request.receipt_deadline_ms);let sealed=false,unknown=false,originalUnknown=previousEffect==='unknown',pending=0,allocation,client,stream,streamClosed=false,authority,producer,dependencies,txn=false,output,problem;
  const active=()=>{if(sealed||signal?.aborted||Date.now()>=end)throw fail('DEADLINE');verify();verifyRpcSource(source,{base:root});const row=source.files.filter(f=>f.path==='native-scoring-readback.mjs');if(dirname(fileURLToPath(import.meta.url))!==root||row.length!==1||sha(readFileSync(join(root,'native-scoring-readback.mjs')))!==row[0].sha256)throw fail('SOURCE');};
  const checkedRecords=readNativeScoringReceipts(records,{source,scope});
  const journal=openSync(join(directory,'readonly-journal.jsonl'),'wx',0o600),parent=openSync(directory,'r');fsyncSync(parent);closeSync(parent);
@@ -23,7 +23,7 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
  try{
   active();if(!['scoring','mark_leads'].includes(scope.activity)||!Number.isSafeInteger(end)||end<=Date.now()+2)throw fail('SCOPE');
   const rows=selected(),intents=rows.filter(r=>r.request&&r.op),results=rows.filter(r=>r.result&&r.op);if(!rows.length)throw fail('NO_ISSUED_TARGETS');
-  for(const intent of intents)if(!results.some(r=>r.id===intent.id&&r.op===intent.op))throw fail('ORIGINAL_EFFECT_UNKNOWN');
+  for(const intent of intents)if(!results.some(r=>r.id===intent.id&&r.op===intent.op))originalUnknown=true;
   try{authority=createNativeActivityAuthority({runtimeRoot:root,source,request,frozen,directory,...(createAuthorityControl?{createControl:createAuthorityControl}:{})});}catch(error){unknown=true;throw error;}await authorized();
   // The reader's deadline is the original receipt horizon, never a new Activity budget.
   try{producer=await owned(()=>startNativeScoringProducers({root,source,scope,directory:join(directory,'producer'),python,deadlineMs:end-1,receiptDeadlineMs:end,readOnly:true,brainCredential:()=>credentials.brainToken,assertAuthority:async()=>{await authorized();return true;},...(requestImpl?{requestImpl}:{})}));}catch(error){unknown=true;throw error;}
@@ -39,7 +39,8 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
   let metrics,readbacks;
   if(scope.activity==='scoring'){
    const proof=rows.filter(r=>r.op==='score_scope'&&r.data);if(proof.length!==1)throw fail('SCOPE_TARGET');const fixed=proof[0].data;
-   const scored=results.filter(r=>r.op==='score').flatMap(r=>r.result.ids||[]),excluded=results.filter(r=>r.op==='score').flatMap(r=>r.result.excluded_ids||[]),all=[...scored,...excluded];
+   const scored=results.filter(r=>r.op==='score').flatMap(r=>r.result.ids||[]),excluded=results.filter(r=>r.op==='score').flatMap(r=>r.result.excluded_ids||[]);
+   const uncertain=intents.filter(i=>i.op==='score'&&!results.some(r=>r.id===i.id)).flatMap(i=>i.request.ids);if(uncertain.some(id=>!fixed.ids.includes(id)))throw fail('TARGET_SCOPE');if(uncertain.length){const observed=(await query("SELECT id,process_status,judgment_config FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])",[resolveLineKey(scope.line),uncertain])).rows;for(const id of uncertain){const row=observed.find(r=>r.id===id);if(!row||row.judgment_config?.run_id!==scope.run)throw fail('COMMIT_READBACK_UNVERIFIED');(row.process_status==='已排除'?excluded:scored).push(id);}}const all=[...scored,...excluded];
    if(new Set(all).size!==all.length||all.length!==fixed.ids.length||all.some(id=>!fixed.ids.includes(id)))throw fail('INCOMPLETE');
    const fields=ids=>({ids,sources:Object.fromEntries(ids.map(id=>[id,fixed.sources[id]]))});
    const scores=await queue('score_readback',fields(scored)),exclusions=excluded.length?await queue('score_exclusion_readback',fields(excluded)):{verified:true,failures:0,ids:[]},policy=scored.length?await queue('policy_review',{...fields(scored),claim:scope.run,require_dual_review:true}):{verified:excluded.length>0,rows:[]};
@@ -49,10 +50,10 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
    const mark=await queue('mark_readback',{ids:marked.ids,lead_ids:marked.lead_ids}),delivery=await queue('bridge_readback',{ids:bridge.ids});
    metrics={marked:marked.marked,mark_leads_readback_failures:mark.verified===true?mark.failures||0:Math.max(1,mark.failures||0),bridge_readback_failures:delivery.verified===true?delivery.failures||0:Math.max(1,delivery.failures||0)};readbacks={mark,delivery};
   }
-  if(previousEffect==='unknown')throw fail('ORIGINAL_EFFECT_UNKNOWN');
+  // Readback may preserve evidence about an unknown write; it never resolves it.
   const {doc,errors}=loadChecks(join(root,'checks/douyin-comment-scoring.yaml'),join(root,'checks/schema.json')),spec=JSON.parse(readFileSync(join(root,'plans/douyin_comment_scoring.steps.json'),'utf8'));
   if(errors.length||doc.probes.filter(p=>p.stage===scope.activity).some(p=>p.probe.type!=='metric')||spec.steps.filter(s=>(s.at||s.activity)===scope.activity).some(s=>['sql','http'].includes(s.readback?.type)))throw fail('CHECKS_UNSUPPORTED');
-  const params={runTag:scope.run,lineKey:resolveLineKey(scope.line),metrics,word:''},probes=await runProbes({doc,stage:scope.activity,params,timeoutMs:Math.max(1,end-Date.now())}),steps=await runSteps({spec,stage:scope.activity,params,timeoutMs:Math.max(1,end-Date.now())});active();output={...probes,steps,metrics,readbacks};record({event:'readback',metrics,readbacks});
+  const params={runTag:scope.run,lineKey:resolveLineKey(scope.line),metrics,word:''},probes=await runProbes({doc,stage:scope.activity,params,timeoutMs:Math.max(1,end-Date.now())}),steps=await runSteps({spec,stage:scope.activity,params,timeoutMs:Math.max(1,end-Date.now())});active();output={...probes,steps,metrics,readbacks};if(originalUnknown)problem=fail('ORIGINAL_EFFECT_UNKNOWN');record({event:'readback',metrics,readbacks});
  }catch(error){problem=error;}
  finally{
   // Only owned transaction cleanup may run after admission is sealed. Never COMMIT.
@@ -67,6 +68,6 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
   if(pending)unknown=true;record({event:'final',role:'independent-code-judge/v1',execution_stopped:!unknown,pending,problem:problem?.message||null});closeSync(journal);
  }
  const stop={role:'independent-code-judge/v1',execution_stopped:!unknown,execution_unknown:unknown,original_external_effect:previousEffect};
- if(problem||unknown)return {ok:true,result:{stage:scope.activity,gate:{verdict:'unknown',action:'fail_stage'},steps:[],probes:[{key:'independent_readback',pass:null,error:problem?.message||'JUDGE_STOP_UNVERIFIED'}],code_native_readback:stop}};
+ if(problem||unknown)return {ok:true,result:{...output,stage:scope.activity,gate:{verdict:'unknown',action:'fail_stage'},steps:[],probes:[{key:'independent_readback',pass:null,error:problem?.message||'JUDGE_STOP_UNVERIFIED'}],code_native_readback:stop}};
  return {ok:true,result:{...output,code_native_readback:stop}};
 }
