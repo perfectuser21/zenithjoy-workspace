@@ -611,7 +611,7 @@
       "code_digest": "1e68fa53a9cb4b5d1ddae50bd8c0dd81468e7965aaad4369f10b43dd29333a38",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。101新增文件仅公共源码闭包补全；正常101采集域仍不因103实现获得supports。手机初始化仅operator显式clean入口，原11函数AST相同，已有guard必须NB持有且hardlink同inode，任一owner/claim/未知项拒绝；不删除旧锁或扩大Worker操作。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。101新增文件仅公共源码闭包补全；正常101采集域仍不因103实现获得supports。手机初始化仅operator显式clean入口，原11函数AST相同，已有guard必须NB持有且hardlink同inode，任一owner/claim/未知项拒绝；不删除旧锁或扩大Worker操作。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "3b0fef304033f79ca0c7094a9f0fa6b78a40c8167aad1df0ffd3f8c4cbb216bc",
         "current_code_digest": "1e68fa53a9cb4b5d1ddae50bd8c0dd81468e7965aaad4369f10b43dd29333a38"
@@ -829,14 +829,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "48101ce19e3e1245cd82f63632b8ccbe7662cdcbfef7916e110103470bd1a6c8"
+          "sha256": "f4c0b8d210f6b61b267bc4fe9d7e7918a427b7e64b92724582453950b4db5dcd"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "9f2206d1ea860eb167b7ba635cf87adf0ec87f373723c12adb2b578265282a0f"
+          "sha256": "0a0c231dcca41d8c74cb2b95e98c6dd504ead363bd7e69fb608e35746ac939a8"
         },
         {
           "kind": "code",
@@ -1249,13 +1249,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3605a980303e63aec76f85d4a20e7263216ff7f1b2df70529599f2d4fdeca80a",
+      "code_digest": "2ba110176a45a9b2518fcfd676c91febb765ccec108892db8954c35a29880dd3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102预检原公司/账号/中央租约和手机域准入不变；新增PG material读接口只供Code按既有固定来源，103的scoring_pg与preflight_pg分命名空间，不能借串改权限。clean锁根仅operator setup，不是本Activity新手机动作。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102预检原公司/账号/中央租约和手机域准入不变；新增PG material读接口只供Code按既有固定来源，103的scoring_pg与preflight_pg分命名空间，不能借串改权限。clean锁根仅operator setup，不是本Activity新手机动作。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。本条相对331新增差异仅正规gen-step-dod再生的discovery/processing.steps.json来源contract_sha256及其代码闭包摘要；逐四文件剥离该字段后原始字节与完整JSON结构全等，所有Step mode/readback/condition完全相同，没有放宽DoD、顺序、权限或安全行为。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "a158a751aeb4514aed48447052da0073814fd58b7c82e28bc4fe5fef7df095fc",
-        "current_code_digest": "3605a980303e63aec76f85d4a20e7263216ff7f1b2df70529599f2d4fdeca80a"
+        "current_code_digest": "2ba110176a45a9b2518fcfd676c91febb765ccec108892db8954c35a29880dd3"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1861,7 +1861,7 @@
       "code_digest": "00662cfcc40744589c4a574ca1834526b7dd6facf85a5ef39a27053d3885c703",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102判重/来源/视频认领事务未改；新增103父域仅MMV+mmv-scoring+serialnone准入，不把dedup翻成支持原生执行，不替换旧来源或放宽租约。clean setup不接受已有owner。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102判重/来源/视频认领事务未改；新增103父域仅MMV+mmv-scoring+serialnone准入，不把dedup翻成支持原生执行，不替换旧来源或放宽租约。clean setup不接受已有owner。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "7f9146fc90c159a522707f3496f921dbf0a90116cebb272e146ee50e75908d7c",
         "current_code_digest": "00662cfcc40744589c4a574ca1834526b7dd6facf85a5ef39a27053d3885c703"
@@ -2554,7 +2554,7 @@
       "code_digest": "91cabdb72503764b041678a9a30b623718c1dbdcc4a6a075898f401d29a30602",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102原资格/音频/转写和公司政策保持；共同闭包补全不开放资格Activity原生工具或扩大恢复/录音次数，未知执行与旧隔离仍保留。新增clean setup不作为资格成功证据。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102原资格/音频/转写和公司政策保持；共同闭包补全不开放资格Activity原生工具或扩大恢复/录音次数，未知执行与旧隔离仍保留。新增clean setup不作为资格成功证据。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "f816675aef3bff37349361a95d41ebf2fe1a08e314d30ce994e0b26f0e430087",
         "current_code_digest": "91cabdb72503764b041678a9a30b623718c1dbdcc4a6a075898f401d29a30602"
@@ -3185,7 +3185,7 @@
       "code_digest": "bd1c89219bf0fb8504a6bc40afa86d9107256edaa9db280502884f0178d852ff",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102原评论持久化/身份/采样/独立回读及确认零评论不排队未改；103按同source_run消费或由Code发行逐ID来源，不能反写102资格或借历史数据冒新采集。此条不证明真机collection可用。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102原评论持久化/身份/采样/独立回读及确认零评论不排队未改；103按同source_run消费或由Code发行逐ID来源，不能反写102资格或借历史数据冒新采集。此条不证明真机collection可用。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "5019bee6b6b27945859b834996d016216d8fa835362e80c77b73437451e9ef58",
         "current_code_digest": "bd1c89219bf0fb8504a6bc40afa86d9107256edaa9db280502884f0178d852ff"
@@ -3403,14 +3403,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "48101ce19e3e1245cd82f63632b8ccbe7662cdcbfef7916e110103470bd1a6c8"
+          "sha256": "f4c0b8d210f6b61b267bc4fe9d7e7918a427b7e64b92724582453950b4db5dcd"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "9f2206d1ea860eb167b7ba635cf87adf0ec87f373723c12adb2b578265282a0f"
+          "sha256": "0a0c231dcca41d8c74cb2b95e98c6dd504ead363bd7e69fb608e35746ac939a8"
         },
         {
           "kind": "code",
@@ -3808,13 +3808,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7cde45d001e963c01fb27eca1fa9d9cb9799759d131ea7dd23565c70cd4a7bb7",
+      "code_digest": "24830bb0356b415cc6744b673b506b012b3621eeb4e3b1a9987772dc7e09f4d2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102原cleanup与执行未知保护保持；新clean initializer是部署operator首次空根安装，不是cleanup或Worker释放锁入口，已有owner/claim均拒绝，原migrate/verify AST相同。不会用新marker倒洗旧未知。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。102原cleanup与执行未知保护保持；新clean initializer是部署operator首次空根安装，不是cleanup或Worker释放锁入口，已有owner/claim均拒绝，原migrate/verify AST相同。不会用新marker倒洗旧未知。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。本条相对331新增差异仅正规gen-step-dod再生的discovery/processing.steps.json来源contract_sha256及其代码闭包摘要；逐四文件剥离该字段后原始字节与完整JSON结构全等，所有Step mode/readback/condition完全相同，没有放宽DoD、顺序、权限或安全行为。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "a45929b93a21ac3ea74dcb05cfd7048b85dc63358ff02519148bf8a8f2af9435",
-        "current_code_digest": "7cde45d001e963c01fb27eca1fa9d9cb9799759d131ea7dd23565c70cd4a7bb7"
+        "current_code_digest": "24830bb0356b415cc6744b673b506b012b3621eeb4e3b1a9987772dc7e09f4d2"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -4420,7 +4420,7 @@
       "code_digest": "c7a558782b44baabbc1110736a0ca16771b05c2886d4fa961570538d5bebfc23",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。落实既有raw Skill的父Code业务域，沿原company freeze/score_scope/原SQL事务/Jev与双政策模型及原strict parser，无Agent提供SQL/依赖。正式Starter只对原同claimed_by/at已有lease做一次真实HB，失ACK不重POST；每AV Code-only Caller投影与Worker权限分离，最终由独立BEGIN READ ONLY Judge裁判。评分COMMIT失ACK仅精确原ID读回且unknown保留，原业务政策和预算不变。本轮新增仅落实原有empty状态：独立Code Judge在原生资源与Caller确切归还后，对Code发行空scope及同公司/租户/版本/政策身份重新BEGIN READ ONLY核验；通过包由私有WeakMap绑定原request/source/snapshot，不接受JSON clone或跨Task。原Workflow核新mark AV的原claimed_by/at与原绝对截止，再由同core授权和源码检查读取空事实；未知/失败或晚关闭不签发，旧域不重开。mark空批只交not_applicable/no-op，仍独立新Caller和PG只读Judge；没有score/Lead/outbox写入或业务模型/CRM HTTP，不伪造quality/bridge verified。账本仅新增接受真实empty状态，不改变任何发送操作。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。落实既有raw Skill的父Code业务域，沿原company freeze/score_scope/原SQL事务/Jev与双政策模型及原strict parser，无Agent提供SQL/依赖。正式Starter只对原同claimed_by/at已有lease做一次真实HB，失ACK不重POST；每AV Code-only Caller投影与Worker权限分离，最终由独立BEGIN READ ONLY Judge裁判。评分COMMIT失ACK仅精确原ID读回且unknown保留，原业务政策和预算不变。本轮新增仅落实原有empty状态：独立Code Judge在原生资源与Caller确切归还后，对Code发行空scope及同公司/租户/版本/政策身份重新BEGIN READ ONLY核验；通过包由私有WeakMap绑定原request/source/snapshot，不接受JSON clone或跨Task。原Workflow核新mark AV的原claimed_by/at与原绝对截止，再由同core授权和源码检查读取空事实；未知/失败或晚关闭不签发，旧域不重开。mark空批只交not_applicable/no-op，仍独立新Caller和PG只读Judge；没有score/Lead/outbox写入或业务模型/CRM HTTP，不伪造quality/bridge verified。账本仅新增接受真实empty状态，不改变任何发送操作。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "2645b36ac25d5fbefa491f23362814c428ed07c8f0aac93616199de27aa0c1e4",
         "current_code_digest": "c7a558782b44baabbc1110736a0ca16771b05c2886d4fa961570538d5bebfc23"
@@ -5071,7 +5071,7 @@
       "code_digest": "2dba7ec8b31c07c70e097489ebe8f46840455493e07add84e83d36e6e3b6a23a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。落实既有mark Skill：只消费Code发行的评分集合，沿原资格、线索/outbox事务、严格原生身份parser与原订单锁；CRM POST失ACK保attempted、不重投，只读回原run outbox。独立Judge不发模型/CRM POST。mark两AV各自Caller/Observer且切换前真实close，总Commander预算不重置；不执行104或授权云profile发送。本轮新增仅落实原有empty状态：独立Code Judge在原生资源与Caller确切归还后，对Code发行空scope及同公司/租户/版本/政策身份重新BEGIN READ ONLY核验；通过包由私有WeakMap绑定原request/source/snapshot，不接受JSON clone或跨Task。原Workflow核新mark AV的原claimed_by/at与原绝对截止，再由同core授权和源码检查读取空事实；未知/失败或晚关闭不签发，旧域不重开。mark空批只交not_applicable/no-op，仍独立新Caller和PG只读Judge；没有score/Lead/outbox写入或业务模型/CRM HTTP，不伪造quality/bridge verified。账本仅新增接受真实empty状态，不改变任何发送操作。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。落实既有mark Skill：只消费Code发行的评分集合，沿原资格、线索/outbox事务、严格原生身份parser与原订单锁；CRM POST失ACK保attempted、不重投，只读回原run outbox。独立Judge不发模型/CRM POST。mark两AV各自Caller/Observer且切换前真实close，总Commander预算不重置；不执行104或授权云profile发送。本轮新增仅落实原有empty状态：独立Code Judge在原生资源与Caller确切归还后，对Code发行空scope及同公司/租户/版本/政策身份重新BEGIN READ ONLY核验；通过包由私有WeakMap绑定原request/source/snapshot，不接受JSON clone或跨Task。原Workflow核新mark AV的原claimed_by/at与原绝对截止，再由同core授权和源码检查读取空事实；未知/失败或晚关闭不签发，旧域不重开。mark空批只交not_applicable/no-op，仍独立新Caller和PG只读Judge；没有score/Lead/outbox写入或业务模型/CRM HTTP，不伪造quality/bridge verified。账本仅新增接受真实empty状态，不改变任何发送操作。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "0bbe1afcfdf3ca78c46c99fe2472b4a5a03d63bab35329637c420b3a5470b622",
         "current_code_digest": "2dba7ec8b31c07c70e097489ebe8f46840455493e07add84e83d36e6e3b6a23a"
@@ -5670,7 +5670,7 @@
       "code_digest": "bac2655b84fc27cacf7864009b80eea43885b1a60a99a6c4fc4b5e9de1efba80",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原preflight/订单/审批/发送账号核验未改；agent-primary/raw仍不支持104，7个103模块仅静态依赖，不给104新执行权。clean bootstrap仅operator首次空根设置，原预检/锁保护不弱化。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原preflight/订单/审批/发送账号核验未改；agent-primary/raw仍不支持104，7个103模块仅静态依赖，不给104新执行权。clean bootstrap仅operator首次空根设置，原预检/锁保护不弱化。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "7c2d953d773fd7625199a7ee4f46823e7adc995fedb9602601bd7997524bb586",
         "current_code_digest": "bac2655b84fc27cacf7864009b80eea43885b1a60a99a6c4fc4b5e9de1efba80"
@@ -6244,7 +6244,7 @@
       "code_digest": "5d6a6f32465438ce0cadd5ed9bcf57f79913f7534e276a5ba4b489c7d4d46f02",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原send_dm执行文件/订单/审批/发送目标/重发禁止保持，raw仍禁。shared recipient注入默认仍原严格parser，eligibleOrders与reviewPreparedOrder旧路径保持；不把103桥接确认当发送批准。此次没有任何104业务调用。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原send_dm执行文件/订单/审批/发送目标/重发禁止保持，raw仍禁。shared recipient注入默认仍原严格parser，eligibleOrders与reviewPreparedOrder旧路径保持；不把103桥接确认当发送批准。此次没有任何104业务调用。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "d7ec813c3f36903f540438956b3a12c46e39ec327b5848d380050553ea9f4cf3",
         "current_code_digest": "5d6a6f32465438ce0cadd5ed9bcf57f79913f7534e276a5ba4b489c7d4d46f02"
@@ -6811,7 +6811,7 @@
       "code_digest": "63b815d66d1380f2c4387b5471d1a510faa525f0001f599dfab5d303ce36b4fe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原真实发送回执、原订单状态独立读回及unknown只读不重发保持；新增103只读Judge不接管104写回，不能用Caller审计JSON或Skill文本伪造发送结果。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原真实发送回执、原订单状态独立读回及unknown只读不重发保持；新增103只读Judge不接管104写回，不能用Caller审计JSON或Skill文本伪造发送结果。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "30506cd119aaf11167a6422ae45ec027ab778f2d03e765ca6a3195e7fd195fad",
         "current_code_digest": "63b815d66d1380f2c4387b5471d1a510faa525f0001f599dfab5d303ce36b4fe"
@@ -7388,7 +7388,7 @@
       "code_digest": "99da543e91f83b8e0f9c918e3bb3225c450acd42038ef5d4201287b679359ed2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验main6d71→331固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原cleanup及未决发送/未知执行保留规则不变；operator clean initializer对已有owner/claim直接拒绝，不为104清未知锁、续TTL或放行下一次发送。原104执行文件与调度字节不变。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。",
+        "reason": "独立核验main6d71→b4e固定Git对象；原Skill正文/支持闭包、方法版本、Activity版本及contract_digest逐项相同。7模块进入双端正式数组、RPC_SOURCE必需集合及本Activity实现binding；真实冷闭包目标测试通过，缺件/错hash仍拒。Task显式transport/max_turns现在在原4GET持续授权中比较，变更在第3GET拒绝；不增加请求或回合额度。104本条仅共享源码闭包变化，原cleanup及未决发送/未知执行保留规则不变；operator clean initializer对已有owner/claim直接拒绝，不为104清未知锁、续TTL或放行下一次发送。原104执行文件与调度字节不变。新增empty交接只在normal103工厂内部准入，对本Activity仅共享闭包摘要；ledger接受empty为审计状态，不触发新动作或转换为发送成功。逐12项Skill/支持、方法版本、AV版本与contract_digest同值，workflow方法身份同值，按正式collectMethods固定Git读回评估。独立本轮empty公开正负2/2通过，clone/crossTask拒、Judge close未知停在needs_review已实测；此前原103执行/事务21及桥接/claim/lease45通过作为配套回归。真实部署、真实获客和现场104消费边界仍未证明，正式CI由Root独立读回。最终四steps仅来源摘要更新；本条code_digest相对331同值。最终104.steps的来源摘要有变，不能再说该文件逐字未改；其去来源字段的字节/结构/Step行为均保持。所有业务生产实现对331逐字不变；本评估不替代正式CI和真实业务验收。",
         "reviewed_by": "/root/review_103_delivery",
         "previous_code_digest": "c28d70f82fc9b5d3f7f235883111c3bdeeca356279d1dbbec8927b6eb3b29bd9",
         "current_code_digest": "99da543e91f83b8e0f9c918e3bb3225c450acd42038ef5d4201287b679359ed2"
