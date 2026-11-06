@@ -37,9 +37,7 @@ def native_panel(s):
   if not headers or not any(n.get('class')=='android.widget.EditText' for n in legacy_input): raise ValueError('panel')
  return b,comment_nodes,row_id,strict_layout
 `;
-function parseNative(profile,returned,{nickname,douyinId,commentBody,commentEncoding='canonical'}){
- if(!['xml_raw','canonical'].includes(commentEncoding))throw Error('RECIPIENT_BODY_ENCODING_INVALID');
- const r=spawnSync('python3',['-c',nativePanelPython+String.raw`
+const recipientNativePython=nativePanelPython+String.raw`
 v=json.load(sys.stdin);p=native_nodes(v['profile']);b,comment_nodes,row_id,strict_layout=native_panel(v['returned'])
 ids=[n.get('text','')[4:] for n in p if n.get('text','').startswith('抖音号：')]
 if ids!=[v['douyinId']]: raise ValueError('uid')
@@ -52,7 +50,10 @@ matches=sum(exact_comment(n) for n in comment_nodes)
 if matches==0 or (strict_layout and matches!=1): raise ValueError('returned_comment')
 texts=list(dict.fromkeys(s for n in p for s in [n.get('text',''),n.get('content-desc','')] if s))
 print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'returned_comment_verified':True},ensure_ascii=False))
-`],{input:JSON.stringify({profile,returned,nickname,douyinId,commentBody:commentEncoding==='xml_raw'?decodeXmlEntities(commentBody):commentBody}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});
+`;
+function parseNative(profile,returned,{nickname,douyinId,commentBody,commentEncoding='canonical'}){
+ if(!['xml_raw','canonical'].includes(commentEncoding))throw Error('RECIPIENT_BODY_ENCODING_INVALID');
+ const r=spawnSync('python3',['-c',recipientNativePython],{input:JSON.stringify({profile,returned,nickname,douyinId,commentBody:commentEncoding==='xml_raw'?decodeXmlEntities(commentBody):commentBody}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});
  if(r.status!==0)throw Error('RECIPIENT_NATIVE_PROOF_INVALID');
  return JSON.parse(r.stdout);
 }
@@ -95,7 +96,7 @@ print(json.dumps({'rows':rows,'footer_reached':footer,'strict_layout':strict_lay
  if(r.status!==0)throw Error('RECIPIENT_COMMENT_PANEL_INVALID');
  return JSON.parse(r.stdout);
 }
-function validateEvidence(e,scope,{companyBinding}={}){
+function validateEvidence(e,scope,{companyBinding,parseNative:parser=parseNative}={}){
  if(e?.version!==1||e.status!=='verified'||!e.scope||!e.raw||!e.sha256)throw Error('RECIPIENT_EVIDENCE_MISSING');
  for(const key of ['line_key','run','douyin_id','nickname','comment_body_sha256','video_url'])if(e.scope[key]!==scope[key])throw Error('RECIPIENT_SCOPE_INVALID');
  if(!['xml_raw','canonical'].includes(e.scope.comment_encoding))throw Error('RECIPIENT_BODY_ENCODING_MISSING');
@@ -112,7 +113,7 @@ function validateEvidence(e,scope,{companyBinding}={}){
   ? e.scope.profile_eid.slice(personPrefix.length).match(/^([1-9][0-9]*)-t[123]$/)?.[1] : null;
  if(!row||e.scope.video_identity_eid!==prefix+'-after-card'+row)throw Error('RECIPIENT_PAIR_INVALID');
  for(const k of ['profile','returned'])if(typeof e.raw[k]!=='string'||Buffer.byteLength(e.raw[k])>4*1024*1024||hash(e.raw[k])!==e.sha256[k])throw Error('RECIPIENT_BYTES_INVALID');
- return parseNative(e.raw.profile,e.raw.returned,{nickname:scope.nickname,douyinId:scope.douyin_id,commentBody:scope.comment_body,commentEncoding:e.scope.comment_encoding});
+ return parser(e.raw.profile,e.raw.returned,{nickname:scope.nickname,douyinId:scope.douyin_id,commentBody:scope.comment_body,commentEncoding:e.scope.comment_encoding});
 }
 function capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding='canonical',companyBindingFile,companyBindingSha}){
  if(!Number.isSafeInteger(Number(started))||Number(started)<=0||Number(started)*1000>Date.now()+1000)throw Error('RECIPIENT_TIME_INVALID');
@@ -142,4 +143,4 @@ if(require.main===module){try{
  if(!profilePath||!returnedPath){console.log(`RECIPIENT_UNKNOWN\t${videoId}\t${douyinId}\t${hash(commentBody)}\tnative_profile_missing`);}
  else {const p=capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding,companyBindingFile,companyBindingSha});console.log(`RECIPIENT_PROOF\t${videoId}\t${douyinId}\t${p.body_sha256}\t${p.file}\t${p.sha256}`);}
 }catch{process.stderr.write('RECIPIENT_EVIDENCE_FAILED\n');process.exitCode=8;}}
-module.exports={hash,parseNative,parseNativeCommentXml,validateEvidence,capture};
+module.exports={hash,recipientNativePython,parseNative,parseNativeCommentXml,validateEvidence,capture};

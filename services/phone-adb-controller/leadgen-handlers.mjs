@@ -1,3 +1,4 @@
+import {isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {verifyNoComments,createNoComments} from './no-comments-evidence.mjs';
 import {createLeadgenAgentTools,verifyAgentUpstream,mergeAgentCollectionRows,aggregateAgentCollectionCommit} from './leadgen-agent-tools.mjs';
 import {verifyProducerDescriptor,verifyProducerCompany} from './producer-descriptor.mjs';
@@ -58,7 +59,8 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata,preflightRuntime}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata,preflightRuntime,scoringRuntime}) {
+  const trustedScoring=isNativeScoringWorkflow(scoringRuntime);
   const trustedPreflight=isPreflightRuntime(preflightRuntime);if(trustedPreflight)preflightMetadata=preflightRuntime.metadata;
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
@@ -131,7 +133,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
   const phone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope||collectionScope,checked,nativeReceipt,getAgentDeadline:()=>state.agentPhoneDeadline??null});
   const returnedContext=()=>{const frozen=readFrozen(env.WFR_RUN_DIR),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);return {task_id:taskId??null,run_id:state.run_id,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile,serial,activity:'collection',owner:run,target:frozen.deployment.target,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};};
-  const queue=async(op,fields={})=>{if(op==='discover')discoveryScope?.assert();if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');const admissionOp=op==='admit_102g_comments'||op==='admit_102g_readback';const exactRecoveryOp=op==='recover_false_exclusion_102l'||op==='recover_false_exclusion_102l_readback';const rpcBudget=op==='discover'?225000:admissionOp?150000:60000;return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,...(admissionOp||exactRecoveryOp?{}:{limit:Number(env.LEADGEN_LIMIT||2)}),...fields}},
+  const queue=async(op,fields={})=>{if(trustedScoring)return scoringRuntime.queue(op,fields);if(op==='discover')discoveryScope?.assert();if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');const admissionOp=op==='admit_102g_comments'||op==='admit_102g_readback';const exactRecoveryOp=op==='recover_false_exclusion_102l'||op==='recover_false_exclusion_102l_readback';const rpcBudget=op==='discover'?225000:admissionOp?150000:60000;return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,...(admissionOp||exactRecoveryOp?{}:{limit:Number(env.LEADGEN_LIMIT||2)}),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video',
       'admit_102g_comments','admit_102g_readback'].includes(op)?{timeoutMs:Math.max(1,Math.min(rpcBudget,state.budgetDeadline?state.budgetDeadline-Date.now():rpcBudget))}:{})).result;};
   const preflight=async()=>{
@@ -284,6 +286,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       ||scope.source_commit!==sourceCommit||scope.limit!==Number(env.LEADGEN_LIMIT||2))throw Error('AGENT_PRIMARY_SCOPE_MISMATCH');
     const frozen=readFrozen(env.WFR_RUN_DIR);
     if(frozen.execution_mode!=='agent'||frozen.snapshot_sha256!==scope.snapshot_sha256||frozen.deployment.source_commit!==sourceCommit)throw Error('AGENT_PRIMARY_FROZEN_SCOPE_MISMATCH');
+    if(trustedScoring)await scoringRuntime.assertScope(scope);
     if(state.executionUnknown)throw Object.assign(Error('AGENT_PRIMARY_NATIVE_UNKNOWN'),{executionStopped:false});
     if(needsCentralLock){
       await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
@@ -298,6 +301,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     return true;
   };
   const prepareAgentResources=async scope=>{
+    if(trustedScoring)await scoringRuntime.prepareActivity(scope);
     if(scope.activity==='preflight'){
       if(agent.facts.prepared)return;
       const metadataActive=()=>{if(Date.now()>=Math.min(scope.worker_deadline_ms??scope.deadline_ms,scope.deadline_ms))throw Object.assign(Error('PREFLIGHT_METADATA_DEADLINE'),{code:'PREFLIGHT_METADATA_DEADLINE'});preflightMetadata?.assertActive?.();};
@@ -540,7 +544,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(cachedPreflight){preflightMetadata.assertActive?.();if(Date.now()>=Math.min(scope.worker_deadline_ms??scope.deadline_ms,scope.deadline_ms)||!agent.facts.prepared||!state.company_config?.device_binding)throw Error('PREFLIGHT_METADATA_DEADLINE');}
       let value=cachedPreflight?structuredClone(state.company_config):await queue(op,input);
       if(op==='score_scope'){
-        if(!Array.isArray(value?.ids)||!value.sources||new Set(value.ids).size!==value.ids.length||value.ids.some(id=>value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
+        if(!Array.isArray(value?.ids)||!value.sources||new Set(value.ids).size!==value.ids.length||value.ids.some(id=>typeof value.sources[id]!=='string'||!value.sources[id]||scope.source_run!==null&&value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
         const ids=value.ids.slice(0,scope.limit);value={...value,ids,sources:Object.fromEntries(ids.map(id=>[id,value.sources[id]]))};
       }
       outcomes.push({op,input,result:value});
@@ -571,7 +575,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         const previous=agent.collections.get(input.video_id);if(!previous||value?.verified!==true||value.coverage!==previous.comments.length+previous.history.length)throw Error('AGENT_PRIMARY_COLLECTION_READBACK_INVALID');previous.pgReadback=value;
       }
       if(op==='score_scope'){
-        if(!Array.isArray(value?.ids)||!value.sources||value.ids.some(id=>value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
+        if(!Array.isArray(value?.ids)||!value.sources||value.ids.some(id=>typeof value.sources[id]!=='string'||!value.sources[id]||scope.source_run!==null&&value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
         agent.scoreScope=structuredClone(value);
       }
       if(op==='mark_leads'){
@@ -583,6 +587,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(op==='score'){
         if(!Array.isArray(value?.ids)||!Array.isArray(value.excluded_ids)||[...value.ids,...value.excluded_ids].some(id=>!input.ids.includes(id)))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
         value.ids.forEach(id=>agent.scored.add(id));value.excluded_ids.forEach(id=>agent.excluded.add(id));
+        if(trustedScoring)appendFileSync(join(env.WFR_RUN_DIR,'activity.log'),'SORT_STATS '+JSON.stringify(value)+'\n');
       }
       return value;
     };
@@ -746,7 +751,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       await discoveryScope?.close();discoveryScope=null;await collectionScope?.close();collectionScope=null;agent.facts.released=true;
       return {...localRelease,central_lock_released:1,central_lock_task_id:taskId,central_lock_run_id:state.run_id,...(agent.facts.cleanup_proof?{cleanup_readback_digest:agent.facts.cleanup_proof.digest}:{})};
     };
-    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{...(trustedPreflight?{closeNativeScope:proof=>preflightRuntime.current()?.close(proof)||{execution_stopped:!preflightRuntime.nativeState().execution_unknown}}:{}),assertResources:assertAgentScope,executionState:()=>({native_stop_unproven:state.nativeStopUnproven===true,execution_unknown:state.executionUnknown===true||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
+    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{...(trustedScoring?{closeNativeScope:proof=>scoringRuntime.closeActivity(proof)}:{}),...(trustedPreflight?{closeNativeScope:proof=>preflightRuntime.current()?.close(proof)||{execution_stopped:!preflightRuntime.nativeState().execution_unknown}}:{}),assertResources:assertAgentScope,executionState:()=>({native_stop_unproven:state.nativeStopUnproven===true||(trustedScoring&&scoringRuntime.nativeState().native_stop_unproven===true),execution_unknown:state.executionUnknown===true||(trustedScoring&&scoringRuntime.nativeState().execution_unknown===true)||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
       native_video_candidates:[...agent.native.values()].map(({metrics,...video})=>({...video,metrics:{likes:metrics.likes,comment_total:metrics.comment_total,comment_tier:metrics.comment_tier}})),
       native_comment_receipts:[...agent.comments].map(([native_receipt,p])=>({native_receipt,video_id:p.video_id,douyin_id:p.row.douyinId,nickname:p.row.nickname,comment_body:p.row.commentBody,historical_verified:!!p.history})),
       panel_session_available:!!agent.panelSession&&agent.panelSession.video_id===agent.currentVideo?.video_id,verified_detail_video_id:agent.detailIdentity?.video_id||null,
@@ -757,15 +762,17 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       evidenceId:command=>activity.key==='cleanup'?`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`:activity.key==='collection'&&agent.currentVideo?`${run}-v${agent.currentVideo.video_id}-collection-screen${++agent.screenIndex}-comments`:null,
       validatePhone,phone:primitivePhone,release,resourceUnknown:()=>{state.executionUnknown=true;},heartbeat:async()=>{
         await assertAgentScope(scope);
+        if(trustedScoring)return {task_claim_verified:true};
         if(trustedPreflight&&['preflight','cleanup'].includes(activity.key))return preflightScope.heartbeat();
         if(locked){const raw=(await phone('lock-refresh',run)).trim().split(/\s+/),fields=Object.fromEntries(raw.map(token=>token.split('=')));
           if(raw.length!==3||fields.lock!=='refreshed'||fields.owner!==run||!/^\d+s$/.test(fields.ttl||''))throw Error('AGENT_PRIMARY_LOCAL_LEASE_UNVERIFIED');}
         if(activity.key!=='cleanup')for(const v of leased){const result=await queue('renew_video',{video_id:v.video_id});if(result?.renewed!==true)throw Error('AGENT_PRIMARY_VIDEO_LEASE_UNVERIFIED');}
         return {renewed:true,video_ids:activity.key==='cleanup'?[]:leased.map(v=>v.video_id)};
       }}});
+    if(trustedScoring){tools.bindOfficialAuthority=entry=>scoringRuntime.bindOfficialAuthority(entry);const readResult=tools.getResult;tools.getResult=()=>({...readResult(),external_effect:scoringRuntime.nativeState().external_effect});}
     agent.tools.set(activity.key,tools);return tools;
   };
-  return {state,preflight,createAgentTools,agentSupportsNativeScope:activity=>trustedPreflight&&preflightRuntime.supports(activity)===true,agentNativeState:()=>({native_stop_unproven:state.nativeStopUnproven===true,execution_unknown:state.executionUnknown===true||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),quarantineResources,beginCollectionReadback:async evidence=>{
+  return {state,preflight,createAgentTools,agentSupportsNativeScope:activity=>trustedScoring?scoringRuntime.supports(activity):trustedPreflight&&preflightRuntime.supports(activity)===true,agentNativeState:()=>({... (trustedScoring?scoringRuntime.nativeState():{}),native_stop_unproven:state.nativeStopUnproven===true||(trustedScoring&&scoringRuntime.nativeState().native_stop_unproven===true),execution_unknown:state.executionUnknown===true||(trustedScoring&&scoringRuntime.nativeState().execution_unknown===true)||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),quarantineResources,beginCollectionReadback:async evidence=>{
       collectionScope=await startCollectionReturnedScope({evidence,context:returnedContext(),purpose:'readback'});
       return async()=>{try{await collectionScope.close();}finally{collectionScope=null;}};
     },handoffPhone:async(command,...args)=>{
