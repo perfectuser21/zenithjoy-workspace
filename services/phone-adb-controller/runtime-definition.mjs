@@ -1,3 +1,4 @@
+import {issueNativeTaskLease,consumeNativeTaskLease,assertFrozenNativeTaskLease} from './native-task-lease.mjs';
 import {prepareFrozenPreflightPg,prepareFrozenScoringPg} from './preflight-pg-dependencies.mjs';
 import {controlAcceptanceFromTask,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
@@ -247,7 +248,7 @@ export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir
 }
 export function nativeClaimFromTask({task,input,sourceCommit}){
  const fail=()=>{throw Error('NATIVE_CLAIM_SCOPE');};const p=task?.payload;
- if(!task||task.id!==input?.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isFinite(Date.parse(task.lease_until))||Date.parse(task.lease_until)<=Date.now()||!p||p.workflow_key!==input.workflow_key||p.source_commit!==sourceCommit||p.run_tag!==input.run_tag||p.profile!==input.profile||p.company_line!==input.line||(input.serial==='none'?p.device_serial!=null:p.device_serial!==input.serial))fail();
+ if(!task||task.id!==input?.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!p||p.workflow_key!==input.workflow_key||p.source_commit!==sourceCommit||p.run_tag!==input.run_tag||p.profile!==input.profile||p.company_line!==input.line||(input.serial==='none'?p.device_serial!=null:p.device_serial!==input.serial))fail();
  if(!p.scope||typeof p.scope!=='object'||Array.isArray(p.scope)||p.scope.limit!==input.limit||(p.scope.source_run??null)!==input.source_run)fail();
  for(const [key,value]of [['limit',input.limit],['source_run',input.source_run]])if(Object.hasOwn(p,key)&&p[key]!==value)fail();
  return {claimed_by:task.claimed_by,claimed_at:task.claimed_at};
@@ -291,7 +292,8 @@ export async function freezeDefinition(o) {
     if(o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==q[k==='tag'?'run_tag':k]))throw Error('冻结采样输入运行身份不符');
   }
   if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(canonical(frozen.collection_phone_scope||null)!==canonical(o.collectionPhoneScope||null))throw Error('collection phone scope续跑输入与冻结请求不符');
-    const control=await loadControlAuthority(frozen.deployment.source_commit),oldControl=frozen.control_scope?{control_scope:frozen.control_scope,control_claim:frozen.control_claim}:null;
+    const control=await loadControlAuthority(frozen.deployment.source_commit),oldControl=frozen.control_scope?{control_scope:frozen.control_scope,control_claim:frozen.control_claim}:frozen.native_claim?{native_claim:frozen.native_claim}:null;
+    if(hasScoring)assertFrozenNativeTaskLease(frozen);
     if(canonical(control)!==canonical(oldControl))throw Error('CONTROL_ACCEPTANCE_RESUME_MISMATCH');
     if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   assertDeploymentAdmission(o.deploymentRoot);
@@ -369,7 +371,7 @@ export async function freezeDefinition(o) {
     ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasScoring?{scoring_pg:structuredClone(o.scoringPg),scoring_control_scope:structuredClone(o.scoringControlScope)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
-  const snapshot={...body,snapshot_sha256:digest(body)};
+  let snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});
   try {
     for(const file of checked.values()){
@@ -383,10 +385,20 @@ export async function freezeDefinition(o) {
     }
     writeFileSync(resolve(staging,'runtime/deployment-manifest.json'),manifestBytes,{mode:0o600});
     writeFileSync(resolve(staging,'workflow.plan'),plan);writeFileSync(resolve(staging,'step-dod.json'),steps);
-    writeFileSync(resolve(staging,'run-definition.json'),JSON.stringify(snapshot,null,2));
+
     assertDeploymentAdmission(o.deploymentRoot);
     if(!readFileSync(manifestPath).equals(originalManifest))throw Error('冻结期间部署声明发生变化');
     if(canonical(await loadControlAuthority(manifest.source_commit))!==canonical(controlAuthority))throw Error('CONTROL_ACCEPTANCE_TASK_CHANGED');
+    if(hasScoring){
+      if(!o.nativeLeaseDriver||typeof o.nativeLeaseDriver.credential!=='function')throw Error('NATIVE_TASK_LEASE_DRIVER_REQUIRED');
+      const globalDeadline=(fixedAgentInput.run_start_ts+fixedAgentInput.run_max_seconds)*1000;
+      const leaseBinding={task_id:fixedAgentInput.task_id,source_commit:manifest.source_commit,run_tag:fixedAgentInput.run_tag,claim:controlAuthority.native_claim,snapshot_sha256:digest(body),scope_sha256:digest(fixedAgentInput),worker_deadline_ms:globalDeadline,receipt_deadline_ms:globalDeadline};
+      mkdirSync(dirname(o.runDir),{recursive:true});
+      const parent=realpathSync(dirname(o.runDir));
+      const lease=await issueNativeTaskLease({directory:resolve(parent,basename(o.runDir)+'.native-task-lease'),origin:o.nativeLeaseDriver.origin,credential:o.nativeLeaseDriver.credential,binding:leaseBinding,readClaim:reply=>nativeClaimFromTask({task:reply?.task??reply,input:fixedAgentInput,sourceCommit:manifest.source_commit})});
+      body.native_task_lease=consumeNativeTaskLease(lease,leaseBinding);snapshot={...body,snapshot_sha256:digest(body)};assertFrozenNativeTaskLease(snapshot);
+    }
+    writeFileSync(resolve(staging,'run-definition.json'),JSON.stringify(snapshot,null,2));
     mkdirSync(dirname(o.runDir),{recursive:true}); renameSync(staging,o.runDir);
   } finally {rmSync(staging,{recursive:true,force:true});}
   return snapshot;

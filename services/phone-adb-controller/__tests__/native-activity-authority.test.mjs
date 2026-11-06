@@ -1,0 +1,14 @@
+import test from'node:test';import assert from'node:assert/strict';import{mkdirSync,readFileSync}from'node:fs';import{join}from'node:path';import{createHash}from'node:crypto';import{pathToFileURL}from'node:url';import{using}from'./fixtures/official-control-fixture.mjs';
+const sha=b=>createHash('sha256').update(b).digest('hex');
+test('separate real Code Caller retains only Task claim reads after Worker Caller is sealed; exact claim and physical closure remain mandatory',async()=>using(async f=>{
+ const module=await import(pathToFileURL(join(f.runtimeRoot,'native-activity-authority.mjs')));assert.equal(typeof module.createNativeActivityAuthority,'function');
+ Object.assign(f.q,{worker_deadline_ms:Date.now()+10000,receipt_deadline_ms:Date.now()+15000});const task=f.routes.get('/api/brain/tasks/'+f.q.task_id);task.claimed_at='2026-11-06T00:00:00.000Z';const claim={claimed_by:task.claimed_by,claimed_at:task.claimed_at};
+ f.source.files.push({path:'native-activity-authority.mjs',sha256:sha(readFileSync(join(f.runtimeRoot,'native-activity-authority.mjs')))});
+ const directory=join(f.journalDirectory,'business-owner');mkdirSync(directory,{mode:0o700});
+ const authority=module.createNativeActivityAuthority({runtimeRoot:f.runtimeRoot,source:f.source,request:f.q,frozen:{native_claim:claim,snapshot_sha256:f.q.runtime_snapshot_sha256,deployment:{source_commit:f.q.source_commit}},directory,createControl:({directory:d})=>{const journalDirectory=join(d,'caller');mkdirSync(journalDirectory,{mode:0o700});return f.createControl({...f.options,request:f.q,journalDirectory});}});
+ assert.equal('request'in authority,false);assert.equal('rawTurn'in authority,false);assert.equal('stop'in authority,false);
+ await f.instance.close();assert.equal(f.instance.snapshot().sealed,true);
+ const proof=await authority.readClaim();const value=module.readNativeAuthorityProjection(proof,{request:f.q,source:f.source});assert.equal(value.claimed_at,claim.claimed_at);assert.equal(value.id,f.q.task_id);assert.equal(Object.hasOwn(value,'lease_until'),false);assert.throws(()=>module.readNativeAuthorityProjection(structuredClone(proof),{request:f.q,source:f.source}),/UNBRANDED/);
+ task.claimed_by='foreign';await assert.rejects(authority.readClaim(),/CLAIM_CHANGED/);assert.throws(()=>module.readNativeAuthorityProjection(proof,{request:f.q,source:f.source}),/REVOKED|CONSUMED/);
+ const closed=await authority.close();assert.equal(closed.execution_stopped,true);assert.equal(authority.verifyStopped(closed),true);assert.equal(authority.verifyStopped(structuredClone(closed)),false);await assert.rejects(authority.readClaim(),/CLOSED/);
+},{rawTransport:true}));
