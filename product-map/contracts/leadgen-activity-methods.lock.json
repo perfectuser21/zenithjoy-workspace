@@ -31,7 +31,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -199,7 +199,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -769,13 +769,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "724414327ed379456a33b0fa026a46871234493db23ab8933ea6c079102fccdd",
+      "code_digest": "cf5d5e31f7bfd5230b53dad594b83c707a392a8eed358e919a6555e433da8a2a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本Activity接通原raw Skill细粒度意图的Code手机执行与独立PG读回，保留原采样/限额/零评论禁入/VID链接与nonce，不新增104能力；Agent文本不作为结果。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。101仍仅由Code接入有限手机raw意图、原3hard SQL/filter/同VID指标/采样限额/零评论禁入保留；取链上限3匹配原metrics身份，Vision仅原vtab/fbtn定位，无104或任意动作授权。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "1e68fa53a9cb4b5d1ddae50bd8c0dd81468e7965aaad4369f10b43dd29333a38",
-        "current_code_digest": "724414327ed379456a33b0fa026a46871234493db23ab8933ea6c079102fccdd"
+        "current_code_digest": "cf5d5e31f7bfd5230b53dad594b83c707a392a8eed358e919a6555e433da8a2a"
       }
     },
     "douyin_video_processing.preflight": {
@@ -808,7 +808,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -976,7 +976,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -1571,13 +1571,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c1dd363917e211fabd54615c55b9a83277b7a9076969ce41e50b6f5ddda97926",
+      "code_digest": "6bb27ddf442645a03a14cb0fbd5968f1bbbf4e719b45abb138d0cc443c569d8b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本共享Activity仅在101原preflight/cleanup槽经Code接入有限手机通道；原账号/本人owner/epoch/双锁和桌面独立读回不变。新增zero-local分支仅接受真not-launched品牌且本人元数据关闭，物理动作0、未取锁不伪造释放，不能覆盖已启动unknown；public noLaunch两目标已通过。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。共享preflight仅101路径使用有限手机Source；本人owner/epoch/双锁及独立桌面读回保留。zero-local只接受真实not-launched品牌且本人资源已归还，0物理动作不伪造锁释放，不覆盖已启动unknown。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "2ba110176a45a9b2518fcfd676c91febb765ccec108892db8954c35a29880dd3",
-        "current_code_digest": "c1dd363917e211fabd54615c55b9a83277b7a9076969ce41e50b6f5ddda97926"
+        "current_code_digest": "6bb27ddf442645a03a14cb0fbd5968f1bbbf4e719b45abb138d0cc443c569d8b"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1610,7 +1610,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -1778,7 +1778,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -2341,13 +2341,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "2ea6007a6c500cee1354fd27a20db329d58b36e4ff5f1bcf1d5bdcf138bedd50",
+      "code_digest": "7bb1471046a51103ceff71e971706a366c7cd309b95ee05e6e2a30c99bf04484",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本102 Activity仅共享依赖闭包更新；本次phone工厂仍仅101，102原native support未放行，不改变去重、资格/公司原政策、采集、每VID次数或重试/零评论规则，不冒称102已通过。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。102仅共享静态代码依赖闭包及摘要更新；本候选phone工厂/raw执行仍限101，未把102native支持放行，不改变去重/资格公司政策/评论采集/每VID次数/零评论与未知停止规则。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "00662cfcc40744589c4a574ca1834526b7dd6facf85a5ef39a27053d3885c703",
-        "current_code_digest": "2ea6007a6c500cee1354fd27a20db329d58b36e4ff5f1bcf1d5bdcf138bedd50"
+        "current_code_digest": "7bb1471046a51103ceff71e971706a366c7cd309b95ee05e6e2a30c99bf04484"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2380,7 +2380,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -2548,7 +2548,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -3195,13 +3195,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "2232d9d8ea3ffe99e6eb504e2c84fabdfb5858901c63d3077b183a177ccc548d",
+      "code_digest": "b0e7796a42d60bf02fd36709a0f6452c7182b2afaabbbf9b8dde650027813fba",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本102 Activity仅共享依赖闭包更新；本次phone工厂仍仅101，102原native support未放行，不改变去重、资格/公司原政策、采集、每VID次数或重试/零评论规则，不冒称102已通过。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。102仅共享静态代码依赖闭包及摘要更新；本候选phone工厂/raw执行仍限101，未把102native支持放行，不改变去重/资格公司政策/评论采集/每VID次数/零评论与未知停止规则。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "91cabdb72503764b041678a9a30b623718c1dbdcc4a6a075898f401d29a30602",
-        "current_code_digest": "2232d9d8ea3ffe99e6eb504e2c84fabdfb5858901c63d3077b183a177ccc548d"
+        "current_code_digest": "b0e7796a42d60bf02fd36709a0f6452c7182b2afaabbbf9b8dde650027813fba"
       }
     },
     "douyin_video_processing.collection": {
@@ -3234,7 +3234,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -3402,7 +3402,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -3987,13 +3987,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "ce628ff3b07bc1b7602c92712f4c89d8afdd85bb924a8265978c4238b6632619",
+      "code_digest": "23db356789ee5b5b08766da1bff9fcd835db9131b26515d82fa3f64a0d27bdfa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本102 Activity仅共享依赖闭包更新；本次phone工厂仍仅101，102原native support未放行，不改变去重、资格/公司原政策、采集、每VID次数或重试/零评论规则，不冒称102已通过。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。102仅共享静态代码依赖闭包及摘要更新；本候选phone工厂/raw执行仍限101，未把102native支持放行，不改变去重/资格公司政策/评论采集/每VID次数/零评论与未知停止规则。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "bd1c89219bf0fb8504a6bc40afa86d9107256edaa9db280502884f0178d852ff",
-        "current_code_digest": "ce628ff3b07bc1b7602c92712f4c89d8afdd85bb924a8265978c4238b6632619"
+        "current_code_digest": "23db356789ee5b5b08766da1bff9fcd835db9131b26515d82fa3f64a0d27bdfa"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4026,7 +4026,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -4194,7 +4194,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -4774,13 +4774,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ebb06f9ec03e234676f4b7c6fe5b4b7edd558d1e8dd741a0c575f57540a22efc",
+      "code_digest": "0e588b8bc175f3c598b6c6ad80e08cb28ee67f165932654393bf62ede6e2c6b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本共享Activity仅在101原preflight/cleanup槽经Code接入有限手机通道；原账号/本人owner/epoch/双锁和桌面独立读回不变。新增zero-local分支仅接受真not-launched品牌且本人元数据关闭，物理动作0、未取锁不伪造释放，不能覆盖已启动unknown；public noLaunch两目标已通过。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。共享cleanup保留本人双锁/桌面读回和全部资源归还门。zero-local只接受真实not-launched品牌，不把Source或Host结束当远端停证，不清未知旧锁。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "24830bb0356b415cc6744b673b506b012b3621eeb4e3b1a9987772dc7e09f4d2",
-        "current_code_digest": "ebb06f9ec03e234676f4b7c6fe5b4b7edd558d1e8dd741a0c575f57540a22efc"
+        "current_code_digest": "0e588b8bc175f3c598b6c6ad80e08cb28ee67f165932654393bf62ede6e2c6b2"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -4813,7 +4813,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -4995,7 +4995,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -5558,13 +5558,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "7dc1c7ffd4e320ead169ff90d44e493bef92d4cc437c3393046899cfed5a4e4f",
+      "code_digest": "c71e35ae24818ed26bf20560ca02df4a903dce2043a909724cd0857b62a3a697",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本103 Activity仅共享依赖闭包及来源摘要更新；103评分/标记五模块与原Code-only authority字节不变，原冻结公司评分政策、empty品牌交接、Bridge和COMMIT unknown只读语义不变，不把手机source转成评分或CRM新授权。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。103仅已核验请求的终结回调幂等修复；在途POST abort/error仍external_effect unknown且不重投，原评分政策、独立PG读回、server-issued空范围品牌、COMMIT未知只读语义不变。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "c7a558782b44baabbc1110736a0ca16771b05c2886d4fa961570538d5bebfc23",
-        "current_code_digest": "7dc1c7ffd4e320ead169ff90d44e493bef92d4cc437c3393046899cfed5a4e4f"
+        "current_code_digest": "c71e35ae24818ed26bf20560ca02df4a903dce2043a909724cd0857b62a3a697"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5597,7 +5597,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -5779,7 +5779,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -6384,13 +6384,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c3c00a20030d787b2b384822aec87c62f0b80c75b4bbf96fbac820727a116202",
+      "code_digest": "e6153030353c786f7c08201e5fd1b841260528df6fb2571be9f6e24a76953b5d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本103 Activity仅共享依赖闭包及来源摘要更新；103评分/标记五模块与原Code-only authority字节不变，原冻结公司评分政策、empty品牌交接、Bridge和COMMIT unknown只读语义不变，不把手机source转成评分或CRM新授权。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。103配送/标记原Bridge、收件人核验及公司政策保留，Producer仅终结回调幂等；在途外部效果未知不洗成成功，空批不伪造quality/bridge验证，原评分与配送授权不扩展。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "2dba7ec8b31c07c70e097489ebe8f46840455493e07add84e83d36e6e3b6a23a",
-        "current_code_digest": "c3c00a20030d787b2b384822aec87c62f0b80c75b4bbf96fbac820727a116202"
+        "current_code_digest": "e6153030353c786f7c08201e5fd1b841260528df6fb2571be9f6e24a76953b5d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6423,7 +6423,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -6689,7 +6689,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -7144,13 +7144,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6f52856c3574c6a39495533ce29deaa261b5906246da97e80c2eb2d5f3518b64",
+      "code_digest": "7c2104e997c9161873ec313259f8ee12a91bd1ae24e3df4932f68742259131e7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本104 Activity仅共享静态Source闭包及来源摘要更新；104发送/订单/桥接/账号批准与原工具白名单字节不变，phone工厂与raw主执行仍不支持104，不增发送权、不改调度、不清未知锁、不把103配送确认当发送批准。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "bac2655b84fc27cacf7864009b80eea43885b1a60a99a6c4fc4b5e9de1efba80",
-        "current_code_digest": "6f52856c3574c6a39495533ce29deaa261b5906246da97e80c2eb2d5f3518b64"
+        "current_code_digest": "7c2104e997c9161873ec313259f8ee12a91bd1ae24e3df4932f68742259131e7"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7183,7 +7183,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -7449,7 +7449,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -7879,13 +7879,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8b6389b49826e33332ebe1463be82b200dbfcc7608e8b4e4a797ee9e101d89b6",
+      "code_digest": "ce4f46a7993811007b86dfbc0cbfe1d96d9dbc814d9f00d31ee57d34165d0cf1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本104 Activity仅共享静态Source闭包及来源摘要更新；104发送/订单/桥接/账号批准与原工具白名单字节不变，phone工厂与raw主执行仍不支持104，不增发送权、不改调度、不清未知锁、不把103配送确认当发送批准。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "5d6a6f32465438ce0cadd5ed9bcf57f79913f7534e276a5ba4b489c7d4d46f02",
-        "current_code_digest": "8b6389b49826e33332ebe1463be82b200dbfcc7608e8b4e4a797ee9e101d89b6"
+        "current_code_digest": "ce4f46a7993811007b86dfbc0cbfe1d96d9dbc814d9f00d31ee57d34165d0cf1"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -7918,7 +7918,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -8184,7 +8184,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -8607,13 +8607,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "aa5062f3b5c691f6423b712eaaf9b551a0f3ffa60f913c31bba5ef5cfd62cd3c",
+      "code_digest": "afb964ddb70d7c4212f466eff80083d25cfe2d0336fb2f83395765c92b72ca18",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本104 Activity仅共享静态Source闭包及来源摘要更新；104发送/订单/桥接/账号批准与原工具白名单字节不变，phone工厂与raw主执行仍不支持104，不增发送权、不改调度、不清未知锁、不把103配送确认当发送批准。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "63b815d66d1380f2c4387b5471d1a510faa525f0001f599dfab5d303ce36b4fe",
-        "current_code_digest": "aa5062f3b5c691f6423b712eaaf9b551a0f3ffa60f913c31bba5ef5cfd62cd3c"
+        "current_code_digest": "afb964ddb70d7c4212f466eff80083d25cfe2d0336fb2f83395765c92b72ca18"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8646,7 +8646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-vision.mjs",
           "revision": "contract",
-          "sha256": "ea02b46cab530f4bfd554b571a65b138ad2965acb407976a5dca77a04816ebd1"
+          "sha256": "e7eb877a5d0e7bcb2ca3d527fb77bba3d85211e8befe21cf2fe725bdfd9af2c6"
         },
         {
           "kind": "code",
@@ -8912,7 +8912,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-producers.mjs",
           "revision": "contract",
-          "sha256": "de686380846dca1242874efd84cd38db0be26256a0cab53cc1ceb786d47d2594"
+          "sha256": "20ab2cf7ee865ecdf42bb031e035aaca32fcfca43fe9476bd98763c1fe7d54bb"
         },
         {
           "kind": "code",
@@ -9345,13 +9345,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "358c6204df24b087f163da8adc81ef806a431b1c32cfd58601493ebe277ce60f",
+      "code_digest": "e9e249dfb2f816b94a6ccb1f61e7c6ba66898df9e99bbde3383fb57a74a66207",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审核main1f固定Git与本人隔离工作树快照（snapshot-files.json SHA256 84f49a69dd3dc3f2b40862723a6b95fb5c2bd7b562768f0bcfe4f96590ca9bcf）。正式collectMethods逐对象确认Skill正文/支持闭包、method_version、Activity版本和contract_digest相同，4个workflow方法身份相同；原锁与旧collect精确一致。本次27项有限手机Source依赖、真实19ROM入口和MMV Pillow229清单进入双端deploy/RPC/requiredSource/Activity binding。Source能力不当作远端停证，手机raw品牌AND Caller及本人通道全部关闭才准入读回/cleanup。原3hard SQL、filter、同VID指标和权限/unknown停止保留；原record-only SQL Step不独自覆盖gate，原external_effect unknown、pool错误、未停证仍阻止成功。新取链上限收紧为3以匹配原metrics身份合同。4份steps仅更新contract_sha256，删除该字段后结构不变。此为代码内部兼容评估，不替代CI或真实抖音验收；本轮测试fixture重复追加Source路径导致12例门禁拒绝已报告，未改生产门禁。本104 Activity仅共享静态Source闭包及来源摘要更新；104发送/订单/桥接/账号批准与原工具白名单字节不变，phone工厂与raw主执行仍不支持104，不增发送权、不改调度、不清未知锁、不把103配送确认当发送批准。",
-        "reviewed_by": "/root/review_103_delivery",
+        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "99da543e91f83b8e0f9c918e3bb3225c450acd42038ef5d4201287b679359ed2",
-        "current_code_digest": "358c6204df24b087f163da8adc81ef806a431b1c32cfd58601493ebe277ce60f"
+        "current_code_digest": "e9e249dfb2f816b94a6ccb1f61e7c6ba66898df9e99bbde3383fb57a74a66207"
       }
     }
   },
