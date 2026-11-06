@@ -58,8 +58,9 @@ test('四流程正式部署覆盖 RPC 固定依赖、四新计划和 MMV 同 SHA
  // Evaluate the real pre-network array expansion, including transitive probe files.
  const array=name=>execFileSync('/bin/bash',['-c',prefix+"\nprintf '%s\\0' \"${"+name+"[@]}\"",new URL('../deploy.sh',import.meta.url).pathname],{encoding:'utf8'}).split('\0').filter(Boolean);
  const rpc=array('RPC_FILES');assert.deepEqual([...rpc].sort(),[...RPC_FILES].sort());
- const mmv=[...array('MMV_JS_FILES'),...array('MMV_PROBE_FILES')];for(const name of RPC_FILES)assert.ok(mmv.includes(name),`MMV漏RPC依赖 ${name}`);
- const device=[...array('DEVICE_NODE_FILES'),...array('DEVICE_RPC_PROBE_FILES'),...array('DEVICE_PLAN_FILES')];for(const name of RPC_FILES)assert.ok(device.includes(name),`设备冻结漏RPC依赖 ${name}`);
+ const mmv=array('MMV_RUNTIME_FILES');assert.equal(new Set(mmv).size,mmv.length,'MMV actual runtime has one target per file');
+ const device=[...array('DEVICE_SH_FILES'),...array('DEVICE_NODE_FILES'),...array('DEVICE_RPC_PROBE_FILES'),...array('DEVICE_PLAN_FILES'),...array('DEVICE_CTL_FILES')];assert.equal(new Set(device).size,device.length,'M4 manifest arguments must not contain repeated installed paths');
+ for(const name of RPC_FILES){assert.equal(mmv.filter(file=>file===name).length,1,`MMV实际运行包须恰好一份RPC依赖 ${name}`);assert.equal(device.filter(file=>file===name).length,1,`设备实际冻结须恰好一份RPC依赖 ${name}`);}
  for(const key of ['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach']){
   assert.ok(array('DEVICE_PLAN_FILES').includes(`plans/${key}.plan`));assert.ok(array('DEVICE_PLAN_FILES').includes(`plans/${key}.steps.json`));
  }

@@ -20,11 +20,11 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,controlAcceptance=false,terminalPolicy}={}){
+export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,phone=false,controlAcceptance=false,terminalPolicy}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
- if(scoring){const binding=bindNative103TestPython(runtimeRoot);if(binding)writeFileSync(binding.path,JSON.stringify(binding.policy));}
+ if(scoring||phone){const binding=bindNative103TestPython(runtimeRoot);if(binding)writeFileSync(binding.path,JSON.stringify(binding.policy));}
  const localControl=await import(new URL('./runtime/official-agent-control.mjs',new URL('file://'+copied+'/')).href);
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-control-'))),home=join(directory,'home'),journalDirectory=join(directory,'journal');
  mkdirSync(journalDirectory,{mode:0o700});

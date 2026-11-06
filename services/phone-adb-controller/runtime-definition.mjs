@@ -262,13 +262,17 @@ export async function freezeDefinition(o) {
     if(!executionTransport)return null;
     const response=await o.get('/api/brain/tasks/'+fixedAgentInput.task_id);
     const task=response?.task??response,control=controlAcceptanceFromTask({task,input:fixedAgentInput,sourceCommit});
-    return control||(hasScoring?{native_claim:nativeClaimFromTask({task,input:fixedAgentInput,sourceCommit})}:null);
+    return control||(hasNativeTaskLease?{native_claim:nativeClaimFromTask({task,input:fixedAgentInput,sourceCommit})}:null);
   };
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(transportPair(readFrozen(o.runDir),executionMode,o.workflowKey))!==canonical(executionTransport))throw Error('EXECUTION_TRANSPORT_RESUME_MISMATCH');
   const hasScoring=o.scoringPg!=null||o.scoringControlScope!=null;
   if(hasScoring&&(executionMode!=='agent'||o.workflowKey!=='douyin_comment_scoring'||fixedAgentInput?.profile!=='mmv-scoring'||fixedAgentInput?.serial!=='none'||!o.scoringPg||!o.scoringControlScope||Object.keys(o.scoringPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.scoringPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('SCORING_INPUT_MODE_INVALID');
   if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.scoring_pg||null)!==canonical(o.scoringPg||null)||canonical(old.scoring_control_scope||null)!==canonical(o.scoringControlScope||null))throw Error('SCORING_INPUT_RESUME_MISMATCH');}
   const hasPreflight=o.preflightPg!=null||o.preflightControlScope!=null||o.preflightProfile!=null;
+  // A raw phone run uses the same Starter-owned lease producer as 103. This
+  // freezes Task ownership only; it does not grant device or command authority.
+  const hasNativePhone=hasPreflight&&executionTransport?.execution_transport==='raw-model-v1'&&['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey);
+  const hasNativeTaskLease=hasScoring||hasNativePhone;
   if(existsSync(resolve(o.runDir,'run-definition.json'))){const old=readFrozen(o.runDir);if(canonical(old.preflight_pg||null)!==canonical(o.preflightPg||null)||canonical(old.preflight_control_scope||null)!==canonical(o.preflightControlScope||null)||canonical(old.preflight_profile||null)!==canonical(o.preflightProfile||null))throw Error('PREFLIGHT_INPUT_RESUME_MISMATCH');}
   if(hasPreflight&&(executionMode!=='agent'||!['douyin_video_discovery','douyin_video_processing'].includes(o.workflowKey)||!o.preflightPg||!o.preflightControlScope||!o.preflightProfile||Object.keys(o.preflightPg).sort().join(',')!=='lock_sha256,package_lock_sha256'||Object.values(o.preflightPg).some(v=>!/^[a-f0-9]{64}$/.test(v))))throw Error('PREFLIGHT_INPUT_MODE_INVALID');
   if(hasPreflight){const p=validatePreflightProfile(o.preflightProfile);if(p.profile!==fixedAgentInput?.profile||p.serial!==fixedAgentInput?.serial)throw Error('PREFLIGHT_PROFILE_IDENTITY');}
@@ -293,7 +297,7 @@ export async function freezeDefinition(o) {
   }
   if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(canonical(frozen.collection_phone_scope||null)!==canonical(o.collectionPhoneScope||null))throw Error('collection phone scope续跑输入与冻结请求不符');
     const control=await loadControlAuthority(frozen.deployment.source_commit),oldControl=frozen.control_scope?{control_scope:frozen.control_scope,control_claim:frozen.control_claim}:frozen.native_claim?{native_claim:frozen.native_claim}:null;
-    if(hasScoring)assertFrozenNativeTaskLease(frozen);
+    if(hasNativeTaskLease)assertFrozenNativeTaskLease(frozen);
     if(canonical(control)!==canonical(oldControl))throw Error('CONTROL_ACCEPTANCE_RESUME_MISMATCH');
     if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   assertDeploymentAdmission(o.deploymentRoot);
@@ -389,7 +393,7 @@ export async function freezeDefinition(o) {
     assertDeploymentAdmission(o.deploymentRoot);
     if(!readFileSync(manifestPath).equals(originalManifest))throw Error('冻结期间部署声明发生变化');
     if(canonical(await loadControlAuthority(manifest.source_commit))!==canonical(controlAuthority))throw Error('CONTROL_ACCEPTANCE_TASK_CHANGED');
-    if(hasScoring){
+    if(hasNativeTaskLease){
       if(!o.nativeLeaseDriver||typeof o.nativeLeaseDriver.credential!=='function')throw Error('NATIVE_TASK_LEASE_DRIVER_REQUIRED');
       const globalDeadline=(fixedAgentInput.run_start_ts+fixedAgentInput.run_max_seconds)*1000;
       const leaseBinding={task_id:fixedAgentInput.task_id,source_commit:manifest.source_commit,run_tag:fixedAgentInput.run_tag,claim:controlAuthority.native_claim,snapshot_sha256:digest(body),scope_sha256:digest(fixedAgentInput),worker_deadline_ms:globalDeadline,receipt_deadline_ms:globalDeadline};

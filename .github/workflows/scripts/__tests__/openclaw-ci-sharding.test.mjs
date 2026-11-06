@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 import {runCodeGate} from './helpers/run-code-gate.mjs';
 import {openclawStep,captureNodeArgs} from './helpers/openclaw-selection.mjs';
+import {isPhoneDarwinTest} from '../../../../scripts/ci/native-phone-ci-selection.mjs';
 
 const workflow = YAML.parse(readFileSync(new URL('../../ci-l3-code.yml', import.meta.url), 'utf8'));
 const globs = [
@@ -31,7 +32,7 @@ function validate(w) {
   assert.deepEqual(actual.filter(arg=>arg.startsWith('--')),['--test','--test-shard=1/3']);
   const baseline=captureNodeArgs('node --test --test-shard=1/3 '+globs.join(' '));
   const darwinOnly=/\/native-103-(transaction|public-executor|producers)\.test\.mjs$/;
-  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract');
+  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');

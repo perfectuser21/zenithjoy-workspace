@@ -10734,3 +10734,171 @@ tests:
     product: AI视频
     execution: ci-smoke-glob-runner.yml / smoke-glob-shards / video-tools-smoke.sh
     note: Both shipped starter graphs retain owned asset links, required nodes and fresh request identities; no provider submission.
+
+  - id: phone-native-phone-adb-read
+    path: services/phone-adb-controller/__tests__/native-phone-adb-read.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-clip-state
+    path: services/phone-adb-controller/__tests__/native-phone-clip-state.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-command-source
+    path: services/phone-adb-controller/__tests__/native-phone-command-source.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-foreground
+    path: services/phone-adb-controller/__tests__/native-phone-foreground.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-integration
+    path: services/phone-adb-controller/__tests__/native-phone-integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-link-macros
+    path: services/phone-adb-controller/__tests__/native-phone-link-macros.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-link-resolver
+    path: services/phone-adb-controller/__tests__/native-phone-link-resolver.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-local-producer
+    path: services/phone-adb-controller/__tests__/native-phone-local-producer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-preflight-adapter
+    path: services/phone-adb-controller/__tests__/native-phone-preflight-adapter.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-public-executor
+    path: services/phone-adb-controller/__tests__/native-phone-public-executor.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-queue
+    path: services/phone-adb-controller/__tests__/native-phone-queue.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-screenshot-wire
+    path: services/phone-adb-controller/__tests__/native-phone-screenshot-wire.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-search-macros
+    path: services/phone-adb-controller/__tests__/native-phone-search-macros.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-source-delivery
+    path: services/phone-adb-controller/__tests__/native-phone-source-delivery.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-source-issuer
+    path: services/phone-adb-controller/__tests__/native-phone-source-issuer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-ui
+    path: services/phone-adb-controller/__tests__/native-phone-ui.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-vision
+    path: services/phone-adb-controller/__tests__/native-phone-vision.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-runner-phone-commander
+    path: services/phone-adb-controller/__tests__/runner-phone-commander.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；101来源/协议/独立PG与同生产Judge隔离验收，不代表真实手机业务通过"
+
+  - id: phone-native-phone-queue-idle-error
+    path: services/phone-adb-controller/__tests__/native-phone-queue-idle-error.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实本人PG idle error归属与关闭未知反例，非生产业务验收"
+
+  - id: phone-native-phone-vision-late-terminal
+    path: services/phone-adb-controller/__tests__/native-phone-vision-late-terminal.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实loopback已闭HTTP迟到错误回调保终态，沿Linux原glob执行，非真实手机业务验收"
+
+  - id: ci-api-media-dependency-preflight
+    path: .github/workflows/scripts/__tests__/api-media-dependency-preflight.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；API原媒体三包和CJK字体有界安装，失败不跳测试"

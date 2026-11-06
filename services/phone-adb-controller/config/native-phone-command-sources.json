@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "device_sources": [
+    {
+      "profile": "cloud-phone-test",
+      "serial": "47.100.213.173:10001",
+      "package": "com.ss.android.ugc.aweme",
+      "width": 720,
+      "height": 1280,
+      "device_sdk": 31,
+      "review": {
+        "path": "config/native-phone-reviews/cloud-phone-test-sdk31.md",
+        "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+      },
+      "pillow": {
+        "path": "config/native-phone-pillow-mmv.json",
+        "sha256": "e6c60dc26be5af212b00721bf294f431ae0d7a732ea91b2f5315796b1fbc3411"
+      },
+      "program_files": [
+        {
+          "path": "/system/bin/am",
+          "sha256": "1db5dd2e6b805970474c3e58b170aacfa137b9575b233f0d7d3fc69ff9583c97"
+        },
+        {
+          "path": "/system/bin/app_process",
+          "sha256": "a00bcdcbf8072cfaea7af2d18d31d8bd048630e5769c51b6c5609cbd51bafc70"
+        },
+        {
+          "path": "/system/bin/app_process32",
+          "sha256": "710d143e414c82a247c6ae34d3df22e9d6d33028326b15a34679297fd6803d8e"
+        },
+        {
+          "path": "/system/bin/app_process64",
+          "sha256": "a00bcdcbf8072cfaea7af2d18d31d8bd048630e5769c51b6c5609cbd51bafc70"
+        },
+        {
+          "path": "/system/bin/cmd",
+          "sha256": "0ee76019eb281ad9e4c236c23b31cb0d2e468edce07c14305b019573e2ab1c24"
+        },
+        {
+          "path": "/system/bin/dumpsys",
+          "sha256": "71925c9fae5797625480048db3e6f72c1c68dc4872c2d37f9bd8540d3ac54244"
+        },
+        {
+          "path": "/system/bin/getprop",
+          "sha256": "4cf5bb07af42162a2333aaf858f8c78c62555701da855ded61761e8281995dbf"
+        },
+        {
+          "path": "/system/bin/ime",
+          "sha256": "d0959c12d988f12b92b075a2222a0df1b66e1764f64ce75ef3d4bd9eacb282b7"
+        },
+        {
+          "path": "/system/bin/input",
+          "sha256": "108767c95965714fd7194257f37f6fe5d90f81ff9279e20a2326c1f7f63b737d"
+        },
+        {
+          "path": "/system/bin/monkey",
+          "sha256": "1cde380f3deaf3a8a075c96f8342a444ba96d12a6ea5773c882c31fe3a68b310"
+        },
+        {
+          "path": "/system/bin/screencap",
+          "sha256": "d8936c701195c87dd51c1480c924c61a245e69579ca248512861e0201a08a0f3"
+        },
+        {
+          "path": "/system/bin/settings",
+          "sha256": "5c447700471b694854e201453d8a588505e9a0913ca9583429dc6c9bfcef4dde"
+        },
+        {
+          "path": "/system/bin/sh",
+          "sha256": "df266576b1c89136e0784b2c4d211650ef338f02b1c4d17320cd88a130bd788a"
+        },
+        {
+          "path": "/system/bin/toybox",
+          "sha256": "e314f913f16fe2c2ab601428d64a1c9686b70b962441852d2faecc20a82fff0b"
+        },
+        {
+          "path": "/system/bin/uiautomator",
+          "sha256": "588f4e89975e626c1ae185c350389e4fad005b2cb9525834a42dfa7dfd548545"
+        },
+        {
+          "path": "/system/bin/wm",
+          "sha256": "6aa95202ca1b2a691737daffc979bfd81dd497f2493cb37dc0972faf6af3fae2"
+        },
+        {
+          "path": "/system/framework/android.test.runner.jar",
+          "sha256": "7427a912de902ce1d90ffc54a0d62a2f5beedb6bca5b7dc95d4da8fcf3972baa"
+        },
+        {
+          "path": "/system/framework/monkey.jar",
+          "sha256": "c28ac3461fc3abdf41e50bc314689d10f866097bf4dd3c74ab331d717f622ee9"
+        },
+        {
+          "path": "/system/framework/uiautomator.jar",
+          "sha256": "66b2ac623cb01c7c47044a53ff8245d9eef414a6f9115420e2e589d68ed27e55"
+        }
+      ],
+      "commands": [
+        "pause",
+        "dump",
+        "tap",
+        "search",
+        "foreground",
+        "window",
+        "screenshot",
+        "sdk",
+        "keyevent",
+        "swipe",
+        "long-press",
+        "current-ime",
+        "ime-enable",
+        "ime-set",
+        "clear-nonce",
+        "broadcast-nonce",
+        "input-nonce",
+        "input-select-all",
+        "scratch-search",
+        "open-detail",
+        "remove-ui",
+        "stat-ui",
+        "stat-ui-mtime",
+        "ui-exists",
+        "ui-symlink",
+        "device-date",
+        "model",
+        "telecom",
+        "wake",
+        "unlock",
+        "open-app",
+        "close-app",
+        "home-resolve",
+        "dump-file",
+        "screenshot-file"
+      ]
+    }
+  ]
+}

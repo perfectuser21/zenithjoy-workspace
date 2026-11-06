@@ -6,6 +6,7 @@ import {join,resolve,isAbsolute} from 'node:path';
 import {createServer} from 'node:net';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
+import {PHONE_DARWIN_SUITES} from './native-phone-ci-selection.mjs';
 const require=createRequire(import.meta.url),{Pool}=require('pg');
 const root=resolve(import.meta.dirname,'../..'),sha=b=>createHash('sha256').update(b).digest('hex');
 const suites=['native-103-public-executor.test.mjs','native-103-transaction.test.mjs','native-103-producers.test.mjs','native-103-claim.test.mjs','native-103-control-scope.test.mjs','native-103-public.test.mjs','native-activity-authority.test.mjs','native-task-lease.test.mjs'];
@@ -46,10 +47,10 @@ try{
   await admin.query('CREATE DATABASE cecelia_scratch');
  }finally{await admin.end();}
  const fixture=join(directory,'fixture.json');
- writeFileSync(fixture,JSON.stringify({task_id:'7d85f6ba-873b-40fc-993f-932d24d61e5a',host:'127.0.0.1',port,user:'postgres',database:'cecelia_scratch'}),{mode:0o600,flag:'wx'});
+ writeFileSync(fixture,JSON.stringify({task_id:'7d85f6ba-873b-40fc-993f-932d24d61e5a',host:'127.0.0.1',port,user:'postgres',database:'cecelia_scratch',data}),{mode:0o600,flag:'wx'});
  const env={...process.env,PREFLIGHT_TEST_PYTHON_BIN:python,ZJ_NATIVE_103_PG_FIXTURE:fixture};
  console.log(JSON.stringify({event:'native103-private-pg-ready',host:'127.0.0.1',port,database:'cecelia_scratch',owned_pid:pg.pid}));
- await run(process.execPath,['--test','--test-concurrency=1',...suites.map(s=>'services/phone-adb-controller/__tests__/'+s)],{env});
+ await run(process.execPath,['--test','--test-concurrency=1',...[...suites,...PHONE_DARWIN_SUITES].map(s=>'services/phone-adb-controller/__tests__/'+s)],{env});
  await run(python,['services/phone-adb-controller/__tests__/phone-lock-clean-bootstrap.test.py'],{env});
 }finally{
  let stopped=true;

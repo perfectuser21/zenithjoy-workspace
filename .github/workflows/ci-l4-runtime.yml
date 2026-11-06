@@ -95,7 +95,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/api
       - name: Install media tools required by current video contracts
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg fontconfig fonts-noto-cjk
+        timeout-minutes: 5
+        run: timeout --signal=KILL 240s bash .github/workflows/scripts/prepare-api-media-tools.sh
       - name: Fix rollup optional deps (npm ci bug workaround)
         run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - name: Run tests with coverage
