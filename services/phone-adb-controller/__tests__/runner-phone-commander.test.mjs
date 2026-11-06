@@ -37,7 +37,7 @@ async function realPhone(fn,{processing=false,cloneClosure=false,gateway,nativeR
   };
   const nativePhoneRuntime=nativeRuntimeFactory?nativeRuntimeFactory(await import('file://'+join(f.runtimeRoot,'native-phone-runtime.mjs'))):undefined;
   let router;try{router=await cold.createRunnerPhoneCommander({runtimeRoot:f.runtimeRoot,source:f.source,runDir:f.runDir,activities,nativePhoneRuntime,workflowDeadlineMs:q.deadline_ms,prepareRequest:activity=>requests.find(r=>r.activity_key===activity.key),createObserver});await fn({router,cold,q,keys,activities,requests,allocated,proofs,ownerPins,owner,runtimeRoot:f.runtimeRoot,source:f.source});}finally{await router?.close();}
- },{rawTransport:true});
+ },{rawTransport:true,phone:true});
 }
 for(const processing of [false,true])test('真实私有close后顺序分配所有Phone AV，隔离Caller/SDK且不授业务权 '+(processing?'102':'101'),async()=>{
  await realPhone(async({router,cold,q,keys,activities,allocated,proofs})=>{
