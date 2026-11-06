@@ -120,7 +120,8 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
  async function withOrderLock(line,fn,{directory:lockDirectory=join(directory,'order-locks')}={}){
   check();if(readOnly)throw fail('READONLY_LOCK');if(!calibration)throw fail('DEPENDENCY');if(line!==route.key||heldLock)throw fail('ORDER_LOCK_SCOPE');mkdirSync(lockDirectory,{recursive:true,mode:0o700});
   const code=readFileSync(join(root,'outreach-order-lock.py'),'utf8'),target=leaf('/usr/bin/sandbox-exec',['-p',sandbox,py.path,'-I','-S','-c',code,lockDirectory,line,String(process.pid),randomUUID()],'',{readyLine:'ORDER_LOCK_READY\n'});heldLock=target;
-  try{await target.ready;check();return await fn();}finally{target.end();const result=await target.done;heldLock=null;if(result.code!==0||result.signal||result.unverified){unknown=true;throw fail('ORDER_LOCK_STOP_UNKNOWN');}}
+  let readyTimer;const readyBound=new Promise((_,reject)=>{readyTimer=setTimeout(()=>{target.cancel();reject(fail('ORDER_LOCK_READY_TIMEOUT'));},Math.max(1,Math.min(5000,deadlineMs-Date.now())));});
+  try{await Promise.race([target.ready,readyBound]);clearTimeout(readyTimer);check();return await fn();}finally{clearTimeout(readyTimer);target.end();const result=await target.done;heldLock=null;if(result.code!==0||result.signal||result.unverified){unknown=true;throw fail('ORDER_LOCK_STOP_UNKNOWN');}}
  }
  async function queueDependencies({apiKey,feishuCredentials,orderDirectory}={}){
   check();if(!calibration)throw fail('DEPENDENCY');if(typeof apiKey!=='string'||!apiKey||!feishuCredentials?.[route.account]?.appId||!feishuCredentials[route.account].appSecret)throw fail('DEPENDENCY');
