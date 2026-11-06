@@ -8,6 +8,17 @@ import {createHash} from 'node:crypto';
 import {canonical} from '../runtime-definition.mjs';
 import {using} from './fixtures/official-control-fixture.mjs';
 
+test('运行中Task显式transport或回合预算变化须撤销后续Caller授权',async()=>{
+ for(const placement of ['payload','scope'])for(const field of ['execution_transport','max_turns'])await using(async({instance,q,routes,count})=>{
+  const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_at=new Date().toISOString();
+  const target=placement==='payload'?task.payload:(task.payload.scope??={});
+  target[field]=q[field];await instance.readAuthorizedTaskClaim(q);assert.equal(count(),4);
+  target[field]=field==='execution_transport'?'handoff-v1':q.max_turns-1;
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID/);
+  assert.equal(count(),7,'Task检查失败即停止，不继续读取绑定或增加请求');
+ },{rawTransport:true});
+});
+
 test('Code claim投影来自同次完整授权的真实Task读取，不补造lease或增加GET',async()=>using(async({instance,q,routes,count})=>{
  assert.equal(typeof instance.readAuthorizedTaskClaim,'function');
  const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_at='2026-11-06T00:00:00.000Z';
