@@ -19,7 +19,7 @@ async function using(t,respond,options={}){
  const python=native103TestPython(root);
  const scope={task_id:randomUUID(),binding_id:randomUUID(),run_id:'douyin_comment_scoring-producers__a1',source_commit:source.commit,profile:'mmv-scoring',serial:'none',line:'yuesheng',source_run:options.sourceRun??null};
  const deadlineMs=Date.now()+(options.duration??2000),receiptDeadlineMs=deadlineMs+1000;
- const requestImpl=(url,opts,callback)=>httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname+new URL(url).search,method:opts.method,headers:opts.headers,agent:false},callback);
+ const requestImpl=(url,opts,callback)=>{const req=httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname+new URL(url).search,method:opts.method,headers:opts.headers,agent:false},res=>{options.captureResponse?.(res);callback(res);});options.captureRequest?.(req);return req;};
  const readSource=(path,...args)=>path===join(root,'deployment-manifest.json')?JSON.stringify({source_commit:source.commit}):readFileSync(path,...args);
  const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python,deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token',assertAuthority:options.assertAuthority,readOnly:options.readOnly});
  t.after(()=>producer.close());return {producer,scope,deadlineMs,receiptDeadlineMs};
@@ -48,6 +48,21 @@ test('in-flight POST abort keeps the original external effect unknown and never 
  const call=f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key',{signal:controller.signal});await seen;controller.abort();await assert.rejects(call,/NATIVE_103_HTTP_CLOSED|NATIVE_103_HTTP_UNKNOWN/);
  const stopped=await f.producer.close();assert.equal(stopped.pending,0);assert.equal(stopped.external_effect,'unknown');assert.equal(hits,1);assert.equal(getEventListeners(controller.signal,'abort').length,0);
  controller.abort();assert.equal(f.producer.snapshot().external_effect,'unknown');
+});
+// Capture the callback actually installed on a real HTTP object, forwarding
+// registration unchanged. Calling a retained handler models queued late events.
+function retainHttpError(method,save){return object=>{const original=object[method];object[method]=function(event,handler,...args){if(event==='error')save(handler);return original.call(this,event,handler,...args);};};}
+for(const side of ['request','response'])for(const closeFirst of [false,true])test(`completed POST ignores retained ${side} error ${closeFirst?'after':'before'} producer close`,async t=>{
+ let installed,hits=0;const f=await using(t,(req,res)=>{hits++;req.resume();req.on('end',()=>{res.setHeader('Connection','close');res.end(JSON.stringify({id:'known-returned-http'}));});},{[side==='request'?'captureRequest':'captureResponse']:retainHttpError(side==='request'?'once':'on',handler=>installed=handler)});
+ const response=await f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key');assert.equal(response.id,'known-returned-http');assert.equal(typeof installed,'function');if(closeFirst)await f.producer.close();
+ const before=f.producer.snapshot();assert.equal(before.pending,0);assert.equal(before.external_effect,'observed');assert.ok(before.http.every(row=>row.request_closed&&row.response_closed&&row.socket_closed));
+ installed(Error('retained late HTTP error'));await new Promise(setImmediate);assert.deepEqual(f.producer.snapshot(),before,'the real installed late error callback cannot rewrite terminal facts');
+ const stopped=await f.producer.close();assert.equal(stopped.execution_stopped,true);assert.equal(stopped.external_effect,'observed');assert.equal(hits,1);
+});
+for(const side of ['request','response'])test(`in-flight retained ${side} error preserves unknown and does not resend`,async t=>{
+ let installed,arrived,hits=0;const seen=new Promise(resolve=>arrived=resolve),f=await using(t,(req,res)=>{hits++;req.resume();req.on('end',()=>{if(side==='request')arrived();else{res.writeHead(200,{'Content-Type':'application/json'});res.write('{');}});},{[side==='request'?'captureRequest':'captureResponse']:retainHttpError(side==='request'?'once':'on',handler=>{installed=handler;if(side==='response')arrived();})});
+ const call=f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key');await seen;assert.equal(typeof installed,'function');installed(Error('real pending HTTP error'));await assert.rejects(call,/NATIVE_103_HTTP_UNKNOWN|NATIVE_103_HTTP_CLOSED/);
+ const stopped=await f.producer.close();assert.equal(stopped.pending,0);assert.equal(stopped.external_effect,'unknown');assert.equal(hits,1);
 });
 test('正式父Task读取仅固定scope任务；GET也需req/res/socketclose且不调用模型',async t=>{
  assert.equal(typeof module.startNativeScoringProducers,'function');let path,authorization;

@@ -87,7 +87,7 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
   const finish=()=>{if(completing||!(r.request_closed&&r.response_closed&&r.socket_closed))return;completing=true;
    (async()=>{try{if(!ended)throw fail('HTTP_UNKNOWN');await authority();check();if(final)return;const value=JSON.parse(output);final=true;resolveDone({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,body:value});}catch{if(r.post&&r.dispatched)effectUnknown=true;if(!final){final=true;rejectDone(fail('HTTP_UNKNOWN'));}}finally{opts.signal?.removeEventListener('abort',token.cancel);clearTimeout(timer);clearTimeout(hard);pending.delete(token);}})();
   };
-  const bad=()=>{if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();};
+  const bad=()=>{if(final)return;if(r.post&&r.dispatched)effectUnknown=true;req?.destroy();res?.destroy();socket?.destroy();};
   const timer=setTimeout(token.cancel,Math.max(1,deadlineMs-Date.now())),hard=setTimeout(()=>{if(pending.has(token)){unknown=true;token.cancel();}},Math.max(1,receiptDeadlineMs-Date.now()));
   record({event:'http-intent',id:r.id,method,origin:new URL(url).origin,path:new URL(url).pathname,body_sha256:opts.body?sha(opts.body):null});
   (async()=>{try{
