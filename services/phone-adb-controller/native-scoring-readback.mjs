@@ -7,7 +7,7 @@ const fail=reason=>Error('NATIVE_103_JUDGE_'+reason),sha=b=>createHash('sha256')
 const allowed=new Set(['score_readback','score_exclusion_readback','policy_review','mark_readback','bridge_readback']);
 export async function readNativeScoringActivity({root,source,scope,request,frozen,records,directory,python,credentials,createPool,createAuthorityControl,requestImpl,verify,previousEffect,deadlineMs,signal}={}){
  const end=Math.min(request.receipt_deadline_ms,deadlineMs??request.receipt_deadline_ms);let sealed=false,unknown=false,originalUnknown=previousEffect==='unknown',pending=0,allocation,client,stream,streamClosed=false,authority,producer,dependencies,txn=false,output,problem;
- const active=()=>{if(sealed||signal?.aborted||Date.now()>=end)throw fail('DEADLINE');verify();verifyRpcSource(source,{base:root});const row=source.files.filter(f=>f.path==='native-scoring-readback.mjs');if(dirname(fileURLToPath(import.meta.url))!==root||row.length!==1||sha(readFileSync(join(root,'native-scoring-readback.mjs')))!==row[0].sha256)throw fail('SOURCE');};
+ const active=()=>{if(sealed||signal?.aborted||Date.now()>=end)throw fail('DEADLINE');verify();verifyRpcSource(source,{base:root});const row=source.files.filter(f=>f.path==='native-scoring-readback.mjs');if(dirname(fileURLToPath(import.meta.url))!==root||row.length!==1||sha(readFileSync(join(root,'native-scoring-readback.mjs')))!==row[0].sha256)throw fail('SOURCE');if(sealed||signal?.aborted||Date.now()>=end)throw fail('DEADLINE');};
  const checkedRecords=readNativeScoringReceipts(records,{source,scope});
  const journal=openSync(join(directory,'readonly-journal.jsonl'),'wx',0o600),parent=openSync(directory,'r');fsyncSync(parent);closeSync(parent);
  const record=value=>{writeFileSync(journal,JSON.stringify(value)+'\n');fsyncSync(journal);};
@@ -15,7 +15,7 @@ export async function readNativeScoringActivity({root,source,scope,request,froze
  let rejectDeadline;const expired=new Promise((_,reject)=>{rejectDeadline=reject;});expired.catch(()=>{});
  const cancel=()=>{sealed=true;unknown=true;stream?.destroy();rejectDeadline(fail('DEADLINE'));};
  const timer=setTimeout(cancel,Math.max(1,end-Date.now()));signal?.addEventListener('abort',cancel,{once:true});
- const owned=async fn=>{active();pending++;const work=Promise.resolve().then(fn).finally(()=>{pending--;});work.catch(()=>{});const value=await Promise.race([work,expired]);active();return value;};
+ const owned=async fn=>{active();pending++;const work=Promise.resolve().then(()=>{active();return fn();}).finally(()=>{pending--;});work.catch(()=>{});const value=await Promise.race([work,expired]);active();return value;};
  async function authorized(){active();const cap=await owned(()=>authority.readClaim()),projection=readNativeAuthorityProjection(cap,{request,source});if(!nativeAuthorityProjectionMatches(projection,{source,scope}))throw fail('AUTHORITY');active();}
  async function query(text,args){if(!/^SELECT\s/i.test(String(text).trim()))throw fail('SQL_UNSUPPORTED');await authorized();const value=await owned(()=>client.query(text,args));await authorized();await owned(()=>dependencies.stageRows(value.rows));await authorized();return value;}
  const queue=async(op,input)=>{if(!allowed.has(op))throw fail('UNSUPPORTED');await authorized();const pool={query,connect:async()=>({query,release(){}})};const value=await owned(()=>queueRequest(pool,{...input,op,line:scope.line,run:scope.run,source_run:scope.source_run},{...dependencies,sourceCommit:source.commit}));await authorized();return value;};
