@@ -211,3 +211,17 @@ test('Observer refusal has a safe diagnostic code without leaking arbitrary erro
   await module.runActivitySkillParentLoop({...state,beforeTurn:()=>{if(error)throw error;return false;}});const raw=readFileSync(join(state.directory,'parent-loop/loop-failure.json'),'utf8'),record=JSON.parse(raw);assert.equal(record.failure_code,error?'PARENT_LOOP_UNCLASSIFIED':'PARENT_LOOP_OBSERVER_UNVERIFIED');assert.doesNotMatch(raw,/FIXTURE_SECRET|postgres/);assert.equal(state.inputs.length,0);
  }
 });
+
+for(const action of ['steer','answer','abort'])test('completed accepted '+action+' between context snapshot and dispatch must invalidate the old snapshot',async t=>{
+ let first=true;const state=await fixture(t,{turns:async(_index,input)=>{assert.deepEqual(input.context.commander_guidance,['Same accepted guidance.','Same accepted guidance.']);return{type:'finish'};},onEvent:async()=>action==='abort'?{action:'abort',reason:'Stop the current Worker.'}:{action,text:'Same accepted guidance.'}}),read=state.broker.readParentContext;
+ state.broker.readParentContext=async()=>{const old=await read();if(first){first=false;await state.broker.report({type:'stall'});if(action!=='abort')await state.broker.report({type:'stall'});}return old;};
+ const out=await module.runActivitySkillParentLoop({...state,beforeTurn:async()=>true});
+ assert.equal(out.reason,action==='abort'?'commander_aborted':'agent_finished');assert.equal(state.inputs.length,action==='abort'?0:1);assert.deepEqual(state.effects,[]);
+});
+
+test('parent context watermark is private to the original broker object, never clone or cross-broker JSON',async t=>{
+ const first=await fixture(t,{turns:async()=>({type:'finish'})}),other=await fixture(t,{turns:async()=>({type:'finish'})});
+ assert.equal(typeof first.broker.isParentContextCurrent,'function');const context=await first.broker.readParentContext();
+ assert.equal(first.broker.isParentContextCurrent(context),true);assert.equal(first.broker.isParentContextCurrent(structuredClone(context)),false);assert.equal(other.broker.isParentContextCurrent(context),false);
+ await first.broker.abort('Code cancelled original scope');assert.equal(first.broker.isParentContextCurrent(context),false);
+});
