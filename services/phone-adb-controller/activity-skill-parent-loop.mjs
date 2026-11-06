@@ -19,6 +19,8 @@ const immutable=value=>{
  return value;
 };
 const code=error=>/^(?:SKILL_PRIMARY_|PARENT_BROKER_)[A-Z0-9_]+$/.test(error?.message||'')?error.message:'PARENT_LOOP_TOOL_FAILED';
+const failureCodes=new Set(['PARENT_LOOP_ABORTED','PARENT_LOOP_DEADLINE','PARENT_LOOP_OBSERVER_UNVERIFIED','RUNNER_OBSERVER_DRAIN_DEADLINE','RUNNER_OBSERVER_DRAIN_ABORTED','RUNNER_OBSERVER_EXECUTION_UNKNOWN']);
+const safeFailure=error=>failureCodes.has(error?.code)?error.code:failureCodes.has(error?.message)?error.message:'PARENT_LOOP_UNCLASSIFIED';
 function intent(text){
  if(typeof text!=='string'||Buffer.byteLength(text)>65536)throw Error('PARENT_LOOP_INTENT_INVALID');
  let value;try{value=JSON.parse(text);}catch{throw Error('PARENT_LOOP_INTENT_INVALID');}
@@ -60,7 +62,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}
   const parent=openSync(directory,constants.O_RDONLY);try{fsyncSync(parent);}finally{closeSync(parent);}
  };
- let permit=null,currentIndex=null,reason='turn_limit',turnCount=0,officialStopped=true,modelUnknown=false,controlSeal;
+ let permit=null,currentIndex=null,reason='turn_limit',turnCount=0,officialStopped=true,modelUnknown=false,controlSeal,failureCode;
  const client=createActivitySkillBrokerClient({request:deliveryRequest,requestPath:deliveryRequest.broker_request_path,canReadback,
   authorize:(fixed,{op,body})=>control.consumeIntentPermit(permit,{request:q,index:currentIndex,op,body})});
  const history=[],runIds=new Set();
@@ -68,9 +70,9 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
  try{
   for(let index=startIndex;index<Math.min(q.max_turns,readOnlyContinuation?startIndex+1:q.max_turns);index++){
    active();
+   if(beforeTurn&&await bounded(Promise.resolve().then(()=>beforeTurn({deadlineMs:q.worker_deadline_ms,signal})),q.worker_deadline_ms,signal)!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();
    const context=await bounded(broker.readParentContext(),q.worker_deadline_ms,signal);active();
    if(context.commander_abort===true){reason='commander_aborted';break;}
-   if(beforeTurn&&await beforeTurn()!==true)throw Error('PARENT_LOOP_OBSERVER_UNVERIFIED');active();
    const input={protocol:'leadgen-parent-turn/v1',index,context,history:structuredClone(history)};
    if(Buffer.byteLength(JSON.stringify(input))>256*1024){reason='input_limit';break;}
    record(`turn-${index}-request`,{request_sha256:hash(JSON.stringify(q)),input});
@@ -111,7 +113,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
   }
  }catch(error){
   reason=error?.message==='PARENT_LOOP_ABORTED'?'runner_aborted':error?.message==='PARENT_LOOP_DEADLINE'?'worker_deadline':'parent_loop_failed';
-  record('loop-failure',{reason});
+  failureCode=safeFailure(error);record('loop-failure',{reason,failure_code:failureCode});
  }finally{
   permit=null;client.seal();broker.seal();
   try{
@@ -127,7 +129,7 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
  if(officialStopped&&!modelUnknown&&!client.snapshot().execution_unknown&&actual.sealed===true&&actual.pending===0&&actual.active===0&&!actual.execution_unknown&&boundScope(scope,q)){
   modelStopProof=Object.freeze({domain:'raw-model-turns-v1'});stoppedModelScopes.set(modelStopProof,canonical(scope));
  }
- return {reason,turn_count:turnCount,official_execution_stopped:officialStopped,model_execution_unknown:modelUnknown,
+ return {reason,...(failureCode?{failure_code:failureCode}:{}),turn_count:turnCount,official_execution_stopped:officialStopped,model_execution_unknown:modelUnknown,
   broker_execution_unknown:actual.execution_unknown===true||client.snapshot().execution_unknown,
   model_stop_proof:modelStopProof,activity_result:actual.result};
 }
