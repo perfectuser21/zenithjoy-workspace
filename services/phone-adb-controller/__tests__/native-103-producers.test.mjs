@@ -5,7 +5,7 @@ import {readFileSync,mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import {RPC_FILES} from '../leadgen-client.mjs';
+import {RPC_FILES} from '../leadgen-client.mjs';import lineRoutes from '../line-routes.js';
 
 const module=await import('../native-scoring-producers.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return {};throw error;});
 const root=resolve(import.meta.dirname,'..'),sha=b=>createHash('sha256').update(b).digest('hex');
@@ -16,9 +16,9 @@ async function using(t,respond,options={}){
  const source={commit:'a'.repeat(40),files:[...new Set([...RPC_FILES,'native-scoring-runtime.mjs','native-scoring-producers.mjs'])].map(path=>({path,sha256:sha(readFileSync(join(root,path)))}))};
  const pins=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.filter(row=>row.target==='mmv').map(row=>row.executables.python);
  assert.ok(pins.length);assert.ok(pins.every(pin=>JSON.stringify(pin)===JSON.stringify(pins[0])));
- const scope={task_id:randomUUID(),binding_id:randomUUID(),run_id:'douyin_comment_scoring-producers__a1',source_commit:source.commit,profile:'mmv-scoring',serial:'none',line:'yuesheng'};
+ const scope={task_id:randomUUID(),binding_id:randomUUID(),run_id:'douyin_comment_scoring-producers__a1',source_commit:source.commit,profile:'mmv-scoring',serial:'none',line:'yuesheng',source_run:options.sourceRun??null};
  const deadlineMs=Date.now()+(options.duration??2000),receiptDeadlineMs=deadlineMs+1000;
- const requestImpl=(url,opts,callback)=>httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname,method:opts.method,headers:opts.headers,agent:false},callback);
+ const requestImpl=(url,opts,callback)=>httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname+new URL(url).search,method:opts.method,headers:opts.headers,agent:false},callback);
  const readSource=(path,...args)=>path===join(root,'deployment-manifest.json')?JSON.stringify({source_commit:source.commit}):readFileSync(path,...args);
  const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python:pins[0],deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token'});
  t.after(()=>producer.close());return {producer,scope,deadlineMs,receiptDeadlineMs};
@@ -62,4 +62,10 @@ test('严格原parser与原订单锁均沿固定Python：源码/UID不匹配拒�
  let called=0;await f.producer.withOrderLock('yuesheng',async()=>{called++;});assert.equal(called,1);
  const closed=await f.producer.close();assert.equal(closed.execution_stopped,true);
  assert.ok(closed.native.every(leaf=>leaf.process_closed&&leaf.stdin_closed&&leaf.stdout_closed&&leaf.stderr_closed));
+});
+test('原sample readProof同冻结sourceRun三次受控GET，保原身份归并；错源0HTTP、不读ambient Brain凭据',async t=>{
+ let hits=0;const upstream='fixture102',runId=`douyin_video_processing-${upstream}__a1`;
+ const f=await using(t,(req,res)=>{hits++;assert.equal(req.headers.authorization,'Bearer fixture-brain-token');const values={};values[`/api/brain/runs/${runId}/definition`]={binding:{id:'binding102',run_id:runId,release_id:'release102',workflow_definition_version_id:'wf102'},workflow:{id:'wf102',source_commit:'a'.repeat(40)}};values[`/api/brain/runs/${runId}/reconciliation`]={run_id:runId,run_binding_id:'binding102',release_id:'release102',business_outcome:'pass',evidence_status:'verified',gaps:[],span_count:0,expected_count:0};values[`/api/brain/runs/${runId}?include=spans`]={spans:[]};const value=values[req.url];res.statusCode=value?200:404;res.end(JSON.stringify(value||{}));},{sourceRun:upstream});
+ const deps=await f.producer.queueDependencies({apiKey:'fixture-key',feishuCredentials:{[lineRoutes.routeOf('yuesheng').account]:{appId:'fixture-app',appSecret:'fixture-secret'}}});
+ const proof=await deps.sampledAdmission.readProof(upstream);assert.equal(proof.run_id,runId);assert.equal(proof.identity_bound,true);assert.equal(hits,3);await assert.rejects(deps.sampledAdmission.readProof('foreign102'),/SOURCE_PROOF_SCOPE/);assert.equal(hits,3);const closed=await f.producer.close();assert.equal(closed.execution_stopped,true);assert.equal(closed.external_effect,'none');
 });
