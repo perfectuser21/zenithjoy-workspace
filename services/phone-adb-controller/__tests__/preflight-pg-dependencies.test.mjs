@@ -21,6 +21,15 @@ test('官方固定闭包可在私有候选安装并载入Pool，篡改模块后�
    const pg=loadPreflightPg({runtimeRoot:process.argv[1],frozen:JSON.parse(process.argv[2])});
    if ('native' in pg) throw Error('optional native capability must not escape'); const pool=new pg.Pool({max:1}); console.log(typeof pool.query); await pool.end();`;
   const frozen={deployment:{source_commit:'a'.repeat(40)},preflight_pg:identity.frozen};
+  const pgModule=await import('../preflight-pg-dependencies.mjs');
+  assert.equal(typeof pgModule.loadScoringPg,'function','103必须使用scoring_pg独立冻结键，不伪preflight');
+  const scoringFrozen={deployment:frozen.deployment,execution_mode:'agent',workflow_version:{payload:{key:'douyin_comment_scoring'}},agent_input:{workflow_key:'douyin_comment_scoring',profile:'mmv-scoring',serial:'none'},scoring_pg:identity.frozen};
+  const scoringPool=new (pgModule.loadScoringPg({runtimeRoot:root,frozen:scoringFrozen}).Pool)({max:1});await scoringPool.end();
+  assert.throws(()=>loadForScoring({...scoringFrozen,scoring_pg:undefined}),/SCORING_PG/);
+  assert.throws(()=>loadForScoring({...scoringFrozen,agent_input:{...scoringFrozen.agent_input,serial:'4311010223'}}),/SCORING_PG/);
+  function loadForScoring(scope){return pgModule.loadScoringPg({runtimeRoot:root,frozen:scope});}
+  assert.throws(()=>pgModule.loadPreflightPg({runtimeRoot:root,frozen:scoringFrozen}),/FROZEN_LOCK/);
+
   const launch=(env={},scope=frozen)=>spawnSync(process.execPath,['--input-type=module','-e',code,root,JSON.stringify(scope)],{encoding:'utf8',timeout:10000,env:{...process.env,NODE_PATH:'',NODE_PG_FORCE_NATIVE:'',...env}});
   {const {prepareFrozenPreflightPg,preflightPgDeployment,loadPreflightPg}=await import('../preflight-pg-dependencies.mjs'),runRoot=join(root,'run-runtime');mkdirSync(runRoot,{mode:0o700});
   const expectedDeployment=preflightPgDeployment({runtimeRoot:root,sourceCommit:frozen.deployment.source_commit});

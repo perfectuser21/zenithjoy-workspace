@@ -82,8 +82,8 @@ export async function installPreflightPg({runtimeRoot,sourceCommit,tarballs}){
 function inventory(root,prefix=''){
  const out=[];for(const e of readdirSync(join(root,prefix),{withFileTypes:true})){const p=prefix?prefix+'/'+e.name:e.name;need(safePath(p),'FILE_PATH');if(e.isDirectory()){directory(join(root,p),true);out.push(...inventory(root,p));}else{regular(join(root,p));out.push(p);}}return out.sort();
 }
-export function verifyPreflightPg({runtimeRoot,frozen}){
- const identity=preflightPgLockIdentity({runtimeRoot});const source=frozen?.deployment?.source_commit;need(/^[a-f0-9]{40}$/.test(source||'')&&(!Object.hasOwn(frozen,'source_commit')||frozen.source_commit===source),'FROZEN_SOURCE');need(frozen.preflight_pg&&Object.keys(frozen.preflight_pg).sort().join(',')==='lock_sha256,package_lock_sha256'&&frozen.preflight_pg.lock_sha256===identity.lock_sha256&&frozen.preflight_pg.package_lock_sha256===identity.package_lock_sha256,'FROZEN_LOCK');
+function verifyPgDependency({runtimeRoot,frozen,key}){
+ const identity=preflightPgLockIdentity({runtimeRoot});const source=frozen?.deployment?.source_commit;need(/^[a-f0-9]{40}$/.test(source||'')&&(!Object.hasOwn(frozen,'source_commit')||frozen.source_commit===source),'FROZEN_SOURCE');const locked=frozen[key];need(locked&&Object.keys(locked).sort().join(',')==='lock_sha256,package_lock_sha256'&&locked.lock_sha256===identity.lock_sha256&&locked.package_lock_sha256===identity.package_lock_sha256,'FROZEN_LOCK');
  const {value:lock}=lockAt(runtimeRoot),dest=target(runtimeRoot);directory(join(runtimeRoot,'_dependencies'),true);directory(dest,true);const actualPaths=inventory(dest);
  const manifest=decodeJson(regular(join(dest,'manifest.json')),'MANIFEST_JSON');need(manifest.schema_version===1&&manifest.source_commit===source&&manifest.lock_sha256===identity.lock_sha256&&manifest.package_lock_sha256===identity.package_lock_sha256,'MANIFEST');need(JSON.stringify(manifest.packages)===JSON.stringify(lock.packages),'MANIFEST_PACKAGES');
  const files=[];const expected=['manifest.json'];
@@ -92,12 +92,17 @@ export function verifyPreflightPg({runtimeRoot,frozen}){
  }
  need(JSON.stringify(actualPaths)===JSON.stringify(expected.sort()),'EXTRA_FILES');need(JSON.stringify(files.sort((a,b)=>a.path.localeCompare(b.path)))===JSON.stringify(manifest.files),'MANIFEST_FILES');return {manifest,manifest_sha256:sha(regular(join(dest,'manifest.json')))};
 }
+export function verifyPreflightPg(input){return verifyPgDependency({...input,key:'preflight_pg'});}
+function scoringScope(frozen){
+ if(frozen?.execution_mode!=='agent'||frozen.workflow_version?.payload?.key!=='douyin_comment_scoring'||frozen.agent_input?.workflow_key!=='douyin_comment_scoring'||frozen.agent_input.profile!=='mmv-scoring'||frozen.agent_input.serial!=='none'||Object.hasOwn(frozen,'preflight_pg')||Object.hasOwn(frozen,'control_scope')||!frozen.scoring_pg)throw Error('SCORING_PG_SCOPE');
+}
+export function verifyScoringPg(input){scoringScope(input.frozen);return verifyPgDependency({...input,key:'scoring_pg'});}
 // Explicit offline handoff from a source-verified candidate into this run's
 // private frozen tree. Runtime never searches the candidate or downloads packages.
-export async function prepareFrozenPreflightPg({sourceRuntimeRoot,runtimeRoot,frozen,expectedDeployment}){
+async function prepareFrozenPgDependency({sourceRuntimeRoot,runtimeRoot,frozen,expectedDeployment,key}){
  const canonical=value=>JSON.stringify(value,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
  need(realpathSync(sourceRuntimeRoot)!==realpathSync(runtimeRoot),'FREEZE_ROOT');
- const sourceCommit=frozen?.deployment?.source_commit,verified=verifyPreflightPg({runtimeRoot:sourceRuntimeRoot,frozen});
+ const sourceCommit=frozen?.deployment?.source_commit,verified=verifyPgDependency({runtimeRoot:sourceRuntimeRoot,frozen,key});
  const observed=preflightPgDeployment({runtimeRoot:sourceRuntimeRoot,sourceCommit});need(expectedDeployment&&canonical(observed)===canonical(expectedDeployment),'FREEZE_DEPLOYMENT');
  const tarballs=new Map(verified.manifest.packages.map(e=>[e.name,regular(join(target(sourceRuntimeRoot),'tarballs',tarName(e)),4*1024*1024)]));
  need(tarballs.size===verified.manifest.packages.length,'FREEZE_TARBALLS');
@@ -105,8 +110,14 @@ export async function prepareFrozenPreflightPg({sourceRuntimeRoot,runtimeRoot,fr
  const installed=preflightPgDeployment({runtimeRoot,sourceCommit});need(canonical(installed)===canonical(observed),'FREEZE_COPY');
  need(canonical(preflightPgDeployment({runtimeRoot:sourceRuntimeRoot,sourceCommit}))===canonical(observed),'FREEZE_SOURCE_CHANGED');return installed;
 }
+export async function prepareFrozenPreflightPg(input){return prepareFrozenPgDependency({...input,key:'preflight_pg'});}
+export async function prepareFrozenScoringPg(input){scoringScope(input.frozen);return prepareFrozenPgDependency({...input,key:'scoring_pg'});}
 export function loadPreflightPg({runtimeRoot,frozen}){
  verifyPreflightPg({runtimeRoot,frozen});need(!process.env.NODE_PG_FORCE_NATIVE&&!process.env.NODE_PATH,'ENVIRONMENT_ROUTE');const dest=target(realpathSync(runtimeRoot)),require=createRequire(join(dest,'package.json'));
+ need(require.resolve('pg')===join(dest,'node_modules/pg/lib/index.js'),'MODULE_ROUTE');const {Pool}=require('pg');need(typeof Pool==='function','POOL_EXPORT');return Object.freeze({Pool});
+}
+export function loadScoringPg({runtimeRoot,frozen}){
+ verifyScoringPg({runtimeRoot,frozen});need(!process.env.NODE_PG_FORCE_NATIVE&&!process.env.NODE_PATH,'ENVIRONMENT_ROUTE');const dest=target(realpathSync(runtimeRoot)),require=createRequire(join(dest,'package.json'));
  need(require.resolve('pg')===join(dest,'node_modules/pg/lib/index.js'),'MODULE_ROUTE');const {Pool}=require('pg');need(typeof Pool==='function','POOL_EXPORT');return Object.freeze({Pool});
 }
 export function preflightPgDeployment({runtimeRoot,sourceCommit}){

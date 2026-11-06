@@ -209,7 +209,7 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 在原正式启动输入上设置 `LEADGEN_EXECUTION_MODE=agent`，可选择 101、102、103 的 Agent 主执行路径。执行模式、任务身份、输入范围与预算冻结到本 run，不能在续跑时切换为 Code，也不适用于 104。原 Code 路径保持独立。
 
-Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行域能力检查。当前 Provider 尚未声明支持完整执行域，101–103 的 Agent 活动会返回 `needs_review`、`not_started=true`，不会开始手机或业务操作；这不代表业务完成，也不会自动切换为 Code。环境变量、Agent 返回内容或 JSON 标记不能开启此能力。旧执行的停止状态若仍未证明，必须保留 `execution_stopped=false`，不能因为本次没有启动 Worker 就覆盖它。
+Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行域能力检查。103 的原生执行路径限定 MMV、`mmv-scoring`、`serial=none`，要求完整冻结的数据库依赖、主机身份、Task 归属及真实租约；缺少这些条件则返回 `needs_review`、`not_started=true`。101、102 的完整手机执行域仍需另外验收。环境变量、Agent 返回内容或 JSON 标记不能开启此能力。旧执行的停止状态若仍未证明，必须保留 `execution_stopped=false`，不能因为本次没有启动 Worker 就覆盖它。
 
 Agent 主执行时，每个 Activity 加载自己的冻结 Skill，通过当前活动允许的手机、录音、提交和读回原语完成工作；不会调用原业务 handler 或 `resume`。底层控制器、事务、资源管理和规则校验仍由代码提供。`inspect`、`phone`、`business` 只使用本次原请求给出的入口，Agent 不创建绑定或直接调用内部队列。
 
@@ -244,6 +244,12 @@ Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和�
 `checkpoint` 在步骤裁判和工作流读回中统一只记录；`hard` 缺失、未知或失败均不能通过。正常异常与中止仍进入清场；旧执行是否停止未知时禁止重放和清场，持久隔离手机。未知发送效果只读回，不重发。104 的发送实现、账号与审批行为不变。
 
 每个 Caller 关闭后另存 `official-caller-final-*.json`，绑定原请求、来源、原始日志与逐回合证据。它只供独立审计，不能凭 JSON 或文件存在授予停止证明、恢复权限或洗掉旧 unknown；记录失败继续保留 unknown。取消、deadline 或客户端关闭抛错时，仍尝试关闭其它本人资源，并在原收尾预算内记录实际结果。
+
+103 每个 Activity 分别关闭 Worker、Code 授权、数据库和原生辅助进程；结束检查另建只能读回的调用域，执行原评分政策与步骤检查。Task 显式修改运输或回合上限后，下一次授权即拒绝旧请求。SQL 提交或 CRM 请求失去确认时只按原已发行对象读回，保留 unknown，不重复提交、不进入下一活动。
+
+103 原队列发行空范围时，scoring 与 mark 仍按合同 `empty→next` 顺序执行并记账为 `empty`。独立只读检查确认公司与原空范围，前活动完全关闭后 Code 才能交接空范围事实；质量评审和 CRM 配送记录为 `not_applicable`，不评分、不生成线索、不请求配送。任何未知状态仍阻断后续活动，空批不代表新增获客产出。
+
+`phone-lock-root.py bootstrap-clean-production` 是安装时的空锁根初始化入口。它要求旧根没有 owner、未决锁或 claim 文件，持有全部 guard，并用同一 guard inode 保护新旧根；运行中的 Worker 只能验证，不能初始化。任何提交或 fsync 结果未知都保留现场，不能凭标记存在宣称初始化成功。
 
 Code 可用 `readAuthorizedTaskClaim` 取得同次完整授权实际读到的 Task 归属投影，不新增模型或业务操作。该投影不包含租约，也不是权限凭据；正常业务仍需自己的正式来源、租约、原生资源域和独立结果核验。
 

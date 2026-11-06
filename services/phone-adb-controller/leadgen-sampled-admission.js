@@ -31,15 +31,17 @@ function brainToken(){
   if(!token||/\s/.test(token))fail('BRAIN_AUTH_UNAVAILABLE');
   return token;
 }
-async function readRunProof(sourceRun){
+async function readRunProof(sourceRun,{read:readOverride}={}){
+  if(readOverride!==undefined&&typeof readOverride!=='function')fail('BRAIN_PROOF_UNAVAILABLE');
+  const runId=`douyin_video_processing-${sourceRun}__a1`;
+  const read=readOverride||(()=>{
   const base=(process.env.BRAIN_URL||'http://localhost:5221').replace(/\/$/,'');
   const token=brainToken();
-  const runId=`douyin_video_processing-${sourceRun}__a1`;
-  const read=async path=>{
+  return async path=>{
     const response=await fetch(`${base}/api/brain${path}`,{headers:{authorization:`Bearer ${token}`},signal:AbortSignal.timeout(8000)});
     if(!response.ok)fail('BRAIN_PROOF_UNAVAILABLE');
     return response.json();
-  };
+  };})();
   const [definition,reconciliation,run]=await Promise.all([
     read(`/runs/${encodeURIComponent(runId)}/definition`),
     read(`/runs/${encodeURIComponent(runId)}/reconciliation`),

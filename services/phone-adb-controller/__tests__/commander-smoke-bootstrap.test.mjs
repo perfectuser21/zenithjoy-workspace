@@ -6,6 +6,7 @@ import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 import {gates} from '../../../scripts/ci/required-gate.mjs';
+import {openclawStep,captureNodeArgs} from '../../../.github/workflows/scripts/__tests__/helpers/openclaw-selection.mjs';
 const path='.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh';
 function run(fail){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-bootstrap-')));
@@ -54,19 +55,18 @@ test('真实Commander来源用例可消费外部无HEAD对象缓存且不依赖�
 
 // Expand the actual required workflow command, rather than treating a comment
 // about L3 ownership as evidence that the behavior suites are still selected.
-test('实际required L3命令仍选择完整Commander执行与部署回归且每套只选择一次', t=>{
- const dir=mkdtempSync(join(tmpdir(),'commander-required-selection-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+test('实际required L3命令仍选择完整Commander执行与部署回归且每套只选择一次', ()=>{
  const workflow=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
  const job=workflow.jobs['openclaw-scripts-test'];assert.ok(job);assert.ok(!job['continue-on-error']);
  assert.ok(workflow.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
  assert.ok(gates.code.always.includes('openclaw-scripts-test'));
- const step=job.steps.find(step=>step.run?.startsWith('node --test'));assert.ok(step);assert.ok(!step['continue-on-error']);
- const args=join(dir,'args');writeFileSync(join(dir,'node'),'#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE_ARGS"\n',{mode:0o755});
- const command=step.run.replace(/\$\{\{\s*matrix.shard\s*\}\}/g,'1');
- const result=spawnSync('bash',['-c',command],{cwd:resolve(new URL('../../..',import.meta.url).pathname),env:{...process.env,PATH:dir+':'+process.env.PATH,CAPTURE_ARGS:args},encoding:'utf8'});
- assert.equal(result.status,0,result.stderr);
- const selected=readFileSync(args,'utf8').trim().split('\n');
+ const step=openclawStep(workflow);assert.ok(!step['continue-on-error']);
+ const selected=captureNodeArgs(step.run);
  for(const name of ['commander-report','commander-v2','commander-codex-agent','commander-handoff','deployment-unified','deployment-prepare']){
   const file='services/phone-adb-controller/__tests__/'+name+'.test.mjs';assert.equal(selected.filter(arg=>arg===file).length,1,file);
  }
+ const darwin=workflow.jobs['native-103-darwin-test'];assert.ok(darwin&&!darwin.if&&!darwin['continue-on-error']);assert.ok(workflow.jobs['l3-passed'].needs.includes('native-103-darwin-test'));assert.ok(gates.code.always.includes('native-103-darwin-test'));
+ assert.ok(darwin.steps.some(step=>step.run?.includes('node scripts/ci/native-103-darwin-tests.mjs')),'the required Darwin job must actually invoke its full suite driver');
+ const driver=readFileSync(new URL('../../../scripts/ci/native-103-darwin-tests.mjs',import.meta.url),'utf8');
+ for(const name of ['transaction','public-executor','producers']){const file='native-103-'+name+'.test.mjs';assert.equal(selected.some(arg=>arg.endsWith('/'+file)),false);assert.equal(driver.split("'"+file+"'").length-1,1,'dedicated Darwin driver declares '+file+' exactly once');}
 });

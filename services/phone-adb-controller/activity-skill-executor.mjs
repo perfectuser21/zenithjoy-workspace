@@ -107,6 +107,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     if(!rawControl||['authorizeParentContext','authorizeBrokerDelivery','seal','close','snapshot','verifySealedExecution'].some(key=>typeof rawControl[key]!=='function')
       ||await rawControl.authorizeParentContext(request)!==true)throw noLaunch('AGENT_PRIMARY_RAW_AUTHORITY_UNVERIFIED');
    }
+   if(transport&&typeof tools.bindOfficialAuthority==='function')await tools.bindOfficialAuthority({request,control:rawControl,scope,directory});
    const preparation=await tools.prepare();
    if(activity.key==='cleanup'&&preparation?.native_cleanup_not_required===true){
     const proof=Object.freeze({agent_not_launched:true,execution_stopped:true});notLaunched.set(proof,canonical(scope));

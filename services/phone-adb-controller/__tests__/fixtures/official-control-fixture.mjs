@@ -10,6 +10,7 @@ import {RPC_FILES} from '../../leadgen-client.mjs';
 import {workflowCommanderSession} from '../../commander-owner-state.mjs';
 import {skillRunKey} from '../../leadgen-skill-agent.mjs';
 import {canonical} from '../../runtime-definition.mjs';
+import {bindNative103TestPython} from '../helpers/native-103-test-python.mjs';
 
 const control=await import('../../official-agent-control.mjs').catch(error=>{
  if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url===new URL('../../official-agent-control.mjs',import.meta.url).href)return {};
@@ -23,6 +24,7 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
+ if(scoring){const binding=bindNative103TestPython(runtimeRoot);if(binding)writeFileSync(binding.path,JSON.stringify(binding.policy));}
  const localControl=await import(new URL('./runtime/official-agent-control.mjs',new URL('file://'+copied+'/')).href);
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-control-'))),home=join(directory,'home'),journalDirectory=join(directory,'journal');
  mkdirSync(journalDirectory,{mode:0o700});

@@ -42,6 +42,7 @@ test('权威 absent 首次安装原字节，所有SSH原语使用私有连接且
  for(const host of ['mmv','xian-m4']){
   assert.equal(readFileSync(join(base(f,host),f.revision,'runtime/transport-payload.bin')).length,270000);
   assert.ok(readFileSync(join(base(f,host),f.revision,'runtime/leadgen-outreach-scope.js')).includes('validateOutreachScope'),'候选必须携带 runtime-definition 的新依赖');
+  assert.deepEqual(readFileSync(join(base(f,host),f.revision,'runtime/native-task-lease.mjs')),readFileSync(new URL('../native-task-lease.mjs',import.meta.url)),'两端冷collector必须收到实际runtime-definition静态依赖的原字节');
  }
  const posts=readFileSync(join(f.top,'brain.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(posts.length,2);
 });

@@ -1,3 +1,4 @@
+import {createNativeScoringWorkflow,isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -28,7 +29,9 @@ export async function invokeNativeActivity(execute,state){
 }
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 export function createWorkflowHandlers(options){
- return validateFrozenControlAcceptance(options.frozen)?createControlAcceptanceHandlers(options):createHandlers(options);
+ if(validateFrozenControlAcceptance(options.frozen))return createControlAcceptanceHandlers(options);
+ const scoring=options.frozen?.execution_mode==='agent'&&options.env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'?createNativeScoringWorkflow(options):undefined;
+ const handlers=createHandlers({...options,scoringRuntime:scoring});return scoring?{...handlers,prepareNativeScoring:()=>scoring.prepare(),nativeScoringRuntime:scoring}:handlers;
 }
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
@@ -113,9 +116,9 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  return {executionMode,execution};
 }
 
-export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,execute=execInput}){
+export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,nativeScoring,execute=execInput}){
     const control=controlScope===undefined?null:validateControlScope(controlScope);
-    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key);
+    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key||env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&isNativeScoringWorkflow(nativeScoring)&&nativeScoring.snapshot().prepared===true&&['scoring','mark_leads'].includes(r.activity));
     if(r.phase==='start'){
       if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
       else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
@@ -130,10 +133,11 @@ export async function recordActivityBookkeeping(r,{root,env,executionMode,contro
     }
 }
 
-export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal}){
+export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal,nativeScoring}){
   if(executionMode==='agent'&&validateFrozenControlAcceptance(frozen)){
     return {result:{gate:{verdict:'fail',reason:'CONTROL_ACCEPTANCE_IS_NOT_103_OUTPUT'},steps:[],probes:[{name:'actual_103_business_result',pass:false,reason:'control acceptance has no scoring/PG capability'}]}};
   }
+  if(executionMode==='agent'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'){if(!isNativeScoringWorkflow(nativeScoring))throw Error('NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED');return nativeScoring.readbackChecks(activity.key,{deadlineMs:deadline_ms,signal});}
   if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
@@ -143,7 +147,13 @@ export async function readbackActivityChecks({executionMode,activity,root,frozen
 
 export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver}){
  if(frozen.execution_transport!=='raw-model-v1')return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},close:async()=>null};
- if(!validateFrozenControlAcceptance(frozen)||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
+ if(!validateFrozenControlAcceptance(frozen)){
+  if(frozen.workflow_version?.payload?.key!=='douyin_comment_scoring'||!frozen.scoring_control_scope||!frozen.scoring_pg||!frozen.native_task_lease||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
+  const input=frozen.agent_input,deadline=(input.run_start_ts+input.run_max_seconds)*1000;
+  const {createRunnerScoringCommander}=await import('./runner-official-commander.mjs');
+  return createRunnerScoringCommander({runtimeRoot:join(runDir,'runtime'),runDir,source:rpcSource(frozen),activities,workflowDeadlineMs:deadline,prepareRequest:(activity,options={})=>executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:Math.min(deadline,options.deadline_ms??Infinity)}),...(createObserver?{createObserver}:{})});
+ }
+ if(typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
  const activity=activities.find(value=>value.key===frozen.control_scope.activity_key);if(!activity)throw Error('RAW_OBSERVER_ACTIVITY_MISSING');
  const input=frozen.agent_input,request=executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:(input.run_start_ts+input.run_max_seconds)*1000});
  const factory=createObserver||(await import('./runner-official-commander.mjs')).createRunnerOfficialCommander;
@@ -177,7 +187,7 @@ export async function runWorkflowWithCommander({frozen,prepareCommander=prepareW
   return allowed();
  };
  if(observerSafety){observerSafety.safe=allowed;observerSafety.ready=ready;}
- const guarded=options.executeAgent&& (async(activity,input)=>{if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
+ const guarded=options.executeAgent&& (async(activity,input)=>{await observer.selectActivity?.(activity,input);if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
  if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!await ready({signal:args[1]?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
  let result,runError,closed,resourceQuarantine;
  try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}catch(error){runError=error;}
@@ -220,7 +230,7 @@ async function main(){
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
-    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope});
+    await recordActivityBookkeeping(r,{root,env,executionMode,controlScope:frozen.control_scope,nativeScoring:handlers.nativeScoringRuntime});
   };
   const activities=frozen.activities.map(a=>({...a.version.payload.contract,key:a.reference.slot_key}));
   const verify=async(activity,result,options={})=>{
@@ -238,7 +248,7 @@ async function main(){
         scope:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,source_commit:frozen.deployment.source_commit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key},
         readback:async video=>(await rpc({kind:'queue',request:{op:'discover_readback',run:env.WFR_TAG,line:env.LEADGEN_LINE,video}},{timeoutMs:60000})).result}));
     }
-    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,...options});
+    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,nativeScoring:handlers.nativeScoringRuntime,...options});
     const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
     // 多源取证分别按真实source索引检查，不能拿一个来源的截图代替另一个。
     const phoneEvidence=env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',env.P);
@@ -254,6 +264,7 @@ async function main(){
   };
   const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
   const handlers=createWorkflowHandlers({runDir:dir,frozen,binding,preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
+  if(executionMode==='agent'&&frozen.execution_transport==='raw-model-v1'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&!validateFrozenControlAcceptance(frozen))await handlers.prepareNativeScoring();
   const observerSafety={};
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:input=>observerSafety.ready?.(input)});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
