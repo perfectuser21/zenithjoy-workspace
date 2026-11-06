@@ -9,6 +9,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {createServer,request as httpRequest} from 'node:http';
 import {RPC_FILES} from '../leadgen-client.mjs';
 import lineRoutes from '../line-routes.js';
+import {native103TestPython} from './helpers/native-103-test-python.mjs';
 const require=createRequire(import.meta.url),{Pool}=require('pg');
 const root=resolve(import.meta.dirname,'..');
 const runtime=await import('../native-scoring-runtime.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return {};throw e;});
@@ -91,7 +92,7 @@ test('两Activity完整业务fixture：原评分双审/原生parser/标人事务
  });});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
  const requestImpl=(url,opts,callback)=>{const target=new URL(url);return httpRequest({hostname:'127.0.0.1',port:server.address().port,path:target.pathname+target.search,method:opts.method,headers:opts.headers,agent:false},callback);};
- const policy=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))),python=policy.hosts.find(h=>h.target==='mmv').executables.python;
+ const python=native103TestPython(root);
  const pd=join(f.directory,'producers');mkdirSync(pd,{mode:0o700});
  const producers=await producerModule.startNativeScoringProducers({root,source:f.source,scope:f.scope,directory:pd,python,deadlineMs:f.scope.deadline_ms,receiptDeadlineMs:f.scope.receipt_deadline_ms,requestImpl,readSource:f.readSource});
  const deps=await producers.queueDependencies({apiKey:'fixture-key',feishuCredentials:{[lineRoutes.routeOf('yuesheng').account]:{appId:'fixture-app',appSecret:'fixture-secret'}},orderDirectory:join(f.directory,'order-locks')});
@@ -118,7 +119,7 @@ test('两Activity完整业务fixture：原评分双审/原生parser/标人事务
  const f=await fixture(t);f.scope.source_run=null;f.task.payload.scope.source_run=null;delete f.task.lease_until;const r=runtime.createNativeScoringRuntime(f);await r.prepare();await r.begin({...f.scope,activity:'scoring'});await r.queue('company_config',{step:'103'});const selected=await r.queue('score_scope',{});assert.deepEqual(selected.ids,[f.id]);assert.equal(selected.sources[f.id],'source102');await r.closeActivity();r.seal();assert.equal(r.snapshot().execution_stopped,true);
  });
 test('两slot只接受同Source品牌producer；前slot真实封闭后才能更换，不能复开旧域',async t=>{
- const f=await fixture(t),policy=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))),python=policy.hosts.find(h=>h.target==='mmv').executables.python;
+ const f=await fixture(t),python=native103TestPython(root);
  const make=async name=>{const directory=join(f.directory,name);mkdirSync(directory,{mode:0o700});const p=await producerModule.startNativeScoringProducers({root,source:f.source,scope:f.scope,directory,python,deadlineMs:f.scope.deadline_ms,receiptDeadlineMs:f.scope.receipt_deadline_ms,readSource:f.readSource});t.after(()=>p.close());return {p,deps:await p.queueDependencies({apiKey:'fixture-key',feishuCredentials:{[lineRoutes.routeOf('yuesheng').account]:{appId:'fixture-app',appSecret:'fixture-secret'}},orderDirectory:join(directory,'locks')})};};
  const first=await make('scoring-producer'),second=await make('mark-producer'),ledger=join(f.directory,'queue-ledger');mkdirSync(ledger,{mode:0o700});const r=runtime.createNativeScoringRuntime({...f,directory:ledger,queueDependencies:first.deps});await r.prepare();assert.equal(typeof r.bindDependencies,'function','公开两slot不能永远复用同一已封producer');await r.begin({...f.scope,activity:'scoring'});await r.queue('company_config',{step:'103'});const scope=await r.queue('score_scope',{});assert.deepEqual(scope.ids,[f.id]);await r.closeActivity();assert.throws(()=>r.bindDependencies(second.deps),/PREVIOUS_PRODUCER/);await first.p.close();r.bindDependencies(second.deps);assert.throws(()=>r.bindDependencies({}),/DEPENDENCY/);await r.begin({...f.scope,activity:'mark_leads'});await second.p.close();await r.closeActivity();r.seal();assert.equal(r.snapshot().execution_stopped,true);
 });

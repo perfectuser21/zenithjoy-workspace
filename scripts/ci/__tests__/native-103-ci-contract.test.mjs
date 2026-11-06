@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import YAML from 'yaml';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {gates,checkGate} from '../required-gate.mjs';
 
 test('native 103 PG and Darwin tests have a required owned-fixture CI path',()=>{
@@ -18,8 +20,13 @@ test('native 103 PG and Darwin tests have a required owned-fixture CI path',()=>
  assert.doesNotThrow(()=>checkGate('code',needs));
  needs['native-103-darwin-test']={result:'skipped'};
  assert.throws(()=>checkGate('code',needs),/native-103-darwin-test=skipped/);
- const linux=doc.jobs['openclaw-scripts-test'].steps.find(s=>s.name.startsWith('node --test scripts/openclaw')).run;
- assert.match(linux,/native-103-\(transaction\|public-executor\|producers\)\.test\.mjs/);
+ const linux=doc.jobs['openclaw-scripts-test'].steps.find(s=>s.name?.startsWith('node --test scripts/openclaw')).run;
+ const selection=linux.replace(/^node --test.*$/m,'printf "%s\\n" "${phone_tests[@]}"');
+ const result=spawnSync('/bin/bash',['-c',selection],{cwd:fileURLToPath(new URL('../../../',import.meta.url)),encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
+ const selected=result.stdout.trim().split('\n');
+ for(const name of ['transaction','public-executor','producers'])assert.equal(selected.some(p=>p.endsWith('native-103-'+name+'.test.mjs')),false);
+ for(const name of ['claim','control-scope','public'])assert.ok(selected.some(p=>p.endsWith('native-103-'+name+'.test.mjs')));
  const lifecycle=readFileSync(new URL('../native-103-darwin-tests.mjs',import.meta.url),'utf8');
  for(const suite of ['native-103-public-executor','native-103-transaction','native-103-producers','native-103-claim','native-103-control-scope','native-103-public','native-activity-authority','native-task-lease'])assert.ok(lifecycle.includes(suite+'.test.mjs'),suite);
  assert.ok(lifecycle.includes('phone-lock-clean-bootstrap.test.py'));

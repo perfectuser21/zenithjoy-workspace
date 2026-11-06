@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {RPC_FILES} from '../leadgen-client.mjs';import lineRoutes from '../line-routes.js';
+import {native103TestPython} from './helpers/native-103-test-python.mjs';
 
 const module=await import('../native-scoring-producers.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return {};throw error;});
 const root=resolve(import.meta.dirname,'..'),sha=b=>createHash('sha256').update(b).digest('hex');
@@ -14,13 +15,12 @@ async function using(t,respond,options={}){
  const server=createServer(respond);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));rmSync(directory,{recursive:true,force:true});});
  const source={commit:'a'.repeat(40),files:[...new Set([...RPC_FILES,'native-scoring-runtime.mjs','native-scoring-producers.mjs'])].map(path=>({path,sha256:sha(readFileSync(join(root,path)))}))};
- const pins=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.filter(row=>row.target==='mmv').map(row=>row.executables.python);
- assert.ok(pins.length);assert.ok(pins.every(pin=>JSON.stringify(pin)===JSON.stringify(pins[0])));
+ const python=native103TestPython(root);
  const scope={task_id:randomUUID(),binding_id:randomUUID(),run_id:'douyin_comment_scoring-producers__a1',source_commit:source.commit,profile:'mmv-scoring',serial:'none',line:'yuesheng',source_run:options.sourceRun??null};
  const deadlineMs=Date.now()+(options.duration??2000),receiptDeadlineMs=deadlineMs+1000;
  const requestImpl=(url,opts,callback)=>httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname+new URL(url).search,method:opts.method,headers:opts.headers,agent:false},callback);
  const readSource=(path,...args)=>path===join(root,'deployment-manifest.json')?JSON.stringify({source_commit:source.commit}):readFileSync(path,...args);
- const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python:pins[0],deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token',assertAuthority:options.assertAuthority,readOnly:options.readOnly});
+ const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python,deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token',assertAuthority:options.assertAuthority,readOnly:options.readOnly});
  t.after(()=>producer.close());return {producer,scope,deadlineMs,receiptDeadlineMs};
 }
 test('原Jev HTTP seam：真正请求/响应/socket归还后才消费；URL/model固定，错目标零IO',async t=>{
