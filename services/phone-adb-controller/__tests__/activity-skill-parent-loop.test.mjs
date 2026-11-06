@@ -11,10 +11,10 @@ const module=await import('../activity-skill-parent-loop.mjs').catch(error=>{
  if(error.code==='ERR_MODULE_NOT_FOUND')return {};
  throw error;
 });
-async function fixture(t,{turns,onEvent=async()=>({action:'none'}),maxTurns=4,result=null,stopKnown=false,runId}={}){
+async function fixture(t,{turns,onEvent=async()=>({action:'none'}),maxTurns=4,result=null,stopKnown=false,runId,workerMs=8000}={}){
  const directory=mkdtempSync(join(tmpdir(),'raw-parent-loop-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const text='---\nname: fixture\nmetadata:\n  primary_execution: agent-v1\n  execution_transports: [raw-model-v1]\n---\nOnly this activity.';
- const request={protocol:'leadgen-activity-v1',mode:'execute',execution_transport:'raw-model-v1',max_turns:maxTurns,workflow_key:'douyin_video_discovery',run_id:'douyin_video_discovery-loop_fixture__a1',run_tag:'loop_fixture',profile:'fixture',serial:'FIXTURE12345',line:'yuesheng',source_run:null,limit:2,comment_limit:null,task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',activity_key:'preflight',nonce:'a'.repeat(48),source_commit:'b'.repeat(40),runtime_snapshot_sha256:'c'.repeat(64),deadline_ms:Date.now()+10000,worker_deadline_ms:Date.now()+8000,receipt_deadline_ms:Date.now()+9000,method:{text,sha256:createHash('sha256').update(text).digest('hex')},broker_request_path:join(directory,'broker-request.json')};
+ const request={protocol:'leadgen-activity-v1',mode:'execute',execution_transport:'raw-model-v1',max_turns:maxTurns,workflow_key:'douyin_video_discovery',run_id:'douyin_video_discovery-loop_fixture__a1',run_tag:'loop_fixture',profile:'fixture',serial:'FIXTURE12345',line:'yuesheng',source_run:null,limit:2,comment_limit:null,task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',activity_key:'preflight',nonce:'a'.repeat(48),source_commit:'b'.repeat(40),runtime_snapshot_sha256:'c'.repeat(64),deadline_ms:Date.now()+10000,worker_deadline_ms:Date.now()+workerMs,receipt_deadline_ms:Date.now()+9000,method:{text,sha256:createHash('sha256').update(text).digest('hex')},broker_request_path:join(directory,'broker-request.json')};
  const receipts=new WeakMap(),permits=new WeakMap(),stops=new WeakMap(),inputs=[],effects=[],stopRequests=[];
  let sealed=false,closed=false;const sealSnapshots=new WeakSet();
  const control={
@@ -189,4 +189,17 @@ test('owned pending stall must drain and apply guidance BEFORE the next real bro
  assert.equal(out.reason,'agent_finished');assert.equal(out.turn_count,3);assert.equal(out.model_execution_unknown,false);assert.deepEqual(state.effects,[]);
  const events=readFileSync(join(state.directory,'broker-events.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
  assert.equal(events.filter(e=>e.event.type==='stall').length,1);assert.equal(events.find(e=>e.event.type==='stall').action_applied,true);
+});
+
+test('Observer admission uses the original worker deadline and persists only a fixed failure code',async t=>{
+ const state=await fixture(t,{workerMs:80,turns:async()=>({type:'finish'})});let release;const held=new Promise(r=>{release=r;});
+ const pending=module.runActivitySkillParentLoop({...state,beforeTurn:()=>held});
+ try{const out=await Promise.race([pending,new Promise(r=>setTimeout(()=>r(null),150))]);assert.ok(out,'owned admission must not escape original deadline');assert.equal(out.reason,'worker_deadline');assert.equal(state.inputs.length,0);const failure=JSON.parse(readFileSync(join(state.directory,'parent-loop/loop-failure.json')));assert.equal(failure.failure_code,'PARENT_LOOP_DEADLINE');}
+ finally{release(true);await pending;}
+});
+
+test('Observer refusal has a safe diagnostic code without leaking arbitrary errors',async t=>{
+ for(const error of [null,Error('Bearer FIXTURE_SECRET postgres://private')]){const state=await fixture(t,{turns:async()=>({type:'finish'})});
+  await module.runActivitySkillParentLoop({...state,beforeTurn:()=>{if(error)throw error;return false;}});const raw=readFileSync(join(state.directory,'parent-loop/loop-failure.json'),'utf8'),record=JSON.parse(raw);assert.equal(record.failure_code,error?'PARENT_LOOP_UNCLASSIFIED':'PARENT_LOOP_OBSERVER_UNVERIFIED');assert.doesNotMatch(raw,/FIXTURE_SECRET|postgres/);assert.equal(state.inputs.length,0);
+ }
 });
