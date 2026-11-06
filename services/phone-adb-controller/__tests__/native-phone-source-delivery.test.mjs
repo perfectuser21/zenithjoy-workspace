@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
+import {execFileSync} from 'node:child_process';
 import {RPC_FILES,rpcSource} from '../leadgen-client.mjs';
 import {NATIVE_PHONE_FILES} from '../native-phone-runtime.mjs';
 import {collectMethods} from '../../../scripts/product-map/leadgen-methods.mjs';
@@ -16,11 +17,27 @@ const dependencies=[...new Set([...NATIVE_PHONE_FILES,'douyin-phone-adb','search
 
 test('cold phone source reaches both deployed inventories, RPC and every shared Activity binding',()=>{
  const deploy=text('deploy.sh');
- for(const name of ['MMV_JS_FILES','DEVICE_NODE_FILES']){
-  const match=deploy.match(new RegExp(name+'=\\(([\\s\\S]*?)\\)'));
-  assert.ok(match,`${name} is the actual deployment inventory`);
-  const inventory=new Set(match[1].replace(/#[^\n]*/g,'').split(/\s+/));
-  for(const file of dependencies)assert.ok(inventory.has(file),`${name} misses ${file}`);
+ const start=deploy.indexOf('MMV_JS_FILES=('),end=deploy.indexOf('# 在任何SSH前核验部署源字节');assert.ok(start>0&&end>start);
+ const names=['MMV_JS_FILES','MMV_PROBE_FILES','MMV_RUNTIME_FILES','DEVICE_NODE_FILES','DEVICE_RPC_PROBE_FILES','DEVICE_PLAN_FILES','DEVICE_SH_FILES','DEVICE_CTL_FILES','DEVICE_CTL_DIRS','RPC_FILES'];
+ const script=deploy.slice(start,end)+'\n'+names.map(name=>`printf '%s\\0' '${name}' "\${${name}[@]}" '@END@'`).join('\n');
+ const values=execFileSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8'}).split('\0').filter(Boolean),groups={};
+ for(let i=0;i<values.length;){const name=values[i++],entries=[];while(values[i]!=='@END@'&&i<values.length)entries.push(values[i++]);assert.equal(values[i++],'@END@');groups[name]=entries;}
+ const count=(entries,file)=>entries.filter(value=>value===file).length;
+ const controllers=['douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','locate-element.py'];
+ for(const file of controllers){
+  assert.equal(count(groups.DEVICE_CTL_FILES,file),1,`${file} retains its existing controller installer`);
+  for(const name of ['MMV_JS_FILES','MMV_PROBE_FILES','DEVICE_NODE_FILES','DEVICE_RPC_PROBE_FILES'])assert.equal(count(groups[name],file),0,`${file} must not be installed through ordinary ${name}`);
+ }
+ assert.deepEqual(groups.DEVICE_CTL_DIRS,['bin-harvest','.local/bin'],'paired controller execution paths remain unchanged');
+ const policyFiles=['config/native-phone-command-sources.json',...policy.device_sources.flatMap(row=>[row.review.path,row.pillow.path])];
+ for(const file of policyFiles){
+  for(const name of ['MMV_JS_FILES','DEVICE_NODE_FILES'])assert.equal(count(groups[name],file),0,`${file} is data, not a Node program`);
+  for(const name of ['MMV_PROBE_FILES','DEVICE_RPC_PROBE_FILES'])assert.equal(count(groups[name],file),1,`${file} uses the existing data/probe validator`);
+ }
+ const device=[...groups.DEVICE_SH_FILES,...groups.DEVICE_NODE_FILES,...groups.DEVICE_PLAN_FILES,...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES];
+ for(const [name,inventory]of [['MMV_RUNTIME_FILES',groups.MMV_RUNTIME_FILES],['actual M4 manifest arguments',device]]){
+  assert.equal(new Set(inventory).size,inventory.length,`${name} must not hide duplicate deployed paths`);
+  for(const file of dependencies)assert.equal(count(inventory,file),1,`${name} must contain exactly one ${file}`);
  }
  const required=text('leadgen-rpc.mjs').match(/for\s*\(const path of (\[[\s\S]*?\])\)/);
  assert.ok(required,'actual RPC receiver source gate exists');
