@@ -147,7 +147,13 @@ export async function readbackActivityChecks({executionMode,activity,root,frozen
 
 export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver}){
  if(frozen.execution_transport!=='raw-model-v1')return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},close:async()=>null};
- if(!validateFrozenControlAcceptance(frozen)||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
+ if(!validateFrozenControlAcceptance(frozen)){
+  if(frozen.workflow_version?.payload?.key!=='douyin_comment_scoring'||!frozen.scoring_control_scope||!frozen.scoring_pg||!frozen.native_task_lease||typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
+  const input=frozen.agent_input,deadline=(input.run_start_ts+input.run_max_seconds)*1000;
+  const {createRunnerScoringCommander}=await import('./runner-official-commander.mjs');
+  return createRunnerScoringCommander({runtimeRoot:join(runDir,'runtime'),runDir,source:rpcSource(frozen),activities,workflowDeadlineMs:deadline,prepareRequest:(activity,options={})=>executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:Math.min(deadline,options.deadline_ms??Infinity)}),...(createObserver?{createObserver}:{})});
+ }
+ if(typeof executeAgent.prepareObserverRequest!=='function')throw Error('RAW_OBSERVER_ACTIVITY_DOMAIN_UNSUPPORTED');
  const activity=activities.find(value=>value.key===frozen.control_scope.activity_key);if(!activity)throw Error('RAW_OBSERVER_ACTIVITY_MISSING');
  const input=frozen.agent_input,request=executeAgent.prepareObserverRequest(activity,{context:{task_id:input.task_id},deadline_ms:(input.run_start_ts+input.run_max_seconds)*1000});
  const factory=createObserver||(await import('./runner-official-commander.mjs')).createRunnerOfficialCommander;
@@ -181,7 +187,7 @@ export async function runWorkflowWithCommander({frozen,prepareCommander=prepareW
   return allowed();
  };
  if(observerSafety){observerSafety.safe=allowed;observerSafety.ready=ready;}
- const guarded=options.executeAgent&& (async(activity,input)=>{if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
+ const guarded=options.executeAgent&& (async(activity,input)=>{await observer.selectActivity?.(activity,input);if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
  if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!await ready({signal:args[1]?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
  let result,runError,closed,resourceQuarantine;
  try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}catch(error){runError=error;}
