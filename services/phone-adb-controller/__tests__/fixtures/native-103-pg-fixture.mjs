@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import{createRequire}from'node:module';import{mkdtempSync,mkdirSync,readFileSync,rmSync}from'node:fs';import{tmpdir}from'node:os';import{join,resolve}from'node:path';import{randomUUID,createHash}from'node:crypto';import{RPC_FILES}from'../../leadgen-client.mjs';import lineRoutes from'../../line-routes.js';
+import assert from 'node:assert/strict';import{createRequire}from'node:module';import{mkdtempSync,mkdirSync,readFileSync,rmSync,appendFileSync}from'node:fs';import{tmpdir}from'node:os';import{join,resolve}from'node:path';import{randomUUID,createHash}from'node:crypto';import{RPC_FILES}from'../../leadgen-client.mjs';import lineRoutes from'../../line-routes.js';
 const require=createRequire(import.meta.url),{Pool}=require('pg'),root=resolve(import.meta.dirname,'../..'),fixturePath=process.env.ZJ_NATIVE_103_PG_FIXTURE;
 export async function native103PgFixture(t,{Pool:OwnedPool=Pool}={}){
  const Pool=OwnedPool;
@@ -22,12 +22,20 @@ export async function native103PgFixture(t,{Pool:OwnedPool=Pool}={}){
  await admin.query(`INSERT INTO ${schema}.leadgen_comments(id,line_key,dedup_key,harvest_batch,source_video,source_video_url,comment_body) VALUES($1,'yuesheng','one','source102','人工智能报名',$2,'在哪里报名')`,[id,url]);
  const directory=mkdtempSync(join(tmpdir(),'native103-txn-'));mkdirSync(join(directory,'ledger'),{mode:0o700});
  t.after(async()=>{await admin.query('DROP SCHEMA '+schema+' CASCADE');admin.release();await pool.end();rmSync(directory,{recursive:true,force:true});});
- const calls=[],control={loseCommit:false};let allocated=0;
+ const calls=[],control={loseCommit:false,pgErrors:[]};let allocated=0;
  const createPool=async()=>{
   allocated++;const actual=new Pool({host:pg.host,port:pg.port,user:pg.user,database:pg.database,max:1});
+  // The test adapter intentionally injects held closes and lost COMMIT ACKs,
+  // unlike the production local Pool's own deadline/end timer. Own real errors
+  // here too; a caught Client/idle-Pool error stays sticky in the close proof.
+  const allocationId=randomUUID(),seenErrors=new WeakSet();let errorUnknown=false;
+  const ownError=(kind,error,client)=>{errorUnknown=true;if(error&&typeof error==='object'){if(seenErrors.has(error))return;seenErrors.add(error);}const event={at:Date.now(),allocation_id:allocationId,kind,backend_pid:client?.processID??null,message:String(error?.message||error)};control.pgErrors.push(event);appendFileSync(join(directory,'pg-errors.jsonl'),JSON.stringify(event)+'\n',{mode:0o600});};
+  actual.on('error',(error,client)=>ownError('pool',error,client));
+  actual.on('connect',client=>client.on('error',error=>ownError('client',error,client)));
   let closing;const close=()=>closing??=actual.end();
+  const stopped=async()=>{await close();return {execution_stopped:actual.ended&&!errorUnknown,execution_unknown:errorUnknown};};
   const owned={async connect(){const c=await actual.connect();let scoreWrite=false,markWrite=false;return {connection:c.connection,release:(...args)=>c.release(...args),async query(text,args){calls.push(text);const r=await c.query(sql(text),args);if(/UPDATE\s+zenithjoy\.leadgen_comments\b[\s\S]*judgment_config\s*=/i.test(text))scoreWrite=true;if(/INSERT INTO\s+zenithjoy\.leadgen_leads\b/i.test(text))markWrite=true;if(text==='COMMIT'&&markWrite&&control.loseMarkResultCommit){control.loseMarkResultCommit=false;throw Error('FIXTURE_MARK_RESULT_ACK_LOST');}if(text==='COMMIT'&&scoreWrite&&control.loseScoreResultCommit){control.loseScoreResultCommit=false;throw Error('FIXTURE_SCORE_RESULT_ACK_LOST');}if(text==='COMMIT'&&control.loseCommit){control.loseCommit=false;throw Error('FIXTURE_ACK_LOST');}return r;}};},async query(text,args){calls.push(text);return actual.query(sql(text),args);},end:close};
-  return {pool:owned,transport:{async close(){await close();return {execution_stopped:actual.ended};},async seal(){await close();return {execution_stopped:actual.ended};}},expectedIdentity:{database:'cecelia_scratch',role:'postgres',system_identifier:systemIdentifier}};
+  return {pool:owned,transport:{close:stopped,seal:stopped},expectedIdentity:{database:'cecelia_scratch',role:'postgres',system_identifier:systemIdentifier}};
  };
  const source={repo:'perfectuser21/zenithjoy-workspace',commit:'a'.repeat(40),files:[...new Set([...RPC_FILES,'native-scoring-runtime.mjs','native-scoring-producers.mjs'])].map(path=>({path,sha256:createHash('sha256').update(readFileSync(join(root,path))).digest('hex')}))};
  const scope={workflow:'douyin_comment_scoring',run:'native103_real',run_id:'douyin_comment_scoring-native103_real__a1',task_id:randomUUID(),binding_id:randomUUID(),source_commit:source.commit,profile:'mmv-scoring',serial:'none',line:'yuesheng',source_run:'source102',limit:1,deadline_ms:Date.now()+20000,receipt_deadline_ms:Date.now()+25000};
