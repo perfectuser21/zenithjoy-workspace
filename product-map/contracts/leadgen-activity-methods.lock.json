@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -220,7 +220,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -559,13 +559,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "c1d47d2a5b96554e104e666f26f5e57461762ecdf6e1fe28a8fa2f2464d4b8f3",
+      "code_digest": "3b0fef304033f79ca0c7094a9f0fa6b78a40c8167aad1df0ffd3f8c4cbb216bc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "cb4a3c6e9d371d4d88ca127ea7295ddb3aed0f21de6199a35bf7704037c4ad05",
-        "current_code_digest": "c1d47d2a5b96554e104e666f26f5e57461762ecdf6e1fe28a8fa2f2464d4b8f3"
+        "previous_code_digest": "c1d47d2a5b96554e104e666f26f5e57461762ecdf6e1fe28a8fa2f2464d4b8f3",
+        "current_code_digest": "3b0fef304033f79ca0c7094a9f0fa6b78a40c8167aad1df0ffd3f8c4cbb216bc"
       }
     },
     "douyin_video_processing.preflight": {
@@ -801,7 +801,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -829,7 +829,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -1151,13 +1151,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eb28a5df1d93096e04bb036daad313ac05492070f29580cf592490c6a9e60c4d",
+      "code_digest": "a158a751aeb4514aed48447052da0073814fd58b7c82e28bc4fe5fef7df095fc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "32fb5a6133925d4386a8ec61c431a318f4cb9b58f1be23900d9e9612e05fd669",
-        "current_code_digest": "eb28a5df1d93096e04bb036daad313ac05492070f29580cf592490c6a9e60c4d"
+        "previous_code_digest": "eb28a5df1d93096e04bb036daad313ac05492070f29580cf592490c6a9e60c4d",
+        "current_code_digest": "a158a751aeb4514aed48447052da0073814fd58b7c82e28bc4fe5fef7df095fc"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1358,7 +1358,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -1386,7 +1386,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -1711,13 +1711,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "737660f39cd45460875b608dcfb7c6e3ba4c245c76d014a190d6eede702f35ba",
+      "code_digest": "7f9146fc90c159a522707f3496f921dbf0a90116cebb272e146ee50e75908d7c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "02e0dbe1037117f2701f6bf3fd9dd5d0838201346eaacd046e7be15492a8d187",
-        "current_code_digest": "737660f39cd45460875b608dcfb7c6e3ba4c245c76d014a190d6eede702f35ba"
+        "previous_code_digest": "737660f39cd45460875b608dcfb7c6e3ba4c245c76d014a190d6eede702f35ba",
+        "current_code_digest": "7f9146fc90c159a522707f3496f921dbf0a90116cebb272e146ee50e75908d7c"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1946,7 +1946,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -1974,7 +1974,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -2355,13 +2355,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "c7643147b13dd6aa9a35dab8755f0df8a79035346205a2c1ef05ab5ac8be3948",
+      "code_digest": "f816675aef3bff37349361a95d41ebf2fe1a08e314d30ce994e0b26f0e430087",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "b599d9a0fe83bbc0d0dc9364aa585b6530d7ca5cffef7d0a2583faaaf241606d",
-        "current_code_digest": "c7643147b13dd6aa9a35dab8755f0df8a79035346205a2c1ef05ab5ac8be3948"
+        "previous_code_digest": "c7643147b13dd6aa9a35dab8755f0df8a79035346205a2c1ef05ab5ac8be3948",
+        "current_code_digest": "f816675aef3bff37349361a95d41ebf2fe1a08e314d30ce994e0b26f0e430087"
       }
     },
     "douyin_video_processing.collection": {
@@ -2562,7 +2562,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -2590,7 +2590,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -2937,13 +2937,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "689506afd5e72288d71ced61e4b5385b4b1d1d61a3f625eb5832b064517028dc",
+      "code_digest": "5019bee6b6b27945859b834996d016216d8fa835362e80c77b73437451e9ef58",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "2ed04cda184d4a7905e848f151af362d6936aa724149fee8ce19d85a965e07be",
-        "current_code_digest": "689506afd5e72288d71ced61e4b5385b4b1d1d61a3f625eb5832b064517028dc"
+        "previous_code_digest": "689506afd5e72288d71ced61e4b5385b4b1d1d61a3f625eb5832b064517028dc",
+        "current_code_digest": "5019bee6b6b27945859b834996d016216d8fa835362e80c77b73437451e9ef58"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -3165,7 +3165,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -3193,7 +3193,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -3514,13 +3514,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "fe81b9dfe3d1390b75cdcf670d391fa556745eef41d778aa4aa4a9ee5906ae43",
+      "code_digest": "a45929b93a21ac3ea74dcb05cfd7048b85dc63358ff02519148bf8a8f2af9435",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "4e7ac49bc2fb307d6b2e394dc2d7a41d675169db7842b7976be3c0a907743207",
-        "current_code_digest": "fe81b9dfe3d1390b75cdcf670d391fa556745eef41d778aa4aa4a9ee5906ae43"
+        "previous_code_digest": "fe81b9dfe3d1390b75cdcf670d391fa556745eef41d778aa4aa4a9ee5906ae43",
+        "current_code_digest": "a45929b93a21ac3ea74dcb05cfd7048b85dc63358ff02519148bf8a8f2af9435"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -3714,7 +3714,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -3742,7 +3742,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -4074,13 +4074,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "d8804773476c9e08adf12b7a4b5244acada13b74ade25ef6e65dc1d3ead407a3",
+      "code_digest": "2645b36ac25d5fbefa491f23362814c428ed07c8f0aac93616199de27aa0c1e4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "51b9d2fbf4adc8f82875994a21add48a371e7251c8a491e9372a7aeba726dac1",
-        "current_code_digest": "d8804773476c9e08adf12b7a4b5244acada13b74ade25ef6e65dc1d3ead407a3"
+        "previous_code_digest": "d8804773476c9e08adf12b7a4b5244acada13b74ade25ef6e65dc1d3ead407a3",
+        "current_code_digest": "2645b36ac25d5fbefa491f23362814c428ed07c8f0aac93616199de27aa0c1e4"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -4281,7 +4281,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -4309,7 +4309,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -4676,13 +4676,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6f25a986a5b609589f35e1723ec3c43a72af53c2ba1cf5faa445ffa90933686d",
+      "code_digest": "0bbe1afcfdf3ca78c46c99fe2472b4a5a03d63bab35329637c420b3a5470b622",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：原raw方法/Skill/Activity合同不变，修复Code-owned Observer排队、原截止内排空和指导应用的时序；实际已完成的answer/steer和abort通过同broker私有上下文revision失效重读，保留已splice指导且同文两指令各一次。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：原raw方法合同、模型身份/终态协议、截止与额度不变；Caller增加close时本地final审计，JSON明确非恢复权限，私有WeakSet和当前事实双校未改。 三类job取消及HTTP/Gateway/模型资源关闭逐项捕获同步异常并保unknown，继续其它owned资源，真实close/deadline/finally/cancel反例均修复；不会以捕获错误伪造停止。新增readAuthorizedTaskClaim仅Code私有接口复用原完整verifySkillRequest同次Task读，返回受限claim投影，无额外GET/lease/Worker入口，旧bool接口保持。固定Git六套114及独立错误/部分分配负例通过；这是等强源码修复与审计补全，非仅日志，不证明真实部署、业务或全OS停止。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "ee567e2fdedf1d9b5642f494c13a88603b59687d81c90f6c652b87fb916069c6",
-        "current_code_digest": "6f25a986a5b609589f35e1723ec3c43a72af53c2ba1cf5faa445ffa90933686d"
+        "previous_code_digest": "6f25a986a5b609589f35e1723ec3c43a72af53c2ba1cf5faa445ffa90933686d",
+        "current_code_digest": "0bbe1afcfdf3ca78c46c99fe2472b4a5a03d63bab35329637c420b3a5470b622"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -4736,7 +4736,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -4764,7 +4764,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -5226,13 +5226,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "23494b94aa9fff93658bbc88cc86336d4325a6b5ad2b7a100a72c168f5b00e12",
+      "code_digest": "7c2d953d773fd7625199a7ee4f46823e7adc995fedb9602601bd7997524bb586",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：本104条目仅共享源码闭包摘要变化；104原发送、订单、审批及授权逻辑未改，raw禁用保持，不向104开放新Task投影API或新执行路径。共享Caller关闭审计与逐资源取消异常隔离不改变104业务合同、方法身份或旧停止要求；final JSON仍非权限品牌或恢复依据。固定Source及独立错误反例已核验，本条仅作共享闭包的internal_compatible评估，不证明104业务、部署或全OS停止通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "e8475cf8cebc4d71c89ce8cfc5ba47c223b2d69d717fc84187a68f0b7eca8af2",
-        "current_code_digest": "23494b94aa9fff93658bbc88cc86336d4325a6b5ad2b7a100a72c168f5b00e12"
+        "previous_code_digest": "23494b94aa9fff93658bbc88cc86336d4325a6b5ad2b7a100a72c168f5b00e12",
+        "current_code_digest": "7c2d953d773fd7625199a7ee4f46823e7adc995fedb9602601bd7997524bb586"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -5286,7 +5286,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -5314,7 +5314,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -5751,13 +5751,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9cf4756a5ee375c6fa2ac102c921f4795a5d78089f1eaba29755dffc3b51b846",
+      "code_digest": "d7ec813c3f36903f540438956b3a12c46e39ec327b5848d380050553ea9f4cf3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：本104条目仅共享源码闭包摘要变化；104原发送、订单、审批及授权逻辑未改，raw禁用保持，不向104开放新Task投影API或新执行路径。共享Caller关闭审计与逐资源取消异常隔离不改变104业务合同、方法身份或旧停止要求；final JSON仍非权限品牌或恢复依据。固定Source及独立错误反例已核验，本条仅作共享闭包的internal_compatible评估，不证明104业务、部署或全OS停止通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "0f0afde1f8e705e6149b2b20dddd3b4f1da2a0a609641679caa5e9bde331af99",
-        "current_code_digest": "9cf4756a5ee375c6fa2ac102c921f4795a5d78089f1eaba29755dffc3b51b846"
+        "previous_code_digest": "9cf4756a5ee375c6fa2ac102c921f4795a5d78089f1eaba29755dffc3b51b846",
+        "current_code_digest": "d7ec813c3f36903f540438956b3a12c46e39ec327b5848d380050553ea9f4cf3"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -5811,7 +5811,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -5839,7 +5839,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -6269,13 +6269,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ad5b2e82bc1e68ddc061ee9004ea02a7d3791fed48ef9048a27638ac681add95",
+      "code_digest": "30506cd119aaf11167a6422ae45ec027ab778f2d03e765ca6a3195e7fd195fad",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：本104条目仅共享源码闭包摘要变化；104原发送、订单、审批及授权逻辑未改，raw禁用保持，不向104开放新Task投影API或新执行路径。共享Caller关闭审计与逐资源取消异常隔离不改变104业务合同、方法身份或旧停止要求；final JSON仍非权限品牌或恢复依据。固定Source及独立错误反例已核验，本条仅作共享闭包的internal_compatible评估，不证明104业务、部署或全OS停止通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "8f585ee471449035a188aa533b0d2acc9400c6abeda5c75a00df306c2cfa4ebf",
-        "current_code_digest": "ad5b2e82bc1e68ddc061ee9004ea02a7d3791fed48ef9048a27638ac681add95"
+        "previous_code_digest": "ad5b2e82bc1e68ddc061ee9004ea02a7d3791fed48ef9048a27638ac681add95",
+        "current_code_digest": "30506cd119aaf11167a6422ae45ec027ab778f2d03e765ca6a3195e7fd195fad"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -6329,7 +6329,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "decb5f877f8ded11d55c708fe48c8dd6beba9a886343657c4e64db9ceaa66fd3"
+          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
         },
         {
           "kind": "code",
@@ -6357,7 +6357,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
-          "sha256": "3e06252919f7a775263413420d0b324ace5be16cdf0a319b5eaf8d1bb870f977"
+          "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
         },
         {
           "kind": "code",
@@ -6797,13 +6797,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0a5ea1fdee889fcd62e68e8a3f0a0cbd6d79749566288fa38dc776a252612763",
+      "code_digest": "c28d70f82fc9b5d3f7f235883111c3bdeeca356279d1dbbec8927b6eb3b29bd9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核验baseafc3→6d1：104正常模式仍不允许raw；原发送/订单/权限/旧终态源逐字未改。本条变化限共享Code闭包：新增私有context revision仅raw父循环消费，Code/legacy原默认路径不增加模型/外部动作或放宽未知。 队列完整reservation尾部、stallJob与guidance应用纳受控等待；未知、abort、原worker/receipt/global截止、次数和独立Judge品牌不松，未重放工具/重置预算。原真实broker已完成观察竞态转绿，clone/crossbroker/abort及69项离线阳阴通过。这是等强方法实现修复，非仅日志，不证明真实控制验收或业务已通过。",
+        "reason": "独立核验base45df→2cace：本104条目仅共享源码闭包摘要变化；104原发送、订单、审批及授权逻辑未改，raw禁用保持，不向104开放新Task投影API或新执行路径。共享Caller关闭审计与逐资源取消异常隔离不改变104业务合同、方法身份或旧停止要求；final JSON仍非权限品牌或恢复依据。固定Source及独立错误反例已核验，本条仅作共享闭包的internal_compatible评估，不证明104业务、部署或全OS停止通过。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "fe3525a434e8499cb4033ce99dbf1c063a38eb4b09fff94b18f7ddd5b83a30c9",
-        "current_code_digest": "0a5ea1fdee889fcd62e68e8a3f0a0cbd6d79749566288fa38dc776a252612763"
+        "previous_code_digest": "0a5ea1fdee889fcd62e68e8a3f0a0cbd6d79749566288fa38dc776a252612763",
+        "current_code_digest": "c28d70f82fc9b5d3f7f235883111c3bdeeca356279d1dbbec8927b6eb3b29bd9"
       }
     }
   },

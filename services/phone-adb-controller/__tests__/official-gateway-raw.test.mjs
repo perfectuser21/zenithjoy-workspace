@@ -3,6 +3,44 @@ import test from 'node:test';import assert from 'node:assert/strict';import {cre
 import WS,{WebSocketServer} from 'ws';import {GatewayProtocolClient} from '@openclaw/gateway-client/browser';import {rawDataToString} from '@openclaw/gateway-client/websocket-data';
 import {using} from './fixtures/official-control-fixture.mjs';import {rmSync,readFileSync,writeFileSync,readdirSync,mkdtempSync,mkdirSync,symlinkSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
 const hiddenSession=run=>'internal-session-effects-'+run+'-'+createHash('sha256').update(run).digest('hex').slice(0,16);
+
+test('模型客户端stop抛错仍归还真实WS及三close证明，Caller保留unknown',async t=>{
+ const g=await rawGateway(t);let sdk,wire,thrown=false;const Base=g.dependencies.GatewayProtocolClient,Wire=g.dependencies.WebSocket;
+ g.dependencies.GatewayProtocolClient=class extends Base{constructor(...a){super(...a);sdk=this;}stop(){if(!thrown){thrown=true;throw Error('FIXTURE_MODEL_STOP_THROW');}return super.stop();}};
+ g.dependencies.WebSocket=class extends Wire{constructor(...a){super(...a);wire=this;}};
+ try{await using(async({instance,q,journalDirectory})=>{
+  await assert.rejects(instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{}}}));
+  assert.equal(instance.snapshot().execution_unknown,true);assert.equal(wire.readyState,WS.CLOSED);
+  const records=readdirSync(journalDirectory).filter(n=>n.endsWith('.jsonl')).flatMap(n=>readFileSync(join(journalDirectory,n),'utf8').trim().split('\n').filter(Boolean).map(JSON.parse));
+  const closed=records.filter(x=>x.event==='raw_owned_connection_closed');assert.equal(closed.length,2);
+  assert.ok(closed.every(x=>x.request_closed&&x.websocket_closed&&x.socket_closed));
+ },{rawTransport:true,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'});}
+ finally{if(sdk)Base.prototype.stop.call(sdk);wire?.terminate();}
+});
+const callerFinal=directory=>{const names=readdirSync(directory).filter(n=>/^official-caller-final-.*\.json$/.test(n));assert.equal(names.length,1);return {path:join(directory,names[0]),value:JSON.parse(readFileSync(join(directory,names[0])))};};
+
+test('raw final links actual turn artifacts without prose; continuation has an independent immutable final',async t=>{
+ const g=await rawGateway(t);await using(async({instance,q,journalDirectory})=>{
+  await instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{brief:'FIXTURE_PROSE_NOT_IN_FINAL'}}});
+  const closed=await instance.close(),first=callerFinal(journalDirectory),bytes=readFileSync(first.path);
+  assert.equal(first.value.evidence_complete,true);assert.deepEqual(first.value.snapshot,closed);assert.equal(first.value.continuation,false);assert.equal(first.value.raw_turns.length,1);
+  const turn=first.value.raw_turns[0];assert.equal(turn.index,0);assert.equal(turn.official_terminal,true);assert.equal(turn.dispatched,true);assert.notEqual(turn.source_session_id,turn.execution_session_id);assert.equal(turn.artifacts.length,2);
+  for(const artifact of first.value.artifacts)assert.equal(artifact.sha256,createHash('sha256').update(readFileSync(join(journalDirectory,artifact.file))).digest('hex'));
+  assert.ok(!bytes.includes(Buffer.from('FIXTURE_PROSE')));assert.ok(!bytes.includes(Buffer.from('fixture-private-token')));assert.ok(!bytes.includes(Buffer.from('{"op":"inspect"')));
+  const next=instance.createReadOnlyContinuation({request:q,snapshot:closed,startIndex:1});try{
+   await next.request({kind:'official_agent_turn',request:q,turn:{index:1,input:{}}});const stopped=await next.close();
+   const folder=readdirSync(journalDirectory).find(n=>n.startsWith('readonly-continuation-')),second=callerFinal(join(journalDirectory,folder));
+   assert.equal(second.value.continuation,true);assert.equal(second.value.start_index,1);assert.deepEqual(second.value.raw_turns.map(r=>r.index),[1]);assert.deepEqual(second.value.snapshot,stopped);assert.equal(next.verifySealedExecution(first.value.snapshot,{request:q}),false);assert.deepEqual(readFileSync(first.path),bytes);
+  }finally{await next.close();}
+ },{rawTransport:true,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'});
+});
+for(const artifact of ['intent','terminal'])test(`raw ${artifact} missing or drifted cannot yield positive durable Caller final`,async t=>{
+ for(const mutate of ['missing','changed']){const g=await rawGateway(t);await using(async({instance,q,journalDirectory})=>{
+  await instance.request({kind:'official_agent_turn',request:q,turn:{index:0,input:{}}});const name=readdirSync(journalDirectory).find(n=>n.startsWith('raw-')&&n.endsWith('.'+artifact+'.json'));
+  if(mutate==='missing')rmSync(join(journalDirectory,name));else writeFileSync(join(journalDirectory,name),'{}\n');
+  const closed=await instance.close(),final=callerFinal(journalDirectory).value;assert.equal(closed.execution_stopped,false);assert.equal(closed.execution_unknown,true);assert.equal(final.evidence_complete,false);assert.equal(final.snapshot.execution_stopped,false);assert.equal(instance.verifySealedExecution(closed,{request:q}),false);
+ },{rawTransport:true,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'});}
+});
 async function rawGateway(t,{loseLaunchAck=false,status='ok',waitUntilAbort=false,terminalIdentity,waitReceiptAbsent=false,sessionGone=false,producerForeignSession=false,expectedToken='fixture'}={}){
  const http=createServer(),wss=new WebSocketServer({server:http}),sockets=new Set(),frames=[];let current,aborted=false,waitSeen,connections=0;const waiting=new Promise(r=>waitSeen=r);
  wss.on('connection',ws=>{connections++;sockets.add(ws);ws.on('close',()=>sockets.delete(ws));ws.send(JSON.stringify({type:'event',event:'connect.challenge',payload:{nonce:'fixture',ts:Date.now()}}));ws.on('message',raw=>{const f=JSON.parse(raw);frames.push(f);let payload;
