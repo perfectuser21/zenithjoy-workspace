@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync,realpathSync,chmodSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync,realpathSync,chmodSync,existsSync,linkSync} from 'node:fs';
 import os from 'node:os';
 import cp from 'node:child_process';
 import {syncBuiltinESMExports} from 'node:module';
@@ -94,4 +94,27 @@ test('cold bootstrap errors never echo key and private temporary identity tree i
  const f=await coldFixture(t),{prepareDeploymentSkillSources}=await import('../deployment-fixed-source.mjs');process.env.FIXTURE_FAIL='1';
  assert.throws(()=>prepareDeploymentSkillSources(f.root,f.revision),e=>/^SKILL_SOURCE_BOOTSTRAP_/.test(e.message)&&!e.message.includes(f.fake));
  const calls=readFileSync(f.log,'utf8').trim().split('\n').map(JSON.parse);assert.ok(calls.some(c=>c.kind==='ssh'));assert.ok(calls.every(c=>!c.has_key));assert.ok(calls.filter(c=>c.kind==='ssh').every(c=>!existsSync(c.identity)));
+});
+
+for(const kind of ['missing','mode','symlink','hardlink','directory','fifo','empty','oversized','nul','invalid-utf8'])test(`cold key mirror rejects ${kind} before bootstrap or release work`,async t=>{
+ const f=await coldFixture(t),{prepareDeploymentSkillSources}=await import('../deployment-fixed-source.mjs');
+ if(kind==='mode')chmodSync(f.mirror,0o644);
+ else if(kind==='hardlink')linkSync(f.mirror,f.mirror+'.link');
+ else if(kind==='empty')writeFileSync(f.mirror,'');
+ else if(kind==='oversized')writeFileSync(f.mirror,Buffer.alloc(65537,65));
+ else if(kind==='nul')writeFileSync(f.mirror,Buffer.from([65,0,66]));
+ else if(kind==='invalid-utf8')writeFileSync(f.mirror,Buffer.from([0xff]));
+ else {rmSync(f.mirror);if(kind==='symlink')symlinkSync('missing-target',f.mirror);if(kind==='directory')mkdirSync(f.mirror);if(kind==='fifo')execFileSync('mkfifo',[f.mirror]);}
+ const run=cp.execFileSync;let bootstrap=0;cp.execFileSync=(command,args,options)=>{if(command==='python3')bootstrap++;return run(command,args,options);};syncBuiltinESMExports();
+ const previous=process.env.SKILLS_SOURCE_SSH_KEY;process.env.SKILLS_SOURCE_SSH_KEY=f.fake;
+ try{assert.throws(()=>prepareDeploymentSkillSources(f.root,f.revision),e=>e.message==='SKILL_SOURCE_BOOTSTRAP_KEY_INVALID'&&!e.message.includes(f.fake));}
+ finally{cp.execFileSync=run;if(previous===undefined)delete process.env.SKILLS_SOURCE_SSH_KEY;else process.env.SKILLS_SOURCE_SSH_KEY=previous;syncBuiltinESMExports();}
+ assert.equal(bootstrap,0);assert.ok(!existsSync(f.log)||readFileSync(f.log,'utf8').split('\n').filter(Boolean).map(JSON.parse).every(c=>c.kind==='git'&&!c.has_key));
+});
+test('cold bootstrap timeout/error object cannot leak output or leave its owned private temporary tree',async t=>{
+ const f=await coldFixture(t),{prepareDeploymentSkillSources}=await import('../deployment-fixed-source.mjs'),run=cp.execFileSync;let temporary;
+ cp.execFileSync=(command,args,options)=>{if(command==='python3'){temporary=options.env.TMPDIR;assert.ok(existsSync(temporary));writeFileSync(join(temporary,'partial-secret'),f.fake,{mode:0o600});throw Object.assign(Error(f.fake),{code:'ETIMEDOUT',stderr:Buffer.from(f.fake),stdout:Buffer.from(f.fake)});}return run(command,args,options);};syncBuiltinESMExports();
+ try{assert.throws(()=>prepareDeploymentSkillSources(f.root,f.revision),e=>e.message==='SKILL_SOURCE_BOOTSTRAP_FAILED'&&!JSON.stringify(e).includes(f.fake)&&!e.cause);}
+ finally{cp.execFileSync=run;syncBuiltinESMExports();}
+ assert.ok(temporary&&!existsSync(temporary));
 });
