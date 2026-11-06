@@ -7,6 +7,7 @@ import {join,basename} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {parse} from 'yaml';
 import {runCodeGate} from './helpers/run-code-gate.mjs';
+import {openclawStep,captureNodeArgs} from './helpers/openclaw-selection.mjs';
 
 const script=new URL('../smoke/leadgen-field-cleanup-smoke.sh',import.meta.url).pathname;
 const expected=['own-accounts-lib','lead-fields-lib','next-outreach-lib','account-current-nickname','video-link-restore'].map(s=>s+'.test.mjs');
@@ -34,9 +35,11 @@ test('实际API映射测试失败同样传播且不输出PASS',t=>{
 const workflow=parse(readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8'));
 function fullSuiteRequired(w){
  const job=w.jobs['openclaw-scripts-test'];assert.ok(job&&!job.if);
- const step=job.steps.find(s=>s.run?.includes('run: node --test')||s.run?.startsWith('node --test'));
+ const step=openclawStep(w);
  assert.ok(step&&!step.if);assert.match(step.run,/services\/phone-adb-controller\/__tests__\/\*\.test\.mjs/);
  assert.doesNotMatch(step.run,/--test-name-pattern|--test-skip-pattern|\|\|\s*true/);
+ const selected=captureNodeArgs(step.run);
+ for(const name of expected){const file='services/phone-adb-controller/__tests__/'+name;assert.equal(selected.filter(arg=>arg===file).length,1,file);}
  assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
 }
 function aggregate(w,result){return runCodeGate(w,result);}
@@ -46,7 +49,7 @@ test('独立完整phone通配套始终执行且聚合器实际拒绝其失败/�
 });
 test('全套门禁缺通配/变条件/脱离required/聚合吞错的四类变异均被发现',()=>{
  for(const mutate of [
-  w=>{w.jobs['openclaw-scripts-test'].steps.find(s=>s.run?.startsWith('node --test')).run='node --test only-one.test.mjs';},
+  w=>{openclawStep(w).run='node --test only-one.test.mjs';},
   w=>{w.jobs['openclaw-scripts-test'].if='false';},
   w=>{w.jobs['l3-passed'].needs=w.jobs['l3-passed'].needs.filter(s=>s!=='openclaw-scripts-test');}
  ]){const w=structuredClone(workflow);mutate(w);assert.throws(()=>fullSuiteRequired(w));}
