@@ -20,7 +20,7 @@ async function using(t,respond,options={}){
  const deadlineMs=Date.now()+(options.duration??2000),receiptDeadlineMs=deadlineMs+1000;
  const requestImpl=(url,opts,callback)=>httpRequest({hostname:'127.0.0.1',port:server.address().port,path:new URL(url).pathname+new URL(url).search,method:opts.method,headers:opts.headers,agent:false},callback);
  const readSource=(path,...args)=>path===join(root,'deployment-manifest.json')?JSON.stringify({source_commit:source.commit}):readFileSync(path,...args);
- const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python:pins[0],deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token'});
+ const producer=await module.startNativeScoringProducers({root,source,scope,directory:join(directory,'owned'),python:pins[0],deadlineMs,receiptDeadlineMs,requestImpl,readSource,brainCredential:()=> 'fixture-brain-token',assertAuthority:options.assertAuthority});
  t.after(()=>producer.close());return {producer,scope,deadlineMs,receiptDeadlineMs};
 }
 test('原Jev HTTP seam：真正请求/响应/socket归还后才消费；URL/model固定，错目标零IO',async t=>{
@@ -68,4 +68,9 @@ test('原sample readProof同冻结sourceRun三次受控GET，保原身份归并�
  const f=await using(t,(req,res)=>{hits++;assert.equal(req.headers.authorization,'Bearer fixture-brain-token');const values={};values[`/api/brain/runs/${runId}/definition`]={binding:{id:'binding102',run_id:runId,release_id:'release102',workflow_definition_version_id:'wf102'},workflow:{id:'wf102',source_commit:'a'.repeat(40)}};values[`/api/brain/runs/${runId}/reconciliation`]={run_id:runId,run_binding_id:'binding102',release_id:'release102',business_outcome:'pass',evidence_status:'verified',gaps:[],span_count:0,expected_count:0};values[`/api/brain/runs/${runId}?include=spans`]={spans:[]};const value=values[req.url];res.statusCode=value?200:404;res.end(JSON.stringify(value||{}));},{sourceRun:upstream});
  const deps=await f.producer.queueDependencies({apiKey:'fixture-key',feishuCredentials:{[lineRoutes.routeOf('yuesheng').account]:{appId:'fixture-app',appSecret:'fixture-secret'}}});
  const proof=await deps.sampledAdmission.readProof(upstream);assert.equal(proof.run_id,runId);assert.equal(proof.identity_bound,true);assert.equal(hits,3);await assert.rejects(deps.sampledAdmission.readProof('foreign102'),/SOURCE_PROOF_SCOPE/);assert.equal(hits,3);const closed=await f.producer.close();assert.equal(closed.execution_stopped,true);assert.equal(closed.external_effect,'none');
+});
+
+test('HTTP producer每次真实dispatch与消费前核Code authority，迟到授权/seal不得发HTTP',async t=>{
+ let authorizeCount=0,hits=0;const f=await using(t,(_q,r)=>{hits++;r.end('{}');},{assertAuthority:async()=>{authorizeCount++;return true;}});await f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key');assert.equal(hits,1);assert.equal(authorizeCount,2);
+ let entered,release;const wait=new Promise(r=>entered=r),blocked=new Promise(r=>release=r);const second=await using(t,(_q,r)=>{hits++;r.end('{}');},{assertAuthority:async()=>{entered();await blocked;return true;}});const work=second.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture-key');await wait;second.producer.seal();release();await assert.rejects(work,/CLOSED|UNKNOWN/);const closed=await second.producer.close();assert.equal(hits,1);assert.equal(closed.pending,0);assert.equal(closed.external_effect,'none');
 });
