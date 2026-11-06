@@ -159,14 +159,14 @@ async function reviewPreparedOrder(route,record,{pool,run,scope,freezeCompanyCon
 }
 module.exports.reviewPreparedOrder=reviewPreparedOrder;
 
-async function readbackBridge(pool,input){
+async function readbackBridge(pool,input,{verifyRecipient}={}){
  const route=routeOf(input.line),ids=input.ids;
  if(!Array.isArray(ids)||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>!/^[-a-zA-Z0-9]{1,80}$/.test(id)))throw Error('BRIDGE_READBACK_IDS_INVALID');
  const rows=ids.length?(await pool.query('SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND id=ANY($2::uuid[])',[route.key,ids])).rows:[];
  let failures=0;
  for(const id of ids){const found=rows.filter(r=>r.id===id);if(found.length!==1){failures++;continue;}const row=found[0],p=row.payload;
   if(!matchesRequestedSource(row,input.source_run)||!p||row.line_key!==route.key||p.line_key!==route.key||digest(p)!==row.payload_sha256||!['confirmed','protected','excluded','unknown'].includes(row.state)||p.qualification?.status!==row.qualification_status){failures++;continue;}
-  if(row.state==='confirmed'){try{nativeIntent(row,{companyBinding:await collectionBinding(pool,p.line_key,p.comment_run,p.recipient_evidence)});}catch{failures++;continue;}if(!/^rec[A-Za-z0-9]{6,40}$/.test(row.feishu_record_id||'')||!row.fields||digest(row.fields)!==row.fields_sha256){failures++;continue;}}
+  if(row.state==='confirmed'){try{nativeIntent(row,{companyBinding:await collectionBinding(pool,p.line_key,p.comment_run,p.recipient_evidence),verifyRecipient});}catch{failures++;continue;}if(!/^rec[A-Za-z0-9]{6,40}$/.test(row.feishu_record_id||'')||!row.fields||digest(row.fields)!==row.fields_sha256){failures++;continue;}}
   if(row.state==='excluded'&&row.qualification_status!=='excluded')failures++;
  }
  return {verified:failures===0,failures,ids,states:Object.fromEntries(rows.map(r=>[r.id,r.state]))};

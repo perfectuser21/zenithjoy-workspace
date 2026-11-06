@@ -1,3 +1,4 @@
+import {createNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -28,7 +29,9 @@ export async function invokeNativeActivity(execute,state){
 }
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 export function createWorkflowHandlers(options){
- return validateFrozenControlAcceptance(options.frozen)?createControlAcceptanceHandlers(options):createHandlers(options);
+ if(validateFrozenControlAcceptance(options.frozen))return createControlAcceptanceHandlers(options);
+ const scoring=options.frozen?.execution_mode==='agent'&&options.env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'?createNativeScoringWorkflow(options):undefined;
+ const handlers=createHandlers({...options,scoringRuntime:scoring});return scoring?{...handlers,prepareNativeScoring:()=>scoring.prepare()}:handlers;
 }
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
@@ -254,6 +257,7 @@ async function main(){
   };
   const preflightRuntime=executionMode==='agent'&&centralWorkflow?createPreflightRuntime({root,env,frozen,binding,taskId}):undefined;
   const handlers=createWorkflowHandlers({runDir:dir,frozen,binding,preflightRuntime,root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
+  if(executionMode==='agent'&&frozen.execution_transport==='raw-model-v1'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&!validateFrozenControlAcceptance(frozen))await handlers.prepareNativeScoring();
   const observerSafety={};
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:input=>observerSafety.ready?.(input)});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
