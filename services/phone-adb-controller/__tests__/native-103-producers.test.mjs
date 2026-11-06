@@ -80,3 +80,9 @@ test('Code Judge readonly producer rejects every POST before HTTP intent while f
  await assert.rejects(()=>f.producer.httpPost('https://openrouter.ai/api/alpha/decisions',{model:'typesafe/jev-1.13'},'fixture'),/NATIVE_103_READONLY_POST/);
  assert.equal(hits,0);assert.equal(f.producer.snapshot().external_effect,'none');await f.producer.readTask();assert.equal(hits,1);
 });
+
+test('original order lock readiness remains capped at five seconds inside the unchanged absolute producer deadline',async t=>{
+ const f=await using(t,(_q,r)=>r.end('{}'),{duration:8000});const cp=await import('node:child_process'),{syncBuiltinESMExports}=await import('node:module'),{EventEmitter}=await import('node:events'),{PassThrough}=await import('node:stream');let calls=0,kills=0;
+ t.mock.method(cp.default,'spawn',()=>{calls++;const c=new EventEmitter();c.pid=99999999;c.stdin=new PassThrough();c.stdout=new PassThrough();c.stderr=new PassThrough();c.kill=()=>{kills++;c.stdin.destroy();c.stdout.destroy();c.stderr.destroy();setImmediate(()=>c.emit('close',null,'SIGKILL'));return true;};return c;});syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+ const start=performance.now();await assert.rejects(()=>f.producer.withOrderLock('yuesheng',async()=>assert.fail('无READY不得执行订单体')),/NATIVE_103_/);const elapsed=performance.now()-start;assert.equal(calls,1);assert.ok(kills>=1);assert.ok(elapsed<6500,'必须保原5秒ready上限，不借8秒Activity剩余额度: '+elapsed);assert.equal(f.producer.snapshot().execution_unknown,true);
+});
