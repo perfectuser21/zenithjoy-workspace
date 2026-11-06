@@ -1,3 +1,4 @@
+import {nativeAuthorityProjectionMatches} from './native-activity-authority.mjs';
 // 103父Code业务域；原队列/政策决定业务结果，Agent不能提供SQL/来源/依赖。
 import {createRequire} from 'node:module';
 import {Socket} from 'node:net';
@@ -14,7 +15,7 @@ const operations={scoring:new Set(['company_config','score_scope','score','score
 const writes=new Set(['company_config','score','mark_leads','bridge_outreach']);
 const readbacks={company_config:[],score:['score_readback','score_exclusion_readback'],mark_leads:['mark_readback'],bridge_outreach:['bridge_readback']};
 export const isNativeScoringRuntime=value=>runtimes.has(value);
-export function createNativeScoringRuntime({root,source,scope,directory,createPool,assertAuthority,readSource,queueDependencies={}}={}){
+export function createNativeScoringRuntime({root,source,scope,directory,createPool,assertAuthority,readSource,queueDependencies={},requireProjectedAuthority=false}={}){
  const fixed=structuredClone(scope),src=structuredClone(source);let prepared=false,sealed=false,unknown=false,effectUnknown=false,current=null,claim=null,scoreScope=null,marked=null;
  const pending=new Set(),reasons=new Set(),streams=new Map();
  const taint=reason=>{unknown=true;reasons.add(reason);};
@@ -22,7 +23,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
  const verify=()=>{
   try{
    if(!src||realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||new Set(src.files.map(f=>f.path)).size!==src.files.length)throw Error();
-   for(const name of ['native-scoring-runtime.mjs','native-scoring-producers.mjs']){const self=src.files.filter(f=>f.path===name),file=join(root,name),s=lstatSync(file);if(self.length!==1||!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha(readFileSync(file))!==self[0].sha256)throw Error();}
+   for(const name of ['native-scoring-runtime.mjs','native-scoring-producers.mjs',...(requireProjectedAuthority?['native-activity-authority.mjs']:[])]){const self=src.files.filter(f=>f.path===name),file=join(root,name),s=lstatSync(file);if(self.length!==1||!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha(readFileSync(file))!==self[0].sha256)throw Error();}
    verifyRpcSource(src,{base:root,...(readSource?{read:readSource}:{})});
   }catch{throw fail('SOURCE');}
  };
@@ -34,9 +35,10 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
    queueDependencies.assertActive({readOnly});active(readOnly);
   }
   const p=task?.payload,s=p?.scope;
+  if(requireProjectedAuthority&&!nativeAuthorityProjectionMatches(task,{source:src,scope:current}))throw fail('AUTHORITY');
   if(task?.id!==fixed.task_id||task.status!=='in_progress'||!task.claimed_by||!Number.isFinite(Date.parse(task.claimed_at))
-   ||p?.workflow_key!==fixed.workflow||p.source_commit!==src.commit||p.run_tag!==fixed.run||p.profile!==fixed.profile||p.company_line!==fixed.line||p.device_serial!=null
-   ||s?.source_run!==fixed.source_run||s.limit!==fixed.limit)throw fail('AUTHORITY');
+   ||(!requireProjectedAuthority&&(p?.workflow_key!==fixed.workflow||p.source_commit!==src.commit||p.run_tag!==fixed.run||p.profile!==fixed.profile||p.company_line!==fixed.line||p.device_serial!=null
+   ||(s?.source_run??null)!==fixed.source_run||s.limit!==fixed.limit)))throw fail('AUTHORITY');
   const actual=[task.claimed_by,task.claimed_at];if(claim&&!same(claim,actual))throw fail('CLAIM_CHANGED');claim??=actual;active(readOnly);
  };
  function durable(name,value){const file=join(directory,name),fd=openSync(file,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}const parent=openSync(directory,'r');try{fsyncSync(parent);}finally{closeSync(parent);}return file;}
