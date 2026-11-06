@@ -128,6 +128,57 @@ class CleanBootstrap(unittest.TestCase):
         self.assertNotIn('PRIVATE_SENTINEL', json.dumps(record))
         self.assertEqual(record['stage'], str(stages[0]))
 
+    def test_all_guards_are_owned_and_hardlinked(self):
+        other = self.old / 'USB_2.guard'
+        other.touch(mode=0o600)
+        with other.open('r+') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(ValueError, 'guard busy'): self.invoke()
+        self.invoke()
+        for guard in [self.guard, other]:
+            self.assertEqual(guard.stat().st_ino, (self.dest / guard.name).stat().st_ino)
+
+    def test_missing_guard_and_unsafe_permissions_reject(self):
+        self.guard.unlink()
+        with self.assertRaises(ValueError): self.invoke()
+        self.guard.touch(mode=0o600)
+        self.guard.chmod(0o666)
+        with self.assertRaises(ValueError): self.invoke()
+        self.assertFalse(self.dest.exists())
+
+    def test_dangling_target_symlink_is_not_followed(self):
+        self.dest.symlink_to(self.base / 'absent')
+        with self.assertRaises(ValueError): self.invoke()
+        self.assertTrue(self.dest.is_symlink())
+        self.assertFalse((self.base / 'absent').exists())
+
+    def test_source_directory_replacement_rejects(self):
+        original = root.sync_tree
+        def replace(path):
+            original(path)
+            self.old.rename(self.base / 'original-legacy')
+            self.old.mkdir(mode=0o755)
+        with patch.object(root, 'sync_tree', side_effect=replace):
+            with self.assertRaises(ValueError): self.invoke()
+        self.assertFalse(self.dest.exists())
+        self.assertTrue((self.base / 'original-legacy' / self.guard.name).exists())
+
+    def test_parent_fsync_failure_after_publish_is_unknown_not_success(self):
+        original = root.os.fsync
+        def fail_parent(fd):
+            info = os.fstat(fd)
+            if (info.st_dev, info.st_ino) == (self.base.stat().st_dev, self.base.stat().st_ino):
+                raise OSError('SENSITIVE_DIAGNOSTIC_SENTINEL')
+            return original(fd)
+        with patch.object(root.os, 'fsync', side_effect=fail_parent):
+            with self.assertRaises(OSError): self.invoke()
+        self.assertTrue(self.dest.exists(), 'do not delete a possibly committed root')
+        record = json.loads(next(self.base.glob('.phone-lock-bootstrap-failure-*.json')).read_text())
+        self.assertTrue(record['commit_unknown'])
+        self.assertEqual(record['phase'], 'parent_sync')
+        self.assertNotIn('SENSITIVE_DIAGNOSTIC_SENTINEL', json.dumps(record))
+        with self.assertRaises(ValueError): self.invoke()
+
     def test_competing_empty_target_publication_is_not_replaced(self):
         original = root._publish_clean_root
         def compete(stage, target):
