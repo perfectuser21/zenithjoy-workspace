@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,readdirSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -92,3 +92,36 @@ test('可信scope可使用规范云serial；连接或改ADB服务仍不在Agent�
  for(const command of ['connect','disconnect','start-server','kill-server'])await assert.rejects(()=>t.phone(command),/PHONE/);
  assert.equal(calls.length,0);
 },{scope:{serial:'47.100.213.173:10001',profile:'cloud-phone-test'}}));
+
+test('resource_prepare失败持久保存原错误码和cause，但保留未解决intent并禁止重发、phone与settle',async()=>{
+ let prepares=0,settles=0;
+ const secret='sk-private-fixture-token-never-journal';
+ const wire=Object.assign(Error(secret),{code:'ADB_SHELL_V2_SOCKET'}),command=Object.assign(Error(secret),{code:'NATIVE_PHONE_COMMAND_UNKNOWN',cause:wire});
+ const failure=Object.assign(Error(secret),{code:'NATIVE_PHONE_COMMAND_CLOSE_UNKNOWN',cause:command,diagnostics:{private_value:secret}});
+ await using(async(tools,calls,runDir)=>{
+  let thrown;try{await tools.prepare();}catch(error){thrown=error;}
+  assert.equal(thrown?.message,'AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED');assert.equal(thrown?.externalEffect,'unknown');
+  const folder=join(runDir,'agent-tools','preflight'),names=readdirSync(folder),intentName=names.find(name=>name.endsWith('.intent.json'));
+  assert.ok(intentName);const key=intentName.slice(0,-'.intent.json'.length),failureName=key+'.failure.json';
+  assert.ok(names.includes(failureName),'a failed prepare needs a durable diagnostic separate from its unresolved intent');
+  assert.equal(names.includes(key+'.result.json'),false,'diagnostics must not manufacture a successful result');
+  const diagnostic=JSON.parse(readFileSync(join(folder,failureName),'utf8')),intent=JSON.parse(readFileSync(join(folder,intentName),'utf8'));
+  assert.equal(diagnostic.operation,'resource_prepare');assert.equal(diagnostic.scope_key,intent.scope_key);assert.deepEqual(diagnostic.scope,intent.scope);
+  assert.equal(diagnostic.error_code,'NATIVE_PHONE_COMMAND_CLOSE_UNKNOWN');assert.deepEqual(diagnostic.cause_codes,['NATIVE_PHONE_COMMAND_UNKNOWN','ADB_SHELL_V2_SOCKET']);assert.ok(Number.isFinite(Date.parse(diagnostic.observed_at)));
+  assert.equal(statSync(join(folder,failureName)).mode&0o777,0o600);assert.equal(readFileSync(join(folder,failureName),'utf8').includes(secret),false);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'resource_prepare',readback_operations:[]}]);
+  await assert.rejects(()=>tools.prepare(),/AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED/);await assert.rejects(()=>tools.phone('foreground'),/READBACK_REQUIRED/);await assert.rejects(()=>tools.settle({execution_stopped:true}),/READBACK_REQUIRED/);
+  assert.equal(prepares,1);assert.equal(settles,0);assert.equal(calls.length,0);
+ },{scope:{activity:'preflight'},primitives:{prepare:async()=>{prepares++;throw failure;},settle:async()=>{settles++;return {};}}});
+});
+
+test('prepare failure诊断只记录规范code并限制cause深度，拒绝任意message、stack和diagnostics',async()=>{
+ const secret='sk-private-fixture-token-never-journal';
+ const chain=Array.from({length:7},(_,index)=>Object.assign(Error(secret),{code:'NATIVE_PHONE_CAUSE_'+index}));for(let index=0;index<chain.length-1;index++)chain[index].cause=chain[index+1];
+ const failure=Object.assign(Error(secret),{code:'TOKEN='+secret,cause:chain[0],diagnostics:{value:secret}});
+ await using(async(tools,_calls,runDir)=>{
+  await assert.rejects(()=>tools.prepare(),/AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED/);
+  const folder=join(runDir,'agent-tools','preflight'),name=readdirSync(folder).find(value=>value.endsWith('.failure.json'));assert.ok(name);
+  const text=readFileSync(join(folder,name),'utf8'),diagnostic=JSON.parse(text);assert.equal(diagnostic.error_code,null);assert.deepEqual(diagnostic.cause_codes,['NATIVE_PHONE_CAUSE_0','NATIVE_PHONE_CAUSE_1','NATIVE_PHONE_CAUSE_2','NATIVE_PHONE_CAUSE_3']);assert.equal(text.includes(secret),false);assert.equal(Object.hasOwn(diagnostic,'stack'),false);assert.equal(Object.hasOwn(diagnostic,'message'),false);assert.equal(Object.hasOwn(diagnostic,'diagnostics'),false);
+ },{scope:{activity:'preflight'},primitives:{prepare:async()=>{throw failure;}}});
+});
