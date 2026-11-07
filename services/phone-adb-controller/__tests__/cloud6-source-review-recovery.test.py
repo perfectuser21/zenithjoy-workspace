@@ -151,6 +151,30 @@ class RecoveryTests(unittest.TestCase):
   p=self.plan();os.rename(self.lock,Path(p['retired_path']))
   with self.assertRaises(ValueError):self.apply()
   with self.assertRaises(ValueError):self.plan()
+ def test_last_machine_authority_cannot_hide_original_evidence_drift(self):
+  self.plan();old=self.m.brain_get;count=0
+  def read(path):
+   nonlocal count
+   if path=='/device-locks':
+    count+=1
+    if count==2:
+     f=self.files['activity-preflight.json'];v=json.loads(f.read_text());v['execution_stopped']=True;put(f,v)
+   return old(path)
+  self.m.brain_get=read
+  with self.assertRaises(ValueError):self.apply()
+  self.assertTrue(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
+ def test_final_machine_readback_cannot_hide_evidence_drift_after_retirement(self):
+  self.plan();old=self.m.brain_get;count=0
+  def read(path):
+   nonlocal count
+   if path=='/device-locks':
+    count+=1
+    if count==3:
+     f=self.files['activity-preflight.json'];v=json.loads(f.read_text());v['execution_stopped']=True;put(f,v)
+   return old(path)
+  self.m.brain_get=read
+  with self.assertRaises(ValueError):self.apply()
+  self.assertFalse(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
  def test_symlink_and_hardlink_fail_before_plan(self):
   f=self.lock/'owner';b=f.read_bytes();f.unlink();os.link(self.foreign/'owner',f)
   with self.assertRaises(ValueError):self.plan()
