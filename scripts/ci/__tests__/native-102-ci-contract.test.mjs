@@ -28,6 +28,8 @@ test('actual Linux shell argv retains every portable102 case and sends each Darw
  assert.deepEqual(Object.values(NATIVE_102_DARWIN_SHARDS).flat().sort(),[...NATIVE_102_DARWIN_SUITES].sort(),'each Darwin case has exactly one independent PG owner leg');
  assert.deepEqual(NATIVE_102_DARWIN_SHARDS['1'],['native-102-public-executor.test.mjs','native-102-public-nonce-driver.test.mjs','native-102-public-ui-driver.test.mjs','native-102-source-closure.test.mjs']);
  assert.ok(NATIVE_102_PORTABLE_SUITES.includes('native-102-public-intents.test.mjs'),'pure async/failfast intents remain in Linux');
+ assert.ok(NATIVE_102_PORTABLE_SUITES.includes('native-adb-inflight-admission.test.mjs'),'Node TCP admission remains in Linux');
+ assert.ok(NATIVE_102_DARWIN_SHARDS['2'].includes('native-phone-collection-return-navigation.test.mjs'),'original physical Python return navigation belongs to Darwin component leg');
  assert.equal(new Set([...NATIVE_102_DARWIN_SUITES,...NATIVE_102_PORTABLE_SUITES]).size,NATIVE_102_DARWIN_SUITES.length+NATIVE_102_PORTABLE_SUITES.length);
  const args=captureNodeArgs(openclawStep(workflow()).run),selected=args.filter(p=>p.endsWith('.test.mjs'));
  for(const name of NATIVE_102_DARWIN_SUITES)assert.equal(selected.filter(p=>p.endsWith('/'+name)).length,0,name+' must run on actual Darwin without Linux skips');
@@ -35,7 +37,7 @@ test('actual Linux shell argv retains every portable102 case and sends each Darw
  assert.equal(args.filter(p=>p==='scripts/ci/__tests__/native-102-ci-contract.test.mjs').length,1);
  const classified=new Set([...NATIVE_102_DARWIN_SUITES,...NATIVE_102_PORTABLE_SUITES]);
  const family=/^native-(?:102-|collection-|scrcpy-|phone-(?:audio-|collection-|credentials|detail-|managed-|media|processing|test-media))/;
- const actual=readdirSync(new URL('../../../services/phone-adb-controller/__tests__/',import.meta.url)).filter(n=>(family.test(n)||n==='native-queue-terminal-callbacks.test.mjs'||n==='native102-default-credentials.test.mjs')&&n.endsWith('.test.mjs'));
+ const actual=readdirSync(new URL('../../../services/phone-adb-controller/__tests__/',import.meta.url)).filter(n=>(family.test(n)||n==='native-queue-terminal-callbacks.test.mjs'||n==='native102-default-credentials.test.mjs'||n==='native-adb-inflight-admission.test.mjs')&&n.endsWith('.test.mjs'));
  assert.deepEqual([...classified].sort(),actual.sort(),'every current102 test must have one explicit runnable owner');
  for(const name of PHONE_DARWIN_SUITES)assert.equal(NATIVE_102_DARWIN_SUITES.includes(name),false,'102 must not consume the101/103 budget');
 });

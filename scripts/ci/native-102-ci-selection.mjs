@@ -18,6 +18,7 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-collection-sampling.test.mjs',
  'native-phone-audio-macros.test.mjs',
  'native-phone-collection-macros.test.mjs',
+ 'native-phone-collection-return-navigation.test.mjs',
  'native-phone-detail-macros.test.mjs',
  'native-phone-managed-recording.integration.test.mjs',
  'native-phone-processing-footer.test.mjs',
@@ -37,6 +38,7 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
 ]);
 export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
  'native-102-public-intents.test.mjs',
+ 'native-adb-inflight-admission.test.mjs',
  'native102-default-credentials.test.mjs',
  'native-phone-credentials-growth.test.mjs',
  'native-phone-credentials.test.mjs',
