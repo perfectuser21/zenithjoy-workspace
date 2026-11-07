@@ -40,6 +40,8 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-scrcpy-startup-authority.test.mjs',
  'native-phone-wire-ticket-boundary.test.mjs',
  'native-phone-wire-ticket-private-brand.test.mjs',
+ 'native-scrcpy-host-identity-budget.test.mjs',
+ 'native-scrcpy-host-identity-conflicts.test.mjs',
 ]);
 export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
  'native-102-public-intents.test.mjs',
