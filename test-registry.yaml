@@ -7928,6 +7928,22 @@ tests:
     product: AI员工
     note: "维护前核中央与本地锁、来源与进程身份；一次切换日志保留；不等于真实手机业务验收"
 
+  - id: adb-mmv-policy-install
+    path: services/phone-adb-controller/__tests__/adb-mmv-policy-install.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "运行隔离Python安装smoke，不操作真实手机；真实业务另行Drive验收"
+
+  - id: adb-mmv-policy-install-python
+    path: services/phone-adb-controller/__tests__/adb-mmv-policy-install.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "由adb-mmv-policy-install.test.mjs调用，核私有安装、冲突和失败保持"
+
   - id: managed-adb-deployment
     path: services/phone-adb-controller/__tests__/managed-adb-deployment.test.mjs
     type: integration
