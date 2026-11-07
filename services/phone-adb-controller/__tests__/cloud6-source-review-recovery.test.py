@@ -19,7 +19,7 @@ class RecoveryTests(unittest.TestCase):
   self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.home=Path(self.temp.name).resolve();self.root=self.home/'.local/share/zenithjoy/phone-locks';self.root.mkdir(parents=True,mode=0o700);self.root.chmod(0o700)
   self.run=self.home/'.local/share/zenithjoy/phone-candidate-runs'/COMMIT/'ledger'/('douyin_video_discovery-'+TAG);self.run.mkdir(parents=True,mode=0o700)
   self.e=self.home/'perfect21/runner-deploy-evidence/potato-runner-commander-20261107/cloud-drive6';self.e.mkdir(parents=True,mode=0o700)
-  self.legacy=self.home/'legacy';self.legacy.mkdir(mode=0o700);put(self.root/'.migration-complete.json',dict(schema_version=1,state='complete',source_sha256='a'*64,legacy_root=str(self.legacy)));put(self.root/(SERIAL+'.guard'),b'');os.link(self.root/(SERIAL+'.guard'),self.legacy/(SERIAL+'.guard'))
+  self.legacy=self.home/'legacy';self.legacy.mkdir(mode=0o755);self.legacy.chmod(0o755);put(self.root/'.migration-complete.json',dict(schema_version=1,state='complete',source_sha256='a'*64,legacy_root=str(self.legacy)));put(self.root/(SERIAL+'.guard'),b'');os.link(self.root/(SERIAL+'.guard'),self.legacy/(SERIAL+'.guard'))
   self.lock=self.root/(SERIAL+'.lock');self.lock.mkdir(mode=0o700)
   for name,value in dict(owner=TAG,preflight_epoch=EPOCH,preflight_proof_required=EPOCH,standalone_review_required=TAG,preflight_quarantined=EPOCH,acquired_at='1794068935').items():put(self.lock/name,(value+'\n').encode())
   self.foreign=self.root/'4227.lock';self.foreign.mkdir(mode=0o700);put(self.foreign/'owner',b'untouched\n')
@@ -245,10 +245,10 @@ class RecoveryTests(unittest.TestCase):
   self.m.brain_get=read
   with self.assertRaises(ValueError):self.apply()
   self.assertTrue(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
- def test_legacy_root_must_be_canonical_private_and_owned(self):
-  self.legacy.chmod(0o755)
+ def test_legacy_root_must_be_canonical_owned_and_not_writable_by_others(self):
+  self.legacy.chmod(0o777)
   with self.assertRaises(ValueError):self.plan()
-  self.legacy.chmod(0o700);moved=self.home/'moved-legacy';os.rename(self.legacy,moved);self.legacy.symlink_to(moved,target_is_directory=True)
+  self.legacy.chmod(0o755);moved=self.home/'moved-legacy';os.rename(self.legacy,moved);self.legacy.symlink_to(moved,target_is_directory=True)
   with self.assertRaises(ValueError):self.plan()
  def test_non_guard_evidence_still_refuses_hardlinks(self):
   path=self.files['activity-preflight.json'];os.link(path,self.home/'linked-evidence')
