@@ -59,7 +59,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -416,7 +416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -783,13 +783,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "3367318002b64d1828db4313da2799db8cf737d91dbb004371fbe7d746ea1763",
+      "code_digest": "e1019daeedc9aa37874d31d63df4387071a83dd7f77f57927e99cf246ece0ad5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690",
-        "current_code_digest": "3367318002b64d1828db4313da2799db8cf737d91dbb004371fbe7d746ea1763",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "3367318002b64d1828db4313da2799db8cf737d91dbb004371fbe7d746ea1763",
+        "current_code_digest": "e1019daeedc9aa37874d31d63df4387071a83dd7f77f57927e99cf246ece0ad5",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_video_processing.preflight": {
@@ -850,7 +850,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -1249,7 +1249,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -1599,13 +1599,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cd0ad19d8cbf2b0562786331d4002269ca1be79daeb6ff3b38f22b3e80b6904e",
+      "code_digest": "7ca9f3f94bcd07adcc6ae443d6038089cc5c180e7d4956d6b247b68e5940b4d3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb",
-        "current_code_digest": "cd0ad19d8cbf2b0562786331d4002269ca1be79daeb6ff3b38f22b3e80b6904e",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "cd0ad19d8cbf2b0562786331d4002269ca1be79daeb6ff3b38f22b3e80b6904e",
+        "current_code_digest": "7ca9f3f94bcd07adcc6ae443d6038089cc5c180e7d4956d6b247b68e5940b4d3",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1666,7 +1666,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -2016,7 +2016,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -2369,13 +2369,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "607a4c0a41323b95a11552e64edc815a42074ef2b6734e43a61aa631334e0fee",
+      "code_digest": "7611a6876cefdd61616803d0cb27bf194ba5a341d91bbb51ebc4e39efa65305d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948",
-        "current_code_digest": "607a4c0a41323b95a11552e64edc815a42074ef2b6734e43a61aa631334e0fee",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "607a4c0a41323b95a11552e64edc815a42074ef2b6734e43a61aa631334e0fee",
+        "current_code_digest": "7611a6876cefdd61616803d0cb27bf194ba5a341d91bbb51ebc4e39efa65305d",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2436,7 +2436,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -2814,7 +2814,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -3223,13 +3223,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "a6d70548f59198d3cd48020763e591d7ce7ad8c7edb673583eedccea902692c1",
+      "code_digest": "fac878a7c7dbca6ad5bd88517955269ea831447400d143639ca49edaca8d1ff1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa",
-        "current_code_digest": "a6d70548f59198d3cd48020763e591d7ce7ad8c7edb673583eedccea902692c1",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "a6d70548f59198d3cd48020763e591d7ce7ad8c7edb673583eedccea902692c1",
+        "current_code_digest": "fac878a7c7dbca6ad5bd88517955269ea831447400d143639ca49edaca8d1ff1",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_video_processing.collection": {
@@ -3290,7 +3290,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -3640,7 +3640,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -4015,13 +4015,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "6114504dd1e50234fd1f5f37d7b2407c81b429d9b38d7c2e7c34b246a606eeeb",
+      "code_digest": "1691d73d54737729ed2d2e5423f9baf752f233536d95ac59e6df90cc652fdd26",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb",
-        "current_code_digest": "6114504dd1e50234fd1f5f37d7b2407c81b429d9b38d7c2e7c34b246a606eeeb",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "6114504dd1e50234fd1f5f37d7b2407c81b429d9b38d7c2e7c34b246a606eeeb",
+        "current_code_digest": "1691d73d54737729ed2d2e5423f9baf752f233536d95ac59e6df90cc652fdd26",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4082,7 +4082,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -4467,7 +4467,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -4816,13 +4816,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d41c9106ddceb1c303d5b34f4352a5dc48730ee603c7e633cfa897bd0c611bba",
+      "code_digest": "ee3175fc118ffd9f7276cc947b5c77cf19071be0a46cd2658bca0a0659cd3f64",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b",
-        "current_code_digest": "d41c9106ddceb1c303d5b34f4352a5dc48730ee603c7e633cfa897bd0c611bba",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "d41c9106ddceb1c303d5b34f4352a5dc48730ee603c7e633cfa897bd0c611bba",
+        "current_code_digest": "ee3175fc118ffd9f7276cc947b5c77cf19071be0a46cd2658bca0a0659cd3f64",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -4883,7 +4883,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -5240,7 +5240,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -5600,13 +5600,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "7184436c7b84de8eba0d0690066ed315499e52b0ad2a98b35ca0b3644890685d",
+      "code_digest": "9585d1d0032e622877a6e1e3798bee26300960f24e1e663660c3403d724c334d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052",
-        "current_code_digest": "7184436c7b84de8eba0d0690066ed315499e52b0ad2a98b35ca0b3644890685d",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "7184436c7b84de8eba0d0690066ed315499e52b0ad2a98b35ca0b3644890685d",
+        "current_code_digest": "9585d1d0032e622877a6e1e3798bee26300960f24e1e663660c3403d724c334d",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5667,7 +5667,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -6031,7 +6031,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -6426,13 +6426,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "49bb1f3f4eb55c7b98667eefdbab5540d11d9bb2b4139ea4f8d0eaed1d70aa8a",
+      "code_digest": "a9ecc7318ce3ac8433fdfc8c246af21d2c3bb3212e5b0c659b6a286ff7e1f4e3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de",
-        "current_code_digest": "49bb1f3f4eb55c7b98667eefdbab5540d11d9bb2b4139ea4f8d0eaed1d70aa8a",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "49bb1f3f4eb55c7b98667eefdbab5540d11d9bb2b4139ea4f8d0eaed1d70aa8a",
+        "current_code_digest": "a9ecc7318ce3ac8433fdfc8c246af21d2c3bb3212e5b0c659b6a286ff7e1f4e3",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6493,7 +6493,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -6647,7 +6647,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -7186,13 +7186,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "1ea246d4a24d54cea775f02c44b021df698bed69397adec2bcc45f2ace358125",
+      "code_digest": "fa3f98b2f3a6d71cf53a2465f1f878b24d8de48da6d09043a5890410634e8f17",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0",
-        "current_code_digest": "1ea246d4a24d54cea775f02c44b021df698bed69397adec2bcc45f2ace358125",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "1ea246d4a24d54cea775f02c44b021df698bed69397adec2bcc45f2ace358125",
+        "current_code_digest": "fa3f98b2f3a6d71cf53a2465f1f878b24d8de48da6d09043a5890410634e8f17",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7253,7 +7253,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -7407,7 +7407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -7921,13 +7921,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b4b3a459393decfa48bb2fef6f1777cb522cadd8649ae4babc362842ddc6b8c4",
+      "code_digest": "5ede3dfd65f6c020cff7fd983f02fa0edfbf4baa52d0ec0db86574f70235b8e6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f",
-        "current_code_digest": "b4b3a459393decfa48bb2fef6f1777cb522cadd8649ae4babc362842ddc6b8c4",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "b4b3a459393decfa48bb2fef6f1777cb522cadd8649ae4babc362842ddc6b8c4",
+        "current_code_digest": "5ede3dfd65f6c020cff7fd983f02fa0edfbf4baa52d0ec0db86574f70235b8e6",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -7988,7 +7988,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -8142,7 +8142,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -8649,13 +8649,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f32acec51a6dfbac63c2b78cc40ed95416a9dfa1eab4f66c2028b6d1852784c8",
+      "code_digest": "12bdcc845da03e9822bda4faac5ab04190f3a214263688f9d405ba6ffa5f4700",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2",
-        "current_code_digest": "f32acec51a6dfbac63c2b78cc40ed95416a9dfa1eab4f66c2028b6d1852784c8",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "f32acec51a6dfbac63c2b78cc40ed95416a9dfa1eab4f66c2028b6d1852784c8",
+        "current_code_digest": "12bdcc845da03e9822bda4faac5ab04190f3a214263688f9d405ba6ffa5f4700",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8716,7 +8716,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-adb-read.mjs",
           "revision": "contract",
-          "sha256": "238c92d4e8542e4497093f247d8add5f4e23aeb5990f80d12a604d6af7b9f861"
+          "sha256": "2182ad4e8f0961602c674dde436215c88de40f78195de0b99a1ce6dd76252adf"
         },
         {
           "kind": "code",
@@ -8870,7 +8870,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "e1cc24ead4a3757d65099c77a1d4524a46f4476e141df8dcf4612e0c95e98d85"
+          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
         },
         {
           "kind": "code",
@@ -9387,13 +9387,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2f4cc6706a127fcd4e38ed9d09cbf81ecf02391520cb72eb996dd8e2126ee0c8",
+      "code_digest": "a92032a02c019b6c7c3b602788d8634a01e9a9adfc655eecdb92e026c1082c68",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2",
-        "current_code_digest": "2f4cc6706a127fcd4e38ed9d09cbf81ecf02391520cb72eb996dd8e2126ee0c8",
-        "reason": "Add the independently read and reviewed xian-m4 4311 ROM/Pillow source to the existing finite 101 command policy and source delivery inventories. Regenerate execution plans and step-spec contract hashes from the same unchanged business contract. No Skill, business contract, allowed operation, owner, deadline or 104 execution behavior changes.",
-        "reviewed_by": "Codex continuation 2026-11-07; independent review /root/review_101"
+        "previous_code_digest": "2f4cc6706a127fcd4e38ed9d09cbf81ecf02391520cb72eb996dd8e2126ee0c8",
+        "current_code_digest": "a92032a02c019b6c7c3b602788d8634a01e9a9adfc655eecdb92e026c1082c68",
+        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
+        "reviewed_by": "codex-independent-authority-review"
       }
     }
   },
