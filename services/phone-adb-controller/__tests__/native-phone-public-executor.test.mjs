@@ -86,13 +86,23 @@ test('public definition fixture locks original three-slot methods and issues an 
  });
 });
 
-test('real external bindRun ACK and genuine frozen Task lease must reach the same native phone prepare',async t=>publicPhoneScenario(t,{prepareBoundary:async({f,definition,pg,adb,load,runDir,root})=>{
+test('real external bindRun ACK and genuine frozen Task lease must reach the same native phone prepare',async t=>publicPhoneScenario(t,{prepareBoundary:async({f,definition,pg,adb,load,runDir,root,setFixtureHostname})=>{
  // These two files are the fixture's manually fabricated placeholder binding,
  // not an old real frozen run. This new fixture now performs real bindRun.
  rmSync(join(runDir,'run-bindings'),{recursive:true,force:true});writeFileSync(join(runDir,'step-dod.json'),JSON.stringify({steps:[]}));
  const allowed=['release_id','observation_id','workflow_id','workflow_definition_version_id','snapshot_sha256','runtime_snapshot_sha256','expected_path','source_kind','task_run_id','external_origin','attempt_key','actor'];let binding,posts=0,gets=0;
  const server=createBindingServer(async(req,res)=>{res.setHeader('Content-Type','application/json');res.setHeader('Connection','close');if(req.method==='POST'){posts++;let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);assert.ok(Object.keys(body).every(k=>allowed.includes(k)));assert.equal(body.source_kind,'external');assert.equal(body.task_run_id,undefined);assert.equal(body.task_id,undefined);binding={id:randomUUID(),run_id:f.q.run_id,...body,task_run_id:null,payload:body};res.statusCode=201;}else gets++;res.end(JSON.stringify({binding}));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
- const {bindRun}=await load('runtime-binding.mjs'),runId=f.q.run_id.replace(/__a1$/,''),result=await bindRun({dir:runDir,runId,brainUrl:'http://127.0.0.1:'+server.address().port,request:async(url,body)=>{const response=await fetch(url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return response.json();},ledgerPath:join(root,'ledger.mjs')});
+ const {bindRun}=await load('runtime-binding.mjs'),runId=f.q.run_id.replace(/__a1$/,''),bindOptions={dir:runDir,runId,brainUrl:'http://127.0.0.1:'+server.address().port,request:async(url,body)=>{const response=await fetch(url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return response.json();},ledgerPath:join(root,'ledger.mjs')};
+ const host=await load('runtime-host.mjs'),controlScope=await load('preflight-control-scope.mjs'),snapshot=readFileSync(join(runDir,'run-definition.json'),'utf8');
+ assert.equal(readFileSync(join(root,'runtime-host.mjs'),'utf8'),readFileSync(new URL('../runtime-host.mjs',import.meta.url),'utf8'),'production host guard bytes remain unchanged');
+ assert.equal(host.assertRuntimeHost(definition.frozen.release,definition.frozen.deployment),'mmv');
+ assert.throws(()=>host.assertRuntimeHost({...definition.frozen.release,target:'foreign'},definition.frozen.deployment),/实际机器与固定release/);
+ assert.throws(()=>host.assertRuntimeHost(definition.frozen.release,{...definition.frozen.deployment,target:'foreign'}),/实际机器与固定release/);
+ assert.throws(()=>controlScope.assertPreflightControlScope({root,env:f.env,frozen:{...definition.frozen,preflight_control_scope:{...definition.frozen.preflight_control_scope,target:'foreign'}}}),/PREFLIGHT_CONTROL_SCOPE/);
+ setFixtureHostname('github-native-fixture-host.example');
+ await assert.rejects(bindRun(bindOptions),/实际机器与固定release及部署观测目标不匹配/);assert.equal(posts,0);assert.equal(gets,0);assert.equal(adb.requests.length,0);
+ setFixtureHostname('r10-7');assert.equal(readFileSync(join(runDir,'run-definition.json'),'utf8'),snapshot,'virtual host changes never rewrite frozen Source');
+ const result=await bindRun(bindOptions);
  assert.equal(posts,1);assert.equal(gets,1);assert.equal(result.binding.task_id,null);const ack=readFileSync(join(runDir,'run-bindings/a1.ack.json'),'utf8');assert.equal(Object.hasOwn(JSON.parse(ack).binding,'task_id'),false);assert.equal(Object.hasOwn(JSON.parse(ack).binding.payload,'task_id'),false);
  const {createPreflightRuntime}=await load('preflight-phone-scope.mjs'),preflightRuntime=createPreflightRuntime({root,env:f.env,frozen:definition.frozen,binding:result.binding,taskId:f.q.task_id,poolFactory:pg.createPool});
  const actualSource=(await load('native-phone-runtime.mjs')).nativePhoneSource(definition.frozen),controls=[];t.after(()=>Promise.allSettled(controls.map(c=>c.close())));const createControl=({request,directory})=>{const d=join(directory,'owned-caller');mkdirSync(d,{mode:0o700});const c=f.createControl({...f.options,source:actualSource,request,journalDirectory:d,deadlineMs:request.receipt_deadline_ms,cleanupDeadlineMs:request.deadline_ms});controls.push(c);return c;};
