@@ -51,5 +51,6 @@ test('only finite Code identifiers can escape error redaction, including error.c
  const secret='PRIVATE_TOKEN_do_not_log';
  assert.equal(workflowStartupFailureCode({code:'NATIVE_TASK_LEASE_FROZEN',message:'Bearer '+secret,body:secret,stack:secret}),'NATIVE_TASK_LEASE_FROZEN');
  assert.equal(workflowStartupFailureCode(Error('NATIVE_TASK_LEASE_FROZEN')),'NATIVE_TASK_LEASE_FROZEN');
+ assert.equal(workflowStartupFailureCode({code:'NATIVE_TASK_LEASE_RUN_ASSOCIATION',message:secret}),'NATIVE_TASK_LEASE_RUN_ASSOCIATION');
  for(const error of [{code:secret,message:secret},{code:'NATIVE_PHONE_'+secret,message:'NATIVE_TASK_LEASE_FROZEN '+secret},{code:'UNRECOGNIZED_ALL_CAPS',stack:secret}])assert.equal(workflowStartupFailureCode(error),'CLI_STARTUP_FAILURE');
 });
