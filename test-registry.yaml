@@ -10944,3 +10944,11 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；真实CLI启动失败独占留受控错误码，拒外来路径/secret/覆盖；不当作活动或资源已归还证明"
+
+  - id: phone-adb-shell-v2-durable-outcome
+    path: services/phone-adb-controller/__tests__/adb-shell-v2-durable-outcome.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；loopback SDK EXIT/EOF/socket关闭与未知终态持久化，不接触真机"
