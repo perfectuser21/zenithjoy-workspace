@@ -1,6 +1,7 @@
 // Native102 explicit CI ownership. Portable media/HTTP/IPC contracts stay in Linux.
 export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-102-public-executor.test.mjs',
+ 'native-102-public-nonce-driver.test.mjs',
  'native-102-public-ui-driver.test.mjs',
  'native-102-qualification-terminal.test.mjs',
  'native-102-qualification.test.mjs',
@@ -35,6 +36,7 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-scrcpy-startup-authority.test.mjs',
 ]);
 export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
+ 'native-102-public-intents.test.mjs',
  'native102-default-credentials.test.mjs',
  'native-phone-credentials-growth.test.mjs',
  'native-phone-credentials.test.mjs',
@@ -50,7 +52,7 @@ export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
 export const isNative102DarwinTest=path=>NATIVE_102_DARWIN_SUITES.includes(path.split('/').at(-1));
 // Heavy public execution gets its own owner leg; the remaining contracts never
 // consume its20min clock or share its temporary PostgreSQL.
-const publicSuites=['native-102-public-executor.test.mjs','native-102-public-ui-driver.test.mjs','native-102-source-closure.test.mjs'];
+const publicSuites=['native-102-public-executor.test.mjs','native-102-public-nonce-driver.test.mjs','native-102-public-ui-driver.test.mjs','native-102-source-closure.test.mjs'];
 export const NATIVE_102_DARWIN_SHARDS=Object.freeze({
  '1':Object.freeze(publicSuites),
  '2':Object.freeze(NATIVE_102_DARWIN_SUITES.filter(name=>!publicSuites.includes(name))),
