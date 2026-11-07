@@ -84,7 +84,12 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
     try{
      guard(e);if(error)throw error;if(!ended)throw failure('OFFICIAL_CONTROL_READ');
      record({event:'read_returned',path,epoch:e,bytes});resolveRead(value);
-    }catch(cause){rejectRead(cause);}
+    }catch(cause){
+     // This is a failed read with physically closed owned resources, never a
+     // synthetic read_returned. Record before final journal closure.
+     try{record({event:'read_failed',path,epoch:e,code:/^[A-Z][A-Z0-9_]{0,95}$/.test(cause?.code||'')?cause.code:'OFFICIAL_CONTROL_READ',request_closed:requestClosed,response_closed:responseClosed,socket_closed:socketClosed});}catch{}
+     rejectRead(cause);
+    }
    };
    const abort=cause=>{error??=cause;stopOwnedResources(()=>res?.destroy(),()=>socket?.destroy(),()=>req?.destroy());};
    job.cancelRead=()=>abort(failure('OFFICIAL_CONTROL_CLOSED'));
