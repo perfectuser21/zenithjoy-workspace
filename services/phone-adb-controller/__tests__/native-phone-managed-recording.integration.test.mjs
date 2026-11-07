@@ -1,7 +1,7 @@
+import {nativePhoneTestArtifacts} from './helpers/native-phone-test-python.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {mkdirSync,writeFileSync,readFileSync,readdirSync,existsSync,mkdtempSync,cpSync} from 'node:fs';
-import {tmpdir} from 'node:os';
+import {mkdirSync,writeFileSync,readFileSync,readdirSync,existsSync,lstatSync,realpathSync,openSync,fstatSync,closeSync,constants} from 'node:fs';
 import {join} from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 const root=new URL('../',import.meta.url).pathname,sha=b=>createHash('sha256').update(b).digest('hex');
 // Synthetic loopback-only ROM/JAR and original captured audio text. This is an
@@ -49,22 +49,39 @@ test('manager已看见Source漂移后，恢复原字节也不能洗白或重放'
  await assert.rejects(f.manager.run('record-start',['invalid',15,'1234567890123456789']),/SOURCE|CLOSED/);assert.equal(f.requests.length,before);assert.equal(f.observations.length,0);assert.throws(()=>f.manager.captureFor(eid),/CAPTURE_NOT_STOPPED/);const proof=await f.manager.close();assert.equal(f.manager.verifyStopped(proof),false);
 });
 
+
+// Preserve only safe evidence projections in the CI-managed artifact directory.
+// Never copy the runtime tree, environment, argv, credentials or symlink targets.
+function saveTerminalDiagnostic(f,eid,label,error){
+ const archive=nativePhoneTestArtifacts(),files=[];
+ for(const [directory,names]of [[join(f.journal,eid+'-host'),['host.startup-phase.json','host.ready.json','host.closed.json',eid+'.rec.log']],[join(f.journal,eid+'-bridge'),['server.identity-after-exec.json','server.wire.returned.json','server.failed.json']],[f.capture,['natural-limit.released']]]){
+  if(!existsSync(directory))continue;const ds=lstatSync(directory);if(!ds.isDirectory()||ds.isSymbolicLink()||realpathSync(directory)!==directory)continue;
+  for(const name of names){const path=join(directory,name);let fd;try{fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);const st=fstatSync(fd);if(!st.isFile()||st.nlink!==1||st.size>1024*1024)continue;const bytes=readFileSync(fd),row={name,mtime_ms:st.mtimeMs,size:st.size,sha256:sha(bytes)};
+   if(name.endsWith('.rec.log'))Object.assign(row,{recording_started:/^INFO: Recording started to wav file:/m.test(bytes.toString()),recording_complete:/^INFO: Recording complete to wav file:/m.test(bytes.toString())});
+   else{const input=JSON.parse(bytes);for(const key of ['pid','post_exec_verified','post_exec_verified_at_ms','exit_code','wire_complete','protocol_started_at_ms','protocol_deadline_ms','media_deadline_ms','termination_reserve_ms','host_ready_mtime_ms','released_at_ms'])if(typeof input[key]==='boolean'||typeof input[key]==='number')row[key]=input[key];}files.push(row);
+  }catch(e){if(e.code!=='ENOENT')files.push({name,read_rejected:true});}finally{if(fd!==undefined)closeSync(fd);}}
+ }
+ writeFileSync(join(archive,'managed-terminal-diagnostic.json'),JSON.stringify({test_only:true,label,error_code:/^[A-Z0-9_]+$/.test(error?.code||'')?error.code:null,files},null,2),{mode:0o600,flag:'wx'});console.error(JSON.stringify({managed_terminal_evidence:archive,label}));
+}
+
 async function actualProcessRow(pid){return new Promise((yes,no)=>{const child=spawn('/bin/ps',['-ww','-p',String(pid),'-o','pid=,ppid=,pgid=,uid=,lstart=,stat=,command='],{stdio:['ignore','pipe','pipe']}),out=[],err=[];child.once('error',no);child.stdout.on('data',b=>out.push(b));child.stderr.on('data',b=>err.push(b));child.once('close',(code,signal)=>yes({code,signal,stdout:Buffer.concat(out).toString(),stderr:Buffer.concat(err).toString()}));});}
 test('原CLI 5秒自然退出后实际等7秒，完整EXIT0 EOF仍须原END与独立全停才mint capture',async t=>{
- const f=await managerFixture(t),eid=f.scope.run+'-v1234567890123456789-qualification-record';
+ const f=await managerFixture(t,{loopbackOptions:{naturalLimitAfterHostReady:true}}),eid=f.scope.run+'-v1234567890123456789-qualification-record';
  try{
-  const started=await f.manager.run('record-start',[eid,5,'1234567890123456789']);assert.match(started,/record_started/);const beganWait=Date.now();await new Promise(r=>setTimeout(r,7000));assert.ok(Date.now()-beganWait>=7000);
+  assert.throws(()=>f.releaseNaturalLimit(join(f.journal,eid+'-host')));assert.equal(existsSync(join(f.capture,'natural-limit.released')),false);
+  const fake=join(f.directory,'fake-ready');mkdirSync(fake,{mode:0o700});writeFileSync(join(fake,'host.ready.json'),JSON.stringify({pid:process.pid,root_identity:{pid:process.pid,pgid:process.pid,command:join(f.capture,'scrcpy')+' forged'},remote_server_stopped:'not_attested'}),{mode:0o600});assert.throws(()=>f.releaseNaturalLimit(fake));assert.equal(existsSync(join(f.capture,'natural-limit.released')),false);
+  const started=await f.manager.run('record-start',[eid,5,'1234567890123456789']);assert.match(started,/record_started/);const released=f.releaseNaturalLimit(join(f.journal,eid+'-host'));assert.ok(released.released_at_ms>=released.host_ready_mtime_ms);const beganWait=Date.now();await new Promise(r=>setTimeout(r,7000));assert.ok(Date.now()-beganWait>=7000);
   const hostDir=join(f.journal,eid+'-host'),bridgeDir=join(f.journal,eid+'-bridge'),ready=JSON.parse(readFileSync(join(hostDir,'host.ready.json'))),rootExit=await actualProcessRow(ready.pid),server=JSON.parse(readFileSync(join(bridgeDir,'server.wire.returned.json'))),wire=readdirSync(bridgeDir).filter(n=>/^wire-[0-9]+\.returned\.json$/.test(n)).map(n=>JSON.parse(readFileSync(join(bridgeDir,n)))).find(r=>r.operation==='server-launch');
   assert.equal(rootExit.code,1,JSON.stringify(rootExit));assert.equal(rootExit.stdout.trim(),'');assert.equal(server.exit_code,0);assert.equal(server.wire_complete,true);assert.equal(wire.peer_eof,true);assert.equal(wire.socket_closed,true);assert.match(readFileSync(join(hostDir,eid+'.rec.log'),'utf8'),/INFO: Recording complete to wav file:/);assert.equal(existsSync(join(hostDir,'host.closed.json')),false);
-  assert.throws(()=>f.manager.captureFor(eid),/CAPTURE_NOT_STOPPED/);const stopped=await f.manager.run('record-stop',[eid]);assert.match(stopped,/record_stopped/);assert.match(stopped,/native_audio_restored_state=started/);const cap=f.manager.captureFor(eid),facts=f.api.readNativeManagedCapture(cap,{scope:f.scope});assert.equal(facts.requested_seconds,5);assert.equal(facts.sha256,sha(readFileSync(facts.path)));assert.deepEqual(facts.scope,f.scope);assert.ok(f.observations.some(o=>o.evidenceId===eid+'-playback-end'));assert.ok(f.observations.some(o=>o.evidenceId===eid+'-playback-restored'));const proof=await f.manager.close();assert.equal(f.manager.verifyStopped(proof),true);
- }catch(error){const archive=mkdtempSync(join(tmpdir(),'native-managed-natural-evidence-'));cpSync(f.directory,join(archive,'run'),{recursive:true});console.error(JSON.stringify({natural_capture_evidence:archive,error:error.code||error.message}));throw error;}
+  assert.throws(()=>f.manager.captureFor(eid),/CAPTURE_NOT_STOPPED/);const stopped=await f.manager.run('record-stop',[eid]);assert.match(stopped,/record_stopped/);assert.match(stopped,/native_audio_restored_state=started/);const cap=f.manager.captureFor(eid),facts=f.api.readNativeManagedCapture(cap,{scope:f.scope});assert.equal(facts.requested_seconds,5);assert.equal(facts.sha256,sha(readFileSync(facts.path)));assert.deepEqual(facts.scope,f.scope);assert.ok(f.observations.some(o=>o.evidenceId===eid+'-playback-end'));assert.ok(f.observations.some(o=>o.evidenceId===eid+'-playback-restored'));const proof=await f.manager.close();assert.equal(f.manager.verifyStopped(proof),true);saveTerminalDiagnostic(f,eid,'natural-passed');
+ }catch(error){saveTerminalDiagnostic(f,eid,'natural',error);throw error;}
 });
 
 for(const [label,loopbackOptions]of [['non0真实EXIT23',{remoteExitCode:23}],['缺EXIT真实EOF',{missingExit:true}]])test(label+'不能借自然terminal读END、签capture或重放未知执行',async t=>{
- const f=await managerFixture(t,{loopbackOptions}),eid=f.scope.run+'-v1234567890123456789-qualification-record';
+ const f=await managerFixture(t,{loopbackOptions:{...loopbackOptions,naturalLimitAfterHostReady:true}}),eid=f.scope.run+'-v1234567890123456789-qualification-record';
  try{
-  await f.manager.run('record-start',[eid,5,'1234567890123456789']);await new Promise(r=>setTimeout(r,7000));const bridgeDir=join(f.journal,eid+'-bridge');
+  await f.manager.run('record-start',[eid,5,'1234567890123456789']);f.releaseNaturalLimit(join(f.journal,eid+'-host'));await new Promise(r=>setTimeout(r,7000));const bridgeDir=join(f.journal,eid+'-bridge');
   if(loopbackOptions.remoteExitCode){const returned=JSON.parse(readFileSync(join(bridgeDir,'server.wire.returned.json')));assert.equal(returned.exit_code,23);assert.equal(returned.wire_complete,true);}else{assert.equal(existsSync(join(bridgeDir,'server.wire.returned.json')),false);assert.equal(existsSync(join(bridgeDir,'server.failed.json')),true);}
-  await assert.rejects(f.manager.run('record-stop',[eid]),/SESSION|TRUNCATED|REMOTE_UNKNOWN|WIRE_END/);assert.throws(()=>f.manager.captureFor(eid),/CAPTURE_NOT_STOPPED/);assert.equal(f.observations.some(o=>o.evidenceId===eid+'-playback-restored'),false);const before=f.requests.length;await assert.rejects(f.manager.run('record-stop',[eid]),/CLOSED/);assert.equal(f.requests.length,before);const proof=await f.manager.close();assert.equal(f.manager.verifyStopped(proof),false);await assert.rejects(f.manager.assertAudioObservationAllowed({scope:f.scope,evidenceId:eid+'-playback-end'}),/AUDIO_OBSERVATION/);
- }catch(error){const archive=mkdtempSync(join(tmpdir(),'native-managed-terminal-negative-evidence-'));cpSync(f.directory,join(archive,'run'),{recursive:true});console.error(JSON.stringify({negative_terminal_evidence:archive,label,error:error.code||error.message}));throw error;}
+  await assert.rejects(f.manager.run('record-stop',[eid]),/SESSION|TRUNCATED|REMOTE_UNKNOWN|WIRE_END/);assert.throws(()=>f.manager.captureFor(eid),/CAPTURE_NOT_STOPPED/);assert.equal(f.observations.some(o=>o.evidenceId===eid+'-playback-restored'),false);const before=f.requests.length;await assert.rejects(f.manager.run('record-stop',[eid]),/CLOSED/);assert.equal(f.requests.length,before);const proof=await f.manager.close();assert.equal(f.manager.verifyStopped(proof),false);await assert.rejects(f.manager.assertAudioObservationAllowed({scope:f.scope,evidenceId:eid+'-playback-end'}),/AUDIO_OBSERVATION/);saveTerminalDiagnostic(f,eid,label+'-passed');
+ }catch(error){saveTerminalDiagnostic(f,eid,label,error);throw error;}
 });
