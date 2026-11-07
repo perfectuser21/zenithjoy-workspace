@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';import {join} from 'node:path';import {crea
 import {usingNative102Queue} from './fixtures/native-102-queue-fixture.mjs';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 test('actual processing claim COMMIT loss must remain unknown in the runtime state projection',async t=>usingNative102Queue(t,async f=>{
- f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+ const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'review must consume the unique formal processing Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
  let lost=false;const createPool=async options=>{const a=await f.createPool(options),connect=a.pool.connect.bind(a.pool);a.pool.connect=async()=>{const c=await connect(),query=c.query.bind(c);let write=false;return {...c,async query(text,args){if(text.startsWith('WITH pending AS'))write=true;const value=await query(text,args);if(text==='COMMIT'&&write&&!lost){lost=true;throw Error('REVIEW_ACTUAL_CLAIM_COMMIT_ACK_LOST');}return value;}};};return a;};
  const mod=await f.load('native-phone-processing.mjs'),processing=mod.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool});
  const ds=f.activate('dedup');await processing.prepareActivity(ds,{directory:f.makeDirectory('review-intake'),assertAuthority:f.authority(),resources:async()=>true,refreshOwned:async()=>{throw Error("UNUSED_REVIEW_HOOK");},readbackAuthority:async()=>{throw Error("UNUSED_REVIEW_HOOK");}});await processing.primitives(ds).verifyUpstream();assert.equal((await processing.closeActivity(ds)).execution_stopped,true);

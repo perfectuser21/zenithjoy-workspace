@@ -10,7 +10,7 @@ const api=await import('../native-phone-processing.mjs').catch(e=>{if(e.code==='
 test('processing composition exposes Code primitives for the original shared agent tools',()=>assert.equal(typeof api.createNativePhoneProcessing,'function'));
 test('actual 101 admission -> closed private intake -> original PG claim passes through processing primitives',async t=>{
  await usingNative102Queue(t,async f=>{
-  f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+  const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'processing must consume its unique formal RPC Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
   const {createLeadgenAgentTools}=await f.load('leadgen-agent-tools.mjs'),module=await f.load('native-phone-processing.mjs'),processing=module.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool:f.createPool});
   const scope=f.activate('dedup');await processing.prepareActivity(scope,{directory:f.makeDirectory('composition-dedup'),assertAuthority:f.authority(),resources:async()=>true,refreshOwned:async()=>{throw Error('TEST_HOOK_NOT_USED');},readbackAuthority:async()=>{throw Error('TEST_HOOK_NOT_USED');}});
   const d=processing.primitives(scope),dt=createLeadgenAgentTools({scope,runDir:f.current,primitives:{...d,assertResources:async()=>true}}),result=await dt.business('verify_upstream');assert.equal(result.received,2);assert.equal(result.eligible,1);
@@ -28,7 +28,7 @@ test('actual 101 admission -> closed private intake -> original PG claim passes 
 });
 test('actual cleanup COMMIT ACK loss preserves unknown and never sends another release',async t=>{
  await usingNative102Queue(t,async f=>{
-  f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+  const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'processing must consume its unique formal RPC Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
   const module=await f.load('native-phone-processing.mjs'),p=module.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool:f.createPool});
   const ds=f.activate('dedup');await p.prepareActivity(ds,{directory:f.makeDirectory('ack-intake'),assertAuthority:f.authority(),resources:async()=>true,refreshOwned:async()=>{throw Error('TEST_HOOK_NOT_USED');},readbackAuthority:async()=>{throw Error('TEST_HOOK_NOT_USED');}});await p.primitives(ds).verifyUpstream();await p.closeActivity(ds);
   const qs=f.activate('qualification');await p.prepareActivity(qs,{directory:f.makeDirectory('ack-claim'),assertAuthority:f.authority(),resources:async()=>true,refreshOwned:async()=>{throw Error('TEST_HOOK_NOT_USED');},readbackAuthority:async()=>{throw Error('TEST_HOOK_NOT_USED');}});await p.primitives(qs).queue('claim_videos');await p.closeActivity(qs);
@@ -50,7 +50,7 @@ test('processing uses the original detail macro and binds actual Code link bytes
 });
 test('Code module with no started body reports zero owned resources without minting handoff or phone permission',async t=>{
  await usingNative102Queue(t,async f=>{
-  f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+  const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'processing must consume its unique formal RPC Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
   const module=await f.load('native-phone-processing.mjs'),processing=module.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool:f.createPool}),scope=f.activate('qualification'),before=f.allocated();
   const stopped=await processing.closeActivity(scope);assert.equal(stopped.execution_stopped,true);assert.equal(stopped.not_started,true);assert.equal(stopped.physical_actions,0);assert.equal(f.allocated(),before);
   assert.throws(()=>processing.primitives(scope),/SCOPE/);await assert.rejects(processing.closeActivity({...scope,source_commit:'f'.repeat(40)}),/SCOPE/);
@@ -60,7 +60,7 @@ test('Code module with no started body reports zero owned resources without mint
 });
 test('new cleanup AV releases only its private actual owned claims and independently reads them back',async t=>{
  await usingNative102Queue(t,async f=>{
-  f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+  const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'processing must consume its unique formal RPC Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
   const module=await f.load('native-phone-processing.mjs'),processing=module.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool:f.createPool});
   const ds=f.activate('dedup');await processing.prepareActivity(ds,{directory:f.makeDirectory('cleanup-intake'),assertAuthority:f.authority(),resources:async()=>true,refreshOwned:async()=>{throw Error('TEST_HOOK_NOT_USED');},readbackAuthority:async()=>{throw Error('TEST_HOOK_NOT_USED');}});await processing.primitives(ds).verifyUpstream();await processing.closeActivity(ds);
   const qs=f.activate('qualification');await processing.prepareActivity(qs,{directory:f.makeDirectory('cleanup-claim'),assertAuthority:f.authority(),resources:async()=>true,refreshOwned:async()=>{throw Error('TEST_HOOK_NOT_USED');},readbackAuthority:async()=>{throw Error('TEST_HOOK_NOT_USED');}});await processing.primitives(qs).queue('claim_videos');await processing.closeActivity(qs);
@@ -72,7 +72,7 @@ test('new cleanup AV releases only its private actual owned claims and independe
 });
 test('closed dedup gets an independent original-B readonly PG Judge and fixed hard probes',async t=>{
  await usingNative102Queue(t,async f=>{
-  f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+  const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'processing must consume its unique formal RPC Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
   const module=await f.load('native-phone-processing.mjs'),auth=await f.load('native-activity-authority.mjs'),scope=f.activate('dedup'),request=structuredClone(f.q),task=f.routes.get('/api/brain/tasks/'+scope.task_id);
   const processing=module.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool:f.createPool});let readerClosed=false;
   const readbackAuthority=async()=>{const directory=f.makeDirectory('readback-B'),a=auth.createNativeActivityAuthority({runtimeRoot:f.root,source:f.source,request,frozen:{native_claim:{claimed_by:task.claimed_by,claimed_at:task.claimed_at},snapshot_sha256:scope.snapshot_sha256,deployment:{source_commit:f.source.commit}},directory,createControl:({directory:d})=>f.createControl({...f.options,source:f.source,request,journalDirectory:d})});return {assertAuthority:async()=>auth.readNativeAuthorityProjection(await a.readClaim(),{source:f.source,request}),close:async()=>{const p=await a.close();readerClosed=true;return p;},verifyStopped:p=>a.verifyStopped(p)};};
@@ -86,7 +86,7 @@ test('closed dedup gets an independent original-B readonly PG Judge and fixed ha
 });
 test('authority loss still closes every owned 102 domain and retains unknown instead of blocking close itself',async t=>{
  await usingNative102Queue(t,async f=>{
-  f.source.files.push({path:'native-phone-processing.mjs',sha256:sha(readFileSync(join(f.root,'native-phone-processing.mjs')))});
+  const pins=f.source.files.filter(r=>r.path==='native-phone-processing.mjs');assert.equal(pins.length,1,'processing must consume its unique formal RPC Source');assert.equal(pins[0].sha256,sha(readFileSync(join(f.root,'native-phone-processing.mjs'))));
   const module=await f.load('native-phone-processing.mjs'),processing=module.createNativePhoneProcessing({root:f.root,source:f.source,env:f.env,createPool:f.createPool});
   let allowed=true;const scope=f.activate('dedup');await processing.prepareActivity(scope,{directory:f.makeDirectory('composition-revoked'),assertAuthority:f.authority(),resources:async()=>allowed,refreshOwned:async()=>{throw Error('TEST_HOOK_NOT_USED');},readbackAuthority:async()=>{throw Error('TEST_HOOK_NOT_USED');}});
   const p=processing.primitives(scope);await p.verifyUpstream();allowed=false;await assert.rejects(p.inspect(),/RESOURCES/);
