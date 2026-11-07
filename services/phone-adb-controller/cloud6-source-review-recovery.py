@@ -347,6 +347,7 @@ def durable(path, value):
 @contextlib.contextmanager
 def device_guard():
     _, root, _, _ = layout()
+    root_identity = directory(root, True)
     path = root / (SERIAL + '.guard')
     read_bytes(path, True)
     fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
@@ -355,11 +356,35 @@ def device_guard():
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             need(False, 'GUARD_BUSY')
-        a, b = os.fstat(fd), path.lstat()
-        need(a.st_dev == b.st_dev and a.st_ino == b.st_ino, 'GUARD_CHANGED')
-        yield root
+        owned = os.fstat(fd)
+
+        def assert_current():
+            current_root = directory(root, True)
+            need((current_root.st_dev, current_root.st_ino) ==
+                 (root_identity.st_dev, root_identity.st_ino), 'ROOT_CHANGED')
+            need(path.resolve() == path, 'GUARD_CHANGED')
+            current, opened = path.lstat(), os.fstat(fd)
+            need(stat.S_ISREG(current.st_mode) and current.st_uid == os.geteuid()
+                 and stat.S_IMODE(current.st_mode) == 0o600 and current.st_nlink == 1
+                 and (current.st_dev, current.st_ino) == (opened.st_dev, opened.st_ino) ==
+                 (owned.st_dev, owned.st_ino), 'GUARD_CHANGED')
+            # Retain the original open-file-description lock; a replacement
+            # pathname's flock never substitutes for this owned descriptor.
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        assert_current()
+        yield root, assert_current
     finally:
         os.close(fd)
+
+
+def boundary(facts, assert_guard):
+    # Network authorization is work, not permission to commit facts which
+    # changed during that work. No HTTP read occurs after this checkpoint and
+    # before its guarded filesystem mutation.
+    assert_guard()
+    need(verify_evidence() == facts, 'EVIDENCE_CHANGED')
+    assert_guard()
 
 
 def lock_snapshot(path):
@@ -399,8 +424,9 @@ def validate_plan(root, journal, evidence):
 
 
 def plan():
-    with device_guard() as root:
-        facts = verify_evidence(); machine_authority = brain_authority()
+    with device_guard() as (root, assert_guard):
+        facts = verify_evidence(); assert_guard()
+        machine_authority = brain_authority(); boundary(facts, assert_guard)
         journal = journal_dir(root)
         if (journal / 'plan.json').exists():
             value = validate_plan(root, journal, facts)
@@ -411,12 +437,15 @@ def plan():
                 expected = dict(protocol=PROTOCOL, plan_sha256=sha(read_bytes(journal / 'plan.json', True)), identity=IDENTITY)
                 need(json.loads(read_bytes(journal / 'apply.intent.json', True)) == expected, 'INTENT_DRIFT')
             need(lock_snapshot(held if held.exists() else retired) == value['lock'], 'PLAN_LOCK_DRIFT')
+            boundary(facts, assert_guard)
             return value
         need(not archive_path(root).exists() and not archive_path(root).is_symlink(), 'ARCHIVE_EXISTS')
         value = dict(protocol=PROTOCOL, state='planned', identity=IDENTITY, evidence=facts,
                      lock=lock_snapshot(root / (SERIAL + '.lock')), retired_path=str(archive_path(root)),
                      machine_authority=machine_authority)
+        boundary(facts, assert_guard)
         durable(journal / 'plan.json', value)
+        assert_guard()
         return value
 
 
@@ -436,8 +465,9 @@ def free_readback(root, run, facts):
 
 
 def apply():
-    with device_guard() as root:
-        facts = verify_evidence(); brain_authority()
+    with device_guard() as (root, assert_guard):
+        facts = verify_evidence(); assert_guard()
+        brain_authority(); boundary(facts, assert_guard)
         journal = journal_dir(root)
         need((journal / 'plan.json').exists(), 'PLAN_REQUIRED')
         p = validate_plan(root, journal, facts)
@@ -448,27 +478,39 @@ def apply():
         else:
             need(not (journal / 'apply.returned.json').exists(), 'RETURN_WITHOUT_INTENT')
             need((root / (SERIAL + '.lock')).is_dir() and not archive_path(root).exists(), 'ARCHIVE_WITHOUT_INTENT')
+            assert_guard()
             durable(i, intent)
+        assert_guard()
         active, retired = root / (SERIAL + '.lock'), archive_path(root)
         need(active.exists() != retired.exists() and not active.is_symlink() and not retired.is_symlink(), 'LOCK_LOCATION')
         if active.exists():
             need(not (journal / 'apply.returned.json').exists() and lock_snapshot(active) == p['lock'], 'LOCK_DRIFT')
             # All immutable evidence and current machine authority are checked
             # again immediately before the single filesystem mutation.
-            need(verify_evidence() == facts, 'EVIDENCE_CHANGED'); brain_authority()
+            boundary(facts, assert_guard)
+            brain_authority(); boundary(facts, assert_guard)
             need(lock_snapshot(active) == p['lock'], 'LOCK_DRIFT')
+            assert_guard()
             os.rename(active, retired); sync_dir(root)
+            assert_guard()
         need(lock_snapshot(retired) == p['lock'], 'RETIRED_DRIFT')
+        assert_guard()
         _, _, run, _ = layout()
         local = free_readback(root, run, facts)
         central = brain_authority()  # No central release: preserve the actual readback.
+        boundary(facts, assert_guard)
+        need(not active.exists() and lock_snapshot(retired) == p['lock'], 'RETIRED_DRIFT')
+        local = free_readback(root, run, facts)
+        assert_guard()
         result = dict(protocol=PROTOCOL, state='retired', identity=IDENTITY, plan_sha256=intent['plan_sha256'],
                       retired_path=str(retired), local_readback=local, central_readback=central, original_execution_stopped=False)
         returned = journal / 'apply.returned.json'
         if returned.exists():
             need(json.loads(read_bytes(returned, True)) == result, 'RETURN_DRIFT')
         else:
+            assert_guard()
             durable(returned, result)
+        assert_guard()
         return result
 
 
