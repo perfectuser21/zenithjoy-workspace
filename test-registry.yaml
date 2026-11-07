@@ -7944,6 +7944,24 @@ tests:
     product: AI员工
     note: "由adb-mmv-policy-install.test.mjs调用，核私有安装、冲突和失败保持"
 
+  - id: cloud6-source-review-recovery
+    path: services/phone-adb-controller/__tests__/cloud6-source-review-recovery.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "隔离Python fixture验证固定cloud6 source-only归档合同；不操作真实手机或原隔离锁"
+
+  - id: cloud6-source-review-recovery-python
+    path: services/phone-adb-controller/__tests__/cloud6-source-review-recovery.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: cloud6-source-review-recovery.test.mjs invokes Python unittest
+    note: "21项原件/guard/claim/中央读回/中断与幂等行为测试；真实业务另行cloud7验收"
+
   - id: managed-adb-deployment
     path: services/phone-adb-controller/__tests__/managed-adb-deployment.test.mjs
     type: integration
