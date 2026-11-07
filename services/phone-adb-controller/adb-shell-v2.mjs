@@ -69,20 +69,24 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
  const admit=async()=>{
   guard();verifyJournal();verifySource();reviewed?.verify();guard();let a;try{a=await readAuthority();}catch{throw failure('ADB_SHELL_V2_AUTHORITY');}guard();verifyJournal();verifySource();reviewed?.verify();guard();
   if(!a||canonical(a.scope)!==canonical(q)||a.claimed_by!==q.claim.claimed_by||a.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(a.lease_until))||Date.parse(a.lease_until)<=Date.now())throw failure('ADB_SHELL_V2_AUTHORITY');
+  return Date.parse(a.lease_until);
  };
  let interrupt;const destroyAll=()=>{for(const c of channels)c.socket.destroy();};
  function seal(){if(!sealed){sealed=true;epoch++;if(pending){taint('ADB_SHELL_V2_CLOSED');interrupt?.();}destroyAll();}return snapshot();}
  async function connect(){
   if(connectionIndex>=2)throw failure('ADB_SHELL_V2_RECONNECT');
-  const index=connectionIndex++;record(`socket-${index}.intent.json`,{schema_version:1,index,endpoint_sha256:sha(q.endpoint),serial_sha256:sha(q.serial)});await admit();guard();
-  const socket=new Socket(),c={socket,buffer:Buffer.alloc(0),ended:false,closed:false,error:null,total:0,wake:new Set()};
+  const index=connectionIndex++;record(`socket-${index}.intent.json`,{schema_version:1,index,endpoint_sha256:sha(q.endpoint),serial_sha256:sha(q.serial)});const leaseUntil=await admit();guard();
+  const socket=new Socket(),c={socket,leaseUntil,buffer:Buffer.alloc(0),ended:false,closed:false,error:null,total:0,wake:new Set()};
   let close;const closePromise=new Promise(r=>{close=r;}),notify=()=>{for(const wake of c.wake)wake();c.wake.clear();};
   channels.add(c);socket.on('data',bytes=>{c.total+=bytes.length;if(c.total>commandWireLimit(reviewed)){c.error='ADB_SHELL_V2_LIMIT';socket.destroy();}else c.buffer=Buffer.concat([c.buffer,bytes]);notify();});
   socket.on('end',()=>{c.ended=true;notify();});socket.on('error',()=>{c.error='ADB_SHELL_V2_SOCKET';notify();});socket.on('close',hadError=>{c.closed=true;if(hadError||!c.ended)c.error??='ADB_SHELL_V2_SOCKET';channels.delete(c);close();notify();});
   const wait=()=>new Promise(r=>c.wake.add(r));
-  c.read=async size=>{await admit();while(c.buffer.length<size){guard();if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
-  c.chunk=async()=>{await admit();while(!c.buffer.length&&!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
-  c.finish=async()=>{while(!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}if(c.buffer.length)throw failure('ADB_SHELL_V2_TRAILING');await closePromise;guard();if(c.error)throw failure(c.error);};
+  // This connection is a private, single-observer inflight ticket. Frame reads
+  // cannot issue a command: every write and the final receipt still re-admit.
+  const frameGuard=()=>{guard();if(Date.now()>=c.leaseUntil)throw failure('ADB_SHELL_V2_AUTHORITY');};
+  c.read=async size=>{frameGuard();while(c.buffer.length<size){frameGuard();if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}frameGuard();if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
+  c.chunk=async()=>{frameGuard();while(!c.buffer.length&&!c.ended){frameGuard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}frameGuard();if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
+  c.finish=async()=>{while(!c.ended){frameGuard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}if(c.buffer.length)throw failure('ADB_SHELL_V2_TRAILING');await closePromise;frameGuard();if(c.error)throw failure(c.error);};
   c.closePromise=closePromise;
   const connected=new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',()=>reject(failure('ADB_SHELL_V2_SOCKET')));socket.once('close',()=>reject(failure('ADB_SHELL_V2_SOCKET')));});
   // Own rejection synchronously: guard() or connect() can throw before await.
@@ -92,7 +96,7 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
   guard();try{socket.connect(Number(endpoint[1]),'127.0.0.1');}catch{throw failure('ADB_SHELL_V2_SOCKET');}await connected;guard();return c;
  }
  async function write(c,bytes){
-  record(`write-${writeIndex++}.intent.json`,{schema_version:1,bytes:bytes.length,sha256:sha(bytes)});await admit();guard();
+  record(`write-${writeIndex++}.intent.json`,{schema_version:1,bytes:bytes.length,sha256:sha(bytes)});c.leaseUntil=await admit();guard();
   await new Promise((resolve,reject)=>c.socket.write(bytes,error=>error?reject(failure('ADB_SHELL_V2_SOCKET')):resolve()));guard();
  }
  async function status(c){const ack=await c.read(4);if(ack.equals(Buffer.from('OKAY')))return;if(ack.equals(Buffer.from('FAIL'))){const n=adbPayloadLength(await c.read(4),4096);await c.read(n);throw failure('ADB_SHELL_V2_FAIL');}throw failure('ADB_SHELL_V2_ACK');}
