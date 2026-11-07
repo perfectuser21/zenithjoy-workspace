@@ -1,6 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import os from 'node:os';import {syncBuiltinESMExports} from 'node:module';
-import {readFileSync} from 'node:fs';import {join} from 'node:path';import {pathToFileURL} from 'node:url';
+import {readFileSync} from 'node:fs';
+import {nativePhoneTestPython} from './helpers/native-phone-test-python.mjs';
+import {createHash} from 'node:crypto';import {join} from 'node:path';import {pathToFileURL} from 'node:url';
 import {usingNative102Public} from './fixtures/native-102-public-fixture.mjs';
 import {usingNative102PublicSource} from './fixtures/native-102-public-source-fixture.mjs';
 test('102 public factory refuses an incomplete preflight definition without an outer executor',async t=>usingNative102Public(t,async f=>{
@@ -27,3 +29,14 @@ test('102 public factory freezes the legal quota-one input across Task, lease, C
  const wired=f.workflow.createWorkflowExecution({runDir:f.env.WFR_RUN_DIR,frozen,binding,env:f.env,handlers:f.handlers,taskId:f.q.task_id,activities:f.definition.activities,createOfficialControl:f.createControl,rpc:async()=>{throw Error('NO_RPC');}}),request=wired.executeAgent.prepareObserverRequest(f.definition.activities[0],{context:{task_id:f.q.task_id},deadline_ms:Date.now()+90000});assert.equal(request.comment_limit,1);assert.equal(request.runtime_snapshot_sha256,frozen.snapshot_sha256);assert.equal(f.adb.requests.length,0);assert.equal(f.definition.binding.task_id,null);assert.equal(Object.hasOwn(JSON.parse(f.definition.ackBytes).binding,'task_id'),false);
  const host=await import(pathToFileURL(join(f.runtimeRoot,'runtime-host.mjs')));assert.equal(host.assertRuntimeHost(frozen.release,frozen.deployment),'mmv');assert.throws(()=>host.assertRuntimeHost({...frozen.release,target:'xian-m4'},frozen.deployment),/实际机器/);assert.throws(()=>host.assertRuntimeHost(frozen.release,{...frozen.deployment,target:'xian-m4'}),/实际机器/);t.mock.method(os,'hostname',()=> 'github-foreign-native102-host');syncBuiltinESMExports();assert.throws(()=>host.assertRuntimeHost(frozen.release,frozen.deployment),/实际机器/);t.mock.method(os,'hostname',()=> 'r10-7');syncBuiltinESMExports();assert.equal(host.assertRuntimeHost(frozen.release,frozen.deployment),'mmv');assert.equal(f.adb.requests.length,0);
  },{commentLimit:1}));
+
+test('102 public Source pins the actual test Python before constructing the real bounded Observer',async t=>usingNative102PublicSource(t,async f=>{
+ const python=nativePhoneTestPython(),pin={path:python,sha256:createHash('sha256').update(readFileSync(python)).digest('hex')},policy=JSON.parse(readFileSync(join(f.runtimeRoot,'config/collection-phone-hosts.json')));
+ const pins=policy.hosts.filter(h=>h.target==='mmv').map(h=>h.executables.python);assert.ok(pins.length);for(const declared of pins)assert.deepEqual(declared,pin);
+ assert.deepEqual(f.definition.frozen.collection_phone_scope.executables.python,pin);
+ await f.handlers.prepareNativePhone();
+ const wired=f.workflow.createWorkflowExecution({runDir:f.env.WFR_RUN_DIR,frozen:f.definition.frozen,binding:f.definition.binding,env:f.env,handlers:f.handlers,taskId:f.q.task_id,activities:f.definition.activities,createOfficialControl:f.createControl,rpc:async()=>{throw Error('NO_RPC');}}),request=wired.executeAgent.prepareObserverRequest(f.definition.activities[0],{context:{task_id:f.q.task_id},deadline_ms:Date.now()+90000});
+ const ownerModule=await import(pathToFileURL(join(f.runtimeRoot,'commander-bounded-owner.mjs')));assert.throws(()=>ownerModule.createBoundedCommanderOwner({runtimeRoot:f.runtimeRoot,source:f.source,python:{...pin,sha256:'0'.repeat(64)},deadlineMs:request.worker_deadline_ms,cleanupDeadlineMs:request.deadline_ms}),/COMMANDER_OWNER_BOUNDED_UNVERIFIED/);
+ const observers=await import(pathToFileURL(join(f.runtimeRoot,'runner-official-commander.mjs'))),observer=await observers.createRunnerOfficialCommander({runtimeRoot:f.runtimeRoot,runDir:f.env.WFR_RUN_DIR,source:f.source,request,directoryName:'commander-preflight',factories:{createControl:f.createControl}});
+ const closed=await observer.close();assert.equal(closed.execution_stopped,true);assert.equal(closed.execution_unknown,false);assert.equal(f.adb.requests.length,0);assert.equal(f.outerCalls(),0);
+}));
