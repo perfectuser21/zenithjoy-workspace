@@ -10961,7 +10961,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-102-queue
     path: services/phone-adb-controller/__tests__/native-102-queue.test.mjs
@@ -10987,7 +10987,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-102-sampling-intake
     path: services/phone-adb-controller/__tests__/native-102-sampling-intake.test.mjs
@@ -11026,7 +11026,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-collection-heartbeat
     path: services/phone-adb-controller/__tests__/native-collection-heartbeat.test.mjs
@@ -11052,7 +11052,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-collection-parser-seam
     path: services/phone-adb-controller/__tests__/native-collection-parser-seam.test.mjs
@@ -11078,7 +11078,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-collection-readonly
     path: services/phone-adb-controller/__tests__/native-collection-readonly.test.mjs
@@ -11104,7 +11104,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-audio-macros
     path: services/phone-adb-controller/__tests__/native-phone-audio-macros.test.mjs
@@ -11130,7 +11130,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-credentials-growth
     path: services/phone-adb-controller/__tests__/native-phone-credentials-growth.test.mjs
@@ -11167,7 +11167,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-managed-recording.integration
     path: services/phone-adb-controller/__tests__/native-phone-managed-recording.integration.test.mjs
@@ -11229,7 +11229,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-processing-history-freshness
     path: services/phone-adb-controller/__tests__/native-phone-processing-history-freshness.test.mjs
@@ -11255,7 +11255,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-processing-managed
     path: services/phone-adb-controller/__tests__/native-phone-processing-managed.test.mjs
@@ -11281,7 +11281,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-processing-ready
     path: services/phone-adb-controller/__tests__/native-phone-processing-ready.test.mjs
@@ -11307,7 +11307,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-phone-processing-search-isolation
     path: services/phone-adb-controller/__tests__/native-phone-processing-search-isolation.test.mjs
@@ -11394,7 +11394,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-scrcpy-natural-end
     path: services/phone-adb-controller/__tests__/native-scrcpy-natural-end.test.mjs
@@ -11420,7 +11420,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-scrcpy-source-preconditions
     path: services/phone-adb-controller/__tests__/native-scrcpy-source-preconditions.test.mjs
@@ -11446,7 +11446,7 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "native-102-darwin-test"
       command: "node scripts/ci/native-102-darwin-tests.mjs"
-      shard: "2"
+      shard: "3"
 
   - id: phone-native-scrcpy-terminal-callbacks
     path: services/phone-adb-controller/__tests__/native-scrcpy-terminal-callbacks.test.mjs
@@ -11557,4 +11557,116 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: native-102-darwin-test
       command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "3"
+
+  - id: phone-official-claim-journal
+    path: services/phone-adb-controller/__tests__/official-claim-journal.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code授权/生命周期有限反例，不冒真实手机成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-official-claim-head-parallel
+    path: services/phone-adb-controller/__tests__/official-claim-head-parallel.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code授权/生命周期有限反例，不冒真实手机成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-runtime-approval-semantics
+    path: services/phone-adb-controller/__tests__/native-phone-runtime-approval-semantics.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code授权/生命周期有限反例，不冒真实手机成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
       shard: "2"
+
+  - id: phone-locked-definition-facts
+    path: services/phone-adb-controller/__tests__/locked-definition-facts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-locked-definition-control
+    path: services/phone-adb-controller/__tests__/locked-definition-control.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-locked-definition-immutability
+    path: services/phone-adb-controller/__tests__/locked-definition-immutability.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "3"
+
+  - id: phone-native-phone-protocol-ticket-brand
+    path: services/phone-adb-controller/__tests__/native-phone-protocol-ticket-brand.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-wire-ticket-boundary
+    path: services/phone-adb-controller/__tests__/native-phone-wire-ticket-boundary.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "2"
+
+  - id: phone-native-phone-wire-ticket-private-brand
+    path: services/phone-adb-controller/__tests__/native-phone-wire-ticket-private-brand.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功；完整单文件使用experimental-test-module-mocks并强制4项零skip计数"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "3"

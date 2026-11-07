@@ -6,7 +6,7 @@ import {join,resolve,isAbsolute} from 'node:path';
 import {createServer} from 'node:net';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
-import {NATIVE_102_DARWIN_SHARDS} from './native-102-ci-selection.mjs';
+import {NATIVE_102_DARWIN_SHARDS,native102DarwinInvocations} from './native-102-ci-selection.mjs';
 import {nativePhoneTestPilRoot,nativePhoneTestImageArgs} from '../../services/phone-adb-controller/__tests__/helpers/native-phone-test-python.mjs';
 import {nativePhoneTestMediaBinary} from '../../services/phone-adb-controller/__tests__/helpers/native-phone-test-media.mjs';
 const require=createRequire(import.meta.url),{Pool}=require('pg');
@@ -14,9 +14,14 @@ const root=resolve(import.meta.dirname,'../..'),sha=b=>createHash('sha256').upda
 const cancellation=new AbortController(),onTerm=()=>cancellation.abort(Error('CI_SIGTERM')),onInt=()=>cancellation.abort(Error('CI_SIGINT'));
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const freePort=()=>new Promise((resolve,reject)=>{const s=createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(error=>error?reject(error):resolve(port));});});
-const run=(command,args,options={})=>new Promise((resolve,reject)=>{
- let error;
- const child=spawn(command,args,{cwd:root,stdio:'inherit',signal:cancellation.signal,...options});child.once('error',value=>{error=value;});child.once('close',(code,signal)=>!error&&code===0&&!signal?resolve():reject(error||Error('NATIVE_102_CI_CHILD_FAILED '+command+' code='+code+' signal='+signal)));
+const run=(command,args,{expectedTests=null,...options}={})=>new Promise((resolve,reject)=>{
+ let error,output='';const child=spawn(command,args,{cwd:root,stdio:expectedTests===null?'inherit':['inherit','pipe','inherit'],signal:cancellation.signal,...options});
+ child.once('error',value=>{error=value;});if(expectedTests!==null)child.stdout.on('data',bytes=>{process.stdout.write(bytes);output+=bytes;if(Buffer.byteLength(output)>2*1024*1024){error=Error('NATIVE_102_CI_FULL_FILE_OUTPUT_LIMIT');child.kill('SIGTERM');}});
+ child.once('close',(code,signal)=>{if(error||code!==0||signal)return reject(error||Error('NATIVE_102_CI_CHILD_FAILED '+command+' code='+code+' signal='+signal));
+  if(expectedTests!==null){const counts={};for(const key of ['tests','pass','fail','cancelled','skipped','todo']){const rows=[...output.matchAll(new RegExp('^# '+key+' ([0-9]+)$','gm'))];if(rows.length!==1)return reject(Error('NATIVE_102_CI_FULL_FILE_COUNT'));counts[key]=Number(rows[0][1]);}
+   if(counts.tests!==expectedTests||counts.pass!==expectedTests||['fail','cancelled','skipped','todo'].some(k=>counts[k]!==0))return reject(Error('NATIVE_102_CI_FULL_FILE_COUNT'));
+   console.log(JSON.stringify({event:'native102-ci-complete-file',suite:args.find(s=>s.endsWith('.test.mjs')),counts}));
+  }resolve();});
 });
 if(process.platform!=='darwin')throw Error('NATIVE_102_CI_DARWIN_REQUIRED');
 const shard=process.env.NATIVE_102_CI_SHARD;
@@ -67,7 +72,7 @@ try{
  const compiler=spawnSync('/usr/bin/clang',['--version'],{encoding:'utf8',timeout:10000});if(compiler.status!==0||compiler.signal)throw Error('NATIVE_102_CI_COMPILER_REQUIRED');
  console.log(JSON.stringify({event:'native102-test-pillow',root:pil,verified:true}));
  console.log(JSON.stringify({event:'native102-ci-selection',shard,suites:selectedSuites}));
- await run(process.execPath,['--test','--test-concurrency=1',...selectedSuites.map(s=>'services/phone-adb-controller/__tests__/'+s)],{env});
+ for(const batch of native102DarwinInvocations(shard))await run(process.execPath,batch.args,{env,expectedTests:batch.expectedTests});
 
 }catch(error){
  // Only isolated test facts; no environment, raw request or credential directory.

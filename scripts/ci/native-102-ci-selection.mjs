@@ -38,9 +38,14 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-scrcpy-recording-loopback.test.mjs',
  'native-scrcpy-source-preconditions.test.mjs',
  'native-scrcpy-startup-authority.test.mjs',
+ 'native-phone-wire-ticket-boundary.test.mjs',
+ 'native-phone-wire-ticket-private-brand.test.mjs',
 ]);
 export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
  'native-102-public-intents.test.mjs',
+ 'locked-definition-facts.test.mjs',
+ 'locked-definition-control.test.mjs',
+ 'native-phone-protocol-ticket-brand.test.mjs',
  'native-adb-inflight-admission.test.mjs',
  'native102-default-credentials.test.mjs',
  'native-phone-credentials-growth.test.mjs',
@@ -64,3 +69,13 @@ export const NATIVE_102_DARWIN_SHARDS=Object.freeze({
  '2':Object.freeze(componentSuites.filter((_name,index)=>index%2===0)),
  '3':Object.freeze(componentSuites.filter((_name,index)=>index%2===1)),
 });
+
+// Only the genuine private-brand observation layer needs Node module mocks.
+// Keep it a complete single-file child; its owner retains the same private PG.
+export function native102DarwinInvocations(shard){
+ const suites=NATIVE_102_DARWIN_SHARDS[shard];if(!suites)throw Error('NATIVE_102_CI_SHARD_REQUIRED');
+ const privateName='native-phone-wire-ticket-private-brand.test.mjs',normal=suites.filter(name=>name!==privateName),batches=[];
+ if(normal.length)batches.push({args:['--test','--test-concurrency=1',...normal.map(name=>'services/phone-adb-controller/__tests__/'+name)],expectedTests:null});
+ if(suites.includes(privateName))batches.push({args:['--test','--experimental-test-module-mocks','--test-concurrency=1','services/phone-adb-controller/__tests__/'+privateName],expectedTests:4});
+ if(!batches.length)throw Error('NATIVE_102_CI_EMPTY_SELECTION');return batches;
+}
