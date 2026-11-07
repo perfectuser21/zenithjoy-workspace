@@ -98,7 +98,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
   './control-acceptance-tools.mjs':{validateControlScope:()=>{throw Error('raw control scope after Code stop');},validateFrozenControlAcceptance:value=>{assert.equal(value.control_scope,undefined);assert.equal(value.control_claim,undefined);return null;},createControlAcceptanceHandlers:()=>{throw Error('raw control handlers after Code stop');}},
   './runtime-receipts.mjs':{markActivityStart:()=>{throw Error('Agent recorder after Code stop');}},
   './ledger.mjs':{setLedgerStage:()=>{throw Error('Agent ledger after Code stop');}},
-  './runtime-definition.mjs':{readFrozen:()=>frozen,assertCommentSampling:()=>{},assertOutreachScope:()=>{},assertExecutionMode:()=> 'code',assertAgentInput:()=>null},
+  './runtime-definition.mjs':{readFrozen:()=>frozen,digest:()=>{throw Error('startup failure digest must not run after a normal Code stop');},assertCommentSampling:()=>{},assertOutreachScope:()=>{},assertExecutionMode:()=> 'code',assertAgentInput:()=>null},
   './runtime-binding.mjs':{readBinding:()=>({run_id:'original-run__a1',id:'fixed-binding'})},
   './leadgen-client.mjs':{createRpc:()=>async()=>({}),rpcSource:()=>{throw Error('unexpected RPC source after stop');},execInput:async()=>({code:0,stdout:'WFR_EVIDENCE_STATUS=sent'})},
   './leadgen-discovery.mjs':{verifyDiscoveryFilterEvidence:()=>{throw Error('unexpected filter verifier after stop');}},
