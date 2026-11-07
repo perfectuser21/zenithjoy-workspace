@@ -39,7 +39,7 @@ export async function createRecordingLoopbackFixture(t,{prepareSource,preExecDel
 }
 async function buildClient(capture,serial,port,preExecDelayMicros,{earlyReady,mediaDelayMs,naturalLimitAfterHostReady,preProtocolDelayMs}){
  if(typeof earlyReady!=="boolean"||!Number.isSafeInteger(mediaDelayMs)||mediaDelayMs<0||mediaDelayMs>20000)throw Error("FIXTURE_MEDIA_DELAY");
- if(!Number.isSafeInteger(preExecDelayMicros)||preExecDelayMicros<0||preExecDelayMicros>500000)throw Error("FIXTURE_PRE_EXEC_DELAY");
+ if(!Number.isSafeInteger(preExecDelayMicros)||preExecDelayMicros<0||preExecDelayMicros>2000000)throw Error("FIXTURE_PRE_EXEC_DELAY");
  const emit = 'FILE*f=fopen(out,"wb");if(!f)return 8;fputs("synthetic loopback material, not Android audio",f);fflush(f);fsync(fileno(f));fclose(f);fprintf(stderr,"INFO: Recording started to wav file: %s\\n",out);fflush(stderr);';
  const code=`#include <stdio.h>
 #include <stdlib.h>
