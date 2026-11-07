@@ -31,7 +31,12 @@ test('frozen deployment write set includes every physical alias and all metadata
   assert.ok(result.mmv.some(e=>e.path===path),path);
  assert.equal(result.mmv.find(e=>e.path==='.codex-team1/skills/multi-platform-publish').after.kind,'symlink');
  assert.ok(result.mmv.some(e=>e.path.startsWith('.openclaw/leadgen-scripts/release-evidence/')));
- assert.ok(!result.mmv.some(e=>e.path.includes('credentials')||e.path.includes('node_modules')));
+ // The fixed reader module is deployable code; private cache paths remain forbidden.
+ const privatePath=path=>path.split('/').some(part=>part==='.credentials'||part==='credentials'||part==='node_modules');
+ assert.ok(!result.mmv.some(e=>privatePath(e.path)||e.path.includes('credentials')&&!e.path.endsWith('/native-phone-credentials.mjs')));
+ const reader=result.mmv.find(e=>e.path==='.openclaw/leadgen-scripts/native-phone-credentials.mjs');
+ assert.equal(reader?.after.kind,'file');
+ assert.equal(reader.after.sha256,createHash('sha256').update(readFileSync(service+'/native-phone-credentials.mjs')).digest('hex'));
 });
 
 test('write set parser refuses missing arrays or executable shell fragments',()=>{
