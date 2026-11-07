@@ -16,7 +16,7 @@ class RecoveryTests(unittest.TestCase):
  def setUp(self):
   self.assertTrue(SOURCE.is_file(),'missing source-only quarantine recovery implementation')
   spec=importlib.util.spec_from_file_location('source_review',SOURCE);self.m=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.m)
-  self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.home=Path(self.temp.name);self.root=self.home/'.local/share/zenithjoy/phone-locks';self.root.mkdir(parents=True,mode=0o700);self.root.chmod(0o700)
+  self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.home=Path(self.temp.name).resolve();self.root=self.home/'.local/share/zenithjoy/phone-locks';self.root.mkdir(parents=True,mode=0o700);self.root.chmod(0o700)
   self.run=self.home/'.local/share/zenithjoy/phone-candidate-runs'/COMMIT/'ledger'/('douyin_video_discovery-'+TAG);self.run.mkdir(parents=True,mode=0o700)
   self.e=self.home/'perfect21/runner-deploy-evidence/potato-runner-commander-20261107/cloud-drive6';self.e.mkdir(parents=True,mode=0o700)
   self.legacy=self.home/'legacy';self.legacy.mkdir(mode=0o700);put(self.root/'.migration-complete.json',dict(schema_version=1,state='complete',source_sha256='a'*64,legacy_root=str(self.legacy)));put(self.root/(SERIAL+'.guard'),b'')
@@ -49,6 +49,7 @@ class RecoveryTests(unittest.TestCase):
    if n==2:rs.append(dict(event='read_intent',path='/api/brain/runs/'+RUN+'/definition',epoch=0))
    self.add(d+'official-authority-fixture.jsonl',b''.join(encoded(x) for x in rs));self.add(d+'caller-lifecycle-fixture.intent.json',dict(protocol='official-caller-lifecycle/v1',source_commit=COMMIT));b=self.files[d+'official-authority-fixture.jsonl'].read_bytes();a=self.files[d+'caller-lifecycle-fixture.intent.json'].read_bytes()
    self.add(d+'official-caller-final-fixture.json',dict(protocol='official-caller-final/v1',evidence_only=True,not_recovery_authority=True,task_id=TASK,run_id=RUN,binding_id=BIND,source_commit=COMMIT,activity_key='preflight',raw_turns=[],journal_closed=True,evidence_complete=True,snapshot=dict(sealed=True,pending=0,execution_stopped=True,caller_execution_stopped=True,execution_unknown=False,external_effect_unknown=False,previous_caller_stop_unproven=False,final_record_failed=False),ledger=dict(file='official-authority-fixture.jsonl',sha256=sha(b),bytes=len(b)),artifacts=[dict(file='caller-lifecycle-fixture.intent.json',sha256=sha(a),bytes=len(a))]))
+  self.add('native-phone/preflight/source/lifecycle.intent.json',dict(protocol='native-phone-adb-read/v1'))
   for n,path in enumerate(['/system/bin/am','/system/bin/app_process','/system/bin/app_process32','/system/bin/app_process64']):
    d='native-phone/preflight/source/';self.add(d+f'read-{n}.intent.json',dict(id=n,path=path,scope_sha256='b'*64));cmds=[]
    for service in ['host:transport:'+SERIAL,'sync:']:
@@ -138,6 +139,18 @@ class RecoveryTests(unittest.TestCase):
   self.plan();r=self.apply();f=Path(r['retired_path'])/'owner';put(f,b'foreign\n')
   with self.assertRaises(ValueError):self.apply()
   self.assertFalse(self.lock.exists())
+ def test_plan_journal_or_marker_drift_refuses(self):
+  self.plan();j=next(self.root.glob('.source-review-cloud6-*/plan.json'));v=json.loads(j.read_text());v['identity']['epoch']='foreign';put(j,v)
+  with self.assertRaises(ValueError):self.apply()
+  self.assertTrue(self.lock.exists())
+ def test_cli_cannot_supply_another_owner_root_or_hash(self):
+  import subprocess
+  r=subprocess.run([sys.executable,str(SOURCE),'plan','--owner','foreign'],capture_output=True,text=True)
+  self.assertEqual(r.returncode,2);self.assertIn('USAGE',r.stderr);self.assertTrue(self.lock.exists())
+ def test_retirement_without_apply_intent_cannot_be_adopted(self):
+  p=self.plan();os.rename(self.lock,Path(p['retired_path']))
+  with self.assertRaises(ValueError):self.apply()
+  with self.assertRaises(ValueError):self.plan()
  def test_symlink_and_hardlink_fail_before_plan(self):
   f=self.lock/'owner';b=f.read_bytes();f.unlink();os.link(self.foreign/'owner',f)
   with self.assertRaises(ValueError):self.plan()
@@ -149,7 +162,7 @@ class RecoveryTests(unittest.TestCase):
    nonlocal count
    if path=='/device-locks':
     count+=1
-    if count>=2:raise ValueError('central after rename unknown')
+    if not self.lock.exists():raise ValueError('central after rename unknown')
    return old(path)
   self.m.brain_get=read
   with self.assertRaises(ValueError):self.apply()
