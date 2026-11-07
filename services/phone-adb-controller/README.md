@@ -211,6 +211,8 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行域能力检查。103 的原生执行路径限定 MMV、`mmv-scoring`、`serial=none`，要求完整冻结的数据库依赖、主机身份、Task 归属及真实租约；缺少这些条件则返回 `needs_review`、`not_started=true`。101、102 的完整手机执行域仍需另外验收。环境变量、Agent 返回内容或 JSON 标记不能开启此能力。旧执行的停止状态若仍未证明，必须保留 `execution_stopped=false`，不能因为本次没有启动 Worker 就覆盖它。
 
+ADB 的每次写入（包括真正 shell/RECV 首次发送）和最终结果返回前，仍重新读取真实权限并核完整 Source。已发送的同一请求只在本连接、原 scope/epoch、最近真实租约、seal/Abort 和绝对期限内消费帧，省去每个分片重复远程校验；这不是跨命令授权缓存。评论者核验后先重新打开同 VID，再新取实际链接并恢复严格评论面板，才可签发本轮身份凭证。
+
 102 的原生路径保留预检、判重、资格、评论采集、收尾五个 Activity。资格录制由固定 Source、Code 管理的 Host/ADB 及独立音轨恢复共同约束；转写后仍调用原独立资格判断，Agent 或 Commander 的文本不作为结果。评论只接受本轮原生身份凭证，按原采样规则提交并独立读回，历史评论不计为本轮新增；确认零评论不进入待处理队列。
 
 默认 `raw-model-v1` 启动时，Code 从系统用户固定私有目录读取 OpenRouter、DashScope 凭据，只冻结路径和摘要，执行时重新核验；凭据值不进 Source、Git 或日志。MMV 模板固定现有 ffmpeg、ffprobe 的真实路径和摘要，缺依赖即拒绝；旧 Code、旧 Agent 运输不强制这些新增模型凭据。续跑沿原快照，不能借凭据或模板变化重放未决操作。

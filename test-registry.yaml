@@ -11520,3 +11520,28 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: openclaw-scripts-test
       command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-adb-inflight-admission
+    path: services/phone-adb-controller/__tests__/native-adb-inflight-admission.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；独立协议/原生谓词回归，非真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-collection-return-navigation
+    path: services/phone-adb-controller/__tests__/native-phone-collection-return-navigation.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；独立协议/原生谓词回归，非真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
