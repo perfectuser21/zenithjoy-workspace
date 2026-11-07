@@ -89,7 +89,12 @@ NODE
     print -u2 'MMV只执行独立评论评分，禁止借用手机身份'; exit 1
   fi
   export LEADGEN_LOCAL_RPC=1
-  export NODE_PATH="$HOME/.openclaw/leadgen-scripts/node_modules:$HOME/.openclaw/node_modules${NODE_PATH:+:$NODE_PATH}"
+  if [[ "$WF_ARG_CAP" == douyin_comment_scoring && "$P" == mmv-scoring && "$SERIAL" == none ]]; then
+    export NODE_PATH="$HOME/.openclaw/leadgen-scripts/node_modules:$HOME/.openclaw/node_modules${NODE_PATH:+:$NODE_PATH}"
+  else
+    # 手机运行使用冻结的PG闭包；也清除调用方继承的全局解析路径。
+    unset NODE_PATH
+  fi
   if [[ -r "$HOME/.credentials/zenithjoy-db.env" ]]; then set -a; source "$HOME/.credentials/zenithjoy-db.env"; set +a; fi
 elif [[ "$WF_ARG_CAP" == douyin_comment_scoring ]]; then
   print -u2 '独立评论评分必须在MMV运行'; exit 1

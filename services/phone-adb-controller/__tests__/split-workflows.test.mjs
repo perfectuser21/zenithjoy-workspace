@@ -30,7 +30,7 @@ if(process.argv[2]==='prepare'){
  const dir=process.env.WFR_RUN_DIR; mkdirSync(join(dir,'runtime'),{recursive:true});
  copyFileSync(process.argv[1],join(dir,'runtime/runtime-receipts.mjs'));
  writeFileSync(join(dir,'workflow.plan'),${JSON.stringify(plan)});
- writeFileSync(join(dir,'runtime/leadgen-workflow.mjs'), 'console.log(JSON.stringify({brain:process.env.BRAIN_URL,loaded:process.env.FIXTURE_CREDENTIAL_LOADED,host:process.env.WFR_HOSTKEY,localRpc:process.env.LEADGEN_LOCAL_RPC,profile:process.env.P,serial:process.env.SERIAL}));');
+ writeFileSync(join(dir,'runtime/leadgen-workflow.mjs'), 'console.log(JSON.stringify({brain:process.env.BRAIN_URL,loaded:process.env.FIXTURE_CREDENTIAL_LOADED,host:process.env.WFR_HOSTKEY,localRpc:process.env.LEADGEN_LOCAL_RPC,nodePath:process.env.NODE_PATH,profile:process.env.P,serial:process.env.SERIAL}));');
 }else if(process.argv[2]==='bind-run')console.log('WFR_ATTEMPT=fixture; WFR_SKIP_WORDS=');
 else process.exit(1);
 `);
@@ -44,7 +44,7 @@ else process.exit(1);
       ...['douyin_video_discovery','douyin_video_processing','douyin_lead_outreach'].map(flow=>({host:'r10-7',flow,error:'MMV只执行独立评论评分'})),
     ];
     for (const [index, row] of cases.entries()) await t.test(JSON.stringify(row), () => {
-      const env = { ...process.env, HOME: home, ZDOTDIR: home, FIXTURE_HOST: row.host, WFR_HOME: join(home, 'case-'+index) };
+      const env = { ...process.env, HOME: home, ZDOTDIR: home, FIXTURE_HOST: row.host, NODE_PATH:'/inherited/node_modules', LEADGEN_MMV_DEVICE_RUNTIME:row.flow?'':'1', WFR_HOME: join(home, 'case-'+index) };
       delete env.BRAIN_URL;
       if (row.explicit) env.BRAIN_URL = 'http://registered-brain.invalid:5221';
       const out = spawnSync('/bin/zsh', [join(app, 'leadgen-run.sh'), row.flow||'douyin_comment_scoring', row.profile||'mmv-scoring', row.serial||'none', 'fixture', 'fixture'], { env, encoding: 'utf8' });
@@ -60,6 +60,7 @@ else process.exit(1);
       assert.equal(receipt.loaded, '1', '保留地址不能跳过凭据加载');
       assert.equal(receipt.host,'mmv');assert.equal(receipt.localRpc,'1');
       assert.equal(receipt.profile,'mmv-scoring');assert.equal(receipt.serial,'none');
+      assert.equal(receipt.nodePath,`${home}/.openclaw/leadgen-scripts/node_modules:${home}/.openclaw/node_modules:/inherited/node_modules`);
     });
   } finally { rmSync(home, { recursive: true, force: true }); }
 });

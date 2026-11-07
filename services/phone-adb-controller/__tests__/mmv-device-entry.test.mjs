@@ -8,7 +8,7 @@ import { spawn,spawnSync } from 'node:child_process';
 const header='profile\tserial\tmodel\twidth\theight\tenabled\n';
 const row='cloud-phone-test\t47.100.213.173:10001\tSM-F900F\t720\t1280\ttrue\n';
 
-// 入口边界回归，所有允许入口都止于真实缺正式plan；不mock PG/公司账号预检。
+// 隔离入口回归；默认止于缺plan，PG兼容测试只加载真实私有闭包，不访问DB或手机。
 function fixture(t,registry=header+row){
   const home=mkdtempSync(join(tmpdir(),'mmv-device-entry-'));
   t.after(()=>rmSync(home,{recursive:true,force:true}));
@@ -105,5 +105,31 @@ test('MMV设备入口拒不匹配或未知的本地ADB客户端，不调用设�
     const out=launch(f,route);assert.equal(out.status,1);
     assert.match(out.stderr,/MMV_DEVICE_ADB_CLIENT/);
     assert.doesNotMatch(out.stderr,/正式发布计划缺失/);
+  }
+});
+
+
+test('MMV手机101/102入口清除新导出及继承NODE_PATH，真实固定PG可加载',async t=>{
+  const f=fixture(t),route=await bridge(t);
+  const {installPreflightPg}=await import('../preflight-pg-dependencies.mjs');
+  const sourceCommit='a'.repeat(40);
+  const installed=await installPreflightPg({runtimeRoot:f.app,sourceCommit});
+  const frozen={deployment:{source_commit:sourceCommit},preflight_pg:installed.frozen};
+  const probe=join(f.app,'pg-probe.mjs');
+  writeFileSync(probe,`import {loadPreflightPg} from ${JSON.stringify(new URL('../preflight-pg-dependencies.mjs',import.meta.url).href)};
+const {Pool}=loadPreflightPg({runtimeRoot:${JSON.stringify(f.app)},frozen:${JSON.stringify(frozen)}});
+const pool=new Pool({max:1});await pool.end();
+console.log(JSON.stringify({pool:typeof Pool,nodePath:process.env.NODE_PATH??null,localRpc:process.env.LEADGEN_LOCAL_RPC,dbLoaded:process.env.FIXTURE_DB_LOADED}));`);
+  mkdirSync(join(f.app,'plans'));mkdirSync(join(f.home,'.credentials'));
+  writeFileSync(join(f.home,'.credentials/zenithjoy-db.env'),'FIXTURE_DB_LOADED=1\n');
+  // 在真实入口source plan的边界观察环境；不替换PG加载器、不执行业务prepare。
+  for(const flow of ['douyin_video_discovery','douyin_video_processing']){
+    writeFileSync(join(f.app,'plans',flow+'.plan'),`node '${probe}'\nexit $?\n`);
+    for(const inherited of ['', '/foreign/node_modules']){
+      const out=launch(f,{...route,NODE_PATH:inherited,NODE_PG_FORCE_NATIVE:'',WF_BRAIN_TASK_ID:'7037d210-2af1-4af9-8635-f93a805e58b6'},flow);
+      assert.equal(out.status,0,`${flow} inherited=${inherited}: ${out.stderr}`);
+      assert.deepEqual(JSON.parse(out.stdout),{pool:'function',nodePath:null,localRpc:'1',dbLoaded:'1'});
+      assert.equal(existsSync(join(f.home,'.config/zenithjoy/ledger')),false);
+    }
   }
 });
