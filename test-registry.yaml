@@ -11545,3 +11545,16 @@ tests:
       job: native-102-darwin-test
       command: "node scripts/ci/native-102-darwin-tests.mjs"
       shard: "2"
+
+  - id: phone-native-phone-runtime-admission-boundary
+    path: services/phone-adb-controller/__tests__/native-phone-runtime-admission-boundary.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际工厂B/资源撤权反例，不代表真机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "2"
