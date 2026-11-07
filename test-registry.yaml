@@ -11495,3 +11495,28 @@ tests:
       workflow: .github/workflows/ci-l3-code.yml
       job: "openclaw-scripts-test"
       command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-102-public-nonce-driver
+    path: services/phone-adb-controller/__tests__/native-102-public-nonce-driver.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；仅隔离nonce/fixture错误验收，不代表真实业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "1"
+
+  - id: phone-native-102-public-intents
+    path: services/phone-adb-controller/__tests__/native-102-public-intents.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；仅隔离nonce/fixture错误验收，不代表真实业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
