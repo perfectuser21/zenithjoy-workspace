@@ -899,7 +899,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -944,13 +944,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "bc8bc7a6aa5176befd2beb8150267a2ef003c68730c782d45465aea19ec06578",
+      "code_digest": "00716b60b29ba4ee6109db995c1f9c74906aed64ec0d3d6c636ccbbcc0546460",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。101关键词/筛选/视频身份与零评论禁入队规则不变；变化是公共授权与有限ADB协议复用，未增加搜索、点击或业务重发步骤。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690",
-        "current_code_digest": "bc8bc7a6aa5176befd2beb8150267a2ef003c68730c782d45465aea19ec06578"
+        "current_code_digest": "00716b60b29ba4ee6109db995c1f9c74906aed64ec0d3d6c636ccbbcc0546460"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1876,7 +1876,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -1921,13 +1921,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "8f298f8e33d4e998c80beab493602a61435bf00cb290692a9be91c30f806babf",
+      "code_digest": "743509b8ae7c7a6d7b2cfc317e0bd0a29c4c86de36f0a9b437e0046aedab8d75",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。预检账号、Source/锁、只读资格与联合停证/未知隔离不变；不缓存Task、lease或审批。 本项plans/discovery及processing.steps.json仅重新生成contract_sha256来源摘要；逐文件删除该唯一行后字节全等，所有步骤/mode/readback/condition恒等，故仅code_bindings文件SHA/code_digest更新，不改DoD或安全规则。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb",
-        "current_code_digest": "8f298f8e33d4e998c80beab493602a61435bf00cb290692a9be91c30f806babf"
+        "current_code_digest": "743509b8ae7c7a6d7b2cfc317e0bd0a29c4c86de36f0a9b437e0046aedab8d75"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2821,7 +2821,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -2866,13 +2866,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "125d7a1095e627ea528a7c49d0d95c80dcf2bf02675af18e525549c51af13438",
+      "code_digest": "6a9f382ca9ff5f7d79d04939096674b48b49343f167f21a9f667ad79ab9fe1f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。101来源、认领与去重范围、原PG独立读回/未知COMMIT不重投不变。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948",
-        "current_code_digest": "125d7a1095e627ea528a7c49d0d95c80dcf2bf02675af18e525549c51af13438"
+        "current_code_digest": "6a9f382ca9ff5f7d79d04939096674b48b49343f167f21a9f667ad79ab9fe1f0"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3843,7 +3843,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -3874,13 +3874,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "f5112bbc115dbe72f4d2b1bb76cd49f46f311ec593e39041ae065817244cde1c",
+      "code_digest": "e2dec7484d8a264978c51c6a161bcb88a1b2d9d421f9091873895033e9c803c8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。原Jev/Gemini政策、fresh媒体/材料与资格判定标准不变；授权输入复用不缓存业务结论。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa",
-        "current_code_digest": "f5112bbc115dbe72f4d2b1bb76cd49f46f311ec593e39041ae065817244cde1c"
+        "current_code_digest": "e2dec7484d8a264978c51c6a161bcb88a1b2d9d421f9091873895033e9c803c8"
       }
     },
     "douyin_video_processing.collection": {
@@ -4796,7 +4796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -4841,13 +4841,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "f45f84e947794ee082e39540f79cc3fab16f1a2e8be4e892c608d5726b838f96",
+      "code_digest": "91715eb379b8bdad0211d4c438f8487161fb30f0ca925f3f6440825d386fac8f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。原sampling/quota/collect_partial、原生身份、历史与footer原判据、confirmed0规则不变；未增评论写入或放宽采样。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb",
-        "current_code_digest": "f45f84e947794ee082e39540f79cc3fab16f1a2e8be4e892c608d5726b838f96"
+        "current_code_digest": "91715eb379b8bdad0211d4c438f8487161fb30f0ca925f3f6440825d386fac8f"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -5758,7 +5758,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -5803,13 +5803,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "b24f6f4e3230ba9446ae2cc7fbe55df8e1200e62a5a811af19feccff71e3df50",
+      "code_digest": "013541c19b2ab798e2042d50dc2594eda1ccf069f74d9ebca4edd9ce9ed332fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。原清理/释放本人资源与raw AND Caller/全部producer停证要求不变；未知不能被历史事实或协议EXIT洗白。 本项plans/discovery及processing.steps.json仅重新生成contract_sha256来源摘要；逐文件删除该唯一行后字节全等，所有步骤/mode/readback/condition恒等，故仅code_bindings文件SHA/code_digest更新，不改DoD或安全规则。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b",
-        "current_code_digest": "b24f6f4e3230ba9446ae2cc7fbe55df8e1200e62a5a811af19feccff71e3df50"
+        "current_code_digest": "013541c19b2ab798e2042d50dc2594eda1ccf069f74d9ebca4edd9ce9ed332fa"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -6717,7 +6717,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -6762,13 +6762,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "513dfd5cfa6658c452f97e5033210f3a7a8a1c976652cac39403bef32b677b33",
+      "code_digest": "04b10948d185b186c43b3a05c3fb7f651a137c1e2545830c0e265808b8086836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。原公司评分政策、独立消费评论与PG读回不变；历史缓存只用于授权事实，不缓存评分结果或worker verdict。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052",
-        "current_code_digest": "513dfd5cfa6658c452f97e5033210f3a7a8a1c976652cac39403bef32b677b33"
+        "current_code_digest": "04b10948d185b186c43b3a05c3fb7f651a137c1e2545830c0e265808b8086836"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -7718,7 +7718,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -7763,13 +7763,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "b00ec127555667fac1c91ed381440877fe7dfcf6d4f494c4637468b42e22a475",
+      "code_digest": "36178919edc2a77ebc257192ccf4c6152ffe3f951f9a8a0d4b45534072bc70a0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。原线索身份、保留/配送、CRM/outbox与未知只读不重发边界不变；没有自动调用104。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de",
-        "current_code_digest": "b00ec127555667fac1c91ed381440877fe7dfcf6d4f494c4637468b42e22a475"
+        "current_code_digest": "36178919edc2a77ebc257192ccf4c6152ffe3f951f9a8a0d4b45534072bc70a0"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -8653,7 +8653,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -8698,13 +8698,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "d2467ebdd5f514c2a12da9cfd66598d6b08099a936dcce67b54e064f8c3c2ca9",
+      "code_digest": "09415e8d5f1d7270cde583e0f4b81200421969b36fe762a84e42b903d919ea85",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。104原授权/发送账号/话术与设备预检合同不变；新Native Caller仍只支持101/102/103，104仅承接公共Source声明。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0",
-        "current_code_digest": "d2467ebdd5f514c2a12da9cfd66598d6b08099a936dcce67b54e064f8c3c2ca9"
+        "current_code_digest": "09415e8d5f1d7270cde583e0f4b81200421969b36fe762a84e42b903d919ea85"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -9563,7 +9563,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -9608,13 +9608,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "60dcd9ed2a376b8cf8df7b43ca129de7cd67f111ac7557497de7ecdb6d8b5cd0",
+      "code_digest": "b98e7b7485e8528e73b1026a70b3141a9ddd400a1dad3416eb3fa2b8bf2d9220",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。104发送实现、次数限制和批准话术文件逐字同main，DoD步骤亦相同；steps文件仅contract_sha256来源摘要变化；未改变发送或审批能力，公共helper声明不等于启用104新执行。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f",
-        "current_code_digest": "60dcd9ed2a376b8cf8df7b43ca129de7cd67f111ac7557497de7ecdb6d8b5cd0"
+        "current_code_digest": "b98e7b7485e8528e73b1026a70b3141a9ddd400a1dad3416eb3fa2b8bf2d9220"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -10466,7 +10466,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -10511,13 +10511,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "e6708e31855434eaa18c441ee300c9a1a2b68cafb3c8a8f4b8513870567a4c96",
+      "code_digest": "c4eb3146c677aad549ac19a11a5f016f452794f5001ef4e27c0c2404cc9dc1cd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。104订单独立读回、unknown先读不重发与原回写状态规则不变；未新增发送路径。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2",
-        "current_code_digest": "e6708e31855434eaa18c441ee300c9a1a2b68cafb3c8a8f4b8513870567a4c96"
+        "current_code_digest": "c4eb3146c677aad549ac19a11a5f016f452794f5001ef4e27c0c2404cc9dc1cd"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -11379,7 +11379,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scrcpy-host-producer.mjs",
           "revision": "contract",
-          "sha256": "d8932cee4e634b77b85c563cf49066c7e9a44ff70a670a3a629e20f1360cd56a"
+          "sha256": "4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2"
         },
         {
           "kind": "code",
@@ -11424,13 +11424,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "cf51eff4d745aa61eda314e72c69f1e9d2db4150c38bb8611f1ff19e59e41dcd",
+      "code_digest": "a7182d455d42841eba4da54a59ebbb8313a0d120818a0eb95ae99dbc9590dc51",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 1e4087094c08a807d89ee0dbb89c13a06af8bab3 重新离线collectMethods，私有Git Skill Source固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74并核loader/catalog哈希，重新读Git生成全部current/previous摘要；未复用f199/b2d/b4aa旧摘要。12AV版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/方法版本，以及4Workflow/Commander与14槽身份均同；base原锁与实际重算一致。两新helper各直接声明于12AV、Repo/revision contract与文件SHA均核实。Caller3生产文件逐字同已独审2ba（dd6a6395），协议5文件逐字同已独审61d（0bf6bf66）；本签名只独立复核内部业务合同/来源身份，不自签新增安全。历史定义仅在Cecelia immutable-history v1前提复用，Auth/Task及Source/截止/停证仍fresh；协议票只辖同命令有限协议，业务派发/最终cap仍fresh。既有业务/导航限定独审94450bb1、10002b89对应的生产正文自b4aa未变。无CPU票。300/min外层限制及source-only部署未解决，不证明完整public、真实业务或600秒完成。104原资源/订单清理及未决发送保护不变；不授历史缓存或协议票释放锁/批准外部行为能力。",
-        "reviewed_by": "Codex /root/review_103_delivery（独立合同身份/来源摘要复核；新增安全引用其他独审）",
+        "reason": "固定Git 4a4f7a18a2659481ca163342bd7e6fcda1e8449a 对真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 重新离线collectMethods，私有SkillSource固定3bbea5b5e95c348bc1b097da18aaab967fcd0c74，loader/catalog/payload逐项校验；previous/current摘要全部本次重算，未复用1e408摘要。该AV版本、剥implementation_bindings的业务合同digest、方法版本及Skill正文/支持闭包均恒同；4Workflow/Commander与14槽位身份全等。相对1e408绑定生产文件仅Host发生变化，Host SHA256 4eb054be8aa61063cf708500ee4860a02560d1793ce0f0da3337ff698d3baaf2逐字同2e9；独立Host安全/RPA引用/Users/administrator/perfect21/runner-deploy-evidence/yuesheng-real-run/resume-20261104/native-runner-delivery-20261107/rpa-host-final-2e9-independent/report.md SHA256 45c576e9b116af42cd0256fee2e9eb1aebdd032e1d5fbd40bb1e36c96693814c，本人仅签内部合同身份及来源摘要，不自签Host安全。既有Caller/协议新增安全仍引用dd6a6395/0bf6bf66独审范围。原101筛选/零评论不入队、102 sampling5/collect_partial/身份/JevGemini政策、103独立评分配送及104发送/审批合同不变；无CPU票，不增加Worker权限、重发或业务槽位。300/min及source-only部署未解；不证明完整public、真实业务或600/1800预算达标，测试私预算不算业务预算。",
+        "reviewed_by": "Codex /root/review_103_delivery（独立内部合同身份/来源摘要复核，新增安全引用独立报告）",
         "previous_code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2",
-        "current_code_digest": "cf51eff4d745aa61eda314e72c69f1e9d2db4150c38bb8611f1ff19e59e41dcd"
+        "current_code_digest": "a7182d455d42841eba4da54a59ebbb8313a0d120818a0eb95ae99dbc9590dc51"
       }
     }
   },
