@@ -16,6 +16,7 @@ export function createShellV2Decoder({maxBytes=2*1024*1024}={}){
  if(!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>13*1024*1024)fail();
  let buffer=Buffer.alloc(0),exitCode,total=0,finished=false;const stdout=[],stderr=[];
  return Object.freeze({
+  hasExit:()=>exitCode!==undefined,
   push(bytes){
    if(finished||!Buffer.isBuffer(bytes))fail();if(!bytes.length)return;
    total+=bytes.length;if(total>maxBytes||exitCode!==undefined)fail();buffer=Buffer.concat([buffer,bytes]);

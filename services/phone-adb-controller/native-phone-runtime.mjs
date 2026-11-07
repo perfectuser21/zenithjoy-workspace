@@ -2,7 +2,7 @@
 // macros; it never supplies provenance, a resource lease, SQL or a stop verdict.
 import {createRequire} from 'node:module';
 import {runProbes} from './verify-step.mjs';
-import {readFileSync,lstatSync,realpathSync,mkdirSync,openSync,closeSync,fstatSync,constants} from 'node:fs';
+import {readFileSync,writeFileSync,fsyncSync,lstatSync,realpathSync,mkdirSync,openSync,closeSync,fstatSync,constants} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
@@ -88,6 +88,11 @@ export function createNativePhoneRuntime(options={}){
   await readClaim(entry);if(entry.guard)await entry.guard();await readClaim(entry);return true;
  }
  const directory=(entry,name)=>{const path=join(entry.directory,name);mkdirSync(path,{mode:0o700});return path;};
+ const diagnostic=(entry,name,value)=>{
+  const fd=openSync(join(entry.directory,name),constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);
+  try{writeFileSync(fd,JSON.stringify({schema_version:1,scope:entry.commandScope,observed_at:new Date().toISOString(),...value})+'\n');fsyncSync(fd);}finally{closeSync(fd);}
+  const dir=openSync(entry.directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(dir);}finally{closeSync(dir);}
+ };
  async function prepareIngress(entry){
   if(entry.ready)return;await resources(entry);
   entry.directory=join(env.WFR_RUN_DIR,'native-phone',entry.scope.activity);mkdirSync(entry.directory,{mode:0o700});
@@ -100,12 +105,21 @@ export function createNativePhoneRuntime(options={}){
   const reviewed=readNativePhoneCommandSource(entry.commandSource),pillow={path:join(root,reviewed.pillow.path),sha256:reviewed.pillow.sha256};
   entry.local=await startNativePhoneLocalProducer({root,source,scope:entry.scope,directory:directory(entry,'local'),python:spec.executables.python,pillow,deadlineMs:entry.scope.worker_deadline_ms,receiptDeadlineMs:entry.scope.receipt_deadline_ms,assertResources:()=>resources(entry)});
   entry.ready=true;
-  const sdk=await command('sdk');if(sdk.code!==0||sdk.stdout.toString().replaceAll('\r','').trim()!==String(policy.device_sdk))throw fail('SDK_SCOPE');
+  const sdk=await command('sdk'),actual=sdk.stdout.toString().replaceAll('\r','').trim(),matches=sdk.code===0&&actual===String(policy.device_sdk);
+  diagnostic(entry,'sdk.outcome.json',{operation:'sdk',expected_sdk:policy.device_sdk,actual_sdk:/^[0-9]{1,5}$/.test(actual)?actual:null,exit_code:sdk.code,wire_complete:sdk.wire_complete,error_code:matches?null:'NATIVE_PHONE_SDK_SCOPE',remote_execution_stopped:'not_attested'});
+  if(!matches)throw fail('SDK_SCOPE');
  }
  async function command(operation,args=[]){
   const entry=active;if(!entry?.ready)throw fail('NOT_PREPARED');await resources(entry);
-  const observer=createNativePhoneCommandObserver({runtimeRoot:root,source,directory:directory(entry,'command-'+entry.commands.length),scope:entry.commandScope,commandSource:entry.commandSource,operation,args,context:{...entry.context,originalIme:entry.originalIme},readAuthority:entry.wireAuthority(entry.commandScope)});entry.commands.push(observer);
-  try{const cap=await observer.observeDump(),result=observer.readReviewedCommandReceipt(cap,{scope:entry.commandScope});entry.commandReceipts??=[];entry.commandReceipts.push({observer,cap});if(operation==='current-ime'&&result.code===0&&!entry.originalIme)entry.originalIme=result.stdout.toString().trim();await resources(entry);return result;}catch(e){entry.unknown=true;unsafe=true;throw fail('COMMAND_UNKNOWN',true);}finally{const stop=await observer.close();if(stop.unknown||stop.pending||stop.open_sockets){entry.unknown=true;unsafe=true;throw fail('COMMAND_CLOSE_UNKNOWN',true);}}
+  const commandIndex=entry.commands.length,observer=createNativePhoneCommandObserver({runtimeRoot:root,source,directory:directory(entry,'command-'+commandIndex),scope:entry.commandScope,commandSource:entry.commandSource,operation,args,context:{...entry.context,originalIme:entry.originalIme},readAuthority:entry.wireAuthority(entry.commandScope)});entry.commands.push(observer);
+  let result,error,stop,closeError;
+  try{const cap=await observer.observeDump();result=observer.readReviewedCommandReceipt(cap,{scope:entry.commandScope});entry.commandReceipts??=[];entry.commandReceipts.push({observer,cap});if(operation==='current-ime'&&result.code===0&&!entry.originalIme)entry.originalIme=result.stdout.toString().trim();await resources(entry);}
+  catch(e){entry.unknown=true;unsafe=true;error=Object.assign(fail('COMMAND_UNKNOWN',true),{cause:e});}
+  try{stop=await observer.close();}catch(e){closeError=e;stop=observer.snapshot();}
+  if(closeError||stop.unknown||stop.pending||stop.open_sockets){entry.unknown=true;unsafe=true;if(!error)error=Object.assign(fail('COMMAND_CLOSE_UNKNOWN',true),{cause:closeError});}
+  try{diagnostic(entry,`command-${commandIndex}.native.json`,{operation,error_code:error?.code??null,wire_error_code:error?.cause?.code??null,close_error_code:closeError?.code??null,wire_snapshot:stop,remote_execution_stopped:'not_attested'});}
+  catch(e){entry.unknown=true;unsafe=true;throw Object.assign(fail('COMMAND_DIAGNOSTICS_UNKNOWN',true),{cause:error||e});}
+  if(error)throw error;return result;
  }
  async function readEvidence(path){
   const entry=active;if(!entry?.ready)throw fail('NOT_PREPARED');await resources(entry);

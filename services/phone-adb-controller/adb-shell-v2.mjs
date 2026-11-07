@@ -54,7 +54,7 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
  verifySource();
  let dirIdentity;const artifacts=new Map();
  const verifyJournal=()=>{
-  try{const s=lstatSync(directory);if(!s.isDirectory()||s.isSymbolicLink()||realpathSync(directory)!==resolve(directory)||s.uid!==process.getuid()||(s.mode&0o777)!==0o700||dirIdentity&&(s.dev!==dirIdentity.dev||s.ino!==dirIdentity.ino))throw Error();for(const [name,a]of artifacts){const {bytes,stat:st}=pinnedBytes(resolve(directory,name),{max:65536,privateFile:true});if(st.ino!==a.ino||st.dev!==a.dev||sha(bytes)!==a.sha256)throw Error();}return s;}catch{throw failure('ADB_SHELL_V2_JOURNAL');}
+  try{const s=lstatSync(directory);if(!s.isDirectory()||s.isSymbolicLink()||realpathSync(directory)!==resolve(directory)||s.uid!==process.getuid()||(s.mode&0o777)!==0o700||dirIdentity&&(s.dev!==dirIdentity.dev||s.ino!==dirIdentity.ino))throw Error();for(const [name,a]of artifacts){const {bytes,stat:st}=pinnedBytes(resolve(directory,name),{max:name==='command.outcome.json'?20*1024*1024:65536,privateFile:true});if(st.ino!==a.ino||st.dev!==a.dev||sha(bytes)!==a.sha256)throw Error();}return s;}catch{throw failure('ADB_SHELL_V2_JOURNAL');}
  };
  dirIdentity=verifyJournal();if(readdirSync(directory).length)throw failure('ADB_SHELL_V2_PREVIOUS_UNKNOWN');
  const record=(name,data)=>{
@@ -62,12 +62,12 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
   try{dir=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);const ds=fstatSync(dir);if(ds.dev!==dirIdentity.dev||ds.ino!==dirIdentity.ino)throw Error();const bytes=Buffer.from(JSON.stringify(data)+'\n');fd=openSync(resolve(directory,name),constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);writeFileSync(fd,bytes);fsyncSync(fd);fsyncSync(dir);verifyJournal();const s=fstatSync(fd);artifacts.set(name,{dev:s.dev,ino:s.ino,sha256:sha(bytes)});}catch{throw failure('ADB_SHELL_V2_JOURNAL');}finally{if(fd!==undefined)closeSync(fd);if(dir!==undefined)closeSync(dir);}
  };
  record('lifecycle.intent.json',{schema_version:1,instance_id:randomUUID(),scope_sha256:sha(canonical(q)),source_sha256:sha(canonical(fixed))});
- let used=false,sealed=false,unknown=false,complete=false,epoch=q.epoch,pending=0,pipeline,connectionIndex=0,writeIndex=0;const channels=new Set(),reasons=new Set();
+ let used=false,sealed=false,unknown=false,complete=false,epoch=q.epoch,pending=0,pipeline,connectionIndex=0,writeIndex=0,closeIndex=0,terminalError=null,originalError=null;const channels=new Set(),reasons=new Set();
  const snapshot=()=>Object.freeze({domain:'adb-shell-v2-wire-observation/v1',pending,open_sockets:channels.size,sealed,unknown,wire_complete:complete,remote_execution_stopped:'not_attested',command_source:'not_attested',android_services:'not_attested',resource_authority:'not_attested',authority_reader_execution:'not_attested',loaded_process_attestation:false,unknown_reasons:Object.freeze([...reasons])});
  const taint=code=>{unknown=true;complete=false;reasons.add(code);};
  const guard=()=>{if(Date.now()>=q.worker_deadline_ms)throw failure('ADB_SHELL_V2_DEADLINE');if(sealed||epoch!==q.epoch)throw failure('ADB_SHELL_V2_CLOSED');if(unknown)throw failure('ADB_SHELL_V2_UNKNOWN');};
  const admit=async()=>{
-  guard();verifyJournal();verifySource();reviewed?.verify();guard();let a;try{a=await readAuthority();}catch{throw failure('ADB_SHELL_V2_AUTHORITY');}guard();verifyJournal();verifySource();reviewed?.verify();guard();
+  guard();verifyJournal();verifySource();reviewed?.verify();guard();let a;try{a=await readAuthority();}catch(error){throw Object.assign(failure('ADB_SHELL_V2_AUTHORITY'),{cause:error});}guard();verifyJournal();verifySource();reviewed?.verify();guard();
   if(!a||canonical(a.scope)!==canonical(q)||a.claimed_by!==q.claim.claimed_by||a.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(a.lease_until))||Date.parse(a.lease_until)<=Date.now())throw failure('ADB_SHELL_V2_AUTHORITY');
  };
  let interrupt;const destroyAll=()=>{for(const c of channels)c.socket.destroy();};
@@ -75,10 +75,14 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
  async function connect(){
   if(connectionIndex>=2)throw failure('ADB_SHELL_V2_RECONNECT');
   const index=connectionIndex++;record(`socket-${index}.intent.json`,{schema_version:1,index,endpoint_sha256:sha(q.endpoint),serial_sha256:sha(q.serial)});await admit();guard();
-  const socket=new Socket(),c={socket,buffer:Buffer.alloc(0),ended:false,closed:false,error:null,total:0,wake:new Set()};
+  const socket=new Socket(),c={socket,index,buffer:Buffer.alloc(0),ended:false,closed:false,error:null,total:0,wake:new Set()};
   let close;const closePromise=new Promise(r=>{close=r;}),notify=()=>{for(const wake of c.wake)wake();c.wake.clear();};
   channels.add(c);socket.on('data',bytes=>{c.total+=bytes.length;if(c.total>commandWireLimit(reviewed)){c.error='ADB_SHELL_V2_LIMIT';socket.destroy();}else c.buffer=Buffer.concat([c.buffer,bytes]);notify();});
-  socket.on('end',()=>{c.ended=true;notify();});socket.on('error',()=>{c.error='ADB_SHELL_V2_SOCKET';notify();});socket.on('close',hadError=>{c.closed=true;if(hadError||!c.ended)c.error??='ADB_SHELL_V2_SOCKET';channels.delete(c);close();notify();});
+  // Event callbacks cannot throw out of the owned pipeline on journal failure.
+  const event=(kind,data)=>{try{record(`socket-${index}.${kind}.json`,{schema_version:1,index,observed_at:new Date().toISOString(),...data});}catch{c.error='ADB_SHELL_V2_JOURNAL';taint(c.error);socket.destroy();}};
+  socket.on('end',()=>{c.ended=true;event('end',{peer_eof:true,wire_bytes:c.total});notify();});
+  socket.on('error',error=>{c.error='ADB_SHELL_V2_SOCKET';event('error',{error_code:c.error,socket_error_code:/^[A-Z][A-Z0-9_]{0,63}$/.test(error.code||'')?error.code:null});notify();});
+  socket.on('close',hadError=>{c.closed=true;if(hadError||!c.ended)c.error??='ADB_SHELL_V2_SOCKET';event('close',{had_error:hadError,peer_eof:c.ended,error_code:c.error,wire_bytes:c.total});channels.delete(c);close();notify();});
   const wait=()=>new Promise(r=>c.wake.add(r));
   c.read=async size=>{await admit();while(c.buffer.length<size){guard();if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
   c.chunk=async()=>{await admit();while(!c.buffer.length&&!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
@@ -91,9 +95,15 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
   connected.catch(()=>{taint('ADB_SHELL_V2_SOCKET');});
   guard();try{socket.connect(Number(endpoint[1]),'127.0.0.1');}catch{throw failure('ADB_SHELL_V2_SOCKET');}await connected;guard();return c;
  }
- async function write(c,bytes){
-  record(`write-${writeIndex++}.intent.json`,{schema_version:1,bytes:bytes.length,sha256:sha(bytes)});await admit();guard();
-  await new Promise((resolve,reject)=>c.socket.write(bytes,error=>error?reject(failure('ADB_SHELL_V2_SOCKET')):resolve()));guard();
+ async function write(c,bytes,{closeStdin=false}={}){
+  const index=writeIndex++;record(`write-${index}.intent.json`,{schema_version:1,bytes:bytes.length,sha256:sha(bytes)});await admit();guard();
+  // A finite command may have already sent EXIT and EOF while authority was
+  // read. EOF only skips this optional input close; decoding still proves EXIT.
+  if(closeStdin&&c.ended&&!c.error){record(`write-${index}.result.json`,{schema_version:1,index,status:'skipped',reason:'peer_eof',socket_index:c.index});return;}
+  await new Promise((resolve,reject)=>c.socket.write(bytes,error=>{
+   try{record(`write-${index}.result.json`,{schema_version:1,index,status:error?'failed':'acknowledged',socket_index:c.index,error_code:error?'ADB_SHELL_V2_SOCKET':null,socket_error_code:/^[A-Z][A-Z0-9_]{0,63}$/.test(error?.code||'')?error.code:null});}
+   catch(e){reject(e);return;}error?reject(failure('ADB_SHELL_V2_SOCKET')):resolve();
+  }));guard();
  }
  async function status(c){const ack=await c.read(4);if(ack.equals(Buffer.from('OKAY')))return;if(ack.equals(Buffer.from('FAIL'))){const n=adbPayloadLength(await c.read(4),4096);await c.read(n);throw failure('ADB_SHELL_V2_FAIL');}throw failure('ADB_SHELL_V2_ACK');}
  async function observeDump(...args){
@@ -105,17 +115,25 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
     const feature=await connect();await write(feature,adbRequest('host-serial:'+q.serial+':features'));await status(feature);
     const n=adbPayloadLength(await feature.read(4),4096),text=(await feature.read(n)).toString('latin1'),features=text.split(',');if(!features.length||features.some(x=>!/^[a-z][a-z0-9_]*$/.test(x))||new Set(features).size!==features.length||!features.includes('shell_v2'))throw failure('ADB_SHELL_V2_UNSUPPORTED');await feature.finish();
     const command=await connect();await write(command,adbRequest('host:transport:'+q.serial));await status(command);
-    await write(command,adbRequest('shell,v2,raw:'+(reviewed?.command??`exec /system/bin/uiautomator dump --compressed /sdcard/douyin-leadgen-ui-${q.profile}.xml`)));await status(command);await write(command,closeStdinFrame());
-    const decoder=createShellV2Decoder({maxBytes:commandWireLimit(reviewed)});let chunk;while((chunk=await command.chunk())!==null)decoder.push(chunk);const parsed=decoder.finish();await command.finish();
+    await write(command,adbRequest('shell,v2,raw:'+(reviewed?.command??`exec /system/bin/uiautomator dump --compressed /sdcard/douyin-leadgen-ui-${q.profile}.xml`)));await status(command);await write(command,closeStdinFrame(),{closeStdin:true});
+    const decoder=createShellV2Decoder({maxBytes:commandWireLimit(reviewed)});let chunk,parsed;
+    while((chunk=await command.chunk())!==null){
+     decoder.push(chunk);
+     if(decoder.hasExit()){
+      parsed=decoder.finish();
+      record('command.outcome.json',{schema_version:1,operation:reviewed?.operation??'dump',scope_sha256:sha(canonical(q)),exit_code:parsed.exit_code,stdout_base64:parsed.stdout.toString('base64'),stderr_base64:parsed.stderr.toString('base64'),wire_bytes:parsed.wire_bytes,remote_execution_stopped:'not_attested'});
+     }
+    }
+    if(!parsed)decoder.finish();await command.finish();
     await admit();guard();complete=true;
     const cap=Object.freeze({protocol:'adb-shell-v2-wire/v1',exit_code:parsed.exit_code,stdout_sha256:sha(parsed.stdout),stderr_sha256:sha(parsed.stderr),stdout_bytes:parsed.stdout.length,stderr_bytes:parsed.stderr.length,wire_bytes:parsed.wire_bytes,remote_execution_stopped:'not_attested',command_source:'not_attested',android_services:'not_attested',resource_authority:'not_attested'});
     receipts.set(cap,{owner:api,scope,scope_sha256:sha(canonical(q)),reviewed:reviewed!==null,operation:reviewed?.operation,stdout:Buffer.from(parsed.stdout),stderr:Buffer.from(parsed.stderr)});return cap;
-   }catch(error){const code=/^ADB_SHELL_V2_[A-Z_]+$/.test(error?.code||'')?error.code:'ADB_SHELL_V2_FAILED';taint(code);throw failure(code);}
+   }catch(error){const code=/^ADB_SHELL_V2_[A-Z_]+$/.test(error?.code||'')?error.code:'ADB_SHELL_V2_FAILED';terminalError=code;originalError=/^[A-Z][A-Z0-9_]{0,95}$/.test(error?.cause?.code||error?.code||'')?(error.cause?.code||error.code):null;taint(code);throw Object.assign(failure(code),{cause:error});}
    finally{destroyAll();await Promise.all([...channels].map(c=>c.closePromise));}
-  })().finally(()=>{pending--;clearTimeout(timer);interrupt=null;});
+  })().finally(()=>{pending--;clearTimeout(timer);interrupt=null;try{record('terminal.json',{schema_version:1,operation:reviewed?.operation??'dump',scope_sha256:sha(canonical(q)),observed_at:new Date().toISOString(),error_code:terminalError,original_error_code:originalError,snapshot:snapshot()});}catch(error){taint('ADB_SHELL_V2_JOURNAL');throw error;}});
   try{return await Promise.race([pipeline,interruption]);}finally{pipeline.catch(()=>{});interruption.catch(()=>{});}
  }
- async function close(){seal();if(pending){let timer;await Promise.race([pipeline?.catch(()=>{}),new Promise(r=>{timer=setTimeout(r,Math.max(0,q.cleanup_deadline_ms-Date.now()));})]).finally(()=>clearTimeout(timer));}if(pending)taint('ADB_SHELL_V2_CLEANUP_PENDING');return snapshot();}
+ async function close(){seal();if(pending){let timer;await Promise.race([pipeline?.catch(()=>{}),new Promise(r=>{timer=setTimeout(r,Math.max(0,q.cleanup_deadline_ms-Date.now()));})]).finally(()=>clearTimeout(timer));}if(pending)taint('ADB_SHELL_V2_CLEANUP_PENDING');const state=snapshot();try{record(`close-${closeIndex++}.snapshot.json`,{schema_version:1,scope_sha256:sha(canonical(q)),observed_at:new Date().toISOString(),error_code:pending?'ADB_SHELL_V2_CLEANUP_PENDING':terminalError,snapshot:state});}catch(error){taint('ADB_SHELL_V2_JOURNAL');throw error;}return state;}
  const matches=(cap,expected)=>{const p=receipts.get(cap);return p?.owner===api&&p.scope===scope&&expected?.scope===scope&&p.scope_sha256===sha(canonical(scope))&&!unknown&&complete;};
  const api=Object.freeze({observeDump,seal,close,snapshot,verifyWireReceipt:matches,readReviewedCommandReceipt(cap,expected){
   if(!reviewed||!matches(cap,expected))throw failure('NATIVE_PHONE_COMMAND_RECEIPT');reviewed.verify();const p=receipts.get(cap);
