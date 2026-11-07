@@ -348,29 +348,50 @@ def durable(path, value):
 def device_guard():
     _, root, _, _ = layout()
     root_identity = directory(root, True)
-    path = root / (SERIAL + '.guard')
-    read_bytes(path, True)
-    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+    marker_path = root / '.migration-complete.json'
+    marker_bytes = read_bytes(marker_path)
+    need(sha(marker_bytes) == PINS['marker'], 'MARKER_HASH')
+    marker = json.loads(marker_bytes)
+    need(marker.get('schema_version') == 1 and marker.get('state') == 'complete'
+         and isinstance(marker.get('legacy_root'), str), 'GUARD_MIGRATION')
+    legacy = Path(marker['legacy_root'])
+    # The historical migration permits an owned 0755 legacy root. Both roots
+    # must be canonical and deny group/world writes; only durable requires 0700.
+    legacy_identity = directory(legacy)
+    need(legacy != root, 'GUARD_ROOTS')
+    paths = [root / (SERIAL + '.guard'), legacy / (SERIAL + '.guard')]
+    fd = os.open(paths[0], os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            need(False, 'GUARD_BUSY')
         owned = os.fstat(fd)
 
         def assert_current():
             current_root = directory(root, True)
             need((current_root.st_dev, current_root.st_ino) ==
                  (root_identity.st_dev, root_identity.st_ino), 'ROOT_CHANGED')
-            need(path.resolve() == path, 'GUARD_CHANGED')
-            current, opened = path.lstat(), os.fstat(fd)
-            need(stat.S_ISREG(current.st_mode) and current.st_uid == os.geteuid()
-                 and stat.S_IMODE(current.st_mode) == 0o600 and current.st_nlink == 1
-                 and (current.st_dev, current.st_ino) == (opened.st_dev, opened.st_ino) ==
-                 (owned.st_dev, owned.st_ino), 'GUARD_CHANGED')
-            # Retain the original open-file-description lock; a replacement
-            # pathname's flock never substitutes for this owned descriptor.
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            current_legacy = directory(legacy)
+            need((current_legacy.st_dev, current_legacy.st_ino) ==
+                 (legacy_identity.st_dev, legacy_identity.st_ino), 'LEGACY_ROOT_CHANGED')
+            need(read_bytes(marker_path) == marker_bytes, 'GUARD_MIGRATION_CHANGED')
+            opened = os.fstat(fd)
+            guards = [opened]
+            for path in paths:
+                need(path.resolve() == path, 'GUARD_CHANGED')
+                try:
+                    guards.append(path.lstat())
+                except OSError:
+                    need(False, 'GUARD_PEER_MISSING')
+            for current in guards:
+                need(stat.S_ISREG(current.st_mode) and current.st_uid == os.geteuid()
+                     and stat.S_IMODE(current.st_mode) == 0o600 and current.st_size == 0
+                     and current.st_nlink == 2 and (current.st_dev, current.st_ino) ==
+                     (owned.st_dev, owned.st_ino), 'GUARD_CHANGED')
+            # Only the two marker-authorized paths may share this empty inode.
+            # Evidence readers still require nlink=1. Every checkpoint retains
+            # this original descriptor's lock across both migration roots.
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                need(False, 'GUARD_BUSY')
 
         assert_current()
         yield root, assert_current
