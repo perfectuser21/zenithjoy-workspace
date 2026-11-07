@@ -30,6 +30,8 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-phone-processing-record-navigation.test.mjs',
  'native-phone-processing.test.mjs',
  'native-phone-runtime-admission-boundary.test.mjs',
+ 'native-phone-runtime-approval-semantics.test.mjs',
+ 'locked-definition-immutability.test.mjs',
  'native-queue-terminal-callbacks.test.mjs',
  'native-scrcpy-host-producer.test.mjs',
  'native-scrcpy-natural-end.test.mjs',
@@ -56,7 +58,9 @@ export const isNative102DarwinTest=path=>NATIVE_102_DARWIN_SUITES.includes(path.
 // Heavy public execution gets its own owner leg; the remaining contracts never
 // consume its20min clock or share its temporary PostgreSQL.
 const publicSuites=['native-102-public-executor.test.mjs','native-102-public-nonce-driver.test.mjs','native-102-public-ui-driver.test.mjs','native-102-source-closure.test.mjs'];
+const componentSuites=NATIVE_102_DARWIN_SUITES.filter(name=>!publicSuites.includes(name));
 export const NATIVE_102_DARWIN_SHARDS=Object.freeze({
  '1':Object.freeze(publicSuites),
- '2':Object.freeze(NATIVE_102_DARWIN_SUITES.filter(name=>!publicSuites.includes(name))),
+ '2':Object.freeze(componentSuites.filter((_name,index)=>index%2===0)),
+ '3':Object.freeze(componentSuites.filter((_name,index)=>index%2===1)),
 });

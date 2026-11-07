@@ -10,7 +10,7 @@ const root=fileURLToPath(new URL('../../../',import.meta.url));
 const workflow=()=>YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
 test('102 owns a separate required20min Darwin job while101/103 keep their original budget and selector',()=>{
  const w=workflow(),job=w.jobs['native-102-darwin-test'];assert.ok(job,'native102 needs its own required Darwin owner');
- assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],20);assert.deepEqual(job.strategy,{'fail-fast':false,matrix:{shard:[1,2]}});assert.equal(job.env.NATIVE_102_CI_SHARD,'${{ matrix.shard }}');assert.equal(job.if,undefined);assert.equal(job['continue-on-error'],undefined);
+ assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],20);assert.deepEqual(job.strategy,{'fail-fast':false,matrix:{shard:[1,2,3]}});assert.equal(job.env.NATIVE_102_CI_SHARD,'${{ matrix.shard }}');assert.equal(job.if,undefined);assert.equal(job['continue-on-error'],undefined);
  assert.equal(w.jobs['native-103-darwin-test']['timeout-minutes'],20);assert.equal(PHONE_DARWIN_SUITES.length,18);
  assert.ok(w.jobs['l3-passed'].needs.includes('native-102-darwin-test'));assert.ok(gates.code.always.includes('native-102-darwin-test'));
  const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}]))};assert.doesNotThrow(()=>checkGate('code',needs));
@@ -26,19 +26,22 @@ test('102 job restores pinned Skills and prepares actual PG/Python/Pillow/media/
 test('actual Linux shell argv retains every portable102 case and sends each Darwin case exclusively to its owner',async()=>{
  const {NATIVE_102_DARWIN_SUITES,NATIVE_102_PORTABLE_SUITES,NATIVE_102_DARWIN_SHARDS}=await import('../native-102-ci-selection.mjs');
  assert.deepEqual(Object.values(NATIVE_102_DARWIN_SHARDS).flat().sort(),[...NATIVE_102_DARWIN_SUITES].sort(),'each Darwin case has exactly one independent PG owner leg');
+ assert.deepEqual(Object.keys(NATIVE_102_DARWIN_SHARDS),['1','2','3']);
  assert.deepEqual(NATIVE_102_DARWIN_SHARDS['1'],['native-102-public-executor.test.mjs','native-102-public-nonce-driver.test.mjs','native-102-public-ui-driver.test.mjs','native-102-source-closure.test.mjs']);
  assert.ok(NATIVE_102_PORTABLE_SUITES.includes('native-102-public-intents.test.mjs'),'pure async/failfast intents remain in Linux');
  assert.ok(NATIVE_102_PORTABLE_SUITES.includes('native-adb-inflight-admission.test.mjs'),'Node TCP admission remains in Linux');
- assert.ok(NATIVE_102_DARWIN_SHARDS['2'].includes('native-phone-collection-return-navigation.test.mjs'),'original physical Python return navigation belongs to Darwin component leg');
- assert.ok(NATIVE_102_DARWIN_SHARDS['2'].includes('native-phone-runtime-admission-boundary.test.mjs'),'real factory/PG/Pillow/SDK admission belongs exclusively to Darwin component leg');
+ const components=NATIVE_102_DARWIN_SUITES.filter(name=>!NATIVE_102_DARWIN_SHARDS['1'].includes(name));
+ assert.deepEqual(NATIVE_102_DARWIN_SHARDS['2'],components.filter((_name,index)=>index%2===0));assert.deepEqual(NATIVE_102_DARWIN_SHARDS['3'],components.filter((_name,index)=>index%2===1));
+ assert.ok(Math.abs(NATIVE_102_DARWIN_SHARDS['2'].length-NATIVE_102_DARWIN_SHARDS['3'].length)<=1);
+ for(const name of ['native-phone-collection-return-navigation.test.mjs','native-phone-runtime-admission-boundary.test.mjs','native-phone-runtime-approval-semantics.test.mjs','locked-definition-immutability.test.mjs'])assert.equal([...NATIVE_102_DARWIN_SHARDS['2'],...NATIVE_102_DARWIN_SHARDS['3']].filter(n=>n===name).length,1,'physical factory contracts need exactly one component owner');
  assert.equal(new Set([...NATIVE_102_DARWIN_SUITES,...NATIVE_102_PORTABLE_SUITES]).size,NATIVE_102_DARWIN_SUITES.length+NATIVE_102_PORTABLE_SUITES.length);
  const args=captureNodeArgs(openclawStep(workflow()).run),selected=args.filter(p=>p.endsWith('.test.mjs'));
  for(const name of NATIVE_102_DARWIN_SUITES)assert.equal(selected.filter(p=>p.endsWith('/'+name)).length,0,name+' must run on actual Darwin without Linux skips');
  for(const name of NATIVE_102_PORTABLE_SUITES)assert.equal(selected.filter(p=>p.endsWith('/'+name)).length,1,name+' must remain in the real Linux glob');
  assert.equal(args.filter(p=>p==='scripts/ci/__tests__/native-102-ci-contract.test.mjs').length,1);
  const classified=new Set([...NATIVE_102_DARWIN_SUITES,...NATIVE_102_PORTABLE_SUITES]);
- const family=/^native-(?:102-|collection-|scrcpy-|phone-(?:audio-|collection-|credentials|detail-|managed-|media|processing|runtime-admission-boundary|test-media))/;
- const actual=readdirSync(new URL('../../../services/phone-adb-controller/__tests__/',import.meta.url)).filter(n=>(family.test(n)||n==='native-queue-terminal-callbacks.test.mjs'||n==='native102-default-credentials.test.mjs'||n==='native-adb-inflight-admission.test.mjs')&&n.endsWith('.test.mjs'));
+ const family=/^native-(?:102-|collection-|scrcpy-|phone-(?:audio-|collection-|credentials|detail-|managed-|media|processing|runtime-admission-boundary|runtime-approval-semantics|test-media))/;
+ const actual=readdirSync(new URL('../../../services/phone-adb-controller/__tests__/',import.meta.url)).filter(n=>(family.test(n)||n==='native-queue-terminal-callbacks.test.mjs'||n==='native102-default-credentials.test.mjs'||n==='native-adb-inflight-admission.test.mjs'||n==='locked-definition-immutability.test.mjs')&&n.endsWith('.test.mjs'));
  assert.deepEqual([...classified].sort(),actual.sort(),'every current102 test must have one explicit runnable owner');
  for(const name of PHONE_DARWIN_SUITES)assert.equal(NATIVE_102_DARWIN_SUITES.includes(name),false,'102 must not consume the101/103 budget');
 });

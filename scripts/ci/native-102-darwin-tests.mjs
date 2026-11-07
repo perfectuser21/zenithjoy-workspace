@@ -20,7 +20,7 @@ const run=(command,args,options={})=>new Promise((resolve,reject)=>{
 });
 if(process.platform!=='darwin')throw Error('NATIVE_102_CI_DARWIN_REQUIRED');
 const shard=process.env.NATIVE_102_CI_SHARD;
-if(!['1','2'].includes(shard))throw Error('NATIVE_102_CI_SHARD_REQUIRED');
+if(!['1','2','3'].includes(shard))throw Error('NATIVE_102_CI_SHARD_REQUIRED');
 const selectedSuites=NATIVE_102_DARWIN_SHARDS[shard];
 const pgbin=process.env.PREFLIGHT_TEST_PG_BIN;
 if(!isAbsolute(pgbin||''))throw Error('NATIVE_102_CI_EXPLICIT_PG_BIN_REQUIRED');
