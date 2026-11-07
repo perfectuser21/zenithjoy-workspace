@@ -10952,3 +10952,21 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；loopback SDK EXIT/EOF/socket关闭与未知终态持久化，不接触真机"
+
+  - id: cloud7-quarantine-supersession
+    path: services/phone-adb-controller/__tests__/cloud7-quarantine-supersession.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定预检只读SDK非重放隔离迁移，保留原unknown与全部字节，不碰真实手机"
+
+  - id: cloud7-quarantine-supersession-python
+    path: services/phone-adb-controller/__tests__/cloud7-quarantine-supersession.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: cloud7-quarantine-supersession.test.mjs invokes Python unittest
+    note: "私有目录测试真实guard/原子rename/断电重入，拒绝新命令、Worker、副作用与外来owner"
