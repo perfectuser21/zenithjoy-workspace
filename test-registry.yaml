@@ -11254,3 +11254,27 @@ tests:
     status: pending-ci
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: ci-native-102-ci-contract
+    path: scripts/ci/__tests__/native-102-ci-contract.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际入口接线已核；尚未证明本HEAD完整CI或真实手机业务通过"
+
+  - id: ci-native-102-ci-lifecycle
+    path: scripts/ci/__tests__/native-102-ci-lifecycle.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际入口接线已核；尚未证明本HEAD完整CI或真实手机业务通过"
+
+  - id: phone-native102-default-credentials
+    path: services/phone-adb-controller/__tests__/native102-default-credentials.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际入口接线已核；尚未证明本HEAD完整CI或真实手机业务通过"
