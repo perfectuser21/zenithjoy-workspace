@@ -164,7 +164,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -783,13 +783,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "022a929b5fd3b25b7aafa4ef231c06d6dc31aeacba136febb78befc6e2381d81",
+      "code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "e1019daeedc9aa37874d31d63df4387071a83dd7f77f57927e99cf246ece0ad5",
-        "current_code_digest": "022a929b5fd3b25b7aafa4ef231c06d6dc31aeacba136febb78befc6e2381d81"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "022a929b5fd3b25b7aafa4ef231c06d6dc31aeacba136febb78befc6e2381d81",
+        "current_code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175"
       }
     },
     "douyin_video_processing.preflight": {
@@ -810,6 +810,13 @@
         "content_digest": "4a89fe966dbec48506264ae6cf57f5076b82791758cea0574dd1791be1dbeedb"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/cloud7-quarantine-supersession.py",
+          "revision": "contract",
+          "sha256": "ca0e6eb6cd5a2a2e164150a225d29951ae9131b1ce59c7dd43d7bbc10936cb5b"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -955,7 +962,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -983,7 +990,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -1599,13 +1606,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6",
+      "code_digest": "01aa93999171dd916c5aee0777204476a503bd988b961abb2ee48ae7d8602f3e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "7ca9f3f94bcd07adcc6ae443d6038089cc5c180e7d4956d6b247b68e5940b4d3",
-        "current_code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6"
+        "reason": "新增精确cloud7预检只读SDK隔离的一次性非重放迁移程序，独立CLI执行；原Activity执行与OLD_EXECUTION_TERMINATION_UNKNOWN严闸不变，原Worker方法及输入输出不变。其余仅云手机review/policy哈希更新，104未获新权限。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6",
+        "current_code_digest": "01aa93999171dd916c5aee0777204476a503bd988b961abb2ee48ae7d8602f3e"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1771,7 +1778,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -1785,7 +1792,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -2369,13 +2376,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "92566079be88eee2b1cf9e7399fc931cca7c65389146453a8c9b5f6752dee867",
+      "code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "7611a6876cefdd61616803d0cb27bf194ba5a341d91bbb51ebc4e39efa65305d",
-        "current_code_digest": "92566079be88eee2b1cf9e7399fc931cca7c65389146453a8c9b5f6752dee867"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "92566079be88eee2b1cf9e7399fc931cca7c65389146453a8c9b5f6752dee867",
+        "current_code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2541,7 +2548,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -2555,7 +2562,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -3223,13 +3230,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "6531451463e0d332631e189599764f24a847fe682e47ea70aad65811612b5e45",
+      "code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "fac878a7c7dbca6ad5bd88517955269ea831447400d143639ca49edaca8d1ff1",
-        "current_code_digest": "6531451463e0d332631e189599764f24a847fe682e47ea70aad65811612b5e45"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "6531451463e0d332631e189599764f24a847fe682e47ea70aad65811612b5e45",
+        "current_code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b"
       }
     },
     "douyin_video_processing.collection": {
@@ -3395,7 +3402,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -3409,7 +3416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -4015,13 +4022,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "7df3f3ca397e996b2315a5dc2d8c869ba153e6ffc8b60612b153bca9f8000fda",
+      "code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "1691d73d54737729ed2d2e5423f9baf752f233536d95ac59e6df90cc652fdd26",
-        "current_code_digest": "7df3f3ca397e996b2315a5dc2d8c869ba153e6ffc8b60612b153bca9f8000fda"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "7df3f3ca397e996b2315a5dc2d8c869ba153e6ffc8b60612b153bca9f8000fda",
+        "current_code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4187,7 +4194,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -4215,7 +4222,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -4816,13 +4823,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f",
+      "code_digest": "78c5c601efe17720e707210c996e536a94f5f3fd9f753a7a0162920ce0fa8002",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "ee3175fc118ffd9f7276cc947b5c77cf19071be0a46cd2658bca0a0659cd3f64",
-        "current_code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f",
+        "current_code_digest": "78c5c601efe17720e707210c996e536a94f5f3fd9f753a7a0162920ce0fa8002"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5002,7 +5009,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -5016,7 +5023,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -5600,13 +5607,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "89a35a3cef2c06e2f161194b102f54ba36e76753642654129bdfdc2aa7ac6f17",
+      "code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "9585d1d0032e622877a6e1e3798bee26300960f24e1e663660c3403d724c334d",
-        "current_code_digest": "89a35a3cef2c06e2f161194b102f54ba36e76753642654129bdfdc2aa7ac6f17"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "89a35a3cef2c06e2f161194b102f54ba36e76753642654129bdfdc2aa7ac6f17",
+        "current_code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5786,7 +5793,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -5800,7 +5807,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -6426,13 +6433,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d30ed11999d51e9bfb157e3107d9a2d17325f6852e3253f0785493c78d6f8122",
+      "code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "a9ecc7318ce3ac8433fdfc8c246af21d2c3bb3212e5b0c659b6a286ff7e1f4e3",
-        "current_code_digest": "d30ed11999d51e9bfb157e3107d9a2d17325f6852e3253f0785493c78d6f8122"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "d30ed11999d51e9bfb157e3107d9a2d17325f6852e3253f0785493c78d6f8122",
+        "current_code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6598,7 +6605,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -6612,7 +6619,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -7186,13 +7193,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "b134fe4acf95a56b46db05105676e8f109f6d842d6ecaa5c56f257966ffbe738",
+      "code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "fa3f98b2f3a6d71cf53a2465f1f878b24d8de48da6d09043a5890410634e8f17",
-        "current_code_digest": "b134fe4acf95a56b46db05105676e8f109f6d842d6ecaa5c56f257966ffbe738"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "b134fe4acf95a56b46db05105676e8f109f6d842d6ecaa5c56f257966ffbe738",
+        "current_code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7358,7 +7365,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -7372,7 +7379,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -7921,13 +7928,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "017c1c44b3332170894b2d1eeba95d48d30f4b560fcb1b5c31b815f0513feb21",
+      "code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "5ede3dfd65f6c020cff7fd983f02fa0edfbf4baa52d0ec0db86574f70235b8e6",
-        "current_code_digest": "017c1c44b3332170894b2d1eeba95d48d30f4b560fcb1b5c31b815f0513feb21"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "017c1c44b3332170894b2d1eeba95d48d30f4b560fcb1b5c31b815f0513feb21",
+        "current_code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8093,7 +8100,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -8107,7 +8114,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -8649,13 +8656,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2054ac8efbf6446de71baea2d282add59e6183d144528abf83fec218507540da",
+      "code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "12bdcc845da03e9822bda4faac5ab04190f3a214263688f9d405ba6ffa5f4700",
-        "current_code_digest": "2054ac8efbf6446de71baea2d282add59e6183d144528abf83fec218507540da"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "2054ac8efbf6446de71baea2d282add59e6183d144528abf83fec218507540da",
+        "current_code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8821,7 +8828,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "6efd184445df802b20aa3b8a98a4188360c7459283503d51183585937e0f61b2"
+          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
         },
         {
           "kind": "code",
@@ -8835,7 +8842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "97a7415f6bdb53e4fbce327a20452ac61c7cd50c9f4e362103a12da8ff7bc27d"
+          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
         },
         {
           "kind": "code",
@@ -9387,13 +9394,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "743e70a4a0664a94e99ad961f109983551e04f794a32109336bf8ff305453893",
+      "code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
-        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
-        "previous_code_digest": "a92032a02c019b6c7c3b602788d8634a01e9a9adfc655eecdb92e026c1082c68",
-        "current_code_digest": "743e70a4a0664a94e99ad961f109983551e04f794a32109336bf8ff305453893"
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
+        "reviewed_by": "/root/recovery_contract_review",
+        "previous_code_digest": "743e70a4a0664a94e99ad961f109983551e04f794a32109336bf8ff305453893",
+        "current_code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8"
       }
     }
   },

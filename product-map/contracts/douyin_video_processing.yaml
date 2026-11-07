@@ -168,6 +168,10 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/cloud7-quarantine-supersession.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/native-phone-runtime.mjs
         revision: contract
       - kind: code
