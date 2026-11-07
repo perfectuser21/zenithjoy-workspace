@@ -3,6 +3,7 @@ import{createHash}from'node:crypto';
 import http from 'node:http';import https from 'node:https';
 import{mkdirSync,openSync,writeFileSync,fsyncSync,closeSync,lstatSync,realpathSync}from'node:fs';
 import{resolve,dirname,join}from'node:path';import{userInfo}from'node:os';
+import{readBinding}from'./runtime-binding.mjs';
 const issued=new WeakMap();
 const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -52,4 +53,25 @@ export function assertFrozenNativeTaskLease(frozen){
  const{snapshot_sha256,native_task_lease,...body}=frozen;if(b.snapshot_sha256!==sha(canonical(body)))throw fail('FROZEN');
  if(v.reply?.ok!==true||!Number.isFinite(Date.parse(v.reply.lease_until))||!Number.isSafeInteger(v.effective_deadline_ms)||v.effective_deadline_ms!==Math.min(Date.parse(v.reply.lease_until),b.receipt_deadline_ms)||v.effective_deadline_ms<=Date.now()||canonical(v.transport)!==canonical({heartbeat:{request_closed:true,response_closed:true,socket_closed:true},task:{request_closed:true,response_closed:true,socket_closed:true}}))throw fail('FROZEN');
  return structuredClone(v);
+}
+
+// Public Brain external bindings deliberately have no Task FK. Associate the
+// unchanged ACK with the Starter's issued Task lease, never a Worker Task ID.
+// This is not a task_run: every AV still reads the live Task through Caller.
+export function assertNativeTaskAssociation({frozen,binding,taskId,runDir,scope,host}={}){
+ const lease=assertFrozenNativeTaskLease(frozen),input=frozen.agent_input;
+ const reject=()=>{throw fail('RUN_ASSOCIATION');};
+ if(taskId!==input.task_id||lease.binding.task_id!==taskId||!binding?.id||typeof binding.run_id!=='string')reject();
+ const match=binding.run_id.match(/__(a[1-9][0-9]*)$/);
+ if(!match||binding.run_id!==`${input.workflow_key}-${input.run_tag}__${match[1]}`)reject();
+ const actual=readBinding(runDir,match[1],frozen);
+ if(canonical(actual)!==canonical(binding))reject();
+ const value=key=>binding[key]??binding.payload?.[key];
+ for(const[key,wanted]of Object.entries({runtime_snapshot_sha256:frozen.snapshot_sha256,release_id:frozen.release?.id,observation_id:frozen.deployment?.observation_id,workflow_id:frozen.workflow_version?.payload?.workflow_id,workflow_definition_version_id:frozen.workflow_version?.id}))if(wanted===undefined||value(key)!==wanted)reject();
+ for(const[key,wanted]of Object.entries({task_id:taskId,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:input.profile,serial:input.serial}))if(scope?.[key]!==wanted)reject();
+ if(binding.task_id!==null){if(binding.task_id!==taskId)reject();}
+ else{
+  if(value('source_kind')!=='external'||value('external_origin')!==`zenithjoy:${host}`||!Object.hasOwn(binding,'task_run_id')||binding.task_run_id!==null||Object.hasOwn(binding.payload||{},'task_run_id')&&binding.payload.task_run_id!==null)reject();
+ }
+ return {kind:binding.task_id===null?'verified_external_native_task_association':'verified_native_task_association',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,runtime_snapshot_sha256:frozen.snapshot_sha256};
 }
