@@ -40,7 +40,7 @@ export function createNativeScrcpyHostProducer({runtimeRoot,source,scope,directo
  const identityUnproven=()=>{mark();return fail('IDENTITY_UNPROVEN');};
  function identityEnd(requested,cleanup){
   let end=Math.min(requested,cleanup?q.cleanup_deadline_ms:q.worker_deadline_ms);
-  if(!cleanup&&nativeBound&&startup){const phase=bridgeModule.readNativeScrcpyStartupPhase(nativeBridge,{scope:q});end=Math.min(end,startup.protocol_deadline_ms);if(phase.phase==='buffer'){if(startup.post_exec_verified_at_ms!==null&&startup.post_exec_verified_at_ms!==phase.post_exec_verified_at_ms)throw fail('SESSION_TIME');end=Math.min(end,phase.post_exec_verified_at_ms+startupBufferMs);}}
+  if(!cleanup&&nativeBound&&startup&&!childState?.ready){const phase=bridgeModule.readNativeScrcpyStartupPhase(nativeBridge,{scope:q});end=Math.min(end,startup.protocol_deadline_ms);if(phase.phase==='buffer'){if(startup.post_exec_verified_at_ms!==null&&startup.post_exec_verified_at_ms!==phase.post_exec_verified_at_ms)throw fail('SESSION_TIME');end=Math.min(end,phase.post_exec_verified_at_ms+startupBufferMs);}}
   return end;
  }
  // Observe conflicts before waiting: a later empty ps must not erase a foreign
@@ -64,15 +64,15 @@ export function createNativeScrcpyHostProducer({runtimeRoot,source,scope,directo
   try{processHandle=spawn(row.ps.path,['-ww','-g',String(childState.pid),'-o','pid=,ppid=,pgid=,uid=,lstart=,stat=,command='],{env:{PATH:'/usr/bin:/bin',LANG:'C',LC_ALL:'C'},stdio:['pipe','pipe','pipe']});processHandle.once('error',()=>{mark();});processHandle.stdin.end();
    for(const[name,stream]of [['stdin',processHandle.stdin],['stdout',processHandle.stdout],['stderr',processHandle.stderr]]){stream.on('error',()=>mark());stream.once('close',()=>{state[name+'_closed']=true;finish();});if(name!=='stdin')stream.once('end',()=>state[name+'_eof']=true);}
    processHandle.stdout.on('data',b=>{bytes+=b.length;if(bytes>2*1024*1024){mark();processHandle.kill('SIGKILL');}else parts.push(b);});processHandle.stderr.on('data',b=>errors.push(b));processHandle.once('close',(code,signal)=>{exit={code,signal};state.process_closed=true;finish();});
-   deadlineTimer=setTimeout(()=>{mark();processHandle.kill('SIGKILL');},Math.max(1,Math.min(1000,q.cleanup_deadline_ms-Date.now())));
+   deadlineTimer=setTimeout(()=>{mark();processHandle.kill('SIGKILL');},Math.max(1,Math.min(1000,(cleanup&&!recheck&&identityDeadline<=Date.now()?q.cleanup_deadline_ms:identityDeadline)-Date.now())));
   }catch(error){probes.delete(job);mark();throw error;}
   const text=await returned;await check();const rows=[];
-  for(const line of text.split('\n').filter(s=>s.trim())){const m=line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(\S+)\s+(.*)$/);if(!m)throw fail('PS_FORMAT');const r={pid:Number(m[1]),ppid:Number(m[2]),pgid:Number(m[3]),uid:Number(m[4]),birth:m[5].replace(/\s+/g,' '),state:m[6],command:m[7]};if(r.pgid!==childState.pid)throw fail('GROUP');rows.push(r);}
+  for(const line of text.split('\n').filter(s=>s.trim())){const m=line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(\S+)\s+(.*)$/);if(!m)throw fail('PS_FORMAT');const r={pid:Number(m[1]),ppid:Number(m[2]),pgid:Number(m[3]),uid:Number(m[4]),birth:m[5].replace(/\s+/g,' '),state:m[6],command:m[7]};if(r.pgid!==childState.pid){mark();throw fail('GROUP');}rows.push(r);}
   identityDeadline=identityEnd(requestedEnd,cleanup);try{publish('host-processes-'+probeSequence+++'.json',{rows,observed_at_ms:Date.now(),identity_deadline_ms:identityDeadline,cleanup});}catch(error){if(!cleanup)throw error;mark();}
   // A read during fork/exec or kernel teardown can lose argv. These are
   // read-only rechecks, never identities or signal authority; the final rows
   // still pass the original strict matcher within the original absolute budget.
-  observedConflicts(rows);const rootCommand=join(row.root,'scrcpy')+' '+argv.join(' '),shim=join(runtimeRoot,row.shim.path);const pending=rows.some(r=>!(owned.has(r.pid)&&r.state.startsWith('Z'))&&(/^\([A-Za-z0-9_.-]+\)$/.test(r.command)||!owned.has(r.pid)&&r.pid!==childState.pid&&r.uid===uid()&&(r.ppid===childState.pid||owned.has(r.ppid))&&(r.command===rootCommand||r.state.startsWith('Z')||r.command==='/usr/bin/env node '+shim||r.command.startsWith('/usr/bin/env node '+shim+' '))));identityDeadline=identityEnd(requestedEnd,cleanup);if(!cleanup&&Date.now()>=identityDeadline)throw identityUnproven();if(pending){if(Date.now()>=identityDeadline)throw identityUnproven();await new Promise(resolve=>setTimeout(resolve,Math.max(1,Math.min(10,identityDeadline-Date.now()))));return processRows(cleanup,identityDeadline,true);}return rows;
+  try{observedConflicts(rows);}catch(error){mark();throw error;}const rootCommand=join(row.root,'scrcpy')+' '+argv.join(' '),shim=join(runtimeRoot,row.shim.path);const pending=rows.some(r=>!(owned.has(r.pid)&&r.state.startsWith('Z'))&&(/^\([A-Za-z0-9_.-]+\)$/.test(r.command)||!owned.has(r.pid)&&r.pid!==childState.pid&&r.uid===uid()&&(r.ppid===childState.pid||owned.has(r.ppid))&&(r.command===rootCommand||r.state.startsWith('Z')||r.command==='/usr/bin/env node '+shim||r.command.startsWith('/usr/bin/env node '+shim+' '))));identityDeadline=identityEnd(requestedEnd,cleanup);if(!cleanup&&Date.now()>=identityDeadline)throw identityUnproven();if(pending){if(Date.now()>=identityDeadline)throw identityUnproven();await new Promise(resolve=>setTimeout(resolve,Math.max(1,Math.min(10,identityDeadline-Date.now()))));return processRows(cleanup,identityDeadline,true);}return rows;
  }
  function remember(rows){
   const rootCommand=join(row.root,'scrcpy')+' '+argv.join(' '),shim=join(runtimeRoot,row.shim.path),prefixes=[shim,row.node.path+' '+shim,basename(row.node.path)+' '+shim];
@@ -95,7 +95,7 @@ export function createNativeScrcpyHostProducer({runtimeRoot,source,scope,directo
    try{pinned(row.ps.path,row.ps.sha256);rows=await processRows(true,q.cleanup_deadline_ms-(signal==='SIGINT'?terminationReserveMs:signal==='SIGTERM'?2500:500));remember(rows);if(!rows.some(r=>!r.state.startsWith('Z')))break;if(!safe)break;
     // The leader is either the exact unreaped ChildProcess or rows retain its
     // registered group identity. A replacement/foreign row always fails above.
-    process.kill(-childState.pid,signal);signals.push(signal);
+    if(Date.now()>=q.cleanup_deadline_ms){mark();break;}process.kill(-childState.pid,signal);signals.push(signal);
    }catch(error){if(error.code!=='ESRCH')mark();}
    const reserve=signal==='SIGINT'?2500:signal==='SIGTERM'?500:0;const until=Math.min(q.cleanup_deadline_ms-reserve,Date.now()+waitMs);
    do{if(Date.now()>=until)break;await sleep(Math.max(1,Math.min(50,until-Date.now())));if(Date.now()>=until)break;try{rows=await processRows(true,until);remember(rows);}catch{mark();safe=false;break;}}while(rows.some(r=>!r.state.startsWith('Z'))&&Date.now()<until);
