@@ -34,6 +34,9 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)||realpathSync(journalDirectory)!==resolve(journalDirectory))throw failure('OFFICIAL_CONTROL_JOURNAL');
  const ledger=join(journalDirectory,'official-authority-'+randomUUID()+'.jsonl');
  const ledgerHash=createHash('sha256');let ledgerBytes=0;
+ // Each readonly claim job may defer only its own records. No ambient
+ // defer state can affect model, worker, delivery or other action intents.
+ const claimJournalJobs=new WeakSet();
  let sealed=false,epoch=0,tainted=false,journalClosed=false,closing,finalRecordFailed=false;const durableArtifacts=new Map();const jobs=new Set(),rawTurns=new Map(),turnReceipts=new WeakMap(),intentPermits=new WeakMap(),stopReceipts=new WeakMap(),privateSnapshots=new WeakSet();const rawPrefix='raw-'+hash(canonical([fixed.run_id,fixed.task_id,fixed.binding_id,fixed.nonce,fixed.activity_key,fixed.source_commit])).slice(0,32);let externalEffectUnknown=false,rawEpoch=0,nextTurn=0,rawRevoked=false,recoveryScanned=false,previousCallerUnknown=false,deliveryPermit,controlAcceptance=false;
  const continuation=continuationCapability===undefined?null:continuationCapabilities.get(continuationCapability);
  if(continuationCapability!==undefined&&(!continuation||continuation.used||continuation.request!==canonical(fixed)||continuation.source!==canonical(fixedSource)||continuation.directory!==journalDirectory))throw failure('OFFICIAL_CONTROL_CONTINUATION');
@@ -56,12 +59,16 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   throw failure('OFFICIAL_CONTROL_JOURNAL');
  }
  const snapshot=()=>{const outstanding=[...rawTurns.values()].some(r=>r.dispatched&&!r.officialTerminal);const value=Object.freeze({sealed,pending:jobs.size,execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed&&!outstanding&&!previousCallerUnknown,caller_execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed,execution_unknown:tainted||jobs.size>0||outstanding||externalEffectUnknown||previousCallerUnknown,external_effect_unknown:externalEffectUnknown,previous_caller_stop_unproven:previousCallerUnknown,final_record_failed:finalRecordFailed});privateSnapshots.add(value);return value;};
- const record=value=>{try{
+ const assertLedger=()=>{
   const current=lstatSync(ledger),opened=fstatSync(descriptor);
   if(journalClosed||!current.isFile()||current.isSymbolicLink()||current.dev!==identity.dev||current.ino!==identity.ino||opened.dev!==identity.dev||opened.ino!==identity.ino||current.nlink!==1||current.uid!==process.getuid()||(current.mode&0o777)!==0o600)throw Error();
+ };
+ const flushClaimJournal=()=>{try{verifyJournalDirectory();assertLedger();fsyncSync(descriptor);verifyJournalDirectory();assertLedger();}catch{tainted=true;throw failure('OFFICIAL_CONTROL_JOURNAL');}};
+ const record=(value,job)=>{try{
+  assertLedger();
   const bytes=Buffer.from(JSON.stringify(value)+'\n');let offset=0;
   while(offset<bytes.length){const written=writeSync(descriptor,bytes,offset,bytes.length-offset);if(written<1)throw Error();offset+=written;}
-  fsyncSync(descriptor);ledgerHash.update(bytes);ledgerBytes+=bytes.length;
+  if(!claimJournalJobs.has(job))fsyncSync(descriptor);ledgerHash.update(bytes);ledgerBytes+=bytes.length;
  }catch{tainted=true;throw failure('OFFICIAL_CONTROL_JOURNAL');}};
  function stopOwnedResources(...actions){for(const action of actions){try{action();}catch{tainted=true;}}}
  const guard=e=>{if(previousCallerUnknown)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(tainted)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(sealed||e!==epoch)throw failure('OFFICIAL_CONTROL_CLOSED');if(Date.now()>=deadlineMs)throw failure('OFFICIAL_CONTROL_DEADLINE');};
@@ -74,7 +81,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   guard(e);
   if(typeof path!=='string'||path.split('/').some(part=>part==='.'||part==='..')||path.includes('%')||!/^\/api\/brain\/(?:runs\/[^/?#]+\/definition|tasks\/[a-f0-9-]{36}|workflows\/[^/?#]+\/versions\/[^/?#]+|activities\/[^/?#]+\/versions\/[^/?#]+)$/.test(path))throw failure('OFFICIAL_CONTROL_SCOPE');
   const token=credential();if(typeof token!=='string'||!token||/[\r\n]/.test(token))throw failure('OFFICIAL_CONTROL_CREDENTIAL');
-  guard(e);record({event:'read_intent',path,epoch:e});
+  guard(e);record({event:'read_intent',path,epoch:e},job);
   return new Promise((resolveRead,rejectRead)=>{
    let req,res,socket,requestClosed=false,responseClosed=true,socketClosed=true,error,value,ended=false,bytes=0;
    const chunks=[];let finished=false;
@@ -83,7 +90,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
     finished=true;job.cancelRead=null;
     try{
      guard(e);if(error)throw error;if(!ended)throw failure('OFFICIAL_CONTROL_READ');
-     record({event:'read_returned',path,epoch:e,bytes});resolveRead(value);
+     record({event:'read_returned',path,epoch:e,bytes},job);resolveRead(value);
     }catch(cause){rejectRead(cause);}
    };
    const abort=cause=>{error??=cause;stopOwnedResources(()=>res?.destroy(),()=>socket?.destroy(),()=>req?.destroy());};
@@ -220,9 +227,19 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  function readAuthorizedTaskClaim(q){return authorizeParent(q,true);}
  async function authorizeParent(q,projectClaim){
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
-  return ownedJob(async(job,e)=>{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
-   if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
-   const claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});record({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))});return claim;
+  return ownedJob(async(job,e)=>{
+   if(projectClaim)claimJournalJobs.add(job);
+   let claim;
+   try{
+    let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false},job);if(!projectClaim)return true;
+    if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
+    claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});record({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))},job);
+   }finally{
+    // GET-only work may fail or be sealed while in flight. Its written records
+    // must still be durable before job.done settles and close can retire the FD.
+    if(projectClaim)try{flushClaimJournal();}finally{claimJournalJobs.delete(job);}
+   }
+   guard(e);if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');return claim;
   });
  }
  function durableRaw(name,value,onCreated){const path=join(journalDirectory,name),fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);const b=Buffer.from(JSON.stringify(value)+'\n');let writtenIdentity;try{onCreated?.(fstatSync(fd));let n=0;while(n<b.length){const wrote=writeSync(fd,b,n,b.length-n);if(wrote<1)throw failure('OFFICIAL_CONTROL_JOURNAL');n+=wrote;}fsyncSync(fd);writtenIdentity=fstatSync(fd);}finally{closeSync(fd);}const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}durableArtifacts.set(name,{sha256:hash(b),bytes:b.length,identity:writtenIdentity});}
