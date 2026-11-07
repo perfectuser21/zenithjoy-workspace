@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -930,13 +930,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "a9d2bf50f443bdf588d570f5641c9ef3e4e14cb7d9522a437ff5cf585462fb19",
+      "code_digest": "457a4c088205b170ea1af8f8ac7787d157f6652d36be905e94622a87c94d2b04",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690",
-        "current_code_digest": "a9d2bf50f443bdf588d570f5641c9ef3e4e14cb7d9522a437ff5cf585462fb19"
+        "current_code_digest": "457a4c088205b170ea1af8f8ac7787d157f6652d36be905e94622a87c94d2b04"
       }
     },
     "douyin_video_processing.preflight": {
@@ -962,7 +962,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -1893,13 +1893,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "3742611c94af306ff6ac91b8b509537567d7bbe3383ff394b1a9efafe72e79e1",
+      "code_digest": "e8c3d2ee47f3ff42ce9646ce173dc14cbcc859020392357e7df6f14dfe085335",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb",
-        "current_code_digest": "3742611c94af306ff6ac91b8b509537567d7bbe3383ff394b1a9efafe72e79e1"
+        "current_code_digest": "e8c3d2ee47f3ff42ce9646ce173dc14cbcc859020392357e7df6f14dfe085335"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1925,7 +1925,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -2824,13 +2824,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "376b084203aedcfa66b936c97adf6e7e3dce9e1c9692dfd6910ba56b2246b6a7",
+      "code_digest": "baef882c3fadc855aa6367e12d0c292dfe9606d4aafef1827b1aa740fd250d2d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948",
-        "current_code_digest": "376b084203aedcfa66b936c97adf6e7e3dce9e1c9692dfd6910ba56b2246b6a7"
+        "current_code_digest": "baef882c3fadc855aa6367e12d0c292dfe9606d4aafef1827b1aa740fd250d2d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2856,7 +2856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -3818,13 +3818,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "2acd2fa0ab368f718cf873179ee7312392f5d4df6a2495d293161cc4bd041354",
+      "code_digest": "ebaeaceed5ec974b565fd7e53f21e22f1896a6bbd8f79a1c90a47bab802d60a0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa",
-        "current_code_digest": "2acd2fa0ab368f718cf873179ee7312392f5d4df6a2495d293161cc4bd041354"
+        "current_code_digest": "ebaeaceed5ec974b565fd7e53f21e22f1896a6bbd8f79a1c90a47bab802d60a0"
       }
     },
     "douyin_video_processing.collection": {
@@ -3850,7 +3850,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -4771,13 +4771,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "4e3d0636137f20c558f85b6f1c759195a8fde9645dca37f4e3e457e4a1fdd37f",
+      "code_digest": "e83910dbb72743c0e7f77f615fd20e95707a681d38457422d7f587f1dd3e24a4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb",
-        "current_code_digest": "4e3d0636137f20c558f85b6f1c759195a8fde9645dca37f4e3e457e4a1fdd37f"
+        "current_code_digest": "e83910dbb72743c0e7f77f615fd20e95707a681d38457422d7f587f1dd3e24a4"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4803,7 +4803,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -5719,13 +5719,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "16e95d04a302ec6626ed7ced2fd646285d21d9d969f83b9eb335f8e3442521cb",
+      "code_digest": "643dd7913548afbbb1d459ace83ccadc59cdcb94dc1c6110d284246aeb9df5d7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b",
-        "current_code_digest": "16e95d04a302ec6626ed7ced2fd646285d21d9d969f83b9eb335f8e3442521cb"
+        "current_code_digest": "643dd7913548afbbb1d459ace83ccadc59cdcb94dc1c6110d284246aeb9df5d7"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5751,7 +5751,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -6664,13 +6664,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "034d031b87de9beb4fdbdb49ac78d810236eb5467cc0f1df2b3fa667e7e8f466",
+      "code_digest": "ae36c881764dad673a5fb52b1dd1aaf65a1608eeb610cfe12eaf31cc1fc76a01",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052",
-        "current_code_digest": "034d031b87de9beb4fdbdb49ac78d810236eb5467cc0f1df2b3fa667e7e8f466"
+        "current_code_digest": "ae36c881764dad673a5fb52b1dd1aaf65a1608eeb610cfe12eaf31cc1fc76a01"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6696,7 +6696,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -7651,13 +7651,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "6d7725158473539f761f1f04eb0758b91b7c812f2197909ed177605bcf4544de",
+      "code_digest": "8734080956b457c39e0a5413df6f4962979d78329f46138096992cbc0980da8b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de",
-        "current_code_digest": "6d7725158473539f761f1f04eb0758b91b7c812f2197909ed177605bcf4544de"
+        "current_code_digest": "8734080956b457c39e0a5413df6f4962979d78329f46138096992cbc0980da8b"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7683,7 +7683,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -8572,13 +8572,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "56f79ba453be8508dad48b0e74c1a369601b5bd13de01d78294d94ae41f7d6f5",
+      "code_digest": "7dfbc594649a6d69a2dfcf4f32ad6f6ca4382edb439b084d86650f600eb946de",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0",
-        "current_code_digest": "56f79ba453be8508dad48b0e74c1a369601b5bd13de01d78294d94ae41f7d6f5"
+        "current_code_digest": "7dfbc594649a6d69a2dfcf4f32ad6f6ca4382edb439b084d86650f600eb946de"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8604,7 +8604,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -9468,13 +9468,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "c88dff11a8f6f8518c799c99b1fcc5387d45a028b93b1c6cfe3e78c3cd6b71cd",
+      "code_digest": "b24f09b30bb714f59685552a886a3a56c9a9bfd80f2031213a9bcb0b6d1c27e4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f",
-        "current_code_digest": "c88dff11a8f6f8518c799c99b1fcc5387d45a028b93b1c6cfe3e78c3cd6b71cd"
+        "current_code_digest": "b24f09b30bb714f59685552a886a3a56c9a9bfd80f2031213a9bcb0b6d1c27e4"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9500,7 +9500,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -10357,13 +10357,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "db2639165826952b5531fcabedcf000383f12abd6b1626f39ee8b2f7ea721b8b",
+      "code_digest": "71de587a308de39753246790da39a2222dce1057c74935ad90ef8208ee7f9623",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2",
-        "current_code_digest": "db2639165826952b5531fcabedcf000383f12abd6b1626f39ee8b2f7ea721b8b"
+        "current_code_digest": "71de587a308de39753246790da39a2222dce1057c74935ad90ef8208ee7f9623"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10389,7 +10389,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "d233e2df9f2dba1837356d7f08379ff9a52fe28f78f4a78950888469e0c10ef7"
+          "sha256": "4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111"
         },
         {
           "kind": "code",
@@ -11256,13 +11256,13 @@
           "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
         }
       ],
-      "code_digest": "dd00611236228a43f191e085210cf6754e06bdef5c0b151e2bd138f4a00296ea",
+      "code_digest": "9b937ff3db120456e27106cdf6dcb9cdc1dafa246d81021b8ef669c3a25abdc3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 dfc714d87047297caf333ae54302e64c2e511b96 离线读取Git及private Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74重新collectMethods，未复用60abe摘要。12个Activity版本、剥implementation_bindings后业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同。既有Source打包、MMV/sdk31物理pins、有限5readonly命令、阶段时钟、cleanEXIT0 END-only以及Host/RemotePID/tunnel/transport/audio联合停证独审范围继续有效，实际Source/config/review字节未改；不扩大104发送、shell/path/volume权限或预算，unknown不可洗为已停。凭据文件精确匹配独立9a08审。新增4prod已逐字对应独立低层及导航审：owned读帧只省同socket/job重复fresh检查，所有write及最终交付仍fresh B/Source，私有票保lease/epoch/seal/unknown/deadline且不可跨RECV；导航只同leased VID重开，必须重新原nonce/share取得真实link cap再重新核评论面板，不以open ACK或期望ID当证据。业务独审94450报告的queue/collection依赖/历史/成果五文件仍字节同，processing仅本导航delta由新独审覆盖；23例ownedPG报告不冒本人UI/media全审。兼容结论仅内部合同保持，不证明真实公共五槽成功、设备性能改善、OEM媒体质量或整个OS；execution_unproven，不追认旧unknown运行。",
+        "reason": "独立以真实main b07c32944be8cdc68af677643d143a4e8a4c80b3 对固定 b4aa67814d02607204005b6bd0dece0a7b006e1f 重新离线collectMethods/privateGit Skill Source 3bbea5b5e95c348bc1b097da18aaab967fcd0c74，未复用dfc摘要。12个Activity版本、剥implementation_bindings后的业务合同digest、Skill正文/支持闭包/method版本及4Workflow/Commander/槽位身份全同；真实base原锁也与重新计算相同。相对已独审dfc，AV绑定中唯一改变字节为native-phone-runtime.mjs，完整SHA4668d85f8b43a36af59967fcaa82ef26991e2c048d38ab2a7315df36a8fb2111，逐字匹配独立ca457限定审f9be15be。原每个Code命令/读取前完整resources不变；每wire准入先全Source/当前entry检查，再原资源guard，随后fresh genuine readClaim/B与local检查，await后检查原active/closed/unknown/worker期限；所有write和最终cap仍经过该fresh边界，仅移除原结果后重复resources。真实guard内撤AV/换local owner的独立ownedPG2/2均零shell、unknown保锁、PGclose0，不由owner吞吐自述推断性能。其余dfc生产/Source/review/config与既有scope/nonce/联合Stop/zero/whitelist/104边界不变，先前独立业务94450、低层7fc0与导航10002限定证据继续适用；Root603历史Git成功字节单调用缓存只属tooling不在AV绑定，不缓存live/错误/运行授权。这里只签内部业务合同兼容，完整public五槽、真实设备性能/OEM媒体质量和部署仍execution_unproven，不追认旧unknown；本机smoke300超时诊断另记，不伪称Pilot已过。",
         "reviewed_by": "Codex independent /root/review_clean_bootstrap",
         "previous_code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2",
-        "current_code_digest": "dd00611236228a43f191e085210cf6754e06bdef5c0b151e2bd138f4a00296ea"
+        "current_code_digest": "9b937ff3db120456e27106cdf6dcb9cdc1dafa246d81021b8ef669c3a25abdc3"
       }
     }
   },
