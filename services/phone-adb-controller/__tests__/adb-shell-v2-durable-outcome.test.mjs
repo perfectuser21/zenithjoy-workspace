@@ -84,3 +84,15 @@ test('decoded EXIT is durable even when peer withholds EOF until the deadline',a
  const outcome=f.read('command.outcome.json');assert.equal(outcome.exit_code,0);assert.equal(Buffer.from(outcome.stdout_base64,'base64').toString(),'31\n');
  const terminal=f.read('terminal.json');assert.equal(terminal.snapshot.wire_complete,false);assert.ok(terminal.snapshot.unknown_reasons.includes('ADB_SHELL_V2_DEADLINE'));assert.equal(terminal.snapshot.remote_execution_stopped,'not_attested');
 });
+
+test('unreturned authority admission leaves a durable pending close snapshot without asserting wire completion',async t=>{
+ const temporary=realpathSync(mkdtempSync(join(tmpdir(),'shell-v2-pending-'))),directory=join(temporary,'journal');mkdirSync(directory,{mode:0o700});t.after(()=>rmSync(temporary,{recursive:true,force:true}));
+ const now=Date.now(),scope={protocol:'adb-shell-v2-observation/v1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',run_id:'douyin_video_discovery-synthetic__a1',source_commit:source.commit,profile:'synthetic',serial:'synthetic-fixture',endpoint:'tcp:127.0.0.1:1',epoch:1,claim:{claimed_by:'synthetic-pending-test',claimed_at:new Date(now).toISOString()},worker_deadline_ms:now+200,cleanup_deadline_ms:now+300};
+ let admissions=0;
+ const observer=createAdbShellV2Observer({source,runtimeRoot:root,directory,scope,readAuthority:()=>{admissions++;return new Promise(()=>{});}});
+ await assert.rejects(()=>observer.observeDump(),/ADB_SHELL_V2_CLOSED|ADB_SHELL_V2_DEADLINE/);
+ const stopped=await observer.close();assert.equal(admissions,1);assert.equal(stopped.pending,1);assert.equal(stopped.open_sockets,0,'admission has not authorized any socket');assert.equal(stopped.unknown,true);assert.equal(stopped.wire_complete,false);assert.ok(stopped.unknown_reasons.includes('ADB_SHELL_V2_CLEANUP_PENDING'));
+ const names=readdirSync(directory);assert.ok(names.includes('close-0.snapshot.json'),'a close that cannot drain the pipeline must durably retain its pending state');
+ const close=JSON.parse(readFileSync(join(directory,'close-0.snapshot.json'),'utf8'));assert.deepEqual(close.snapshot,stopped);assert.match(close.scope_sha256,/^[a-f0-9]{64}$/);assert.match(close.error_code,/^ADB_SHELL_V2_[A-Z_]+$/);assert.ok(Number.isFinite(Date.parse(close.observed_at)));assert.equal(close.snapshot.remote_execution_stopped,'not_attested');
+ assert.equal(names.includes('command.outcome.json'),false);assert.equal(names.includes('terminal.json'),false,'a pending pipeline has not produced a terminal outcome');
+});
