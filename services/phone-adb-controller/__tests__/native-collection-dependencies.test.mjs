@@ -1,10 +1,11 @@
+import {nativePhoneTestPython} from './helpers/native-phone-test-python.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFileSync,realpathSync,writeFileSync} from 'node:fs';import {join} from 'node:path';import {createHash} from 'node:crypto';import {createServer,request} from 'node:http';
 import {usingPhoneQueue} from './fixtures/native-phone-queue-fixture.mjs';
 const sha=v=>createHash('sha256').update(v).digest('hex');
 async function fixture(t,fn){return usingPhoneQueue(t,async f=>{
  for(const path of ['native-collection-history-proof.mjs','queued-comment-history.js','douyin-phone-adb','native-collection-dependencies.mjs','native-phone-link-resolver.mjs','queued-recipient-evidence.js','nickname-match-lib.js','native-activity-authority.mjs'])if(!f.source.files.some(x=>x.path===path))f.source.files.push({path,sha256:sha(readFileSync(join(f.root,path)))});
- const api=await f.load('native-collection-dependencies.mjs'),python=realpathSync('/usr/bin/python3'),options={root:f.root,source:f.source,scope:f.scope,directory:f.makeDirectory('collection-dependencies'),python:{path:python,sha256:sha(readFileSync(python))},deadlineMs:f.scope.worker_deadline_ms,receiptDeadlineMs:f.scope.receipt_deadline_ms,assertAuthority:f.authority()};
+ const api=await f.load('native-collection-dependencies.mjs'),python=nativePhoneTestPython(),options={root:f.root,source:f.source,scope:f.scope,directory:f.makeDirectory('collection-dependencies'),python:{path:python,sha256:sha(readFileSync(python))},deadlineMs:f.scope.worker_deadline_ms,receiptDeadlineMs:f.scope.receipt_deadline_ms,assertAuthority:f.authority()};
  const profile=readFileSync(new URL('./fixtures/honor-e1b-recipient/profile.xml',import.meta.url),'utf8'),returned=readFileSync(new URL('./fixtures/honor-e1b-recipient/returned.xml',import.meta.url),'utf8'),args={nickname:'测试评论人',douyinId:'fixture-account-102',commentBody:'测试完整评论 首评',commentEncoding:'canonical'};
  return fn({...f,api,options,profile,returned,args});
  });}
