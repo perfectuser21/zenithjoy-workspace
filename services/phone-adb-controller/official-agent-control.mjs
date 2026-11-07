@@ -36,7 +36,10 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  const ledgerHash=createHash('sha256');let ledgerBytes=0;
  // Each readonly claim job may defer only its own records. No ambient
  // defer state can affect model, worker, delivery or other action intents.
- const claimJournalJobs=new WeakSet();
+ const claimJournalJobs=new WeakSet(),centralReadCancels=new WeakMap();
+ // Route strings only, committed after a fully validated and durable first B.
+ // Response objects remain local to a single call and are never retained here.
+ let readonlyPaths;
  let sealed=false,epoch=0,tainted=false,journalClosed=false,closing,finalRecordFailed=false;const durableArtifacts=new Map();const jobs=new Set(),rawTurns=new Map(),turnReceipts=new WeakMap(),intentPermits=new WeakMap(),stopReceipts=new WeakMap(),privateSnapshots=new WeakSet();const rawPrefix='raw-'+hash(canonical([fixed.run_id,fixed.task_id,fixed.binding_id,fixed.nonce,fixed.activity_key,fixed.source_commit])).slice(0,32);let externalEffectUnknown=false,rawEpoch=0,nextTurn=0,rawRevoked=false,recoveryScanned=false,previousCallerUnknown=false,deliveryPermit,controlAcceptance=false;
  const continuation=continuationCapability===undefined?null:continuationCapabilities.get(continuationCapability);
  if(continuationCapability!==undefined&&(!continuation||continuation.used||continuation.request!==canonical(fixed)||continuation.source!==canonical(fixedSource)||continuation.directory!==journalDirectory))throw failure('OFFICIAL_CONTROL_CONTINUATION');
@@ -81,20 +84,21 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   guard(e);
   if(typeof path!=='string'||path.split('/').some(part=>part==='.'||part==='..')||path.includes('%')||!/^\/api\/brain\/(?:runs\/[^/?#]+\/definition|tasks\/[a-f0-9-]{36}|workflows\/[^/?#]+\/versions\/[^/?#]+|activities\/[^/?#]+\/versions\/[^/?#]+)$/.test(path))throw failure('OFFICIAL_CONTROL_SCOPE');
   const token=credential();if(typeof token!=='string'||!token||/[\r\n]/.test(token))throw failure('OFFICIAL_CONTROL_CREDENTIAL');
-  guard(e);record({event:'read_intent',path,epoch:e},job);
+  guard(e);record({event:'read_intent',path,epoch:e,...(claimJournalJobs.has(job)?{at:Date.now()}:{})},job);
   return new Promise((resolveRead,rejectRead)=>{
-   let req,res,socket,requestClosed=false,responseClosed=true,socketClosed=true,error,value,ended=false,bytes=0;
+   let req,res,socket,requestClosed=false,responseClosed=true,socketClosed=true,error,value,ended=false,responseEndedAt,bytes=0;
    const chunks=[];let finished=false;
    const finish=()=>{
     if(finished||!requestClosed||!responseClosed||!socketClosed)return;
-    finished=true;job.cancelRead=null;
+    finished=true;cancels.delete(cancelRead);if(!cancels.size)centralReadCancels.delete(job);
     try{
      guard(e);if(error)throw error;if(!ended)throw failure('OFFICIAL_CONTROL_READ');
-     record({event:'read_returned',path,epoch:e,bytes},job);resolveRead(value);
+     record({event:'read_returned',path,epoch:e,bytes,...(claimJournalJobs.has(job)?{at:Date.now(),response_ended_at:responseEndedAt}:{})},job);resolveRead(value);
     }catch(cause){rejectRead(cause);}
    };
    const abort=cause=>{error??=cause;stopOwnedResources(()=>res?.destroy(),()=>socket?.destroy(),()=>req?.destroy());};
-   job.cancelRead=()=>abort(failure('OFFICIAL_CONTROL_CLOSED'));
+   let cancels=centralReadCancels.get(job);if(!cancels){cancels=new Set();centralReadCancels.set(job,cancels);}
+   const cancelRead=()=>abort(failure('OFFICIAL_CONTROL_CLOSED'));cancels.add(cancelRead);
    try{
     req=httpRequest({protocol:'http:',hostname:'127.0.0.1',port:5221,method:'GET',path,agent:false,headers:{'X-Internal-Token':token,Connection:'close'}},response=>{
      res=response;responseClosed=false;
@@ -104,7 +108,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
      try{guard(e);}catch(cause){abort(cause);return;}
      if(res.statusCode!==200||!/^application\/json(?:\s*;|$)/i.test(String(res.headers['content-type']||''))){abort(failure('OFFICIAL_CONTROL_READ'));return;}
      res.on('data',chunk=>{bytes+=chunk.length;if(bytes>2*1024*1024){abort(failure('OFFICIAL_CONTROL_LIMIT'));return;}chunks.push(chunk);});
-     res.once('end',()=>{try{guard(e);value=JSON.parse(Buffer.concat(chunks).toString('utf8'));ended=true;}catch{error??=failure('OFFICIAL_CONTROL_READ');}finish();});
+     res.once('end',()=>{try{guard(e);value=JSON.parse(Buffer.concat(chunks).toString('utf8'));responseEndedAt=Date.now();ended=true;}catch{error??=failure('OFFICIAL_CONTROL_READ');}finish();});
     });
     req.once('socket',owned=>{socket=owned;socketClosed=false;socket.once('close',()=>{socketClosed=true;finish();});if(sealed||e!==epoch)abort(failure('OFFICIAL_CONTROL_CLOSED'));});
     req.once('close',()=>{requestClosed=true;finish();});
@@ -113,7 +117,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
    }catch{
     tainted=true;abort(failure('OFFICIAL_CONTROL_READ'));
     // No returned request handle means native allocation cannot be certified.
-    if(!req){job.cancelRead=null;rejectRead(failure('OFFICIAL_CONTROL_UNKNOWN'));}
+    if(!req){cancels.delete(cancelRead);if(!cancels.size)centralReadCancels.delete(job);rejectRead(failure('OFFICIAL_CONTROL_UNKNOWN'));}
    }
   });
  }
@@ -171,7 +175,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  async function readOfficial(body){
   guard(epoch);if(body?.operation!=='sessions.list')throw failure('OFFICIAL_CONTROL_UNSUPPORTED');
   if(Object.keys(body).sort().join(',')!=='kind,operation,request'||canonical(body.request)!==canonical(fixed))throw failure('OFFICIAL_CONTROL_SCOPE');
-  verify();const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
+  verify();const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.(),...(centralReadCancels.get(job)||[]));};
   job.done=(async()=>{const timer=setTimeout(()=>job.cancel('OFFICIAL_CONTROL_DEADLINE'),Math.max(1,deadlineMs-Date.now()));
    try{await verifySkillRequest(fixed,{get:path=>readCentral(path,e,job)});guard(e);verify();const bound=skillExecutionIdentity(fixed,{home});guard(e);
     const started=Date.now(),result=await gatewayRead('sessions.list',{agentId:'skill-factory',search:bound.child_session_key,limit:5,archived:'all',includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false},e,job);guard(e);
@@ -195,7 +199,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  const sameRequest=q=>canonical(q)===canonical(fixed);
  function ownedJob(callback,{cleanup=false}={}){
   if(cleanup){if(Date.now()>=cleanupDeadlineMs||journalClosed||tainted)throw failure('OFFICIAL_CONTROL_CLOSED');}else guard(epoch);
-  const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
+  const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.(),...(centralReadCancels.get(job)||[]));};
   job.done=(async()=>{const timer=setTimeout(()=>job.cancel('OFFICIAL_CONTROL_DEADLINE'),Math.max(1,(cleanup?cleanupDeadlineMs:deadlineMs)-Date.now()));try{return await callback(job,e);}finally{clearTimeout(timer);jobs.delete(job);}})();return Promise.race([job.done,interrupted]);
  }
  // raw promptMode=none does not load either global Commander workspace. These
@@ -225,13 +229,35 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  const intentAllowed=op=>!(controlAcceptance||continuation)||op==='inspect';
  function authorizeParentContext(q){return authorizeParent(q,false);}
  function readAuthorizedTaskClaim(q){return authorizeParent(q,true);}
+ // Only the fixed binding/WF pair overlaps. The original validator must pass
+ // both before it can dispatch Task, then AV, through the original reader.
+ async function readReadonlyHead(paths,e,job){
+  const reads=paths.slice(0,2).map(path=>Promise.resolve().then(()=>readCentral(path,e,job)));
+  try{return new Map((await Promise.all(reads)).map((value,index)=>[paths[index],value]));}
+  catch(error){
+   stopOwnedResources(...(centralReadCancels.get(job)||[]));
+   await Promise.allSettled(reads);throw error;
+  }
+ }
  async function authorizeParent(q,projectClaim){
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
   return ownedJob(async(job,e)=>{
    if(projectClaim)claimJournalJobs.add(job);
-   let claim;
+   let claim,paths=[];
    try{
-    let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false},job);if(!projectClaim)return true;
+    let task,observedAt;verifyRawParentSources();
+    const expected=projectClaim?readonlyPaths:undefined,head=expected?await readReadonlyHead(expected,e,job):undefined;
+    await verifySkillRequest(fixed,{get:async path=>{
+     guard(e);if(expected&&!expected.includes(path))throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
+     paths.push(path);
+     const value=head?.has(path)?head.get(path):await readCentral(path,e,job);
+     if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}
+     return value;
+    }});
+    guard(e);verify();rawGate();
+    if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
+    record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false},job);
+    if(!projectClaim)return true;
     if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
     claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});record({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))},job);
    }finally{
@@ -239,7 +265,9 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
     // must still be durable before job.done settles and close can retire the FD.
     if(projectClaim)try{flushClaimJournal();}finally{claimJournalJobs.delete(job);}
    }
-   guard(e);if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');return claim;
+   guard(e);if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
+   if(paths.length!==4||new Set(paths).size!==4||readonlyPaths&&canonical(paths)!==canonical(readonlyPaths))throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
+   readonlyPaths??=Object.freeze(paths.slice());return claim;
   });
  }
  function durableRaw(name,value,onCreated){const path=join(journalDirectory,name),fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);const b=Buffer.from(JSON.stringify(value)+'\n');let writtenIdentity;try{onCreated?.(fstatSync(fd));let n=0;while(n<b.length){const wrote=writeSync(fd,b,n,b.length-n);if(wrote<1)throw failure('OFFICIAL_CONTROL_JOURNAL');n+=wrote;}fsyncSync(fd);writtenIdentity=fstatSync(fd);}finally{closeSync(fd);}const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}durableArtifacts.set(name,{sha256:hash(b),bytes:b.length,identity:writtenIdentity});}
@@ -345,7 +373,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   if(!body||Object.keys(body).sort().join(',')!=='kind,request'||canonical(body.request)!==canonical(fixed))throw failure('OFFICIAL_CONTROL_SCOPE');
   verify();guard(epoch);const e=epoch,job={cancelRead:null};jobs.add(job);
   let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});
-  job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
+  job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.(),...(centralReadCancels.get(job)||[]));};
   job.done=(async()=>{
    const timer=setTimeout(()=>{job.cancel('OFFICIAL_CONTROL_DEADLINE');},Math.max(1,deadlineMs-Date.now()));
    try{
