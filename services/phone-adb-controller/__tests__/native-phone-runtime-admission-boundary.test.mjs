@@ -25,3 +25,16 @@ for(const mode of ['shell-before-task','recv-before-task','shell-result-source',
  if(mode==='shell-before-task')assert.equal(after.filter(r=>typeof r==='string'&&r.startsWith('shell,v2,raw:')).length,0);
  if(mode==='recv-before-task')assert.equal(after.filter(r=>r&&typeof r==='object'&&r.id==='RECV').length,0);
 });
+
+for(const mode of ['AV-revoked','local-owner-changed'])test('actual central guard '+mode+' after transport ACK cannot dispatch a new shell',async t=>{
+ let armed=false,changed=false,shells=[];
+ const result=await usingNativeRuntimeAdmissionBoundary(t,async f=>{
+  const requests=f.adb.requests,original=requests.push,begin=requests.length,task=f.definition.task,live=f.routes.get('/api/brain/activities/a1/versions/av1').version,oldStatus=live.status;
+  const ownerFile=f.lockRoot+'/'+f.q.serial+'.lock/owner',oldOwner=readFileSync(ownerFile);
+  requests.push=function(...rows){for(const row of rows)if(row==='host:transport:'+f.q.serial)armed=true;return original.apply(this,rows);};
+  f.centralHooks.beforeLocksRead=async()=>{if(armed&&!changed){changed=true;if(mode==='AV-revoked')live.status='revoked';else writeFileSync(ownerFile,'foreign-test-owner\n');assert.equal(task.status,'in_progress');}};
+  try{await assert.rejects(()=>f.preflightRuntime.current().phone('foreground'));}finally{requests.push=original;f.centralHooks.beforeLocksRead=null;if(oldStatus===undefined)delete live.status;else live.status=oldStatus;writeFileSync(ownerFile,oldOwner);shells=requests.slice(begin).filter(r=>typeof r==='string'&&r.startsWith('shell,v2,raw:'));}
+  assert.equal(armed,true);assert.equal(changed,true);
+ });
+ assert.equal(changed,true);assert.equal(shells.length,0,'no physical shell may follow a guard-time revocation');assert.equal(result.state.execution_unknown,true);assert.ok(result.lockHeld);assert.equal(result.cleanup,undefined);
+});
