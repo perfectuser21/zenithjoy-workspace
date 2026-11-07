@@ -2,6 +2,7 @@
 import {readFileSync,mkdirSync} from 'node:fs';import {join} from 'node:path';import {createHash} from 'node:crypto';
 import {createOfficialAgentControlFactory} from './official-agent-control.mjs';import {createOfficialCommanderExecute} from './official-commander-sdk.mjs';
 import {createBoundedCommanderOwner} from './commander-bounded-owner.mjs';import {openClawCommander} from './activity-commander.mjs';import {canonical} from './runtime-definition.mjs';
+import {workflowCommanderSession} from './commander-owner-state.mjs';
 import * as nativePhoneDomain from './native-phone-runtime.mjs';
 const fail=()=>Error('RUNNER_OFFICIAL_COMMANDER_UNAVAILABLE');
 const preparations=new WeakMap(),closures=new WeakMap();
@@ -67,7 +68,18 @@ export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,r
    if([sdk,control,owner].some(domain=>domain.snapshot?.().execution_unknown===true))throw drainError('RUNNER_OBSERVER_EXECUTION_UNKNOWN');
    const timeoutMs=Math.min(60000,Math.floor((q.worker_deadline_ms-Date.now())/1000)*1000);
    if(timeoutMs<1000)throw fail();
-   return openClawCommander({timeoutMs,execute:sdk.execute,reserveOwner:owner.reserveOwner})(fixedReceipt);
+   // Owner calibration and its fresh check consume this same AV window. Only
+   // tighten our own generated command immediately before the SDK's unchanged
+   // scope/deadline checks; foreign commands still reach those checks intact.
+   const execute=(command,args,options)=>{
+    let params;try{params=JSON.parse(args?.[8]);}catch{return sdk.execute(command,args,options);}
+    if(command!=='openclaw'||!Array.isArray(args)||args.length!==9||canonical(args.slice(0,6))!==canonical(['gateway','call','agent','--expect-final','--json','--timeout'])||args[7]!=='--params'||!params||Object.keys(params).sort().join(',')!=='agentId,idempotencyKey,message,modelRun,sessionKey,thinking,timeout'||params.agentId!=='work-commander'||params.sessionKey!==workflowCommanderSession({...q,commander_role:'observer'})||params.thinking!=='low'||params.modelRun!==true||typeof params.message!=='string'||Buffer.byteLength(params.message)>1024*1024||!/^[-a-f0-9]{36}$/.test(params.idempotencyKey||'')||params.timeout!==timeoutMs/1000||args[6]!==String(timeoutMs+5000)||canonical(options)!==canonical({timeout:timeoutMs+5000,maxBuffer:1024*1024}))return sdk.execute(command,args,options);
+    const seconds=Math.min(params.timeout,Math.floor((q.worker_deadline_ms-Date.now())/1000));
+    if(seconds<1)throw fail();
+    const bounded=[...args];bounded[6]=String(seconds*1000+5000);bounded[8]=JSON.stringify({...params,timeout:seconds});
+    return sdk.execute(command,bounded,{timeout:seconds*1000+5000,maxBuffer:1024*1024});
+   };
+   return openClawCommander({timeoutMs,execute,reserveOwner:owner.reserveOwner})(fixedReceipt);
    });job.done=running.finally(()=>jobs.delete(job));queue=job.done.catch(()=>{});return job.done;
   },waitForIdle:async options=>{await waitJobs(options);return dispatchSafety().safe;},dispatchSafety,canDispatchWorker:()=>dispatchSafety().safe,close});
  }catch(cause){const closed=await close();const error=fail();const unavailable=cause?.code==='OFFICIAL_CONTROL_READ';if(!unavailable)error.code='RUNNER_OFFICIAL_COMMANDER_AUTHORITY_INVALID';preparations.set(error,{identity:identity(q),closed:runnerCommanderClosureKnown(closed,q),unavailable});throw error;}
