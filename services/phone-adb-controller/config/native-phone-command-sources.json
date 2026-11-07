@@ -131,6 +131,137 @@
         "dump-file",
         "screenshot-file"
       ]
+    },
+    {
+      "profile": "xiaolongxia",
+      "serial": "ANGYVB4311010223",
+      "package": "com.ss.android.ugc.aweme",
+      "width": 1200,
+      "height": 2664,
+      "device_sdk": 35,
+      "review": {
+        "path": "config/native-phone-reviews/xiaolongxia-sdk35-xian-m4.md",
+        "sha256": "29235df1744a245a6e02ff417b243a5606ac9a60a563be0c5231239bab3b4b45"
+      },
+      "pillow": {
+        "path": "config/native-phone-pillow-xian-m4.json",
+        "sha256": "3094d6d993052e22bb5738fe46f3d3d4238ee6800aaeec02f38ffd116b146ad8"
+      },
+      "program_files": [
+        {
+          "path": "/system/bin/am",
+          "sha256": "1db5dd2e6b805970474c3e58b170aacfa137b9575b233f0d7d3fc69ff9583c97"
+        },
+        {
+          "path": "/system/bin/app_process",
+          "sha256": "1fe5a80ca4745b604600ca4f9dff0bed40a4944bf8e4f1a9afcb14cb5b53f61c"
+        },
+        {
+          "path": "/system/bin/app_process32",
+          "sha256": "3b7fbae70b4887199432094d47756afc1fa066fe71df858fed886da4b79db06c"
+        },
+        {
+          "path": "/system/bin/app_process64",
+          "sha256": "1fe5a80ca4745b604600ca4f9dff0bed40a4944bf8e4f1a9afcb14cb5b53f61c"
+        },
+        {
+          "path": "/system/bin/cmd",
+          "sha256": "c6aa7d69dbe86faf01b912c8f0eef094ee325bc0a0a162e4358892befba7060e"
+        },
+        {
+          "path": "/system/bin/dumpsys",
+          "sha256": "a66d01ada72525fc67e7600399d575bea6ee969cbaeadda5c423443a09760f99"
+        },
+        {
+          "path": "/system/bin/getprop",
+          "sha256": "889124f5d14a35dbeeb65e254c5e17caf2c2d36781a25d919b20a8e5e0fb24fe"
+        },
+        {
+          "path": "/system/bin/ime",
+          "sha256": "d0959c12d988f12b92b075a2222a0df1b66e1764f64ce75ef3d4bd9eacb282b7"
+        },
+        {
+          "path": "/system/bin/input",
+          "sha256": "108767c95965714fd7194257f37f6fe5d90f81ff9279e20a2326c1f7f63b737d"
+        },
+        {
+          "path": "/system/bin/monkey",
+          "sha256": "1cde380f3deaf3a8a075c96f8342a444ba96d12a6ea5773c882c31fe3a68b310"
+        },
+        {
+          "path": "/system/bin/screencap",
+          "sha256": "0c89fc2bc67c370ebadcc3abe3ebe7ea35ab0081c025c076543ae60665d287e8"
+        },
+        {
+          "path": "/system/bin/settings",
+          "sha256": "5c447700471b694854e201453d8a588505e9a0913ca9583429dc6c9bfcef4dde"
+        },
+        {
+          "path": "/system/bin/sh",
+          "sha256": "8dfe31b05eefe4b700850a39aef7a5efa0d6f54245379146016ee5ec8a585699"
+        },
+        {
+          "path": "/system/bin/toybox",
+          "sha256": "e9a313528aa1679d6e1a67f059a7370ab0c97a90295de51a20e2f7fe752a146f"
+        },
+        {
+          "path": "/system/bin/uiautomator",
+          "sha256": "588f4e89975e626c1ae185c350389e4fad005b2cb9525834a42dfa7dfd548545"
+        },
+        {
+          "path": "/system/bin/wm",
+          "sha256": "6aa95202ca1b2a691737daffc979bfd81dd497f2493cb37dc0972faf6af3fae2"
+        },
+        {
+          "path": "/system/framework/android.test.runner.jar",
+          "sha256": "b5bf3f9335d60df0623ccd6f88670f0a66b538286414c53954414dbd100f968f"
+        },
+        {
+          "path": "/system/framework/monkey.jar",
+          "sha256": "43a01da98bbf1f8cd85c6f1319267c696c755d673fc444d33f8186a9b2f81b6e"
+        },
+        {
+          "path": "/system/framework/uiautomator.jar",
+          "sha256": "f0fa0bbaf458902594ddcff3feebe6b89e4a8000e4c7d14e91c0132d83202752"
+        }
+      ],
+      "commands": [
+        "pause",
+        "dump",
+        "tap",
+        "search",
+        "foreground",
+        "window",
+        "screenshot",
+        "sdk",
+        "keyevent",
+        "swipe",
+        "long-press",
+        "current-ime",
+        "ime-enable",
+        "ime-set",
+        "clear-nonce",
+        "broadcast-nonce",
+        "input-nonce",
+        "input-select-all",
+        "scratch-search",
+        "open-detail",
+        "remove-ui",
+        "stat-ui",
+        "stat-ui-mtime",
+        "ui-exists",
+        "ui-symlink",
+        "device-date",
+        "model",
+        "telecom",
+        "wake",
+        "unlock",
+        "open-app",
+        "close-app",
+        "home-resolve",
+        "dump-file",
+        "screenshot-file"
+      ]
     }
   ]
 }

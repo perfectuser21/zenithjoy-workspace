@@ -46,7 +46,10 @@ test('cold phone source reaches both deployed inventories, RPC and every shared 
  const methods=collectMethods(repository);
  for(const [ref,activity] of Object.entries(methods.activities)){
   const bound=new Set(activity.code_bindings.map(row=>row.path));
-  for(const file of dependencies)assert.ok(bound.has('services/phone-adb-controller/'+file),`${ref} misses ${file}`);
+  const xian=policy.device_sources.find(row=>row.profile==='xiaolongxia');
+  const only101=xian?[xian.review.path,xian.pillow.path]:[];
+  const consumes101=['douyin_video_processing.preflight','douyin_video_discovery.collect_videos','douyin_video_processing.cleanup'].includes(ref);
+  for(const file of dependencies.filter(file=>consumes101||!only101.includes(file)))assert.ok(bound.has('services/phone-adb-controller/'+file),`${ref} misses ${file}`);
  }
 });
 
@@ -61,9 +64,8 @@ test('RPC frozen source refuses any missing phone dependency instead of falling 
 });
 
 test('actual device policy binds the reviewed command entrypoints and local Pillow inventory',()=>{
- assert.equal(policy.schema_version,1);assert.equal(policy.device_sources.length,1);
- const row=policy.device_sources[0];
- assert.equal(row.profile,'cloud-phone-test');assert.equal(row.serial,'47.100.213.173:10001');assert.equal(row.device_sdk,31);
+ assert.equal(policy.schema_version,1);
+ for(const row of policy.device_sources){
  assert.equal(hash(row.review.path),row.review.sha256);assert.equal(hash(row.pillow.path),row.pillow.sha256);
  const programs=new Map(row.program_files.map(file=>[file.path,file.sha256]));
  assert.equal(programs.size,row.program_files.length);
@@ -73,4 +75,16 @@ test('actual device policy binds the reviewed command entrypoints and local Pill
  const pillow=JSON.parse(text(row.pillow.path));assert.equal(pillow.root,'/opt/homebrew/lib/python3.14/site-packages/PIL');
  assert.equal(new Set(pillow.files.map(file=>file.path)).size,pillow.files.length);
  assert.ok(pillow.files.length>0);for(const file of pillow.files)assert.match(file.sha256,/^[a-f0-9]{64}$/);
+ }
+});
+
+test('101 Drive admits the granted xian-m4 phone with its own reviewed ROM and Pillow source',()=>{
+ const matches=policy.device_sources.filter(row=>row.profile==='xiaolongxia'&&row.serial==='ANGYVB4311010223');
+ assert.equal(matches.length,1,'the real 101 surface must not stop at NATIVE_PHONE_SOURCE');
+ const row=matches[0],cloud=policy.device_sources.find(row=>row.profile==='cloud-phone-test');
+ assert.equal(row.device_sdk,35);assert.equal(row.width,1200);assert.equal(row.height,2664);
+ assert.notDeepEqual(row.program_files,cloud.program_files,'a physical ROM cannot inherit cloud-phone source attestations');
+ assert.notEqual(row.review.path,cloud.review.path);assert.notEqual(row.pillow.path,cloud.pillow.path);
+ assert.equal(hash(row.review.path),row.review.sha256);assert.equal(hash(row.pillow.path),row.pillow.sha256);
+ for(const command of ['wake','unlock','open-app','telecom','dump-file','screenshot-file','search','open-detail','close-app','home-resolve'])assert.ok(row.commands.includes(command),command+' is needed by the existing 101 sequence');
 });
