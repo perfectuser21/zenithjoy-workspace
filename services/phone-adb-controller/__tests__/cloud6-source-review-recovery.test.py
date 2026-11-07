@@ -19,7 +19,7 @@ class RecoveryTests(unittest.TestCase):
   self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.home=Path(self.temp.name).resolve();self.root=self.home/'.local/share/zenithjoy/phone-locks';self.root.mkdir(parents=True,mode=0o700);self.root.chmod(0o700)
   self.run=self.home/'.local/share/zenithjoy/phone-candidate-runs'/COMMIT/'ledger'/('douyin_video_discovery-'+TAG);self.run.mkdir(parents=True,mode=0o700)
   self.e=self.home/'perfect21/runner-deploy-evidence/potato-runner-commander-20261107/cloud-drive6';self.e.mkdir(parents=True,mode=0o700)
-  self.legacy=self.home/'legacy';self.legacy.mkdir(mode=0o700);put(self.root/'.migration-complete.json',dict(schema_version=1,state='complete',source_sha256='a'*64,legacy_root=str(self.legacy)));put(self.root/(SERIAL+'.guard'),b'')
+  self.legacy=self.home/'legacy';self.legacy.mkdir(mode=0o700);put(self.root/'.migration-complete.json',dict(schema_version=1,state='complete',source_sha256='a'*64,legacy_root=str(self.legacy)));put(self.root/(SERIAL+'.guard'),b'');os.link(self.root/(SERIAL+'.guard'),self.legacy/(SERIAL+'.guard'))
   self.lock=self.root/(SERIAL+'.lock');self.lock.mkdir(mode=0o700)
   for name,value in dict(owner=TAG,preflight_epoch=EPOCH,preflight_proof_required=EPOCH,standalone_review_required=TAG,preflight_quarantined=EPOCH,acquired_at='1794068935').items():put(self.lock/name,(value+'\n').encode())
   self.foreign=self.root/'4227.lock';self.foreign.mkdir(mode=0o700);put(self.foreign/'owner',b'untouched\n')
@@ -220,6 +220,39 @@ class RecoveryTests(unittest.TestCase):
   self.m.brain_get=read
   with self.assertRaises(ValueError):self.apply()
   self.assertTrue(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
+ def test_migrated_guard_is_exactly_the_two_root_shared_inode(self):
+  durable=self.root/(SERIAL+'.guard');peer=self.legacy/(SERIAL+'.guard');self.assertEqual(durable.stat().st_nlink,2);self.assertEqual(durable.stat().st_ino,peer.stat().st_ino)
+  self.plan();self.assertEqual(self.apply()['state'],'retired');self.assertTrue(peer.is_file());self.assertEqual(durable.stat().st_ino,peer.stat().st_ino)
+ def test_guard_missing_peer_foreign_inode_or_third_link_refuses(self):
+  guard=self.root/(SERIAL+'.guard');peer=self.legacy/(SERIAL+'.guard')
+  peer.unlink()
+  with self.assertRaises(ValueError):self.plan()
+  put(peer,b'')
+  with self.assertRaises(ValueError):self.plan()
+  peer.unlink();os.link(guard,peer);third=self.home/'third.guard';os.link(guard,third)
+  with self.assertRaises(ValueError):self.plan()
+  third.unlink();self.plan()
+ def test_legacy_root_inode_replacement_preserving_both_guards_is_refused(self):
+  self.plan();old=self.m.brain_get;count=0
+  def read(path):
+   nonlocal count
+   if path=='/device-locks':
+    count+=1
+    if count==2:
+     backup=self.home/'old-legacy';os.rename(self.legacy,backup);self.legacy.mkdir(mode=0o700)
+     for child in backup.iterdir():os.rename(child,self.legacy/child.name)
+   return old(path)
+  self.m.brain_get=read
+  with self.assertRaises(ValueError):self.apply()
+  self.assertTrue(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
+ def test_legacy_root_must_be_canonical_private_and_owned(self):
+  self.legacy.chmod(0o755)
+  with self.assertRaises(ValueError):self.plan()
+  self.legacy.chmod(0o700);moved=self.home/'moved-legacy';os.rename(self.legacy,moved);self.legacy.symlink_to(moved,target_is_directory=True)
+  with self.assertRaises(ValueError):self.plan()
+ def test_non_guard_evidence_still_refuses_hardlinks(self):
+  path=self.files['activity-preflight.json'];os.link(path,self.home/'linked-evidence')
+  with self.assertRaises(ValueError):self.plan()
  def test_symlink_and_hardlink_fail_before_plan(self):
   f=self.lock/'owner';b=f.read_bytes();f.unlink();os.link(self.foreign/'owner',f)
   with self.assertRaises(ValueError):self.plan()
