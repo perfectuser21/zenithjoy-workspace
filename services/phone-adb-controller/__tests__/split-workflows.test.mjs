@@ -44,7 +44,7 @@ else process.exit(1);
       ...['douyin_video_discovery','douyin_video_processing','douyin_lead_outreach'].map(flow=>({host:'r10-7',flow,error:'MMV只执行独立评论评分'})),
     ];
     for (const [index, row] of cases.entries()) await t.test(JSON.stringify(row), () => {
-      const env = { ...process.env, HOME: home, ZDOTDIR: home, FIXTURE_HOST: row.host, NODE_PATH:'/inherited/node_modules', LEADGEN_MMV_DEVICE_RUNTIME:'1', WFR_HOME: join(home, 'case-'+index) };
+      const env = { ...process.env, HOME: home, ZDOTDIR: home, FIXTURE_HOST: row.host, NODE_PATH:'/inherited/node_modules', LEADGEN_MMV_DEVICE_RUNTIME:row.flow?'':'1', WFR_HOME: join(home, 'case-'+index) };
       delete env.BRAIN_URL;
       if (row.explicit) env.BRAIN_URL = 'http://registered-brain.invalid:5221';
       const out = spawnSync('/bin/zsh', [join(app, 'leadgen-run.sh'), row.flow||'douyin_comment_scoring', row.profile||'mmv-scoring', row.serial||'none', 'fixture', 'fixture'], { env, encoding: 'utf8' });
