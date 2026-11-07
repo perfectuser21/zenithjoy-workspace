@@ -51,6 +51,7 @@ export function createNativeScrcpyHostProducer({runtimeRoot,source,scope,directo
   for(const r of rows){
    if(r.uid!==uid()||r.pgid!==childState.pid)throw fail('FOREIGN_PROCESS');const previous=owned.get(r.pid),placeholder=/^\([A-Za-z0-9_.-]+\)$/.test(r.command);
    if(previous&&(previous.birth!==r.birth||previous.uid!==r.uid||!r.state.startsWith('Z')&&!placeholder&&previous.command!==r.command))throw fail('PROCESS_REPLACED');
+   if(previous&&r.state.startsWith('Z')&&previous.birth===r.birth&&previous.uid===r.uid){if(r.pid!==childState.pid&&r.ppid!==1&&!knownParents.has(r.ppid))throw fail('ANCESTRY');continue;}
    if(r.pid===childState.pid){if(r.ppid!==process.pid||rootIdentity&&rootIdentity.birth!==r.birth||!placeholder&&r.command!==rootCommand)throw fail('ROOT_IDENTITY');}
    else{if(r.ppid!==1&&!knownParents.has(r.ppid))throw fail('ANCESTRY');const strict=prefixes.some(prefix=>r.command===prefix||r.command.startsWith(prefix+' ')),pending=!previous&&(r.ppid===childState.pid||owned.has(r.ppid))&&(r.command===rootCommand||r.state.startsWith('Z')||r.command==='/usr/bin/env node '+shim||r.command.startsWith('/usr/bin/env node '+shim+' '));if(!placeholder&&!strict&&!pending&&!(previous&&r.state.startsWith('Z')))throw fail('FOREIGN_PROCESS');}
   }
@@ -64,7 +65,7 @@ export function createNativeScrcpyHostProducer({runtimeRoot,source,scope,directo
   try{processHandle=spawn(row.ps.path,['-ww','-g',String(childState.pid),'-o','pid=,ppid=,pgid=,uid=,lstart=,stat=,command='],{env:{PATH:'/usr/bin:/bin',LANG:'C',LC_ALL:'C'},stdio:['pipe','pipe','pipe']});processHandle.once('error',()=>{mark();});processHandle.stdin.end();
    for(const[name,stream]of [['stdin',processHandle.stdin],['stdout',processHandle.stdout],['stderr',processHandle.stderr]]){stream.on('error',()=>mark());stream.once('close',()=>{state[name+'_closed']=true;finish();});if(name!=='stdin')stream.once('end',()=>state[name+'_eof']=true);}
    processHandle.stdout.on('data',b=>{bytes+=b.length;if(bytes>2*1024*1024){mark();processHandle.kill('SIGKILL');}else parts.push(b);});processHandle.stderr.on('data',b=>errors.push(b));processHandle.once('close',(code,signal)=>{exit={code,signal};state.process_closed=true;finish();});
-   deadlineTimer=setTimeout(()=>{mark();processHandle.kill('SIGKILL');},Math.max(1,Math.min(1000,(cleanup&&!recheck&&identityDeadline<=Date.now()?q.cleanup_deadline_ms:identityDeadline)-Date.now())));
+   deadlineTimer=setTimeout(()=>{mark();processHandle.kill('SIGKILL');},Math.max(1,Math.min(1000,(cleanup&&!recheck?q.cleanup_deadline_ms:identityDeadline)-Date.now())));
   }catch(error){probes.delete(job);mark();throw error;}
   const text=await returned;await check();const rows=[];
   for(const line of text.split('\n').filter(s=>s.trim())){const m=line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(\S+)\s+(.*)$/);if(!m)throw fail('PS_FORMAT');const r={pid:Number(m[1]),ppid:Number(m[2]),pgid:Number(m[3]),uid:Number(m[4]),birth:m[5].replace(/\s+/g,' '),state:m[6],command:m[7]};if(r.pgid!==childState.pid){mark();throw fail('GROUP');}rows.push(r);}

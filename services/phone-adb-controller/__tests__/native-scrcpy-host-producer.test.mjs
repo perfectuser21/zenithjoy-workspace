@@ -49,3 +49,10 @@ test('host根进程已退出但shim继承stdio还活时不能签停证，实际T
 for(const value of [undefined,{verified:true},false])test('host Source guard必须true，不能由undefined/JSON替代原B授权 '+JSON.stringify(value),async t=>{
  const f=await fixture(t);const options={...f.options,directory:join(f.journal,'other'),assertResources:async()=>value};mkdirSync(options.directory,{mode:0o700});const producer=f.api.createNativeScrcpyHostProducer(options);await assert.rejects(producer.start('fixture-no-authority'),/AUTHORITY/);assert.equal(producer.snapshot().pid,null);assert.equal((await producer.close()).host_unknown,true);
 });
+
+import {createRequire,syncBuiltinESMExports} from 'node:module';
+test('cleanup first fresh ps retains its original leaf budget near INT until and permits original TERM tail recovery',async t=>{
+ const cp=createRequire(import.meta.url)('node:child_process'),original=cp.spawn;let f,paused=false,resumed=false,remaining,psExit;
+ t.mock.method(cp,'spawn',function(command,...args){const child=original.call(this,command,...args);if(command==='/bin/ps'&&f&&!paused&&f.producer.snapshot().signals.length===1){remaining=f.scope.cleanup_deadline_ms-2500-Date.now();if(remaining>0&&remaining<90){paused=child.kill('SIGSTOP');if(paused){child.once('close',(code,signal)=>{psExit={code,signal};});setTimeout(()=>{resumed=child.kill('SIGCONT');},150);}}}return child;});syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+ f=await fixture(t,{orphanOnInt:true,workerMs:2600,receiptMs:3800,cleanupMs:5500});await f.producer.start('fixture-slow-ps');const proof=await f.producer.stop();assert.equal(paused,true,'the actual owned /bin/ps leaf must be paused near the original INT until');assert.ok(remaining>0&&remaining<90);t.diagnostic(JSON.stringify({paused,resumed,remaining_ms:remaining,ps_exit:psExit,host_unknown:proof.host_unknown,signals:proof.signals}));assert.equal(resumed,true,'the original ps must survive its ordinary 1s leaf budget');assert.equal(proof.host_stopped,true,JSON.stringify({unknown:proof.host_unknown,signals:proof.signals,client:proof.client}));assert.deepEqual(proof.signals,['SIGINT','SIGTERM']);
+});
