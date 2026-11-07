@@ -29,6 +29,7 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-phone-processing-ready.test.mjs',
  'native-phone-processing-record-navigation.test.mjs',
  'native-phone-processing.test.mjs',
+ 'native-phone-runtime-admission-boundary.test.mjs',
  'native-queue-terminal-callbacks.test.mjs',
  'native-scrcpy-host-producer.test.mjs',
  'native-scrcpy-natural-end.test.mjs',
