@@ -9,3 +9,5 @@
 来源凭据仅证明固定入口匹配，永远不是远端停证。每次实际命令仍须shell-v2的有效EXIT、通道EOF和socket关闭、原scope/epoch/Source一致；异常、失ACK、截止、未决输入法/剪贴板恢复均保留unknown，不能靠本文件或Commander文本释放锁。最终手机释放还须原预检/清理、所有producer/raw品牌以及Caller都证实关闭；cleanup后launcher XML/PNG与独立Code Judge读回。
 
 Pillow只用于原本地filter与原视觉编码，策略另固定MMV既有PIL完整文件清单；不安装或修改PIL，不改变图片谓词、评分政策或成功标准。
+
+102另准五个有限只读查询：media-volume仅cmd media_session volume --stream 3 --get；media-session仅dumpsys media_session；audio-dump仅dumpsys audio；package-uid仅cmd package list packages -U固定抖音包；uid-owners仅cmd package list packages -U --uid并由Code限正整数UID。参数由Code编译，Worker不可提供shell或路径。仍使用已RECV的cmd/dumpsys固定来源，不从旧读回推定新的执行结果；音量0或未知阻断录制，不盲升音量。录制另受独立录制来源审查与全部终态条件约束。

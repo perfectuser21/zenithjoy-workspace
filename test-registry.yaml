@@ -10910,3 +10910,347 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；真实CLI启动失败独占留受控错误码，拒外来路径/secret/覆盖；不当作活动或资源已归还证明"
+
+  - id: phone-native-102-public-executor
+    path: services/phone-adb-controller/__tests__/native-102-public-executor.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-public-ui-driver
+    path: services/phone-adb-controller/__tests__/native-102-public-ui-driver.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-qualification-terminal
+    path: services/phone-adb-controller/__tests__/native-102-qualification-terminal.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-qualification
+    path: services/phone-adb-controller/__tests__/native-102-qualification.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-queue
+    path: services/phone-adb-controller/__tests__/native-102-queue.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-review-projection
+    path: services/phone-adb-controller/__tests__/native-102-review-projection.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-sampling-intake
+    path: services/phone-adb-controller/__tests__/native-102-sampling-intake.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-102-source-closure
+    path: services/phone-adb-controller/__tests__/native-102-source-closure.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-dependencies
+    path: services/phone-adb-controller/__tests__/native-collection-dependencies.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-heartbeat
+    path: services/phone-adb-controller/__tests__/native-collection-heartbeat.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-history-proof
+    path: services/phone-adb-controller/__tests__/native-collection-history-proof.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-parser-seam
+    path: services/phone-adb-controller/__tests__/native-collection-parser-seam.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-queue
+    path: services/phone-adb-controller/__tests__/native-collection-queue.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-readonly
+    path: services/phone-adb-controller/__tests__/native-collection-readonly.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-collection-sampling
+    path: services/phone-adb-controller/__tests__/native-collection-sampling.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-audio-macros
+    path: services/phone-adb-controller/__tests__/native-phone-audio-macros.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-collection-macros
+    path: services/phone-adb-controller/__tests__/native-phone-collection-macros.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-credentials-growth
+    path: services/phone-adb-controller/__tests__/native-phone-credentials-growth.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-credentials
+    path: services/phone-adb-controller/__tests__/native-phone-credentials.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-detail-macros
+    path: services/phone-adb-controller/__tests__/native-phone-detail-macros.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-managed-recording.integration
+    path: services/phone-adb-controller/__tests__/native-phone-managed-recording.integration.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-managed-recording
+    path: services/phone-adb-controller/__tests__/native-phone-managed-recording.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-media-late-terminal
+    path: services/phone-adb-controller/__tests__/native-phone-media-late-terminal.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-media
+    path: services/phone-adb-controller/__tests__/native-phone-media.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-footer
+    path: services/phone-adb-controller/__tests__/native-phone-processing-footer.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-history-freshness
+    path: services/phone-adb-controller/__tests__/native-phone-processing-history-freshness.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-history
+    path: services/phone-adb-controller/__tests__/native-phone-processing-history.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-managed
+    path: services/phone-adb-controller/__tests__/native-phone-processing-managed.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-material
+    path: services/phone-adb-controller/__tests__/native-phone-processing-material.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-ready
+    path: services/phone-adb-controller/__tests__/native-phone-processing-ready.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-record-navigation
+    path: services/phone-adb-controller/__tests__/native-phone-processing-record-navigation.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-search-isolation
+    path: services/phone-adb-controller/__tests__/native-phone-processing-search-isolation.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing-vision-credential
+    path: services/phone-adb-controller/__tests__/native-phone-processing-vision-credential.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-processing
+    path: services/phone-adb-controller/__tests__/native-phone-processing.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-phone-test-media-paths
+    path: services/phone-adb-controller/__tests__/native-phone-test-media-paths.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-queue-terminal-callbacks
+    path: services/phone-adb-controller/__tests__/native-queue-terminal-callbacks.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-adb-bridge
+    path: services/phone-adb-controller/__tests__/native-scrcpy-adb-bridge.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-host-producer
+    path: services/phone-adb-controller/__tests__/native-scrcpy-host-producer.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-natural-end
+    path: services/phone-adb-controller/__tests__/native-scrcpy-natural-end.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-recording-loopback
+    path: services/phone-adb-controller/__tests__/native-scrcpy-recording-loopback.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-source-preconditions
+    path: services/phone-adb-controller/__tests__/native-scrcpy-source-preconditions.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-startup-authority
+    path: services/phone-adb-controller/__tests__/native-scrcpy-startup-authority.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+
+  - id: phone-native-scrcpy-terminal-callbacks
+    path: services/phone-adb-controller/__tests__/native-scrcpy-terminal-callbacks.test.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"

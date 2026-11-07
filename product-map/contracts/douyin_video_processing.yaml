@@ -21,7 +21,7 @@ on_status:
   empty: next
   partial: stop
   needs_review: pause
-always_run: [cleanup]
+always_run: [ cleanup ]
 trigger_inputs:
   - Video
   - Account
@@ -119,7 +119,8 @@ activities:
           - serial
     preconditions:
       - 仅旧定时采收入口 wf-run.sh 的发起闸在 8-22 点让路；手动或 Brain 派发的 101/102 Activity 预检不以此为条件
-      - 仅旧定时采收入口 wf-run.sh 用 kpi-gate.js 判断当日 KPI，达标则退让、不可达则按默认词数继续；手动或 Brain 派发不以此为条件
+      - 仅旧定时采收入口 wf-run.sh 用 kpi-gate.js 判断当日 KPI，达标则退让、不可达则按默认词数继续；手动或 Brain
+        派发不以此为条件
     postconditions:
       - probe: pf_device_verified
         asserts: 本轮设备 serial 的原生在线与身份核验结果 metrics.device_verified 等于 1
@@ -615,6 +616,98 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/commander-owner-reconcile.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-processing.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-qualification.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-media.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/decode-recording.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-collection-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-comment-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-dependencies.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-history-proof.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-credentials.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-managed-recording.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-host-producer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-bridge.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-shim.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy-sdk33.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-scrcpy-hosts.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31-recording.md
         revision: contract
     steps:
       - key: acquire_device_lock
@@ -1271,6 +1364,98 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-policy-review.js
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-processing.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-qualification.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-media.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/decode-recording.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-collection-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-comment-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-dependencies.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-history-proof.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-credentials.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-managed-recording.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-host-producer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-bridge.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-shim.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy-sdk33.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-scrcpy-hosts.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31-recording.md
+        revision: contract
     model:
       - provider: openrouter
         model: bytedance/ui-tars-1.5-7b
@@ -1388,7 +1573,9 @@ activities:
       - probe: qual_none_pending
         asserts: 本批已认领视频中 judgment_status 仍为 pending 的 PG 独立读回条数为 0
       - probe: qual_reason_present
-        asserts: 本批已有资格结论的视频在 PG 中的 judgment_reason 全部非空；显式采样时本轮qualification主span另绑定run/binding/SHA、逐VID原生身份核验、fresh/cached模式及旧judgment run，缺私有原件或回执不能交collection
+        asserts: 本批已有资格结论的视频在 PG 中的 judgment_reason
+          全部非空；显式采样时本轮qualification主span另绑定run/binding/SHA、逐VID原生身份核验、fresh/cached模式及旧judgment
+          run，缺私有原件或回执不能交collection
     execution:
       primary_kind: code
       location: phone
@@ -1911,6 +2098,86 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/runtime/scrcpy-v3.3.4-log-flush.patch
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-processing.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-qualification.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-media.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-collection-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-comment-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-dependencies.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-history-proof.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-credentials.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-managed-recording.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-host-producer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-bridge.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-shim.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-scrcpy-hosts.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31-recording.md
+        revision: contract
     model:
       - provider: dashscope
         model: qwen-audio-3.0-asr-flash
@@ -2154,7 +2421,9 @@ activities:
         fields:
           - process_status
     preconditions:
-      - MMV102原生收件人来源须使用首个设备动作前冻结到company_config_runs.task_inputs的本run profile/serial，实号核对后生成私有company-binding工件；capture/parse显式消费，PG提交只读原102快照重验唯一verified enabled抖音账号及公司/租户/平台，不能由原件自报profile授权；旧M4无新绑定保持原静态路径
+      - MMV102原生收件人来源须使用首个设备动作前冻结到company_config_runs.task_inputs的本run
+        profile/serial，实号核对后生成私有company-binding工件；capture/parse显式消费，PG提交只读原102快照重验唯一verified
+        enabled抖音账号及公司/租户/平台，不能由原件自报profile授权；旧M4无新绑定保持原静态路径
       - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，可选collection_budget_s仅显式配置时冻结为1..6720整数，默认480和进程960保持，显式进程预算加480收尾并受Activity/真实全局剩余时间限制；配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
       - 仅matched视频可采评论
       - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
@@ -2170,7 +2439,8 @@ activities:
       - probe: coll_rescan_rate
         asserts: 真实身份错位后的重定位次数与合格视频数之比 metrics.rescan_rate 不超过 0.3
       - probe: comments_readback
-        asserts: 本批已提交评论在 zenithjoy.leadgen_comments 的独立读回条数不少于 metrics.comments_collected
+        asserts: 本批已提交评论在 zenithjoy.leadgen_comments 的独立读回条数不少于
+          metrics.comments_collected
       - probe: sampling_readback_verified
         asserts: 仅显式采样时每个qualified视频须达冻结配额或真实footer/no_comments，逐完整身份独立PG读回；本run精确评论ID集、规范PG行摘要及新增/历史数进入同run/binding/SHA的collection主span；其逐VID资格身份须与qualification主span精确一致，旧matched仅核本轮资格并保留旧判断run；总POST小于3MB，供跨机103核验；默认无采样required=0不声称采样通过
       - probe: history_scope_verified
@@ -2668,6 +2938,98 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/queued-recipient-evidence.js
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-processing.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-qualification.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-media.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/decode-recording.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-collection-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-comment-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-dependencies.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-history-proof.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-credentials.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-managed-recording.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-host-producer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-bridge.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-shim.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy-sdk33.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-scrcpy-hosts.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31-recording.md
+        revision: contract
     model:
       - provider: openrouter
         model: bytedance/ui-tars-1.5-7b
@@ -2681,7 +3043,8 @@ activities:
           - Video.judgment_status
         writes: []
         check: 本run逐VID有评论时必须原生评论header和输入面板，旧n条评论与新exact评论n均可见；
-          仅已证零评论可用本run同VID的精确零占位before原XML及identity原件哈希证明替代该VID面板，未知/缺按钮不算零；实际VID仍须qv新鲜nonce与identity sidecar核验，可选历史不替代核验
+          仅已证零评论可用本run同VID的精确零占位before原XML及identity原件哈希证明替代该VID面板，未知/缺按钮不算零；实际VID仍须qv新鲜nonce与identity
+          sidecar核验，可选历史不替代核验
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh
@@ -3386,6 +3749,98 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/commander-owner-reconcile.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-processing.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-102-qualification.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-media.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/decode-recording.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-audio-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-collection-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-comment-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-dependencies.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-history-proof.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-credentials.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-collection-queue.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-macros.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-detail-step.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-phone-managed-recording.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-host-producer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-bridge.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/native-scrcpy-adb-shim.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy-sdk33.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-scrcpy-hosts.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31-recording.md
         revision: contract
     steps:
       - key: close_app

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "hosts": [
+    {
+      "target": "mmv",
+      "kind": "sdk31",
+      "root": "/Users/administrator/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8",
+      "adb_endpoint": "tcp:127.0.0.1:5041",
+      "node": {
+        "path": "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+        "sha256": "f023ca4cc73074018b8085e846c8f46fc175f923d6349708e9af2e3cef76af59"
+      },
+      "ps": {
+        "path": "/bin/ps",
+        "sha256": "a06fe087161557f1f8c030672eaedcd90bc6a8e92b8f2d44e07cffedc3349205"
+      },
+      "shim": {
+        "path": "native-scrcpy-adb-shim.mjs",
+        "sha256": "6ab742bf5aec7f062ba2d1c9fe359b596baf35649fee6041ac0cf652e90b3e74"
+      },
+      "review": {
+        "path": "config/native-phone-reviews/cloud-phone-test-sdk31-recording.md",
+        "sha256": "ab6df2e151164158ddfd000f63ae981209cb9304d8a7389edb5e333128dfe798"
+      }
+    }
+  ]
+}

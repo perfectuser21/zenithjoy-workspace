@@ -53,7 +53,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
     'verify-step.mjs','step-judge.mjs','checks/probes-lib.js','checks/schema.json',
     'checks/douyin-video-discovery.yaml','checks/douyin-video-processing.yaml','checks/douyin-comment-scoring.yaml',
     'checks/douyin-lead-outreach.yaml','plans/douyin_video_discovery.steps.json','plans/douyin_video_processing.steps.json',
-    'plans/douyin_comment_scoring.steps.json','plans/douyin_lead_outreach.steps.json']) {
+    'plans/douyin_comment_scoring.steps.json','plans/douyin_lead_outreach.steps.json','native-phone-processing.mjs','native-102-queue.mjs','native-102-qualification.mjs','native-phone-media.mjs','decode-recording.py','native-phone-audio-macros.mjs','native-phone-audio-step.py','native-phone-collection-macros.mjs','native-phone-comment-step.py','native-collection-dependencies.mjs','native-collection-history-proof.mjs','native-phone-credentials.mjs','native-collection-queue.mjs','native-phone-detail-macros.mjs','native-phone-detail-step.py','native-phone-managed-recording.mjs','native-scrcpy-host-producer.mjs','native-scrcpy-adb-bridge.mjs','native-scrcpy-adb-shim.mjs','runtime/runtime-policy.json','runtime/runtime-policy-sdk33.json','config/native-scrcpy-hosts.json','runtime-receipts.mjs','config/native-phone-reviews/cloud-phone-test-sdk31-recording.md']) {
     if (!source.files.some(f => f.path === path)) throw Error(`RPC_SOURCE_DEPENDENCY_MISSING:${path}`);
   }
 }
