@@ -1,0 +1,42 @@
+{
+  "at": "2026-11-07T10:07:27.258940+00:00",
+  "phase": "throughput_checkpoint",
+  "intent": "xian-m4 + ADB 101 Skill + Commander receipts + videos>=1 + clean locks",
+  "workspace_base": "b07c32944be8cdc68af677643d143a4e8a4c80b3",
+  "available_candidate": "a3f5ea211ca3854978c696207e4e2b590f954f2d",
+  "task_id": "18aeb4f3-e42d-407e-a2f9-beebd62c58a1",
+  "findings": [
+    "101 shared processing.preflight is intentional and explicitly supported by Skill.",
+    "Old official child spent 224s before first inspect; child terminal blocked on absent required_readbacks/commander fields and persisted result capability.",
+    "Old default stall=300s matched Activity=300s; steer from timer was discarded. Latest main fixes stall/report and reserves stop/check budgets.",
+    "a3f candidate lacks latest external binding-to-native Task association fix; cannot safely represent it as latest source."
+  ],
+  "constraints": [
+    "Only ANGYVB4311010223 authorized; initial online + free verified.",
+    "Never clear review owners 4227/4402; no104.",
+    "Original requested evidence directory is outside session writable roots; evidence mirrored in isolated writable checkout."
+  ],
+  "next": "Check candidate source admission, then execute actual 101 if current admitted source is available; retain all blockers and no fabricated PASS.",
+  "continuation": {
+    "at": "2026-11-07T10:32:33.538Z",
+    "preflight_binding": {
+      "contract": "douyin_video_discovery.yaml:34 -> douyin_video_processing.preflight",
+      "method": "douyin-leadgen-activity-102-preflight explicitly supports 101; do not rebind by name"
+    },
+    "deadline_origin": {
+      "file": "leadgen-client.mjs:87",
+      "mechanism": "local command timer at original Activity deadline; old child consumed 224 seconds before first inspect and never persisted required tool result"
+    },
+    "commander_root": {
+      "old": "activity-skill-executor stall_s default 300 matched max_duration_s=300; timer discarded steer",
+      "current": "baseline b07c32944 includes early stall via broker.report and worker/receipt/final-check reserves; prove on actual drive"
+    },
+    "remaining_root": "NATIVE_PHONE_SOURCE rejects authorized physical ROM absent reviewed source; add exact 4311 hashes and Pillow files to contract/deployment/RPC closure",
+    "lock_precheck": {
+      "state": "free",
+      "host": "xian-m4",
+      "serial": "ANGYVB4311010223"
+    },
+    "evidence_directory_writable": true
+  }
+}
