@@ -1,0 +1,19 @@
+// Factory boundary only: synthetic ROM/Task/model service, actual frozen Source,
+// Caller B, original preflight locks, native wire and raw model stop lifecycle.
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync} from 'node:fs';import {join} from 'node:path';import {pathToFileURL} from 'node:url';
+import {usingNative102PublicSource} from './native-102-public-source-fixture.mjs';
+export async function usingNativeRuntimeAdmissionBoundary(t,probe){let boundaryResult;await usingNative102PublicSource(t,async f=>{
+ const load=name=>import(pathToFileURL(join(f.runtimeRoot,name))),{createPreflightRuntime}=await load('preflight-phone-scope.mjs');
+ const preflightRuntime=createPreflightRuntime({root:f.runtimeRoot,env:f.env,frozen:f.definition.frozen,binding:f.definition.binding,taskId:f.q.task_id,poolFactory:f.pg.createPool});
+ const observations=[];let counter=0,hook=null;
+ const createAuthorityControl=options=>{const actual=f.createControl(options);return Object.freeze({...actual,async readAuthorizedTaskClaim(...args){counter++;if(hook)await hook({counter,args});return actual.readAuthorizedTaskClaim(...args);}});};
+ const handlers=f.workflow.createWorkflowHandlers({root:f.runtimeRoot,env:f.env,frozen:f.definition.frozen,binding:f.definition.binding,taskId:f.q.task_id,sourceCommit:f.source.commit,preflightRuntime,poolFactory:f.pg.createPool,createAuthorityControl,requestImpl:f.requestImpl,visionCredential:()=> 'fixture-vision',rpc:async()=>{throw Error('NO_RPC');},execute:async()=>{throw Error('NO_EXEC');}});
+ await handlers.prepareNativePhone();writeFileSync(join(f.env.WFR_RUN_DIR,'step-dod.json'),readFileSync(join(f.runtimeRoot,'plans/douyin_video_processing.steps.json')));writeFileSync(join(f.env.WFR_RUN_DIR,'activity.log'),'');
+ let probeError;f.intents.push({type:'phone',command:'open-app',args:[]},{type:'phone',command:'account-current',args:[]},async()=>{try{await probe({...f,handlers,preflightRuntime,observations,claimCount:()=>counter,setClaimHook:value=>{hook=value;}});}catch(error){probeError=error;}return {type:'finish'};});
+ const wired=f.workflow.createWorkflowExecution({runDir:f.env.WFR_RUN_DIR,frozen:f.definition.frozen,binding:f.definition.binding,env:f.env,handlers,taskId:f.q.task_id,activities:f.definition.activities,createOfficialControl:f.createControl,rpc:async()=>{throw Error('NO_RPC');}}),context=f.workflow.createWorkflowContext({frozen:f.definition.frozen,binding:f.definition.binding,env:f.env,taskId:f.q.task_id});
+ let preflight,error,cleanup;try{preflight=await wired.executeAgent(f.definition.activities[0],{context,deadline_ms:Date.now()+150000});}catch(e){error=e;}
+ if(preflight?.execution_stopped===true&&!handlers.nativePhoneRuntime.nativeState().execution_unknown){f.intents.push(...['close-app','return-safe-desktop','ui-evidence','snapshot-evidence'].map(command=>({type:'phone',command,args:[]})),{type:'finish'});cleanup=await wired.executeAgent(f.definition.activities.at(-1),{context,deadline_ms:Date.now()+150000});}
+ const result={preflight,error,cleanup,probeError,observations,native:handlers.nativePhoneRuntime.snapshot(),state:handlers.nativePhoneRuntime.nativeState(),lockHeld:f.lockHeld(),adb:f.adb.requests};
+ console.log(JSON.stringify({event:"actual-runtime-admission-boundary",observations,preflight:preflight?.status,cleanup:cleanup?.status,unknown:result.state.execution_unknown}));if(probeError)throw probeError;boundaryResult=result;
+ },{commentLimit:1});return boundaryResult;}
