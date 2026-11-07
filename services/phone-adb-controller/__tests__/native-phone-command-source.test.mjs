@@ -35,3 +35,18 @@ test('finite original preflight and UI commands retain exact target and no shell
  ])assert.equal(api.compileNativePhoneCommand(op,args,context),expected);
  for(const [op,args] of [['dump-file',['/sdcard/foreign.xml']],['dump-file',[id+'.png']],['open-app',['foreign']],['screenshot-file',[id]],['model',['ro.secret']],['keyevent',['225']],['device-date',['$(id)']]])assert.throws(()=>api.compileNativePhoneCommand(op,args,context),/NATIVE_PHONE_COMMAND/);
 });
+
+test('102 read-only audio observation compiles only the original finite service queries',()=>{
+ for(const [op,args,expected] of [
+  ['media-session',[],"exec /system/bin/dumpsys 'media_session'"],
+  ['audio-dump',[],"exec /system/bin/dumpsys 'audio'"],
+  ['package-uid',[],"exec /system/bin/cmd 'package' 'list' 'packages' '-U' 'com.ss.android.ugc.aweme'"],
+  ['uid-owners',['10123'],"exec /system/bin/cmd 'package' 'list' 'packages' '-U' '--uid' '10123'"]
+ ])assert.equal(api.compileNativePhoneCommand(op,args,context),expected);
+ for(const [op,args] of [['media-session',['volume']],['audio-dump',['--reset']],['package-uid',['other.app']],['uid-owners',['0']],['uid-owners',['-1']],['uid-owners',['10123;id']],['uid-owners',['10123','other.app']],['uid-owners',['999999999999999999999']]])assert.throws(()=>api.compileNativePhoneCommand(op,args,context),/NATIVE_PHONE_COMMAND/);
+});
+
+test('recording volume check compiles only the original read-only media stream query',()=>{
+ assert.equal(api.compileNativePhoneCommand('media-volume',[],context),"exec /system/bin/cmd 'media_session' 'volume' '--stream' '3' '--get'");
+ for(const args of [['--set','1'],['--stream','0'],['$(id)']])assert.throws(()=>api.compileNativePhoneCommand('media-volume',args,context),/NATIVE_PHONE_COMMAND/);
+});

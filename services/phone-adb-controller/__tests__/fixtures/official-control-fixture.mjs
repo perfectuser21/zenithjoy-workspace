@@ -64,19 +64,26 @@ export async function using(fn,{delay=false,suppressClose=false,shortDeadline=fa
  const server=createServer((req,res)=>{
   dispatches++;assert.equal(req.headers['x-internal-token'],'fixture-private-token');arrived();
   if(delay)return;
+  if(req.method==='HEAD'&&req.url==='/api/brain/projections/notion/directory/status'){res.writeHead(200,{'Content-Type':'application/json','Connection':'close'});res.end();return;}
   const value=routes.get(req.url);res.writeHead(value?200:404,{'Content-Type':'application/json','Connection':'close'});res.end(JSON.stringify(value??{}));
  });
  server.on('connection',socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const options={source,runtimeRoot,request:q,home,journalDirectory,gatewayDependencies,gatewayCredential,deadlineMs:(suppressClose||shortDeadline)?Date.now()+500:q.deadline_ms,cleanupDeadlineMs:(suppressClose||shortDeadline)?Date.now()+800:q.deadline_ms,credential:()=> 'fixture-private-token',httpRequest:(opts,callback)=>{
-  assert.equal(opts.hostname,'127.0.0.1');assert.equal(String(opts.port),'5221');assert.equal(opts.method,'GET');
+  assert.equal(opts.hostname,'127.0.0.1');assert.equal(String(opts.port),'5221');assert.ok(opts.method==='GET'||opts.method==='HEAD'&&opts.path==='/api/brain/projections/notion/directory/status');
   const req=requestHttp({...opts,port:server.address().port},callback);
   if(suppressClose){const emit=req.emit;req.emit=function(event,...args){if(event==='close'){replay.push(()=>emit.call(req,event,...args));return false;}return emit.call(req,event,...args);};}
   return req;
  }};
+ const lockHistory=()=>{
+  const freeze=x=>{if(x&&typeof x==='object'&&!Object.isFrozen(x)){for(const v of Object.values(x))freeze(v);Object.freeze(x);}};
+  const history=path=>/^\/api\/brain\/(?:runs\/.+\/definition|workflows\/.+\/versions\/.+|activities\/.+\/versions\/.+)$/.test(path);
+  for(const[path,row]of routes)if(history(path))freeze(row);
+  const set=routes.set.bind(routes),del=routes.delete.bind(routes);routes.set=(path,row)=>{if(history(path))throw Error('IMMUTABLE_HISTORY_V1');return set(path,row);};routes.delete=path=>{if(history(path))throw Error('IMMUTABLE_HISTORY_V1');return del(path);};routes.clear=()=>{throw Error('IMMUTABLE_HISTORY_V1');};
+ };
  const replay=[];
  let instance;
- try{instance=localControl.createOfficialAgentControl(options);await fn({instance,q,source,options,createControl:localControl.createOfficialAgentControl,createFactory:localControl.createOfficialAgentControlFactory,routes,firstRequest,count:()=>dispatches,journalDirectory,runDir,replay,runtimeRoot});}
+ try{instance=localControl.createOfficialAgentControl(options);await fn({instance,q,source,options,createControl:localControl.createOfficialAgentControl,createNativeControl:localControl.createNativeReadOnlyAuthorityControl,createFactory:localControl.createOfficialAgentControlFactory,routes,lockHistory,firstRequest,count:()=>dispatches,journalDirectory,runDir,replay,runtimeRoot});}
  finally{for(const callback of replay)callback();if(instance)await instance.close();for(const socket of sockets)socket.destroy();await new Promise(r=>server.close(r));rmSync(directory,{recursive:true,force:true});rmSync(copied,{recursive:true,force:true});}
 }
 

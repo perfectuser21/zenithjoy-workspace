@@ -1,0 +1,83 @@
+// Native102 explicit CI ownership. Portable media/HTTP/IPC contracts stay in Linux.
+export const NATIVE_102_DARWIN_SUITES=Object.freeze([
+ 'native-102-public-executor.test.mjs',
+ 'native-102-public-nonce-driver.test.mjs',
+ 'native-102-public-ui-driver.test.mjs',
+ 'native-102-qualification-terminal.test.mjs',
+ 'native-102-qualification.test.mjs',
+ 'native-102-queue.test.mjs',
+ 'native-102-review-projection.test.mjs',
+ 'native-102-sampling-intake.test.mjs',
+ 'native-102-source-closure.test.mjs',
+ 'native-collection-dependencies.test.mjs',
+ 'native-collection-heartbeat.test.mjs',
+ 'native-collection-history-proof.test.mjs',
+ 'native-collection-parser-seam.test.mjs',
+ 'native-collection-queue.test.mjs',
+ 'native-collection-readonly.test.mjs',
+ 'native-collection-sampling.test.mjs',
+ 'native-phone-audio-macros.test.mjs',
+ 'native-phone-collection-macros.test.mjs',
+ 'native-phone-collection-return-navigation.test.mjs',
+ 'native-phone-detail-macros.test.mjs',
+ 'native-phone-managed-recording.integration.test.mjs',
+ 'native-phone-processing-footer.test.mjs',
+ 'native-phone-processing-history-freshness.test.mjs',
+ 'native-phone-processing-history.test.mjs',
+ 'native-phone-processing-managed.test.mjs',
+ 'native-phone-processing-material.test.mjs',
+ 'native-phone-processing-ready.test.mjs',
+ 'native-phone-processing-record-navigation.test.mjs',
+ 'native-phone-processing.test.mjs',
+ 'native-phone-runtime-admission-boundary.test.mjs',
+ 'native-phone-runtime-approval-semantics.test.mjs',
+ 'locked-definition-immutability.test.mjs',
+ 'native-queue-terminal-callbacks.test.mjs',
+ 'native-scrcpy-host-producer.test.mjs',
+ 'native-scrcpy-natural-end.test.mjs',
+ 'native-scrcpy-recording-loopback.test.mjs',
+ 'native-scrcpy-source-preconditions.test.mjs',
+ 'native-scrcpy-startup-authority.test.mjs',
+ 'native-phone-wire-ticket-boundary.test.mjs',
+ 'native-phone-wire-ticket-private-brand.test.mjs',
+ 'native-scrcpy-host-identity-budget.test.mjs',
+ 'native-scrcpy-host-identity-conflicts.test.mjs',
+]);
+export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
+ 'native-102-public-intents.test.mjs',
+ 'locked-definition-facts.test.mjs',
+ 'locked-definition-control.test.mjs',
+ 'native-phone-protocol-ticket-brand.test.mjs',
+ 'native-adb-inflight-admission.test.mjs',
+ 'native102-default-credentials.test.mjs',
+ 'native-phone-credentials-growth.test.mjs',
+ 'native-phone-credentials.test.mjs',
+ 'native-phone-managed-recording.test.mjs',
+ 'native-phone-media-late-terminal.test.mjs',
+ 'native-phone-media.test.mjs',
+ 'native-phone-processing-search-isolation.test.mjs',
+ 'native-phone-processing-vision-credential.test.mjs',
+ 'native-phone-test-media-paths.test.mjs',
+ 'native-scrcpy-adb-bridge.test.mjs',
+ 'native-scrcpy-terminal-callbacks.test.mjs',
+]);
+export const isNative102DarwinTest=path=>NATIVE_102_DARWIN_SUITES.includes(path.split('/').at(-1));
+// Heavy public execution gets its own owner leg; the remaining contracts never
+// consume its20min clock or share its temporary PostgreSQL.
+const publicSuites=['native-102-public-executor.test.mjs','native-102-public-nonce-driver.test.mjs','native-102-public-ui-driver.test.mjs','native-102-source-closure.test.mjs'];
+const componentSuites=NATIVE_102_DARWIN_SUITES.filter(name=>!publicSuites.includes(name));
+export const NATIVE_102_DARWIN_SHARDS=Object.freeze({
+ '1':Object.freeze(publicSuites),
+ '2':Object.freeze(componentSuites.filter((_name,index)=>index%2===0)),
+ '3':Object.freeze(componentSuites.filter((_name,index)=>index%2===1)),
+});
+
+// Only the genuine private-brand observation layer needs Node module mocks.
+// Keep it a complete single-file child; its owner retains the same private PG.
+export function native102DarwinInvocations(shard){
+ const suites=NATIVE_102_DARWIN_SHARDS[shard];if(!suites)throw Error('NATIVE_102_CI_SHARD_REQUIRED');
+ const privateName='native-phone-wire-ticket-private-brand.test.mjs',normal=suites.filter(name=>name!==privateName),batches=[];
+ if(normal.length)batches.push({args:['--test','--test-concurrency=1',...normal.map(name=>'services/phone-adb-controller/__tests__/'+name)],expectedTests:null});
+ if(suites.includes(privateName))batches.push({args:['--test','--experimental-test-module-mocks','--test-concurrency=1','services/phone-adb-controller/__tests__/'+privateName],expectedTests:4});
+ if(!batches.length)throw Error('NATIVE_102_CI_EMPTY_SELECTION');return batches;
+}

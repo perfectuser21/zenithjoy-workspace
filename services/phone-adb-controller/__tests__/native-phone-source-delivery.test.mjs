@@ -6,14 +6,14 @@ import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {RPC_FILES,rpcSource} from '../leadgen-client.mjs';
-import {NATIVE_PHONE_FILES} from '../native-phone-runtime.mjs';
+import {NATIVE_PHONE_FILES,NATIVE_PHONE_PROCESSING_FILES} from '../native-phone-runtime.mjs';
 import {collectMethods} from '../../../scripts/product-map/leadgen-methods.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url)),repository=resolve(root,'../..');
 const text=path=>readFileSync(resolve(root,path),'utf8');
 const hash=path=>createHash('sha256').update(readFileSync(resolve(root,path))).digest('hex');
 const policy=JSON.parse(text('config/native-phone-command-sources.json'));
-const dependencies=[...new Set([...NATIVE_PHONE_FILES,'douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','locate-element.py','config/native-phone-command-sources.json',...policy.device_sources.flatMap(row=>[row.review.path,row.pillow.path])])];
+const dependencies=[...new Set([...NATIVE_PHONE_FILES,...NATIVE_PHONE_PROCESSING_FILES,'runtime-receipts.mjs','config/native-phone-reviews/cloud-phone-test-sdk31-recording.md','douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','locate-element.py','config/native-phone-command-sources.json',...policy.device_sources.flatMap(row=>[row.review.path,row.pillow.path])])];
 
 test('cold phone source reaches both deployed inventories, RPC and every shared Activity binding',()=>{
  const deploy=text('deploy.sh');
@@ -23,13 +23,13 @@ test('cold phone source reaches both deployed inventories, RPC and every shared 
  const values=execFileSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8'}).split('\0').filter(Boolean),groups={};
  for(let i=0;i<values.length;){const name=values[i++],entries=[];while(values[i]!=='@END@'&&i<values.length)entries.push(values[i++]);assert.equal(values[i++],'@END@');groups[name]=entries;}
  const count=(entries,file)=>entries.filter(value=>value===file).length;
- const controllers=['douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','locate-element.py'];
+ const controllers=['douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','locate-element.py','decode-recording.py','runtime/runtime-policy.json','runtime/runtime-policy-sdk33.json'];
  for(const file of controllers){
   assert.equal(count(groups.DEVICE_CTL_FILES,file),1,`${file} retains its existing controller installer`);
   for(const name of ['MMV_JS_FILES','MMV_PROBE_FILES','DEVICE_NODE_FILES','DEVICE_RPC_PROBE_FILES'])assert.equal(count(groups[name],file),0,`${file} must not be installed through ordinary ${name}`);
  }
  assert.deepEqual(groups.DEVICE_CTL_DIRS,['bin-harvest','.local/bin'],'paired controller execution paths remain unchanged');
- const policyFiles=['config/native-phone-command-sources.json',...policy.device_sources.flatMap(row=>[row.review.path,row.pillow.path])];
+ const policyFiles=['config/native-scrcpy-hosts.json','config/native-phone-reviews/cloud-phone-test-sdk31-recording.md','config/native-phone-command-sources.json',...policy.device_sources.flatMap(row=>[row.review.path,row.pillow.path])];
  for(const file of policyFiles){
   for(const name of ['MMV_JS_FILES','DEVICE_NODE_FILES'])assert.equal(count(groups[name],file),0,`${file} is data, not a Node program`);
   for(const name of ['MMV_PROBE_FILES','DEVICE_RPC_PROBE_FILES'])assert.equal(count(groups[name],file),1,`${file} uses the existing data/probe validator`);
@@ -73,4 +73,11 @@ test('actual device policy binds the reviewed command entrypoints and local Pill
  const pillow=JSON.parse(text(row.pillow.path));assert.equal(pillow.root,'/opt/homebrew/lib/python3.14/site-packages/PIL');
  assert.equal(new Set(pillow.files.map(file=>file.path)).size,pillow.files.length);
  assert.ok(pillow.files.length>0);for(const file of pillow.files)assert.match(file.sha256,/^[a-f0-9]{64}$/);
+});
+
+test('default MMV processing template declares both fixed media programs without credential values',()=>{
+ const hosts=JSON.parse(text('config/collection-phone-hosts.json')).hosts,rows=hosts.filter(row=>row.target==='mmv'&&row.profile==='cloud-phone-test');
+ assert.equal(rows.length,1);const row=rows[0];assert.ok(row.workflow_keys.includes('douyin_video_processing'));
+ for(const key of ['ffmpeg','ffprobe']){const binary=row.executables[key];assert.ok(binary&&binary.path.startsWith('/opt/homebrew/Cellar/'),key+' requires fixed executable');assert.match(binary.sha256,/^[a-f0-9]{64}$/);}
+ assert.equal(row.credentials,undefined,'runtime code freezes private credential descriptors; values never enter repository policy');
 });

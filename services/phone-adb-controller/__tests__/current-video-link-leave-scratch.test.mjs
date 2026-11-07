@@ -59,6 +59,20 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  */
 function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null, returnSkeleton = false, unrecognizedGuide = false, videoTabSelected = true, scratchExtra = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
+  // This fake ADB mutates every page/clipboard file synchronously. These cases
+  // check identity and stack transitions, not Android UI settling or timing.
+  // Keep the complete controller and record the original logical waits.
+  const source=readFileSync(SCRIPT,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.equal(source.match(/^wait_ms\(\) \{/gm)?.length,1);
+  assert.ok(wait?.includes('  /bin/sleep "$seconds"'));
+  const waitsFile=join(dir,'logical-waits'),quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
+  const controlled=wait.replace('  /bin/sleep "$seconds"','  print -r -- "$milliseconds" >> '+quote(waitsFile));
+  const patched=source.replace(wait,controlled);
+  assert.equal(patched.replace(controlled,wait),source,'only the fixture wait body may change');
+  assert.equal(patched.split(controlled).length-1,1);
+  const runner=join(dir,'douyin-phone-adb');writeFileSync(runner,patched);
+  for(const file of ['phone-lock-lib.sh','phone-lock-helper.py','adb-existing-route.py'])
+    writeFileSync(join(dir,file),readFileSync(join(FIXTURES,'..','..',file)));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
   writeFileSync(join(dir, 'play_state'), playState);
@@ -159,11 +173,12 @@ exit 0
     env.WFR_RUN_DIR=runDir;
   }
   const run = (args) => {
-    const r = spawnSync('zsh', [SCRIPT, '--profile', 'legacy', ...args], { env, encoding: 'utf8', timeout: 180000 });
+    const r = spawnSync('zsh', [runner, '--profile', 'legacy', ...args], { env, encoding: 'utf8', timeout: 180000 });
     return { code: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
   };
   return {
     run,
+    requestedWaits:()=>{try{return readFileSync(waitsFile,'utf8').trim().split('\n').filter(Boolean).map(Number);}catch(error){if(error.code==='ENOENT')return [];throw error;}},
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
     foregroundPages: () => readFileSync(join(dir,'foreground_pages'),'utf8').trim().split('\n'),
     guideDismissXml: (eid) => readFileSync(join(dir,'tmp','evidence','legacy',eid+'-t1-leave-guide-dismiss-b3.xml'),'utf8'),
@@ -332,4 +347,23 @@ test('results-only仍在搜索栈超过5次BACK：helper失败后原有界恢复
  assert.match(r.err,/still on a search activity after 5 backs/);assert.match(r.err,/using bounded results restoration/);assert.deepEqual(ph.stack(),['results']);
  const xml=ph.returnedGridXml('cvl-bounded-results');assert.match(xml,/text="人工智能"[^>]*et_search_kw/);assert.match(xml,/<node[^>]*text="视频"[^>]*selected="true"/);
  assert.equal(ph.deeplinks(),0);assert.match(r.out,/return_mode=results/);t.diagnostic(JSON.stringify({bounded_fallback_dump_pages:ph.dumpPages()}));
+});
+
+test('同步假手机归位记录全部逻辑等待，不消耗真实UI稳定时间',()=>{
+ const ph=makeFakePhone();const r=ph.run(['current-video-link','cvl-wait-clock']);
+ assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7000000000000000001/);
+ assert.deepEqual(ph.stack(),['results','detail']);assert.equal(ph.deeplinks(),0);
+ const waits=ph.requestedWaits?.()??[];
+ assert.deepEqual(waits,[300,600,700,800,900,200,500,700,700,700,600,300],'同步页面必须走原全部等待调用和参数，只控制夹具时钟');
+});
+
+test('同步等待夹具仍由原uint与5000ms边界拒绝非法参数',()=>{
+ for(const value of ['-1','1.5','abc','5001']){
+  const ph=makeFakePhone();const r=ph.run(['tap-snapshot','0','0',value]);
+  assert.notEqual(r.code,0,value);assert.deepEqual(ph.requestedWaits(),[],'非法等待不能进入逻辑时钟');
+ }
+ for(const value of ['0','5000']){
+  const ph=makeFakePhone();const r=ph.run(['tap-snapshot','0','0',value]);
+  assert.equal(r.code,0,r.err);assert.deepEqual(ph.requestedWaits(),[Number(value)]);
+ }
 });

@@ -3,6 +3,7 @@ import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,fstatSync,rea
 import {join,resolve,isAbsolute} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {readFrozen} from './runtime-definition.mjs';
+import {freezeNativePhoneCredentialDescriptors,assertNativePhoneCredentialDescriptors} from './native-phone-credentials.mjs';
 import {prepareCollectionAcceptanceProbe,validateCollectionAcceptanceProbe,verifiedCollectionPanelFailure,verifyCollectionAcceptanceConsumption} from './collection-acceptance-probe.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
@@ -129,8 +130,9 @@ export function readCollectionPhoneScopeInput(path){
   fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);const st=fstatSync(fd);
   if(!st.isFile()||(st.mode&0o777)!==0o600||st.uid!==process.getuid()||st.size>65536)throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');
   const value=JSON.parse(readFileSync(fd,'utf8'));
-  const keys=['version','task_id','run_id','attempt','source_commit','profile','serial','target','evidence_root','policy','executables','expected_account','acceptance_probe','evidence_alias','evidence_identity'];
+  const keys=['version','task_id','run_id','attempt','source_commit','profile','serial','target','evidence_root','policy','executables','credentials','expected_account','acceptance_probe','evidence_alias','evidence_identity'];
   if(!value||typeof value!=='object'||Object.keys(value).some(k=>!keys.includes(k))||value.version!==1||!Object.hasOwn(value,'task_id')||value.task_id!==null&&typeof value.task_id!=='string'||!/^a[1-9][0-9]*$/.test(value.attempt||'')||!/^[a-f0-9]{40}$/.test(value.source_commit||'')||!['run_id','profile','serial','target','evidence_root'].every(k=>typeof value[k]==='string'&&value[k]))throw Error('COLLECTION_SCOPE_INPUT_INVALID');
+  if(Object.hasOwn(value,'credentials'))assertNativePhoneCredentialDescriptors(value.credentials);
   if(value.acceptance_probe)validateCollectionAcceptanceProbe(value.acceptance_probe);
   evidenceBinding(value);
   return value;
@@ -152,6 +154,7 @@ export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_W
  const taskIds=[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID].filter(Boolean);
  if(new Set(taskIds).size>1)throw Error('COLLECTION_DEFAULT_TASK_CONFLICT');
  const specification={...structuredClone(matches[0]),version:1,task_id:taskIds[0]||null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};
+ if(env.LEADGEN_EXECUTION_MODE==='agent'&&env.LEADGEN_EXECUTION_TRANSPORT==='raw-model-v1')specification.credentials=freezeNativePhoneCredentialDescriptors();
  if(specification.evidence_alias)specification.evidence_identity=evidenceIdentity(specification);
  else if(specification.evidence_identity)throw Error('COLLECTION_EVIDENCE_ALIAS_INVALID');
  return specification;

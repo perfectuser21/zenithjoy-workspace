@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,symlinkSync} from 'node:fs';
+import {chmodSync,mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -250,4 +250,23 @@ for(const name of ['commander-owner-state.mjs','commander-owner-lock.mjs','comma
 for(const name of ['preflight-judge.mjs','preflight-local-leaves.mjs','preflight-local-step.py','preflight-metadata.mjs','preflight-native-domain.mjs','preflight-pg-stream.mjs','preflight-phone-driver.mjs','preflight-control-scope.mjs','preflight-phone-scope.mjs','config/preflight-control-hosts.json','preflight-pg-dependencies.mjs','preflight-pg-lock.json','phone-lock-root.py'])test('preflight shared source byte pin includes '+name,t=>{
  const {root}=fixture(t),path='services/phone-adb-controller/'+name;put(root,path,readFileSync(join(source,path)));const before=collectMethods(root);put(root,path,Buffer.concat([readFileSync(join(root,path)),Buffer.from('\n')]));const after=collectMethods(root);
  for(const [ref,method] of Object.entries(before.activities)){assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted shared source '+name);assert.equal(after.activities[ref].contract_digest,method.contract_digest);assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);}
+});
+
+// Fixed historical objects may be reused within one check; live source must not be cached.
+test('one check reads each fixed historical path once while a subsequent check observes live edits',t=>{
+ const {root,base}=fixture(t),bin=join(root,'fixture-bin'),trace=join(root,'git-reads.txt');mkdirSync(bin);
+ const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
+ put(root,'fixture-bin/git',`#!/bin/sh\nprintf 'CALL\\n' >> ${quote(trace)}\nprintf '%s\\n' "$@" >> ${quote(trace)}\nexec /usr/bin/git "$@"\n`);
+ chmodSync(join(bin,'git'),0o755);const oldPath=process.env.PATH;let result;
+ try{process.env.PATH=bin+':'+oldPath;result=check(root,base);}finally{process.env.PATH=oldPath;}
+ assert.equal(result.status,0,result.stderr);const reads=new Map();
+ for(const args of readFileSync(trace,'utf8').split('CALL\n').slice(1).map(s=>s.trim().split('\n'))){
+  const at=args.indexOf('show');if(at<0||!args[at+1]?.startsWith(base+':'))continue;
+  const path=args[at+1].slice(base.length+1);reads.set(path,(reads.get(path)||0)+1);
+ }
+ assert.ok(reads.size>=144,'complete original historical source closure must still be read');
+ assert.deepEqual([...reads].filter(([,count])=>count!==1),[],'fixed base paths must not spawn duplicate Git reads in a single check');
+ const skill=json(root,lockPath).activities['douyin_video_processing.dedup'].skill.path;
+ put(root,skill,readFileSync(join(root,skill),'utf8')+'\nUnversioned live change after the preceding check.\n');
+ refresh(root);const rejected=check(root,base);assert.notEqual(rejected.status,0);assert.match(rejected.stderr,/SKILL_VERSION_NOT_ADVANCED/);
 });

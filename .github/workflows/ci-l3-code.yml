@@ -328,9 +328,10 @@ jobs:
             # These real PG/kernel suites run in the required Darwin job below.
             [[ "$path" =~ /native-103-(transaction|public-executor|producers)\.test\.mjs$ ]] && continue
             [[ "$path" =~ /native-phone-(adb-read|clip-state|command-source|foreground|integration|link-macros|link-resolver|local-producer|preflight-adapter|public-executor|queue|queue-idle-error|screenshot-wire|search-macros|source-issuer|ui|vision)\.test\.mjs$|/runner-phone-commander\.test\.mjs$ ]] && continue
+            [[ "$path" =~ /native-102-(public-executor|public-nonce-driver|public-ui-driver|qualification-terminal|qualification|queue|review-projection|sampling-intake|source-closure)\.test\.mjs$|/native-collection-(dependencies|heartbeat|history-proof|parser-seam|queue|readonly|sampling)\.test\.mjs$|/native-phone-(audio-macros|collection-macros|collection-return-navigation|detail-macros|managed-recording\.integration|processing-footer|processing-history-freshness|processing-history|processing-managed|processing-material|processing-ready|processing-record-navigation|processing|runtime-admission-boundary|runtime-approval-semantics|wire-ticket-boundary|wire-ticket-private-brand)\.test\.mjs$|/native-scrcpy-(host-producer|host-identity-budget|host-identity-conflicts|natural-end|recording-loopback|source-preconditions|startup-authority)\.test\.mjs$|/native-queue-terminal-callbacks\.test\.mjs$|/locked-definition-immutability\.test\.mjs$ ]] && continue
             phone_tests+=("$path")
           done
-          node --test --test-shard=${{ matrix.shard }}/3 scripts/openclaw/**/*.test.js "${phone_tests[@]}" .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js scripts/ci/__tests__/native-103-ci-contract.test.mjs
+          node --test --test-shard=${{ matrix.shard }}/3 scripts/openclaw/**/*.test.js "${phone_tests[@]}" .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js scripts/ci/__tests__/native-103-ci-contract.test.mjs scripts/ci/__tests__/native-102-ci-contract.test.mjs
       - name: Agent 主执行与 Commander 无设备 smoke
         if: matrix.shard == 1
         run: bash .github/workflows/scripts/smoke/agent-first-leadgen-smoke.sh
@@ -379,6 +380,63 @@ jobs:
           name: native-phone-fixture-failures
           path: ${{ runner.temp }}/native-phone-fixture-artifacts
           if-no-files-found: ignore
+
+  native-102-darwin-test:
+    name: Native 102 Darwin PostgreSQL Test (${{ matrix.shard }})
+    runs-on: macos-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      NATIVE_102_CI_SHARD: ${{ matrix.shard }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --workspaces=false
+      - name: Prepare native 102 private PG and physical media tools
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/native102-fixture-artifacts"
+          brew install postgresql@17 python@3.14 ffmpeg
+          /usr/bin/clang --version
+          echo "PREFLIGHT_TEST_PG_BIN=$(brew --prefix postgresql@17)/bin" >> "$GITHUB_ENV"
+          test_python="$(brew --prefix python@3.14)/bin/python3.14"
+          physical_python="$("$test_python" -I -S -c 'import os,sys; print(os.path.realpath(sys.executable))')"
+          "$physical_python" -m pip install --disable-pip-version-check --no-input --timeout 30 --retries 1 --only-binary=:all: --no-deps --target "$RUNNER_TEMP/native102-pillow" Pillow==12.2.0
+          echo "PREFLIGHT_TEST_PYTHON_BIN=$physical_python" >> "$GITHUB_ENV"
+          echo "PREFLIGHT_TEST_PIL_ROOT=$RUNNER_TEMP/native102-pillow/PIL" >> "$GITHUB_ENV"
+          echo "PREFLIGHT_TEST_PHONE_ARTIFACTS=$RUNNER_TEMP/native102-fixture-artifacts" >> "$GITHUB_ENV"
+          for pair in ffmpeg:PREFLIGHT_TEST_FFMPEG_BIN ffprobe:PREFLIGHT_TEST_FFPROBE_BIN; do
+            tool="${pair%%:*}"
+            variable="${pair#*:}"
+            installed="$(brew --prefix ffmpeg)/bin/$tool"
+            physical="$("$physical_python" -I -S -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$installed")"
+            echo "$variable=$physical" >> "$GITHUB_ENV"
+          done
+      - name: Verify native 102 owner lifecycle and run its explicit suites
+        run: |
+          set -o pipefail
+          node --test scripts/ci/__tests__/native-102-ci-lifecycle.test.mjs 2>&1 | tee "$PREFLIGHT_TEST_PHONE_ARTIFACTS/native102-lifecycle.log"
+          node scripts/ci/native-102-darwin-tests.mjs 2>&1 | tee "$PREFLIGHT_TEST_PHONE_ARTIFACTS/native102-runner.log"
+      - name: Preserve failed native 102 fixture artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native102-fixture-failures-${{ matrix.shard }}
+          path: ${{ runner.temp }}/native102-fixture-artifacts
+          if-no-files-found: warn
 
   # 本机内核nofork守卫不能由Linux上的platform skip代替。
   collection-phone-darwin-test:
@@ -524,6 +582,7 @@ jobs:
       - openclaw-scripts-test
       - collection-phone-darwin-test
       - native-103-darwin-test
+      - native-102-darwin-test
       - api-scripts-test
       - line-module-build
     if: always()

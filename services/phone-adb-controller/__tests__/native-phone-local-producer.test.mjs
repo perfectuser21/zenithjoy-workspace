@@ -8,8 +8,8 @@ const root=fileURLToPath(new URL('../',import.meta.url)),sha=x=>createHash('sha2
 const api=await import('../native-phone-local-producer.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return {};throw e;});
 test('actual fixed local producer is available; Worker cannot select executables or helper arguments',()=>{assert.equal(typeof api.startNativePhoneLocalProducer,'function');});
 const names=['native-phone-local-producer.mjs','native-phone-search-step.py','native-phone-link-step.py','douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','discovery-metrics.js'];
-async function fixture(t,{assertResources=async()=>true,duration=5000,cleanup=6000,includeUi=false,includeVision=false}={}){
- const parent=realpathSync(mkdtempSync(join(tmpdir(),'native-local-'))),runtime=join(parent,'runtime'),directory=join(parent,'journal');mkdirSync(runtime,{mode:0o700});mkdirSync(directory,{mode:0o700});const fixedNames=[...names,...(includeUi?['native-phone-ui-step.py']:[]),...(includeVision?['native-phone-vision-step.py','locate-element.py']:[])];for(const name of fixedNames)copyFileSync(root+name,join(runtime,name));t.after(()=>rmSync(parent,{recursive:true,force:true}));
+async function fixture(t,{assertResources=async()=>true,duration=5000,cleanup=6000,includeUi=false,includeVision=false,includeAudio=false,includeCollection=false,includeDetail=false}={}){
+ const parent=realpathSync(mkdtempSync(join(tmpdir(),'native-local-'))),runtime=join(parent,'runtime'),directory=join(parent,'journal');mkdirSync(runtime,{mode:0o700});mkdirSync(directory,{mode:0o700});const fixedNames=[...names,...(includeUi?['native-phone-ui-step.py']:[]),...(includeAudio?['native-phone-audio-step.py']:[]),...(includeCollection?['native-phone-comment-step.py','queued-recipient-evidence.js','comment-count-evidence.py']:[]),...(includeDetail?['native-phone-detail-step.py','comment-count-evidence.py']:[]),...(includeVision?['native-phone-vision-step.py','locate-element.py']:[])];for(const name of fixedNames)copyFileSync(root+name,join(runtime,name));t.after(()=>rmSync(parent,{recursive:true,force:true}));
  const source={commit:'a'.repeat(40),files:fixedNames.map(path=>({path,sha256:sha(readFileSync(join(runtime,path)))}))},scope={task_id:randomUUID(),binding_id:randomUUID(),run_id:'douyin_video_discovery-fixture__a1',source_commit:source.commit,profile:'fixture',serial:'47.100.213.173:10001',activity:'collect_videos'};
  const python=nativePhoneTestPython(),module=await import(pathToFileURL(join(runtime,'native-phone-local-producer.mjs'))),options={root:runtime,directory,source,scope,python:{path:python,sha256:sha(readFileSync(python))},deadlineMs:Date.now()+duration,receiptDeadlineMs:Date.now()+cleanup,assertResources};return {module,options,runtime,directory};
 }
@@ -79,4 +79,34 @@ test('filter-ready uses the actual Source-pinned complete Pillow package before 
  }
  const before=p.snapshot().leaves.length;await assert.rejects(p.local('native-phone-vision-step.py',{operation:'encode',path:'/tmp/worker',sha256:'0'.repeat(64),program:'id'}),/INPUT/);assert.equal(p.snapshot().leaves.length,before);
  writeFileSync(join(pilRoot,'Image.py'),readFileSync(join(pilRoot,'Image.py'),'utf8')+'\n# drift');await assert.rejects(p.local('native-phone-search-step.py',{operation:'filter-ready',args:[]}),/HELPER_FAILED/);assert.equal((await p.close()).execution_stopped,true);
+});
+
+test('102 original audio predicates run in the same actual nofork producer with exact fixed payloads',async t=>{
+ const f=await fixture(t,{includeAudio:true});Object.assign(f.options.scope,{workflow:'douyin_video_processing',activity:'qualification'});
+ const p=await f.module.startNativePhoneLocalProducer(f.options);t.after(()=>p.close());
+ assert.deepEqual(await p.local('native-phone-audio-step.py',{operation:'foreground',args:['mCurrentFocus=Window{token u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}']}),{accepted:true});
+ assert.deepEqual(await p.local('native-phone-audio-step.py',{operation:'foreground',args:['other.package/.Main']}),{accepted:false});
+ assert.deepEqual(await p.local('native-phone-audio-step.py',{operation:'foreground',args:['com.ss.android.ugc.aweme/.main.MainActivity']}),{accepted:false});
+ const before=p.snapshot().leaves.length;
+ for(const q of [{operation:'foreground',args:[]},{operation:'arbitrary',args:['x']},{operation:'uid',args:['x'],controller:'/tmp/worker'},{operation:'native',args:['x','x','x','x','x'],argv:[]}])await assert.rejects(p.local('native-phone-audio-step.py',q),/INPUT|SOURCE_OVERRIDE/);
+ assert.equal(p.snapshot().leaves.length,before);assert.equal((await p.close()).execution_stopped,true);
+ const original=await fixture(t,{includeAudio:true}),old=await original.module.startNativePhoneLocalProducer(original.options);await assert.rejects(old.local('native-phone-audio-step.py',{operation:'foreground',args:['x']}),/INPUT/);assert.equal(old.snapshot().leaves.length,2);await old.close();
+});
+
+test('102 comment parser uses the same owned nofork producer and original pinned recipient/count source bodies',async t=>{
+ const f=await fixture(t,{includeCollection:true});Object.assign(f.options.scope,{workflow:'douyin_video_processing',activity:'collection'});
+ const p=await f.module.startNativePhoneLocalProducer(f.options);t.after(()=>p.close());
+ const xml=readFileSync(join(root,'__tests__/fixtures/honor-e1b-recipient/returned.xml'),'utf8'),parsed=await p.local('native-phone-comment-step.py',{operation:'panel',xml});assert.equal(parsed.strict_layout,true);assert.equal(parsed.rows.length,1);
+ const zero='<hierarchy><node package="com.ss.android.ugc.aweme" class="android.widget.ImageView" text="" enabled="true" clickable="true" content-desc="评论评论，按钮" bounds="[950,1000][1150,1200]"/></hierarchy>';
+ assert.equal((await p.local('native-phone-comment-step.py',{operation:'button',xml:zero})).zero,true);
+ const before=p.snapshot().leaves.length;
+ for(const q of [{operation:'panel',xml,controller:'/tmp/x'},{operation:'recipient',profile:xml,returned:xml,nickname:'x',douyinId:'x'},{operation:'comment-icon',args:[]},{operation:'unknown',xml}])await assert.rejects(p.local('native-phone-comment-step.py',q),/INPUT|SOURCE_OVERRIDE/);
+ assert.equal(p.snapshot().leaves.length,before);assert.equal((await p.close()).execution_stopped,true);
+});
+
+test('102 detail predicates and fixed speed description use original Source bytes in owned nofork transport',async t=>{
+ const f=await fixture(t,{includeDetail:true});Object.assign(f.options.scope,{workflow:'douyin_video_processing',activity:'qualification'});const p=await f.module.startNativePhoneLocalProducer(f.options);t.after(()=>p.close());
+ const prompt=await p.local('native-phone-detail-step.py',{operation:'speed-prompt',args:[]});assert.equal(prompt.prompt,"播放速度菜单中的「'3.0'」倍速选项数字");
+ const before=p.snapshot().leaves.length;for(const q of [{operation:'speed-prompt',args:['2.0']},{operation:'comment-count',args:[]},{operation:'shell',args:['id']},{operation:'gate-dismiss',args:['<hierarchy/>','720','1280'],controller:'/tmp/worker'}])await assert.rejects(p.local('native-phone-detail-step.py',q),/INPUT|SOURCE_OVERRIDE/);
+ assert.equal(p.snapshot().leaves.length,before);assert.equal((await p.close()).execution_stopped,true);
 });

@@ -211,6 +211,12 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 Agent 在分配工具或派发 Worker 前，还必须通过受信代码的执行域能力检查。103 的原生执行路径限定 MMV、`mmv-scoring`、`serial=none`，要求完整冻结的数据库依赖、主机身份、Task 归属及真实租约；缺少这些条件则返回 `needs_review`、`not_started=true`。101、102 的完整手机执行域仍需另外验收。环境变量、Agent 返回内容或 JSON 标记不能开启此能力。旧执行的停止状态若仍未证明，必须保留 `execution_stopped=false`，不能因为本次没有启动 Worker 就覆盖它。
 
+每次手机命令入口、真正 shell/RECV 派发和最终结果返回前，仍重新读取当前权限并核完整 Source。同一条已准入命令内，连接、features、transport、限定的 CLOSE_STDIN 与 sync QUIT 可使用代码签发的一次性私有协议凭证；逐次写入仍核 Source、本人 owner/epoch 和绝对期限，凭证不能派发 shell/RECV，也不能跨命令复用。已发送的同一请求只在本连接、原 scope/epoch、最近真实租约、seal/Abort 和绝对期限内消费帧。评论者核验后先重新打开同 VID，再新取实际链接并恢复严格评论面板，才可签发本轮身份凭证。
+
+102 的原生路径保留预检、判重、资格、评论采集、收尾五个 Activity。资格录制由固定 Source、Code 管理的 Host/ADB 及独立音轨恢复共同约束；转写后仍调用原独立资格判断，Agent 或 Commander 的文本不作为结果。评论只接受本轮原生身份凭证，按原采样规则提交并独立读回，历史评论不计为本轮新增；确认零评论不进入待处理队列。
+
+默认 `raw-model-v1` 启动时，Code 从系统用户固定私有目录读取 OpenRouter、DashScope 凭据，只冻结路径和摘要，执行时重新核验；凭据值不进 Source、Git 或日志。MMV 模板固定现有 ffmpeg、ffprobe 的真实路径和摘要，缺依赖即拒绝；旧 Code、旧 Agent 运输不强制这些新增模型凭据。续跑沿原快照，不能借凭据或模板变化重放未决操作。
+
 Agent 主执行时，每个 Activity 加载自己的冻结 Skill，通过当前活动允许的手机、录音、提交和读回原语完成工作；不会调用原业务 handler 或 `resume`。底层控制器、事务、资源管理和规则校验仍由代码提供。`inspect`、`phone`、`business` 只使用本次原请求给出的入口，Agent 不创建绑定或直接调用内部队列。
 
 Agent 路径沿公共 Runner 的实际剩余时间设置一次绝对截止，在原 Activity 与整轮预算内为 Worker、父会话返回、精确停止读证和终检留时间；阶段字段只能缩短截止，预算不足不启动。Worker 截止限制新业务准入及官方子会话超时，不代表原生执行域已停止；此前已发起的操作仍需独立终止证明。普通超时也请求停止同一绑定对象，缺父子双方终态证明仍隔离。旧官方子会话路径中，Parent 只负责官方派发，Child 分页读取同一冻结方法、支持材料和合同，完整原件保留。
@@ -306,7 +312,7 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 
 ### Agent 预检的受控执行域（42e）
 
-101 的正常 `raw-model-v1` 入口接入同一公共 Runner 和生产 Judge，按 preflight → collect_videos → cleanup 原槽序运行。Code 创建手机与数据库执行域，沿原搜索筛选、nonce 取链、同视频指标和队列持久化方法执行；结束检查另建只读调用域，复核原筛选证据、三个硬 SQL probe 与原步骤检查。`checkpoint` 仍只记录，未知执行或硬检查失败仍阻断。102 尚未完成完整录制、资格与评论执行域，继续在派发前拒绝；源码支持和隔离测试不等于真实 101→102→103 已跑通。
+101 的正常 `raw-model-v1` 入口接入同一公共 Runner 和生产 Judge，按 preflight → collect_videos → cleanup 原槽序运行。Code 创建手机与数据库执行域，沿原搜索筛选、nonce 取链、同视频指标和队列持久化方法执行；结束检查另建只读调用域，复核原筛选证据、三个硬 SQL probe 与原步骤检查。`checkpoint` 仍只记录，未知执行或硬检查失败仍阻断。102 已接入原五槽的录制、资格与评论执行域；只有冻结来源、设备、账号和执行域全部核验后才允许派发。源码支持和隔离测试不等于真实 101→102→103 已跑通。
 
 101/102 Agent 预检使用父进程内的原关键词、公司冻结函数及独立 Judge、记录函数。物理操作只有固定、来源绑定的 nofork ADB/Python 叶，不再启动旧 controller shell。PG 控制面、本机物理叶和官方 Commander/Worker 双停分别留证：本机叶关闭不证明远端 PG 服务或 Android 应用进程全集停止；PG 提交未知仍保留未知，官方停证也不能由本机证明代替。
 
@@ -329,3 +335,36 @@ Agent 101/102 的 `preflight_profile` 在正式 prepare 阶段冻结规范 regis
 101 的独立协议验收使用合成设备页面与私有 PostgreSQL，沿同一生产裁判覆盖完整三槽及未启动模型的 always_run 清理。真实视频、评论、评分的业务验收仍须以同一候选、真实账号与独立读回结果为准；这些隔离测试不生成或授权104触达。
 
 外部入口的中央 ACK 按协议没有 Task 外键；原生执行器用固定运行 ACK 和代码签发的 Task 租约验证关联，不修改 ACK，每次执行前仍由 Caller 重新核验真实任务。启动阶段失败会保留受控错误码和运行身份，不能据此宣称活动完成或资源已归还。
+
+### Native authority：不可变历史 v1
+
+`createNativeReadOnlyAuthorityControlFactory` 是 `NativeActivityAuthority` 使用的
+Code 专用构造入口。Worker 请求与环境变量不能选择此模式；既有构造入口保留原四次读取行为。
+
+本模式仅适用于已审阅的 Cecelia `e3a01021ee7100b83d8ed5a0be219d0b543b5dff`
+历史 getter。前提是发布负责人核验的同一数据库（system identifier
+`7683515241657997053`、正常 `origin` 会话），Run binding、release version、WF/AV
+version 均有启用的无条件 UPDATE/DELETE 拒绝触发器，原 owner/FK 约束仍存在。
+历史 getter 必须继续只读这些不可变行并保留原 release/consumer 检查。这不是通用 HTTP
+响应缓存；这些部署前提不能由一次成功 JSON 响应推断。管理员禁用触发器、替换或重指向
+数据库、改变 getter/鉴权语义时，必须停止本模式、重建 Controller 并重新审阅前提。
+
+每个 Controller 首先执行原完整四次 GET，以及所有原谓词、Source 检查、日志耐久化和最终
+守卫。全部成功后，才保留绑定该 request/Source 的私有 Run/WF/AV 规范字节及摘要。
+不保留 Task、token、已发行 claim、lease 或校验 verdict；不写缓存文件，也不能在另一
+Controller 中恢复。原 validator 每次得到重新解析的历史事实副本，修改副本不会改变私有字节。
+
+后续每次授权先真实 HEAD 固定路径
+`/api/brain/projections/notion/directory/status`，要求 HTTP 200、JSON Content-Type，
+并等待 request、response、socket 全部关闭。HEAD 实际正文必须为零，但允许 Content-Length
+描述 GET 正文长度。它不读取配置正文，也不把业务 `enabled` 字段当成权限。
+然后 GET 完整的当前 Task，继续执行原 validator、Source/Method、精确 claim、
+deadline/epoch/seal 与日志耐久化检查。鉴权、响应头、传输或校验失败均不能回退旧授权。
+这保留当前鉴权和 Task 读取，不承诺跨两次请求的原子或即时撤权。
+日志如实记录两个 HTTP 交换及三项历史事实摘要，不伪造四次网络读取。
+
+生产可用性仍有未解决的限流前置：e3 `server.js:427` 在 `brainRoutes:433` 前挂载
+通用 `projectionsRoutes`；其 `router.use(rateLimit)` 配置为共享 300 次/分钟。
+因此 Directory 自身没有限流器，并不能证明该 HEAD 不受前置限流。完整挂载链和实际容量
+仍待独立核验；本实现对 429 拒绝授权且不发 Task 请求，不绕过或修改限流。
+局部控制测试通过不代表业务已可用、完整五槽成功或能在 600 秒内完成。

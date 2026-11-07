@@ -40,6 +40,7 @@ async function fixture(){
    const profile=join(directory,'profiles');writeFileSync(profile,'profile\tserial\tmodel\twidth\theight\tenabled\nfixture\t'+serial+'\t'+(process.argv.includes('--before-lock')?'WrongModel':'Fixture')+'\t720\t1280\t'+(process.argv.includes('--disabled')?'0':'true')+'\n',{mode:0o600});
    const task='11111111-1111-4111-8111-111111111111',binding={id:'22222222-2222-4222-8222-222222222222',run_id:'douyin_video_discovery-fixture__a1',task_id:task},source='a'.repeat(40);
    const frozen={snapshot_sha256:'b'.repeat(64),deployment:{source_commit:source},files,agent_input:{workflow_key:'douyin_video_discovery',run_tag:'fixture',line:'yuesheng',profile:'fixture',serial:serial,source_run:null,limit:2},discovery_phone_scope:{version:1,task_id:task,run_id:binding.run_id,source_commit:source,profile:'fixture',serial:serial,expected_account:'actual',evidence_root:evidence,policy,executables:{python:{path:preflightTestPython,sha256:sha(readFileSync(preflightTestPython))}}}};
+   if(process.argv.includes('--collection-handoff')){frozen.agent_input.workflow_key='douyin_video_processing';frozen.collection_phone_scope=frozen.discovery_phone_scope;delete frozen.discovery_phone_scope;}
    const noLaunch=new WeakMap(),realSkillAPI=await import('../activity-skill-executor.mjs');
    const mocks={'./activity-skill-executor.mjs':{skillLaunchDidNotStart:(proof,scope)=>realSkillAPI.skillLaunchDidNotStart(proof,scope)||Boolean(proof&&scope&&noLaunch.get(proof)===scope)}, './runtime-definition.mjs':{readFrozen:()=>frozen,canonical:(await import('../runtime-definition.mjs')).canonical},'./runtime-binding.mjs':{readBinding:()=>binding},'./leadgen-client.mjs':{rpcSource:()=>({})},'./preflight-metadata.mjs':{createPreflightMetadata:()=>{const metadata=async q=>({result:q.kind==='keywords'?frozen.discovery_input.sources:{company_id:'company',tenant_id:'tenant',run_id:'fixture',version:1,device_binding:{company_id:'company',tenant_id:'tenant',run_id:'fixture',version:1,profile:'fixture',device_serial:serial,enabled:true,verification_status:'verified',douyin_id:'actual'}}});metadata.snapshot=()=>({unknown:false});metadata.close=async()=>({sealed:true,execution_stopped:true,pending:0});return metadata;}},'./preflight-control-scope.mjs':{...await import('../preflight-control-scope.mjs'),createPreflightPoolFactory:()=>()=>{throw Error('UNEXPECTED_PG');}}};
    const module=new SourceTextModule(readFileSync(join(root,'preflight-phone-scope.mjs'),'utf8'),{identifier:pathToFileURL(join(root,'preflight-phone-scope.mjs')).href});
@@ -55,6 +56,7 @@ async function fixture(){
    if(process.argv.includes('--missing-profile')){delete frozen.preflight_profile;assert.throws(()=>createPreflightRuntime({root:runtime,env,frozen,binding,taskId:task}),/PREFLIGHT_PROFILE/);assert.equal((await import('node:fs')).existsSync(join(lockRoot,serial+'.lock')),false);return {missing_profile:true};}
    if(process.argv.includes('--raw')){frozen.execution_transport='raw-model-v1';frozen.max_turns=2;Object.assign(frozen.agent_input,{execution_transport:'raw-model-v1',max_turns:2});}
    const factory=createPreflightRuntime({root:runtime,env,frozen,binding,taskId:task}),now=Date.now(),scope={workflow:'douyin_video_discovery',run:'fixture',activity:'preflight',profile:'fixture',serial:serial,task_id:task,run_id:binding.run_id,binding_id:binding.id,source_commit:source,worker_deadline_ms:now+15000,receipt_deadline_ms:now+20000};
+   scope.workflow=frozen.agent_input.workflow_key;
    if(process.argv.includes('--raw'))Object.assign(scope,{execution_transport:'raw-model-v1',max_turns:2,agent_nonce:'d'.repeat(48),snapshot_sha256:frozen.snapshot_sha256,line:'yuesheng',source_run:null,limit:2,comment_limit:null,deadline_ms:now+22000});
    assert.deepEqual(await factory.quarantine(),{verified:false,not_owned:true,physical_actions:0});
    activeFactory=factory;if(process.argv.includes('--runner'))return await runFixtureWorkflow({root,runtime,directory,frozen,env,factory,binding,task,module,SourceTextModule,SyntheticModule});
@@ -78,11 +80,20 @@ async function fixture(){
     return {unknown:true};}
    assert.equal((await handle.close(proof)).execution_stopped,true);assert.equal(factory.nativeState().execution_unknown,false);assert.throws(()=>factory.desktopVerificationOptions(),/DESKTOP_AUTHORITY/);
    if(process.argv.includes('--ownership-handoff')){
-    const collectScope={...scope,activity:'collect_videos',agent_nonce:'f'.repeat(48)},api=module.namespace;
+    const collectScope={...scope,activity:process.argv.includes('--collection-handoff')?'qualification':'collect_videos',agent_nonce:'f'.repeat(48)},api=module.namespace;
     if(process.argv.includes('--forged-account')){assert.throws(()=>api.issuePreflightPhoneHandoff(factory,collectScope),/HANDOFF_ACCOUNT/);return {forged_account_rejected:true};}
     const cap=api.issuePreflightPhoneHandoff(factory,collectScope),facts=api.readPreflightPhoneHandoff(cap,{runtime:factory,scope:collectScope});assert.equal(facts.owner,'fixture');assert.equal(facts.account,'actual');assert.equal(facts.serial,serial);assert.match(facts.epoch,/^[a-f0-9-]{36}$/);
     assert.throws(()=>api.readPreflightPhoneHandoff({...cap},{runtime:factory,scope:collectScope}),/HANDOFF/);assert.throws(()=>api.readPreflightPhoneHandoff(cap,{runtime:factory,scope:{...collectScope,task_id:'33333333-3333-4333-8333-333333333333'}}),/HANDOFF/);
     assert.throws(()=>api.issuePreflightPhoneHandoff(factory,collectScope),/HANDOFF_REPLAY/);
+    if(process.argv.includes('--collection-handoff')){
+     assert.deepEqual(await factory.refreshOwned({...collectScope,activity:'dedup'}),{renewed:true});
+     const collectionScope={...collectScope,activity:'collection',agent_nonce:'9'.repeat(48)};
+     const collectionCap=api.issuePreflightPhoneHandoff(factory,collectionScope);assert.equal(api.readPreflightPhoneHandoff(collectionCap,{runtime:factory,scope:collectionScope}).epoch,facts.epoch);
+     assert.throws(()=>api.issuePreflightPhoneHandoff(factory,collectionScope),/HANDOFF_REPLAY/);
+     for(const activity of ['dedup','collect_videos','cleanup'])assert.throws(()=>api.issuePreflightPhoneHandoff(factory,{...collectionScope,activity}),/HANDOFF_SCOPE/);
+     assert.throws(()=>api.issuePreflightPhoneHandoff(factory,{...collectionScope,workflow:'douyin_video_discovery'}),/HANDOFF_SCOPE/);
+     assert.throws(()=>api.readPreflightPhoneHandoff(collectionCap,{runtime:factory,scope:collectScope}),/HANDOFF_BRAND/);
+    }
     writeFileSync(join(lockRoot,serial+'.lock/preflight_epoch'),'foreign-epoch');assert.throws(()=>api.readPreflightPhoneHandoff(cap,{runtime:factory,scope:collectScope}),/HANDOFF_OWNER/);return {handoff:true,clone_rejected:true,foreign_epoch_rejected:true};
    }
 
@@ -148,3 +159,5 @@ if(!process.argv.includes('--scope-fixture'))test('old frozen Agent missing prof
 
 if(!process.argv.includes('--scope-fixture'))test('same-owner public collect handoff requires actual account UI and closed branded preflight, never clone or foreign epoch',{skip:process.platform!=='darwin'},()=>{const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture','--raw','--ownership-handoff'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{handoff:true,clone_rejected:true,foreign_epoch_rejected:true});});
 if(!process.argv.includes('--scope-fixture'))test('Code state account string alone cannot substitute for actual native account verification',{skip:process.platform!=='darwin'},()=>{const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture','--raw','--ownership-handoff','--forged-account'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{forged_account_rejected:true});});
+
+if(!process.argv.includes('--scope-fixture'))test('102 qualification and collection receive distinct same-owner read-only handoffs; dedup and cross-workflow never do',{skip:process.platform!=='darwin'},()=>{const p=spawnSync(process.execPath,['--experimental-vm-modules',fileURLToPath(import.meta.url),'--scope-fixture','--raw','--ownership-handoff','--collection-handoff'],{encoding:'utf8',timeout:30000});assert.equal(p.status,0,p.stderr);assert.deepEqual(JSON.parse(p.stdout),{handoff:true,clone_rejected:true,foreign_epoch_rejected:true});});

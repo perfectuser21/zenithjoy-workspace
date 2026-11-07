@@ -10910,3 +10910,789 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；真实CLI启动失败独占留受控错误码，拒外来路径/secret/覆盖；不当作活动或资源已归还证明"
+
+  - id: phone-native-102-public-executor
+    path: services/phone-adb-controller/__tests__/native-102-public-executor.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "1"
+
+  - id: phone-native-102-public-ui-driver
+    path: services/phone-adb-controller/__tests__/native-102-public-ui-driver.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "1"
+
+  - id: phone-native-102-qualification-terminal
+    path: services/phone-adb-controller/__tests__/native-102-qualification-terminal.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-102-qualification
+    path: services/phone-adb-controller/__tests__/native-102-qualification.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-102-queue
+    path: services/phone-adb-controller/__tests__/native-102-queue.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-102-review-projection
+    path: services/phone-adb-controller/__tests__/native-102-review-projection.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-102-sampling-intake
+    path: services/phone-adb-controller/__tests__/native-102-sampling-intake.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-102-source-closure
+    path: services/phone-adb-controller/__tests__/native-102-source-closure.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "1"
+
+  - id: phone-native-collection-dependencies
+    path: services/phone-adb-controller/__tests__/native-collection-dependencies.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-collection-heartbeat
+    path: services/phone-adb-controller/__tests__/native-collection-heartbeat.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-collection-history-proof
+    path: services/phone-adb-controller/__tests__/native-collection-history-proof.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-collection-parser-seam
+    path: services/phone-adb-controller/__tests__/native-collection-parser-seam.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-collection-queue
+    path: services/phone-adb-controller/__tests__/native-collection-queue.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-collection-readonly
+    path: services/phone-adb-controller/__tests__/native-collection-readonly.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-collection-sampling
+    path: services/phone-adb-controller/__tests__/native-collection-sampling.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-audio-macros
+    path: services/phone-adb-controller/__tests__/native-phone-audio-macros.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-collection-macros
+    path: services/phone-adb-controller/__tests__/native-phone-collection-macros.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-credentials-growth
+    path: services/phone-adb-controller/__tests__/native-phone-credentials-growth.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-credentials
+    path: services/phone-adb-controller/__tests__/native-phone-credentials.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-detail-macros
+    path: services/phone-adb-controller/__tests__/native-phone-detail-macros.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-managed-recording.integration
+    path: services/phone-adb-controller/__tests__/native-phone-managed-recording.integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-managed-recording
+    path: services/phone-adb-controller/__tests__/native-phone-managed-recording.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-media-late-terminal
+    path: services/phone-adb-controller/__tests__/native-phone-media-late-terminal.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-media
+    path: services/phone-adb-controller/__tests__/native-phone-media.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-processing-footer
+    path: services/phone-adb-controller/__tests__/native-phone-processing-footer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-processing-history-freshness
+    path: services/phone-adb-controller/__tests__/native-phone-processing-history-freshness.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-processing-history
+    path: services/phone-adb-controller/__tests__/native-phone-processing-history.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-processing-managed
+    path: services/phone-adb-controller/__tests__/native-phone-processing-managed.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-processing-material
+    path: services/phone-adb-controller/__tests__/native-phone-processing-material.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-processing-ready
+    path: services/phone-adb-controller/__tests__/native-phone-processing-ready.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-processing-record-navigation
+    path: services/phone-adb-controller/__tests__/native-phone-processing-record-navigation.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-phone-processing-search-isolation
+    path: services/phone-adb-controller/__tests__/native-phone-processing-search-isolation.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-processing-vision-credential
+    path: services/phone-adb-controller/__tests__/native-phone-processing-vision-credential.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-processing
+    path: services/phone-adb-controller/__tests__/native-phone-processing.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-test-media-paths
+    path: services/phone-adb-controller/__tests__/native-phone-test-media-paths.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-queue-terminal-callbacks
+    path: services/phone-adb-controller/__tests__/native-queue-terminal-callbacks.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-scrcpy-adb-bridge
+    path: services/phone-adb-controller/__tests__/native-scrcpy-adb-bridge.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-scrcpy-host-producer
+    path: services/phone-adb-controller/__tests__/native-scrcpy-host-producer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-scrcpy-natural-end
+    path: services/phone-adb-controller/__tests__/native-scrcpy-natural-end.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-scrcpy-recording-loopback
+    path: services/phone-adb-controller/__tests__/native-scrcpy-recording-loopback.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-scrcpy-source-preconditions
+    path: services/phone-adb-controller/__tests__/native-scrcpy-source-preconditions.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-scrcpy-startup-authority
+    path: services/phone-adb-controller/__tests__/native-scrcpy-startup-authority.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"
+
+  - id: phone-native-scrcpy-terminal-callbacks
+    path: services/phone-adb-controller/__tests__/native-scrcpy-terminal-callbacks.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；102隔离协议与数据库验收；登记不代表CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: ci-native-102-ci-contract
+    path: scripts/ci/__tests__/native-102-ci-contract.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际入口接线已核；尚未证明本HEAD完整CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test scripts/ci/__tests__/native-102-ci-contract.test.mjs"
+
+  - id: ci-native-102-ci-lifecycle
+    path: scripts/ci/__tests__/native-102-ci-lifecycle.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际入口接线已核；尚未证明本HEAD完整CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node --test scripts/ci/__tests__/native-102-ci-lifecycle.test.mjs"
+
+  - id: phone-native102-default-credentials
+    path: services/phone-adb-controller/__tests__/native102-default-credentials.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际入口接线已核；尚未证明本HEAD完整CI或真实手机业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "openclaw-scripts-test"
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-102-public-nonce-driver
+    path: services/phone-adb-controller/__tests__/native-102-public-nonce-driver.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；仅隔离nonce/fixture错误验收，不代表真实业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "1"
+
+  - id: phone-native-102-public-intents
+    path: services/phone-adb-controller/__tests__/native-102-public-intents.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；仅隔离nonce/fixture错误验收，不代表真实业务通过"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-adb-inflight-admission
+    path: services/phone-adb-controller/__tests__/native-adb-inflight-admission.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；独立协议/原生谓词回归，非真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-collection-return-navigation
+    path: services/phone-adb-controller/__tests__/native-phone-collection-return-navigation.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；独立协议/原生谓词回归，非真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-phone-runtime-admission-boundary
+    path: services/phone-adb-controller/__tests__/native-phone-runtime-admission-boundary.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；实际工厂B/资源撤权反例，不代表真机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "3"
+
+  - id: phone-official-claim-journal
+    path: services/phone-adb-controller/__tests__/official-claim-journal.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code授权/生命周期有限反例，不冒真实手机成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-official-claim-head-parallel
+    path: services/phone-adb-controller/__tests__/official-claim-head-parallel.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code授权/生命周期有限反例，不冒真实手机成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-runtime-approval-semantics
+    path: services/phone-adb-controller/__tests__/native-phone-runtime-approval-semantics.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Code授权/生命周期有限反例，不冒真实手机成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "2"
+
+  - id: phone-locked-definition-facts
+    path: services/phone-adb-controller/__tests__/locked-definition-facts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-locked-definition-control
+    path: services/phone-adb-controller/__tests__/locked-definition-control.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-locked-definition-immutability
+    path: services/phone-adb-controller/__tests__/locked-definition-immutability.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "3"
+
+  - id: phone-native-phone-protocol-ticket-brand
+    path: services/phone-adb-controller/__tests__/native-phone-protocol-ticket-brand.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: openclaw-scripts-test
+      command: "node --test --test-shard=${{ matrix.shard }}/3 (actual phone_tests argv)"
+
+  - id: phone-native-phone-wire-ticket-boundary
+    path: services/phone-adb-controller/__tests__/native-phone-wire-ticket-boundary.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "2"
+
+  - id: phone-native-phone-wire-ticket-private-brand
+    path: services/phone-adb-controller/__tests__/native-phone-wire-ticket-private-brand.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；隔离定义/协议授权反例，不代表真实手机业务成功；完整单文件使用experimental-test-module-mocks并强制4项零skip计数"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: native-102-darwin-test
+      command: node scripts/ci/native-102-darwin-tests.mjs
+      shard: "3"
+
+  - id: phone-native-scrcpy-host-identity-budget
+    path: services/phone-adb-controller/__tests__/native-scrcpy-host-identity-budget.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；进程身份、原阶段截止与未知停证的隔离反例；不代表真实手机业务完成"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "2"
+
+  - id: phone-native-scrcpy-host-identity-conflicts
+    path: services/phone-adb-controller/__tests__/native-scrcpy-host-identity-conflicts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: customer_app
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；进程身份、原阶段截止与未知停证的隔离反例；不代表真实手机业务完成"
+    execution:
+      workflow: .github/workflows/ci-l3-code.yml
+      job: "native-102-darwin-test"
+      command: "node scripts/ci/native-102-darwin-tests.mjs"
+      shard: "3"

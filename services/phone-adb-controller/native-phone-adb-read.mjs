@@ -20,7 +20,7 @@ export function createNativePhoneEvidenceRead({commandSource,...options}={}){
  if(canonical(p.claim)!==canonical(q.claim)||q.worker_deadline_ms>p.worker_deadline_ms||q.cleanup_deadline_ms>p.cleanup_deadline_ms)throw fail('EVIDENCE_SCOPE');
  return createRead(options,()=>readNativePhoneCommandSource(commandSource,{source:options.source}));
 }
-function createRead({runtimeRoot,source,directory,scope,readAuthority}={},evidenceSource){
+function createRead({runtimeRoot,source,directory,scope,readAuthority,requestTicket}={},evidenceSource){
  let q,fixed;try{q=structuredClone(scope);fixed=structuredClone(source);}catch{throw fail('SCOPE');}
  const ip=q?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9][0-9]{0,4})$/),uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
  if(!q||q.protocol!=='native-phone-adb-read/v1'||!uuid.test(q.task_id||'')||!uuid.test(q.binding_id||'')||!/^[-A-Za-z0-9_.]{1,150}$/.test(q.run_id||'')||!/^[-A-Za-z0-9_.]{1,80}$/.test(q.profile||'')||!(/^[-A-Za-z0-9_.]{1,80}$/.test(q.serial||'')||isCanonicalTcpDeviceSerial(q.serial))||!ip||Number(ip[1])>65535||!/^[a-f0-9]{40}$/.test(q.source_commit||'')||fixed?.commit!==q.source_commit||!Number.isSafeInteger(q.epoch)||q.epoch<0||!Number.isSafeInteger(q.worker_deadline_ms)||!Number.isSafeInteger(q.cleanup_deadline_ms)||q.worker_deadline_ms>=q.cleanup_deadline_ms||typeof readAuthority!=='function'||!q.claim?.claimed_by||!Number.isFinite(Date.parse(q.claim?.claimed_at)))throw fail('SCOPE');
@@ -36,7 +36,7 @@ function createRead({runtimeRoot,source,directory,scope,readAuthority}={},eviden
  record('lifecycle.intent.json',{protocol:q.protocol,instance_id:randomUUID(),scope_sha256:sha(canonical(q)),source_sha256:sha(canonical(fixed))});
  let sealed=false,unknown=false,index=0,closing;const jobs=new Set(),channels=new Set(),reasons=new Set();
  const guard=()=>{if(unknown)throw fail('UNKNOWN');if(sealed)throw fail('CLOSED');if(Date.now()>=q.worker_deadline_ms)throw fail('DEADLINE');};
- const admit=async()=>{guard();evidenceSource?.();verifySource();verifyJournal();guard();let value;try{value=await readAuthority();}catch{throw fail('AUTHORITY');}guard();verifySource();verifyJournal();guard();if(!value||canonical(value.scope)!==canonical(q)||value.claimed_by!==q.claim.claimed_by||value.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(value.lease_until))||Date.parse(value.lease_until)<=Date.now())throw fail('AUTHORITY');};
+ const admit=async()=>{guard();evidenceSource?.();verifySource();verifyJournal();guard();let value;try{value=await readAuthority();}catch{throw fail('AUTHORITY');}guard();verifySource();verifyJournal();guard();if(!value||canonical(value.scope)!==canonical(q)||value.claimed_by!==q.claim.claimed_by||value.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(value.lease_until))||Date.parse(value.lease_until)<=Date.now())throw fail('AUTHORITY');return Date.parse(value.lease_until);};
  const snapshot=()=>Object.freeze({domain:'native-phone-adb-read/v1',sealed,pending:jobs.size,open_sockets:channels.size,unknown,unknown_reasons:Object.freeze([...reasons]),channel_stopped:sealed&&!unknown&&!jobs.size&&!channels.size,remote_execution_stopped:'not_attested',android_services:'not_attested',authority_reader_execution:'not_attested'});
  const seal=()=>{sealed=true;for(const job of jobs)job.cancel();return snapshot();};
  async function read(path){
@@ -45,26 +45,30 @@ function createRead({runtimeRoot,source,directory,scope,readAuthority}={},eviden
   if(typeof path!=='string'||!(evidenceSource?evidencePath:systemFiles.has(path)))throw fail('PATH');
   const current={cancel:()=>{},done:null},id=index++;jobs.add(current);let interrupt;
   const interrupted=new Promise((_,reject)=>{interrupt=code=>reject(fail(code));});interrupted.catch(()=>{});
-  let timer,socket,canceled=false;current.cancel=(code='CLOSED')=>{unknown=true;reasons.add(code);canceled=true;interrupt(code);socket?.destroy();};
+  let timer,socket,canceled=false,leaseUntil=0,protocolCheck;
+  const localAdmit=()=>{guard();if(canceled||!jobs.has(current))throw fail('CLOSED');evidenceSource?.();verifySource();verifyJournal();protocolCheck();guard();};current.cancel=(code='CLOSED')=>{unknown=true;reasons.add(code);canceled=true;interrupt(code);socket?.destroy();};
   timer=setTimeout(()=>current.cancel('DEADLINE'),Math.max(0,q.worker_deadline_ms-Date.now()));
   current.done=(async()=>{
    let closed,ended=false,connectionError,buffer=Buffer.alloc(0),total=0;const wake=new Set();const notify=()=>{for(const resolve of wake)resolve();wake.clear();};let closePromise;
    try{
-    record(`read-${id}.intent.json`,{id,path,scope_sha256:sha(canonical(q))});await admit();guard();
+    record(`read-${id}.intent.json`,{id,path,scope_sha256:sha(canonical(q))});if(requestTicket!==undefined){const m=await import('./native-phone-protocol-ticket.mjs');protocolCheck=m.claimNativePhoneProtocolTicket(requestTicket,{source:fixed,scope:q,request:{kind:'read',path}});}leaseUntil=protocolCheck?(localAdmit(),q.worker_deadline_ms):await admit();guard();
     socket=new Socket();channels.add(socket);closePromise=new Promise(r=>{closed=r;});
     socket.on('data',chunk=>{total+=chunk.length;if(total>64*1024*1024){connectionError='LIMIT';socket.destroy();}else buffer=Buffer.concat([buffer,chunk]);notify();});socket.on('end',()=>{ended=true;notify();});socket.on('error',()=>{connectionError='SOCKET';notify();});socket.on('close',hadError=>{if(hadError||!ended)connectionError??='SOCKET';channels.delete(socket);closed();notify();});
     const connected=new Promise((yes,no)=>{socket.once('connect',yes);socket.once('error',()=>no(fail('SOCKET')));socket.once('close',()=>no(fail('SOCKET')));});connected.catch(()=>{unknown=true;});
     guard();try{socket.connect(Number(ip[1]),'127.0.0.1');}catch{throw fail('SOCKET');}await connected;guard();
-    const receive=async n=>{await admit();while(buffer.length<n){guard();if(connectionError)throw fail(connectionError);if(ended||!channels.has(socket))throw fail('TRUNCATED');await new Promise(r=>wake.add(r));}guard();if(connectionError)throw fail(connectionError);const bytes=buffer.subarray(0,n);buffer=buffer.subarray(n);return bytes;};
-    const send=async bytes=>{record(`read-${id}-write-${totalWrites++}.intent.json`,{bytes:bytes.length,sha256:sha(bytes)});await admit();guard();await new Promise((yes,no)=>socket.write(bytes,e=>e?no(fail('SOCKET')):yes()));guard();};let totalWrites=0;
+    // Only this private job owns the admitted socket and lease. Incoming sync
+    // frames are not new commands; each send and the returned capability re-admit.
+    const frameGuard=()=>{guard();if(!jobs.has(current)||canceled)throw fail('CLOSED');if(Date.now()>=leaseUntil)throw fail('AUTHORITY');};
+    const receive=async n=>{frameGuard();while(buffer.length<n){frameGuard();if(connectionError)throw fail(connectionError);if(ended||!channels.has(socket))throw fail('TRUNCATED');await new Promise(r=>wake.add(r));}frameGuard();if(connectionError)throw fail(connectionError);const bytes=buffer.subarray(0,n);buffer=buffer.subarray(n);return bytes;};
+    const send=async(bytes,{dispatch=false}={})=>{record(`read-${id}-write-${totalWrites++}.intent.json`,{bytes:bytes.length,sha256:sha(bytes)});if(protocolCheck&&!dispatch)localAdmit();else leaseUntil=await admit();guard();await new Promise((yes,no)=>socket.write(bytes,e=>e?no(fail('SOCKET')):yes()));guard();};let totalWrites=0;
     const status=async()=>{const code=await receive(4);if(code.equals(Buffer.from('OKAY')))return;if(code.equals(Buffer.from('FAIL'))){const n=adbPayloadLength(await receive(4),4096);await receive(n);throw fail('FAIL');}throw fail('ACK');};
     await send(adbRequest('host:transport:'+q.serial));await status();await send(adbRequest('sync:'));await status();
-    const header=Buffer.alloc(8);header.write('RECV');header.writeUInt32LE(Buffer.byteLength(path),4);await send(Buffer.concat([header,Buffer.from(path)]));
+    const header=Buffer.alloc(8);header.write('RECV');header.writeUInt32LE(Buffer.byteLength(path),4);await send(Buffer.concat([header,Buffer.from(path)]),{dispatch:true});
     const chunks=[];let bytes=0;
     while(true){const h=await receive(8),kind=h.subarray(0,4).toString('latin1'),size=h.readUInt32LE(4);if(kind==='DONE'){if(size!==0)throw fail('FRAME');break;}if(kind==='FAIL'){if(size>4096)throw fail('FRAME');await receive(size);throw fail('FAIL');}if(kind!=='DATA'||size>65536||bytes+size>64*1024*1024)throw fail('FRAME');chunks.push(await receive(size));bytes+=size;}
     const quit=Buffer.alloc(8);quit.write('QUIT');await send(quit);
-    while(!ended){guard();if(connectionError)throw fail(connectionError);if(!channels.has(socket))throw fail('TRUNCATED');await new Promise(r=>wake.add(r));}
-    await closePromise;guard();if(connectionError||buffer.length)throw fail('TRAILING');
+    while(!ended){frameGuard();if(connectionError)throw fail(connectionError);if(!channels.has(socket))throw fail('TRUNCATED');await new Promise(r=>wake.add(r));}
+    await closePromise;frameGuard();if(connectionError||buffer.length)throw fail('TRAILING');
     await admit();guard();const data=Buffer.concat(chunks);if(evidenceSource&&data.length>(path.endsWith('.png')?12:5)*1024*1024)throw fail('LIMIT');const cap=Object.freeze({domain:'native-phone-adb-read/v1',id});receipts.set(cap,{owner:api,scope_sha256:sha(canonical(q)),path,bytes:data});record(`read-${id}.returned.json`,{id,path,sha256:sha(data),bytes:data.length,peer_eof:true,socket_closed:true});return cap;
    }catch(error){unknown=true;const code=/^NATIVE_PHONE_READ_[A-Z_]+$/.test(error?.code||'')?error.code:'NATIVE_PHONE_READ_FAILED';reasons.add(code);try{record(`read-${id}.unknown.json`,{id,code});}catch{reasons.add('NATIVE_PHONE_READ_JOURNAL');}throw fail(code.slice('NATIVE_PHONE_READ_'.length));}
    finally{socket?.destroy();if(closePromise)await closePromise;clearTimeout(timer);jobs.delete(current);if(canceled)unknown=true;}

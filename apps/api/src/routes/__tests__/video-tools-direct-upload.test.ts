@@ -11,6 +11,19 @@ const decoder = vi.hoisted(() => ({
   paths: [] as string[],
   metadata: {streams:[{width:1280,height:720,codec_name:'h264',avg_frame_rate:'25/1'}],format:{duration:'14.768',format_name:'mov,mp4,m4a,3gp,3g2,mj2'}},
 }));
+const cleanup=vi.hoisted(()=>({ completions:new Map<string,Promise<void>>(), gate:undefined as Promise<void>|undefined, entered:undefined as ((file:string)=>void)|undefined, release:undefined as (()=>void)|undefined }));
+// Observe the actual unlink of the exact decoder input. All other fs calls,
+// parameters and errors retain the original implementation.
+vi.mock('node:fs/promises',async original=>{
+  const actual=await original<typeof import('node:fs/promises')>();
+  return {...actual,unlink:(...args:Parameters<typeof actual.unlink>)=>{
+    const file=String(args[0]);if(file!==decoder.paths[0])return actual.unlink(...args);
+    const done=cleanup.gate?cleanup.gate.then(()=>actual.unlink(...args)):actual.unlink(...args);
+    cleanup.completions.set(file,done);cleanup.entered?.(file);return done;
+  }};
+});
+function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve};}
+async function observed<T>(promise:Promise<T>,phase:string){let timer:ReturnType<typeof setTimeout>|undefined;try{return await Promise.race([promise,new Promise<never>((_done,reject)=>{timer=setTimeout(()=>reject(new Error('cleanup event missing: '+phase)),2000);})]);}finally{clearTimeout(timer);}}
 vi.mock('node:child_process', async original => ({
   ...await original<typeof import('node:child_process')>(),
   execFile: Object.assign(vi.fn(), { [Symbol.for('nodejs.util.promisify.custom')]: async (_binary: string, args: string[]) => {
@@ -46,26 +59,36 @@ describe('video direct upload: intent → COS PUT → verified completion',()=>{
   const complete=(app:ReturnType<typeof makeApp>,id:string,user='alice')=>request(app).post(`/api/video-tools/uploads/${id}/complete`).set('Cookie',`user=${user}`).send({});
   beforeEach(async()=>{
     directory=await mkdtemp(join(tmpdir(),'video-direct-test-'));
-    expectedSize=content.length;heads=[];signedKeys=[];decoder.paths=[];
+    expectedSize=content.length;heads=[];signedKeys=[];decoder.paths=[];cleanup.completions.clear();cleanup.gate=undefined;cleanup.entered=undefined;cleanup.release=undefined;
     vi.stubEnv('STAFF_EMAILS','alice@example.com,bob@example.com');
     transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(content,{headers:{'Content-Length':String(content.length)}}));
     vi.stubGlobal('fetch',transport);
   });
-  afterEach(async()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();vi.restoreAllMocks();await rm(directory,{recursive:true,force:true});});
+  afterEach(async()=>{cleanup.release?.();try{await observed(Promise.all(cleanup.completions.values()),'test unlink settlement');}finally{vi.unstubAllGlobals();vi.unstubAllEnvs();vi.restoreAllMocks();await rm(directory,{recursive:true,force:true});}});
 
   it('issues only a server-owned object key and completes with the same Asset schema as multipart upload',async()=>{
     const app=makeApp();const intent=await presign(app,{name:'reference.mp4',size:content.length,key:'another-account/overwrite.mp4'});
     expect(intent.status).toBe(200);
     expect(intent.body).toEqual({id:expect.any(String),uploadUrl:expect.stringContaining('https://materials-123.cos.accelerate.myqcloud.com/video-tools/')});
     expect(signedKeys[0]).not.toContain('another-account');
-    const result=await complete(app,intent.body.id);
+    const release=deferred<void>(),entered=deferred<string>();cleanup.gate=release.promise;cleanup.release=()=>release.resolve();cleanup.entered=entered.resolve;
+    try{
+    const completing=complete(app,intent.body.id).then(result=>result);void completing.catch(()=>{});
+    const input=await observed(entered.promise,'exact decoder unlink entered');
+    expect(input).toBe(decoder.paths[0]);
+    expect(await readFile(input)).toEqual(content); // Real bytes still exist while actual cleanup is gated.
+    release.resolve();
+    const result=await completing;
     expect(result.status).toBe(200);
     expect(result.body).toEqual({id:intent.body.id,url:signed(signedKeys[0]),kind:'video',name:'reference.mp4',width:1280,height:720,duration:14.768,size:content.length,fps:25,createdAt:expect.any(String)});
     expect(heads).toEqual(signedKeys);
     expect(transport.mock.calls[0][0]).toBe(signed(signedKeys[0]));
     expect(transport.mock.calls[0][1]).toMatchObject({redirect:'error',signal:expect.any(AbortSignal)});
     expect(decoder.paths[0]).toMatch(/video-tools-complete-/);
+    const completed=cleanup.completions.get(decoder.paths[0]);expect(completed).toBeDefined();
+    await observed(completed!,'actual unlink returned');
     await expect(readFile(decoder.paths[0])).rejects.toMatchObject({code:'ENOENT'});
+    }finally{release.resolve();await observed(Promise.all(cleanup.completions.values()),'test unlink settlement');}
   });
   it('persists the intent across router restarts and makes simultaneous/repeated completion idempotent',async()=>{
     const intent=await presign(makeApp());const restarted=makeApp();

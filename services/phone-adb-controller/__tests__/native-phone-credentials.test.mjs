@@ -1,0 +1,16 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,chmodSync,symlinkSync,unlinkSync,linkSync,rmSync} from 'node:fs';import os from 'node:os';import {join} from 'node:path';import {createHash} from 'node:crypto';import {syncBuiltinESMExports} from 'node:module';
+const api=await import('../native-phone-credentials.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return {};throw e;}),sha=b=>createHash('sha256').update(b).digest('hex');
+test('native102 credentials require a fixed Code reader',()=>assert.equal(typeof api.createNativePhoneCredentialReader,'function'));
+test('only canonical OS HOME fixed private files and frozen bytes are read; no environment or legacy fallback',async t=>{
+ assert.equal(typeof api.createNativePhoneCredentialReader,'function');
+ const home=realpathSync(mkdtempSync(join(os.tmpdir(),'native-credential-'))),folder=join(home,'.credentials');mkdirSync(folder,{mode:0o700});const original=os.userInfo();t.mock.method(os,'userInfo',()=>({...original,homedir:home}));syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();rmSync(home,{recursive:true,force:true});});
+ const frozen={collection_phone_scope:{credentials:{}}};for(const provider of ['openrouter','dashscope']){const path=join(folder,provider+'.env'),key=provider==='openrouter'?'OPENROUTER_API_KEY':'DASHSCOPE_API_KEY';writeFileSync(path,key+'=synthetic-private-token\n',{mode:0o600});frozen.collection_phone_scope.credentials[provider]={path,sha256:sha(readFileSync(path))};const reader=api.createNativePhoneCredentialReader({provider,frozen});assert.equal(reader(),'synthetic-private-token');}
+ const provider='dashscope',path=join(folder,provider+'.env'),reader=api.createNativePhoneCredentialReader({provider,frozen}),raw=readFileSync(path);
+ chmodSync(path,0o644);assert.throws(reader,/CREDENTIAL/);chmodSync(path,0o600);
+ writeFileSync(path,'DASHSCOPE_API_KEY=changed\n');assert.throws(reader,/CREDENTIAL/);writeFileSync(path,raw);
+ const elsewhere=join(home,'elsewhere');writeFileSync(elsewhere,raw,{mode:0o600});unlinkSync(path);symlinkSync(elsewhere,path);assert.throws(reader,/CREDENTIAL/);unlinkSync(path);linkSync(elsewhere,path);assert.throws(reader,/CREDENTIAL/);unlinkSync(path);writeFileSync(path,raw,{mode:0o600});
+ for(const options of [{provider:'other',frozen},{provider,frozen:{collection_phone_scope:{credentials:{dashscope:{path:elsewhere,sha256:sha(raw)}}}}},{provider,frozen:{}}])assert.throws(()=>api.createNativePhoneCredentialReader(options),/CREDENTIAL/);
+ for(const invalid of [Buffer.from('DASHSCOPE_API_KEY=synthetic-one\nDASHSCOPE_API_KEY=synthetic-two\n'),Buffer.from('DASHSCOPE_API_KEY=bad token\n'),Buffer.from([0xff,0xfe]),Buffer.alloc(65537,65)]){writeFileSync(path,invalid);const altered=structuredClone(frozen);altered.collection_phone_scope.credentials.dashscope.sha256=sha(invalid);assert.throws(()=>api.createNativePhoneCredentialReader({provider,frozen:altered}),/CREDENTIAL/);}writeFileSync(path,raw);
+ unlinkSync(path);assert.throws(reader,/CREDENTIAL/);assert.throws(()=>api.createNativePhoneCredentialReader({provider,frozen}),/CREDENTIAL/);
+});

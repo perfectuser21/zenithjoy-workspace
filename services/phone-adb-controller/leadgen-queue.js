@@ -316,7 +316,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           const e=comment.recipientEvidence;
           if(e.scope?.video_id!==input.video_id)throw Error('recipient采集归属错误');
           const companyBinding=e.company_binding===undefined?undefined:await require('./company-config-lib.js').readCollectionAccountBinding(client,{lineKey,run,sourceRun});
-          require('./queued-recipient-evidence.js').validateEvidence(e,{line_key:lineKey,run,douyin_id:comment.douyinId,nickname:comment.nickname,comment_body:comment.commentBody,comment_body_sha256:require('./queued-recipient-evidence.js').hash(comment.commentBody),video_url:comment.sourceVideoUrl},{companyBinding});
+          require('./queued-recipient-evidence.js').validateEvidence(e,{line_key:lineKey,run,douyin_id:comment.douyinId,nickname:comment.nickname,comment_body:comment.commentBody,comment_body_sha256:require('./queued-recipient-evidence.js').hash(comment.commentBody),video_url:comment.sourceVideoUrl},{companyBinding,...(deps.recipientNative?.parseNative?{parseNative:deps.recipientNative.parseNative}:{})});
         }
         const result = await db.upsertComment(client, { ...comment, lineKey, harvestBatch: run });
         if (result.inserted) inserted++;

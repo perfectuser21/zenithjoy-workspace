@@ -1,6 +1,6 @@
 # 云手机有限命令来源审查
 
-范围：MMV 的 cloud-phone-test，47.100.213.173:10001，抖音包 com.ss.android.ugc.aweme，720×1280，Android 12 / SDK 31。仅用于已授权101的有限命令，不授权104发送、任意shell或任意路径。
+范围：MMV 的 cloud-phone-test，47.100.213.173:10001，抖音包 com.ss.android.ugc.aweme，720×1280，Android 12 / SDK 31。仅用于已授权101/102的有限Code命令；102录制另须独立录制来源审查与全部终态条件，不授权104发送、任意shell或任意路径。
 
 来源：2026-11-06两次独立RECV读取了本策略所列19个系统程序/直接Java入口原件。每次取得本人中央锁和同guard旧新根检查的本地锁；RECV后QUIT与真实EOF，本人双锁均已释放。input.jar未存在，明确不列为来源。实际input、wm、settings、ime均转交cmd的对应Android系统服务；am只允许非instrument的activity分支；uiautomator仅dump分支，不能runtest或nohup；monkey只允许固定包启动且count=1。有限参数由Code编译，Worker不能提供shell文本、环境或路径。
 
@@ -9,3 +9,5 @@
 来源凭据仅证明固定入口匹配，永远不是远端停证。每次实际命令仍须shell-v2的有效EXIT、通道EOF和socket关闭、原scope/epoch/Source一致；异常、失ACK、截止、未决输入法/剪贴板恢复均保留unknown，不能靠本文件或Commander文本释放锁。最终手机释放还须原预检/清理、所有producer/raw品牌以及Caller都证实关闭；cleanup后launcher XML/PNG与独立Code Judge读回。
 
 Pillow只用于原本地filter与原视觉编码，策略另固定MMV既有PIL完整文件清单；不安装或修改PIL，不改变图片谓词、评分政策或成功标准。
+
+102另准五个有限只读查询：media-volume仅cmd media_session volume --stream 3 --get；media-session仅dumpsys media_session；audio-dump仅dumpsys audio；package-uid仅cmd package list packages -U固定抖音包；uid-owners仅cmd package list packages -U --uid并由Code限正整数UID。参数由Code编译，Worker不可提供shell或路径。仍使用已RECV的cmd/dumpsys固定来源，不从旧读回推定新的执行结果；音量0或未知阻断录制，不盲升音量。录制另受独立录制来源审查与全部终态条件约束。

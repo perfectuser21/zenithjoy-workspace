@@ -1,0 +1,19 @@
+// TEST SOURCE ONLY. This represents a synthetic capture source, never Android,
+// scrcpy, a remote PID, a phone lock or a production recording-stop proof.
+import {readFileSync,writeFileSync,lstatSync,realpathSync} from 'node:fs';
+import {join,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v),sha=b=>createHash('sha256').update(b).digest('hex'),managers=new WeakMap(),captures=new WeakMap();
+function wav(seconds){const n=seconds*16000,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(16000,24);b.writeUInt32LE(32000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(n*2,40);for(let i=0;i<n;i++)b.writeInt16LE(Math.round(5000*Math.sin(2*Math.PI*440*i/16000)),44+i*2);return b;}
+export async function createNativePhoneManagedRecording({runtimeRoot,source,scope,context,assertResources}={}){
+ const src=structuredClone(source),s=structuredClone(scope),c=structuredClone(context),sessions=new Map(),proofs=new WeakSet();let closed=false;
+ const verify=()=>{const row=src.files.filter(f=>f.path==='native-phone-managed-recording.mjs');if(dirname(fileURLToPath(import.meta.url))!==runtimeRoot||row.length!==1||sha(readFileSync(join(runtimeRoot,row[0].path)))!==row[0].sha256)throw Error('SYNTHETIC_SOURCE_CHANGED');};verify();
+ const run=async(command,args)=>{verify();if(closed||await assertResources()!==true)throw Error('SYNTHETIC_CLOSED');const [eid]=args;if(command==='record-start'){
+  const seconds=Number(args[1]),video=args[2];if(!c.allowedVideoIds.includes(video)||eid!==`${s.run}-v${video}-qualification-record`||sessions.has(eid)||!Number.isInteger(seconds)||seconds<10)throw Error('SYNTHETIC_TARGET');
+  const path=join(c.evidenceRoot,eid+'.synthetic.wav'),bytes=wav(seconds);writeFileSync(path,bytes,{flag:'wx',mode:0o600});sessions.set(eid,{scope:structuredClone(s),video_id:video,evidence_id:eid,requested_seconds:seconds,sdk:31,mode:'output_pcm_sdk31',started_at_ms:Date.now()-seconds*1000,path,sha256:sha(bytes),identity:lstatSync(path),stopped:false});return `record_started path=${path} synthetic_capture=true\n`;
+ }const r=sessions.get(eid);if(!r)throw Error('SYNTHETIC_TARGET');if(command==='record-stop'){r.stopped=true;r.ended_at_ms=Date.now();return `record_stopped path=${r.path} synthetic_capture=true\n`;}if(command==='record-status')return `record_status stopped=${r.stopped}\n`;throw Error('SYNTHETIC_COMMAND');};
+ const api=Object.freeze({run,captureFor:eid=>{verify();const r=sessions.get(eid);if(!r?.stopped)throw Error('SYNTHETIC_NOT_STOPPED');const cap=Object.freeze({});captures.set(cap,{read:()=>{verify();const st=lstatSync(r.path);if(realpathSync(r.path)!==r.path||['dev','ino','size','mtimeMs','ctimeMs'].some(k=>st[k]!==r.identity[k])||sha(readFileSync(r.path))!==r.sha256)throw Error('SYNTHETIC_CAPTURE_CHANGED');const {identity,stopped,...facts}=r;return structuredClone(facts);},scope:canonical(s)});return cap;},assertAudioObservationAllowed:()=>true,close:async()=>{closed=true;const p=Object.freeze({execution_stopped:true,synthetic_capture:true,android_stopped:'not_attested'});proofs.add(p);return p;},verifyStopped:p=>proofs.has(p)&&closed});managers.set(api,{source:canonical(src),scope:canonical(s)});return api;
+}
+export function isNativePhoneManagedRecording(value,{source,scope}={}){const p=managers.get(value);return Boolean(p&&p.source===canonical(source)&&p.scope===canonical(scope));}
+export function readNativeManagedCapture(cap,{scope}={}){const p=captures.get(cap);if(!p||p.scope!==canonical(scope))throw Error('SYNTHETIC_CAPTURE_BRAND');return p.read();}

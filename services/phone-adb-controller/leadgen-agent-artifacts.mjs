@@ -118,9 +118,10 @@ export function recordQualificationResult({runDir,scope,leased,results}){
  return {claimed:ids.length,matched:qualified.length,videos_verified:verified,recordings_required:required,media_volume_verified:media,media_volume_failures:unverified?null:0,recordings_unverified:unverified,recordings_silent_rejected:0,recording_outcomes_failures:0,failures,...(failures.length?{status:'partial'}:{})};
 }
 
-function footerProof(proof,{root,run,vid}){
+function footerProof(proof,{root,run,vid,verifyFooter}){
  if(!proof||typeof proof.file!=='string'||!basename(proof.file).startsWith(`${run}-v${vid}-collection-`)||!proof.file.endsWith('.xml')||!sha.test(proof.sha256||''))fail('AGENT_COLLECTION_FOOTER_UNVERIFIED');
  const bytes=fileBytes(proof.file,root,{maxBytes:4*1024*1024});if(hash(bytes)!==proof.sha256)fail('AGENT_COLLECTION_FOOTER_UNVERIFIED');
+ if(verifyFooter!==undefined){if(verifyFooter(Buffer.from(bytes),{file:proof.file,sha256:proof.sha256,run,video_id:vid})!==true)fail('AGENT_COLLECTION_FOOTER_UNVERIFIED');return {file:basename(proof.file),sha256:proof.sha256};}
  const script=`import sys,xml.etree.ElementTree as E,re
 s=sys.stdin.read();assert '<!DOCTYPE' not in s and '<!ENTITY' not in s
 r=E.fromstring(s);n=list(r.iter('node'));p='com.ss.android.ugc.aweme';assert r.tag=='hierarchy' and n and all(x.get('package')==p for x in n)
@@ -141,7 +142,9 @@ const count=x=>Number.isSafeInteger(x)&&x>=0;
 const rowKey=row=>JSON.stringify([row.douyinId,row.commentBody,row.sourceVideoUrl]);
 const tsv=value=>String(value??'').replace(/[\t\r\n]/g,' ');
 
-export function recordCollectionResult({runDir,scope,samplingInput,qualifiedVideoIds,videos,evidenceRoot}){
+export function recordCollectionResult({runDir,scope,samplingInput,qualifiedVideoIds,videos,evidenceRoot,recipientNative,verifyFooter}){
+ if(recipientNative!==undefined&&typeof recipientNative?.parseNative!=='function')fail('AGENT_COLLECTION_PARSER_INVALID');
+ if(verifyFooter!==undefined&&typeof verifyFooter!=='function')fail('AGENT_COLLECTION_PARSER_INVALID');
  scopeIdentity(scope);
  if(!/^[a-f0-9]{40}$/.test(scope.source_commit||'')||typeof scope.run_id!=='string'||!scope.run_id.startsWith('douyin_video_processing-'+scope.run+'__')||!tag.test(scope.source_run||'')||!scope.line||!scope.line_key||!Array.isArray(qualifiedVideoIds)||!Array.isArray(videos)||qualifiedVideoIds.length>1000||new Set(qualifiedVideoIds).size!==qualifiedVideoIds.length||qualifiedVideoIds.some(id=>!video.test(id))||new Set(videos.map(v=>v.video_id)).size!==videos.length||videos.some(v=>!qualifiedVideoIds.includes(v.video_id)))fail('AGENT_COLLECTION_SCOPE_INVALID');
  if(samplingInput){
@@ -171,7 +174,7 @@ export function recordCollectionResult({runDir,scope,samplingInput,qualifiedVide
   }
   for(const row of v.comments){
    if(!row.nickname||!row.douyinId||!row.commentBody||row.sourceVideoUrl!==url||row.recipientEvidence?.scope?.video_id!==vid||row.recipientEvidence.scope.profile!==scope.profile||row.recipientEvidence.scope.source_run!==scope.source_run)fail('AGENT_COLLECTION_RECIPIENT_INVALID');
-   recipient.validateEvidence(row.recipientEvidence,{line_key:scope.line_key,run:scope.run,douyin_id:row.douyinId,nickname:row.nickname,comment_body:row.commentBody,comment_body_sha256:hash(row.commentBody),video_url:url},{companyBinding:scope.company_binding});
+   recipient.validateEvidence(row.recipientEvidence,{line_key:scope.line_key,run:scope.run,douyin_id:row.douyinId,nickname:row.nickname,comment_body:row.commentBody,comment_body_sha256:hash(row.commentBody),video_url:url},{companyBinding:scope.company_binding,...(recipientNative?{parseNative:recipientNative.parseNative}:{})});
   }
   const expected=[...historical,...v.comments].map(row=>({...row,sourceVideoUrl:row.sourceVideoUrl||url})),keys=expected.map(rowKey);
   if(new Set(expected.map(r=>JSON.stringify([r.douyinId,r.commentBody]))).size!==keys.length||samplingInput&&keys.length>samplingInput.comment_limit)fail('AGENT_COLLECTION_COVERAGE_INVALID');
@@ -181,7 +184,7 @@ export function recordCollectionResult({runDir,scope,samplingInput,qualifiedVide
   for(const r of pg.rows){allIds.add(r.id);const prior=historical.find(h=>rowKey(h)===rowKey(r));if(prior&&prior.id!==r.id)fail('AGENT_COLLECTION_PG_READBACK_INVALID');}
   if(new Set(pg.rows.map(r=>r.id)).size!==pg.rows.length)fail('AGENT_COLLECTION_PG_READBACK_INVALID');
   let footer=null;if(isQuota&&stored.coverage!==samplingInput.comment_limit)fail('AGENT_COLLECTION_QUOTA_UNVERIFIED');
-  if(v.stop_reason==='footer_reached')footer=footerProof(v.footer_evidence,{root:evidenceRoot,run:scope.run,vid});
+  if(v.stop_reason==='footer_reached')footer=footerProof(v.footer_evidence,{root:evidenceRoot,run:scope.run,vid,verifyFooter});
   if(v.stop_reason==='no_comments'){if(stored.coverage!==0||v.comments.length||historical.length)fail('AGENT_COLLECTION_ZERO_INVALID');verifyNoComments({runDir,run:scope.run,videoId:vid});}
   if(!isPartial&&stored.inserted+stored.history_verified!==stored.coverage)fail('AGENT_COLLECTION_COVERAGE_NOT_ADMITTED');
   const hc={version:1,verified:true,line:scope.line,line_key:scope.line_key,run:scope.run,source_run:scope.source_run,video_id:vid,video_url:url,history_status:loaded.receipt.status,history_sha256:loaded.sha256,ids:historical.map(r=>r.id),rows:historical.map(r=>({id:r.id,douyin_id:r.douyinId,comment_body:r.commentBody,source_video_url:r.sourceVideoUrl,identity_eid:r.identity_eid})),history_verified:stored.history_verified,coverage:stored.coverage};historyArtifacts.push({vid,body:hc});

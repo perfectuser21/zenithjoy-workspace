@@ -14,6 +14,10 @@ const failure=code=>Object.assign(new Error(code),{code});
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const keys='protocol task_id binding_id run_id source_commit serial profile endpoint epoch claim worker_deadline_ms cleanup_deadline_ms'.split(' ').sort().join(',');
 const receipts=new WeakMap();
+// Finite SDK31 compiler branch review: close-stdin-review-ca457, not a
+// program-wide exemption. A changed compiler/SDK or unknown op keeps fresh.
+const closeStdinCompiler='c33299939dc55076a985dadea705e61eaa469d93cf3a4548d69d531dec676fc7';
+const closeStdinOperations=new Set(["audio-dump", "broadcast-nonce", "clear-nonce", "close-app", "current-ime", "device-date", "dump", "dump-file", "foreground", "home-resolve", "ime-enable", "ime-set", "input-nonce", "keyevent", "long-press", "media-session", "media-volume", "model", "open-app", "open-detail", "package-uid", "pause", "remove-ui", "scratch-search", "screenshot", "screenshot-file", "sdk", "search", "stat-ui", "stat-ui-mtime", "swipe", "tap", "telecom", "ui-exists", "ui-symlink", "uid-owners", "unlock", "wake", "window"]);
 const commandWireLimit=reviewed=>reviewed?.operation==='screenshot'?13*1024*1024:2*1024*1024;
 function serial(value){
  if(typeof value!=='string')return false;if(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(value))return true;
@@ -37,9 +41,9 @@ export function createNativePhoneCommandObserver(options={}){
  for(const key of ['task_id','binding_id','run_id','source_commit','profile','serial','epoch','endpoint'])if(provenance[key]!==base.scope?.[key])throw failure('NATIVE_PHONE_COMMAND_SOURCE_SCOPE');
  if(canonical(provenance.claim)!==canonical(base.scope.claim)||base.scope.worker_deadline_ms>provenance.worker_deadline_ms||base.scope.cleanup_deadline_ms>provenance.cleanup_deadline_ms)throw failure('NATIVE_PHONE_COMMAND_SOURCE_SCOPE');
  const command=compileVerifiedNativePhoneCommand(commandSource,operation,args,context);
- return createObserver(base,{command,operation,verify:()=>readNativePhoneCommandSource(commandSource,{source:base.source})});
+ return createObserver(base,{command,operation,deviceSdk:provenance.device_sdk,args:structuredClone(args),verify:()=>readNativePhoneCommandSource(commandSource,{source:base.source})});
 }
-function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},reviewed){
+function createObserver({source,runtimeRoot,directory,scope,readAuthority,requestTicket}={},reviewed){
  let fixed,q;try{fixed=frozen(JSON.parse(JSON.stringify(source)));q=frozen(JSON.parse(JSON.stringify(scope)));}catch{throw failure('ADB_SHELL_V2_SCOPE');}
  const endpoint=typeof q?.endpoint==='string'?q.endpoint.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/):null;
  if(!plain(q)||Object.keys(q).sort().join(',')!==keys||q.protocol!=='adb-shell-v2-observation/v1'||!uuid.test(q.task_id||'')||!uuid.test(q.binding_id||'')||!/^[-A-Za-z0-9_.]{1,150}$/.test(q.run_id||'')||!serial(q.serial)||!/^[-A-Za-z0-9_.]{1,80}$/.test(q.profile||'')||!endpoint||Number(endpoint[1])>65535||!Number.isSafeInteger(q.epoch)||q.epoch<0
@@ -69,20 +73,26 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
  const admit=async()=>{
   guard();verifyJournal();verifySource();reviewed?.verify();guard();let a;try{a=await readAuthority();}catch{throw failure('ADB_SHELL_V2_AUTHORITY');}guard();verifyJournal();verifySource();reviewed?.verify();guard();
   if(!a||canonical(a.scope)!==canonical(q)||a.claimed_by!==q.claim.claimed_by||a.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(a.lease_until))||Date.parse(a.lease_until)<=Date.now())throw failure('ADB_SHELL_V2_AUTHORITY');
+  return Date.parse(a.lease_until);
  };
+ let protocolCheck;
+ const localAdmit=()=>{guard();verifyJournal();verifySource();reviewed?.verify();protocolCheck();guard();};
  let interrupt;const destroyAll=()=>{for(const c of channels)c.socket.destroy();};
  function seal(){if(!sealed){sealed=true;epoch++;if(pending){taint('ADB_SHELL_V2_CLOSED');interrupt?.();}destroyAll();}return snapshot();}
  async function connect(){
   if(connectionIndex>=2)throw failure('ADB_SHELL_V2_RECONNECT');
-  const index=connectionIndex++;record(`socket-${index}.intent.json`,{schema_version:1,index,endpoint_sha256:sha(q.endpoint),serial_sha256:sha(q.serial)});await admit();guard();
-  const socket=new Socket(),c={socket,buffer:Buffer.alloc(0),ended:false,closed:false,error:null,total:0,wake:new Set()};
+  const index=connectionIndex++;record(`socket-${index}.intent.json`,{schema_version:1,index,endpoint_sha256:sha(q.endpoint),serial_sha256:sha(q.serial)});const leaseUntil=protocolCheck?(localAdmit(),q.worker_deadline_ms):await admit();guard();
+  const socket=new Socket(),c={socket,leaseUntil,buffer:Buffer.alloc(0),ended:false,closed:false,error:null,total:0,wake:new Set()};
   let close;const closePromise=new Promise(r=>{close=r;}),notify=()=>{for(const wake of c.wake)wake();c.wake.clear();};
   channels.add(c);socket.on('data',bytes=>{c.total+=bytes.length;if(c.total>commandWireLimit(reviewed)){c.error='ADB_SHELL_V2_LIMIT';socket.destroy();}else c.buffer=Buffer.concat([c.buffer,bytes]);notify();});
   socket.on('end',()=>{c.ended=true;notify();});socket.on('error',()=>{c.error='ADB_SHELL_V2_SOCKET';notify();});socket.on('close',hadError=>{c.closed=true;if(hadError||!c.ended)c.error??='ADB_SHELL_V2_SOCKET';channels.delete(c);close();notify();});
   const wait=()=>new Promise(r=>c.wake.add(r));
-  c.read=async size=>{await admit();while(c.buffer.length<size){guard();if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
-  c.chunk=async()=>{await admit();while(!c.buffer.length&&!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
-  c.finish=async()=>{while(!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}if(c.buffer.length)throw failure('ADB_SHELL_V2_TRAILING');await closePromise;guard();if(c.error)throw failure(c.error);};
+  // This connection is a private, single-observer inflight ticket. Frame reads
+  // cannot issue a command: every write and the final receipt still re-admit.
+  const frameGuard=()=>{guard();if(Date.now()>=c.leaseUntil)throw failure('ADB_SHELL_V2_AUTHORITY');};
+  c.read=async size=>{frameGuard();while(c.buffer.length<size){frameGuard();if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}frameGuard();if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
+  c.chunk=async()=>{frameGuard();while(!c.buffer.length&&!c.ended){frameGuard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}frameGuard();if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
+  c.finish=async()=>{while(!c.ended){frameGuard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}if(c.buffer.length)throw failure('ADB_SHELL_V2_TRAILING');await closePromise;frameGuard();if(c.error)throw failure(c.error);};
   c.closePromise=closePromise;
   const connected=new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',()=>reject(failure('ADB_SHELL_V2_SOCKET')));socket.once('close',()=>reject(failure('ADB_SHELL_V2_SOCKET')));});
   // Own rejection synchronously: guard() or connect() can throw before await.
@@ -91,8 +101,8 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
   connected.catch(()=>{taint('ADB_SHELL_V2_SOCKET');});
   guard();try{socket.connect(Number(endpoint[1]),'127.0.0.1');}catch{throw failure('ADB_SHELL_V2_SOCKET');}await connected;guard();return c;
  }
- async function write(c,bytes){
-  record(`write-${writeIndex++}.intent.json`,{schema_version:1,bytes:bytes.length,sha256:sha(bytes)});await admit();guard();
+ async function write(c,bytes,{dispatch=false,completion=false}={}){
+  record(`write-${writeIndex++}.intent.json`,{schema_version:1,bytes:bytes.length,sha256:sha(bytes)});if(protocolCheck&&!dispatch&&(!completion||(reviewed?.deviceSdk===31&&closeStdinOperations.has(reviewed.operation)&&fixed.files.some(f=>f.path==='native-phone-command-source.mjs'&&f.sha256===closeStdinCompiler))))localAdmit();else c.leaseUntil=await admit();guard();
   await new Promise((resolve,reject)=>c.socket.write(bytes,error=>error?reject(failure('ADB_SHELL_V2_SOCKET')):resolve()));guard();
  }
  async function status(c){const ack=await c.read(4);if(ack.equals(Buffer.from('OKAY')))return;if(ack.equals(Buffer.from('FAIL'))){const n=adbPayloadLength(await c.read(4),4096);await c.read(n);throw failure('ADB_SHELL_V2_FAIL');}throw failure('ADB_SHELL_V2_ACK');}
@@ -102,10 +112,11 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
   const timer=setTimeout(()=>{taint('ADB_SHELL_V2_DEADLINE');seal();},Math.max(1,q.worker_deadline_ms-Date.now()));
   pipeline=(async()=>{
    try{
+    if(requestTicket!==undefined){if(!reviewed)throw failure('ADB_SHELL_V2_PROTOCOL_TICKET');const m=await import('./native-phone-protocol-ticket.mjs');protocolCheck=m.claimNativePhoneProtocolTicket(requestTicket,{source:fixed,scope:q,request:{kind:'shell',operation:reviewed.operation,args:reviewed.args}});}
     const feature=await connect();await write(feature,adbRequest('host-serial:'+q.serial+':features'));await status(feature);
     const n=adbPayloadLength(await feature.read(4),4096),text=(await feature.read(n)).toString('latin1'),features=text.split(',');if(!features.length||features.some(x=>!/^[a-z][a-z0-9_]*$/.test(x))||new Set(features).size!==features.length||!features.includes('shell_v2'))throw failure('ADB_SHELL_V2_UNSUPPORTED');await feature.finish();
     const command=await connect();await write(command,adbRequest('host:transport:'+q.serial));await status(command);
-    await write(command,adbRequest('shell,v2,raw:'+(reviewed?.command??`exec /system/bin/uiautomator dump --compressed /sdcard/douyin-leadgen-ui-${q.profile}.xml`)));await status(command);await write(command,closeStdinFrame());
+    await write(command,adbRequest('shell,v2,raw:'+(reviewed?.command??`exec /system/bin/uiautomator dump --compressed /sdcard/douyin-leadgen-ui-${q.profile}.xml`)),{dispatch:true});await status(command);await write(command,closeStdinFrame(),{completion:true});
     const decoder=createShellV2Decoder({maxBytes:commandWireLimit(reviewed)});let chunk;while((chunk=await command.chunk())!==null)decoder.push(chunk);const parsed=decoder.finish();await command.finish();
     await admit();guard();complete=true;
     const cap=Object.freeze({protocol:'adb-shell-v2-wire/v1',exit_code:parsed.exit_code,stdout_sha256:sha(parsed.stdout),stderr_sha256:sha(parsed.stderr),stdout_bytes:parsed.stdout.length,stderr_bytes:parsed.stderr.length,wire_bytes:parsed.wire_bytes,remote_execution_stopped:'not_attested',command_source:'not_attested',android_services:'not_attested',resource_authority:'not_attested'});

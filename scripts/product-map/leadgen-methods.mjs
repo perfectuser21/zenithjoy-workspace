@@ -125,11 +125,17 @@ export function checkMethods(root,{base=null,skillSource}={}){
     if(!/^[a-f0-9]{40}$/.test(base))fail('BASE_SHA_INVALID');
     try{execFileSync('git',['rev-parse','--verify',base+'^{commit}'],{cwd:root,stdio:'pipe'});}catch{fail('BASE_COMMIT_UNAVAILABLE',base);}
     const centralLock=execFileSync('git',['ls-tree',base,'--','.skills-source.json'],{cwd:root,stdio:['ignore','pipe','pipe']}).toString();
+    const historical=new Map();
     const readBase=path=>{safePath(path);
+      if(historical.has(path))return Buffer.from(historical.get(path));
       // Before migration, preserve ordinary Git absence for first method adoption.
       // With a historical source lock, every Skill read remains pinned and strict.
-      if(path===LOCK_PATH||!centralLock)return execFileSync('git',['show',base+':'+path],{cwd:root,stdio:['ignore','pipe','pipe'],maxBuffer:32*1024*1024});
-      return readImplementationSource(root,base,path,{source:skillSource});
+      const bytes=path===LOCK_PATH||!centralLock
+        ?execFileSync('git',['show',base+':'+path],{cwd:root,stdio:['ignore','pipe','pipe'],maxBuffer:32*1024*1024})
+        :readImplementationSource(root,base,path,{source:skillSource});
+      // Only successfully verified immutable history is shared in this call.
+      // Keep the live reader and errors uncached, and do not expose cached buffers.
+      historical.set(path,Buffer.from(bytes));return Buffer.from(bytes);
     };
     const bytes=optional(readBase,LOCK_PATH);let before=null;
     if(bytes){before=JSON.parse(bytes);const baseActual=collectMethods(root,{read:readBase}),strippedBase=structuredClone(before);for(const a of Object.values(strippedBase.activities??{}))delete a.code_compatibility;if(!same(baseActual,strippedBase))fail('BASE_METHOD_LOCK_DRIFT');}

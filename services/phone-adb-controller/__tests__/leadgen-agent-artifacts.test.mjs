@@ -122,3 +122,17 @@ test('真实作者footer可以零覆盖完成范围，不能冒充UI零评论',a
  const file=join(input.evidenceRoot,`${run}-v${vid}-collection-screen1.xml`),raw=readFileSync(new URL('./fixtures/honor-e1b-recipient/author-footer.xml',import.meta.url));writeFileSync(file,raw,{mode:0o600});v.footer_evidence={file,sha256:sha(raw)};
  const out=api.recordCollectionResult(input);assert.equal(out.comments_inserted,0);assert.equal(out.videos_collected,1);assert.equal(out.sampling_receipts[0].stop_reason,'footer_reached');assert.equal(existsSync(join(f.runDir,run+'-no-comments-'+vid+'.json')),false);
 });
+
+test('original collection artifacts consume the Code-owned recipient parser seam',t=>{
+ const {input}=collectionFixture(t),native=createRequire(import.meta.url)('../queued-recipient-evidence.js');let reads=0;
+ input.recipientNative={parseNative(...args){reads++;return native.parseNative(...args);}};
+ const out=api.recordCollectionResult(input);assert.equal(out.videos_sampled,1);assert.equal(reads,1,'must use Code parser rather than hidden default process');
+});
+test('Code recipient parser rejection is retained without falling back to the legacy parser',t=>{
+ const {input}=collectionFixture(t);input.recipientNative={parseNative(){throw Error('CODE_PARSE_REJECTED');}};
+ assert.throws(()=>api.recordCollectionResult(input),/CODE_PARSE_REJECTED/);assert.equal(existsSync(join(input.runDir,run+'-agent-collection-receipts.json')),false);
+});
+
+for(const accepted of [true,false])test('original footer predicate consumes Code reader with exact immutable bytes '+accepted,t=>{
+ const {input}=collectionFixture(t),v=input.videos[0];v.comments=[];v.operation='collect';v.stored={inserted:0,comments:0,video_id:vid,history_verified:0,coverage:0};v.pgReadback={verified:true,video_id:vid,coverage:0,rows:[]};v.stop_reason='footer_reached';const file=join(input.evidenceRoot,`${run}-v${vid}-collection-seam.xml`),raw=readFileSync(new URL('./fixtures/honor-e1b-recipient/author-footer.xml',import.meta.url));writeFileSync(file,raw,{mode:0o600});v.footer_evidence={file,sha256:sha(raw)};let reads=0;input.verifyFooter=(bytes,context)=>{reads++;assert.deepEqual(bytes,raw);assert.equal(context.sha256,sha(raw));assert.equal(context.video_id,vid);return accepted;};if(accepted)assert.equal(api.recordCollectionResult(input).videos_collected,1);else assert.throws(()=>api.recordCollectionResult(input),/AGENT_COLLECTION_FOOTER_UNVERIFIED/);assert.equal(reads,1,'must consume the Code reader rather than start the default Python');
+});

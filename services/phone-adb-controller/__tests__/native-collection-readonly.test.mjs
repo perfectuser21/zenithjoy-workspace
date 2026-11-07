@@ -1,0 +1,24 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {usingNativeCollectionQueue as fixture} from './fixtures/native-collection-queue-fixture.mjs';
+test('closed worker scope remains exact while independent Judge reads only inside its original receipt window',async t=>fixture(t,async f=>{
+ // Narrow this new fixture's worker window. Never renew or change its receipt.
+ f.scope.worker_deadline_ms=Math.min(f.scope.worker_deadline_ms,Date.now()+14000);
+ const dependencies=await f.makeDependencies(),options={...f,dependencies,directory:f.makeDirectory('receipt-worker'),assertAuthority:f.authority()},q=f.api.createNativeCollectionQueue(options);t.after(()=>q.close());t.after(()=>dependencies.close());
+ const {cap}=await f.makeCapture();await q.collect(f.vid,cap);await q.readback(f.vid);await q.close();const packet=q.issuedReceipts();await dependencies.close();
+ const wait=f.scope.worker_deadline_ms-Date.now()+20;if(wait>0)await new Promise(r=>setTimeout(r,wait));assert.ok(Date.now()>f.scope.worker_deadline_ms);assert.ok(Date.now()<f.scope.receipt_deadline_ms);
+ const original=structuredClone(f.scope),deadlineMs=f.scope.receipt_deadline_ms-1,reader=await f.makeDependencies({deadlineMs});try{
+  const readonly=f.api.createNativeCollectionQueue({...f,qualificationRecords:f.qualificationRecords,dependencies:reader,directory:f.makeDirectory('readonly-cannot-write'),assertAuthority:f.authority(),deadlineMs,readOnly:true}),before=f.allocated();await assert.rejects(readonly.collect(f.vid,cap),/READONLY/);assert.equal(f.allocated(),before);assert.throws(()=>readonly.issuedReceipts(),/READONLY/);await readonly.close();
+  assert.throws(()=>f.api.createNativeCollectionQueue({...f,qualificationRecords:f.qualificationRecords,dependencies:reader,directory:f.makeDirectory('extended-receipt'),assertAuthority:f.authority(),deadlineMs:f.scope.receipt_deadline_ms+1,readOnly:true}),/SCOPE/);
+  const result=await f.api.readNativeCollectionQueueReceipts(packet,{...f,dependencies:reader,directory:f.makeDirectory('receipt-judge'),assertAuthority:f.authority(),deadlineMs});assert.equal(result.verified,true);assert.equal(result.coverage,1);assert.deepEqual(f.scope,original);
+ }finally{await reader.close();}
+}));
+test('readonly PG loses ownership during an actual query and remains unknown with no business write',async t=>fixture(t,async f=>{
+ const dependencies=await f.makeDependencies(),original=f.routes.get('/api/brain/tasks/'+f.scope.task_id).claimed_by;let changed=false;
+ const createPool=async options=>{const allocation=await f.createPool(options),connect=allocation.pool.connect.bind(allocation.pool);allocation.pool.connect=async()=>{const c=await connect(),query=c.query.bind(c);return {...c,async query(text,args){const value=await query(text,args);if(text==="SELECT current_setting('transaction_read_only') AS readonly"){changed=true;f.routes.get('/api/brain/tasks/'+f.scope.task_id).claimed_by='changed-during-real-read';}return value;}};};return allocation;};
+ const q=f.api.createNativeCollectionQueue({...f,dependencies,qualificationRecords:f.qualificationRecords,directory:f.makeDirectory('revoked-readonly'),assertAuthority:f.authority(),createPool,readOnly:true,deadlineMs:f.scope.receipt_deadline_ms-1}),before=f.calls.filter(x=>/^\s*(INSERT|UPDATE)/.test(x)).length;
+ try{await assert.rejects(q.history(f.vid),/AUTHORITY|UNKNOWN/);assert.equal(changed,true);assert.equal(q.snapshot().execution_unknown,true);assert.equal(f.calls.filter(x=>/^\s*(INSERT|UPDATE)/.test(x)).length,before);assert.equal((await q.close()).execution_stopped,false);}finally{f.routes.get('/api/brain/tasks/'+f.scope.task_id).claimed_by=original;await q.close();await dependencies.close();}
+}));
+test('held actual readonly pool close cannot produce a stop and a late close cannot clear unknown',async t=>fixture(t,async f=>{
+ const now=Date.now();f.scope.worker_deadline_ms=now+1000;f.scope.receipt_deadline_ms=now+5000;const scope=structuredClone(f.scope),dependencies=await f.makeDependencies({deadlineMs:now+3000}),q=f.api.createNativeCollectionQueue({...f,dependencies,qualificationRecords:f.qualificationRecords,directory:f.makeDirectory('held-readonly'),assertAuthority:f.authority(),readOnly:true,deadlineMs:now+3000}),before=f.allocated();f.holdClose();
+ let work;try{work=q.history(f.vid);await assert.rejects(work,/DEADLINE/);assert.ok(f.allocated()>before);const stopped=await q.close();assert.equal(stopped.execution_stopped,false);assert.equal(stopped.execution_unknown,true);assert.ok(stopped.pending>0);f.releaseClose();for(let i=0;i<100&&q.snapshot().pending;i++)await new Promise(r=>setTimeout(r,10));assert.equal(q.snapshot().pending,0);assert.equal(q.snapshot().execution_unknown,true);assert.equal(q.verifyStopped(stopped),false);assert.deepEqual(f.scope,scope);}finally{f.releaseClose();await work?.catch(()=>{});await q.close();await dependencies.close();}
+}));

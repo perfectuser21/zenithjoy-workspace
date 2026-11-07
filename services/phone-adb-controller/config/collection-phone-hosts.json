@@ -16,7 +16,10 @@
         "host_id": "xian-m4",
         "transport": "usb",
         "endpoint": "tcp:127.0.0.1:5037",
-        "forbidden_ports": [5041, 5042],
+        "forbidden_ports": [
+          5041,
+          5042
+        ],
         "adb_bin": "/opt/homebrew/bin/adb",
         "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/36.0.2/platform-tools/adb",
         "adb_sha256": "534893b946847fdf6f9998108af469e646679824d75098247ca438948fa2dffc"
@@ -41,7 +44,9 @@
       "profile": "jinoshengyuan-work",
       "serial": "ANGYVB4227006983",
       "expected_account": "langzi63485",
-      "workflow_keys": ["douyin_video_discovery"],
+      "workflow_keys": [
+        "douyin_video_discovery"
+      ],
       "evidence_root": "/private/tmp/openclaw-phone/evidence/jinoshengyuan-work",
       "evidence_alias": {
         "path": "/private/tmp/openclaw-phone",
@@ -191,6 +196,14 @@
         "zsh": {
           "path": "/bin/zsh",
           "sha256": "abc56520c469fa4985fca02c5f55621932ad79de4f36440a64a27526f4b535ef"
+        },
+        "ffmpeg": {
+          "path": "/opt/homebrew/Cellar/ffmpeg/9.0.2_1/bin/ffmpeg",
+          "sha256": "2be8e0caabc6ce733a628d1523f43235702d714826df3408e04e09b2a079b7a3"
+        },
+        "ffprobe": {
+          "path": "/opt/homebrew/Cellar/ffmpeg/9.0.2_1/bin/ffprobe",
+          "sha256": "072b4ddb060a6173b274510da92a96a8433d200cd40b277ed8117ffb718f2cbe"
         }
       }
     }
