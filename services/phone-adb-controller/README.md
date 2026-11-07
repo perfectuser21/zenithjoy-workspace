@@ -12,6 +12,8 @@
 
 维护完成后独立读回 `adb-host-service.py status --config "$HOME/.config/zenithjoy/adb-service.json"`、launchd 实际子进程与各 serial；再释放本人维护锁。退出码成功或服务只剩一个，不代表四台设备都在线，更不代表获客验收成功。中途失败保留 `~/.config/zenithjoy/adb-maintenance.journal.jsonl` 与业务锁，禁止删除 journal 重放；先核清现场再处理。
 
+MMV 云手机使用已安装候选目录的 `install-adb-host-service.sh --mmv-policy --manifest <该目录/deployment-manifest.json> --source <完整候选SHA>`。该分支只安装官方 `collection-phone-hosts.json` 中的 mmv/cloud-phone-test 策略；核实际 MMV 主机、administrator/HOME、manifest 字节、ADB realpath/hash 和既有 5041 在线设备，按本人 0600 普通文件独占创建 active policy。已有一致配置幂等，冲突拒绝，不启动、停止或重连 ADB，不安装 M4 launchd。独立验收用 `ADB_SERVER_SOCKET=tcp:127.0.0.1:5041 python3 adb-existing-route.py 47.100.213.173:10001 /opt/homebrew/bin/adb` 及 preflight route；`adb-host-service.py status` 仍限定 M4，不用于 MMV 准入。
+
 ## 102 公司绑定与失败清场
 
 正式冻结的101/102在首个设备动作前核同一公司、租户、版本、run、设备与账号的PG绑定；102以私有文件将绑定传给原生收件人证据核验。宿主名称不决定租户身份，M4仍保留本机账号登记核验。Honor的e1b/fod/jqh/kj+布局按唯一原生面板配对识别，仍逐项核UID、昵称、评论全文与包名；作者评论过滤后即使已到底也可以合法为0条，不能据此制造客户评论。

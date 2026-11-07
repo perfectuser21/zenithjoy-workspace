@@ -1,11 +1,15 @@
 #!/bin/bash
 # 仅stage；正式root plist安装和active policy切换由持锁维护入口负责。
 set -euo pipefail
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+if [[ "${1:-}" == --mmv-policy ]]; then
+  shift
+  exec python3 "$HERE/adb-mmv-policy-install.py" "$@"
+fi
 if [[ $# != 1 ]]; then
   echo '用法: install-adb-host-service.sh <正式deployment-manifest.json>' >&2
   exit 2
 fi
-HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 exec python3 - "$HERE" "$1" <<'PY'
 import importlib.util,sys
 from pathlib import Path
