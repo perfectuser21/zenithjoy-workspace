@@ -36,7 +36,23 @@ function createRead({runtimeRoot,source,directory,scope,readAuthority}={},eviden
  record('lifecycle.intent.json',{protocol:q.protocol,instance_id:randomUUID(),scope_sha256:sha(canonical(q)),source_sha256:sha(canonical(fixed))});
  let sealed=false,unknown=false,index=0,closing;const jobs=new Set(),channels=new Set(),reasons=new Set();
  const guard=()=>{if(unknown)throw fail('UNKNOWN');if(sealed)throw fail('CLOSED');if(Date.now()>=q.worker_deadline_ms)throw fail('DEADLINE');};
- const admit=async()=>{guard();evidenceSource?.();verifySource();verifyJournal();guard();let value;try{value=await readAuthority();}catch{throw fail('AUTHORITY');}guard();verifySource();verifyJournal();guard();if(!value||canonical(value.scope)!==canonical(q)||value.claimed_by!==q.claim.claimed_by||value.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(value.lease_until))||Date.parse(value.lease_until)<=Date.now())throw fail('AUTHORITY');};
+ // Only this private, fixed ROM reader may reuse an exact admission. A short
+ // window avoids multiplying four Brain reads by every DATA frame. Evidence
+ // readers never reuse it; every returned file requires a fresh post-EOF read.
+ let sourceAdmission;
+ const admit=async({fresh=false}={})=>{
+  guard();evidenceSource?.();verifySource();verifyJournal();guard();let value;
+  if(!evidenceSource&&!fresh&&sourceAdmission&&Date.now()<sourceAdmission.until)value=sourceAdmission.value;
+  else{
+   try{value=await readAuthority();}catch(error){throw Object.assign(fail('AUTHORITY'),{authority_error:/^[A-Z][A-Z0-9_]{0,95}$/.test(error?.code||'')?error.code:'UNCLASSIFIED'});}
+   guard();verifySource();verifyJournal();guard();
+   // Copy the response into the Code-owned instance; caller JSON cannot extend
+   // a cached scope, claim, lease, deadline or the one-second validity window.
+   value=structuredClone(value);
+   if(!evidenceSource)sourceAdmission={value,until:Math.min(Date.now()+1000,q.worker_deadline_ms,Date.parse(value?.lease_until))};
+  }
+  if(!value||canonical(value.scope)!==canonical(q)||value.claimed_by!==q.claim.claimed_by||value.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(value.lease_until))||Date.parse(value.lease_until)<=Date.now())throw fail('AUTHORITY');
+ };
  const snapshot=()=>Object.freeze({domain:'native-phone-adb-read/v1',sealed,pending:jobs.size,open_sockets:channels.size,unknown,unknown_reasons:Object.freeze([...reasons]),channel_stopped:sealed&&!unknown&&!jobs.size&&!channels.size,remote_execution_stopped:'not_attested',android_services:'not_attested',authority_reader_execution:'not_attested'});
  const seal=()=>{sealed=true;for(const job of jobs)job.cancel();return snapshot();};
  async function read(path){
@@ -65,8 +81,8 @@ function createRead({runtimeRoot,source,directory,scope,readAuthority}={},eviden
     const quit=Buffer.alloc(8);quit.write('QUIT');await send(quit);
     while(!ended){guard();if(connectionError)throw fail(connectionError);if(!channels.has(socket))throw fail('TRUNCATED');await new Promise(r=>wake.add(r));}
     await closePromise;guard();if(connectionError||buffer.length)throw fail('TRAILING');
-    await admit();guard();const data=Buffer.concat(chunks);if(evidenceSource&&data.length>(path.endsWith('.png')?12:5)*1024*1024)throw fail('LIMIT');const cap=Object.freeze({domain:'native-phone-adb-read/v1',id});receipts.set(cap,{owner:api,scope_sha256:sha(canonical(q)),path,bytes:data});record(`read-${id}.returned.json`,{id,path,sha256:sha(data),bytes:data.length,peer_eof:true,socket_closed:true});return cap;
-   }catch(error){unknown=true;const code=/^NATIVE_PHONE_READ_[A-Z_]+$/.test(error?.code||'')?error.code:'NATIVE_PHONE_READ_FAILED';reasons.add(code);try{record(`read-${id}.unknown.json`,{id,code});}catch{reasons.add('NATIVE_PHONE_READ_JOURNAL');}throw fail(code.slice('NATIVE_PHONE_READ_'.length));}
+    await admit({fresh:true});guard();const data=Buffer.concat(chunks);if(evidenceSource&&data.length>(path.endsWith('.png')?12:5)*1024*1024)throw fail('LIMIT');const cap=Object.freeze({domain:'native-phone-adb-read/v1',id});receipts.set(cap,{owner:api,scope_sha256:sha(canonical(q)),path,bytes:data});record(`read-${id}.returned.json`,{id,path,sha256:sha(data),bytes:data.length,peer_eof:true,socket_closed:true});return cap;
+   }catch(error){unknown=true;const code=/^NATIVE_PHONE_READ_[A-Z_]+$/.test(error?.code||'')?error.code:'NATIVE_PHONE_READ_FAILED';reasons.add(code);try{record(`read-${id}.unknown.json`,{id,code,...(error.authority_error?{authority_error:error.authority_error}:{})});}catch{reasons.add('NATIVE_PHONE_READ_JOURNAL');}throw fail(code.slice('NATIVE_PHONE_READ_'.length));}
    finally{socket?.destroy();if(closePromise)await closePromise;clearTimeout(timer);jobs.delete(current);if(canceled)unknown=true;}
   })();current.done.catch(()=>{});return Promise.race([current.done,interrupted]);
  }
