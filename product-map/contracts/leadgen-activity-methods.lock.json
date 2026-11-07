@@ -1186,14 +1186,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "fa739f7373def83c3094717a68c2cb236d2c30fa6bdac0397655a85022a5659f"
+          "sha256": "12a3fcac54a24bfa7cd411f3c5b875668746d09adf298d0c86a59daa990cb3de"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "e72bdcf65d50882eab1d23b8c6dbf3126cde49cddbc2652e54dc09621405dc9d"
+          "sha256": "90d6966d5e25bfd85339df674c8805ea3302b1a554cd3a7ee4839b638fa352a4"
         },
         {
           "kind": "code",
@@ -1606,13 +1606,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "01aa93999171dd916c5aee0777204476a503bd988b961abb2ee48ae7d8602f3e",
+      "code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "新增精确cloud7预检只读SDK隔离的一次性非重放迁移程序，独立CLI执行；原Activity执行与OLD_EXECUTION_TERMINATION_UNKNOWN严闸不变，原Worker方法及输入输出不变。其余仅云手机review/policy哈希更新，104未获新权限。",
-        "reviewed_by": "/root/recovery_contract_review",
+        "reason": "新增精确cloud7预检只读SDK隔离的一次性非重放迁移程序，独立CLI执行；原Activity执行与OLD_EXECUTION_TERMINATION_UNKNOWN严闸不变，原Worker方法及输入输出不变。其余仅云手机review/policy哈希更新，104未获新权限。 本轮同步生成的101/102步骤清单仅更新合同哈希，步骤、成功标准和路由保持相同。",
+        "reviewed_by": "codex-cloud8-ci-continuation (generated-step hash delta review)",
         "previous_code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6",
-        "current_code_digest": "01aa93999171dd916c5aee0777204476a503bd988b961abb2ee48ae7d8602f3e"
+        "current_code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260"
       }
     },
     "douyin_video_processing.dedup": {
@@ -4418,14 +4418,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "fa739f7373def83c3094717a68c2cb236d2c30fa6bdac0397655a85022a5659f"
+          "sha256": "12a3fcac54a24bfa7cd411f3c5b875668746d09adf298d0c86a59daa990cb3de"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "e72bdcf65d50882eab1d23b8c6dbf3126cde49cddbc2652e54dc09621405dc9d"
+          "sha256": "90d6966d5e25bfd85339df674c8805ea3302b1a554cd3a7ee4839b638fa352a4"
         },
         {
           "kind": "code",
@@ -4823,13 +4823,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "78c5c601efe17720e707210c996e536a94f5f3fd9f753a7a0162920ce0fa8002",
+      "code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
+        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。 本轮同步生成的101/102步骤清单仅更新合同哈希，步骤、成功标准和路由保持相同。",
+        "reviewed_by": "codex-cloud8-ci-continuation (generated-step hash delta review)",
         "previous_code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f",
-        "current_code_digest": "78c5c601efe17720e707210c996e536a94f5f3fd9f753a7a0162920ce0fa8002"
+        "current_code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9"
       }
     },
     "douyin_comment_scoring.scoring": {
