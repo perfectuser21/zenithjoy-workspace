@@ -100,10 +100,13 @@ test('缺失request close回执不得卡死收尾或伪停止；真实socket虽�
  await rejected;
 },{delay:true,suppressClose:true}));
 
-test('绝对deadline取消真实挂起HTTP，之后无新GET且本机关闭可证',async()=>using(async({instance,q,firstRequest,count})=>{
+test('绝对deadline取消真实挂起HTTP，之后无新GET且本机关闭可证',async()=>using(async({instance,q,firstRequest,count,journalDirectory})=>{
  const work=instance.request({kind:'activity_skill_authority',request:q});const rejected=assert.rejects(work,/OFFICIAL_CONTROL_DEADLINE/);
  await Promise.race([firstRequest,work]);await rejected;await instance.close();
  assert.equal(count(),1);assert.equal(instance.snapshot().execution_stopped,true);
+ const ledger=readdirSync(journalDirectory).find(n=>n.endsWith('.jsonl')),rows=readFileSync(join(journalDirectory,ledger),'utf8').trim().split('\n').map(JSON.parse);
+ assert.deepEqual(rows.filter(r=>r.event.startsWith('read_')).map(r=>r.event),['read_intent','read_failed']);
+ assert.equal(rows.find(r=>r.event==='read_failed').request_closed,true);assert.equal(rows.find(r=>r.event==='read_failed').socket_closed,true);
 },{delay:true,shortDeadline:true}));
 test('日志ACL被改时在HTTP前拒绝并保unknown，close不洗掉记录失败',async()=>using(async({instance,q,count,journalDirectory})=>{
  const file=readdirSync(journalDirectory).find(x=>x.endsWith('.jsonl'));chmodSync(join(journalDirectory,file),0o644);
