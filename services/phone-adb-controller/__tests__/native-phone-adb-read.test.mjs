@@ -65,3 +65,8 @@ test('fresh post-EOF authority retains callback failure category without seriali
  const f=await fixture(t);const reader=module.createNativePhoneAdbRead({runtimeRoot:root,source:f.source,directory:f.directory,scope:f.scope,readAuthority:async()=>{if(f.requests.some(r=>r.id==='QUIT'))throw Object.assign(Error('do-not-log-secret'),{code:'OFFICIAL_CONTROL_DEADLINE'});return f.authority();}});
  try{await assert.rejects(reader.read(f.file),/NATIVE_PHONE_READ_AUTHORITY/);assert.equal(reader.snapshot().unknown,true);assert.equal(reader.snapshot().channel_stopped,false);const journal=readFileSync(join(f.directory,'read-0.unknown.json'),'utf8');assert.match(journal,/OFFICIAL_CONTROL_DEADLINE/);assert.doesNotMatch(journal,/do-not-log-secret/);}finally{await reader.close();}
 });
+
+for(const change of ['claim','lease'])test('cached ROM admission cannot bypass fresh post-EOF '+change+' revocation',async t=>{
+ const f=await fixture(t,{frames:8}),reader=module.createNativePhoneAdbRead({runtimeRoot:root,source:f.source,directory:f.directory,scope:f.scope,readAuthority:async()=>{const v=await f.authority();if(f.requests.some(r=>r.id==='QUIT')){if(change==='claim')v.claimed_by='foreign';else v.lease_until=new Date(Date.now()-1).toISOString();}return v;}});
+ try{await assert.rejects(reader.read(f.file),/NATIVE_PHONE_READ_AUTHORITY/);assert.equal(reader.snapshot().unknown,true);assert.equal(f.requests.filter(r=>r.id==='RECV').length,1);assert.equal((await reader.close()).channel_stopped,false);}finally{await reader.close();}
+});
