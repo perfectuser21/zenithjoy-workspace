@@ -1,12 +1,12 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync,writeFileSync} from 'node:fs';
 import {usingNativeRuntimeAdmissionBoundary} from './fixtures/native-phone-runtime-admission-boundary.mjs';
-test('actual public factory uses nine fresh B checks per command and eight per RECV retaining guard-before-and-after admission',async t=>{
+test('actual public factory uses four fresh B checks per command and RECV retaining entry, dispatch and result admission',async t=>{
  const result=await usingNativeRuntimeAdmissionBoundary(t,async f=>{
   const current=f.preflightRuntime.current();assert.ok(current);
   let start=f.claimCount();const before=f.adb.requests.length,foreground=await current.phone('foreground');const command=f.claimCount()-start;assert.match(foreground,/com\.ss\.android\.ugc\.aweme/);assert.ok(f.adb.requests.length>before);
   start=f.claimCount();const xmlPath=(await current.phone('ui-evidence',f.q.run_tag+'-runtime-boundary')).trim(),both=f.claimCount()-start;assert.match(readFileSync(xmlPath,'utf8'),/<hierarchy/);f.observations.push({command,read:both-command,combined:both});
  });
- assert.equal(result.error,undefined);assert.equal(result.preflight.status,'completed');assert.equal(result.preflight.execution_stopped,true);assert.equal(result.cleanup.status,'completed');assert.equal(result.cleanup.execution_stopped,true);assert.equal(result.lockHeld,null);assert.equal(result.state.execution_unknown,false);assert.deepEqual(result.observations,[{command:9,read:8,combined:17}]);
+ assert.equal(result.error,undefined);assert.equal(result.preflight.status,'completed');assert.equal(result.preflight.execution_stopped,true);assert.equal(result.cleanup.status,'completed');assert.equal(result.cleanup.execution_stopped,true);assert.equal(result.lockHeld,null);assert.equal(result.state.execution_unknown,false);assert.deepEqual(result.observations,[{command:4,read:4,combined:8}]);
 });
 
 for(const mode of ['shell-before-task','recv-before-task','shell-result-source','recv-result-owner'])test('actual factory '+mode+' refuses a fresh primitive/cap and preserves the owned phone',async t=>{
