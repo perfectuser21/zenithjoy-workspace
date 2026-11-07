@@ -10902,3 +10902,11 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition keep-green；API原媒体三包和CJK字体有界安装，失败不跳测试"
+
+  - id: phone-workflow-cli-startup-failure
+    path: services/phone-adb-controller/__tests__/workflow-cli-startup-failure.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实CLI启动失败独占留受控错误码，拒外来路径/secret/覆盖；不当作活动或资源已归还证明"
