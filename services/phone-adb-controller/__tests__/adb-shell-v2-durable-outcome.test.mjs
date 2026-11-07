@@ -14,13 +14,13 @@ const source={commit:'a'.repeat(40),files:['adb-shell-v2.mjs','adb-shell-v2-prot
 const frame=(id,bytes)=>{const header=Buffer.alloc(5);header[0]=id;header.writeUInt32LE(bytes.length,1);return Buffer.concat([header,bytes]);};
 
 // A real loopback smart-socket peer only; no installed ADB service or phone.
-async function runWire(t,{sdk='31',early=false,missingExit=false}={}){
+async function runWire(t,{sdk='31',early=false,missingExit=false,holdEof=false}={}){
  const temporary=realpathSync(mkdtempSync(join(tmpdir(),'shell-v2-durable-'))),directory=join(temporary,'journal');mkdirSync(directory,{mode:0o700});
  const connections=new Set(),requests=[];let connectionIndex=0,closeStdinReceived=false;
  const server=createServer(socket=>{
   connections.add(socket);socket.on('error',()=>{});socket.once('close',()=>connections.delete(socket));
   const index=connectionIndex++;let buffered=Buffer.alloc(0),phase=0;
-  const output=()=>socket.end(Buffer.concat([frame(1,Buffer.from(sdk+'\n')),frame(2,Buffer.from('fixture-stderr\n')),...(missingExit?[]:[frame(3,Buffer.from([0]))])]));
+  const output=()=>socket[holdEof?'write':'end'](Buffer.concat([frame(1,Buffer.from(sdk+'\n')),frame(2,Buffer.from('fixture-stderr\n')),...(missingExit?[]:[frame(3,Buffer.from([0]))])]));
   socket.on('data',bytes=>{
    buffered=Buffer.concat([buffered,bytes]);
    while(true){
@@ -42,7 +42,7 @@ async function runWire(t,{sdk='31',early=false,missingExit=false}={}){
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const port=server.address().port;assert.ok(![5037,5041].includes(port));
- const now=Date.now(),scope={protocol:'adb-shell-v2-observation/v1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',run_id:'douyin_video_discovery-synthetic__a1',source_commit:source.commit,profile:'synthetic',serial:'synthetic-fixture',endpoint:'tcp:127.0.0.1:'+port,epoch:1,claim:{claimed_by:'synthetic-wire-test',claimed_at:new Date(now).toISOString()},worker_deadline_ms:now+5000,cleanup_deadline_ms:now+6000};
+ const now=Date.now(),scope={protocol:'adb-shell-v2-observation/v1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',run_id:'douyin_video_discovery-synthetic__a1',source_commit:source.commit,profile:'synthetic',serial:'synthetic-fixture',endpoint:'tcp:127.0.0.1:'+port,epoch:1,claim:{claimed_by:'synthetic-wire-test',claimed_at:new Date(now).toISOString()},worker_deadline_ms:now+(holdEof?650:5000),cleanup_deadline_ms:now+6000};
  const observer=createAdbShellV2Observer({source,runtimeRoot:root,directory,scope,readAuthority:async()=>{
   // Force a short command's EXIT/EOF to arrive during authority admission.
   await new Promise(resolve=>setTimeout(resolve,10));
@@ -75,4 +75,12 @@ test('peer EOF without shell EXIT leaves an exact durable unknown reason and fin
  const terminal=f.read('terminal.json');assert.equal(terminal.error_code,f.error.code);assert.ok(terminal.snapshot.unknown_reasons.includes(f.error.code));assert.equal(terminal.snapshot.pending,0);assert.equal(terminal.snapshot.open_sockets,0);assert.equal(terminal.snapshot.remote_execution_stopped,'not_attested');
  assert.ok(f.names.includes('socket-1.end.json'));assert.ok(f.names.includes('socket-1.close.json'));
  assert.equal(f.names.includes('command.outcome.json'),false,'EOF cannot synthesize a decoded EXIT outcome');
+});
+
+// A peer that sends EXIT but never closes must not erase the decoded outcome
+// when the deadline eventually seals the still-open channel.
+test('decoded EXIT is durable even when peer withholds EOF until the deadline',async t=>{
+ const f=await runWire(t,{holdEof:true});assert.ok(f.error);assert.equal(f.stopped.unknown,true);
+ const outcome=f.read('command.outcome.json');assert.equal(outcome.exit_code,0);assert.equal(Buffer.from(outcome.stdout_base64,'base64').toString(),'31\n');
+ const terminal=f.read('terminal.json');assert.equal(terminal.snapshot.wire_complete,false);assert.ok(terminal.snapshot.unknown_reasons.includes('ADB_SHELL_V2_DEADLINE'));assert.equal(terminal.snapshot.remote_execution_stopped,'not_attested');
 });

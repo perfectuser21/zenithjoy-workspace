@@ -13,6 +13,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {createServer as createBindingServer} from 'node:http';
 const require=createRequire(import.meta.url);
 test('public 101 runs original three slots through Commander, real Code transports, PG Judge and cleanup',async t=>{await publicPhoneScenario(t);});
+test('SDK mismatch preserves its actual decoded result and exact resource_prepare failure before any Worker',async t=>{await publicPhoneScenario(t,{sdkOutput:'32'});});
 test('a genuinely closed official Caller without a raw model stop proof cannot authorize native cleanup',async t=>{await publicPhoneScenario(t,{invalidStop:true});});
 test('a cloned genuine SDK raw model stop proof cannot authorize native cleanup despite actual Caller closure',async t=>{await publicPhoneScenario(t,{invalidStop:'clone'});});
 test('real executor missing model startup closes only its unused metadata and proves no local execution',async t=>{await publicPhoneScenario(t,{earlyModelFailure:true});});
