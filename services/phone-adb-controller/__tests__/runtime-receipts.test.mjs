@@ -3,11 +3,18 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import {createHash} from 'node:crypto';
-import { mkdtempSync,writeFileSync,readFileSync,readdirSync,chmodSync,mkdirSync,existsSync } from 'node:fs';
+import { mkdtempSync,writeFileSync,readFileSync,readdirSync,chmodSync,mkdirSync,existsSync,rmSync } from 'node:fs';
+import {pathToFileURL} from 'node:url';
 import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
 import { seedFrozen } from './fixtures/frozen-runtime.mjs';
 const CLI=resolve('services/phone-adb-controller/runtime-receipts.mjs');
+test('cold frozen collection imports its genuine credential dependency and pins the same source bytes',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'cold-collection-credentials-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));seedFrozen(dir,null,{runId:'cold-credentials'});
+ const api=await import(pathToFileURL(join(dir,'runtime/collection-phone-scope.mjs')));assert.equal(typeof api.defaultCollectionPhoneScope,'function');
+ const expected=readFileSync(new URL('../native-phone-credentials.mjs',import.meta.url)),actual=readFileSync(join(dir,'runtime/native-phone-credentials.mjs'));assert.deepEqual(actual,expected);
+ const frozen=JSON.parse(readFileSync(join(dir,'run-definition.json')));assert.equal(frozen.files['runtime/native-phone-credentials.mjs'],createHash('sha256').update(expected).digest('hex'));
+});
 function invoke(env,...args){return new Promise((done,reject)=>{const child=spawn(process.execPath,[CLI,...args],{env:{...process.env,HOME:env.WFR_RUN_DIR,...env}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('error',reject);child.on('exit',code=>done({code,out,err}));});}
 test('Agent运行真实span按冻结模式记执行者，不把预检和清场记成Code',async t=>{
  const {digest}=await import('../runtime-definition.mjs');const dir=mkdtempSync(join(tmpdir(),'runtime-agent-span-'));seedFrozen(dir,null,{runId:'agent-span'});

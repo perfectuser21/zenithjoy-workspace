@@ -35,6 +35,7 @@ export const NATIVE_102_DARWIN_SUITES=Object.freeze([
  'native-scrcpy-startup-authority.test.mjs',
 ]);
 export const NATIVE_102_PORTABLE_SUITES=Object.freeze([
+ 'native102-default-credentials.test.mjs',
  'native-phone-credentials-growth.test.mjs',
  'native-phone-credentials.test.mjs',
  'native-phone-managed-recording.test.mjs',
