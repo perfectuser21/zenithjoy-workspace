@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {canonical,readFrozen,assertAgentInput} from './runtime-definition.mjs';
 import {rpcSource} from './leadgen-client.mjs';
 import {verifyRpcSource} from './leadgen-rpc.mjs';
-import {assertFrozenNativeTaskLease} from './native-task-lease.mjs';
+import {assertFrozenNativeTaskLease,assertNativeTaskAssociation} from './native-task-lease.mjs';
 import {isPreflightRuntime,issuePreflightPhoneHandoff,readPreflightPhoneHandoff} from './preflight-phone-scope.mjs';
 import {createPreflightPoolFactory,assertPreflightProfile} from './preflight-control-scope.mjs';
 import {createNativeActivityAuthority,readNativeAuthorityProjection,nativeAuthorityProjectionMatches} from './native-activity-authority.mjs';
@@ -59,7 +59,8 @@ export function createNativePhoneRuntime(options={}){
   if(prepared)return;
   if(frozen?.execution_mode!=='agent'||frozen.execution_transport!=='raw-model-v1'||env.WF_BRAIN_WORKFLOW!=='douyin_video_discovery'||frozen.control_scope||!isPreflightRuntime(preflightRuntime))throw fail('UNSUPPORTED');
   input=assertAgentInput(frozen,env);lease=assertFrozenNativeTaskLease(frozen);spec=frozen.discovery_phone_scope;profile=assertPreflightProfile({env,frozen});
-  if(!spec||binding?.task_id!==taskId||input.task_id!==taskId||spec.serial!==input.serial||spec.profile!==input.profile||spec.run_id!==binding.run_id||spec.task_id!==taskId||spec.source_commit!==frozen.deployment.source_commit||!/^tcp:127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(spec.policy?.endpoint||''))throw fail('SCOPE');
+  if(!spec||input.task_id!==taskId||spec.serial!==input.serial||spec.profile!==input.profile||spec.run_id!==binding.run_id||spec.task_id!==taskId||spec.source_commit!==frozen.deployment.source_commit||!/^tcp:127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(spec.policy?.endpoint||''))throw fail('SCOPE');
+  assertNativeTaskAssociation({frozen,binding,taskId,runDir:env.WFR_RUN_DIR,scope:spec,host:env.WFR_HOSTKEY});
   source=nativePhoneSource(frozen);policy=JSON.parse(readFileSync(join(root,'config/native-phone-command-sources.json')));
   const matches=policy.device_sources?.filter(r=>r.profile===input.profile&&r.serial===input.serial);
   if(policy.schema_version!==1||matches?.length!==1)throw fail('SOURCE');policy=matches[0];

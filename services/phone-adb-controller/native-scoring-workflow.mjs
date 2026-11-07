@@ -4,7 +4,7 @@ import{readNativeScoringActivity}from'./native-scoring-readback.mjs';
 import{rawModelScopeStopped}from'./activity-skill-parent-loop.mjs';import{skillLaunchDidNotStart}from'./activity-skill-executor.mjs';
 import{assertRuntimeHost}from'./runtime-host.mjs';
 import{assertAgentInput,readFrozen}from'./runtime-definition.mjs';import{rpcSource}from'./leadgen-client.mjs';import{verifyRpcSource}from'./leadgen-rpc.mjs';
-import{assertFrozenNativeTaskLease}from'./native-task-lease.mjs';import{assertScoringControlScope,readScoringCredentials,createScoringPoolFactory}from'./native-scoring-control.mjs';
+import{assertFrozenNativeTaskLease,assertNativeTaskAssociation}from'./native-task-lease.mjs';import{assertScoringControlScope,readScoringCredentials,createScoringPoolFactory}from'./native-scoring-control.mjs';
 import{createNativeScoringRuntime}from'./native-scoring-runtime.mjs';import{startNativeScoringProducers}from'./native-scoring-producers.mjs';import{createNativeActivityAuthority,readNativeAuthorityProjection,nativeAuthorityProjectionMatches}from'./native-activity-authority.mjs';
 const instances=new WeakSet(),sha=b=>createHash('sha256').update(b).digest('hex');const fail=code=>Error('NATIVE_103_'+code);const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort().map(k=>[k,x[k]])):x);
 export const isNativeScoringWorkflow=value=>instances.has(value);
@@ -21,7 +21,8 @@ export function createNativeScoringWorkflow({root,env,frozen,binding,runDir=env.
  async function prepare(){
   if(prepared)return;try{
    if(frozen?.execution_mode!=='agent'||frozen.execution_transport!=='raw-model-v1'||env.WF_BRAIN_WORKFLOW!=='douyin_comment_scoring'||frozen.control_scope)throw fail('DEPENDENCY');
-   input=assertAgentInput(frozen,env);if(input.profile!=='mmv-scoring'||input.serial!=='none'||binding?.task_id!==input.task_id||!binding.id||!binding.run_id)throw fail('DEPENDENCY');
+   input=assertAgentInput(frozen,env);if(input.profile!=='mmv-scoring'||input.serial!=='none'||!binding?.id||!binding.run_id)throw fail('DEPENDENCY');
+   assertNativeTaskAssociation({frozen,binding,taskId:input.task_id,runDir,scope:{task_id:input.task_id,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:input.profile,serial:input.serial},host:env.WFR_HOSTKEY});
    source=nativeScoringSource(frozen);lease=assertFrozenNativeTaskLease(frozen);spec=assertScoringControlScope({root,env,frozen});makePool=createScoringPoolFactory({runtimeRoot:root,frozen,env});
    const directory=join(runDir,'native-103');mkdirSync(directory,{mode:0o700});const ledger=join(directory,'queue');mkdirSync(ledger,{mode:0o700});
    const scope={workflow:input.workflow_key,run:input.run_tag,run_id:binding.run_id,task_id:input.task_id,binding_id:binding.id,source_commit:source.commit,snapshot_sha256:frozen.snapshot_sha256,profile:input.profile,serial:input.serial,line:input.line,source_run:input.source_run,limit:input.limit,deadline_ms:lease.effective_deadline_ms,receipt_deadline_ms:lease.effective_deadline_ms};

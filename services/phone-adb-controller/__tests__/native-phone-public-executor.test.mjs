@@ -6,10 +6,11 @@ import {freezePublicPhoneDefinition} from './fixtures/native-phone-public-defini
 import {publicPhoneScenario} from './fixtures/native-phone-public-scenario.mjs';
 import {createRequire,syncBuiltinESMExports} from 'node:module';
 import os from 'node:os';
-import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
+import {createServer as createBindingServer} from 'node:http';
 const require=createRequire(import.meta.url);
 test('public 101 runs original three slots through Commander, real Code transports, PG Judge and cleanup',async t=>{await publicPhoneScenario(t);});
 test('a genuinely closed official Caller without a raw model stop proof cannot authorize native cleanup',async t=>{await publicPhoneScenario(t,{invalidStop:true});});
@@ -84,3 +85,35 @@ test('public definition fixture locks original three-slot methods and issues an 
   assert.deepEqual(definition.frozen.discovery_input.sources,['人工智能']);
  });
 });
+
+test('real external bindRun ACK and genuine frozen Task lease must reach the same native phone prepare',async t=>publicPhoneScenario(t,{prepareBoundary:async({f,definition,pg,adb,load,runDir,root,setFixtureHostname})=>{
+ // These two files are the fixture's manually fabricated placeholder binding,
+ // not an old real frozen run. This new fixture now performs real bindRun.
+ rmSync(join(runDir,'run-bindings'),{recursive:true,force:true});writeFileSync(join(runDir,'step-dod.json'),JSON.stringify({steps:[]}));
+ const allowed=['release_id','observation_id','workflow_id','workflow_definition_version_id','snapshot_sha256','runtime_snapshot_sha256','expected_path','source_kind','task_run_id','external_origin','attempt_key','actor'];let binding,posts=0,gets=0;
+ const server=createBindingServer(async(req,res)=>{res.setHeader('Content-Type','application/json');res.setHeader('Connection','close');if(req.method==='POST'){posts++;let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);assert.ok(Object.keys(body).every(k=>allowed.includes(k)));assert.equal(body.source_kind,'external');assert.equal(body.task_run_id,undefined);assert.equal(body.task_id,undefined);binding={id:randomUUID(),run_id:f.q.run_id,...body,task_run_id:null,payload:body};res.statusCode=201;}else gets++;res.end(JSON.stringify({binding}));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
+ const {bindRun}=await load('runtime-binding.mjs'),runId=f.q.run_id.replace(/__a1$/,''),bindOptions={dir:runDir,runId,brainUrl:'http://127.0.0.1:'+server.address().port,request:async(url,body)=>{const response=await fetch(url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return response.json();},ledgerPath:join(root,'ledger.mjs')};
+ const host=await load('runtime-host.mjs'),controlScope=await load('preflight-control-scope.mjs'),snapshot=readFileSync(join(runDir,'run-definition.json'),'utf8');
+ assert.equal(readFileSync(join(root,'runtime-host.mjs'),'utf8'),readFileSync(new URL('../runtime-host.mjs',import.meta.url),'utf8'),'production host guard bytes remain unchanged');
+ assert.equal(host.assertRuntimeHost(definition.frozen.release,definition.frozen.deployment),'mmv');
+ assert.throws(()=>host.assertRuntimeHost({...definition.frozen.release,target:'foreign'},definition.frozen.deployment),/实际机器与固定release/);
+ assert.throws(()=>host.assertRuntimeHost(definition.frozen.release,{...definition.frozen.deployment,target:'foreign'}),/实际机器与固定release/);
+ assert.throws(()=>controlScope.assertPreflightControlScope({root,env:f.env,frozen:{...definition.frozen,preflight_control_scope:{...definition.frozen.preflight_control_scope,target:'foreign'}}}),/PREFLIGHT_CONTROL_SCOPE/);
+ setFixtureHostname('github-native-fixture-host.example');
+ await assert.rejects(bindRun(bindOptions),/实际机器与固定release及部署观测目标不匹配/);assert.equal(posts,0);assert.equal(gets,0);assert.equal(adb.requests.length,0);
+ setFixtureHostname('r10-7');assert.equal(readFileSync(join(runDir,'run-definition.json'),'utf8'),snapshot,'virtual host changes never rewrite frozen Source');
+ const result=await bindRun(bindOptions);
+ assert.equal(posts,1);assert.equal(gets,1);assert.equal(result.binding.task_id,null);const ack=readFileSync(join(runDir,'run-bindings/a1.ack.json'),'utf8');assert.equal(Object.hasOwn(JSON.parse(ack).binding,'task_id'),false);assert.equal(Object.hasOwn(JSON.parse(ack).binding.payload,'task_id'),false);
+ const {createPreflightRuntime}=await load('preflight-phone-scope.mjs'),preflightRuntime=createPreflightRuntime({root,env:f.env,frozen:definition.frozen,binding:result.binding,taskId:f.q.task_id,poolFactory:pg.createPool});
+ const actualSource=(await load('native-phone-runtime.mjs')).nativePhoneSource(definition.frozen),controls=[];t.after(()=>Promise.allSettled(controls.map(c=>c.close())));const createControl=({request,directory})=>{const d=join(directory,'owned-caller');mkdirSync(d,{mode:0o700});const c=f.createControl({...f.options,source:actualSource,request,journalDirectory:d,deadlineMs:request.receipt_deadline_ms,cleanupDeadlineMs:request.deadline_ms});controls.push(c);return c;};
+ const handlers=f.workflow.createWorkflowHandlers({root,env:f.env,frozen:definition.frozen,binding:result.binding,taskId:f.q.task_id,sourceCommit:f.source.commit,preflightRuntime,poolFactory:pg.createPool,createAuthorityControl:createControl,rpc:async()=>{throw Error('NO_RPC');},execute:async()=>{throw Error('NO_EXEC');}});
+ const leaseModule=await load('native-task-lease.mjs'),association={frozen:definition.frozen,binding:result.binding,taskId:f.q.task_id,runDir,scope:definition.frozen.discovery_phone_scope,host:'mmv'};
+ assert.equal(leaseModule.assertNativeTaskAssociation(association).kind,'verified_external_native_task_association');
+ const foreign=randomUUID();for(const patch of [{taskId:foreign},{binding:{...result.binding,task_id:foreign}},{binding:{...result.binding,source_kind:'internal'}},{binding:{...result.binding,task_run_id:foreign}},{binding:{...result.binding,external_origin:'zenithjoy:foreign'}},{host:'foreign'},{scope:{...association.scope,serial:'foreign'}},{scope:{...association.scope,run_id:'foreign'}},{scope:{...association.scope,source_commit:'f'.repeat(40)}},{frozen:{...definition.frozen,native_task_lease:null}},{frozen:{...definition.frozen,native_claim:{...definition.frozen.native_claim,claimed_by:'forged'}}},{frozen:{...definition.frozen,native_task_lease:{...definition.frozen.native_task_lease,binding:{...definition.frozen.native_task_lease.binding,snapshot_sha256:'0'.repeat(64)}}}}])assert.throws(()=>leaseModule.assertNativeTaskAssociation({...association,...patch}));
+ assert.equal(adb.requests.length,0);
+ await handlers.prepareNativePhone();assert.equal(handlers.nativePhoneRuntime.snapshot().prepared,true);assert.equal(readFileSync(join(runDir,'run-bindings/a1.ack.json'),'utf8'),ack);assert.equal(adb.requests.length,0);const raw=JSON.parse(ack).binding;raw.task_id=f.q.task_id;raw.payload={...raw.payload,task_id:f.q.task_id};writeFileSync(join(runDir,'run-bindings/a1.ack.json'),JSON.stringify({binding:raw}));assert.equal(leaseModule.assertNativeTaskAssociation({...association,binding:raw}).kind,'verified_native_task_association');writeFileSync(join(runDir,'run-bindings/a1.ack.json'),ack);
+ const wired=f.workflow.createWorkflowExecution({runDir,frozen:definition.frozen,binding:result.binding,env:f.env,handlers,taskId:f.q.task_id,activities:definition.activities,createOfficialControl:createControl,rpc:async()=>{throw Error('NO_RPC');}}),request=wired.executeAgent.prepareObserverRequest(definition.activities[0],{context:{task_id:f.q.task_id},deadline_ms:Date.now()+90000}),scope=Object.fromEntries([['workflow',request.workflow_key],['activity',request.activity_key],['run',request.run_tag],...['run_id','task_id','binding_id','source_commit','profile','serial','line','source_run','limit','comment_limit','deadline_ms','worker_deadline_ms','receipt_deadline_ms','execution_transport','max_turns'].map(k=>[k,request[k]]),['snapshot_sha256',request.runtime_snapshot_sha256],['agent_nonce',request.nonce]]);
+ f.routes.set('/api/brain/runs/'+request.run_id+'/definition',{binding:JSON.parse(ack).binding});definition.task.status='paused';const callerDir=join(f.journalDirectory,'revoked-real-caller');mkdirSync(callerDir,{mode:0o700});const caller=createControl({request,directory:callerDir}),authorityDir=join(f.journalDirectory,'revoked-native-authority');mkdirSync(authorityDir,{mode:0o700});
+ await assert.rejects(handlers.nativePhoneRuntime.bindOfficialAuthority({request,scope,control:caller,directory:authorityDir}),/TASK_SCOPE_INVALID|TASK_CLAIM|CLAIM_CHANGED/);assert.equal(adb.requests.length,0);assert.equal(handlers.nativePhoneRuntime.nativeState().execution_unknown,true);await caller.close();
+ console.log(JSON.stringify({event:'actual-bindrun-native-prepare',post:posts,get:gets,task_id:f.q.task_id,ack_task_id_absent:true,prepared:true,phone_requests:0}));
+}}));

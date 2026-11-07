@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -185,7 +185,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -220,7 +220,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -395,7 +395,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -668,7 +668,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -769,13 +769,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "cf5d5e31f7bfd5230b53dad594b83c707a392a8eed358e919a6555e433da8a2a",
+      "code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。101仍仅由Code接入有限手机raw意图、原3hard SQL/filter/同VID指标/采样限额/零评论禁入保留；取链上限3匹配原metrics身份，Vision仅原vtab/fbtn定位，无104或任意动作授权。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。101保留原Task/设备claim/Source及原Caller实时GET撤权与独立Judge；Commander仍只观察指导，不能批准业务动作、改顺序或状态，unknown仍需真实私有关闭。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "1e68fa53a9cb4b5d1ddae50bd8c0dd81468e7965aaad4369f10b43dd29333a38",
-        "current_code_digest": "cf5d5e31f7bfd5230b53dad594b83c707a392a8eed358e919a6555e433da8a2a"
+        "previous_code_digest": "cf5d5e31f7bfd5230b53dad594b83c707a392a8eed358e919a6555e433da8a2a",
+        "current_code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690"
       }
     },
     "douyin_video_processing.preflight": {
@@ -801,7 +801,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -962,7 +962,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -997,7 +997,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -1214,7 +1214,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -1498,7 +1498,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -1571,13 +1571,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6bb27ddf442645a03a14cb0fbd5968f1bbbf4e719b45abb138d0cc443c569d8b",
+      "code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。共享preflight仅101路径使用有限手机Source；本人owner/epoch/双锁及独立桌面读回保留。zero-local只接受真实not-launched品牌且本人资源已归还，0物理动作不伪造锁释放，不覆盖已启动unknown。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。101保留原Task/设备claim/Source及原Caller实时GET撤权与独立Judge；Commander仍只观察指导，不能批准业务动作、改顺序或状态，unknown仍需真实私有关闭。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "2ba110176a45a9b2518fcfd676c91febb765ccec108892db8954c35a29880dd3",
-        "current_code_digest": "6bb27ddf442645a03a14cb0fbd5968f1bbbf4e719b45abb138d0cc443c569d8b"
+        "previous_code_digest": "6bb27ddf442645a03a14cb0fbd5968f1bbbf4e719b45abb138d0cc443c569d8b",
+        "current_code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1603,7 +1603,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -1764,7 +1764,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -1799,7 +1799,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -1981,7 +1981,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -2254,7 +2254,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -2341,13 +2341,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "7bb1471046a51103ceff71e971706a366c7cd309b95ee05e6e2a30c99bf04484",
+      "code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。102仅共享静态代码依赖闭包及摘要更新；本候选phone工厂/raw执行仍限101，未把102native支持放行，不改变去重/资格公司政策/评论采集/每VID次数/零评论与未知停止规则。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。102仅共享静态Source和Observer超时内部修复；不由本评估启用新手机/录制/业务动作，原零评论、采样、资格与unknown停止规则不变。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "00662cfcc40744589c4a574ca1834526b7dd6facf85a5ef39a27053d3885c703",
-        "current_code_digest": "7bb1471046a51103ceff71e971706a366c7cd309b95ee05e6e2a30c99bf04484"
+        "previous_code_digest": "7bb1471046a51103ceff71e971706a366c7cd309b95ee05e6e2a30c99bf04484",
+        "current_code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2373,7 +2373,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -2534,7 +2534,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -2569,7 +2569,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -2779,7 +2779,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -3052,7 +3052,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -3195,13 +3195,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "b0e7796a42d60bf02fd36709a0f6452c7182b2afaabbbf9b8dde650027813fba",
+      "code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。102仅共享静态代码依赖闭包及摘要更新；本候选phone工厂/raw执行仍限101，未把102native支持放行，不改变去重/资格公司政策/评论采集/每VID次数/零评论与未知停止规则。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。102仅共享静态Source和Observer超时内部修复；不由本评估启用新手机/录制/业务动作，原零评论、采样、资格与unknown停止规则不变。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "91cabdb72503764b041678a9a30b623718c1dbdcc4a6a075898f401d29a30602",
-        "current_code_digest": "b0e7796a42d60bf02fd36709a0f6452c7182b2afaabbbf9b8dde650027813fba"
+        "previous_code_digest": "b0e7796a42d60bf02fd36709a0f6452c7182b2afaabbbf9b8dde650027813fba",
+        "current_code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa"
       }
     },
     "douyin_video_processing.collection": {
@@ -3227,7 +3227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -3388,7 +3388,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -3423,7 +3423,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -3605,7 +3605,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -3886,7 +3886,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -3987,13 +3987,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "23db356789ee5b5b08766da1bff9fcd835db9131b26515d82fa3f64a0d27bdfa",
+      "code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。102仅共享静态代码依赖闭包及摘要更新；本候选phone工厂/raw执行仍限101，未把102native支持放行，不改变去重/资格公司政策/评论采集/每VID次数/零评论与未知停止规则。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。102仅共享静态Source和Observer超时内部修复；不由本评估启用新手机/录制/业务动作，原零评论、采样、资格与unknown停止规则不变。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "bd1c89219bf0fb8504a6bc40afa86d9107256edaa9db280502884f0178d852ff",
-        "current_code_digest": "23db356789ee5b5b08766da1bff9fcd835db9131b26515d82fa3f64a0d27bdfa"
+        "previous_code_digest": "23db356789ee5b5b08766da1bff9fcd835db9131b26515d82fa3f64a0d27bdfa",
+        "current_code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4019,7 +4019,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -4180,7 +4180,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -4215,7 +4215,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -4418,7 +4418,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -4694,7 +4694,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -4774,13 +4774,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0e588b8bc175f3c598b6c6ad80e08cb28ee67f165932654393bf62ede6e2c6b2",
+      "code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。共享cleanup保留本人双锁/桌面读回和全部资源归还门。zero-local只接受真实not-launched品牌，不把Source或Host结束当远端停证，不清未知旧锁。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。101保留原Task/设备claim/Source及原Caller实时GET撤权与独立Judge；Commander仍只观察指导，不能批准业务动作、改顺序或状态，unknown仍需真实私有关闭。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "24830bb0356b415cc6744b673b506b012b3621eeb4e3b1a9987772dc7e09f4d2",
-        "current_code_digest": "0e588b8bc175f3c598b6c6ad80e08cb28ee67f165932654393bf62ede6e2c6b2"
+        "previous_code_digest": "0e588b8bc175f3c598b6c6ad80e08cb28ee67f165932654393bf62ede6e2c6b2",
+        "current_code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -4806,7 +4806,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -4981,7 +4981,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -5016,7 +5016,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -5191,7 +5191,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -5436,7 +5436,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -5558,13 +5558,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "c71e35ae24818ed26bf20560ca02df4a903dce2043a909724cd0857b62a3a697",
+      "code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。103仅已核验请求的终结回调幂等修复；在途POST abort/error仍external_effect unknown且不重投，原评分政策、独立PG读回、server-issued空范围品牌、COMMIT未知只读语义不变。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。103仍原政策、PG独立读回/空批品牌/Bridge/未知副作用只读与停证门；已有Task关联只断言Codecontext，不伪造中央TaskFK，每AV原Caller实时撤权。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "c7a558782b44baabbc1110736a0ca16771b05c2886d4fa961570538d5bebfc23",
-        "current_code_digest": "c71e35ae24818ed26bf20560ca02df4a903dce2043a909724cd0857b62a3a697"
+        "previous_code_digest": "c71e35ae24818ed26bf20560ca02df4a903dce2043a909724cd0857b62a3a697",
+        "current_code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5590,7 +5590,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -5765,7 +5765,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -5800,7 +5800,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -5982,7 +5982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -6227,7 +6227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -6384,13 +6384,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e6153030353c786f7c08201e5fd1b841260528df6fb2571be9f6e24a76953b5d",
+      "code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。103配送/标记原Bridge、收件人核验及公司政策保留，Producer仅终结回调幂等；在途外部效果未知不洗成成功，空批不伪造quality/bridge验证，原评分与配送授权不扩展。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。103仍原政策、PG独立读回/空批品牌/Bridge/未知副作用只读与停证门；已有Task关联只断言Codecontext，不伪造中央TaskFK，每AV原Caller实时撤权。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "2dba7ec8b31c07c70e097489ebe8f46840455493e07add84e83d36e6e3b6a23a",
-        "current_code_digest": "e6153030353c786f7c08201e5fd1b841260528df6fb2571be9f6e24a76953b5d"
+        "previous_code_digest": "e6153030353c786f7c08201e5fd1b841260528df6fb2571be9f6e24a76953b5d",
+        "current_code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6416,7 +6416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -6598,7 +6598,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -6675,7 +6675,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -6710,7 +6710,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -7043,7 +7043,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -7144,13 +7144,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "7c2104e997c9161873ec313259f8ee12a91bd1ae24e3df4932f68742259131e7",
+      "code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "bac2655b84fc27cacf7864009b80eea43885b1a60a99a6c4fc4b5e9de1efba80",
-        "current_code_digest": "7c2104e997c9161873ec313259f8ee12a91bd1ae24e3df4932f68742259131e7"
+        "previous_code_digest": "7c2104e997c9161873ec313259f8ee12a91bd1ae24e3df4932f68742259131e7",
+        "current_code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7176,7 +7176,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -7358,7 +7358,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -7435,7 +7435,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -7470,7 +7470,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -7792,7 +7792,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -7879,13 +7879,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ce4f46a7993811007b86dfbc0cbfe1d96d9dbc814d9f00d31ee57d34165d0cf1",
+      "code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "5d6a6f32465438ce0cadd5ed9bcf57f79913f7534e276a5ba4b489c7d4d46f02",
-        "current_code_digest": "ce4f46a7993811007b86dfbc0cbfe1d96d9dbc814d9f00d31ee57d34165d0cf1"
+        "previous_code_digest": "ce4f46a7993811007b86dfbc0cbfe1d96d9dbc814d9f00d31ee57d34165d0cf1",
+        "current_code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -7911,7 +7911,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -8093,7 +8093,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -8170,7 +8170,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -8205,7 +8205,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -8527,7 +8527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -8607,13 +8607,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "afb964ddb70d7c4212f466eff80083d25cfe2d0336fb2f83395765c92b72ca18",
+      "code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "63b815d66d1380f2c4387b5471d1a510faa525f0001f599dfab5d303ce36b4fe",
-        "current_code_digest": "afb964ddb70d7c4212f466eff80083d25cfe2d0336fb2f83395765c92b72ca18"
+        "previous_code_digest": "afb964ddb70d7c4212f466eff80083d25cfe2d0336fb2f83395765c92b72ca18",
+        "current_code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8639,7 +8639,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "aeae776594bcb539925c9dddd5f29e5198e44457d7fd452a4f1803d831968d96"
+          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
         },
         {
           "kind": "code",
@@ -8821,7 +8821,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -8898,7 +8898,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-scoring-workflow.mjs",
           "revision": "contract",
-          "sha256": "36736620cfed7bd44a62adb011f6f15942e5b983ac0af15ef7523c1cd9c3b2de"
+          "sha256": "04333452f29d23e985f8efbacfd84537b76829c624759851a326ce2837bb9b76"
         },
         {
           "kind": "code",
@@ -8933,7 +8933,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-task-lease.mjs",
           "revision": "contract",
-          "sha256": "35adc17545e7b835beaa560918bfe53caffffe0a4581e443e580fa8ed5f9e77a"
+          "sha256": "41c396010d3fc251929099ed67834e858643827d98d7e1282b1ee57509ac4246"
         },
         {
           "kind": "code",
@@ -9258,7 +9258,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "de199a3100421bfae7da93cbe9bb165b452e02ca73b01d0615aca60f83e93838"
+          "sha256": "5b891b5bb482e8a0ace722f78ff8557a10612aeff07f570a17c1e91fafac8ac1"
         },
         {
           "kind": "code",
@@ -9345,13 +9345,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e9e249dfb2f816b94a6ccb1f61e7c6ba66898df9e99bbde3383fb57a74a66207",
+      "code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本人固定c13144f3a186c6089966970cbca49800be3d13f7相对main1f344逐12pair真collectMethods复核，Skill正文/支持闭包、method_version、Activity版本/contract_digest和4份Workflow身份完全相同，steps仅contract_sha256变。144个代码依赖路径与上一独审快照集合一致，其中142文件字节不变，仅Producer及Vision终结回调修补已独立真RED/GREEN核验；本次实际17项Producer和Root14项Vision通过，在途unknown/独立Judge/Caller/authority未放宽。104仅共享静态Source闭包及摘要更新；发送/订单/Bridge/批准账号与话术/白名单相对main1f逐字不变，phone工厂与raw主执行仍不支持104，不新增发送权、调度或未知锁释放。评估仅代码内部兼容，不替代CI、真实抖音或整个Android停证。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
-        "previous_code_digest": "99da543e91f83b8e0f9c918e3bb3225c450acd42038ef5d4201287b679359ed2",
-        "current_code_digest": "e9e249dfb2f816b94a6ccb1f61e7c6ba66898df9e99bbde3383fb57a74a66207"
+        "previous_code_digest": "e9e249dfb2f816b94a6ccb1f61e7c6ba66898df9e99bbde3383fb57a74a66207",
+        "current_code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2"
       }
     }
   },

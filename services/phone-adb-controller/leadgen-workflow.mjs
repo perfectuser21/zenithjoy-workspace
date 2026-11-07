@@ -1,7 +1,7 @@
 import {createNativePhoneRuntime,isNativePhoneRuntime} from './native-phone-runtime.mjs';
 import {createNativeScoringWorkflow,isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
-import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
-import {join,resolve} from 'node:path';
+import {readFileSync,writeFileSync,appendFileSync,existsSync,openSync,closeSync,fsyncSync,fstatSync,lstatSync,realpathSync,constants} from 'node:fs';
+import {join,resolve,dirname,basename,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {runWorkflow} from './activity-commander.mjs';
@@ -40,7 +40,7 @@ export function createWorkflowHandlers(options){
 }
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
-import {readFrozen,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
+import {readFrozen,digest,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput,rpcSource} from './leadgen-client.mjs';
 import {judgePreflightInProcess} from './preflight-judge.mjs';
@@ -253,6 +253,43 @@ export async function verifyWorkflowActivity({root,runDir:dir,frozen,env,binding
     return {verified,metrics,probes,step_dod:local};
 }
 
+// Only finite Code-authored identifiers are diagnostic data. Never serialize an
+// exception, its message/body/stack, or an arbitrary uppercase error.code.
+const startupCodes=new Set(['CLI_STARTUP_FAILURE','CENTRAL_LOCK_TASK_CONFLICT',
+ 'EXECUTION_MODE_INVALID','EXECUTION_MODE_FROZEN_INVALID','EXECUTION_MODE_RESUME_MISMATCH','EXECUTION_MODE_BINDING_ACTOR_MISMATCH','EXECUTION_TRANSPORT_INVALID','EXECUTION_TRANSPORT_RESUME_MISMATCH','PREFLIGHT_PROFILE_FROZEN_MISMATCH','PREFLIGHT_CONTROL_SCOPE',
+ 'AGENT_INPUT_INTEGER_INVALID','AGENT_INPUT_IDENTITY_INVALID','AGENT_INPUT_SOURCE_DEVICE_INVALID','AGENT_INPUT_BUDGET_INVALID','AGENT_INPUT_FILTERS_INVALID','AGENT_INPUT_COMMENT_QUOTA_INVALID','AGENT_INPUT_FROZEN_INVALID','AGENT_INPUT_RESUME_MISMATCH',
+ 'NATIVE_TASK_LEASE_BINDING','NATIVE_TASK_LEASE_DIRECTORY','NATIVE_TASK_LEASE_ORIGIN','NATIVE_TASK_LEASE_CREDENTIAL','NATIVE_TASK_LEASE_UNKNOWN','NATIVE_TASK_LEASE_UNBRANDED','NATIVE_TASK_LEASE_FROZEN','NATIVE_TASK_LEASE_RUN_ASSOCIATION',
+ 'NATIVE_PHONE_SCOPE','NATIVE_PHONE_SOURCE','NATIVE_PHONE_UNSUPPORTED','NATIVE_PHONE_INCOMPLETE_COMMAND_POLICY',
+ 'ENOENT','EACCES','EPERM','ENOTDIR','ELOOP','EEXIST','ETIMEDOUT','ECONNREFUSED']);
+export function workflowStartupFailureCode(error){
+ try{for(const code of [error?.code,error?.message])if(typeof code==='string'&&startupCodes.has(code))return code;}catch{}
+ return 'CLI_STARTUP_FAILURE';
+}
+function recordCliStartupFailure(error,env){
+ const modulePath=fileURLToPath(import.meta.url),runtime=dirname(modulePath),dir=dirname(runtime),uid=process.getuid();
+ const reject=()=>{throw Error('CLI_STARTUP_FAILURE_RECORD_UNSAFE');};
+ if(basename(runtime)!=='runtime'||!isAbsolute(env.WFR_RUN_DIR||'')||env.WFR_RUN_DIR!==dir||env.WF_HOME!==runtime||realpathSync(modulePath)!==modulePath)reject();
+ const directory=path=>{const s=lstatSync(path);if(realpathSync(path)!==path||!s.isDirectory()||s.isSymbolicLink()||s.uid!==uid||(s.mode&0o022))reject();return s;};
+ const parent=directory(dir);directory(runtime);
+ const unchanged=()=>{const s=directory(dir);if(s.dev!==parent.dev||s.ino!==parent.ino)reject();};
+ const readOwned=(path,{privateFile=false,max=4*1024*1024}={})=>{
+  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  try{const s=fstatSync(fd),named=lstatSync(path);if(!s.isFile()||named.isSymbolicLink()||s.uid!==uid||s.nlink!==1||(s.mode&0o022)||privateFile&&(s.mode&0o777)!==0o600||s.size>max||s.dev!==named.dev||s.ino!==named.ino)reject();
+   const bytes=readFileSync(fd),after=fstatSync(fd),current=lstatSync(path);if(current.isSymbolicLink()||current.dev!==s.dev||current.ino!==s.ino||bytes.length!==s.size||s.size!==after.size||s.mtimeMs!==after.mtimeMs||s.ctimeMs!==after.ctimeMs)reject();return bytes;
+  }finally{closeSync(fd);}
+ };
+ const frozen=JSON.parse(readOwned(join(dir,'run-definition.json'),{privateFile:true})),{snapshot_sha256,...body}=frozen;
+ const identity=frozen.run_identity,attempt=env.WFR_ATTEMPT,source=frozen.deployment?.source_commit;
+ if(digest(body)!==snapshot_sha256||!/^[a-f0-9]{64}$/.test(snapshot_sha256||'')||!/^[a-f0-9]{40}$/.test(source||'')||!/^a[1-9][0-9]{0,8}$/.test(attempt||'')
+  ||!identity||!/^[-A-Za-z0-9_]{1,200}$/.test(identity.run_id||'')||identity.run_id!==basename(dir)||identity.run_id!==env.WFR_RUN_ID
+  ||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'].includes(identity.capability)||identity.capability!==env.WF_BRAIN_WORKFLOW||frozen.workflow_version?.payload?.key!==identity.capability
+  ||frozen.files?.['runtime/leadgen-workflow.mjs']!==createHash('sha256').update(readOwned(modulePath)).digest('hex'))reject();
+ const value={schema_version:1,phase:'startup_failure',status:'failed',error_code:workflowStartupFailureCode(error),observed_at:new Date().toISOString(),run_id:identity.run_id+'__'+attempt,base_run_id:identity.run_id,attempt,workflow_key:identity.capability,source_commit:source,runtime_snapshot_sha256:snapshot_sha256};
+ unchanged();const path=join(dir,'startup-failure-'+attempt+'.json'),fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
+ try{unchanged();const s=fstatSync(fd);if(!s.isFile()||s.uid!==uid||s.nlink!==1||(s.mode&0o777)!==0o600)reject();writeFileSync(fd,JSON.stringify(value)+'\n');fsyncSync(fd);unchanged();const current=lstatSync(path);if(current.isSymbolicLink()||current.dev!==s.dev||current.ino!==s.ino||current.uid!==uid||current.nlink!==1||(current.mode&0o777)!==0o600)reject();}finally{closeSync(fd);}
+ const parentFd=openSync(dir,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{unchanged();const s=fstatSync(parentFd);if(s.dev!==parent.dev||s.ino!==parent.ino)reject();fsyncSync(parentFd);}finally{closeSync(parentFd);}
+}
+let cliStartupPending=true;
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);assertAgentInput(frozen,env);const executionMode=assertExecutionMode(frozen,env),binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
@@ -283,6 +320,7 @@ async function main(){
   const observerSafety={};
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:input=>observerSafety.ready?.(input)});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
+  cliStartupPending=false;
   const result=await runWorkflowWithCommander({runDir:dir,frozen,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,nativePhoneRuntime:handlers.nativePhoneRuntime,quarantine:handlers.quarantineResources,
     record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
@@ -301,6 +339,8 @@ async function main(){
   process.stdout.write(JSON.stringify({...context,...result})+'\n');
   if(result.status!=='completed')process.exitCode=1;
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(()=>{
-  process.stderr.write('新流程执行失败，请读取本批固定定义与活动证据\n');process.exitCode=1;
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{
+  let persistence='';
+  if(cliStartupPending)try{recordCliStartupFailure(error,process.env);}catch{persistence=' CLI_STARTUP_FAILURE_RECORD_FAILED';}
+  process.stderr.write('新流程执行失败，请读取本批固定定义与活动证据 ['+workflowStartupFailureCode(error)+']'+persistence+'\n');process.exitCode=1;
 });

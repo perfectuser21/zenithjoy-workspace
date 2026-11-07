@@ -327,3 +327,5 @@ Agent 101/102 的 `preflight_profile` 在正式 prepare 阶段冻结规范 regis
 101 的云手机命令来源固定在 `config/native-phone-command-sources.json`：当前仅声明 MMV 的 cloud-phone-test / Android 12 SDK31。有限编译命令绑定真实系统入口和直接 Java 依赖原件，Pillow 配置固定与该机 Python 3.14 匹配的完整既有文件清单；Worker 不能指定程序、路径或来源凭据。来源吻合不是停止证明，shell-v2 EXIT、真实 EOF、所有原生域和 Caller 关闭须分别验证；断线、未知提交或未决输入恢复不得重放或释放手机。
 
 101 的独立协议验收使用合成设备页面与私有 PostgreSQL，沿同一生产裁判覆盖完整三槽及未启动模型的 always_run 清理。真实视频、评论、评分的业务验收仍须以同一候选、真实账号与独立读回结果为准；这些隔离测试不生成或授权104触达。
+
+外部入口的中央 ACK 按协议没有 Task 外键；原生执行器用固定运行 ACK 和代码签发的 Task 租约验证关联，不修改 ACK，每次执行前仍由 Caller 重新核验真实任务。启动阶段失败会保留受控错误码和运行身份，不能据此宣称活动完成或资源已归还。
