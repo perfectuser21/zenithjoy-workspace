@@ -175,6 +175,51 @@ class RecoveryTests(unittest.TestCase):
   self.m.brain_get=read
   with self.assertRaises(ValueError):self.apply()
   self.assertFalse(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
+ def test_last_machine_authority_guard_replacement_is_not_the_owned_guard(self):
+  self.plan();old=self.m.brain_get;count=0;held=[]
+  def read(path):
+   nonlocal count
+   if path=='/device-locks':
+    count+=1
+    if count==2:
+     guard=self.root/(SERIAL+'.guard');os.rename(guard,self.root/'.guard.replaced');put(guard,b'')
+     fd=os.open(guard,os.O_RDWR);held.append(fd);fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   return old(path)
+  self.m.brain_get=read
+  try:
+   with self.assertRaises(ValueError):self.apply()
+   self.assertTrue(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
+  finally:
+   for fd in held:os.close(fd)
+ def test_final_readback_guard_replacement_cannot_write_success_returned(self):
+  self.plan();old=self.m.brain_get;count=0;held=[]
+  def read(path):
+   nonlocal count
+   if path=='/device-locks':
+    count+=1
+    if count==3:
+     guard=self.root/(SERIAL+'.guard');os.rename(guard,self.root/'.guard.replaced');put(guard,b'')
+     fd=os.open(guard,os.O_RDWR);held.append(fd);fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   return old(path)
+  self.m.brain_get=read
+  try:
+   with self.assertRaises(ValueError):self.apply()
+   self.assertFalse(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
+  finally:
+   for fd in held:os.close(fd)
+ def test_root_inode_replacement_preserving_guard_and_lock_inodes_is_refused(self):
+  self.plan();old=self.m.brain_get;count=0
+  def read(path):
+   nonlocal count
+   if path=='/device-locks':
+    count+=1
+    if count==2:
+     backup=self.root.parent/'old-root';os.rename(self.root,backup);self.root.mkdir(mode=0o700)
+     for child in backup.iterdir():os.rename(child,self.root/child.name)
+   return old(path)
+  self.m.brain_get=read
+  with self.assertRaises(ValueError):self.apply()
+  self.assertTrue(self.lock.exists());self.assertFalse(any(self.root.glob('.source-review-cloud6-*/apply.returned.json')))
  def test_symlink_and_hardlink_fail_before_plan(self):
   f=self.lock/'owner';b=f.read_bytes();f.unlink();os.link(self.foreign/'owner',f)
   with self.assertRaises(ValueError):self.plan()
