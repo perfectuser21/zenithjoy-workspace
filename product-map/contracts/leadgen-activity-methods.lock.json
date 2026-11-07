@@ -395,7 +395,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -769,13 +769,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "32b1d69c19b3c437f403ff9479395fe61e6f5baaec4667c14c7c68bcdc91c40d",
+      "code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。101启动仅把正规external无TaskFK ACK与Starter冻结Tasklease做Codecontext关联；原ACK/Brain/Caller不改，每AV仍liveTaskGET撤权，原绑定读回/设备claim/Source/unknown停证不弱。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。101保留原Task/设备claim/Source及原Caller实时GET撤权与独立Judge；Commander仍只观察指导，不能批准业务动作、改顺序或状态，unknown仍需真实私有关闭。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "cf5d5e31f7bfd5230b53dad594b83c707a392a8eed358e919a6555e433da8a2a",
-        "current_code_digest": "32b1d69c19b3c437f403ff9479395fe61e6f5baaec4667c14c7c68bcdc91c40d"
+        "current_code_digest": "3a2f8a2045ec3b4b8ffd474bd4624b68384f6d2617d535e75c7e98e18c99e690"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1214,7 +1214,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -1571,13 +1571,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "85235d7529b8e6da4d17769e221f3ec8753d928c83af56ef55d4bcab9ffea561",
+      "code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。101启动仅把正规external无TaskFK ACK与Starter冻结Tasklease做Codecontext关联；原ACK/Brain/Caller不改，每AV仍liveTaskGET撤权，原绑定读回/设备claim/Source/unknown停证不弱。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。101保留原Task/设备claim/Source及原Caller实时GET撤权与独立Judge；Commander仍只观察指导，不能批准业务动作、改顺序或状态，unknown仍需真实私有关闭。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "6bb27ddf442645a03a14cb0fbd5968f1bbbf4e719b45abb138d0cc443c569d8b",
-        "current_code_digest": "85235d7529b8e6da4d17769e221f3ec8753d928c83af56ef55d4bcab9ffea561"
+        "current_code_digest": "351047f9208c16cbcb0fd761e1a89ee79ec8751e2e05d265c63dde53909b51eb"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1981,7 +1981,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -2341,13 +2341,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "6fb343b2e6c4e44414c7a1581d15b6542a8a338f90e2ab398b06278c824e08c5",
+      "code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。102仅共享静态Source/诊断摘要更新；未启用新的102手机通道，去重/资格/采样/零评论/收尾和unknown规则不变，不从本兼容评估推定已跑通。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。102仅共享静态Source和Observer超时内部修复；不由本评估启用新手机/录制/业务动作，原零评论、采样、资格与unknown停止规则不变。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "7bb1471046a51103ceff71e971706a366c7cd309b95ee05e6e2a30c99bf04484",
-        "current_code_digest": "6fb343b2e6c4e44414c7a1581d15b6542a8a338f90e2ab398b06278c824e08c5"
+        "current_code_digest": "a12bd759abd0097b35f69cab03428170757e63d9ce5b70d78602b1c014a81948"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2779,7 +2779,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -3195,13 +3195,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "3bc9b065fa6a4d5954616503e8661b0e52068c99ddc9795e91bd8990d1f5b6ef",
+      "code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。102仅共享静态Source/诊断摘要更新；未启用新的102手机通道，去重/资格/采样/零评论/收尾和unknown规则不变，不从本兼容评估推定已跑通。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。102仅共享静态Source和Observer超时内部修复；不由本评估启用新手机/录制/业务动作，原零评论、采样、资格与unknown停止规则不变。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "b0e7796a42d60bf02fd36709a0f6452c7182b2afaabbbf9b8dde650027813fba",
-        "current_code_digest": "3bc9b065fa6a4d5954616503e8661b0e52068c99ddc9795e91bd8990d1f5b6ef"
+        "current_code_digest": "9583c8daefe2a3a4e3fb6f952f6c93d30fc500a5bfdb55e52db84d8c462436aa"
       }
     },
     "douyin_video_processing.collection": {
@@ -3605,7 +3605,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -3987,13 +3987,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "2938a57a0cff4ce455df232ce49c5d157db908325d2ad680c4e1f9e1f18d5aec",
+      "code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。102仅共享静态Source/诊断摘要更新；未启用新的102手机通道，去重/资格/采样/零评论/收尾和unknown规则不变，不从本兼容评估推定已跑通。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。102仅共享静态Source和Observer超时内部修复；不由本评估启用新手机/录制/业务动作，原零评论、采样、资格与unknown停止规则不变。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "23db356789ee5b5b08766da1bff9fcd835db9131b26515d82fa3f64a0d27bdfa",
-        "current_code_digest": "2938a57a0cff4ce455df232ce49c5d157db908325d2ad680c4e1f9e1f18d5aec"
+        "current_code_digest": "099e51a28d205d0a116e20d03d8f06fd4a5cac99e7a18b69718bd897972e44bb"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4418,7 +4418,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -4774,13 +4774,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f580cd129adfefdda9d8d935b7c27016d4312bbb44b9868ce64da31490d803f4",
+      "code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。101启动仅把正规external无TaskFK ACK与Starter冻结Tasklease做Codecontext关联；原ACK/Brain/Caller不改，每AV仍liveTaskGET撤权，原绑定读回/设备claim/Source/unknown停证不弱。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。101保留原Task/设备claim/Source及原Caller实时GET撤权与独立Judge；Commander仍只观察指导，不能批准业务动作、改顺序或状态，unknown仍需真实私有关闭。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "0e588b8bc175f3c598b6c6ad80e08cb28ee67f165932654393bf62ede6e2c6b2",
-        "current_code_digest": "f580cd129adfefdda9d8d935b7c27016d4312bbb44b9868ce64da31490d803f4"
+        "current_code_digest": "2732fdc4725d9b6f80da06b4240189a4cb1c440cb1e6fe28dbbfbe2a4332847b"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5191,7 +5191,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -5558,13 +5558,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "32bce21a05a2fcfdfc8b7c3f65779558d62b8eefe0c0a9fbace70665a6528c9c",
+      "code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。103prepare接同一正规关联；原评分政策、scoring/mark独立PG读回、空批品牌、Bridge及未知副作用只读/停证门保持，不新增模型/配送/手机授权。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。103仍原政策、PG独立读回/空批品牌/Bridge/未知副作用只读与停证门；已有Task关联只断言Codecontext，不伪造中央TaskFK，每AV原Caller实时撤权。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "c71e35ae24818ed26bf20560ca02df4a903dce2043a909724cd0857b62a3a697",
-        "current_code_digest": "32bce21a05a2fcfdfc8b7c3f65779558d62b8eefe0c0a9fbace70665a6528c9c"
+        "current_code_digest": "ee1eb0409e72bc349882b7876e1120a69a83c5ea01500d2bf90ed20f02426052"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5982,7 +5982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -6384,13 +6384,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "47ffcdc10d45edb9dd0ad64102c9bbcbc1d4eee15c23d978fe4187d0d56b33a0",
+      "code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。103prepare接同一正规关联；原评分政策、scoring/mark独立PG读回、空批品牌、Bridge及未知副作用只读/停证门保持，不新增模型/配送/手机授权。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。103仍原政策、PG独立读回/空批品牌/Bridge/未知副作用只读与停证门；已有Task关联只断言Codecontext，不伪造中央TaskFK，每AV原Caller实时撤权。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "e6153030353c786f7c08201e5fd1b841260528df6fb2571be9f6e24a76953b5d",
-        "current_code_digest": "47ffcdc10d45edb9dd0ad64102c9bbcbc1d4eee15c23d978fe4187d0d56b33a0"
+        "current_code_digest": "707b6e2b707d875559dafce3f8517458cf87563a2b4f8468e1a48033e24f50de"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6598,7 +6598,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -7144,13 +7144,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c1f8d31a7f218f8568e372237e5a023f8884f884ffe95b10f174160268b488a7",
+      "code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。104仅共享静态Source及诊断摘要更新；发送/订单/Bridge/批准账号话术/白名单逐字不变，native修补只作用101/103prepare，不增加发送权、重试或调度。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "7c2104e997c9161873ec313259f8ee12a91bd1ae24e3df4932f68742259131e7",
-        "current_code_digest": "c1f8d31a7f218f8568e372237e5a023f8884f884ffe95b10f174160268b488a7"
+        "current_code_digest": "de365383c957069304769d11a5469d430a6f1a7cf984db0b816e2ee86ffcf5f0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7358,7 +7358,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -7879,13 +7879,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "58346d41735b0db6604f3454a127deee565f612e5632c9991bae69accda2a381",
+      "code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。104仅共享静态Source及诊断摘要更新；发送/订单/Bridge/批准账号话术/白名单逐字不变，native修补只作用101/103prepare，不增加发送权、重试或调度。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "ce4f46a7993811007b86dfbc0cbfe1d96d9dbc814d9f00d31ee57d34165d0cf1",
-        "current_code_digest": "58346d41735b0db6604f3454a127deee565f612e5632c9991bae69accda2a381"
+        "current_code_digest": "62044b54183f6e8173a39662f1f4302c4c25c74b0d7b6cf30323957e2afc484f"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8093,7 +8093,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -8607,13 +8607,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2070354c4ef0007202affa3115d30248f8b90dbac8b7a8a1f74488377d2581d4",
+      "code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。104仅共享静态Source及诊断摘要更新；发送/订单/Bridge/批准账号话术/白名单逐字不变，native修补只作用101/103prepare，不增加发送权、重试或调度。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "afb964ddb70d7c4212f466eff80083d25cfe2d0336fb2f83395765c92b72ca18",
-        "current_code_digest": "2070354c4ef0007202affa3115d30248f8b90dbac8b7a8a1f74488377d2581d4"
+        "current_code_digest": "6449d6348749de3599f2826087f8af6238cabddc635c44bbbcf7723cd226e9b2"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8821,7 +8821,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "7413fbb88a566caf2afc245a4946915d59a423036018ce8327aa52455ecb7964"
+          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
         },
         {
           "kind": "code",
@@ -9345,13 +9345,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6c331bab0129c78b2445850d1e0a4a2139fee76ad3203b7a9cf6e99b256c15ff",
+      "code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立固定882195b26c09280bb1c8e770252e5b195b44b155相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair重核，Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份/槽位相同，原锁与原collect一致；当前digest在882重新计算，未复用fca或9929值。生产增量仅已审Task关联3模块、CLI启动诊断及五generic JSON patch版本；本人新ownedPG prepare2/2、原lease/binding/authority15/15、最终CLI11/11通过。诊断仅有限Code白名单及冻结身份私有独占记录；新增RUN_ASSOCIATION只是一项精确Code标识，任意message/body/stack/secret仍不输出，exit1不变，不虚报资源0/已归还或Activity通过。104仅共享静态Source及诊断摘要更新；发送/订单/Bridge/批准账号话术/白名单逐字不变，native修补只作用101/103prepare，不增加发送权、重试或调度。仅内部代码兼容，不替代CI/新Task实跑，不改旧187run或宣称中央已有Task关联。",
+        "reason": "独立固定9326c365d82ee13f7fc79456f6b0e256d53a5658相对maina3f5ea211ca3854978c696207e4e2b590f954f2d真collectMethods逐12pair；Skill正文/支持闭包/method版本、Activity版本/contract_digest、4Workflow身份槽位均相同；当前digest在9326重新计算，未复用882/fca。相对已审882绑定生产字节仅runner-official-commander变化：只精确本Code生成参数结构才在SDK入口按原worker剩余floor收紧timeout，绝不扩大原timeout/12秒/worker/receipt/cleanup，六foreign输入原样交未改SDK拒绝，余量不足SDK/WS零派发；Caller/SDK/owner/stop校验未改。本人原17小套全绿0skip20.64秒；此前prepare2+原控15+CLI11证据仍有效且对应四生产文件逐字未变；五generic JSON仅原patch版本。104仅共享静态依赖摘要变化；发送/订单/Bridge/批准账号话术/白名单与maina3f逐字不变，不增发送权或重试，不由Commander回复决定通过。仅内部代码兼容，不追认旧211或替代CI/新真实Task验收。",
         "reviewed_by": "/root/review_clean_bootstrap",
         "previous_code_digest": "e9e249dfb2f816b94a6ccb1f61e7c6ba66898df9e99bbde3383fb57a74a66207",
-        "current_code_digest": "6c331bab0129c78b2445850d1e0a4a2139fee76ad3203b7a9cf6e99b256c15ff"
+        "current_code_digest": "073d2234e198ed23ad8efbfa62a8682c54378f1b61b64e3325b60bf9c6798aa2"
       }
     }
   },
