@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import os from 'node:os';import {syncBuiltinESMExports} from 'node:module';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
@@ -11,6 +12,9 @@ const sha=value=>createHash('sha256').update(typeof value==='string'||Buffer.isB
 // All five 102 slots use distributed, hashed Skill bytes. The task lease below is
 // issued through actual HTTP heartbeat/readback, never Worker JSON.
 export async function freezeNative102PublicDefinition(t,f,{env,manifest,extraFrozen={},activityBudgetS=180}){
+ // This test-only OS surface is virtual MMV; production host/target guards
+ // remain unchanged and are exercised against a foreign preload separately.
+ t.mock.method(os,'hostname',()=> 'r10-7');syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
  const load=name=>import(pathToFileURL(join(f.runtimeRoot,name))),definitions=await load('runtime-definition.mjs'),lease=await load('native-task-lease.mjs');
  assert.equal(manifest.source_commit,f.source.commit);assert.equal(manifest.target,'mmv');
  const input=definitions.agentInput(env),task=f.routes.get('/api/brain/tasks/'+input.task_id);
