@@ -6,7 +6,7 @@ import {rawModelScopeStopped} from './activity-skill-parent-loop.mjs';
 import {readFrozen,canonical} from './runtime-definition.mjs';import {readBinding} from './runtime-binding.mjs';import {rpcSource} from './leadgen-client.mjs';import {createPreflightMetadata} from './preflight-metadata.mjs';import {createPreflightPoolFactory,assertPreflightProfile} from './preflight-control-scope.mjs';import {startPreflightNativeDomain,preflightDomainClosure} from './preflight-native-domain.mjs';import {assertPreflightPng,createPreflightPhoneDriver} from './preflight-phone-driver.mjs';import {startPreflightLocalLeaves} from './preflight-local-leaves.mjs';
 const phoneProviders=new WeakMap();
 export function attachNativePhoneRuntime(runtime,provider){if(!runtimes.has(runtime)||!isNativePhoneRuntime(provider)||phoneProviders.has(runtime))fail('PHONE_PROVIDER');phoneProviders.set(runtime,provider);}
-const runtimes=new WeakSet(),records=new WeakMap(),handoffIssuers=new WeakMap(),handoffs=new WeakMap(),hash=b=>createHash('sha256').update(b).digest('hex');
+const runtimes=new WeakSet(),records=new WeakMap(),handoffIssuers=new WeakMap(),handoffs=new WeakMap(),localIssuers=new WeakMap(),localScopes=new WeakMap(),hash=b=>createHash('sha256').update(b).digest('hex');
 export const isPreflightRuntime=value=>runtimes.has(value);
 const fail=reason=>{throw Object.assign(Error('PREFLIGHT_SCOPE_'+reason),{executionStopped:false});};
 function official(proof,source){const r=proof?.receipt;return proof?.execution_stopped===true&&r?.source_commit===source&&r.execution_stopped===true&&r.owner_execution_stopped===true&&r.child_execution_stopped===true&&r.terminal?.runId===r.child_run_id&&Number.isFinite(r.terminal?.endedAt);}
@@ -14,6 +14,8 @@ function official(proof,source){const r=proof?.receipt;return proof?.execution_s
 // budget, model permission or any remote execution-stop assertion.
 export function issuePreflightPhoneHandoff(runtime,scope){const issuer=handoffIssuers.get(runtime);if(!issuer)fail('HANDOFF_RUNTIME');return issuer(scope);}
 export function readPreflightPhoneHandoff(capability,{runtime,scope}={}){const r=handoffs.get(capability);if(!r||r.runtime!==runtime||r.scope!==canonical(scope))fail('HANDOFF_BRAND');return r.read();}
+export function issuePreflightLocalScope(runtime,scope){const issue=localIssuers.get(runtime);if(!issue)fail('LOCAL_SCOPE_RUNTIME');return issue(scope);}
+export function readPreflightLocalScope(cap,{runtime,scope}={}){const p=localScopes.get(cap);if(!p||p.runtime!==runtime||p.scope!==canonical(scope))fail('LOCAL_SCOPE_BRAND');return p.read();}
 // The handoff only reports the original preflight ownership. Each later AV
 // still needs its own frozen B authority, budget and worker-stop lifecycle.
 function phoneHandoffActivity(scope,frozen){
@@ -155,7 +157,25 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId,poolFacto
    return Object.freeze({...r.identity,epoch:r.epoch,account:r.accountEvidence.account,account_evidence:{path:r.accountEvidence.path,sha256:r.accountEvidence.sha256},lock_root:r.lockRoot});
   };
   read();r.handoffIssued??=new Set();if(r.handoffIssued.has(scope.activity))fail('HANDOFF_REPLAY');r.handoffIssued.add(scope.activity);
-  const cap=Object.freeze({});handoffs.set(cap,{runtime,scope:canonical(scope),read});return cap;
+  const cap=Object.freeze({});handoffs.set(cap,{runtime,scope:canonical(scope),read});r.handoffCaps??=new Map();r.handoffCaps.set(scope.activity,cap);return cap;
+ });
+ localIssuers.set(runtime,inputScope=>{
+  const scope=structuredClone(inputScope),key=canonical(scope),r=records.get(current);
+  let read;
+  if(['preflight','cleanup'].includes(scope.activity)){
+   if(!r||canonical(r.scope)!==key)fail('LOCAL_SCOPE');
+   read=()=>{
+    if(current!==r.handle||r.closed||r.unknown||!r.owned||r.released||bootstrapUnknown||metadata.snapshot().unknown||r.ctx.state.executionUnknown||r.ctx.state.nativeStopUnproven||Date.now()>=scope.worker_deadline_ms)fail('LOCAL_SCOPE');
+    r.stable();assertPreflightProfile({env,frozen});
+    const directory=join(r.lockRoot,env.SERIAL+'.lock'),st=lstatSync(directory);
+    if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||realpathSync(directory)!==resolve(directory))fail('LOCAL_OWNER');
+    for(const [name,value]of [['owner',r.identity.owner],['preflight_epoch',r.epoch],['standalone_review_required',r.identity.owner],['preflight_proof_required',r.epoch]])if(ownershipBytes(join(directory,name)).toString().trim()!==value)fail('LOCAL_OWNER');
+   };
+  }else{
+   const prior=previous&&records.get(previous),cap=prior?.handoffCaps?.get(scope.activity),p=handoffs.get(cap);
+   if(!p||p.runtime!==runtime||p.scope!==key)fail('LOCAL_HANDOFF');read=p.read;
+  }
+  read();const cap=Object.freeze({});localScopes.set(cap,{runtime,scope:key,read});return cap;
  });
  runtimes.add(runtime);return Object.freeze(runtime);
 }

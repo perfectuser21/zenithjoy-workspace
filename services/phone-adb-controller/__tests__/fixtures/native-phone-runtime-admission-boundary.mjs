@@ -5,7 +5,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';import {join} from 
 import {startNativeBoundaryGatewayFixture} from './native-phone-boundary-gateway.mjs';
 import {isolateNativeBoundaryRemoteVersions} from './native-phone-remote-version-fixture.mjs';
 import {usingNative102PublicSource} from './native-102-public-source-fixture.mjs';
-export async function usingNativeRuntimeAdmissionBoundary(t,probe){let boundaryResult;await usingNative102PublicSource(t,async f=>{
+export async function usingNativeRuntimeAdmissionBoundary(t,probe,{beforeWorkflowImport}={}){let boundaryResult;await usingNative102PublicSource(t,async f=>{
  const remoteState=isolateNativeBoundaryRemoteVersions(f);const load=name=>import(pathToFileURL(join(f.runtimeRoot,name))),{createPreflightRuntime}=await load('preflight-phone-scope.mjs');
  const preflightRuntime=createPreflightRuntime({root:f.runtimeRoot,env:f.env,frozen:f.definition.frozen,binding:f.definition.binding,taskId:f.q.task_id,poolFactory:f.pg.createPool});
  const observations=[];let counter=0,hook=null;const gatewayDependencies=await startNativeBoundaryGatewayFixture(t,f.intents),{createOfficialAgentControl}=await load('official-agent-control.mjs');const createControl=({request,directory},role='Worker')=>{const journalDirectory=join(directory,'actual-caller');mkdirSync(journalDirectory,{mode:0o700});return createOfficialAgentControl({...f.options,httpRequest:remoteState.wrapHttp(f.options.httpRequest,role,request.activity_key),source:f.source,request,journalDirectory,deadlineMs:request.receipt_deadline_ms,cleanupDeadlineMs:request.deadline_ms,gatewayDependencies,gatewayCredential:()=> 'fixture-worker'});};
@@ -19,4 +19,4 @@ export async function usingNativeRuntimeAdmissionBoundary(t,probe){let boundaryR
  const result={preflight,error,cleanup,probeError,observations,remoteReads:remoteState.reads,frozen_file_sha256:remoteState.frozen_file_sha256,native:handlers.nativePhoneRuntime.snapshot(),state:handlers.nativePhoneRuntime.nativeState(),lockHeld:f.lockHeld(),adb:f.adb.requests};
  const remoteEvidence=new Map();for(const r of result.remoteReads)if(r.outer_status!==null||r.bindings?.some(b=>b.status!=="verified")){const key=JSON.stringify([r.role,r.activity,r.path,r.outer_status,r.bindings,r.body_sha256]);const old=remoteEvidence.get(key);if(old){old.count++;old.last_received_at=r.received_at;}else remoteEvidence.set(key,{...r,count:1,first_received_at:r.received_at,last_received_at:r.received_at});}
  console.log(JSON.stringify({event:"actual-runtime-admission-boundary",observations,preflight:preflight?.status,cleanup:cleanup?.status,unknown:result.state.execution_unknown,frozen_file_sha256:remoteState.frozen_file_sha256,changed_remote_HTTP_responses:[...remoteEvidence.values()]}));if(probeError)throw probeError;boundaryResult=result;
- },{commentLimit:1});return boundaryResult;}
+ },{commentLimit:1,beforeWorkflowImport});return boundaryResult;}

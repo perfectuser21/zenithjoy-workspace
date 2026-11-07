@@ -1,6 +1,6 @@
 // Code-owned read-only authority domain; never exposes a model/broker launch capability.
 import{createHash}from'node:crypto';import{mkdirSync,readFileSync,lstatSync,realpathSync}from'node:fs';import{dirname,join,resolve}from'node:path';import{fileURLToPath}from'node:url';
-import{createOfficialAgentControlFactory}from'./official-agent-control.mjs';
+import{createNativeReadOnlyAuthorityControlFactory}from'./official-agent-control.mjs';
 const proofs=new WeakMap(),packets=new WeakMap(),projections=new WeakMap();
 const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 const sha=x=>createHash('sha256').update(x).digest('hex'),fail=code=>Error('NATIVE_ACTIVITY_AUTHORITY_'+code);
@@ -9,7 +9,7 @@ export function createNativeActivityAuthority({runtimeRoot,source,request,frozen
  if(q?.execution_transport!=='raw-model-v1'||q.mode!=='execute'||q.source_commit!==src?.commit||frozen?.deployment?.source_commit!==src.commit||q.runtime_snapshot_sha256!==frozen?.snapshot_sha256||!claim||Object.keys(claim).sort().join()!=='claimed_at,claimed_by'||typeof claim.claimed_by!=='string'||!claim.claimed_by||!Number.isFinite(Date.parse(claim.claimed_at))||!Number.isSafeInteger(q.receipt_deadline_ms)||Date.now()>=q.receipt_deadline_ms)throw fail('SCOPE');
  function verify(){const self=src.files?.filter(f=>f.path==='native-activity-authority.mjs'),file=join(runtimeRoot,'native-activity-authority.mjs'),s=lstatSync(file);if(realpathSync(runtimeRoot)!==dirname(fileURLToPath(import.meta.url))||self?.length!==1||!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha(readFileSync(file))!==self[0].sha256)throw fail('SOURCE');}
  verify();if(resolve(directory)!==directory||realpathSync(directory)!==directory)throw fail('DIRECTORY');const sub=join(directory,'native-authority');mkdirSync(sub,{mode:0o700});
- const factory=createControl||createOfficialAgentControlFactory({runtimeRoot,source:src}),control=factory({request:q,scope:{run_id:q.run_id,task_id:q.task_id,binding_id:q.binding_id,source_commit:q.source_commit,activity:q.activity_key},directory:sub});
+ const factory=createControl||createNativeReadOnlyAuthorityControlFactory({runtimeRoot,source:src}),control=factory({request:q,scope:{run_id:q.run_id,task_id:q.task_id,binding_id:q.binding_id,source_commit:q.source_commit,activity:q.activity_key},directory:sub});
  if(!control||['readAuthorizedTaskClaim','seal','close','snapshot','verifySealedExecution'].some(k=>typeof control[k]!=='function'))throw fail('CALLER_REQUIRED');
  const state={epoch:0,sealed:false,invalid:false,pending:0},base={requestHash,sourceHash};let closing;
  function active(){if(state.sealed||Date.now()>=q.receipt_deadline_ms)throw fail('CLOSED');if(state.invalid)throw fail('CLAIM_CHANGED');verify();}

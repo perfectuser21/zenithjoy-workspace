@@ -16,6 +16,7 @@ import {createNativeActivityAuthority,readNativeAuthorityProjection,nativeAuthor
 import {createNativePhoneAdbRead,createNativePhoneEvidenceRead} from './native-phone-adb-read.mjs';
 import {createNativePhoneSourceIssuer,readNativePhoneCommandSource} from './native-phone-command-source.mjs';
 import {createNativePhoneCommandObserver} from './adb-shell-v2.mjs';
+import {registerNativePhoneProtocolIssuer,issueNativePhoneProtocolTicket} from './native-phone-protocol-ticket.mjs';
 import {startNativePhoneLocalProducer,nativePhoneLocalFailureReturned} from './native-phone-local-producer.mjs';
 import {startNativePhoneVision} from './native-phone-vision.mjs';
 import {createNativePhoneClipState} from './native-phone-clip-state.mjs';
@@ -31,7 +32,7 @@ const fail=(code,unknown=false)=>Object.assign(Error('NATIVE_PHONE_'+code),{code
 export const isNativePhoneRuntime=value=>runtimes.has(value);
 export function authorizeNativePhoneCleanupTransition(runtime,{request}={}){const read=cleanupRoutes.get(runtime);if(!read)throw fail('CLEANUP_ROUTE');return read(request);}
 export function firstNativePhoneFocus(raw){return String(raw).replaceAll('\r','').split('\n').find(line=>/^\s*(mCurrentFocus|mFocusedApp)\s*=/.test(line)&&!/=null(?:\s|$)/.test(line))?.trim()||'unknown';}
-export const NATIVE_PHONE_FILES=Object.freeze(['native-phone-runtime.mjs','native-phone-vision.mjs','native-phone-vision-step.py','locate-element.py','native-phone-clip-state.mjs','native-phone-adb-read.mjs','native-phone-command-source.mjs','adb-shell-v2.mjs','adb-shell-v2-protocol.mjs','native-phone-local-producer.mjs','native-phone-ui.mjs','native-phone-ui-step.py','native-phone-search-macros.mjs','native-phone-search-step.py','native-phone-link-macros.mjs','native-phone-link-step.py','native-phone-queue.mjs','native-phone-preflight-adapter.mjs','native-phone-link-resolver.mjs','native-activity-authority.mjs','native-task-lease.mjs']);
+export const NATIVE_PHONE_FILES=Object.freeze(['native-phone-runtime.mjs','native-phone-protocol-ticket.mjs','native-phone-vision.mjs','native-phone-vision-step.py','locate-element.py','native-phone-clip-state.mjs','native-phone-adb-read.mjs','native-phone-command-source.mjs','adb-shell-v2.mjs','adb-shell-v2-protocol.mjs','native-phone-local-producer.mjs','native-phone-ui.mjs','native-phone-ui-step.py','native-phone-search-macros.mjs','native-phone-search-step.py','native-phone-link-macros.mjs','native-phone-link-step.py','native-phone-queue.mjs','native-phone-preflight-adapter.mjs','native-phone-link-resolver.mjs','native-activity-authority.mjs','native-task-lease.mjs']);
 const discoverySlots=['preflight','collect_videos','cleanup'],processingSlots=['preflight','dedup','qualification','collection','cleanup'];
 export const NATIVE_PHONE_PROCESSING_FILES=Object.freeze(['native-phone-processing.mjs','native-102-queue.mjs','native-102-qualification.mjs','native-phone-media.mjs','decode-recording.py','native-phone-audio-macros.mjs','native-phone-audio-step.py','native-phone-collection-macros.mjs','native-phone-comment-step.py','native-collection-dependencies.mjs','native-collection-history-proof.mjs','native-phone-credentials.mjs','native-collection-queue.mjs','native-phone-detail-macros.mjs','native-phone-detail-step.py','native-phone-managed-recording.mjs','native-scrcpy-host-producer.mjs','native-scrcpy-adb-bridge.mjs','native-scrcpy-adb-shim.mjs','runtime/runtime-policy.json','runtime/runtime-policy-sdk33.json','config/native-scrcpy-hosts.json']);
 export const NATIVE_PHONE_PROCESSING_COMMANDS=Object.freeze(['media-volume','media-session','audio-dump','package-uid','uid-owners']);
@@ -117,12 +118,14 @@ export function createNativePhoneRuntime(options={}){
  }
  async function command(operation,args=[]){
   const entry=active;if(!entry?.ready)throw fail('NOT_PREPARED');await resources(entry);
-  const observer=createNativePhoneCommandObserver({runtimeRoot:root,source,directory:directory(entry,'command-'+entry.commands.length),scope:entry.commandScope,commandSource:entry.commandSource,operation,args,context:{...entry.context,originalIme:entry.originalIme},readAuthority:entry.wireAuthority(entry.commandScope)});entry.commands.push(observer);
+  entry.protocolAdmission={kind:'shell',operation,args:structuredClone(args)};const requestTicket=await issueNativePhoneProtocolTicket(api,{source,scope:entry.commandScope,request:entry.protocolAdmission});
+  const observer=createNativePhoneCommandObserver({requestTicket,runtimeRoot:root,source,directory:directory(entry,'command-'+entry.commands.length),scope:entry.commandScope,commandSource:entry.commandSource,operation,args,context:{...entry.context,originalIme:entry.originalIme},readAuthority:entry.wireAuthority(entry.commandScope)});entry.commands.push(observer);
   try{const cap=await observer.observeDump(),result=observer.readReviewedCommandReceipt(cap,{scope:entry.commandScope});entry.commandReceipts??=[];entry.commandReceipts.push({observer,cap});if(operation==='current-ime'&&result.code===0&&!entry.originalIme)entry.originalIme=result.stdout.toString().trim();return result;}catch(e){entry.unknown=true;unsafe=true;throw fail('COMMAND_UNKNOWN',true);}finally{const stop=await observer.close();if(stop.unknown||stop.pending||stop.open_sockets){entry.unknown=true;unsafe=true;throw fail('COMMAND_CLOSE_UNKNOWN',true);}}
  }
  async function readEvidence(path){
   const entry=active;if(!entry?.ready)throw fail('NOT_PREPARED');await resources(entry);
-  const reader=createNativePhoneEvidenceRead({runtimeRoot:root,source,directory:directory(entry,'evidence-'+entry.readers.length),scope:entry.readScope,commandSource:entry.commandSource,readAuthority:entry.wireAuthority(entry.readScope)});entry.readers.push(reader);
+  entry.protocolAdmission={kind:'read',path};const requestTicket=await issueNativePhoneProtocolTicket(api,{source,scope:entry.readScope,request:entry.protocolAdmission});
+  const reader=createNativePhoneEvidenceRead({requestTicket,runtimeRoot:root,source,directory:directory(entry,'evidence-'+entry.readers.length),scope:entry.readScope,commandSource:entry.commandSource,readAuthority:entry.wireAuthority(entry.readScope)});entry.readers.push(reader);
   try{const cap=await reader.read(path),r=reader.readReceipt(cap,{scope:entry.readScope});return r.bytes;}catch(e){entry.unknown=true;unsafe=true;throw fail('READ_UNKNOWN',true);}finally{const stop=await reader.close();if(!stop.channel_stopped){entry.unknown=true;unsafe=true;throw fail('READ_CLOSE_UNKNOWN',true);}}
  }
  async function local(name,payload){const entry=active;await resources(entry);try{return await entry.local.local(name,payload);}catch(e){if(nativePhoneLocalFailureReturned(e)){e.returned=true;e.executionStopped=true;}else{entry.unknown=true;unsafe=true;}throw e;}}
@@ -259,5 +262,10 @@ export function createNativePhoneRuntime(options={}){
   // next Observer and Worker still independently authorize the new request.
   return true;
  });
- runtimes.add(api);return Object.freeze(api);
+ runtimes.add(api);registerNativePhoneProtocolIssuer(api,({source:expectedSource,scope:wire,request})=>{
+  const entry=active,check=()=>{verify();if(active!==entry||entry.closed||entry.unknown||unsafe||Date.now()>=entry.scope.worker_deadline_ms)throw fail('CLOSED',true);};
+  check();const issued=entry.protocolAdmission;delete entry.protocolAdmission;
+  if(!issued||canonical(issued)!==canonical(request)||canonical(expectedSource)!==canonical(source)||canonical(wire)!==canonical(request.kind==='shell'?entry.commandScope:entry.readScope))throw fail('PROTOCOL_SCOPE');
+  return {preflightRuntime,activityScope:entry.scope,check};
+ });return Object.freeze(api);
 }

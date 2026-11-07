@@ -335,3 +335,36 @@ Agent 101/102 的 `preflight_profile` 在正式 prepare 阶段冻结规范 regis
 101 的独立协议验收使用合成设备页面与私有 PostgreSQL，沿同一生产裁判覆盖完整三槽及未启动模型的 always_run 清理。真实视频、评论、评分的业务验收仍须以同一候选、真实账号与独立读回结果为准；这些隔离测试不生成或授权104触达。
 
 外部入口的中央 ACK 按协议没有 Task 外键；原生执行器用固定运行 ACK 和代码签发的 Task 租约验证关联，不修改 ACK，每次执行前仍由 Caller 重新核验真实任务。启动阶段失败会保留受控错误码和运行身份，不能据此宣称活动完成或资源已归还。
+
+### Native authority：不可变历史 v1
+
+`createNativeReadOnlyAuthorityControlFactory` 是 `NativeActivityAuthority` 使用的
+Code 专用构造入口。Worker 请求与环境变量不能选择此模式；既有构造入口保留原四次读取行为。
+
+本模式仅适用于已审阅的 Cecelia `e3a01021ee7100b83d8ed5a0be219d0b543b5dff`
+历史 getter。前提是发布负责人核验的同一数据库（system identifier
+`7683515241657997053`、正常 `origin` 会话），Run binding、release version、WF/AV
+version 均有启用的无条件 UPDATE/DELETE 拒绝触发器，原 owner/FK 约束仍存在。
+历史 getter 必须继续只读这些不可变行并保留原 release/consumer 检查。这不是通用 HTTP
+响应缓存；这些部署前提不能由一次成功 JSON 响应推断。管理员禁用触发器、替换或重指向
+数据库、改变 getter/鉴权语义时，必须停止本模式、重建 Controller 并重新审阅前提。
+
+每个 Controller 首先执行原完整四次 GET，以及所有原谓词、Source 检查、日志耐久化和最终
+守卫。全部成功后，才保留绑定该 request/Source 的私有 Run/WF/AV 规范字节及摘要。
+不保留 Task、token、已发行 claim、lease 或校验 verdict；不写缓存文件，也不能在另一
+Controller 中恢复。原 validator 每次得到重新解析的历史事实副本，修改副本不会改变私有字节。
+
+后续每次授权先真实 HEAD 固定路径
+`/api/brain/projections/notion/directory/status`，要求 HTTP 200、JSON Content-Type，
+并等待 request、response、socket 全部关闭。HEAD 实际正文必须为零，但允许 Content-Length
+描述 GET 正文长度。它不读取配置正文，也不把业务 `enabled` 字段当成权限。
+然后 GET 完整的当前 Task，继续执行原 validator、Source/Method、精确 claim、
+deadline/epoch/seal 与日志耐久化检查。鉴权、响应头、传输或校验失败均不能回退旧授权。
+这保留当前鉴权和 Task 读取，不承诺跨两次请求的原子或即时撤权。
+日志如实记录两个 HTTP 交换及三项历史事实摘要，不伪造四次网络读取。
+
+生产可用性仍有未解决的限流前置：e3 `server.js:427` 在 `brainRoutes:433` 前挂载
+通用 `projectionsRoutes`；其 `router.use(rateLimit)` 配置为共享 300 次/分钟。
+因此 Directory 自身没有限流器，并不能证明该 HEAD 不受前置限流。完整挂载链和实际容量
+仍待独立核验；本实现对 429 拒绝授权且不发 Task 请求，不绕过或修改限流。
+局部控制测试通过不代表业务已可用、完整五槽成功或能在 600 秒内完成。

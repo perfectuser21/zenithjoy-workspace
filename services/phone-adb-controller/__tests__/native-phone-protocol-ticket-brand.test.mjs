@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {registerNativePhoneProtocolIssuer,issueNativePhoneProtocolTicket,claimNativePhoneProtocolTicket} from '../native-phone-protocol-ticket.mjs';
+test('JSON and a Code callback returning true cannot create a genuine Scope ticket',async()=>{let called=0;const fake={};registerNativePhoneProtocolIssuer(fake,()=>{called++;return true;});await assert.rejects(issueNativePhoneProtocolTicket(fake,{source:{},scope:{},request:{kind:'shell',operation:'sdk',args:[]}}),/NATIVE_PHONE_PROTOCOL_TICKET/);assert.equal(called,0);});
+test('protocol registry cannot be replaced for an already registered owner',()=>{const fake={};registerNativePhoneProtocolIssuer(fake,()=>{});assert.throws(()=>registerNativePhoneProtocolIssuer(fake,()=>{}),/NATIVE_PHONE_PROTOCOL_TICKET/);});
+test('serialized or invented protocol tokens are not protocol permission',()=>{for(const cap of [{},{allow:true,operation:'sdk'},JSON.parse('{"protocol":"native-phone-protocol-ticket/v1"}')])assert.throws(()=>claimNativePhoneProtocolTicket(cap,{source:{},scope:{},request:{}}),/NATIVE_PHONE_PROTOCOL_TICKET/);});
