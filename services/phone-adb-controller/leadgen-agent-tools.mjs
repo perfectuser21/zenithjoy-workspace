@@ -46,6 +46,16 @@ function privateRead(file){
 }
 function syncDirectory(directory){const fd=openSync(directory,'r');try{if(!lstatSync(directory).isDirectory()||lstatSync(directory).isSymbolicLink())throw Error('AGENT_TOOL_JOURNAL_INVALID');fsyncSync(fd);}finally{closeSync(fd);}}
 function durable(file,value){const fd=openSync(file,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}syncDirectory(dirname(file));}
+// Failure diagnostics never serialize exception messages, stacks or arbitrary
+// attached values. Only finite code identifiers from own data properties cross
+// into the durable journal; a failure file does not resolve its write intent.
+function failureCodes(error){
+  const own=(value,key)=>value&&(typeof value==='object'||typeof value==='function')?Object.getOwnPropertyDescriptor(value,key)?.value:undefined;
+  const code=value=>{const valueCode=own(value,'code');return typeof valueCode==='string'&&/^[A-Z][A-Z0-9_]{0,95}$/.test(valueCode)?valueCode:null;};
+  const cause_codes=[],seen=new Set([error]);let cause=own(error,'cause');
+  for(let depth=0;cause&&depth<4&&!seen.has(cause);depth++){seen.add(cause);const value=code(cause);if(value)cause_codes.push(value);cause=own(cause,'cause');}
+  return {error_code:code(error),cause_codes};
+}
 function identity(op,input){
   if(['discover','discover_readback'].includes(op))return 'discover:'+String(input.video?.videoId??input.video?.video_id);
   if(['collect','collect_partial'].includes(op))return op+':'+input.video_id+':'+hash((input.comments||[]).map(row=>row.native_receipt||hash(row)).sort());
@@ -185,7 +195,11 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     const key=hash([scopeKey,operation,randomUUID()]),intent={scope_key:scopeKey,scope,operation,request:{},input_sha256:hash({})};
     durable(join(directory,key+'.intent.json'),intent);busy=true;
     try{const value=await fn();durable(join(directory,key+'.result.json'),{...intent,result:value??null});return value;}
-    catch(error){error.externalEffect='unknown';error.message='AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED';throw error;}finally{busy=false;}
+    catch(error){
+      try{durable(join(directory,key+'.failure.json'),{...intent,...failureCodes(error),observed_at:new Date().toISOString()});}
+      catch(journalError){journalError.externalEffect='unknown';journalError.message='AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED';journalError.cause=error;throw journalError;}
+      error.externalEffect='unknown';error.message='AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED';throw error;
+    }finally{busy=false;}
   };
   let prepared=false;
   return {business,phone,canReadback,

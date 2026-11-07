@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -73,14 +73,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -500,7 +500,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -783,13 +783,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "e1019daeedc9aa37874d31d63df4387071a83dd7f77f57927e99cf246ece0ad5",
+      "code_digest": "022a929b5fd3b25b7aafa4ef231c06d6dc31aeacba136febb78befc6e2381d81",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3367318002b64d1828db4313da2799db8cf737d91dbb004371fbe7d746ea1763",
-        "current_code_digest": "e1019daeedc9aa37874d31d63df4387071a83dd7f77f57927e99cf246ece0ad5",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "e1019daeedc9aa37874d31d63df4387071a83dd7f77f57927e99cf246ece0ad5",
+        "current_code_digest": "022a929b5fd3b25b7aafa4ef231c06d6dc31aeacba136febb78befc6e2381d81"
       }
     },
     "douyin_video_processing.preflight": {
@@ -815,7 +815,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -864,14 +864,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -1333,7 +1333,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -1599,13 +1599,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7ca9f3f94bcd07adcc6ae443d6038089cc5c180e7d4956d6b247b68e5940b4d3",
+      "code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "cd0ad19d8cbf2b0562786331d4002269ca1be79daeb6ff3b38f22b3e80b6904e",
-        "current_code_digest": "7ca9f3f94bcd07adcc6ae443d6038089cc5c180e7d4956d6b247b68e5940b4d3",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "7ca9f3f94bcd07adcc6ae443d6038089cc5c180e7d4956d6b247b68e5940b4d3",
+        "current_code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1631,7 +1631,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -1680,14 +1680,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -2100,7 +2100,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -2369,13 +2369,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "7611a6876cefdd61616803d0cb27bf194ba5a341d91bbb51ebc4e39efa65305d",
+      "code_digest": "92566079be88eee2b1cf9e7399fc931cca7c65389146453a8c9b5f6752dee867",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "607a4c0a41323b95a11552e64edc815a42074ef2b6734e43a61aa631334e0fee",
-        "current_code_digest": "7611a6876cefdd61616803d0cb27bf194ba5a341d91bbb51ebc4e39efa65305d",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "7611a6876cefdd61616803d0cb27bf194ba5a341d91bbb51ebc4e39efa65305d",
+        "current_code_digest": "92566079be88eee2b1cf9e7399fc931cca7c65389146453a8c9b5f6752dee867"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2401,7 +2401,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -2450,14 +2450,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -2898,7 +2898,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -3223,13 +3223,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "fac878a7c7dbca6ad5bd88517955269ea831447400d143639ca49edaca8d1ff1",
+      "code_digest": "6531451463e0d332631e189599764f24a847fe682e47ea70aad65811612b5e45",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "a6d70548f59198d3cd48020763e591d7ce7ad8c7edb673583eedccea902692c1",
-        "current_code_digest": "fac878a7c7dbca6ad5bd88517955269ea831447400d143639ca49edaca8d1ff1",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "fac878a7c7dbca6ad5bd88517955269ea831447400d143639ca49edaca8d1ff1",
+        "current_code_digest": "6531451463e0d332631e189599764f24a847fe682e47ea70aad65811612b5e45"
       }
     },
     "douyin_video_processing.collection": {
@@ -3255,7 +3255,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -3304,14 +3304,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -3724,7 +3724,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -4015,13 +4015,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "1691d73d54737729ed2d2e5423f9baf752f233536d95ac59e6df90cc652fdd26",
+      "code_digest": "7df3f3ca397e996b2315a5dc2d8c869ba153e6ffc8b60612b153bca9f8000fda",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "6114504dd1e50234fd1f5f37d7b2407c81b429d9b38d7c2e7c34b246a606eeeb",
-        "current_code_digest": "1691d73d54737729ed2d2e5423f9baf752f233536d95ac59e6df90cc652fdd26",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "1691d73d54737729ed2d2e5423f9baf752f233536d95ac59e6df90cc652fdd26",
+        "current_code_digest": "7df3f3ca397e996b2315a5dc2d8c869ba153e6ffc8b60612b153bca9f8000fda"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4047,7 +4047,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -4096,14 +4096,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -4551,7 +4551,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -4816,13 +4816,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ee3175fc118ffd9f7276cc947b5c77cf19071be0a46cd2658bca0a0659cd3f64",
+      "code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "d41c9106ddceb1c303d5b34f4352a5dc48730ee603c7e633cfa897bd0c611bba",
-        "current_code_digest": "ee3175fc118ffd9f7276cc947b5c77cf19071be0a46cd2658bca0a0659cd3f64",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "ee3175fc118ffd9f7276cc947b5c77cf19071be0a46cd2658bca0a0659cd3f64",
+        "current_code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -4848,7 +4848,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -4897,14 +4897,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -5324,7 +5324,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -5600,13 +5600,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "9585d1d0032e622877a6e1e3798bee26300960f24e1e663660c3403d724c334d",
+      "code_digest": "89a35a3cef2c06e2f161194b102f54ba36e76753642654129bdfdc2aa7ac6f17",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "7184436c7b84de8eba0d0690066ed315499e52b0ad2a98b35ca0b3644890685d",
-        "current_code_digest": "9585d1d0032e622877a6e1e3798bee26300960f24e1e663660c3403d724c334d",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "9585d1d0032e622877a6e1e3798bee26300960f24e1e663660c3403d724c334d",
+        "current_code_digest": "89a35a3cef2c06e2f161194b102f54ba36e76753642654129bdfdc2aa7ac6f17"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5632,7 +5632,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -5681,14 +5681,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -6115,7 +6115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "900ee0d745fb01081d752076bf3326b6f5c8c53ecf077d748511b3ec8db24cde"
+          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
         },
         {
           "kind": "code",
@@ -6426,13 +6426,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a9ecc7318ce3ac8433fdfc8c246af21d2c3bb3212e5b0c659b6a286ff7e1f4e3",
+      "code_digest": "d30ed11999d51e9bfb157e3107d9a2d17325f6852e3253f0785493c78d6f8122",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "49bb1f3f4eb55c7b98667eefdbab5540d11d9bb2b4139ea4f8d0eaed1d70aa8a",
-        "current_code_digest": "a9ecc7318ce3ac8433fdfc8c246af21d2c3bb3212e5b0c659b6a286ff7e1f4e3",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "a9ecc7318ce3ac8433fdfc8c246af21d2c3bb3212e5b0c659b6a286ff7e1f4e3",
+        "current_code_digest": "d30ed11999d51e9bfb157e3107d9a2d17325f6852e3253f0785493c78d6f8122"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6458,7 +6458,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -6507,14 +6507,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -7186,13 +7186,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "fa3f98b2f3a6d71cf53a2465f1f878b24d8de48da6d09043a5890410634e8f17",
+      "code_digest": "b134fe4acf95a56b46db05105676e8f109f6d842d6ecaa5c56f257966ffbe738",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "1ea246d4a24d54cea775f02c44b021df698bed69397adec2bcc45f2ace358125",
-        "current_code_digest": "fa3f98b2f3a6d71cf53a2465f1f878b24d8de48da6d09043a5890410634e8f17",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "fa3f98b2f3a6d71cf53a2465f1f878b24d8de48da6d09043a5890410634e8f17",
+        "current_code_digest": "b134fe4acf95a56b46db05105676e8f109f6d842d6ecaa5c56f257966ffbe738"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7218,7 +7218,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -7267,14 +7267,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -7921,13 +7921,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5ede3dfd65f6c020cff7fd983f02fa0edfbf4baa52d0ec0db86574f70235b8e6",
+      "code_digest": "017c1c44b3332170894b2d1eeba95d48d30f4b560fcb1b5c31b815f0513feb21",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "b4b3a459393decfa48bb2fef6f1777cb522cadd8649ae4babc362842ddc6b8c4",
-        "current_code_digest": "5ede3dfd65f6c020cff7fd983f02fa0edfbf4baa52d0ec0db86574f70235b8e6",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "5ede3dfd65f6c020cff7fd983f02fa0edfbf4baa52d0ec0db86574f70235b8e6",
+        "current_code_digest": "017c1c44b3332170894b2d1eeba95d48d30f4b560fcb1b5c31b815f0513feb21"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -7953,7 +7953,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -8002,14 +8002,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -8649,13 +8649,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "12bdcc845da03e9822bda4faac5ab04190f3a214263688f9d405ba6ffa5f4700",
+      "code_digest": "2054ac8efbf6446de71baea2d282add59e6183d144528abf83fec218507540da",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "f32acec51a6dfbac63c2b78cc40ed95416a9dfa1eab4f66c2028b6d1852784c8",
-        "current_code_digest": "12bdcc845da03e9822bda4faac5ab04190f3a214263688f9d405ba6ffa5f4700",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "12bdcc845da03e9822bda4faac5ab04190f3a214263688f9d405ba6ffa5f4700",
+        "current_code_digest": "2054ac8efbf6446de71baea2d282add59e6183d144528abf83fec218507540da"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8681,7 +8681,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "469a8dbaad2e5f42cab9a6ca92245094c71420ee9229e1ff8aa26956be0618c4"
+          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
         },
         {
           "kind": "code",
@@ -8730,14 +8730,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "be3095647ab5ebe13b13426f4804bc4d0b2ce2085246e561a8dcc78b99cf5513"
+          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2-protocol.mjs",
           "revision": "contract",
-          "sha256": "897f3e0d8ff268684ea8eeb3d08d7588e3acf0fb7dc0cdf0fe2e3b0bf725e8ed"
+          "sha256": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
         },
         {
           "kind": "code",
@@ -9387,13 +9387,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a92032a02c019b6c7c3b602788d8634a01e9a9adfc655eecdb92e026c1082c68",
+      "code_digest": "743e70a4a0664a94e99ad961f109983551e04f794a32109336bf8ff305453893",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2f4cc6706a127fcd4e38ed9d09cbf81ecf02391520cb72eb996dd8e2126ee0c8",
-        "current_code_digest": "a92032a02c019b6c7c3b602788d8634a01e9a9adfc655eecdb92e026c1082c68",
-        "reason": "独立审查确认：仅固定ROM读取的私有scope/claim/lease授权最多复用1秒且每文件EOF强制刷新，HTTP失败记录真实关闭事实；命令、模型、业务方法及成功产物合同均未变，原unknown与停止守卫保留。",
-        "reviewed_by": "codex-independent-authority-review"
+        "reason": "Independent read-only diff review against 69c40526d2ba0ecffae10b566bb5e10b707e1268: durable wire/native failure diagnostics and already-EOF optional CloseStdin handling preserve the reviewed command set, expected SDK, Activity/Skill methods, business outputs, original deadlines, unresolved-intent isolation and stop/free authority; EXIT remains wire-only and never proves remote execution stopped.",
+        "reviewed_by": "independent-reviewer:/root/review_sdk_diff",
+        "previous_code_digest": "a92032a02c019b6c7c3b602788d8634a01e9a9adfc655eecdb92e026c1082c68",
+        "current_code_digest": "743e70a4a0664a94e99ad961f109983551e04f794a32109336bf8ff305453893"
       }
     }
   },

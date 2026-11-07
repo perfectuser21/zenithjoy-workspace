@@ -11,7 +11,7 @@ const child=(binary,args,input='')=>new Promise((yes,no)=>{const p=spawn(binary,
 async function server(t,handler){const sockets=new Set(),s=createServer(handler);s.on('connection',socket=>{sockets.add(socket);socket.once('close',()=>sockets.delete(socket));});await new Promise(r=>s.listen(0,'127.0.0.1',r));t.after(async()=>{for(const socket of sockets)socket.destroy();await new Promise(r=>s.close(r));});return s;}
 const commands=['pause','dump','tap','search','foreground','window','screenshot','sdk','keyevent','swipe','long-press','current-ime','ime-enable','ime-set','clear-nonce','broadcast-nonce','input-nonce','input-select-all','scratch-search','open-detail','remove-ui','stat-ui','stat-ui-mtime','ui-exists','ui-symlink','device-date','model','telecom','wake','unlock','open-app','close-app','home-resolve','dump-file','screenshot-file'];
 const programs=['uiautomator','input','am','cmd','toybox','app_process','dumpsys','screencap','getprop','wm','ime','monkey','settings'];
-export async function publicPhoneScenario(t,{invalidStop=false,earlyModelFailure=false,earlyRunner=false,prepareBoundary}={}){return usingNativePhonePublic(t,async f=>{
+export async function publicPhoneScenario(t,{invalidStop=false,earlyModelFailure=false,earlyRunner=false,sdkOutput='31',prepareBoundary}={}){return usingNativePhonePublic(t,async f=>{
  assertUniquePhoneFixtureSource(f.source);
  // RFC 5737 documentation address: never a production device identity.
  f.q.serial='192.0.2.31:10001';f.q.limit=1;f.env.SERIAL=f.q.serial;f.env.LEADGEN_LIMIT='1';f.routes.get('/api/brain/tasks/'+f.q.task_id).payload.device_serial=f.q.serial;
@@ -37,7 +37,7 @@ export async function publicPhoneScenario(t,{invalidStop=false,earlyModelFailure
  const artifactRoot=nativePhoneTestArtifacts(),trace=join(artifactRoot,'adb-trace-'+(invalidStop||'positive')+'-'+Date.now()+'.jsonl');writeFileSync(trace,'');
  const files=new Map(),adb=await startNativePhoneAdbFixture(t,{serial:f.q.serial,readFile:path=>{const bytes=rom.get(path)||files.get(path);assert.ok(bytes,'unrequested fixture file '+path);return bytes;},command:raw=>{appendFileSync(trace,JSON.stringify({at:Date.now(),raw,page:state.page})+'\n');
   const parts=[...raw.matchAll(/'([^']*)'/g)].map(m=>m[1]),program=raw.match(/^exec (\S+)/)?.[1],ok=stdout=>({stdout:Buffer.isBuffer(stdout)?stdout:Buffer.from(stdout||'')});
-  if(program==='/system/bin/getprop')return ok(parts[0]==='ro.product.model'?'Fixture\n':'31\n');
+  if(program==='/system/bin/getprop')return ok(parts[0]==='ro.product.model'?'Fixture\n':sdkOutput+'\n');
   if(program==='/system/bin/dumpsys')return ok(parts[0]==='telephony.registry'?'mCallState=0\n':`mCurrentFocus=Window{u0 fixture ${state.page==='desktop'?'com.android.launcher/.Home':pkg+'/'+(state.page==='results'||state.page==='scratch'?'com.ss.android.ugc.aweme.search.activity.SearchResultActivity':'com.ss.android.ugc.aweme.main.MainActivity')}}\n`);
   if(program==='/system/bin/uiautomator'){const path=parts.at(-1);files.set(path,Buffer.from(xml()));return ok('UI hierarchy dumped to: '+path+'\n');}
   if(program==='/system/bin/screencap'){const bytes=png(state.page==='panel'?'selected':'results');if(parts.length>1){files.set(parts[1],bytes);return ok('');}return ok(bytes);}
@@ -98,6 +98,15 @@ export async function publicPhoneScenario(t,{invalidStop=false,earlyModelFailure
  if(earlyRunner){
   assert.equal(result.status,'needs_review',JSON.stringify(result));assert.ok(result.results.some(row=>row.activity==='cleanup'),'always_run cleanup must execute');assert.notEqual(result.results.find(row=>row.activity==='cleanup').status,'blocked');assert.equal(result.results.find(row=>row.activity==='preflight').execution_stopped,true);assert.notEqual(result.commander_execution_unknown,true);
   const closed=records.find(row=>row.phase==='commander_domain_closed');assert.ok(closed);assert.equal(observer.runnerCommanderClosureKnown(closed.evidence,context),true);assert.equal(dependencies.fixtureWorkerTurns(),0);assert.equal(adb.requests.length,0);assert.equal(pg.calls.length,0);assert.equal(pg.livePools(),0);assert.equal(lock,null);assert.equal(existsSync(join(lockRoot,f.q.serial+'.lock')),false);assert.equal(preflightRuntime.metadata.snapshot().sealed,true);assert.equal(preflightRuntime.metadata.snapshot().pending,0);assert.equal(handlers.agentNativeState().execution_unknown,false);assert.equal(handlers.agentNativeState().native_stop_unproven,false);return {result,checks,records};
+ }
+ if(sdkOutput!=='31'){
+  assert.equal(result.status,'needs_review');assert.equal((await pg.readRows()).videos.length,0);assert.equal(dependencies.fixtureWorkerTurns(),0);
+  const commandDir=join(runDir,'native-phone/preflight/command-0');
+  const sdkResult=JSON.parse(readFileSync(join(runDir,'native-phone/preflight/sdk.outcome.json')));
+  assert.equal(sdkResult.error_code,'NATIVE_PHONE_SDK_SCOPE');assert.equal(sdkResult.expected_sdk,31);assert.equal(sdkResult.actual_sdk,sdkOutput);assert.equal(sdkResult.wire_complete,true);
+  const wire=JSON.parse(readFileSync(join(commandDir,'command.outcome.json')));assert.equal(Buffer.from(wire.stdout_base64,'base64').toString(),sdkOutput+'\n');assert.equal(wire.exit_code,0);
+  const files=readdirSync(join(runDir,'agent-tools/preflight')).filter(n=>n.endsWith('.failure.json'));assert.equal(files.length,1);
+  const failed=JSON.parse(readFileSync(join(runDir,'agent-tools/preflight',files[0])));assert.equal(failed.error_code,'NATIVE_PHONE_SDK_SCOPE');return {result,checks,records};
  }
  assert.equal(result.status,'completed',JSON.stringify({result,checks:[...checks]}));assert.deepEqual(result.results.map(row=>row.activity),['preflight','collect_videos','cleanup']);assert.equal((await pg.readRows()).videos.length,1);assert.equal(lock,null);assert.equal(existsSync(join(lockRoot,f.q.serial+'.lock')),false);assert.equal(pg.livePools(),0);return {result,checks,records};
  });}
