@@ -10,7 +10,7 @@ const fail=reason=>Object.assign(Error('NATIVE_PHONE_LOCAL_'+reason),{code:'NATI
 const returned=new WeakSet();export const nativePhoneLocalFailureReturned=e=>returned.has(e);
 const profile='(version 1)(allow default)(deny process-fork)';
 const originalHelpers=['native-phone-search-step.py','native-phone-link-step.py'];
-const helpers=new Set([...originalHelpers,'native-phone-ui-step.py','native-phone-vision-step.py']);
+const helpers=new Set([...originalHelpers,'native-phone-ui-step.py','native-phone-vision-step.py','native-phone-audio-step.py','native-phone-comment-step.py','native-phone-detail-step.py']);
 const required=['native-phone-local-producer.mjs',...originalHelpers,'douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','discovery-metrics.js'];
 const sourceFields=['controller','controller_sha256','widget_script','widget_sha256','metrics_script','metrics_sha256'];
 const searchOps=new Set(['filter-ready','filter-index','filter-option','filter-verify','filter-action','tab','results-focus','controls','keyword','cards']);
@@ -70,6 +70,19 @@ export async function startNativePhoneLocalProducer({root,directory,source,scope
    if(Object.keys(payload).sort().join(',')!=='args,operation'||!searchOps.has(payload.operation)||!Array.isArray(payload.args)||payload.args.some(a=>typeof a!=='string'||a.includes('\0')))throw fail('INPUT');
    if(['filter-ready','filter-option','filter-verify','filter-action'].includes(payload.operation)&&!pil)throw fail('PILLOW_REQUIRED');
    argv=[join(root,'douyin-phone-adb'),pins.get('douyin-phone-adb'),pins.get('search-video-tab.py'),pil?.path||'',pil?.sha256||''];input=JSON.stringify(payload);
+  }else if(helperName==='native-phone-detail-step.py'){
+   const arity={'foreground-detail':1,'speed-prompt':0,'comment-count':1,'gate-dismiss':3,'card-copy-overlay':1};
+   if(fixed.workflow!=='douyin_video_processing'||!['qualification','collection'].includes(fixed.activity)||Object.keys(payload).sort().join(',')!=='args,operation'||!Object.hasOwn(arity,payload.operation)||!Array.isArray(payload.args)||payload.args.length!==arity[payload.operation]||payload.args.some(v=>typeof v!=='string'||v.includes('\0')||Buffer.byteLength(v)>4*1024*1024))throw fail('INPUT');
+   if(!pins.has('comment-count-evidence.py'))throw fail('SOURCE');argv=[join(root,'douyin-phone-adb'),pins.get('douyin-phone-adb'),join(root,'comment-count-evidence.py'),pins.get('comment-count-evidence.py')];input=JSON.stringify(payload);
+  }else if(helperName==='native-phone-comment-step.py'){
+   const fields={panel:'operation,xml',button:'operation,xml',detail:'operation,xml',profile:'nickname,operation,xml',recipient:'commentBody,douyinId,nickname,operation,profile,returned','comment-icon':'operation'};
+   if(fixed.workflow!=='douyin_video_processing'||!['qualification','collection'].includes(fixed.activity)||!Object.hasOwn(fields,payload.operation)||Object.keys(payload).sort().join(',')!==fields[payload.operation]||Object.values(payload).some(v=>typeof v!=='string'||v.includes('\0')||Buffer.byteLength(v)>4*1024*1024))throw fail('INPUT');
+   const dependencies=['douyin-phone-adb','queued-recipient-evidence.js','comment-count-evidence.py'];if(dependencies.some(path=>!pins.has(path)))throw fail('SOURCE');
+   argv=dependencies.flatMap(path=>[join(root,path),pins.get(path)]);input=JSON.stringify(payload);
+  }else if(helperName==='native-phone-audio-step.py'){
+   const arity={foreground:1,uid:1,session:2,native:5};
+   if(fixed.workflow!=='douyin_video_processing'||!['qualification','collection','cleanup'].includes(fixed.activity)||Object.keys(payload).sort().join(',')!=='args,operation'||!Object.hasOwn(arity,payload.operation)||!Array.isArray(payload.args)||payload.args.length!==arity[payload.operation]||payload.args.some(a=>typeof a!=='string'||a.includes('\0')))throw fail('INPUT');
+   argv=[join(root,'douyin-phone-adb'),pins.get('douyin-phone-adb')];input=JSON.stringify(payload);
   }else if(helperName==='native-phone-vision-step.py'){
    if(Object.keys(payload).sort().join(',')!=='operation,path,sha256'||payload.operation!=='encode'||!isAbsolute(payload.path||'')||!/^[a-f0-9]{64}$/.test(payload.sha256||''))throw fail('INPUT');
    if(!pil||!pins.has('locate-element.py'))throw fail('SOURCE');
@@ -81,7 +94,7 @@ export async function startNativePhoneLocalProducer({root,directory,source,scope
   }else{
    if(!linkOps.has(payload.operation))throw fail('INPUT');argv=[];input=JSON.stringify({...structuredClone(payload),controller:join(root,'douyin-phone-adb'),controller_sha256:pins.get('douyin-phone-adb'),widget_script:join(root,'clipboard-widget-cancel.py'),widget_sha256:pins.get('clipboard-widget-cancel.py'),metrics_script:join(root,'discovery-metrics.js'),metrics_sha256:pins.get('discovery-metrics.js')});
   }
-  if(Buffer.byteLength(input)>5*1024*1024)throw fail('INPUT');
+  if(Buffer.byteLength(input)>(helperName==='native-phone-comment-step.py'?9:5)*1024*1024)throw fail('INPUT');
   return runOwned(async()=>{const value=await leaf(helperName,py.path,['-I','-S','-c',bootstrap,join(root,helperName),pins.get(helperName),...argv],input);if(value.code!==0){const e=fail('HELPER_FAILED');e.knownLocalFailure=true;e.exitCode=value.code;e.helper=helperName;returned.add(e);throw e;}try{return JSON.parse(value.stdout);}catch{taint();throw fail('RESULT_UNKNOWN');}});
  }
  return Object.freeze({local,seal,close,snapshot,verifyStopped:packet=>packets.has(packet)&&packet.execution_stopped===true&&snapshot().execution_stopped===true});

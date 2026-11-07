@@ -21,6 +21,11 @@ export function compileNativePhoneCommand(operation,args,context){
  else if(operation==='dump'&&args.length===0){program='/system/bin/uiautomator';argv=['dump','--compressed','/sdcard/douyin-leadgen-ui-'+context.profile+'.xml'];}
  else if(operation==='tap'&&args.length===2&&args.every(a=>typeof a==='string'&&/^(0|[1-9][0-9]{0,4})$/.test(a))&&Number(args[0])<context.width&&Number(args[1])<context.height){program='/system/bin/input';argv=['tap',...args];}
  else if(operation==='search'&&args.length===1&&typeof args[0]==='string'&&context.keywords.some(keyword=>encodeURIComponent(keyword)===args[0])&&/^[A-Za-z0-9_.%~-]+$/.test(args[0])){program='/system/bin/am';argv=['start','-a','android.intent.action.VIEW','-d','snssdk1128://search/tabs?keyword='+args[0]];}
+ else if(operation==='media-volume'&&args.length===0){program='/system/bin/cmd';argv=['media_session','volume','--stream','3','--get'];}
+ else if(operation==='media-session'&&args.length===0){program='/system/bin/dumpsys';argv=['media_session'];}
+ else if(operation==='audio-dump'&&args.length===0){program='/system/bin/dumpsys';argv=['audio'];}
+ else if(operation==='package-uid'&&args.length===0){program='/system/bin/cmd';argv=['package','list','packages','-U',context.package];}
+ else if(operation==='uid-owners'&&args.length===1&&typeof args[0]==='string'&&/^[1-9][0-9]{0,9}$/.test(args[0])&&Number(args[0])<=2147483647){program='/system/bin/cmd';argv=['package','list','packages','-U','--uid',args[0]];}
  else if(operation==='foreground'&&args.length===0){program='/system/bin/dumpsys';argv=['window','displays'];}
  else if(operation==='screenshot'&&args.length===0){program='/system/bin/screencap';argv=['-p'];}
  else if(operation==='sdk'&&args.length===0){program='/system/bin/getprop';argv=['ro.build.version.sdk'];}

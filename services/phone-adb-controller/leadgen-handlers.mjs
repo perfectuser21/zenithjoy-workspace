@@ -62,6 +62,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
 
 export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata,preflightRuntime,scoringRuntime,phoneRuntime}) {
   const trustedScoring=isNativeScoringWorkflow(scoringRuntime),trustedPhone=isNativePhoneRuntime(phoneRuntime);
+  const trustedProcessing=trustedPhone&&env.WF_BRAIN_WORKFLOW==='douyin_video_processing';
   const trustedPreflight=isPreflightRuntime(preflightRuntime);if(trustedPreflight)preflightMetadata=preflightRuntime.metadata;
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
@@ -304,7 +305,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   };
   const prepareAgentResources=async scope=>{
     if(trustedScoring)await scoringRuntime.prepareActivity(scope);
-    if(trustedPhone)await phoneRuntime.prepareActivity(scope,{assertResources:assertAgentScope});
+    if(trustedPhone)await phoneRuntime.prepareActivity(scope,{state,assertResources:assertAgentScope});
     if(scope.activity==='preflight'){
       if(agent.facts.prepared)return;
       const metadataActive=()=>{if(Date.now()>=Math.min(scope.worker_deadline_ms??scope.deadline_ms,scope.deadline_ms))throw Object.assign(Error('PREFLIGHT_METADATA_DEADLINE'),{code:'PREFLIGHT_METADATA_DEADLINE'});preflightMetadata?.assertActive?.();};
@@ -350,7 +351,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
     if(scope.activity==='collect_videos'&&!trustedPhone)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,verifyPhoneAssociation});
-    if(scope.activity==='collection'&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation});
+    if(scope.activity==='collection'&&!trustedProcessing&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation});
     if(scope.activity==='cleanup'){
       if(trustedPreflight){preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});return preflightScope.snapshot().resource_only_cleanup?{native_cleanup_not_required:true}:undefined;}
       if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
@@ -773,7 +774,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
           if(raw.length!==3||fields.lock!=='refreshed'||fields.owner!==run||!/^\d+s$/.test(fields.ttl||''))throw Error('AGENT_PRIMARY_LOCAL_LEASE_UNVERIFIED');}
         if(activity.key!=='cleanup')for(const v of leased){const result=await queue('renew_video',{video_id:v.video_id});if(result?.renewed!==true)throw Error('AGENT_PRIMARY_VIDEO_LEASE_UNVERIFIED');}
         return {renewed:true,video_ids:activity.key==='cleanup'?[]:leased.map(v=>v.video_id)};
-      }}});
+      },...(trustedProcessing?phoneRuntime.processingPrimitives(scope):{})}});
     if(trustedPhone)tools.bindOfficialAuthority=entry=>phoneRuntime.bindOfficialAuthority(entry);
     if(trustedScoring){tools.bindOfficialAuthority=entry=>scoringRuntime.bindOfficialAuthority(entry);const readResult=tools.getResult;tools.getResult=()=>({...readResult(),external_effect:scoringRuntime.nativeState().external_effect});}
     agent.tools.set(activity.key,tools);return tools;

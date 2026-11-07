@@ -32,7 +32,9 @@ export const isNativePhoneRuntime=value=>runtimes.has(value);
 export function authorizeNativePhoneCleanupTransition(runtime,{request}={}){const read=cleanupRoutes.get(runtime);if(!read)throw fail('CLEANUP_ROUTE');return read(request);}
 export function firstNativePhoneFocus(raw){return String(raw).replaceAll('\r','').split('\n').find(line=>/^\s*(mCurrentFocus|mFocusedApp)\s*=/.test(line)&&!/=null(?:\s|$)/.test(line))?.trim()||'unknown';}
 export const NATIVE_PHONE_FILES=Object.freeze(['native-phone-runtime.mjs','native-phone-vision.mjs','native-phone-vision-step.py','locate-element.py','native-phone-clip-state.mjs','native-phone-adb-read.mjs','native-phone-command-source.mjs','adb-shell-v2.mjs','adb-shell-v2-protocol.mjs','native-phone-local-producer.mjs','native-phone-ui.mjs','native-phone-ui-step.py','native-phone-search-macros.mjs','native-phone-search-step.py','native-phone-link-macros.mjs','native-phone-link-step.py','native-phone-queue.mjs','native-phone-preflight-adapter.mjs','native-phone-link-resolver.mjs','native-activity-authority.mjs','native-task-lease.mjs']);
-const slots=['preflight','collect_videos','cleanup'];
+const discoverySlots=['preflight','collect_videos','cleanup'],processingSlots=['preflight','dedup','qualification','collection','cleanup'];
+export const NATIVE_PHONE_PROCESSING_FILES=Object.freeze(['native-phone-processing.mjs','native-102-queue.mjs','native-102-qualification.mjs','native-phone-media.mjs','native-phone-audio-macros.mjs','native-phone-audio-step.py','native-phone-collection-macros.mjs','native-phone-comment-step.py','native-collection-dependencies.mjs','native-collection-history-proof.mjs','native-phone-credentials.mjs','native-collection-queue.mjs','native-phone-detail-macros.mjs','native-phone-detail-step.py','native-phone-managed-recording.mjs','native-scrcpy-host-producer.mjs','native-scrcpy-adb-bridge.mjs','native-scrcpy-adb-shim.mjs','runtime/runtime-policy.json','runtime/runtime-policy-sdk33.json','config/native-scrcpy-hosts.json']);
+export const NATIVE_PHONE_PROCESSING_COMMANDS=Object.freeze(['media-volume','media-session','audio-dump','package-uid','uid-owners']);
 const requiredCommands=['pause','dump','tap','search','foreground','window','screenshot','sdk','keyevent','swipe','long-press','current-ime','ime-enable','ime-set','clear-nonce','broadcast-nonce','input-nonce','input-select-all','scratch-search','open-detail','remove-ui','stat-ui','stat-ui-mtime','ui-exists','ui-symlink','device-date','model','telecom','wake','unlock','open-app','close-app','home-resolve','dump-file','screenshot-file'];
 export function nativePhoneSource(frozen){
  const source=rpcSource(frozen);
@@ -41,12 +43,13 @@ export function nativePhoneSource(frozen){
   if(rows.length>1||rows.length&&rows[0].sha256!==sha256)throw fail('SOURCE');
   if(!rows.length)source.files.push({path,sha256});
  }
- for(const name of [...NATIVE_PHONE_FILES,'config/native-phone-command-sources.json'])if(source.files.filter(f=>f.path===name).length!==1)throw fail('SOURCE');
+ for(const name of [...NATIVE_PHONE_FILES,...(frozen.agent_input?.workflow_key==='douyin_video_processing'?NATIVE_PHONE_PROCESSING_FILES:[]),'config/native-phone-command-sources.json'])if(source.files.filter(f=>f.path===name).length!==1)throw fail('SOURCE');
  return source;
 }
 export function createNativePhoneRuntime(options={}){
  if(!options||Object.getPrototypeOf(options)!==Object.prototype||Object.keys(options).some(key=>!['root','env','frozen','binding','taskId','preflightRuntime','createAuthorityControl','poolFactory','requestImpl','visionCredential'].includes(key)))throw fail('SCOPE');
  const {root,env,frozen,binding,taskId,preflightRuntime,createAuthorityControl,poolFactory,requestImpl,visionCredential}=options;
+ const processingMode=env?.WF_BRAIN_WORKFLOW==='douyin_video_processing',slots=processingMode?processingSlots:discoverySlots;let processing;
  let prepared=false,unsafe=false,judgeUnknown=false,source,input,spec,profile,lease,policy,makePool,active,index=0,unstartedScope;
  const entries=[],seen=new Set(),cache=new Map();
  const nativeMetrics=Object.freeze({parseDescriptions(xml){const v=cache.get(hash(xml));if(!v)throw fail('METRICS_UNPRIMED');return structuredClone(v);}});
@@ -57,17 +60,18 @@ export function createNativePhoneRuntime(options={}){
  }
  async function prepare(){
   if(prepared)return;
-  if(frozen?.execution_mode!=='agent'||frozen.execution_transport!=='raw-model-v1'||env.WF_BRAIN_WORKFLOW!=='douyin_video_discovery'||frozen.control_scope||!isPreflightRuntime(preflightRuntime))throw fail('UNSUPPORTED');
-  input=assertAgentInput(frozen,env);lease=assertFrozenNativeTaskLease(frozen);spec=frozen.discovery_phone_scope;profile=assertPreflightProfile({env,frozen});
+  if(frozen?.execution_mode!=='agent'||frozen.execution_transport!=='raw-model-v1'||!['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||frozen.control_scope||!isPreflightRuntime(preflightRuntime))throw fail('UNSUPPORTED');
+  input=assertAgentInput(frozen,env);lease=assertFrozenNativeTaskLease(frozen);spec=processingMode?frozen.collection_phone_scope:frozen.discovery_phone_scope;profile=assertPreflightProfile({env,frozen});
   if(!spec||input.task_id!==taskId||spec.serial!==input.serial||spec.profile!==input.profile||spec.run_id!==binding.run_id||spec.task_id!==taskId||spec.source_commit!==frozen.deployment.source_commit||!/^tcp:127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(spec.policy?.endpoint||''))throw fail('SCOPE');
   assertNativeTaskAssociation({frozen,binding,taskId,runDir:env.WFR_RUN_DIR,scope:spec,host:env.WFR_HOSTKEY});
   source=nativePhoneSource(frozen);policy=JSON.parse(readFileSync(join(root,'config/native-phone-command-sources.json')));
   const matches=policy.device_sources?.filter(r=>r.profile===input.profile&&r.serial===input.serial);
   if(policy.schema_version!==1||matches?.length!==1)throw fail('SOURCE');policy=matches[0];
-  if(policy.package!=='com.ss.android.ugc.aweme'||policy.width!==profile.width||policy.height!==profile.height||!policy.pillow||requiredCommands.some(op=>!policy.commands?.includes(op)))throw fail('INCOMPLETE_COMMAND_POLICY');
+  if(policy.package!=='com.ss.android.ugc.aweme'||policy.width!==profile.width||policy.height!==profile.height||!policy.pillow||[...requiredCommands,...(processingMode?NATIVE_PHONE_PROCESSING_COMMANDS:[])].some(op=>!policy.commands?.includes(op)))throw fail('INCOMPLETE_COMMAND_POLICY');
   for(const row of [policy.review,policy.pillow])if(!row?.path||source.files.filter(f=>f.path===row.path&&f.sha256===row.sha256).length!==1)throw fail('SOURCE');
   makePool=poolFactory||createPreflightPoolFactory({runtimeRoot:root,frozen,env});
   mkdirSync(join(env.WFR_RUN_DIR,'native-phone'),{mode:0o700});prepared=true;verify();
+  if(processingMode){const {createNativePhoneProcessing}=await import('./native-phone-processing.mjs'),{createNativePhoneCredentialReader}=await import('./native-phone-credentials.mjs');processing=createNativePhoneProcessing({root,source,env,frozen,binding,createPool:makePool,requestImpl,credentials:{openrouter:createNativePhoneCredentialReader({provider:'openrouter',frozen}),dashscope:createNativePhoneCredentialReader({provider:'dashscope',frozen})}});}
  }
  async function readClaim(entry){
   verify();if(unsafe||!entry||entry.closed)throw fail('AUTHORITY',true);
@@ -78,6 +82,7 @@ export function createNativePhoneRuntime(options={}){
  async function bindOfficialAuthority({request,control,scope,directory}){
   verify();if(active||unsafe||judgeUnknown||seen.has(scope.activity)||!slots.includes(scope.activity)||scope.deadline_ms>lease.effective_deadline_ms||request.source_commit!==source.commit||request.runtime_snapshot_sha256!==frozen.snapshot_sha256)throw fail('SCOPE');
   if(scope.activity==='collect_videos'&&!seen.has('preflight')||scope.activity==='cleanup'&&!seen.has('preflight')&&!unstartedScope)throw fail('ORDER');
+  if(processingMode&&(['dedup','qualification','collection'].includes(scope.activity)&&!seen.has({dedup:'preflight',qualification:'dedup',collection:'qualification'}[scope.activity])))throw fail('ORDER');
   for(const[a,b]of [['workflow','workflow_key'],['activity','activity_key'],['run','run_tag'],['run_id','run_id'],['task_id','task_id'],['binding_id','binding_id'],['profile','profile'],['serial','serial'],['line','line'],['source_run','source_run'],['limit','limit']])if(scope[a]!==request[b])throw fail('SCOPE');
   if(typeof control?.verifySealedExecution!=='function'||typeof control?.snapshot!=='function')throw fail('WORKER_CONTROL');
   const entry={scope:structuredClone(scope),request:structuredClone(request),workerControl:control,closed:false,unknown:false,commands:[],readers:[],epoch:++index};active=entry;entries.push(entry);seen.add(scope.activity);
@@ -94,7 +99,7 @@ export function createNativePhoneRuntime(options={}){
   const base={task_id:taskId,binding_id:binding.id,run_id:binding.run_id,source_commit:source.commit,profile:input.profile,serial:input.serial,epoch:entry.epoch,endpoint:spec.policy.endpoint,claim:frozen.native_claim,worker_deadline_ms:entry.scope.worker_deadline_ms,cleanup_deadline_ms:entry.scope.receipt_deadline_ms};
   entry.readScope={...base,protocol:'native-phone-adb-read/v1'};entry.commandScope={...base,protocol:'adb-shell-v2-observation/v1'};
   const authority=q=>async()=>{const p=await readClaim(entry);if(entry.guard)await entry.guard();return {scope:q,claimed_by:p.claimed_by,claimed_at:p.claimed_at,lease_until:new Date(Math.min(lease.effective_deadline_ms,entry.scope.receipt_deadline_ms)).toISOString()};};entry.wireAuthority=authority;
-  entry.context={profile:input.profile,serial:input.serial,package:'com.ss.android.ugc.aweme',width:profile.width,height:profile.height,keywords:frozen.discovery_input.sources.map(s=>typeof s==='string'?s:s.source||s.keyword),evidenceRoot:spec.evidence_root,run:input.run_tag,deviceSdk:policy.device_sdk,detailPlayback:'continuous_identity'};
+  entry.context={profile:input.profile,serial:input.serial,package:'com.ss.android.ugc.aweme',width:profile.width,height:profile.height,keywords:processingMode?[]:frozen.discovery_input.sources.map(s=>typeof s==='string'?s:s.source||s.keyword),evidenceRoot:spec.evidence_root,run:input.run_tag,deviceSdk:policy.device_sdk,brokerHost:spec.policy.host_id,endpoint:spec.policy.endpoint,adbReadScope:structuredClone(entry.readScope),detailPlayback:'continuous_identity'};
   const reader=createNativePhoneAdbRead({runtimeRoot:root,source,directory:directory(entry,'source'),scope:entry.readScope,readAuthority:authority(entry.readScope)});entry.readers.push(reader);
   entry.sourceIssuer=createNativePhoneSourceIssuer({runtimeRoot:root,source,scope:entry.readScope,context:entry.context,reader});entry.commandSource=await entry.sourceIssuer.prepare();
   const reviewed=readNativePhoneCommandSource(entry.commandSource),pillow={path:join(root,reviewed.pillow.path),sha256:reviewed.pillow.sha256};
@@ -127,14 +132,23 @@ export function createNativePhoneRuntime(options={}){
   const foreground=async()=>{const r=await command('foreground');if(r.code!==0)throw fail('FOREGROUND');return firstNativePhoneFocus(r.stdout.toString());};
   const macroCommand=async(op,args=[])=>{const r=await command(op,args);if(r.code!==0)throw Object.assign(fail('COMMAND_FAILED'),{returned:true});return r.stdout.toString();};
   const io={command,readEvidence,foreground,wait,local};entry.ui=createNativePhoneUi({context:entry.context,io});
-  const macroIo={...io,command:macroCommand,captureXml:entry.ui.captureXml,snapshot:entry.ui.snapshot,publishXml:entry.ui.publishXml,locate:params=>entry.vision.locate(params)};entry.search=createNativePhoneSearchMacros({context:entry.context,io:macroIo});
+  const macroIo={...io,command:macroCommand,captureXml:entry.ui.captureXml,snapshot:entry.ui.snapshot,publishXml:entry.ui.publishXml,locate:params=>entry.vision.locate(params)};if(!processingMode)entry.search=createNativePhoneSearchMacros({context:entry.context,io:macroIo});
   const {startNativePhoneLinkResolver}=await import('./native-phone-link-resolver.mjs');entry.resolver=await startNativePhoneLinkResolver({root,source,scope:entry.scope,deadlineMs:entry.scope.worker_deadline_ms,receiptDeadlineMs:entry.scope.receipt_deadline_ms,assertResources:()=>resources(entry),...(requestImpl?{requestImpl}:{})});
   entry.vision=startNativePhoneVision({root,source,scope:entry.scope,context:{run:input.run_tag,width:profile.width,height:profile.height},directory:directory(entry,'vision'),deadlineMs:entry.scope.worker_deadline_ms,receiptDeadlineMs:entry.scope.receipt_deadline_ms,assertResources:()=>resources(entry),credential:visionCredential||readVisionCredential,prepareImage:async(raw,{artifact})=>{if(artifact.ext!=='png'||hash(raw)!==artifact.sha256)throw fail('VISION_IMAGE');const value=await local('native-phone-vision-step.py',{operation:'encode',path:artifact.path,sha256:artifact.sha256});if(typeof value.image_b64!=='string'||!/^[A-Za-z0-9+/]*={0,2}$/.test(value.image_b64))throw fail('VISION_IMAGE');return {bytes:Buffer.from(value.image_b64,'base64'),mime:value.mime,width:value.width,height:value.height};},io:{snapshot:entry.ui.snapshot,readArtifact:entry.ui.readArtifact,wait},...(requestImpl?{requestImpl}:{})});
   entry.clip=createNativePhoneClipState({home:env.HOME,profile:input.profile,assertResources:()=>resources(entry)});
-  entry.link=createNativePhoneLinkMacros({context:entry.context,io:{...macroIo,resolveShareLink:entry.resolver.resolveShareLink,writeEvidence:entry.ui.writeEvidence,readClipState:entry.clip.read,writeClipState:entry.clip.write,restoreResults:async(keyword,eid)=>{const raw=await entry.search.run('back-to-results',['5',keyword,eid]);if(!/^back_to_results=1 backs=[0-5](?: recovered_via=research)?\n$/.test(raw))throw fail('RESULTS_RESTORE_UNVERIFIED');return {verified:true,...(raw.includes('recovered_via=research')?{recovered_via:'research'}:{})};},primeMetrics:async artifact=>{const r=entry.ui.readArtifact(artifact);if(r.ext!=='xml')throw fail('METRICS_ARTIFACT');return primeXml(r.bytes.toString());}}});
+  entry.link=createNativePhoneLinkMacros({context:entry.context,io:{...macroIo,resolveShareLink:entry.resolver.resolveShareLink,writeEvidence:entry.ui.writeEvidence,readClipState:entry.clip.read,writeClipState:entry.clip.write,restoreResults:async(keyword,eid)=>{if(processingMode)throw fail('RESULTS_RESTORE_UNSUPPORTED');const raw=await entry.search.run('back-to-results',['5',keyword,eid]);if(!/^back_to_results=1 backs=[0-5](?: recovered_via=research)?\n$/.test(raw))throw fail('RESULTS_RESTORE_UNVERIFIED');return {verified:true,...(raw.includes('recovered_via=research')?{recovered_via:'research'}:{})};},primeMetrics:async artifact=>{const r=entry.ui.readArtifact(artifact);if(r.ext!=='xml')throw fail('METRICS_ARTIFACT');return primeXml(r.bytes.toString());}}});
  }
  async function prepareActivity(scope,ctx){
   verify();if(!active||canonical(active.scope)!==canonical(scope))throw fail('SCOPE');active.guard=()=>ctx.assertResources(scope);
+  if(processingMode&&['dedup','qualification','collection'].includes(scope.activity)){
+   const entry=active;
+   if(scope.activity!=='dedup'){
+    const handoff=issuePreflightPhoneHandoff(preflightRuntime,scope);entry.handoff=()=>readPreflightPhoneHandoff(handoff,{runtime:preflightRuntime,scope});const guard=entry.guard;entry.guard=async()=>{entry.handoff();await guard();};
+    await prepareIngress(entry);await startMacros(entry);
+   }else{entry.directory=join(env.WFR_RUN_DIR,'native-phone',scope.activity);mkdirSync(entry.directory,{mode:0o700});}
+   if(!processing)throw fail('PROCESSING_UNAVAILABLE');
+   await processing.prepareActivity(scope,{directory:directory(entry,'processing'),context:entry.context,commandSource:entry.commandSource,readScope:entry.readScope,python:spec.executables.python,state:ctx.state,assertAuthority:()=>readClaim(entry),resources:()=>resources(entry),refreshOwned:async()=>{await resources(entry);const result=await preflightRuntime.refreshOwned(scope);await resources(entry);return result;},readbackAuthority:options=>startReadbackAuthority(entry,options),io:{command,readEvidence,local,wait,foreground:async()=>{const r=await command('foreground');if(r.code!==0)throw fail('FOREGROUND');return firstNativePhoneFocus(r.stdout.toString());},ui:entry.ui,link:entry.link,vision:entry.vision}});return;
+  }
   if(scope.activity!=='collect_videos')return;
   const handoff=issuePreflightPhoneHandoff(preflightRuntime,scope);active.handoff=()=>readPreflightPhoneHandoff(handoff,{runtime:preflightRuntime,scope});const guard=active.guard;active.guard=async()=>{active.handoff();await guard();};
   await prepareIngress(active);await startMacros(active);
@@ -142,6 +156,7 @@ export function createNativePhoneRuntime(options={}){
  }
  async function preparePreflight(scope,ctx){
   const entry=active;if(!entry||canonical(entry.scope)!==canonical(scope)||!['preflight','cleanup'].includes(scope.activity))throw fail('SCOPE');entry.guard=ctx.assertResources;await prepareIngress(entry);
+  if(processingMode&&scope.activity==='cleanup')await processing.prepareCleanup(scope,{directory:directory(entry,'processing'),assertAuthority:()=>readClaim(entry),resources:()=>resources(entry),readbackAuthority:options=>startReadbackAuthority(entry,options)});
   const {createNativePhonePreflightAdapter}=await import('./native-phone-preflight-adapter.mjs');entry.adapter=createNativePhonePreflightAdapter({context:{owner:input.run_tag,evidenceRoot:spec.evidence_root,width:profile.width,height:profile.height,purpose:scope.activity,deadlineMs:scope.worker_deadline_ms},io:{command,readEvidence},hostAdb:ctx.hostAdb});return entry.adapter.adb;
  }
  async function phone(name,...args){
@@ -171,6 +186,7 @@ export function createNativePhoneRuntime(options={}){
   try{entry.modelStopped &&= entry.workerControl.verifySealedExecution(entry.workerControl.snapshot(),{request:entry.request})===true;}catch{entry.modelStopped=false;}
   entry.adapter?.seal();entry.ui?.seal();entry.search?.seal?.();
   let stopped=true;
+  if(processingMode&&['dedup','qualification','collection','cleanup'].includes(entry.scope.activity))try{entry.processingStop=await processing.closeActivity(entry.scope);stopped=entry.processingStop.execution_stopped===true&&stopped;}catch{entry.processingStop={execution_stopped:false,external_effect:'unknown'};stopped=false;}
   if(entry.queue)try{await entry.queue.closeActivity();stopped=(await entry.queue.close()).execution_stopped===true&&stopped;entry.queueReceipts=entry.queue.issuedReceipts();}catch{stopped=false;}
   if(entry.vision)try{const p=await entry.vision.close();stopped=entry.vision.verifyStopped(p)&&stopped;}catch{stopped=false;}
   if(entry.resolver)try{const p=await entry.resolver.close();stopped=entry.resolver.verifyStopped(p)&&stopped;}catch{stopped=false;}
@@ -179,10 +195,19 @@ export function createNativePhoneRuntime(options={}){
   for(const reader of entry.readers)try{stopped=(await reader.close()).channel_stopped===true&&stopped;}catch{stopped=false;}
   if(entry.sourceIssuer)try{await entry.sourceIssuer.close();}catch{stopped=false;}
   try{const p=await entry.authority.close();stopped=entry.authority.verifyStopped(p)&&stopped;}catch{stopped=false;}
-  entry.closed=true;entry.unknown||=!stopped||!entry.modelStopped||entry.clip?.snapshot().unknown===true;unsafe||=entry.unknown;active=null;entry.stop={domain:'native-phone-activity/v1',activity:entry.scope.activity,execution_stopped:stopped&&!entry.unknown&&entry.modelStopped,model_stopped:entry.modelStopped,external_effect:entry.queue?.snapshot().external_effect||'none'};return {...entry.stop};
+  entry.closed=true;entry.unknown||=!stopped||!entry.modelStopped||entry.clip?.snapshot().unknown===true;unsafe||=entry.unknown;active=null;entry.stop={domain:'native-phone-activity/v1',activity:entry.scope.activity,execution_stopped:stopped&&!entry.unknown&&entry.modelStopped,model_stopped:entry.modelStopped,external_effect:entry.processingStop?.external_effect==='unknown'||entry.queue?.snapshot().external_effect==='unknown'?'unknown':entry.processingStop?.external_effect||entry.queue?.snapshot().external_effect||'none'};return {...entry.stop};
+ }
+ async function startReadbackAuthority(entry,{deadlineMs,signal}={}){
+  verify();if(active||unsafe||judgeUnknown||!entry?.closed||entry.stop?.execution_stopped!==true||entry.modelStopped!==true||signal?.aborted)throw fail('JUDGE_PREVIOUS_STOP',true);
+  const end=Math.min(deadlineMs??entry.scope.receipt_deadline_ms-1,entry.scope.receipt_deadline_ms-1);if(Date.now()>=end)throw fail('JUDGE_DEADLINE');
+  entry.readbacks=(entry.readbacks||0)+1;if(entry.readbacks>2)throw fail('JUDGE_BUDGET');
+  const path=join(entry.directory,'readback-authority-'+entry.readbacks);mkdirSync(path,{mode:0o700});
+  const authority=createNativeActivityAuthority({runtimeRoot:root,source,request:entry.request,frozen,directory:path,...(createAuthorityControl?{createControl:createAuthorityControl}:{})});
+  const assertAuthority=async()=>{verify();if(signal?.aborted||Date.now()>=end)throw fail('JUDGE_DEADLINE');const proof=await authority.readClaim(),projection=readNativeAuthorityProjection(proof,{request:entry.request,source});if(!nativeAuthorityProjectionMatches(projection,{source,scope:entry.scope}))throw fail('JUDGE_AUTHORITY');return projection;};
+  return Object.freeze({assertAuthority,close:()=>authority.close(),verifyStopped:proof=>authority.verifyStopped(proof)});
  }
  async function readbackChecks(activity,{metrics,deadlineMs,signal}={}){
-  verify();const entry=entries.find(e=>e.scope.activity===activity);
+  verify();if(processingMode){try{return await processing.readbackChecks(activity,{metrics,deadlineMs,signal});}catch(error){judgeUnknown=true;throw error;}}const entry=entries.find(e=>e.scope.activity===activity);
   if(activity!=='collect_videos'||active||unsafe||judgeUnknown||!entry?.closed||entry.stop?.execution_stopped!==true||entry.modelStopped!==true||signal?.aborted)throw fail('JUDGE_PREVIOUS_STOP',true);
   entry.readbacks=(entry.readbacks||0)+1;if(entry.readbacks>2)throw fail('JUDGE_BUDGET');
   const path=join(env.WFR_RUN_DIR,'native-phone','readback-'+entry.readbacks);mkdirSync(path,{mode:0o700});
@@ -212,7 +237,12 @@ export function createNativePhoneRuntime(options={}){
   if(!stopped||result.result.code_native_readback.execution_stopped!==true){judgeUnknown=true;throw fail('JUDGE_STOP_UNKNOWN',true);}
   result.result.code_native_readback.authority_execution_stopped=true;return result;
  }
- const api={prepare,readbackChecks,bindOfficialAuthority,prepareActivity,preparePreflight,phone,queue,closeActivity,nativeMetrics,source:()=>structuredClone(source),supports(activity){try{verify();return !unsafe&&!judgeUnknown&&!active&&!seen.has(activity.key)&&slots.includes(activity.key);}catch{return false;}},nativeState:()=>({execution_unknown:unsafe||judgeUnknown||entries.some(e=>e.unknown),native_stop_unproven:unsafe||judgeUnknown,external_effect:entries.some(e=>e.queue?.snapshot().external_effect==='unknown')?'unknown':'observed'}),snapshot:()=>({prepared,unsafe,active:active?.scope.activity||null,activities:entries.map(e=>({activity:e.scope.activity,closed:e.closed,ready:e.ready===true,unknown:e.unknown}))})};
+ const processingPrimitives=scope=>{
+  if(!processingMode||!['dedup','qualification','collection'].includes(scope.activity))return {};
+  const names=['verifyUpstream','queue','validateInput','validatePhone','phone','qualify','qualificationReadback','inspect','evidenceId','settle','heartbeat'];
+  return Object.fromEntries(names.map(name=>[name,(...args)=>{verify();const method=processing?.primitives(scope)?.[name];if(typeof method!=='function')throw fail('PROCESSING_METHOD_UNAVAILABLE');return method(...args);} ]));
+ };
+ const api={processingPrimitives,prepare,readbackChecks,bindOfficialAuthority,prepareActivity,preparePreflight,phone,queue,closeActivity,nativeMetrics,source:()=>structuredClone(source),supports(activity){try{verify();return (!processingMode||processing?.ready?.()===true)&&!unsafe&&!judgeUnknown&&!active&&!seen.has(activity.key)&&slots.includes(activity.key);}catch{return false;}},nativeState:()=>({execution_unknown:unsafe||judgeUnknown||processing?.snapshot().execution_unknown===true||entries.some(e=>e.unknown),native_stop_unproven:unsafe||judgeUnknown||processing?.snapshot().execution_unknown===true,external_effect:entries.some(e=>e.processingStop?.external_effect==='unknown'||e.queue?.snapshot().external_effect==='unknown')?'unknown':'observed'}),snapshot:()=>({prepared,unsafe,active:active?.scope.activity||null,activities:entries.map(e=>({activity:e.scope.activity,closed:e.closed,ready:e.ready===true,unknown:e.unknown}))})};
  cleanupRoutes.set(api,request=>{
   verify();const previous=entries.at(-1),fixed=frozen.workflow_version?.payload?.contract;
   if(unsafe||judgeUnknown||active||!fixed?.always_run?.includes('cleanup')||seen.has('cleanup')||!(previous?.closed&&previous.stop?.execution_stopped===true&&previous.modelStopped===true||unstartedScope&&preflightRuntime.zeroLocalStart(unstartedScope))||request?.activity_key!=='cleanup'||request.execution_transport!=='raw-model-v1'||request.runtime_snapshot_sha256!==frozen.snapshot_sha256||request.deadline_ms>lease.effective_deadline_ms||Date.now()>=request.worker_deadline_ms)throw fail('CLEANUP_ROUTE');

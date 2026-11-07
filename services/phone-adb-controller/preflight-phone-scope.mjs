@@ -14,6 +14,13 @@ function official(proof,source){const r=proof?.receipt;return proof?.execution_s
 // budget, model permission or any remote execution-stop assertion.
 export function issuePreflightPhoneHandoff(runtime,scope){const issuer=handoffIssuers.get(runtime);if(!issuer)fail('HANDOFF_RUNTIME');return issuer(scope);}
 export function readPreflightPhoneHandoff(capability,{runtime,scope}={}){const r=handoffs.get(capability);if(!r||r.runtime!==runtime||r.scope!==canonical(scope))fail('HANDOFF_BRAND');return r.read();}
+// The handoff only reports the original preflight ownership. Each later AV
+// still needs its own frozen B authority, budget and worker-stop lifecycle.
+function phoneHandoffActivity(scope,frozen){
+ if(scope?.workflow!==frozen.agent_input.workflow_key)return false;
+ if(scope.workflow==='douyin_video_discovery')return Boolean(frozen.discovery_phone_scope)&&scope.activity==='collect_videos';
+ return scope.workflow==='douyin_video_processing'&&Boolean(frozen.collection_phone_scope)&&['qualification','collection'].includes(scope.activity);
+}
 function ownershipBytes(path,max=4096){
  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
  try{const before=fstatSync(fd);if(!before.isFile()||before.uid!==process.getuid()||(before.mode&0o777)!==0o600||before.nlink!==1||before.size>max)fail('HANDOFF_OWNER');const bytes=Buffer.alloc(before.size+1);let n=0,k;while(n<bytes.length&&(k=readSync(fd,bytes,n,bytes.length-n,null))>0)n+=k;const after=fstatSync(fd),current=lstatSync(path);if(current.isSymbolicLink()||['dev','ino','size','mtimeMs','ctimeMs'].some(key=>before[key]!==after[key]||before[key]!==current[key])||n!==before.size)fail('HANDOFF_OWNER');return bytes.subarray(0,n);}finally{closeSync(fd);}
@@ -99,7 +106,7 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId,poolFacto
    return handle;
   },
   async refreshOwned(scope){
-   const r=previous&&records.get(previous);if(!r?.owned||!r.closed||!r.official||r.unknown||r.released||scope.activity!=='collect_videos'||Date.now()>=scope.worker_deadline_ms||['task_id','run_id','binding_id','source_commit','profile','serial'].some(k=>scope[k]!==r.identity[k]))fail('REFRESH_AUTHORITY');
+   const r=previous&&records.get(previous);if(!r?.owned||!r.closed||!r.official||r.unknown||r.released||!(phoneHandoffActivity(scope,frozen)||scope.workflow===frozen.agent_input.workflow_key&&scope.workflow==='douyin_video_processing'&&scope.activity==='dedup'&&frozen.collection_phone_scope)||Date.now()>=scope.worker_deadline_ms||['task_id','run_id','binding_id','source_commit','profile','serial'].some(k=>scope[k]!==r.identity[k]))fail('REFRESH_AUTHORITY');
    r.stable();const local=await startPreflightLocalLeaves({root,directory:join(env.WFR_RUN_DIR,'preflight-native-scopes'),sourceFiles:r.sourceFiles,python:r.spec.executables.python,deadlineMs:scope.worker_deadline_ms,env});let result;
    try{const path=join(r.spec.evidence_root,`${r.identity.owner}-lock-refresh.json`);result=JSON.parse(await local.run('lock',JSON.stringify({root:r.lockRoot,serial:env.SERIAL,operation:'refresh',owner:r.identity.owner,epoch:r.epoch,receipt:{path,run:r.identity.owner,profile:env.P,serial:env.SERIAL}})));if(result.lock!=='refreshed'||result.owner!==r.identity.owner||result.epoch!==r.epoch||result.readback_owner!==r.identity.owner)fail('REFRESH_READBACK');}
    finally{if((await local.close()).execution_stopped!==true){r.unknown=true;fail('REFRESH_UNKNOWN');}}
@@ -140,14 +147,14 @@ export function createPreflightRuntime({root,env,frozen,binding,taskId,poolFacto
   const r=previous&&records.get(previous);
   const read=()=>{
    if(!r||current!==r.handle||r.closed!==true||r.official!==true||r.unknown||!r.owned||r.released||bootstrapUnknown||metadata.snapshot().unknown||!preflightDomainClosure(r.domain)||r.ctx.state.executionUnknown||r.ctx.state.nativeStopUnproven)fail('HANDOFF_RESOURCE');
-   if(scope?.activity!=='collect_videos'||scope.workflow!=='douyin_video_discovery'||scope.execution_transport!=='raw-model-v1'||frozen.execution_transport!=='raw-model-v1'||scope.snapshot_sha256!==frozen.snapshot_sha256||!Number.isSafeInteger(scope.worker_deadline_ms)||!Number.isSafeInteger(scope.receipt_deadline_ms)||!Number.isSafeInteger(scope.deadline_ms)||scope.worker_deadline_ms>=scope.receipt_deadline_ms||scope.receipt_deadline_ms>=scope.deadline_ms||Date.now()>=scope.worker_deadline_ms||!/^[a-f0-9]{48}$/.test(scope.agent_nonce||'')||['task_id','run_id','binding_id','source_commit','profile','serial'].some(k=>scope[k]!==r.identity[k])||scope.run!==r.identity.owner)fail('HANDOFF_SCOPE');
+   if(!phoneHandoffActivity(scope,frozen)||scope.execution_transport!=='raw-model-v1'||frozen.execution_transport!=='raw-model-v1'||scope.snapshot_sha256!==frozen.snapshot_sha256||!Number.isSafeInteger(scope.worker_deadline_ms)||!Number.isSafeInteger(scope.receipt_deadline_ms)||!Number.isSafeInteger(scope.deadline_ms)||scope.worker_deadline_ms>=scope.receipt_deadline_ms||scope.receipt_deadline_ms>=scope.deadline_ms||Date.now()>=scope.worker_deadline_ms||!/^[a-f0-9]{48}$/.test(scope.agent_nonce||'')||['task_id','run_id','binding_id','source_commit','profile','serial'].some(k=>scope[k]!==r.identity[k])||scope.run!==r.identity.owner)fail('HANDOFF_SCOPE');
    r.stable();assertPreflightProfile({env,frozen});
    if(!r.accountEvidence||r.ctx.state.account!==r.spec.expected_account||r.accountEvidence.account!==r.spec.expected_account||hash(ownershipBytes(r.accountEvidence.path,4*1024*1024))!==r.accountEvidence.sha256)fail('HANDOFF_ACCOUNT');
    const directory=join(r.lockRoot,env.SERIAL+'.lock'),st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||realpathSync(directory)!==resolve(directory))fail('HANDOFF_OWNER');
    for(const [name,value]of [['owner',r.identity.owner],['preflight_epoch',r.epoch],['standalone_review_required',r.identity.owner],['preflight_proof_required',r.epoch]])if(ownershipBytes(join(directory,name)).toString().trim()!==value)fail('HANDOFF_OWNER');
    return Object.freeze({...r.identity,epoch:r.epoch,account:r.accountEvidence.account,account_evidence:{path:r.accountEvidence.path,sha256:r.accountEvidence.sha256},lock_root:r.lockRoot});
   };
-  read();if(r.handoffIssued)fail('HANDOFF_REPLAY');r.handoffIssued=true;
+  read();r.handoffIssued??=new Set();if(r.handoffIssued.has(scope.activity))fail('HANDOFF_REPLAY');r.handoffIssued.add(scope.activity);
   const cap=Object.freeze({});handoffs.set(cap,{runtime,scope:canonical(scope),read});return cap;
  });
  runtimes.add(runtime);return Object.freeze(runtime);

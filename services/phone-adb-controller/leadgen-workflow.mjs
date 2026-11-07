@@ -32,7 +32,7 @@ export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 export function createWorkflowHandlers(options){
  if(validateFrozenControlAcceptance(options.frozen))return createControlAcceptanceHandlers(options);
  const scoring=options.frozen?.execution_mode==='agent'&&options.env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'?createNativeScoringWorkflow(options):undefined;
- const phoneMode=options.frozen?.execution_mode==='agent'&&options.frozen.execution_transport==='raw-model-v1'&&options.env.WF_BRAIN_WORKFLOW==='douyin_video_discovery';
+ const phoneMode=options.frozen?.execution_mode==='agent'&&options.frozen.execution_transport==='raw-model-v1'&&['douyin_video_discovery','douyin_video_processing'].includes(options.env.WF_BRAIN_WORKFLOW);
  const preflight=options.preflightRuntime||(phoneMode&&options.frozen.preflight_profile?createPreflightRuntime({...options}):undefined);
  const phone=phoneMode?createNativePhoneRuntime({root:options.root,env:options.env,frozen:options.frozen,binding:options.binding,taskId:options.taskId,preflightRuntime:preflight,createAuthorityControl:options.createAuthorityControl,poolFactory:options.poolFactory,requestImpl:options.requestImpl,visionCredential:options.visionCredential}):undefined;
  if(phone&&preflight)attachNativePhoneRuntime(preflight,phone);
@@ -123,7 +123,7 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
 
 export async function recordActivityBookkeeping(r,{root,env,executionMode,controlScope,nativeScoring,nativePhone,execute=execInput}){
     const control=controlScope===undefined?null:validateControlScope(controlScope);
-    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(isNativePhoneRuntime(nativePhone)&&nativePhone.snapshot().prepared===true&&['preflight','collect_videos','cleanup'].includes(r.activity)||['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key||env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&isNativeScoringWorkflow(nativeScoring)&&nativeScoring.snapshot().prepared===true&&['scoring','mark_leads'].includes(r.activity));
+    const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&(isNativePhoneRuntime(nativePhone)&&nativePhone.snapshot().prepared===true&&(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'?['preflight','dedup','qualification','collection','cleanup']:['preflight','collect_videos','cleanup']).includes(r.activity)||['preflight','cleanup'].includes(r.activity)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||control&&r.activity===control.activity_key||env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'&&isNativeScoringWorkflow(nativeScoring)&&nativeScoring.snapshot().prepared===true&&['scoring','mark_leads'].includes(r.activity));
     if(r.phase==='start'){
       if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
       else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
@@ -143,7 +143,7 @@ export async function readbackActivityChecks({executionMode,activity,root,frozen
     return {result:{gate:{verdict:'fail',reason:'CONTROL_ACCEPTANCE_IS_NOT_103_OUTPUT'},steps:[],probes:[{name:'actual_103_business_result',pass:false,reason:'control acceptance has no scoring/PG capability'}]}};
   }
   if(executionMode==='agent'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'){if(!isNativeScoringWorkflow(nativeScoring))throw Error('NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED');return nativeScoring.readbackChecks(activity.key,{deadlineMs:deadline_ms,signal});}
-  if(executionMode==='agent'&&activity.key==='collect_videos'&&isNativePhoneRuntime(nativePhone))return nativePhone.readbackChecks(activity.key,{metrics,deadlineMs:deadline_ms,signal});
+  if(executionMode==='agent'&&isNativePhoneRuntime(nativePhone)&&(activity.key==='collect_videos'||env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&['dedup','qualification','collection'].includes(activity.key)))return nativePhone.readbackChecks(activity.key,{metrics,deadlineMs:deadline_ms,signal});
   if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
