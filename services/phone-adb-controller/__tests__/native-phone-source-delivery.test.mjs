@@ -74,3 +74,10 @@ test('actual device policy binds the reviewed command entrypoints and local Pill
  assert.equal(new Set(pillow.files.map(file=>file.path)).size,pillow.files.length);
  assert.ok(pillow.files.length>0);for(const file of pillow.files)assert.match(file.sha256,/^[a-f0-9]{64}$/);
 });
+
+test('default MMV processing template declares both fixed media programs without credential values',()=>{
+ const hosts=JSON.parse(text('config/collection-phone-hosts.json')).hosts,rows=hosts.filter(row=>row.target==='mmv'&&row.profile==='cloud-phone-test');
+ assert.equal(rows.length,1);const row=rows[0];assert.ok(row.workflow_keys.includes('douyin_video_processing'));
+ for(const key of ['ffmpeg','ffprobe']){const binary=row.executables[key];assert.ok(binary&&binary.path.startsWith('/opt/homebrew/Cellar/'),key+' requires fixed executable');assert.match(binary.sha256,/^[a-f0-9]{64}$/);}
+ assert.equal(row.credentials,undefined,'runtime code freezes private credential descriptors; values never enter repository policy');
+});
