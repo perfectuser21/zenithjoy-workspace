@@ -1,9 +1,9 @@
 // Real nofork C leaf, private parent IPC only; no ADB/phone/server operation.
 import test from 'node:test';import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {createConnection} from 'node:net';
+import {mkdtempSync,writeFileSync,readFileSync,existsSync,rmSync,realpathSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {createConnection} from 'node:net';
 import {startCollectionLeafProducer} from '../collection-leaf-producer.mjs';
 async function rig(t){
- const dir=mkdtempSync(join(tmpdir(),'fenced-leaf-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const binary=join(dir,'client'),marker=join(dir,'called');
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'fenced-leaf-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));const binary=join(dir,'client'),marker=join(dir,'called');
  writeFileSync(binary+'.c','#include <stdio.h>\n#include <stdlib.h>\nint main(){FILE*f=fopen('+JSON.stringify(marker)+',"a");if(f){fputs("called\\n",f);fclose(f);}if(getenv("BRAIN_INTERNAL_TOKEN")||getenv("DATABASE_URL")||getenv("OPENAI_API_KEY"))return 13;puts("device");return 0;}');
  const cc=spawnSync('cc',[binary+'.c','-o',binary],{encoding:'utf8'});assert.equal(cc.status,0,cc.stderr);
  const options={directory:dir,policy:{schema_version:2,instance_id:'fixture-fenced',adb_bin:binary,adb_realpath:binary,adb_sha256:createHash('sha256').update(readFileSync(binary)).digest('hex'),endpoint:'tcp:127.0.0.1:12345'},serial:'NO-DEVICE',deadlineMs:Date.now()+15000,env:{PATH:'/usr/bin:/bin',HOME:dir}};
