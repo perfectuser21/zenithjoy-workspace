@@ -205,8 +205,17 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   return {business,phone,canReadback,
     ...(typeof primitives.closeNativeScope==='function'?{closeNativeScope:proof=>primitives.closeNativeScope(proof,scope)}:{}),
     heartbeat:async()=>{if(unresolved().length)return {deferred:true,commit_unknown:true};try{return await lifecycle('resource_heartbeat',()=>primitives.heartbeat?.(scope));}catch(error){primitives.resourceUnknown?.(error,scope);error.executionStopped=false;throw error;}},
-    inspect:async()=>({scope:structuredClone(scope),phone_capabilities:scope.serial==='none'?[]:[...readPhone,...phoneBySlot[scope.activity]],business_capabilities:[...slots[scope.activity]],
-      pending_write_readbacks:unresolved().map(row=>({operation:row.value.operation,readback_operations:readbackFor[row.value.operation]||[]})),...await primitives.inspect?.(scope)}),
+    inspect:async()=>{
+      const facts=await primitives.inspect?.(scope),preflight=scope.activity==='preflight';
+      const companyAdmitted=preflight&&prepared&&object(facts?.company)&&Boolean(facts.company.company_id&&facts.company.tenant_id&&facts.company.device_binding);
+      const commands=scope.serial==='none'?[]:[...readPhone,...phoneBySlot[scope.activity]];
+      return {...facts,scope:structuredClone(scope),phone_capabilities:commands,business_capabilities:[...slots[scope.activity]],
+        tool_contract:{business:Object.fromEntries(slots[scope.activity].map(op=>[op,{input_keys:[...schemas[op]]}])),
+          ...(preflight?{phone:Object.fromEntries(commands.map(command=>[command,{args:[]}]))}:{})},
+        ...(preflight?{bootstrap:{resources_prepared:prepared,company_config_admitted:companyAdmitted,
+          ...(companyAdmitted&&!facts.account?{next_required_intent:{type:'phone',command:'account-current',args:[]},instruction:'公司配置与设备范围已由Code准入；下一步调用account-current读取原生账号。context或模型文字不能代替账号证据。'}:{})}}:{}),
+        pending_write_readbacks:unresolved().map(row=>({operation:row.value.operation,readback_operations:readbackFor[row.value.operation]||[]}))};
+    },
     prepare:async()=>{if(prepared)return;const result=await lifecycle('resource_prepare',()=>primitives.prepare?.(scope));if(!result?.deferred)prepared=true;return result;},
     settle:async proof=>{if(proof?.execution_stopped!==true||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');rawTermination(proof);if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});await guard();if(typeof primitives.settle!=='function')throw Error('AGENT_TOOL_RESULT_ADAPTER_UNAVAILABLE');result=await primitives.settle({scope,receipts:structuredClone(receipts),proof});settled=true;return result;},
     release:async proof=>{if(proof?.execution_stopped!==true||!settled||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');rawTermination(proof);if(scope.activity!=='cleanup')throw Error('AGENT_TOOL_RELEASE_NOT_CLEANUP');const released=await lifecycle('resource_release',()=>primitives.release?.(proof,scope));if(!object(released))throw Error('AGENT_TOOL_RELEASE_UNVERIFIED');result={...result,...released};return released;},
