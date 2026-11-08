@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const load=()=>import('../device-epoch-fence-diagnostics.mjs');
@@ -18,7 +18,7 @@ async function fixture(mode='ok'){
  return {services,endpoint:`tcp:127.0.0.1:${server.address().port}`,close:()=>new Promise(r=>server.close(r))};
 }
 for(const mode of ['ok','missing-exit','trailing'])test(`固定只读诊断 ${mode} 保留 wire，且不签历史停止`,async()=>{
- const {runDiagnostic}=await load(),f=await fixture(mode),dir=mkdtempSync(join(tmpdir(),'fence-diag-'));let reads=0;
+ const {runDiagnostic}=await load(),f=await fixture(mode),dir=mkdtempSync(join(realpathSync(tmpdir()),'fence-diag-'));let reads=0;
  const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
  try{const result=await runDiagnostic({query:'sdk',scope,directory:dir,readAuthority:async()=>{reads++;return {scope,lease_until:new Date(Date.now()+60000).toISOString()};}});
  assert.equal(result.wire_complete,mode==='ok');assert.equal(result.original_execution_stopped,false);assert.equal(result.remote_quiescence,'unknown');assert.ok(reads>=2);
@@ -29,7 +29,7 @@ for(const mode of ['ok','missing-exit','trailing'])test(`固定只读诊断 ${mo
 test('调用者不能注入命令或修改远端，authority 不符不得连接',async()=>{
  const {runDiagnostic,DIAGNOSTIC_COMMANDS}=await load();assert.deepEqual(Object.keys(DIAGNOSTIC_COMMANDS),['sdk','boot_id','processes','input','activity','window']);
  for(const v of Object.values(DIAGNOSTIC_COMMANDS))assert.ok(!/\b(?:input (?:tap|keyevent)|monkey|rm|connect|disconnect)\b/.test(v));
- const directory=mkdtempSync(join(tmpdir(),'fence-noauth-'));try{
+ const directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-noauth-'));try{
  await assert.rejects(runDiagnostic({query:'exec reboot',scope:{},directory,readAuthority:async()=>({})}),/DIAGNOSTIC_QUERY/);
  const result=await runDiagnostic({query:'sdk',scope:{endpoint:'tcp:127.0.0.1:1',serial:'x',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'},directory,readAuthority:async()=>({})});assert.equal(result.wire_complete,false);assert.equal(result.error_code,'DIAGNOSTIC_AUTHORITY');
  }finally{rmSync(directory,{recursive:true,force:true});}
