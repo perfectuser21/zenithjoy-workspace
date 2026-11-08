@@ -1,5 +1,5 @@
 import {issueNativeTaskLease,consumeNativeTaskLease,assertFrozenNativeTaskLease} from './native-task-lease.mjs';
-import {prepareFrozenPreflightPg,prepareFrozenScoringPg} from './preflight-pg-dependencies.mjs';
+import {prepareFrozenPreflightPg,prepareFrozenScoringPg,prepareFrozenCodePg} from './preflight-pg-dependencies.mjs';
 import {controlAcceptanceFromTask,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
 import outreachScope from './leadgen-outreach-scope.js';
@@ -254,6 +254,8 @@ export function nativeClaimFromTask({task,input,sourceCommit}){
  return {claimed_by:task.claimed_by,claimed_at:task.claimed_at};
 }
 export async function freezeDefinition(o) {
+  const codeObserver=!!o.codeObserverEnv&&(o.executionMode??'code')==='code'&&o.codeObserverEnv.WFR_HOSTKEY==='mmv'&&agentWorkflows.has(o.workflowKey);
+  const codeScope=async sourceCommit=>codeObserver?(await import('./code-observer-authority.mjs')).buildCodeObserverScope({env:o.codeObserverEnv,sourceCommit,get:o.get}):null;
   const executionMode=executionModeInput({WF_BRAIN_WORKFLOW:o.workflowKey,...(Object.hasOwn(o,'executionMode')?{LEADGEN_EXECUTION_MODE:o.executionMode}:{})});
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
   const fixedAgentInput=executionMode==='agent'?validateAgentInput(o.agentInput):null;
@@ -296,6 +298,7 @@ export async function freezeDefinition(o) {
     if(o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==q[k==='tag'?'run_tag':k]))throw Error('冻结采样输入运行身份不符');
   }
   if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(canonical(frozen.collection_phone_scope||null)!==canonical(o.collectionPhoneScope||null))throw Error('collection phone scope续跑输入与冻结请求不符');
+    if(canonical(frozen.code_observer_scope||null)!==canonical(await codeScope(frozen.deployment.source_commit)))throw Error('CODE_OBSERVER_SCOPE_RESUME_MISMATCH');
     const control=await loadControlAuthority(frozen.deployment.source_commit),oldControl=frozen.control_scope?{control_scope:frozen.control_scope,control_claim:frozen.control_claim}:frozen.native_claim?{native_claim:frozen.native_claim}:null;
     if(hasNativeTaskLease)assertFrozenNativeTaskLease(frozen);
     if(canonical(control)!==canonical(oldControl))throw Error('CONTROL_ACCEPTANCE_RESUME_MISMATCH');
@@ -304,6 +307,9 @@ export async function freezeDefinition(o) {
   const manifestPath=o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json');
   const originalManifest=readFileSync(manifestPath);
   const manifest=JSON.parse(originalManifest);
+  const hasCodePg=executionMode==='code'&&agentWorkflows.has(o.workflowKey)&&manifest.target==='mmv'&&!!manifest.dependencies?.preflight_pg;
+  const codePg=hasCodePg?{lock_sha256:manifest.dependencies.preflight_pg.lock_sha256,package_lock_sha256:manifest.dependencies.preflight_pg.package_lock_sha256}:null;
+  const codeObserverScope=await codeScope(manifest.source_commit);
   const controlAuthority=await loadControlAuthority(manifest.source_commit);
   if(hasScoring&&(controlAuthority?.control_scope||hasPreflight||o.scoringControlScope.source_commit!==manifest.source_commit||o.scoringControlScope.target!==manifest.target))throw Error('SCORING_INPUT_MODE_INVALID');
   if(executionTransport&&o.workflowKey==='douyin_comment_scoring'&&!controlAuthority?.control_scope&&!hasScoring)throw Error('SCORING_INPUT_REQUIRED');
@@ -372,7 +378,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasScoring?{scoring_pg:structuredClone(o.scoringPg),scoring_control_scope:structuredClone(o.scoringControlScope)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
+    ...(codePg?{code_pg:codePg}:{}),...(codeObserverScope?{code_observer_scope:codeObserverScope}:{}),...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasScoring?{scoring_pg:structuredClone(o.scoringPg),scoring_control_scope:structuredClone(o.scoringControlScope)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   let snapshot={...body,snapshot_sha256:digest(body)};
@@ -382,7 +388,8 @@ export async function freezeDefinition(o) {
       const target=resolve(staging,'runtime',file.deployed_path);mkdirSync(dirname(target),{recursive:true});
       writeFileSync(target,file.bytes,{mode:file.mode});
     }
-    if(hasScoring){await prepareFrozenScoringPg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:snapshot,expectedDeployment:manifest.dependencies?.preflight_pg});}
+    if(hasCodePg){await prepareFrozenCodePg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:snapshot,expectedDeployment:manifest.dependencies.preflight_pg});}
+    else if(hasScoring){await prepareFrozenScoringPg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:snapshot,expectedDeployment:manifest.dependencies?.preflight_pg});}
     else if(hasPreflight||manifest.dependencies?.preflight_pg){
       const dependency=manifest.dependencies?.preflight_pg,dependencyScope=hasPreflight?snapshot:{...snapshot,preflight_pg:{lock_sha256:dependency?.lock_sha256,package_lock_sha256:dependency?.package_lock_sha256}};
       await prepareFrozenPreflightPg({sourceRuntimeRoot:o.deploymentRoot,runtimeRoot:resolve(staging,'runtime'),frozen:dependencyScope,expectedDeployment:dependency});
@@ -392,6 +399,7 @@ export async function freezeDefinition(o) {
 
     assertDeploymentAdmission(o.deploymentRoot);
     if(!readFileSync(manifestPath).equals(originalManifest))throw Error('冻结期间部署声明发生变化');
+    if(canonical(await codeScope(manifest.source_commit))!==canonical(codeObserverScope))throw Error('CODE_OBSERVER_SCOPE_CHANGED');
     if(canonical(await loadControlAuthority(manifest.source_commit))!==canonical(controlAuthority))throw Error('CONTROL_ACCEPTANCE_TASK_CHANGED');
     if(hasNativeTaskLease){
       if(!o.nativeLeaseDriver||typeof o.nativeLeaseDriver.credential!=='function')throw Error('NATIVE_TASK_LEASE_DRIVER_REQUIRED');

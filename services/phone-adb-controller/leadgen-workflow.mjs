@@ -40,7 +40,7 @@ export function createWorkflowHandlers(options){
 }
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
-import {readFrozen,digest,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
+import {readFrozen,digest,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput,frozenExecutionMode} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput,rpcSource} from './leadgen-client.mjs';
 import {judgePreflightInProcess} from './preflight-judge.mjs';
@@ -151,7 +151,8 @@ export async function readbackActivityChecks({executionMode,activity,root,frozen
   return rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
 }
 
-export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver,nativePhoneRuntime}){
+export async function prepareWorkflowCommander({runDir,frozen,activities,executeAgent,context,rpc,createObserver,nativePhoneRuntime,binding,env}){
+ if(frozen.deployment?.target==='mmv'&&frozenExecutionMode(frozen)==='code'&&['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(frozen.workflow_version?.payload?.key)){if(!frozen.code_observer_scope)throw Error('CODE_OBSERVER_FROZEN_SCOPE_REQUIRED');const {createRunnerCodeCommander}=await import('./code-observer-commander.mjs');return createRunnerCodeCommander({runDir,source:rpcSource(frozen),frozen,binding,activities,context,env,createObserver});}
  if(frozen.execution_transport!=='raw-model-v1')return {commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},close:async()=>null};
  if(!validateFrozenControlAcceptance(frozen)){
   if(['douyin_video_discovery','douyin_video_processing'].includes(frozen.workflow_version?.payload?.key)){
@@ -173,26 +174,27 @@ export async function prepareWorkflowCommander({runDir,frozen,activities,execute
 }
 
 export async function runWorkflowWithCommander({frozen,prepareCommander=prepareWorkflowCommander,observerSafety,...options}){
- const raw=frozen.execution_transport==='raw-model-v1',record=options.record|| (async()=>{});let observer,safetyUnknown=false,preparedAlreadyClosed=false;
+ const raw=frozen.execution_transport==='raw-model-v1',codeObserver=!!frozen.code_observer_scope,secured=raw||codeObserver,record=options.record|| (async()=>{});let observer,safetyUnknown=false,preparedAlreadyClosed=false;
  const quarantine=async()=>{try{return options.quarantine?await options.quarantine():{verified:false,reason:'quarantine unavailable'};}catch{return {verified:false,reason:'quarantine failed'};}};
  try{observer=await prepareCommander({...options,frozen});}
  catch(error){
-  const facts=raw?runnerCommanderPreparation(error,options.context):null;
+  const facts=secured?runnerCommanderPreparation(error,options.context):null;
   let recordError;
-  try{await record({...options.context,phase:raw&&facts?.closed&&!facts.unavailable?'commander_authority_rejected':'commander_unavailable',commander_status:'unavailable'});}catch(cause){recordError=cause;}
-  if(raw&&facts?.closed&&!facts.unavailable)throw recordError||error;
-  if(raw&&(!facts?.unavailable||facts.closed!==true)){
+  try{await record({...options.context,phase:secured&&facts?.closed&&!facts.unavailable?'commander_authority_rejected':'commander_unavailable',commander_status:'unavailable'});}catch(cause){recordError=cause;}
+  if(codeObserver&&facts?.closed)throw recordError||error;
+  if(secured&&facts?.closed&&!facts.unavailable)throw recordError||error;
+  if(secured&&(!facts?.unavailable||facts.closed!==true)){
    const resource_quarantine=await quarantine();
    if(recordError){recordError.executionStopped=false;recordError.commanderExecutionUnknown=true;recordError.resourceQuarantine=resource_quarantine;throw recordError;}
    return {status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine,results:options.activities.map(activity=>({activity:activity.key,status:'blocked',not_started:true,execution_stopped:false,reason:'Observer authority or lifecycle not verified'}))};
   }
   if(recordError)throw recordError;
-  preparedAlreadyClosed=raw&&facts?.closed===true;
+  preparedAlreadyClosed=secured&&facts?.closed===true;
   observer={commander:async()=>{throw Error('COMMANDER_UNAVAILABLE');},canDispatchWorker:()=>true,close:async()=>null};
  }
- const allowed=()=>{if(!raw)return true;const facts=observer.dispatchSafety?.()||{safe:observer.canDispatchWorker?.()===true,execution_unknown:observer.canDispatchWorker?.()!==true};if(facts.execution_unknown===true)safetyUnknown=true;return facts.safe===true;};
+ const allowed=()=>{if(!secured)return true;const facts=observer.dispatchSafety?.()||{safe:observer.canDispatchWorker?.()===true,execution_unknown:observer.canDispatchWorker?.()!==true};if(facts.execution_unknown===true)safetyUnknown=true;return facts.safe===true;};
  const ready=async input=>{
-  if(!raw)return true;
+  if(!secured)return true;
   try{if(typeof observer.waitForIdle==='function'&&await observer.waitForIdle(input)!==true){allowed();return false;}}
   catch(error){const facts=observer.dispatchSafety?.();if(!facts||facts.execution_unknown===true||facts.pending>0)safetyUnknown=true;throw error;}
   return allowed();
@@ -201,16 +203,25 @@ export async function runWorkflowWithCommander({frozen,prepareCommander=prepareW
  const guarded=options.executeAgent&& (async(activity,input)=>{await observer.selectActivity?.(activity,input);if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent(activity,input);});
  if(guarded&&typeof options.executeAgent.recoverAfterCheck==='function')guarded.recoverAfterCheck=async(...args)=>{if(!await ready({signal:args[1]?.signal}))throw Object.assign(Error('OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return options.executeAgent.recoverAfterCheck(...args);};
  let result,runError,closed,resourceQuarantine;
- try{result=await runWorkflow({...options,executeAgent:guarded,commander:observer.commander});}catch(error){runError=error;}
+ try{const handlers=codeObserver?Object.fromEntries(Object.entries(options.handlers||{}).map(([key,handler])=>[key,async input=>{await observer.selectActivity?.({key},input);if(!await ready({deadlineMs:input?.deadline_ms,signal:input?.signal}))throw Object.assign(Error('CODE_OBSERVER_EXECUTION_UNVERIFIED'),{executionStopped:false});return handler(input);}])):options.handlers;result=await runWorkflow({...options,handlers,executeAgent:guarded,commander:observer.commander});}catch(error){runError=error;}
  // Safety work is independent of both the executor and the Recorder. In
  // particular, a failed close record cannot bypass persistent isolation.
  try{closed=await observer.close();}catch{safetyUnknown=true;}
- if(raw&&!preparedAlreadyClosed&&!runnerCommanderClosureKnown(closed,options.context))safetyUnknown=true;
+ if(secured&&!preparedAlreadyClosed&&!runnerCommanderClosureKnown(closed,options.context))safetyUnknown=true;
  if(safetyUnknown)resourceQuarantine=await quarantine();
  if(closed)try{await record({...options.context,phase:'commander_domain_closed',evidence:closed});}catch(error){runError??=error;}
  if(runError){if(safetyUnknown){runError.executionStopped=false;runError.commanderExecutionUnknown=true;runError.resourceQuarantine=resourceQuarantine;}throw runError;}
  if(safetyUnknown)result={...result,status:'needs_review',execution_stopped:false,commander_execution_unknown:true,resource_quarantine:resourceQuarantine};
  return result;
+}
+
+// main与验收共用Task归一；canonical external ACK的null不覆盖冻结Task。
+export function resolveWorkflowTaskIdentity({frozen,binding,env}){
+ const mode=assertExecutionMode(frozen,env),codeScope=frozen.deployment?.target==='mmv'&&mode==='code'&&frozen.code_observer_scope,centralWorkflow=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+ const candidates=(codeScope?[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID,codeScope.task_id,binding.task_id]:centralWorkflow||mode==='agent'?[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID,binding.task_id]:[binding.task_id]).filter(value=>value!==undefined&&value!==null&&value!=='');
+ if(new Set(candidates).size>1)throw Error('CENTRAL_LOCK_TASK_CONFLICT');
+ if(codeScope&&(candidates.length===0||typeof candidates[0]!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(candidates[0])))throw Error('CODE_OBSERVER_TASK_REQUIRED');
+ return candidates[0]??null;
 }
 
 export function createWorkflowContext({frozen,binding,env,taskId,executionMode=assertExecutionMode(frozen,env)}){
@@ -295,9 +306,7 @@ async function main(){
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);assertAgentInput(frozen,env);const executionMode=assertExecutionMode(frozen,env),binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
   if(binding.run_id!==`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`)throw Error('运行绑定身份不符');
   const centralWorkflow=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
-  const taskIds=(centralWorkflow||executionMode==='agent'?[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID,binding.task_id]:[binding.task_id]).filter(Boolean);
-  if(new Set(taskIds).size>1)throw Error('CENTRAL_LOCK_TASK_CONFLICT');
-  const taskId=taskIds[0]||null;
+  const taskId=resolveWorkflowTaskIdentity({frozen,binding,env});
   const root=resolve(dir,'runtime');
   env.DOUYIN_PHONE_ADB=join(root,'douyin-phone-adb');
   if(resolve(env.WF_HOME)!==root||resolve(fileURLToPath(import.meta.url))!==join(root,'leadgen-workflow.mjs'))throw Error('执行器必须来自本批冻结字节');
@@ -321,7 +330,7 @@ async function main(){
   const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId,beforeRawTurn:input=>observerSafety.ready?.(input)});
   const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
   cliStartupPending=false;
-  const result=await runWorkflowWithCommander({runDir:dir,frozen,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,nativePhoneRuntime:handlers.nativePhoneRuntime,quarantine:handlers.quarantineResources,
+  const result=await runWorkflowWithCommander({runDir:dir,frozen,binding,env,rpc,activities,context,handlers:execution,executeAgent,recover,observerSafety,nativePhoneRuntime:handlers.nativePhoneRuntime,quarantine:handlers.quarantineResources,
     record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);
