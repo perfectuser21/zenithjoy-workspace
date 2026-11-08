@@ -111,7 +111,7 @@ def main():
         code = marshal.loads(raw[16:])
         expected = compile(data, str(source), 'exec', dont_inherit=True, optimize=0)
         need(code == expected and all(getattr(code, name) == getattr(expected, name) for name in dir(expected)
-             if name.startswith('co_') and not callable(getattr(expected, name)) and name != 'co_lnotab'), 'BYTECODE_SOURCE')
+             if name.startswith('co_') and name != 'co_lnotab' and not callable(getattr(expected, name))), 'BYTECODE_SOURCE')
         emit({'code_matches': True, 'source_sha256': hashlib.sha256(data).hexdigest(),
               'cache_sha256': hashlib.sha256(raw).hexdigest()})
         return
@@ -142,6 +142,10 @@ def main():
                    'plan_sha256': plan, 'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared'})
         emit({'event': 'prepared'})
         commit = message()
+        while commit == {'action': 'check'}:
+            need(snapshot(root, serial) == before, 'CHECK_CAS')
+            emit({'event': 'checked'})
+            commit = message()
         need(set(commit) == {'action', 'proof_sha256'} and commit['action'] == 'commit'
              and re.fullmatch(r'[a-f0-9]{64}', commit['proof_sha256']) and snapshot(root, serial) == before, 'COMMIT_CAS')
         # Node已完成真正的fence/中央强CAS及fresh读回。这里只执行一次原目录rename，不写原始字段。

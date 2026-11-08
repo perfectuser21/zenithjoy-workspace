@@ -1,7 +1,7 @@
 // 唯一受控host请求原语；不会启动/重启ADB，不提供任意命令或自动重试。
 import {Socket} from 'node:net';import {join,resolve} from 'node:path';
-import {lstatSync,realpathSync,readdirSync,openSync,writeSync,fsyncSync,closeSync,constants} from 'node:fs';
-import {digest as sha,canonical} from './device-epoch-fence-reference.mjs';import {adbRequest,adbPayloadLength} from './adb-shell-v2-protocol.mjs';
+import {lstatSync,realpathSync,readdirSync,openSync,fsyncSync,closeSync,constants} from 'node:fs';
+import {digest as sha,canonical,writeAll} from './device-epoch-fence-reference.mjs';import {adbRequest,adbPayloadLength} from './adb-shell-v2-protocol.mjs';
 const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});};
 export function parseDeviceInventory(raw){
  need(typeof raw==='string'&&!/[^\x20-\x7e\t\n]/.test(raw),'HOST_INVENTORY');if(!raw)return [];need(raw.endsWith('\n'),'HOST_INVENTORY');const ids=new Set();return raw.trimEnd().split('\n').map(line=>{const m=line.match(/^([A-Za-z0-9_.:-]+)\t(device|offline|unauthorized|bootloader|recovery|sideload)(?: +(.*))?$/);need(m&&!ids.has(m[1]),'HOST_INVENTORY');ids.add(m[1]);return {serial:m[1],state:m[2],properties:m[3]??''};});
@@ -10,7 +10,7 @@ export async function hostOperation({operation,scope,directory,readAuthority}={}
  const q=structuredClone(scope),endpoint=q?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/);need(['inventory','disconnect','connect'].includes(operation)&&endpoint&&Number(endpoint[1])<=65535&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(q.serial||''),'HOST_SCOPE');
  let st;try{st=lstatSync(directory);need(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.getuid()&&(st.mode&0o777)===0o700&&realpathSync(directory)===resolve(directory)&&!readdirSync(directory).length,'HOST_JOURNAL');}catch{need(false,'HOST_JOURNAL');}
  need(typeof readAuthority==='function','HOST_AUTHORITY');
- const save=(name,b)=>{const now=lstatSync(directory);need(now.dev===st.dev&&now.ino===st.ino&&realpathSync(directory)===resolve(directory),'HOST_JOURNAL');const fd=openSync(join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeSync(fd,b);fsyncSync(fd);}finally{closeSync(fd);}const d=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(d);}finally{closeSync(d);}return sha(b);};
+ const save=(name,b)=>{const now=lstatSync(directory);need(now.dev===st.dev&&now.ino===st.ino&&realpathSync(directory)===resolve(directory),'HOST_JOURNAL');const fd=openSync(join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeAll(fd,b);fsyncSync(fd);}finally{closeSync(fd);}const d=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(d);}finally{closeSync(d);}return sha(b);};
  const service=operation==='inventory'?'host:devices-l':'host:'+operation+':'+q.serial;save('intent.json',Buffer.from(JSON.stringify({protocol:'device-epoch-fence-host-operation/v1',operation,service,scope:q,at:new Date().toISOString()})+'\n'));
  const socket=new Socket(),chunks=[];let eof=false,closed=false,error=null,writeAttempted=false,writeAcknowledged=false,size=0,body=null;
  const admit=async()=>{const a=await readAuthority();need(canonical(a?.scope)===canonical(q)&&a.authorized_action===operation&&Date.parse(a.lease_until)>Date.now()+1000,'HOST_AUTHORITY');};

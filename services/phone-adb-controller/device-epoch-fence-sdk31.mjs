@@ -44,3 +44,19 @@ export function parseSdk31Diagnostics(bundle){
  if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\n$/.test(bundle.boot_id||''))reasons.push('BOOT_ID');if(processes.old_producers.length)reasons.push('OLD_REMOTE_PRODUCERS_PRESENT');if(processes.unresolved_shells.length)reasons.push('SHELL_CAUSAL_ORIGIN_UNRESOLVED');
  return {protocol:'device-epoch-fence-sdk31-components/v1',processes,input,activities,original_execution_stopped:false,remote_quiescence:'unknown',resource_authority:'not_attested',reasons};
 }
+
+export function consoleShellIsOutsideOldDomain({process,stat,status,cmdline,fds,wchan,controllerSourceSha256}){
+ const fail=()=>{throw Object.assign(new Error('SDK31_CONSOLE_ORIGIN'),{code:'SDK31_CONSOLE_ORIGIN'});};
+ if(controllerSourceSha256!=='b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6')fail();
+ const m=stat?.match(/^(\d+) \(sh\) ([A-Z]) ([0-9 -]+)\n?$/);if(!m)fail();const fields=m[3].trim().split(/\s+/),pid=Number(m[1]);
+ if(process?.pid!==pid||process.uid!==2000||process.ppid!==1||process.name!=='sh'||process.args!=='sh'||m[2]!=='S'||fields[0]!=='1'||fields[1]!==String(pid)||fields[2]!==String(pid)||!/^\d+$/.test(fields[3])||Number(fields[3])===0||fields[4]!==String(pid)||!/^\d+$/.test(fields[18])||cmdline!=='/system/bin/sh\0'||wchan?.trim()!=='wait_woken')fail();
+ for(const [key,value]of Object.entries({Name:'sh',Tgid:String(pid),Pid:String(pid),PPid:'1',Uid:'2000\t2000\t2000\t2000',Threads:'1'})){const lines=status.split('\n').filter(l=>l.startsWith(key+':'));if(lines.length!==1||lines[0].slice(key.length+1).trim()!==value)fail();}
+ const descriptors=fds.split('\n').filter(l=>l&&l!=='total 0').map(l=>l.match(/^l[^\s]+\s+\d+\s+shell\s+shell\s+\d+\s+\S+\s+\S+\s+(\d+) -> (\S+)$/));if(descriptors.length!==4||descriptors.some(x=>!x))fail();const map=Object.fromEntries(descriptors.map(m=>[m[1],m[2]]));if(Object.keys(map).sort().join(',')!=='0,1,10,2'||['0','1','2'].some(k=>map[k]!=='/dev/console')||map['10']!=='/dev/tty')fail();
+ return {pid,ppid:1,uid:2000,session:pid,pgrp:pid,tty_nr:fields[3],start_ticks:fields[18],causal_exclusion:'init-console-descriptors-not-reachable-from-fixed-noninteractive-old-command-set'};
+}
+
+export function verifyConsoleProcessIdentity({excluded,stat,bootId,expectedBootId}){
+ const m=stat?.match(/^(\d+) \(sh\) [A-Z] ([0-9 -]+)\n?$/),fields=m?.[2].trim().split(/\s+/);
+ if(bootId!==expectedBootId||!m||Number(m[1])!==excluded?.pid||fields[18]!==excluded.start_ticks)throw Object.assign(new Error('FENCE_CONSOLE_IDENTITY_CHANGED'),{code:'FENCE_CONSOLE_IDENTITY_CHANGED'});
+ return true;
+}

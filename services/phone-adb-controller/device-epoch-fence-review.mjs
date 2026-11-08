@@ -1,9 +1,9 @@
 // 设备epoch维护只读入口。没有disconnect、start-server、解锁或历史状态写回入口。
-import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,writeSync,fsyncSync} from 'node:fs';
+import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,fsyncSync} from 'node:fs';
 import {join,dirname,resolve,basename} from 'node:path';
 import {userInfo} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {bytes,canonical,digest as sha} from './device-epoch-fence-reference.mjs';
+import {bytes,canonical,digest as sha,writeAll,FENCE_ACTIONS,approvalScopeFor} from './device-epoch-fence-reference.mjs';
 export {bytes};
 import {execFileSync} from 'node:child_process';
 import {runDiagnostic,DIAGNOSTIC_COMMANDS,SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,PROCESS_DIAGNOSTIC_COMMANDS} from './device-epoch-fence-diagnostics.mjs';
@@ -46,7 +46,7 @@ export function reviewSource({runtimeRoot=here,repositoryRoot=resolve(here,'../.
  const files={},queue=['device-epoch-fence-review.mjs'];
  while(queue.length){const n=queue.shift();if(Object.hasOwn(files,'services/phone-adb-controller/'+n))continue;need(!n.startsWith('../')&&queue.length<512,'REVIEW_IMPORT_SCOPE');const path='services/phone-adb-controller/'+n,b=bytes(join(runtimeRoot,n));
   if(manifest){const rows=manifest.files.filter(r=>r.path===path);need(rows.length===1&&rows[0].deployed_path===n&&rows[0].content_sha256===sha(b),'REVIEW_SOURCE_BYTES');}else need(b.equals(Buffer.from(git('show',commit+':'+path))),'REVIEW_SOURCE_DIRTY');files[path]=sha(b);
-  for(const match of b.toString().matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"](\.[^'"]+)['"]/g)){const dependency=resolve(dirname(join(runtimeRoot,n)),match[1]);need(dependency.startsWith(runtimeRoot+'/'),'REVIEW_IMPORT_SCOPE');queue.push(dependency.slice(runtimeRoot.length+1));}
+  for(const match of b.toString().matchAll(/(?:from\s*|import\s*\(\s*|import\s*|new URL\(\s*)['"](\.[^'"]+)['"]/g)){const dependency=resolve(dirname(join(runtimeRoot,n)),match[1]);need(dependency.startsWith(runtimeRoot+'/'),'REVIEW_IMPORT_SCOPE');queue.push(dependency.slice(runtimeRoot.length+1));}
  }return {commit,files};
 }
 
@@ -71,7 +71,7 @@ export async function inspectReview({taskId,stateFile,read=readBrain,home=userIn
  need(b?.id===state.identity.run_binding?.run_binding_id&&b.run_id===p.source_run_id&&b.workflow_definition_version_id===state.identity.run_binding.workflow_definition_version_id&&b.release_id===frozen.release?.id,'CENTRAL_ORIGINAL_BINDING');
  const policyPath=join(home,'.config/zenithjoy/adb-service.json'),policy=json(policyPath);need(policy.endpoint===result.scope.endpoint&&policy.transport==='tcp','ORIGINAL_POLICY');
  result.scope={...result.scope,original_evidence_sha256:sha(canonical(raw)),central_binding_sha256:sha(canonical(b)),local_quarantine:{dev:st.dev,ino:st.ino,mode:st.mode&0o777,fields_sha256:sha(canonical(local)),guards},review_source:source(),old_daemon:daemon({home,endpoint:result.scope.endpoint,policy})};
- return {...result,files:raw,local_quarantine:{path:lockPath,dev:st.dev,ino:st.ino,fields:local},original_binding:b,company:cfg.company,required_next:['original-controller-fixed-source-closure','old-route-continuously-revoked','private-epoch-route-authority','sdk31-reviewed-remote-quiescence','current-maintenance-central-and-local-CAS-readbacks']};
+ return {...result,network_approval:m.result?.device_epoch_fence_approval,files:raw,local_quarantine:{path:lockPath,dev:st.dev,ino:st.ino,fields:local},original_binding:b,company:cfg.company,required_next:['original-controller-fixed-source-closure','old-route-continuously-revoked','private-epoch-route-authority','sdk31-reviewed-remote-quiescence','current-maintenance-central-and-local-CAS-readbacks']};
 }
 export const diagnosticExitCode=result=>Array.isArray(result?.diagnostics)&&result.diagnostics.some(r=>!r.wire_complete||r.exit_code!==0)?2:0;
 export function validateDiagnosticQuery(query){need(Object.hasOwn(DIAGNOSTIC_COMMANDS,query)||Object.hasOwn(SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,query),'DIAGNOSTIC_QUERY');return query;}
@@ -86,7 +86,7 @@ export async function diagnoseReview({taskId,stateFile,directory,read,home,sourc
 }
 function readStartupInstance({instanceId,registrySha256,policySha256}){
  const path=join(here,'config/adb-host-instances.json'),raw=bytes(path);need(sha(raw)===registrySha256,'STARTUP_REGISTRY_DIGEST');const registry=JSON.parse(raw),rows=registry.instances?.filter(r=>r.instance_id===instanceId&&r.kind==='managed');need(registry.schema_version===1&&rows?.length===1,'STARTUP_INSTANCE');const row=rows[0],policyRaw=bytes(row.policy_path),st=lstatSync(row.policy_path);need((st.mode&0o777)===0o600&&sha(policyRaw)===policySha256&&canonical(JSON.parse(policyRaw))===canonical(row.policy),'STARTUP_POLICY_DIGEST');
- need(row.policy.schema_version===2&&row.policy.instance_id===instanceId&&/^tcp:127\.0\.0\.1:[1-9]\d{0,4}$/.test(row.policy.endpoint)&&row.policy.endpoint!=='tcp:127.0.0.1:5041','STARTUP_PRIVATE_ENDPOINT');const partners=registry.instances.filter(r=>row.coexists_with?.includes(r.instance_id)&&r.kind==='external_existing');need(partners.length===1&&partners[0].coexists_with?.includes(instanceId),'STARTUP_COEXISTENCE');const partner=partners[0];return {instance_id:instanceId,endpoint:row.policy.endpoint,registry_sha256:registrySha256,policy_sha256:policySha256,partner:{policy_path:partner.policy_path,policy:partner.policy,actual_policy:JSON.parse(bytes(partner.policy_path))}};
+ need(row.policy.schema_version===2&&row.policy.instance_id===instanceId&&/^tcp:127\.0\.0\.1:[1-9]\d{0,4}$/.test(row.policy.endpoint)&&row.policy.endpoint!=='tcp:127.0.0.1:5041','STARTUP_PRIVATE_ENDPOINT');const partners=registry.instances.filter(r=>row.coexists_with?.includes(r.instance_id)&&r.kind==='external_existing');need(partners.length===1&&partners[0].coexists_with?.includes(instanceId),'STARTUP_COEXISTENCE');const partner=partners[0];return {instance_id:instanceId,policy_path:row.policy_path,endpoint:row.policy.endpoint,registry_sha256:registrySha256,policy_sha256:policySha256,partner:{policy_path:partner.policy_path,policy:partner.policy,actual_policy:JSON.parse(bytes(partner.policy_path))}};
 }
 function loadStartupReceipt(path){const st=lstatSync(path);need((st.mode&0o777)===0o600,'STARTUP_RECEIPT_MODE');return JSON.parse(bytes(path));}
 export async function verifyStartupReceipt(options={}){
@@ -94,19 +94,21 @@ export async function verifyStartupReceipt(options={}){
  need(typeof receiptPath==='string'&&resolve(receiptPath)===receiptPath&&/^[a-z][a-z0-9-]{2,63}$/.test(instanceId||'')&&/^[a-f0-9]{40}$/.test(sourceCommit||'')&&[registrySha256,policySha256].every(x=>/^[a-f0-9]{64}$/.test(x||'')),'STARTUP_ARGUMENTS');const r=load(receiptPath),now=Date.now();
  need(r.protocol==='device-epoch-fence-startup/v1'&&r.action==='start_private_server'&&r.instance_id===instanceId&&r.registry_sha256===registrySha256&&r.policy_sha256===policySha256&&uuid.test(r.task_id||'')&&Number.isFinite(Date.parse(r.issued_at))&&Date.parse(r.issued_at)<=now&&Date.parse(r.expires_at)>now&&Date.parse(r.expires_at)-Date.parse(r.issued_at)<=120000&&r.review?.original_execution_stopped===false,'STARTUP_RECEIPT');
  const currentSource=source();need(currentSource.commit===sourceCommit&&canonical(currentSource)===canonical(r.source_authority),'STARTUP_SOURCE_DRIFT');const fixed=instance({instanceId,registrySha256,policySha256});need(fixed.endpoint===r.endpoint&&fixed.instance_id===instanceId&&fixed.registry_sha256===registrySha256&&fixed.policy_sha256===policySha256,'STARTUP_INSTANCE_DRIFT');
- const current=await inspect({taskId:r.task_id,stateFile:r.state_file});need(canonical(current)===canonical(r.review),'STARTUP_REVIEW_DRIFT');
+ const current=await inspect({taskId:r.task_id,stateFile:r.state_file});need(canonical(current)===canonical(r.review),'STARTUP_REVIEW_DRIFT');const approved=current.network_approval;need(approved?.protocol==='device-epoch-fence-approval/v1'&&approved.plan_sha256===r.operation_plan_sha256&&/^[a-f0-9]{64}$/.test(approved.plan_sha256||'')&&canonical(approved.actions)===canonical(FENCE_ACTIONS)&&canonical(approved.approved_scope)===canonical(approvalScopeFor({scope:current.scope,instance:fixed,sourceCommit}))&&typeof approved.approved_by==='string'&&approved.approved_by.trim()&&typeof approved.approval_ref==='string'&&approved.approval_ref.trim()&&Date.parse(approved.approved_at)<=Date.now(),'STARTUP_EXPLICIT_APPROVAL');
  const daemon=options.daemon??(()=>{const home=userInfo().homedir,policy=JSON.parse(bytes(join(home,'.config/zenithjoy/adb-service.json')));return readOldDaemon({home,endpoint:current.scope.endpoint,policy});});const old=daemon();need(canonical(old)===canonical(r.old_daemon),'STARTUP_DAEMON_DRIFT');const partner=fixed.partner;need(partner&&canonical(partner.actual_policy)===canonical(partner.policy)&&old.endpoint===partner.policy.endpoint&&old.executable===partner.policy.adb_realpath&&old.executable_sha256===partner.policy.adb_sha256&&old.policy_path===partner.policy_path,'STARTUP_COEXISTENCE');
  need(Date.parse(r.expires_at)>Date.now(),'STARTUP_RECEIPT_EXPIRED');
  return {protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',instance_id:instanceId,endpoint:r.endpoint,source_commit:sourceCommit,registry_sha256:registrySha256,policy_sha256:policySha256};
 }
 export async function planStartupReceipt({taskId,stateFile,instanceId,directory}={}){
  const review=await inspectReview({taskId,stateFile}),registryPath=join(here,'config/adb-host-instances.json'),registryRaw=bytes(registryPath),registry=JSON.parse(registryRaw),row=registry.instances?.find(r=>r.instance_id===instanceId&&r.kind==='managed');need(row,'STARTUP_INSTANCE');const registrySha256=sha(registryRaw),policySha256=sha(bytes(row.policy_path)),fixed=readStartupInstance({instanceId,registrySha256,policySha256}),now=Date.now();
- const r={protocol:'device-epoch-fence-startup/v1',action:'start_private_server',issued_at:new Date(now).toISOString(),expires_at:new Date(Math.min(now+120000,Date.parse(review.central_readback.expires_at))).toISOString(),task_id:taskId,state_file:stateFile,...fixed,source_authority:review.scope.review_source,review,old_daemon:review.scope.old_daemon};
+ const approved=review.network_approval;need(approved?.protocol==='device-epoch-fence-approval/v1'&&/^[a-f0-9]{64}$/.test(approved.plan_sha256||'')&&typeof approved.approved_by==='string'&&approved.approved_by.trim()&&typeof approved.approval_ref==='string'&&approved.approval_ref.trim()&&Number.isFinite(Date.parse(approved.approved_at))&&Date.parse(approved.approved_at)<=Date.now()&&canonical(approved.actions)===canonical(FENCE_ACTIONS)&&canonical(approved.approved_scope)===canonical(approvalScopeFor({scope:review.scope,instance:fixed,sourceCommit:review.scope.review_source.commit})),'STARTUP_EXPLICIT_APPROVAL');
+ const r={operation_plan_sha256:approved.plan_sha256,protocol:'device-epoch-fence-startup/v1',action:'start_private_server',issued_at:new Date(now).toISOString(),expires_at:new Date(Math.min(now+120000,Date.parse(review.central_readback.expires_at))).toISOString(),task_id:taskId,state_file:stateFile,...fixed,source_authority:review.scope.review_source,review,old_daemon:review.scope.old_daemon};
  need(typeof directory==='string'&&resolve(directory)===directory,'STARTUP_OUTPUT');const fd=openSync(directory,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeSync(fd,JSON.stringify(r)+'\n');fsyncSync(fd);}finally{closeSync(fd);}return r;
 }
 export async function main(args=process.argv.slice(2)){
  let result;
- if(args[0]==='verify-epoch'){result=await (await import('./device-epoch-fence-admission.mjs')).main(args);}
+ if(['fence-plan','fence-materialize','fence-apply'].includes(args[0])){result=await (await import('./device-epoch-fence-controller.mjs')).main(args);}
+ else if(args[0]==='verify-epoch'){result=await (await import('./device-epoch-fence-admission.mjs')).main(args);}
  else if(args[0]==='verify-startup'){
   need(args.length===11&&args[1]==='--receipt'&&args[3]==='--instance-id'&&args[5]==='--registry-sha256'&&args[7]==='--source'&&args[9]==='--policy-sha256','STARTUP_USAGE');result=await verifyStartupReceipt({receiptPath:args[2],instanceId:args[4],registrySha256:args[6],sourceCommit:args[8],policySha256:args[10]});
  }else if(args[0]==='diagnose-query'){

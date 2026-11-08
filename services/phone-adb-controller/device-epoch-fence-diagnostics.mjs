@@ -1,10 +1,12 @@
 // 固定只读诊断。自身 EXIT/EOF/CLOSE 只证明本次 wire 收回，不证明旧运行停止。
 import {Socket} from 'node:net';
-import {digest as sha,canonical} from './device-epoch-fence-reference.mjs';
+import {digest as sha,canonical,writeAll} from './device-epoch-fence-reference.mjs';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {lstatSync,realpathSync,readdirSync,openSync,writeSync,fsyncSync,closeSync,constants,readFileSync} from 'node:fs';
+import {lstatSync,realpathSync,readdirSync,openSync,fsyncSync,closeSync,constants,readFileSync} from 'node:fs';
 import {adbRequest,adbPayloadLength,closeStdinFrame,createShellV2Decoder} from './adb-shell-v2-protocol.mjs';
+const diagnosticProofs=new WeakMap();
+export function readDiagnosticProof(result){const proof=diagnosticProofs.get(result);if(!proof)throw Object.assign(new Error('DIAGNOSTIC_RECEIPT'),{code:'DIAGNOSTIC_RECEIPT'});return {...structuredClone(proof),stdout:Buffer.from(proof.stdout),stderr:Buffer.from(proof.stderr)};}
 export const DIAGNOSTIC_COMMANDS=Object.freeze({
  sdk:'exec /system/bin/getprop ro.build.version.sdk',
  boot_id:'exec /system/bin/toybox cat /proc/sys/kernel/random/boot_id',
@@ -40,7 +42,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
  const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o700||realpathSync(directory)!==resolve(directory)||readdirSync(directory).length)throw fail('DIAGNOSTIC_JOURNAL');
  const source=diagnosticSource(),channels=[],started=new Date().toISOString(),events=[];let failure=null,parsed=null;
  const verifyDirectory=()=>{const now=lstatSync(directory);if(now.dev!==st.dev||now.ino!==st.ino||realpathSync(directory)!==resolve(directory))throw fail('DIAGNOSTIC_JOURNAL');};
- const save=(name,bytes)=>{verifyDirectory();const fd=openSync(join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}const df=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(df);}finally{closeSync(df);}return sha(bytes);};
+ const save=(name,bytes)=>{verifyDirectory();const fd=openSync(join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeAll(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}const df=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(df);}finally{closeSync(df);}return sha(bytes);};
  const expired=()=>Date.now()>=deadline;
  const deadline=Date.now()+timeoutMs;
  const admit=async()=>{if(expired())throw fail('DIAGNOSTIC_DEADLINE');verifyDirectory();if(canonical(diagnosticSource())!==canonical(source))throw fail('DIAGNOSTIC_SOURCE_DRIFT');const a=await readAuthority();if(expired())throw fail('DIAGNOSTIC_DEADLINE');if(canonical(a?.scope)!==canonical(q)||!Number.isFinite(Date.parse(a?.lease_until))||Date.parse(a.lease_until)<=Date.now())throw fail('DIAGNOSTIC_AUTHORITY');};
@@ -51,7 +53,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
   verifyDirectory();const raw=openSync(join(directory,`socket-${index}.raw`),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);c.raw=raw;
   const notify=()=>{for(const w of c.wakes)w();c.wakes.clear();};
   c.closePromise=new Promise(r=>socket.once('close',hadError=>{c.closed=true;if(hadError||!c.eof)c.error??='DIAGNOSTIC_SOCKET';events.push({index,event:'close',had_error:hadError,peer_eof:c.eof,at:new Date().toISOString()});notify();r();}));
-  socket.on('data',bytes=>{try{writeSync(raw,bytes);fsyncSync(raw);c.total+=bytes.length;if(c.total>8*1024*1024)throw fail('DIAGNOSTIC_LIMIT');c.buffer=Buffer.concat([c.buffer,bytes]);}catch(e){c.error=e.code==='DIAGNOSTIC_LIMIT'?e.code:'DIAGNOSTIC_JOURNAL';socket.destroy();}notify();});
+  socket.on('data',bytes=>{try{writeAll(raw,bytes);fsyncSync(raw);c.total+=bytes.length;if(c.total>8*1024*1024)throw fail('DIAGNOSTIC_LIMIT');c.buffer=Buffer.concat([c.buffer,bytes]);}catch(e){c.error=e.code==='DIAGNOSTIC_LIMIT'?e.code:'DIAGNOSTIC_JOURNAL';socket.destroy();}notify();});
   socket.on('end',()=>{c.eof=true;events.push({index,event:'eof',at:new Date().toISOString()});notify();});
   socket.on('error',()=>{c.error??='DIAGNOSTIC_SOCKET';notify();});
   const check=()=>{if(failure)throw fail(failure);if(c.error)throw fail(c.error);if(expired())throw fail('DIAGNOSTIC_DEADLINE');};
@@ -72,5 +74,5 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
  const files={};for(const c of channels)files[`socket-${c.index}.raw`]=sha(readFileSync(join(directory,`socket-${c.index}.raw`)));
  if(parsed){files['stdout.raw']=save('stdout.raw',parsed.stdout);files['stderr.raw']=save('stderr.raw',parsed.stderr);}
  const result={protocol:'device-epoch-fence-diagnostic/v1',query,scope:q,source,started_at:started,finished_at:new Date().toISOString(),events,files,wire_complete:failure===null&&!!parsed,exit_code:parsed?.exit_code??null,error_code:failure,pending:0,open_sockets:0,original_execution_stopped:false,remote_quiescence:'unknown',resource_authority:'not_attested'};
- save('diagnostic.json',Buffer.from(JSON.stringify(result)+'\n'));return result;
+ save('diagnostic.json',Buffer.from(JSON.stringify(result)+'\n'));if(result.wire_complete&&parsed.exit_code===0)diagnosticProofs.set(result,{query,scope:structuredClone(q),source:structuredClone(source),stdout:Buffer.from(parsed.stdout),stderr:Buffer.from(parsed.stderr),wire_complete:true,exit_code:parsed.exit_code});return result;
 }
