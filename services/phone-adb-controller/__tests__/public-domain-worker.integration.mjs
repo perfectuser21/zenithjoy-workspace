@@ -1,0 +1,64 @@
+// Run explicitly with PUBLIC_DOMAIN_CECELIA_WORKER_ROOT=<fixed Cecelia checkout>.
+// Product Worker/Runner/Commander/domain/handlers/readback/Recorder remain real;
+// only phone/ADB/RPC/model effects are deterministic fixture I/O. Not business PASS.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {mkdtempSync,realpathSync,cpSync,readdirSync,readFileSync,writeFileSync,rmSync,existsSync} from 'node:fs';
+import {join,dirname} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {randomUUID} from 'node:crypto';
+import http from 'node:http';
+import {installPreflightPg,preflightPgLockIdentity} from '../preflight-pg-dependencies.mjs';
+import {hash} from '../public-domain-snapshot.mjs';
+const cecelia=process.env.PUBLIC_DOMAIN_CECELIA_WORKER_ROOT;
+if(!cecelia)throw Error('PUBLIC_DOMAIN_CECELIA_WORKER_ROOT required for explicit cross-repository integration');
+const {createWorkflowRunner,profileDigest}=createRequire(import.meta.url)(join(cecelia,'packages/brain/scripts/fleet-worker/workflow-runner.cjs'));
+const controllerRoot=dirname(fileURLToPath(new URL('../leadgen-public-domain.mjs',import.meta.url)));
+function files(root,p=''){return readdirSync(join(root,p),{withFileTypes:true}).flatMap(e=>{const n=p?p+'/'+e.name:e.name;return e.isDirectory()?files(root,n):e.isFile()?[n]:[];});}
+const io=`import fs from 'node:fs';import path from 'node:path';
+export async function fixtureExecute(command,args,{input='',env=process.env}={}){
+ const dir=env.WFR_RUN_DIR,stateFile=path.join(dir,'fixture-device-state.json'),expected=JSON.parse(fs.readFileSync(path.join(env.WF_HOME,'fixture-expected.json')));let state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile)):{owner:null,account:null,desktop:false};const save=()=>fs.writeFileSync(stateFile,JSON.stringify(state),{mode:0o600});const reply=stdout=>({code:0,stdout,stderr:''});
+ if(input){const q=JSON.parse(input);if(q.kind==='keywords')return reply(JSON.stringify({ok:true,result:['AI办公']}));
+ if(q.kind==='queue'&&q.request.op==='company_config'){const b={company_id:expected.company_id,tenant_id:expected.tenant_id,version:26,run_id:env.WFR_TAG,profile:env.P,device_serial:env.SERIAL,douyin_id:'77980009922',verification_status:'verified',enabled:true};return reply(JSON.stringify({ok:true,result:{company_id:b.company_id,tenant_id:b.tenant_id,version:26,run_id:env.WFR_TAG,device_binding:b}}));}
+ if(q.kind==='verify'){const current=JSON.parse(fs.readFileSync(stateFile));const central=await(await fetch(env.BRAIN_URL+'/api/brain/device-locks')).json();const held=central.locks[0].locked_by;const passed=q.stage==='preflight'?current.account==='77980009922'&&current.owner===env.WFR_TAG&&held===env.WF_BRAIN_TASK_ID:current.desktop===true&&current.owner===null&&held===null;return reply(JSON.stringify({ok:true,result:{probes:[{key:'fixture-independent-native-state',pass:passed}],steps:[]}}));}throw Error('FIXTURE_RPC_UNEXPECTED');}
+ if(args[0]?.endsWith('/adb-existing-route.py'))return reply('5041\n');
+ if(command.endsWith('/adb')||command.endsWith('/adb-managed-client.py'))return reply(args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'');
+ if(command==='/bin/sleep')return reply('');
+ if(command.endsWith('/douyin-phone-adb')){const i=args[2]==='--lock-owner'?4:2,op=args[i],eid=args[i+1];let out='';
+ if(op==='preflight')out='serial='+env.SERIAL;else if(op==='lock-acquire'){state.owner=env.WFR_TAG;out='lock=acquired';}else if(op==='lock-refresh'){if(state.owner!==env.WFR_TAG)throw Error('FIXTURE_FOREIGN_OWNER');out='lock=refreshed';}else if(op==='lock-release'){if(state.owner!==env.WFR_TAG)throw Error('FIXTURE_FOREIGN_OWNER');state.owner=null;out='lock=released';}else if(op==='account-current'){state.account='77980009922';out='douyin_id='+state.account;}else if(op==='close-app'){out='foreground=mCurrentFocus com.android.launcher3/.Home';}else if(op==='return-safe-desktop'){state.desktop=true;out='launcher=com.android.launcher3\nforeground_package=com.android.launcher3\nforeground=mCurrentFocus com.android.launcher3/.Home';}
+ else if(op==='snapshot-evidence'||op==='ui-evidence'){const root=path.join(dir,'fixture-device-evidence');fs.mkdirSync(root,{recursive:true,mode:0o700});const file=path.join(root,eid+(op==='snapshot-evidence'?'.png':'.xml'));fs.writeFileSync(file,op==='snapshot-evidence'?Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082','hex'):'<hierarchy><node package="com.android.launcher3"/></hierarchy>');out=file;}
+ else throw Error('FIXTURE_PHONE_UNEXPECTED:'+op);save();return reply(out);}
+ throw Error('FIXTURE_EXEC_UNEXPECTED');}
+`;
+test('real public Worker owns formal UUID Activity lifecycle, original native cleanup readback and independently acknowledged Recorder',async()=>{
+ const temp=realpathSync(mkdtempSync(join(tmpdir(),'zj-worker-domain-'))),source=join(temp,'package'),stateRoot=join(temp,'worker');let runner,server,passed=false;
+ const spans=[],run_id=randomUUID(),task_id=randomUUID(),workflow_id=randomUUID(),workflow_version=randomUUID();let centralOwner=null,task;
+ const prior={BRAIN_URL:process.env.BRAIN_URL,BRAIN_INTERNAL_TOKEN:process.env.BRAIN_INTERNAL_TOKEN,HOME:process.env.HOME};
+ try{
+ cpSync(controllerRoot,source,{recursive:true,filter:p=>!p.includes('/__tests__')&&!p.includes('/node_modules')});await installPreflightPg({runtimeRoot:source,sourceCommit:'a'.repeat(40)});
+ writeFileSync(join(source,'fixture-io.mjs'),io);const client=readFileSync(join(source,'leadgen-client.mjs'),'utf8');writeFileSync(join(source,'leadgen-client.mjs'),"import {fixtureExecute} from './fixture-io.mjs';\n"+client.replace('export function execInput(command, args,','export const execInput=fixtureExecute;\nfunction unusedNativeInput(command, args,'));
+ const handlers=readFileSync(join(source,'leadgen-handlers.mjs'),'utf8');writeFileSync(join(source,'leadgen-handlers.mjs'),handlers.replaceAll("join('/private/tmp/openclaw-phone/evidence',profile)","join(env.WFR_RUN_DIR,'fixture-device-evidence')"));
+ writeFileSync(join(source,'fixture-steps.json'),'{"steps":[]}');writeFileSync(join(source,'fixture-observer.mjs'),"for await(const c of process.stdin){};console.log(JSON.stringify({action:'none'}));");writeFileSync(join(source,'fixture-observer.txt'),'Observe only the supplied evidence.');
+ const company={company_id:randomUUID(),tenant_id:randomUUID(),version:26,policy_id:'original-v26'};writeFileSync(join(source,'fixture-expected.json'),JSON.stringify(company));
+ server=http.createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;const body=raw?JSON.parse(raw):null;const path=new URL(req.url,'http://fixture').pathname;let value={};
+ if(path==='/api/brain/tasks/'+task_id)value=task;
+ else if(path==='/api/brain/device-locks')value={success:true,locks:[{device_name:'47.100.213.173:10001',locked_by:centralOwner,expires_at:centralOwner?new Date(Date.now()+3600000).toISOString():null}]};
+ else if(path==='/api/brain/device-locks/acquire'){centralOwner=body.locked_by;value={acquired:true,lock:{device_name:body.device_name,locked_by:centralOwner}};}
+ else if(path==='/api/brain/device-locks/release'){assert.equal(body.locked_by,centralOwner);centralOwner=null;value={success:true,released:{device_name:body.device_name,locked_by:null}};}
+ else if(path==='/api/brain/spans'&&req.method==='POST'){spans.push(body);value={ok:true};}
+ else if(path==='/api/brain/spans')value={spans:spans.filter(s=>s.run_id===run_id)};
+ else{res.statusCode=404;value={error:'FIXTURE_UNEXPECTED_ROUTE'};}res.setHeader('content-type','application/json');res.end(JSON.stringify(value));});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;process.env.BRAIN_URL=origin;process.env.BRAIN_INTERNAL_TOKEN='unit-only-not-a-production-secret';process.env.HOME=temp;
+ const activityKeys=['preflight','cleanup'],refs=Object.fromEntries(activityKeys.map(key=>[key,{reference_id:randomUUID(),activity_id:randomUUID(),activity_definition_version_id:randomUUID()}]));
+ const contract={workflow:'douyin_video_discovery',activities:activityKeys.map((key,i)=>({key,order:i+1,budget:{max_duration_s:45,heartbeat_s:5},failure:{empty_ok:[],retryable:[],fatal:['error'],needs_human:{cases:[]}},runtime:{protocol:'json-stdio-v1',phase:key==='cleanup'?'finalize':'source',entry:'leadgen-public-domain.mjs',executor_kind:'code'}}))};
+ const metadata=Object.fromEntries(activityKeys.map(key=>[key,{activity_id:refs[key].activity_id,executor_kind:'code',identity:{identity_protocol:2,workflow_id,workflow_definition_version_id:workflow_version,reference_id:refs[key].reference_id,activity_definition_version_id:refs[key].activity_definition_version_id},questions:Object.fromEntries(['A1','A2','A3','A4','A5','A6','B1'].map(q=>[q,{ref:key+'-'+q,version:'1',declared:'fixed fixture observations'}]))}]));
+ const validators=Object.fromEntries([...activityKeys,'workflow','cleanup'].map(key=>[key,{entry:'leadgen-public-domain.mjs',timeout_s:30,acceptance:{ref:key==='workflow'?'workflow-B1':key+'-B1'}}]));
+ const scope={target:'mmv',profile:'cloud-phone-test',serial:'47.100.213.173:10001',expected_account:'77980009922',policy:{host_id:'mmv',endpoint:'tcp:127.0.0.1:5041'}};
+ const profile={cwd:source,files:Object.fromEntries(files(source).map(p=>[p,hash(readFileSync(join(source,p)))])),contract,metadata,validators,preconditions:Object.fromEntries(activityKeys.map(key=>[key,{entry:'leadgen-public-domain.mjs',acceptance:{ref:key+'-A2'}}])),cleanup_required:true,resources:['fixture-only-cloud-phone'],commander:{kind:'process',entry:'fixture-observer.mjs',skill:{entry:'fixture-observer.txt',version:'fixture1'},timeout_s:5,budget:{max_calls:50}},domain_adapter:{protocol:'workflow-domain/v1',entry:'leadgen-public-domain.mjs',export_name:'createWorkflowDomain',budget:{max_duration_s:120,cleanup_grace_s:60},config:{workflow_key:'douyin_video_discovery',company,resources:{machine:'us-mac-m4',profile:scope.profile,serial:scope.serial,line:'yuesheng',account:scope.expected_account},env:{P:scope.profile,SERIAL:scope.serial,LEADGEN_LINE:'yuesheng',WFR_TAG:'fixture101',LEADGEN_LIMIT:'1',LEADGEN_MMV_DEVICE_RUNTIME:'1',DOUYIN_ADB_PORT:'5041',ADB_SERVER_SOCKET:'tcp:127.0.0.1:5041'},step_spec:'fixture-steps.json',snapshot:{deployment:{source_commit:'a'.repeat(40),target:'mmv'},release:{id:randomUUID(),target:'mmv'},public_pg:preflightPgLockIdentity(),discovery_phone_scope:scope,workflow_version:{id:workflow_version,payload:{key:'douyin_video_discovery',workflow_id}},activities:activityKeys.map(key=>({reference:{slot_key:key,reference_id:refs[key].reference_id,activity_id:refs[key].activity_id},version:{id:refs[key].activity_definition_version_id,payload:{contract:{budget:{max_duration_s:45}}}}}))}}}};
+ const run_binding={run_binding_id:randomUUID(),workflow_id,workflow_definition_version_id:workflow_version,attempt_key:task_id+':1',activities:refs};const identity={run_id,task_id,profile:'leadgen-fixture',profile_sha256:profileDigest(profile),input:{run_tag:'fixture101'},mode:'formal',run_binding};task={id:task_id,status:'in_progress',claimed_by:'common-runner',result:{common_runner:{...identity,machine_id:'us-mac-m4'}}};
+ runner=createWorkflowRunner({stateRoot,machineId:'us-mac-m4',profiles:{'leadgen-fixture':profile},assertCanLaunch:()=>{},assertLocalResources:async()=>{},brainUrl:origin});await runner.start(identity);
+ let observed;const until=Date.now()+30000;do{observed=await runner.inspect({run_id,task_id});if(!['starting','running','validating'].includes(observed.status))break;await new Promise(r=>setTimeout(r,20));}while(Date.now()<until);
+ assert.equal(observed.status,'completed',JSON.stringify(observed));assert.equal(observed.execution_unknown,false);assert.equal(observed.validation.workflow.verdict,'pass');assert.equal(observed.validation.cleanup.verdict,'pass');assert.equal(observed.writeback.pending,0);assert.equal(observed.writeback.blocked,0);assert.equal(centralOwner,null);assert.ok(spans.some(s=>s.evidence?.kind==='commander'));assert.ok(existsSync(join(stateRoot,run_id,'cleanup-readback.json')));assert.equal(existsSync(join(stateRoot,'execution.lock')),false);const final=JSON.parse(readFileSync(join(stateRoot,run_id,'public-result-workflow.json')));assert.equal(final.run_id,run_id);assert.equal(final.execution_stopped,true);passed=true;
+ }finally{runner?.close();if(server)await new Promise(r=>server.close(r));for(const[k,v]of Object.entries(prior))if(v===undefined)delete process.env[k];else process.env[k]=v;if(passed)rmSync(temp,{recursive:true,force:true});else console.error('integration evidence retained: '+temp);}
+});
