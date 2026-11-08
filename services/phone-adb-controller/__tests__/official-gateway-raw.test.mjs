@@ -147,3 +147,22 @@ test('default credential missing, non600, symlink and duplicate declaration reje
   },{rawTransport:true,gatewayDependencies:g.dependencies});
  });
 });
+
+ test('真实Caller精确abort与全部close归还后父loop保留失败但允许known-stopped',async t=>{
+ const g=await rawGateway(t,{waitUntilAbort:true});
+ await using(async({instance,q,journalDirectory})=>{
+  const {startPrimaryActivityBroker}=await import('../activity-skill-primary-broker.mjs');
+  const {runActivitySkillParentLoop}=await import('../activity-skill-parent-loop.mjs');
+  const directory=join(journalDirectory,'parent-broker'),delivery={...q,broker_request_path:join(directory,'broker-request.json')};
+  const broker=await startPrimaryActivityBroker({directory,request:delivery,inspect:async()=>({}),phone:async()=>{throw Error('NO_PHONE');},business:async()=>{throw Error('NO_BUSINESS');},authorizeParentContext:()=>instance.authorizeParentContext(q)});
+  const signal=new AbortController();
+  try{
+   const running=runActivitySkillParentLoop({request:q,brokerRequest:delivery,broker,control:instance,signal:signal.signal});
+   await Promise.race([g.waiting,running.then(()=>{throw Error('EARLY_PARENT_RETURN');})]);signal.abort();const out=await running;
+   assert.equal(out.reason,'official_turn_unverified');assert.equal(out.official_execution_stopped,true);assert.equal(out.model_execution_unknown,false);
+   assert.equal(instance.verifySealedExecution(instance.snapshot(),{request:q}),true);
+   assert.equal(g.frames.filter(frame=>frame.method==='agent').length,1);
+   assert.equal(g.frames.filter(frame=>frame.method==='sessions.abort').length,1);
+  }finally{await broker.close();}
+ },{rawTransport:true,splitDeadlines:true,gatewayDependencies:g.dependencies,gatewayCredential:()=> 'fixture'});
+ });
