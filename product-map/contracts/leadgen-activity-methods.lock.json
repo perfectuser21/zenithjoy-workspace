@@ -507,7 +507,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -790,13 +790,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "390e8ae40bb8e321b3c8a914b17d4fcf493d672032734d25622fb91ffbb647c3",
+      "code_digest": "9f8390479898580b04e04b020588ee3ef6ebea0c6184de6d093f806ce1b83ac2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175",
-        "current_code_digest": "390e8ae40bb8e321b3c8a914b17d4fcf493d672032734d25622fb91ffbb647c3"
+        "current_code_digest": "9f8390479898580b04e04b020588ee3ef6ebea0c6184de6d093f806ce1b83ac2"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1354,7 +1354,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -1620,13 +1620,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ee40aa69e7b8afd339a739d697c7fd0201b00296b9bb3ff6016c0dc0b096459e",
+      "code_digest": "d824ef2627fed8008ec08b680fff11280f28ffda8c6a66ff213f4af631a38366",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260",
-        "current_code_digest": "ee40aa69e7b8afd339a739d697c7fd0201b00296b9bb3ff6016c0dc0b096459e"
+        "current_code_digest": "d824ef2627fed8008ec08b680fff11280f28ffda8c6a66ff213f4af631a38366"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2128,7 +2128,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -2397,13 +2397,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "1b8c2b90f5a1b04a0e9943ac6843eba650223ec3f25e85f2ca9ed2fc6f46c990",
+      "code_digest": "eeafaaca4727cd16d95065f3573d381acfecec9f4123f08bda73446835ee5f8d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd",
-        "current_code_digest": "1b8c2b90f5a1b04a0e9943ac6843eba650223ec3f25e85f2ca9ed2fc6f46c990"
+        "current_code_digest": "eeafaaca4727cd16d95065f3573d381acfecec9f4123f08bda73446835ee5f8d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2933,7 +2933,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -3258,13 +3258,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "92cec85a70deb11cde1a1aa6059f7c27e656de97d9f0bdb811f5a86846b4dbe7",
+      "code_digest": "3e576977984d0037de6b9a5c717bdbb37d0a7c303409fb95dbde911626dd560c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b",
-        "current_code_digest": "92cec85a70deb11cde1a1aa6059f7c27e656de97d9f0bdb811f5a86846b4dbe7"
+        "current_code_digest": "3e576977984d0037de6b9a5c717bdbb37d0a7c303409fb95dbde911626dd560c"
       }
     },
     "douyin_video_processing.collection": {
@@ -3766,7 +3766,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -4057,13 +4057,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "420c9bf88a9704776e973598fc18528ff04152faa4e4ae465ccc8c4c8c677ec7",
+      "code_digest": "425be4faee4a17e571d19d4730cb2042168e4d335c48e4c145413a6b5c5c9702",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706",
-        "current_code_digest": "420c9bf88a9704776e973598fc18528ff04152faa4e4ae465ccc8c4c8c677ec7"
+        "current_code_digest": "425be4faee4a17e571d19d4730cb2042168e4d335c48e4c145413a6b5c5c9702"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4600,7 +4600,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -4865,13 +4865,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "98b7c90b39c3f19466680c3a24a50b201d4c57b7a57cd912f2ec2a5f54f180f8",
+      "code_digest": "70920ca445bc8aec9f1336c75373fd7a54b6a8a9a7c8b2bada6b8e2c6200b8b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9",
-        "current_code_digest": "98b7c90b39c3f19466680c3a24a50b201d4c57b7a57cd912f2ec2a5f54f180f8"
+        "current_code_digest": "70920ca445bc8aec9f1336c75373fd7a54b6a8a9a7c8b2bada6b8e2c6200b8b2"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5380,7 +5380,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -5656,13 +5656,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "2d0fe0622d6cedf5229e644d0d8dcc019e1a06b41bb4472a30a41d6ee0165fec",
+      "code_digest": "258afbd84c8a0a64de4f7928d93be18174c394835026077f6ddeeea00c36397d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c",
-        "current_code_digest": "2d0fe0622d6cedf5229e644d0d8dcc019e1a06b41bb4472a30a41d6ee0165fec"
+        "current_code_digest": "258afbd84c8a0a64de4f7928d93be18174c394835026077f6ddeeea00c36397d"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6178,7 +6178,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "db28303a007bc08666ff2e01e319eca5a8c1cc9f6acbbaead7618675ad710ab3"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -6489,13 +6489,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "3f235b9072fcd8e1a996265a65b0de1d74d64a33f8778ea6e9e73b89c3b7e32b",
+      "code_digest": "a71da23c822c266fab49c0e3b901e9fbe9b1202112537bd3af3e276ac4dc020c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455",
-        "current_code_digest": "3f235b9072fcd8e1a996265a65b0de1d74d64a33f8778ea6e9e73b89c3b7e32b"
+        "current_code_digest": "a71da23c822c266fab49c0e3b901e9fbe9b1202112537bd3af3e276ac4dc020c"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7259,8 +7259,8 @@
       "code_digest": "fd2a5485efaf06f64e1a4ba891da158f437fc1523f2a1659f3224127b6a030c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb",
         "current_code_digest": "fd2a5485efaf06f64e1a4ba891da158f437fc1523f2a1659f3224127b6a030c6"
       }
@@ -8001,8 +8001,8 @@
       "code_digest": "afd451e2ae980f70c2b154ec1e6d276bd62d72a949df0dc56695b17b86d09047",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb",
         "current_code_digest": "afd451e2ae980f70c2b154ec1e6d276bd62d72a949df0dc56695b17b86d09047"
       }
@@ -8736,8 +8736,8 @@
       "code_digest": "638c743a044f3c0c2462163a3e6e78d341324b8d22ec460cae5e5d856a4f8b8f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da",
         "current_code_digest": "638c743a044f3c0c2462163a3e6e78d341324b8d22ec460cae5e5d856a4f8b8f"
       }
@@ -9481,8 +9481,8 @@
       "code_digest": "0acad840091be466c077300bdbf02a8f2774b81796d4cb406db54600753e68df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法与合同：同源bootstrap/schema仅补事实无授权扩大；单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS，native或ACK未知仍隔离；cleanup只关闭旧Observer不派旧Worker；104不进入raw执行。新增预算依赖已纳入真实发布及冻结闭包。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08）",
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
         "previous_code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8",
         "current_code_digest": "0acad840091be466c077300bdbf02a8f2774b81796d4cb406db54600753e68df"
       }
