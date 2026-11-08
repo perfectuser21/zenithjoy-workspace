@@ -9,7 +9,7 @@ test('schema2服务持global共享+instance独占+port独占，换id或端口不
 test('schema2只probe自身endpoint、不扫描旧port；固定binary loopback server命令不含connect或-a',()=>py(`with tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));s.validate_host(p,'r10-7',501)\n calls=[];s.ensure_absent(p,lambda port,*a:calls.append(port) or None);assert calls==[p['port']]\n assert s.foreground_command(p)==[p['adb_realpath'],'-L','tcp:'+str(p['port']),'server','nodaemon']\n rejected(lambda:s.validate_host({**p,'endpoint':'tcp:0.0.0.0:'+str(p['port'])},'r10-7',501),'INSTANCE')\n (r/'adb').write_text('tampered');rejected(lambda:s.foreground_command(p),'INSTANCE')\n`));
 
 test('startup只消费固定Node只读验证单JSON；缺receipt、假授权、污染源码/Node均拒绝',()=>py(`with tempfile.TemporaryDirectory() as d:
- r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();receipt=r/'startup.json';receipt.write_text('{}');receipt.chmod(0o600)
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();os.environ['BRAIN_INTERNAL_TOKEN']='FIXTURE_PRIVATE_TOKEN';receipt=r/'startup.json';receipt.write_text('{}');receipt.chmod(0o600)
  rejected(lambda:i.authorize_start(p,str(path),None),'RECEIPT_REQUIRED')
  expected={'protocol':'device-epoch-fence-startup-verification/v1','authorized':True,'action':'start_private_server','instance_id':p['instance_id'],'endpoint':p['endpoint'],'source_commit':'a'*40,'registry_sha256':hashlib.sha256((r/'config/adb-host-instances.json').read_bytes()).hexdigest(),'policy_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
  import subprocess

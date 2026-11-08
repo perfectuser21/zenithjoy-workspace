@@ -84,6 +84,12 @@ def clean_environment(environment):
             and k not in ('ANDROID_SERIAL', 'ANDROID_VENDOR_KEYS')}
 
 
+def instance_environment(environment):
+    # daemon及version仅需系统运行环境；Brain token仅单独进入固定verifier child。
+    return {k: v for k, v in environment.items()
+            if k in ('HOME', 'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TZ')}
+
+
 def foreground_command(policy):
     # adb服务端listen语法不接受hostname；不加-a时仍仅默认loopback监听。
     if policy.get('schema_version') == 2:
@@ -161,7 +167,7 @@ def run_service(policy, config, maintenance_receipt=None):
     validate_host(policy)
     user = pwd.getpwuid(os.geteuid())
     require(os.environ.get('HOME') == user.pw_dir, 'HOME_MISMATCH')
-    environment = clean_environment(os.environ)
+    environment = instance_environment(os.environ) if policy.get('schema_version') == 2 else clean_environment(os.environ)
     lock_directory = Path(user.pw_dir) / '.config/zenithjoy'
     private_directory(lock_directory)
     # 锁按宿主/用户固定，不能用另一个config目录逃过同一supervisor互斥。

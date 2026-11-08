@@ -126,10 +126,15 @@ def authorize_start(policy, config, receipt, runner=subprocess.run):
          and stat.S_ISREG(node_info.st_mode) and not node_info.st_mode & 0o022 and os.access(node['path'], os.X_OK)
          and sha(Path(node['path']).read_bytes()) == node['sha256'], 'VERIFIER_BINARY')
     policy_sha = sha(read_file(Path(config), private=True))
+    token = os.environ.get('BRAIN_INTERNAL_TOKEN')
+    need(isinstance(token, str) and token and token.strip() == token
+         and not any(c in token for c in ('\r', '\n', '\x00')), 'CREDENTIAL_REQUIRED')
+    verifier_env = {k: v for k, v in os.environ.items() if k in ('HOME', 'PATH', 'LANG', 'TMPDIR')}
+    verifier_env['BRAIN_INTERNAL_TOKEN'] = token
     result = runner([node['path'], str(HERE / verifier['module']), 'verify-startup', '--receipt', receipt,
                      '--instance-id', row['instance_id'], '--registry-sha256', registry_sha,
                      '--source', manifest['source_commit'], '--policy-sha256', policy_sha],
-                    env={k: v for k, v in os.environ.items() if k in ('HOME', 'PATH', 'LANG', 'TMPDIR')},
+                    env=verifier_env,
                     capture_output=True, text=True, timeout=15)
     expected = {'protocol': 'device-epoch-fence-startup-verification/v1', 'authorized': True,
                 'action': 'start_private_server', 'instance_id': row['instance_id'], 'endpoint': policy['endpoint'],
