@@ -95,4 +95,13 @@ class Cloud8Tests(unittest.TestCase):
   lock.mkdir(mode=0o700);(lock/'owner').write_text('successor')
   with self.assertRaises(ValueError):self.m.apply()
   self.assertEqual((lock/'owner').read_text(),'successor')
+ def test_registry_review_pin_matches_real_review_and_is_enforced(self):
+  self.m.check_review_pin()
+  real=self.m.load
+  def bad(path):
+   v=real(path)
+   if path.name=='native-phone-command-sources.json':v['device_sources'][0]['review']['sha256']='0'*64
+   return v
+  with patch.object(self.m,'load',side_effect=bad):
+   with self.assertRaisesRegex(ValueError,'REVIEW_PIN'):self.m.check_review_pin()
 if __name__=='__main__':unittest.main()

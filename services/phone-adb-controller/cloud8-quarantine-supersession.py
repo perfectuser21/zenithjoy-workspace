@@ -80,12 +80,20 @@ def source_authority(require_main=True):
  if require_main:
   try:git('merge-base','--is-ancestor',commit,'origin/main')
   except subprocess.CalledProcessError:need(False,'CLOUD8_RECOVERY_SOURCE_NOT_MAIN')
- names=['cloud8-quarantine-supersession.py','cloud7-quarantine-supersession.py','config/native-phone-reviews/cloud-phone-test-sdk31.md']
+ names=['cloud8-quarantine-supersession.py','cloud7-quarantine-supersession.py','config/native-phone-reviews/cloud-phone-test-sdk31.md','config/native-phone-command-sources.json']
  files={}
  for name in names:
   path='services/phone-adb-controller/'+name;b=read_bytes(repo/path)
   need(b==git('show',commit+':'+path),'CLOUD8_RECOVERY_SOURCE_DIRTY');files[path]=sha(b)
+ check_review_pin()
  return dict(commit=commit,files=files,main_required=require_main)
+
+
+def check_review_pin():
+ registry=load(_here/'config/native-phone-command-sources.json')
+ rows=[r for r in registry['device_sources'] if r.get('profile')==IDENTITY['profile'] and r.get('serial')==SERIAL]
+ need(len(rows)==1 and rows[0]['review']['path']=='config/native-phone-reviews/cloud-phone-test-sdk31.md'
+      and rows[0]['review']['sha256']==sha(read_bytes(_here/rows[0]['review']['path'])),'CLOUD8_REVIEW_PIN')
 
 
 def preserved_archive(run,evidence):
