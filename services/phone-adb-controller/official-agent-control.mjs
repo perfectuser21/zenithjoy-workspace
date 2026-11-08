@@ -1,3 +1,4 @@
+import {isCodeObserverRequest,verifyCodeObserverCapability,authorizeCodeObserverCapability} from './code-observer-authority.mjs';
 import {rawModelTurnDeadline} from './raw-turn-budget.mjs';
 // Parent-only official SDK control. Legacy child authority stays separate from explicit raw turns.
 import {request as requestHttp} from 'node:http';
@@ -22,10 +23,11 @@ function defaultCredential(){
  if(!value||/[\r\n]/.test(value))throw failure('OFFICIAL_CONTROL_CREDENTIAL');return value;
 }
 
-export function createOfficialAgentControl({source,runtimeRoot,request,home=homedir(),journalDirectory,deadlineMs,cleanupDeadlineMs=deadlineMs,credential=defaultCredential,httpRequest=requestHttp,gatewayDependencies,gatewayCredential,continuationCapability}={}){
- const fixed=structuredClone(request),fixedSource=structuredClone(source);
- if(fixed?.mode!=='execute'||fixed.broker_host!=='mmv'||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(fixed.workflow_key)
-  ||fixed.protocol!=='leadgen-activity-v1'||!/^[a-f0-9]{48}$/.test(fixed.nonce||'')||!/^\w[\w.-]{0,150}$/.test(fixed.run_id||'')
+export function createOfficialAgentControl({source,runtimeRoot,request,home=homedir(),journalDirectory,deadlineMs,cleanupDeadlineMs=deadlineMs,credential=defaultCredential,httpRequest=requestHttp,gatewayDependencies,gatewayCredential,continuationCapability,codeObserverCapability}={}){
+ const fixed=structuredClone(request),fixedSource=structuredClone(source),codeObserver=isCodeObserverRequest(fixed);
+ if(codeObserver)verifyCodeObserverCapability(codeObserverCapability,{runtimeRoot,source:fixedSource,request:fixed});
+ if((!codeObserver&&fixed?.mode!=='execute')||fixed.broker_host!=='mmv'||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(fixed.workflow_key)
+  ||(!codeObserver&&fixed.protocol!=='leadgen-activity-v1')||!/^[a-f0-9]{48}$/.test(fixed.nonce||'')||!/^\w[\w.-]{0,150}$/.test(fixed.run_id||'')
   ||fixed.source_commit!==fixedSource?.commit||!/^[a-f0-9]{40}$/.test(fixed.source_commit||'')||!Number.isSafeInteger(fixed.deadline_ms)||!Number.isSafeInteger(deadlineMs)
   ||!Number.isSafeInteger(cleanupDeadlineMs)||deadlineMs>cleanupDeadlineMs||cleanupDeadlineMs>fixed.deadline_ms
   ||typeof credential!=='function'||typeof httpRequest!=='function')throw failure('OFFICIAL_CONTROL_SCOPE');
@@ -225,6 +227,10 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  function authorizeParentContext(q){return authorizeParent(q,false);}
  function readAuthorizedTaskClaim(q){return authorizeParent(q,true);}
  async function authorizeParent(q,projectClaim){
+  if(codeObserver){
+   if(projectClaim||!sameRequest(q))throw failure('OFFICIAL_CONTROL_CODE_OBSERVER_SCOPE');
+   return ownedJob(async(job,e)=>{verifyCodeObserverCapability(codeObserverCapability,{runtimeRoot,source:fixedSource,request:fixed});await authorizeCodeObserverCapability(codeObserverCapability,{runtimeRoot,source:fixedSource,request:fixed,get:path=>readCentral(path,e,job)});guard(e);record({event:'code_observer_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});return true;});
+  }
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
   return ownedJob(async(job,e)=>{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
    if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
@@ -326,6 +332,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  function verifyStopReceipt(receipt,{request:q,index}={}){const p=stopReceipts.get(receipt);if(!p||!sameRequest(q)||p.request!==hash(canonical(q))||p.index!==index)throw failure('OFFICIAL_CONTROL_RAW_RECEIPT');return structuredClone(p.value);}
 
  async function requestAuthority(body){
+  if(codeObserver)throw failure('OFFICIAL_CONTROL_CODE_OBSERVER_NO_TOOLS');
   if(body?.kind==='official_agent_stop')return rawStop(body);
   guard(epoch);
   if(body?.kind==='official_agent_read')return readOfficial(body);
@@ -366,20 +373,22 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   await closing;return snapshot();
  }
 
+ if(codeObserver)return Object.freeze({snapshot,close,seal,authorizeParentContext,verifySealedExecution});
  return Object.freeze({request:requestAuthority,snapshot,close,seal,authorizeParentContext,readAuthorizedTaskClaim,verifyTurnReceipt,verifyStopReceipt,authorizeIntent,consumeIntentPermit,authorizeBrokerDelivery,verifySealedExecution,createReadOnlyContinuation});
 }
 
 // Only the original frozen runtime module may construct its per-Activity controller.
-export function createOfficialAgentControlFactory({runtimeRoot,source,home=homedir()}){
+export function createOfficialAgentControlFactory({runtimeRoot,source,home=homedir(),codeObserverCapability}){
  const fixedSource=structuredClone(source);
  return ({request,scope,directory})=>{
-  if(request?.execution_transport!=='raw-model-v1'||request.mode!=='execute')throw failure('OFFICIAL_CONTROL_RAW_TRANSPORT');
+  if(isCodeObserverRequest(request))verifyCodeObserverCapability(codeObserverCapability,{runtimeRoot,source:fixedSource,request});
+  else if(request?.execution_transport!=='raw-model-v1'||request.mode!=='execute')throw failure('OFFICIAL_CONTROL_RAW_TRANSPORT');
   for(const [a,b]of [['run_id','run_id'],['task_id','task_id'],['binding_id','binding_id'],['source_commit','source_commit'],['activity','activity_key']])if(typeof scope?.[a]!=='string'||scope[a]!==request[b])throw failure('OFFICIAL_CONTROL_SCOPE');
   if(request.source_commit!==fixedSource.commit||!['worker_deadline_ms','receipt_deadline_ms','deadline_ms'].every(k=>Number.isSafeInteger(request[k]))||request.worker_deadline_ms>=request.receipt_deadline_ms||request.receipt_deadline_ms>=request.deadline_ms)throw failure('OFFICIAL_CONTROL_SCOPE');
   const journalDirectory=join(directory,'official-control');try{mkdirSync(journalDirectory,{mode:0o700});}catch(error){if(error.code!=='EEXIST')throw error;}
   const marker=join(journalDirectory,'request-scope.json'),wanted=canonical({source_commit:request.source_commit,request_sha256:hash(canonical(request))});
   try{writeFileSync(marker,wanted+'\n',{flag:'wx',mode:0o600});const f=openSync(marker,constants.O_RDONLY|constants.O_NOFOLLOW);try{fsyncSync(f);}finally{closeSync(f);}const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}}
   catch(error){if(error.code!=='EEXIST')throw error;const st=lstatSync(marker);if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o600||readFileSync(marker,'utf8')!==wanted+'\n')throw failure('OFFICIAL_CONTROL_SCOPE');}
-  return createOfficialAgentControl({runtimeRoot,source:fixedSource,request,home,journalDirectory,deadlineMs:request.receipt_deadline_ms,cleanupDeadlineMs:request.deadline_ms});
+  return createOfficialAgentControl({runtimeRoot,source:fixedSource,request,home,journalDirectory,deadlineMs:request.receipt_deadline_ms,cleanupDeadlineMs:request.deadline_ms,codeObserverCapability});
  };
 }

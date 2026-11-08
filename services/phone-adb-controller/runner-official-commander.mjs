@@ -1,3 +1,4 @@
+import {isCodeObserverRequest,issueCodeObserverCapability} from './code-observer-authority.mjs';
 // Observer transport is constructed before bridge.wake; it never owns worker tools.
 import {readFileSync,mkdirSync} from 'node:fs';import {join} from 'node:path';import {createHash} from 'node:crypto';
 import {createOfficialAgentControlFactory} from './official-agent-control.mjs';import {createOfficialCommanderExecute} from './official-commander-sdk.mjs';
@@ -11,8 +12,8 @@ export const runnerCommanderClosureKnown=(value,scope)=>closures.get(value)===id
 export function runnerCommanderPreparation(error,scope){const facts=preparations.get(error);return facts?.identity===identity(scope)?{unavailable:facts.unavailable,closed:facts.closed}:null;}
 
 export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,request,factories={},directoryName='commander-raw'}={}){
- const q=structuredClone(request);
- if(q?.execution_transport!=='raw-model-v1'||q.mode!=='execute'||q.source_commit!==source?.commit||!Number.isSafeInteger(q.worker_deadline_ms)||q.worker_deadline_ms>=q.receipt_deadline_ms||q.receipt_deadline_ms>=q.deadline_ms)throw fail();
+ const q=structuredClone(request),codeObserver=isCodeObserverRequest(q),codeObserverCapability=codeObserver?issueCodeObserverCapability({runtimeRoot,source,request:q}):undefined;
+ if((!codeObserver&&(q?.execution_transport!=='raw-model-v1'||q.mode!=='execute'))||q.source_commit!==source?.commit||!Number.isSafeInteger(q.worker_deadline_ms)||q.worker_deadline_ms>=q.receipt_deadline_ms||q.receipt_deadline_ms>=q.deadline_ms)throw fail();
  const path='config/collection-phone-hosts.json',bindings=source.files.filter(item=>item.path===path),bytes=readFileSync(join(runtimeRoot,path));
  if(bindings.length!==1||createHash('sha256').update(bytes).digest('hex')!==bindings[0].sha256)throw fail();
  const pins=JSON.parse(bytes).hosts.filter(row=>row.target===q.broker_host).map(row=>row.executables?.python);
@@ -21,7 +22,7 @@ export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,r
  const directory=join(runDir,directoryName);mkdirSync(directory,{mode:0o700});
  const callerDirectory=join(directory,'caller'),sdkDirectory=join(directory,'sdk');mkdirSync(callerDirectory,{mode:0o700});mkdirSync(sdkDirectory,{mode:0o700});
  const scope={run_id:q.run_id,task_id:q.task_id,binding_id:q.binding_id,source_commit:q.source_commit,activity:q.activity_key};
- const control=await (factories.createControl||createOfficialAgentControlFactory({runtimeRoot,source}))({request:q,scope,directory:callerDirectory});
+ const control=await (factories.createControl||createOfficialAgentControlFactory({runtimeRoot,source,codeObserverCapability}))({request:q,scope,directory:callerDirectory,codeObserverCapability});
  let sdk,owner,closing,queue=Promise.resolve();const jobs=new Set();
  const drainError=code=>Object.assign(Error(code),{code});
  const waitJobs=async({deadlineMs=q.worker_deadline_ms,signal,onDrained}={})=>{
@@ -52,7 +53,7 @@ export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,r
  const dispatchSafety=()=>{try{const values=[sdk,control,owner].map(domain=>domain.snapshot()),pending=values.reduce((sum,value)=>sum+value.pending,0)+jobs.size,unknown=values.some(value=>value.execution_unknown===true);return {safe:!closing&&!unknown&&pending===0,pending,execution_unknown:unknown};}catch{return {safe:false,pending:null,execution_unknown:true};}};
  try{
   if(await control.authorizeParentContext(q)!==true)throw fail();
-  sdk=(factories.createSdk||createOfficialCommanderExecute)({control,request:q,source,runtimeRoot,directory:sdkDirectory});
+  sdk=(factories.createSdk||createOfficialCommanderExecute)({control,request:q,source,runtimeRoot,directory:sdkDirectory,codeObserverCapability});
   owner=(factories.createOwner||createBoundedCommanderOwner)({runtimeRoot,source,python:structuredClone(pins[0]),deadlineMs:q.worker_deadline_ms,cleanupDeadlineMs:q.deadline_ms});
   return Object.freeze({commander:receipt=>{
    let fixedReceipt;try{fixedReceipt=structuredClone(receipt);}catch{return Promise.reject(fail());}
@@ -105,15 +106,15 @@ async function createRunnerActivityCommander({runtimeRoot,runDir,source,activiti
   const selected=fixedActivities.find(a=>a.key===activity?.key);if(!selected||policy.phone&&Object.keys(activity).some(key=>key!=='key'&&canonical(activity[key])!==canonical(selected[key])))return Promise.reject(deny());
   const next=transition.then(async()=>{active();if(current.activity===selected.key)return;
    const adjacent=policy.keys.indexOf(selected.key)===policy.keys.indexOf(current.activity)+1;
-   const cleanupTransition=policy.phone&&selected.key==='cleanup'&&!adjacent;
-   if(entries.some(e=>e.activity===selected.key)||!adjacent&&(!cleanupTransition||nativePhoneDomain.isNativePhoneRuntime(nativePhoneRuntime)!==true))throw deny();
+   const cleanupTransition=(policy.phone||policy.code)&&selected.key==='cleanup'&&!adjacent;
+   if(entries.some(e=>e.activity===selected.key)||!adjacent&&(!cleanupTransition||!policy.code&&nativePhoneDomain.isNativePhoneRuntime(nativePhoneRuntime)!==true))throw deny();
    const previous=current;
    // Cleanup revokes the old lane before waiting. Its close uses the original
    // receipt/cleanup budget and cannot dispatch another old Worker/model turn.
    if(selected.key!=='cleanup'&&await previous.observer.waitForIdle({deadlineMs:Math.min(previous.request.worker_deadline_ms,input.deadline_ms??Infinity),signal:input.signal})!==true)throw deny();
    const proof=await previous.observer.close();previous.closed=true;previous.proof=proof;if(!runnerCommanderClosureKnown(proof,first)){invalid=true;throw deny();}
    active();try{const request=prepare(selected,input);
-    if(cleanupTransition&&(typeof nativePhoneDomain.authorizeNativePhoneCleanupTransition!=='function'||await nativePhoneDomain.authorizeNativePhoneCleanupTransition(nativePhoneRuntime,{request})!==true))throw deny();
+    if(cleanupTransition&&!policy.code&&(typeof nativePhoneDomain.authorizeNativePhoneCleanupTransition!=='function'||await nativePhoneDomain.authorizeNativePhoneCleanupTransition(nativePhoneRuntime,{request})!==true))throw deny();
     return await allocate(selected,request);
    }catch(error){if(cleanupTransition){invalid=true;throw deny();}throw error;}
   });transition=next.catch(()=>{});return next;
@@ -135,4 +136,11 @@ export function createRunnerPhoneCommander(options){
  const workflow=keys==='preflight,collect_videos,cleanup'?'douyin_video_discovery':keys==='preflight,dedup,qualification,collection,cleanup'?'douyin_video_processing':null;
  if(!workflow)return Promise.reject(Object.assign(Error('PHONE_OBSERVER_SCOPE_UNVERIFIED'),{executionStopped:false}));
  return createRunnerActivityCommander(options,{keys:keys.split(','),phone:true,error:'PHONE_OBSERVER_SCOPE_UNVERIFIED',domain:'runner-phone-observer/v1',accept:q=>workflow!==null&&q.workflow_key===workflow&&typeof q.profile==='string'&&q.profile.length>0&&q.profile!=='none'&&typeof q.serial==='string'&&q.serial.length>0&&q.serial!=='none'});
+}
+
+// 独立Code观察者路由。无Raw Worker请求或设备接手能力。
+export function createRunnerCodeActivityCommander(options){
+ const keys=options?.activities?.map(a=>a.key).join(','),allowed=['preflight,collect_videos,cleanup','preflight,dedup,qualification,collection,cleanup','scoring,mark_leads'];
+ if(!allowed.includes(keys))throw Error('CODE_OBSERVER_ACTIVITY_UNSUPPORTED');
+ return createRunnerActivityCommander(options,{keys:keys.split(','),code:true,error:'CODE_OBSERVER_SCOPE_UNVERIFIED',domain:'runner-code-observer/v1',accept:isCodeObserverRequest});
 }

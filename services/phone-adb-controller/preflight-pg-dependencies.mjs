@@ -93,6 +93,21 @@ function verifyPgDependency({runtimeRoot,frozen,key}){
  need(JSON.stringify(actualPaths)===JSON.stringify(expected.sort()),'EXTRA_FILES');need(JSON.stringify(files.sort((a,b)=>a.path.localeCompare(b.path)))===JSON.stringify(manifest.files),'MANIFEST_FILES');return {manifest,manifest_sha256:sha(regular(join(dest,'manifest.json')))};
 }
 export function verifyPreflightPg(input){return verifyPgDependency({...input,key:'preflight_pg'});}
+export function verifyCodePg(input){
+ const f=input.frozen,d=f?.deployment?.dependencies?.preflight_pg;
+ need((f?.execution_mode??'code')==='code'&&!f?.agent_input&&!f?.preflight_pg&&!f?.scoring_pg&&f?.deployment?.target==='mmv'
+  &&['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(f?.workflow_version?.payload?.key),'CODE_SCOPE');
+ need(d&&f.code_pg?.lock_sha256===d.lock_sha256&&f.code_pg?.package_lock_sha256===d.package_lock_sha256,'CODE_DEPLOYMENT');
+ const verified=verifyPgDependency({...input,key:'code_pg'});
+ need(verified.manifest_sha256===d.manifest_sha256,'CODE_MANIFEST');return verified;
+}
+export function loadCodePg(input){
+ verifyCodePg(input);need(!process.env.NODE_PG_FORCE_NATIVE&&!process.env.NODE_PATH&&!process.env.NODE_OPTIONS,'ENVIRONMENT_ROUTE');
+ const dest=target(realpathSync(input.runtimeRoot)),require=createRequire(join(dest,'package.json'));
+ need(require.resolve('pg')===join(dest,'node_modules/pg/lib/index.js'),'MODULE_ROUTE');
+ const {Pool}=require('pg');need(typeof Pool==='function','POOL_EXPORT');return Object.freeze({Pool});
+}
+
 function scoringScope(frozen){
  if(frozen?.execution_mode!=='agent'||frozen.workflow_version?.payload?.key!=='douyin_comment_scoring'||frozen.agent_input?.workflow_key!=='douyin_comment_scoring'||frozen.agent_input.profile!=='mmv-scoring'||frozen.agent_input.serial!=='none'||Object.hasOwn(frozen,'preflight_pg')||Object.hasOwn(frozen,'control_scope')||!frozen.scoring_pg)throw Error('SCORING_PG_SCOPE');
 }
@@ -110,6 +125,7 @@ async function prepareFrozenPgDependency({sourceRuntimeRoot,runtimeRoot,frozen,e
  const installed=preflightPgDeployment({runtimeRoot,sourceCommit});need(canonical(installed)===canonical(observed),'FREEZE_COPY');
  need(canonical(preflightPgDeployment({runtimeRoot:sourceRuntimeRoot,sourceCommit}))===canonical(observed),'FREEZE_SOURCE_CHANGED');return installed;
 }
+export async function prepareFrozenCodePg(input){verifyCodePg({runtimeRoot:input.sourceRuntimeRoot,frozen:input.frozen});return prepareFrozenPgDependency({...input,key:'code_pg'});}
 export async function prepareFrozenPreflightPg(input){return prepareFrozenPgDependency({...input,key:'preflight_pg'});}
 export async function prepareFrozenScoringPg(input){scoringScope(input.frozen);return prepareFrozenPgDependency({...input,key:'scoring_pg'});}
 export function loadPreflightPg({runtimeRoot,frozen}){

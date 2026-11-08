@@ -89,7 +89,7 @@ NODE
     print -u2 'MMV只执行独立评论评分，禁止借用手机身份'; exit 1
   fi
   export LEADGEN_LOCAL_RPC=1
-  if [[ "$WF_ARG_CAP" == douyin_comment_scoring && "$P" == mmv-scoring && "$SERIAL" == none ]]; then
+  if [[ "$WF_ARG_CAP" == douyin_comment_scoring && "$P" == mmv-scoring && "$SERIAL" == none && "${LEADGEN_EXECUTION_MODE:-code}" == agent ]]; then
     export NODE_PATH="$HOME/.openclaw/leadgen-scripts/node_modules:$HOME/.openclaw/node_modules${NODE_PATH:+:$NODE_PATH}"
   else
     # 手机运行使用冻结的PG闭包；也清除调用方继承的全局解析路径。
@@ -107,7 +107,7 @@ if [[ -r "$HOME/.credentials/brain.env" ]]; then
   set -a; source "$HOME/.credentials/brain.env"; set +a
 fi
 if [[ -n "$requested_brain_url" ]]; then export BRAIN_URL="$requested_brain_url"; fi
-if [[ "$WF_ARG_CAP" == douyin_video_discovery || "$WF_ARG_CAP" == douyin_video_processing ]]; then
+if [[ "$WF_ARG_CAP" == douyin_video_discovery || "$WF_ARG_CAP" == douyin_video_processing || ( "$WFR_HOSTKEY" == mmv && "$WF_ARG_CAP" == douyin_comment_scoring && "${LEADGEN_EXECUTION_MODE:-code}" == code ) ]]; then
   task_id="${WF_BRAIN_TASK_ID:-${BRAIN_TASK_ID:-${WFR_BRAIN_TASK_ID:-}}}"
   [[ "$task_id" =~ "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" ]] \
     || { print -u2 'CENTRAL_LOCK_TASK_REQUIRED: 101/102必须先关联Brain任务'; exit 1; }
@@ -126,6 +126,15 @@ if [[ "${LEADGEN_EXECUTION_MODE:-code}" == agent ]]; then
   agent_budget="$(node "$WF_HOME/runtime-receipts.mjs" agent-budget)"
   [[ "$agent_budget" =~ '^export WF_RUN_START_TS=[1-9][0-9]* WF_RUN_MAX_SECONDS=[1-9][0-9]*$' ]] || { print -u2 'AGENT_INPUT_BUDGET_OUTPUT_INVALID'; exit 1; }
   eval "$agent_budget"
+elif [[ "$WFR_HOSTKEY" == mmv && "$WF_ARG_CAP" != douyin_lead_outreach ]]; then
+  code_budget="$(node --input-type=module --eval '
+import {pathToFileURL} from "node:url";
+const {initializeCodeBudget}=await import(pathToFileURL(process.argv[1]+"/code-observer-authority.mjs"));
+const b=initializeCodeBudget({env:process.env});
+console.log(`export WF_RUN_START_TS=${b.run_start_ts} WF_RUN_MAX_SECONDS=${b.run_max_seconds}`);
+' "$WF_HOME")"
+  [[ "$code_budget" =~ '^export WF_RUN_START_TS=[1-9][0-9]* WF_RUN_MAX_SECONDS=[1-9][0-9]*$' ]] || { print -u2 'CODE_INPUT_BUDGET_OUTPUT_INVALID'; exit 1; }
+  eval "$code_budget"
 fi
 if [[ "$WFR_HOSTKEY" != mmv && "$SERIAL" != none ]]; then
   unset DOUYIN_PHONE_LOCK_TEST_MODE
@@ -146,7 +155,7 @@ export WF_RUNNER WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_ST
 bound="$(node "$WF_HOME/runtime-receipts.mjs" bind-run)"
 eval "$bound"
 export WFR_ATTEMPT WFR_SKIP_WORDS
-if [[ "${LEADGEN_EXECUTION_MODE:-code}" != agent ]]; then
+if [[ "${LEADGEN_EXECUTION_MODE:-code}" != agent && ( "$WFR_HOSTKEY" != mmv || "$WF_ARG_CAP" == douyin_lead_outreach ) ]]; then
   export WF_RUN_START_TS="$(date +%s)" WF_RUN_MAX_SECONDS="${WF_RUN_MAX_SECONDS:-1800}"
 fi
 export WF_STOP_FILE="$HOME/wf-runs/$WFR_TAG.stop"
