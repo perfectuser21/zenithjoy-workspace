@@ -2,11 +2,11 @@ import {preflightTestPython} from './helpers/preflight-test-python.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join,dirname} from 'node:path';import {createHash} from 'node:crypto';
 const root=dirname(new URL('../leadgen-handlers.mjs',import.meta.url).pathname),hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
-async function rig(t,trees){
+async function rig(t,trees,{launcher=false}={}){
  const {createPreflightPhoneDriver}=await import('../preflight-phone-driver.mjs'),{startPreflightLocalLeaves}=await import('../preflight-local-leaves.mjs');
  const directory=mkdtempSync(join(tmpdir(),'preflight-driver-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const local=await startPreflightLocalLeaves({root,directory,python:{path:preflightTestPython,sha256:hash(preflightTestPython)},sourceFiles:{'preflight-local-step.py':hash(join(root,'preflight-local-step.py'))},deadlineMs:Date.now()+10000});t.after(()=>local.close());
- let index=0;const calls=[];const adb=async(...args)=>{calls.push(args);if(args.join(' ')==='shell dumpsys window displays')return 'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}\n';if(args[0]==='pull'){writeFileSync(args[2],trees[Math.min(index++,trees.length-1)]);return '';}if(args[0]==='shell'&&['uiautomator','input'].includes(args[1]))return '';throw Error('UNEXPECTED_ADB:'+args.join(' '));};
+ let index=0,opened=!launcher;const calls=[];const adb=async(...args)=>{calls.push(args);if(args[0]==='get-state')return 'device\n';if(args.includes('getprop'))return 'MODEL\n';if(args.includes('monkey')){opened=true;return '';}if(args.includes('dismiss-keyguard'))return '';if(args.join(' ')==='shell dumpsys window displays')return opened?'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}\n':'mCurrentFocus=Window{abc u0 com.android.launcher/.Home}\n';if(args[0]==='pull'){writeFileSync(args[2],trees[Math.min(index++,trees.length-1)]);return '';}if(args[0]==='shell'&&['uiautomator','input'].includes(args[1]))return '';throw Error('UNEXPECTED_ADB:'+args.join(' '));};
  const driver=createPreflightPhoneDriver({adb,local,evidenceRoot:directory,owner:'fixture_run',profile:'fixture',serial:'SERIAL',model:'MODEL',expectedAccount:'44997267357',deadlineMs:Date.now()+10000,assertResources:async()=>{}});
  return {driver,calls,directory};
 }
@@ -96,4 +96,21 @@ test('racing evidence publication permits one winner, retains both raw captures,
  const driver=createPreflightPhoneDriver({adb:async(...args)=>{if(args[0]==='pull'){writeFileSync(args[2],args[1].endsWith('.xml')?'<hierarchy/>':png);if(args[1].endsWith('.png')&&++pulls<=2){if(pulls===2)resolve();await ready;}}return '';},local:{run:async()=>JSON.stringify({})},evidenceRoot:directory,owner:'fixture_run',deadlineMs:Date.now()+10000,assertResources:async()=>{},width:1,height:1});
  const results=await Promise.allSettled([driver.run('snapshot-evidence','fixture_run-pair'),driver.run('snapshot-evidence','fixture_run-pair')]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.filter(r=>r.status==='rejected').length,1);assert.deepEqual(readFileSync(join(directory,'fixture_run-pair.png')),png);assert.equal(readdirSync(directory).filter(p=>p.endsWith('.tmp')).length,2);
  assert.equal((await driver.run('ui-evidence','fixture_run-pair')).trim(),join(directory,'fixture_run-pair.xml'));assert.equal(readFileSync(join(directory,'fixture_run-pair.xml'),'utf8'),'<hierarchy/>');await assert.rejects(()=>driver.run('ui-evidence','fixture_run-pair'),/PREFLIGHT_EVIDENCE_EXISTS/);
+});
+
+test('首次从launcher启动时bootstrap逐项要求成功原生前置，原生账号证据不能被准入代替',{skip:process.platform!=='darwin'},async t=>{
+ const {createLeadgenAgentTools}=await import('../leadgen-agent-tools.mjs');
+ const r=await rig(t,[fixture('real-0930-own-profile-cold-start.xml')],{launcher:true});
+ await assert.rejects(()=>r.driver.run('account-current','fixture_run-direct'),/PREFLIGHT_ACCOUNT_NAVIGATION_REFUSED/);
+ let account=null;
+ const scope={workflow:'douyin_video_discovery',activity:'preflight',run:'fixture_run',run_id:'douyin_video_discovery-fixture_run__a1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',source_commit:'a'.repeat(40),snapshot_sha256:'b'.repeat(64),profile:'fixture',serial:'SERIAL',line:'yuesheng',source_run:null,limit:1,comment_limit:null,deadline_ms:Date.now()+10000};
+ const tools=createLeadgenAgentTools({scope,runDir:r.directory,primitives:{assertResources:async()=>true,prepare:async()=>({}),inspect:async()=>({account,company:{company_id:'actual-test-company',tenant_id:'test-tenant',device_binding:{profile:'fixture'}}}),validatePhone:async(command,args)=>{assert.deepEqual(args,[]);return command==='account-current'?['fixture_run-account']:[];},phone:async(...args)=>{const out=await r.driver.run(...args);if(args[0]==='account-current')account=out.match(/^douyin_id=(.+)$/m)[1];return out;}}});
+ await tools.prepare();
+ for(const command of ['wake','unlock','open-app','account-current']){
+  const ctx=await tools.inspect();assert.equal(ctx.account,null);assert.equal(ctx.bootstrap.company_config_admitted,true);
+  assert.deepEqual(ctx.bootstrap.next_required_intent,{type:'phone',command,args:[]});
+  await tools.phone(command);
+ }
+ const ctx=await tools.inspect();assert.equal(ctx.account,'44997267357');assert.equal(ctx.bootstrap.next_required_intent,undefined);
+ assert.ok(r.calls.some(a=>a.includes('monkey')));assert.match(readFileSync(join(r.directory,'fixture_run-account-profile.xml'),'utf8'),/44997267357/);
 });
