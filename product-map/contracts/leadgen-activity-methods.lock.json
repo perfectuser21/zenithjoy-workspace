@@ -164,7 +164,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -790,13 +790,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "9f8390479898580b04e04b020588ee3ef6ebea0c6184de6d093f806ce1b83ac2",
+      "code_digest": "7a96615b4d405817dd26a87706d67c70ad29439ee47c38a2da33ac62e3d36049",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175",
-        "current_code_digest": "9f8390479898580b04e04b020588ee3ef6ebea0c6184de6d093f806ce1b83ac2"
+        "current_code_digest": "7a96615b4d405817dd26a87706d67c70ad29439ee47c38a2da33ac62e3d36049"
       }
     },
     "douyin_video_processing.preflight": {
@@ -969,7 +969,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -997,7 +997,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -1620,13 +1620,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d824ef2627fed8008ec08b680fff11280f28ffda8c6a66ff213f4af631a38366",
+      "code_digest": "77b5284270015f2d1c5016ecbe8bbd60d0f0565d7ed97090e8d151d441f80e80",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260",
-        "current_code_digest": "d824ef2627fed8008ec08b680fff11280f28ffda8c6a66ff213f4af631a38366"
+        "current_code_digest": "77b5284270015f2d1c5016ecbe8bbd60d0f0565d7ed97090e8d151d441f80e80"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1792,7 +1792,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -1806,7 +1806,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -2397,13 +2397,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "eeafaaca4727cd16d95065f3573d381acfecec9f4123f08bda73446835ee5f8d",
+      "code_digest": "2d573414be8c8183b93aafe9be2a61851877ebc13930bd9b21d7e7eb0b22c8e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd",
-        "current_code_digest": "eeafaaca4727cd16d95065f3573d381acfecec9f4123f08bda73446835ee5f8d"
+        "current_code_digest": "2d573414be8c8183b93aafe9be2a61851877ebc13930bd9b21d7e7eb0b22c8e0"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2569,7 +2569,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -2583,7 +2583,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -3258,13 +3258,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "3e576977984d0037de6b9a5c717bdbb37d0a7c303409fb95dbde911626dd560c",
+      "code_digest": "ebb1dbb6395dff6cac43f37990a6a98cd1a7bd17e4632dcfe28d91c4026c5fdf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b",
-        "current_code_digest": "3e576977984d0037de6b9a5c717bdbb37d0a7c303409fb95dbde911626dd560c"
+        "current_code_digest": "ebb1dbb6395dff6cac43f37990a6a98cd1a7bd17e4632dcfe28d91c4026c5fdf"
       }
     },
     "douyin_video_processing.collection": {
@@ -3430,7 +3430,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -3444,7 +3444,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -4057,13 +4057,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "425be4faee4a17e571d19d4730cb2042168e4d335c48e4c145413a6b5c5c9702",
+      "code_digest": "15505f5cdec6d37dacfc2426ecbd6e834a485028124108797b81b2f8225fe67e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706",
-        "current_code_digest": "425be4faee4a17e571d19d4730cb2042168e4d335c48e4c145413a6b5c5c9702"
+        "current_code_digest": "15505f5cdec6d37dacfc2426ecbd6e834a485028124108797b81b2f8225fe67e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4229,7 +4229,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -4257,7 +4257,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -4865,13 +4865,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "70920ca445bc8aec9f1336c75373fd7a54b6a8a9a7c8b2bada6b8e2c6200b8b2",
+      "code_digest": "c7c5b5367fb6e28d1975566b09958e0ed4551b1b6d49ad7e7d215c0948cd0033",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9",
-        "current_code_digest": "70920ca445bc8aec9f1336c75373fd7a54b6a8a9a7c8b2bada6b8e2c6200b8b2"
+        "current_code_digest": "c7c5b5367fb6e28d1975566b09958e0ed4551b1b6d49ad7e7d215c0948cd0033"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5051,7 +5051,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -5065,7 +5065,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -5656,13 +5656,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "258afbd84c8a0a64de4f7928d93be18174c394835026077f6ddeeea00c36397d",
+      "code_digest": "048e6cb0d1276eccbafd5aa9700b3cad3d518f6e4dc9db682e3d52e91e1457f7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c",
-        "current_code_digest": "258afbd84c8a0a64de4f7928d93be18174c394835026077f6ddeeea00c36397d"
+        "current_code_digest": "048e6cb0d1276eccbafd5aa9700b3cad3d518f6e4dc9db682e3d52e91e1457f7"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5842,7 +5842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -5856,7 +5856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -6489,13 +6489,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a71da23c822c266fab49c0e3b901e9fbe9b1202112537bd3af3e276ac4dc020c",
+      "code_digest": "56eac5879269890cc3140a5a7271d8c3de77e21ba982d8cf6549f62c0c57c97b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455",
-        "current_code_digest": "a71da23c822c266fab49c0e3b901e9fbe9b1202112537bd3af3e276ac4dc020c"
+        "current_code_digest": "56eac5879269890cc3140a5a7271d8c3de77e21ba982d8cf6549f62c0c57c97b"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6661,7 +6661,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -6675,7 +6675,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -7256,13 +7256,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "fd2a5485efaf06f64e1a4ba891da158f437fc1523f2a1659f3224127b6a030c6",
+      "code_digest": "700b4c3cf79570ce6207b1ff09996b7159320325de5cdbfcba379f47eb9aab5f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb",
-        "current_code_digest": "fd2a5485efaf06f64e1a4ba891da158f437fc1523f2a1659f3224127b6a030c6"
+        "current_code_digest": "700b4c3cf79570ce6207b1ff09996b7159320325de5cdbfcba379f47eb9aab5f"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7428,7 +7428,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -7442,7 +7442,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -7998,13 +7998,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "afd451e2ae980f70c2b154ec1e6d276bd62d72a949df0dc56695b17b86d09047",
+      "code_digest": "a1d739f9324de943ca38769fc59fff3e3bbc5cfeacb50aea1799cb18ceb6958e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb",
-        "current_code_digest": "afd451e2ae980f70c2b154ec1e6d276bd62d72a949df0dc56695b17b86d09047"
+        "current_code_digest": "a1d739f9324de943ca38769fc59fff3e3bbc5cfeacb50aea1799cb18ceb6958e"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8170,7 +8170,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -8184,7 +8184,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -8733,13 +8733,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "638c743a044f3c0c2462163a3e6e78d341324b8d22ec460cae5e5d856a4f8b8f",
+      "code_digest": "c686c3c460eb98b0ea37fd3f00690ffe2a56ddd5cf7313de4dfd554239f28120",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da",
-        "current_code_digest": "638c743a044f3c0c2462163a3e6e78d341324b8d22ec460cae5e5d856a4f8b8f"
+        "current_code_digest": "c686c3c460eb98b0ea37fd3f00690ffe2a56ddd5cf7313de4dfd554239f28120"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8905,7 +8905,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "185730ffc232e98a2a658ebf3d9b2442e71a3da8cd094e48289de3b2321515c3"
+          "sha256": "33e033ed22c073fdd0fdf25767da07e1d765f5ebcc1e8c944f2aef8aec92e2f4"
         },
         {
           "kind": "code",
@@ -8919,7 +8919,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md",
           "revision": "contract",
-          "sha256": "026d12c1c4fdf7b9e669f2a9dc50db054f88a9820e65901664359e8201ae58ff"
+          "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
         },
         {
           "kind": "code",
@@ -9478,13 +9478,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0acad840091be466c077300bdbf02a8f2774b81796d4cb406db54600753e68df",
+      "code_digest": "565dfa0cebe97a50ccf24668ded3d3333e18b6e3460abbcd98773f70d472db37",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
         "previous_code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8",
-        "current_code_digest": "0acad840091be466c077300bdbf02a8f2774b81796d4cb406db54600753e68df"
+        "current_code_digest": "565dfa0cebe97a50ccf24668ded3d3333e18b6e3460abbcd98773f70d472db37"
       }
     }
   },
