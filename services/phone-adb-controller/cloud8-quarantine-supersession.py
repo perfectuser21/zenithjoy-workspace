@@ -5,7 +5,9 @@ The cloud7 entry is unchanged. A private module instance reuses its reviewed
 CAS transaction; this entry supplies its own immutable identity and evidence.
 inspect is read-only and is explicitly not an apply/recovery capability.
 """
-import importlib.util
+import hashlib
+import stat
+import types
 import json
 import os
 from pathlib import Path
@@ -15,9 +17,32 @@ import tarfile
 import io
 
 _here = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location('cloud8_private_transaction', _here/'cloud7-quarantine-supersession.py')
-_tx = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_tx)
+TRANSACTION_SOURCE_SHA256 = 'ca0e6eb6cd5a2a2e164150a225d29951ae9131b1ce59c7dd43d7bbc10936cb5b'
+
+
+def pinned_transaction():
+ path=_here/'cloud7-quarantine-supersession.py'
+ fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode) or before.st_uid!=os.geteuid() or before.st_mode&0o022 or before.st_nlink!=1 or before.st_size>1024*1024:
+   raise ValueError('CLOUD8_TRANSACTION_SOURCE_FILE')
+  with os.fdopen(os.dup(fd),'rb') as stream:raw=stream.read(1024*1024+1)
+  after,current=os.fstat(fd),path.lstat()
+  fields=['st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns']
+  if len(raw)!=before.st_size or any(getattr(before,k)!=getattr(after,k) or getattr(before,k)!=getattr(current,k) for k in fields):
+   raise ValueError('CLOUD8_TRANSACTION_SOURCE_CHANGED')
+  if hashlib.sha256(raw).hexdigest()!=TRANSACTION_SOURCE_SHA256:
+   raise ValueError('CLOUD8_TRANSACTION_SOURCE_HASH')
+ finally:os.close(fd)
+ # Compile only the exact bytes just verified. Import loaders may execute an
+ # unpinned valid timestamp pyc even when the on-disk .py itself is unchanged.
+ module=types.ModuleType('cloud8_private_transaction');module.__file__=str(path)
+ exec(compile(raw,str(path),'exec'),module.__dict__)
+ return module
+
+
+_tx=pinned_transaction()
 read_bytes, load, lines, sha, need, relative = _tx.read_bytes, _tx.load, _tx.lines, _tx.sha, _tx.need, _tx.relative
 TASK = 'deeb4021-2b05-45e5-b8a6-712a38cdd0c7'
 FIX_TASK = 'ffd2d337-b10e-4f96-8e3e-bd35cd57bac1'
