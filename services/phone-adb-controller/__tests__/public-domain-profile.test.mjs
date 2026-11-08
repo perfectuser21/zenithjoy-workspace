@@ -115,3 +115,20 @@ test('workflow total timeout includes reserved cleanup rather than adding cleanu
   assert.equal(b.cleanup_grace_s,20);assert.equal(b.max_duration_s,70);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
+
+test('all Activity recorder metadata carries the exact source inventory digest declared in the internal run binding',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),'douyin_video_processing');
+ try{
+  const out=buildPublicDomainProfile(x),expected=digest(out.profile.files);
+  assert.equal(out.definition.runtime_snapshot_sha256,expected);
+  for(const [key,m]of Object.entries(out.profile.metadata))assert.equal(m.runtime_snapshot_sha256,expected,key+' must satisfy the original Brain span provenance binding');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+test('workflow cleanup scope shares the original cleanup Activity A4 acceptance instead of overwriting its validator',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),'douyin_video_discovery');
+ try{
+  const p=buildPublicDomainProfile(x).profile;
+  assert.equal(p.validators.cleanup.acceptance.ref,p.metadata.cleanup.questions.A4.ref,'validateActivity and validateWorkflow use this same cleanup key');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
