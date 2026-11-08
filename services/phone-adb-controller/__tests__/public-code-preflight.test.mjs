@@ -56,3 +56,25 @@ test('changed profile registry bytes refuse before any phone command under the f
  writeFileSync(f.registry,readFileSync(f.registry,'utf8').replace('Fixture','Changed'));
  await assert.rejects(()=>runtime.preflight(),/PUBLIC_CODE_PREFLIGHT_SOURCE/);assert.deepEqual(f.calls,[]);
 });
+
+test('shared 102 native cleanup preserves original video lease release after qualification refusal',{skip:process.platform!=='darwin'},async t=>{
+ const f=await publicCodeNativeFixture(t,{workflow:'douyin_video_processing'}),{createHandlers}=await f.load('leadgen-handlers.mjs'),calls=[];
+ Object.assign(f.env,{WFR_HOSTKEY:'mmv',LEADGEN_MMV_DEVICE_RUNTIME:'1',LEADGEN_LIMIT:'1'});
+ Object.assign(f.lease,{acquire:async()=>{},ensure:async()=>{}});
+ const device_binding={company_id:'company-fixture',tenant_id:'tenant-fixture',version:26,run_id:f.env.WFR_TAG,profile:f.env.P,device_serial:f.env.SERIAL,douyin_id:'expected',verification_status:'verified',enabled:true};
+ const handlers=createHandlers({root:f.root,env:f.env,sourceCommit:f.state.source_commit,taskId:f.state.task_id,centralLease:f.lease,
+  execute:async()=>{throw Error('LEGACY_NATIVE_FALLBACK_FORBIDDEN');},rpc:async q=>{
+   const op=q.request?.op;calls.push(op);
+   if(op==='company_config')return {result:{...device_binding,device_binding}};
+   if(op==='claim_videos')return {result:[{video_id:'7693970762462579121'}]};
+   if(op==='renew_video')throw Error('FIXTURE_QUALIFICATION_REFUSED');
+   if(op==='release_video')return {result:{released:true}};
+   throw Error('UNEXPECTED_RPC:'+op);
+  }});
+ handlers.state.budgetDeadline=Date.now()+300000;await handlers.preflight();
+ await assert.rejects(()=>handlers.preflight(),/PUBLIC_CODE_PREFLIGHT_ALREADY_STARTED/);
+ handlers.state.intakeVideoIds=['7693970762462579121'];
+ await assert.rejects(()=>handlers.qualification(),/FIXTURE_QUALIFICATION_REFUSED/);
+ handlers.state.budgetDeadline=Date.now()+120000;const cleanup=await handlers.cleanup();
+ assert.equal(cleanup.no_lock,true);assert.equal(calls.filter(op=>op==='release_video').length,1,'new phone cleanup must preserve original queue lease return');
+});
