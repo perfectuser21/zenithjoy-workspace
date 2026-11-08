@@ -556,7 +556,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -790,13 +790,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "05a662d26d42f06de003cb6f9ef816c834d697c7d95ec786aa4c1b56db32cb50",
+      "code_digest": "03d389d3657ddddc14d909eb3bdac9d2c08b1006c9891c2fc0271b7508c7dee2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "d807f59400538a070f8fec886f8bca3420118ad2be62b210d2b99c302507d27a",
-        "current_code_digest": "05a662d26d42f06de003cb6f9ef816c834d697c7d95ec786aa4c1b56db32cb50"
+        "current_code_digest": "03d389d3657ddddc14d909eb3bdac9d2c08b1006c9891c2fc0271b7508c7dee2"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1403,7 +1403,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -1620,13 +1620,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "98ea4a393b0ad17a05a92e058e1a22dcba0e2998157087a25066bd5c9784b244",
+      "code_digest": "bf3ca9954010fc41630e0f46b10b76a0beefe6ca5c773d2e7e80a21e2721b7a1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "cbb5d3499e3d49ff9eb951296849b74829502870a35f5547f09b2c1ca6f8e0b0",
-        "current_code_digest": "98ea4a393b0ad17a05a92e058e1a22dcba0e2998157087a25066bd5c9784b244"
+        "current_code_digest": "bf3ca9954010fc41630e0f46b10b76a0beefe6ca5c773d2e7e80a21e2721b7a1"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2177,7 +2177,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -2397,13 +2397,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "60c1c14d5c7959e65ed5d7f2c76aa212e6ce6a2f2f752541251a6196fd39ed30",
+      "code_digest": "17cd2d06666f531d549ab6c0b8ee1e0e6d36292d4de4f8e0b3712e55e600b589",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "05355ffd3d0ff353bc6155e41e640589cdd5ff2495048271363ec47e29f6d743",
-        "current_code_digest": "60c1c14d5c7959e65ed5d7f2c76aa212e6ce6a2f2f752541251a6196fd39ed30"
+        "current_code_digest": "17cd2d06666f531d549ab6c0b8ee1e0e6d36292d4de4f8e0b3712e55e600b589"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2982,7 +2982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -3258,13 +3258,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "b25eaf75e5a9d6b93801acd05e244a08a602aec24ed7a48f036959a3873fd281",
+      "code_digest": "c364ac136ebf3c01ace1727894e2343cb1d92cfe0968f8c701b52a53b63f04c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "b206a1623d2b82481b01b3b11dfcbfcd530155e48d92209daae89d1b58c4c65f",
-        "current_code_digest": "b25eaf75e5a9d6b93801acd05e244a08a602aec24ed7a48f036959a3873fd281"
+        "current_code_digest": "c364ac136ebf3c01ace1727894e2343cb1d92cfe0968f8c701b52a53b63f04c3"
       }
     },
     "douyin_video_processing.collection": {
@@ -3815,7 +3815,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -4057,13 +4057,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "43f50cae30d12da8b26610d1a0ce08c135db5b0297d046cc556be6fc336d5dd1",
+      "code_digest": "f8bbd703761689d9ff1c89451f1f385413fcb144e53c450fd92a0a054cf3d66c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "2f57dea9f49824c250ead31716e296a8223801357ad1157f51ef444a8d242806",
-        "current_code_digest": "43f50cae30d12da8b26610d1a0ce08c135db5b0297d046cc556be6fc336d5dd1"
+        "current_code_digest": "f8bbd703761689d9ff1c89451f1f385413fcb144e53c450fd92a0a054cf3d66c"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4649,7 +4649,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -4865,13 +4865,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9a0d1cfc2176e3016ca011b86b048718febb538e757e38b051f725a57132258a",
+      "code_digest": "a6873ee561865badf235dcb783cb3770649827cf36536a6f0153f6aa1635640d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "038b92cebcbad4018ee820e68e91d4d4102e7098d23c3c49709c369408da3cd8",
-        "current_code_digest": "9a0d1cfc2176e3016ca011b86b048718febb538e757e38b051f725a57132258a"
+        "current_code_digest": "a6873ee561865badf235dcb783cb3770649827cf36536a6f0153f6aa1635640d"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5429,7 +5429,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -5656,13 +5656,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "3543f6528b020ffddae67f1a2e1d3513835ddee69e6cd10bbca160dcb414121f",
+      "code_digest": "792ea627307765cce2f9f5a47a2aefa034756072721ab0c9c7cce5bb21c4805a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "0e380c76856c8f4db2b16a2ce65519704312635445962e54d0ff40cb10b23ceb",
-        "current_code_digest": "3543f6528b020ffddae67f1a2e1d3513835ddee69e6cd10bbca160dcb414121f"
+        "current_code_digest": "792ea627307765cce2f9f5a47a2aefa034756072721ab0c9c7cce5bb21c4805a"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6227,7 +6227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -6489,13 +6489,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "bac52e8863e72d1ff550f6747923afc9d196ff66f4c32b01c6e760a800830e26",
+      "code_digest": "69d9043bf1a138b53ad17e603e1c6ec7efd7985c3e380deddcd5f19a7f79b41a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "f838a241820c33103ff6cb25edf403b3fc8fe503574fae74b3924f29ec11d4b4",
-        "current_code_digest": "bac52e8863e72d1ff550f6747923afc9d196ff66f4c32b01c6e760a800830e26"
+        "current_code_digest": "69d9043bf1a138b53ad17e603e1c6ec7efd7985c3e380deddcd5f19a7f79b41a"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7004,7 +7004,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -7256,13 +7256,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "9118480200b9d67245320bc85d185306f4139b535d13a9e1a8758a472f0cbb1e",
+      "code_digest": "99ac33698ff2e0c7515fd2474e3d9951a3fe770bdc4f50638cd504491108c128",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "a81125173ba5dd3ab7af09dcd75ae09d47bfe74bc0f987d60b6134fea93998d6",
-        "current_code_digest": "9118480200b9d67245320bc85d185306f4139b535d13a9e1a8758a472f0cbb1e"
+        "current_code_digest": "99ac33698ff2e0c7515fd2474e3d9951a3fe770bdc4f50638cd504491108c128"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7771,7 +7771,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -7998,13 +7998,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a147fe11f48b24552352af5fce3d41266f443802348d656071da2bfa3388a915",
+      "code_digest": "e3c9979a0fc83dc3d889c7be966d1e81542b11b5ee4b44e1093846cc04e7f2ad",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "c78ad54ce0820c5dad2fb2e62e8b35e45c9ccd62b571882101947a96046f5d76",
-        "current_code_digest": "a147fe11f48b24552352af5fce3d41266f443802348d656071da2bfa3388a915"
+        "current_code_digest": "e3c9979a0fc83dc3d889c7be966d1e81542b11b5ee4b44e1093846cc04e7f2ad"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8513,7 +8513,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -8733,13 +8733,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "fff8911bdd10334108706aaa2c203b0990537478a5a7c901678178c14f1f2437",
+      "code_digest": "dded68c35a0d6bac7d63524ebed286021e5475cf75fa776aa6b0b02130b8459b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "a8062916c944a768b83440e7bee9419e8d8058deee373fc8e88c76a2ba233039",
-        "current_code_digest": "fff8911bdd10334108706aaa2c203b0990537478a5a7c901678178c14f1f2437"
+        "current_code_digest": "dded68c35a0d6bac7d63524ebed286021e5475cf75fa776aa6b0b02130b8459b"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9248,7 +9248,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "17095a4edb3dc0b7a0c36c8413cff47f80b9989559703f5193ebf9f97392322c"
+          "sha256": "1e8c262fc697267428c54b2edc9849cf59a0c68f1773953cbf486246633186de"
         },
         {
           "kind": "code",
@@ -9478,13 +9478,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e0b4c0b18ef928bafc3a031f4db177270bd12935afa35472a5a873ed8bbebdb1",
+      "code_digest": "f311c1a911824d159ba47cd48100f3b6f95fe299a7d26acccf33457b61affb76",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原Method/Skill/AV、公司26/账号、300s及资格评分合同不变；共享Code预检严格封闭并保留102租约归位，schema2仅增加唯一E鲜验与失败封闭，子进程close与epoch丢失分离。旧route/unknown及历史stopped不洗；schema2实机预算与E维护controller仍待真实验收。独立审查限定已审连接链。",
+        "reason": "最终统一source dfe9199e8及444文件flat包/52源码闭包经独立RPA与源码审查。Method/Skill/AV、公司账号、300s与资格评分合同不改；共享预检受控封闭、102租约保留、schema2鲜验与精确Task.result批准维护失败封闭。旧run停止未知永久保留；仅代码及离线封装通过，实机101103与预算未验。",
         "reviewed_by": "/root/cloud_preflight_review（Codex独立只读reviewer）",
         "previous_code_digest": "bb5ce33b21fda056745f140ade9d32478bafbf5991c66549e999e59e612ef40d",
-        "current_code_digest": "e0b4c0b18ef928bafc3a031f4db177270bd12935afa35472a5a873ed8bbebdb1"
+        "current_code_digest": "f311c1a911824d159ba47cd48100f3b6f95fe299a7d26acccf33457b61affb76"
       }
     }
   },
