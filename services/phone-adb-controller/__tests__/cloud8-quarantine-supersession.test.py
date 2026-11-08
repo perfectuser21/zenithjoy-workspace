@@ -106,4 +106,28 @@ class Cloud8Tests(unittest.TestCase):
    return v
   with patch.object(self.m,'load',side_effect=bad):
    with self.assertRaisesRegex(ValueError,'REVIEW_PIN'):self.m.check_review_pin()
+ def private_entry(self):
+  folder=self.run/'private-source';folder.mkdir()
+  entry=folder/SOURCE.name;entry.write_bytes(SOURCE.read_bytes())
+  helper=folder/'cloud7-quarantine-supersession.py';helper.write_bytes((SOURCE.parent/helper.name).read_bytes())
+  return entry,helper
+ def import_private(self,entry):
+  return subprocess.run([sys.executable,'-c','import runpy,sys;runpy.run_path(sys.argv[1],run_name="private_candidate")',str(entry)],capture_output=True,text=True)
+ def test_pinned_helper_source_executes_even_with_valid_poisoned_timestamp_pyc(self):
+  import importlib._bootstrap_external as external
+  entry,helper=self.private_entry();marker=entry.parent/'poison-executed'
+  payload='from pathlib import Path;Path('+repr(str(marker))+').write_text("untrusted pyc")\n'+helper.read_text()
+  code=compile(payload,str(helper),'exec');st=helper.stat()
+  cache=pathlib.Path(importlib.util.cache_from_source(str(helper)));cache.parent.mkdir()
+  cache.write_bytes(external._code_to_timestamp_pyc(code,int(st.st_mtime),st.st_size))
+  r=self.import_private(entry)
+  self.assertEqual(r.returncode,0,r.stderr)
+  self.assertFalse(marker.exists(),'unreviewed helper pyc executed despite clean pinned source')
+ def test_changed_helper_bytes_rejected_before_any_helper_code_executes(self):
+  entry,helper=self.private_entry();marker=entry.parent/'changed-source-executed'
+  helper.write_text('from pathlib import Path;Path('+repr(str(marker))+').write_text("changed helper")\n'+helper.read_text())
+  r=self.import_private(entry)
+  self.assertNotEqual(r.returncode,0,'modified helper source was admitted')
+  self.assertIn('CLOUD8_TRANSACTION_SOURCE_HASH',r.stderr)
+  self.assertFalse(marker.exists(),'changed helper executed before pin validation')
 if __name__=='__main__':unittest.main()
