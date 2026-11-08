@@ -112,13 +112,15 @@ class Cloud8Tests(unittest.TestCase):
   helper=folder/'cloud7-quarantine-supersession.py';helper.write_bytes((SOURCE.parent/helper.name).read_bytes())
   return entry,helper
  def import_private(self,entry):
-  return subprocess.run([sys.executable,'-c','import runpy,sys;runpy.run_path(sys.argv[1],run_name="private_candidate")',str(entry)],capture_output=True,text=True)
+  return subprocess.run([sys.executable,'-X','pycache_prefix='+str(entry.parent/'cache'),'-c','import runpy,sys;runpy.run_path(sys.argv[1],run_name="private_candidate")',str(entry)],capture_output=True,text=True)
  def test_pinned_helper_source_executes_even_with_valid_poisoned_timestamp_pyc(self):
   import importlib._bootstrap_external as external
   entry,helper=self.private_entry();marker=entry.parent/'poison-executed'
   payload='from pathlib import Path;Path('+repr(str(marker))+').write_text("untrusted pyc")\n'+helper.read_text()
   code=compile(payload,str(helper),'exec');st=helper.stat()
-  cache=pathlib.Path(importlib.util.cache_from_source(str(helper)));cache.parent.mkdir()
+  with patch.object(sys,'pycache_prefix',str(entry.parent/'cache')):
+   cache=pathlib.Path(importlib.util.cache_from_source(str(helper)))
+  cache.parent.mkdir(parents=True)
   cache.write_bytes(external._code_to_timestamp_pyc(code,int(st.st_mtime),st.st_size))
   r=self.import_private(entry)
   self.assertEqual(r.returncode,0,r.stderr)
