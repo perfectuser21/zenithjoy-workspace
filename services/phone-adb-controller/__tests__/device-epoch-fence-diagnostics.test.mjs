@@ -49,3 +49,6 @@ test('补充诊断固定只读活动与元数据；proc路径仅接受维护scop
  for(const q of Object.keys(PROCESS_DIAGNOSTIC_COMMANDS)){const command=compileDiagnosticCommand(q,{diagnostic_process_pid:195});assert.match(command,/\/proc\/195\//);assert.ok(!command.includes('environ'));for(const bad of ['195;reboot',0,-1,1.1,undefined])assert.throws(()=>compileDiagnosticCommand(q,{diagnostic_process_pid:bad}),/DIAGNOSTIC_PROCESS_PID/);}
  assert.throws(()=>compileDiagnosticCommand('cat /proc/195/environ',{}),/DIAGNOSTIC_QUERY/);
 });
+test('不完整补采JSON不能以CLI exit0被误认作成功；单query仍固定枚举',async()=>{
+ const {diagnosticExitCode,validateDiagnosticQuery}=await import('../device-epoch-fence-review.mjs');assert.equal(diagnosticExitCode({diagnostics:[{wire_complete:false,exit_code:null}]}),2);assert.equal(diagnosticExitCode({diagnostics:[{wire_complete:true,exit_code:1}]}),2);assert.equal(diagnosticExitCode({diagnostics:[{wire_complete:true,exit_code:0}]}),0);assert.equal(validateDiagnosticQuery('exit_guardian_metadata'),'exit_guardian_metadata');assert.throws(()=>validateDiagnosticQuery('sh -c reboot'),/DIAGNOSTIC_QUERY/);
+});
