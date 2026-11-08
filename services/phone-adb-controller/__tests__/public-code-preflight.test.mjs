@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,writeFileSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,readFileSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createPreflightPhoneDriver} from '../preflight-phone-driver.mjs';
@@ -19,4 +19,40 @@ test('account reader cannot publish or tap after its public Activity cancellatio
 test('public Code preflight has a separate canonical native factory and refuses unbranded admission before IO',async()=>{
  const {createPublicCodePreflight}=await import('../public-code-preflight.mjs');
  assert.throws(()=>createPublicCodePreflight({}),/PUBLIC_CODE_PREFLIGHT_/);
+});
+
+import {publicCodeNativeFixture} from './fixtures/public-code-preflight-native.mjs';
+for(const workflow of ['douyin_video_discovery','douyin_video_processing'])test(workflow+' uses genuine reviewed shell-v2/ROM/nofork account preflight and exact owner cleanup', {skip:process.platform!=='darwin'},async t=>{
+ const now=Date.now;let elapsed=0,advanced=false;
+ t.mock.method(Date,'now',()=>now()+elapsed);
+ const f=await publicCodeNativeFixture(t,{workflow,onDump:()=>{if(!advanced&&workflow==='douyin_video_discovery'){elapsed=125000;advanced=true;}}}),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs');
+ const runtime=createPublicCodePreflight(f),result=await runtime.preflight();
+ assert.equal(result.douyin_id,'expected');assert.equal(f.state.executionUnknown,undefined);
+ if(workflow==='douyin_video_discovery')assert.equal(advanced,true,'a complete reviewed dump after 125s remains inside the original 300s Activity, with no legacy 120s shell cap');
+ assert.equal(readFileSync(join(f.locks,f.env.SERIAL+'.lock/owner'),'utf8').trim(),f.env.WFR_TAG);
+ f.state.budgetDeadline=Date.now()+120000;
+ const cleanup=await runtime.cleanup();assert.equal(cleanup.no_lock,true);assert.equal(cleanup.cleanup_readback_verified,1);
+ assert.equal(existsSync(join(f.locks,f.env.SERIAL+'.lock')),false);
+ assert.ok(f.calls.some(c=>c.includes('uiautomator')));assert.ok(f.calls.every(c=>c.startsWith('exec /system/bin/')));
+});
+
+test('public Code account dump cancelled while active leaves original quarantine and never issues a following tap',{skip:process.platform!=='darwin'},async t=>{
+ const f=await publicCodeNativeFixture(t,{slowDump:true}),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs'),runtime=createPublicCodePreflight(f),controller=new AbortController();
+ const result=runtime.preflight({signal:controller.signal});result.catch(()=>{});await Promise.race([f.dumpStarted,result.then(()=>{throw Error('DUMP_NOT_STARTED');})]);controller.abort();
+ await assert.rejects(result,e=>e.executionStopped===false);assert.equal(f.state.executionUnknown,true);assert.equal(f.calls.some(c=>c.includes("'tap'")),false);
+ assert.equal((await runtime.quarantine()).verified,true);assert.equal(existsSync(join(f.locks,f.env.SERIAL+'.lock/preflight_quarantined')),true);
+ await assert.rejects(()=>runtime.cleanup(),/PUBLIC_CODE_PREFLIGHT_PREVIOUS_UNKNOWN/);
+});
+
+test('new strict cleanup cannot convert previous generic observed-only work or cloned cleanup JSON into stop authority',{skip:process.platform!=='darwin'},async t=>{
+ const f=await publicCodeNativeFixture(t),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs'),runtime=createPublicCodePreflight(f);
+ f.state.nativeStopUnproven=true;f.state.discoveryCleanupEvidence={cleanup_phone_scope:{protocol:'discovery-cleanup-only-v1',purpose:'cleanup_only'}};
+ await assert.rejects(()=>runtime.cleanup(),e=>e.message==='PUBLIC_CODE_PREFLIGHT_PREVIOUS_UNKNOWN'&&e.executionStopped===false);
+ assert.deepEqual(f.calls,[]);
+});
+
+test('changed profile registry bytes refuse before any phone command under the frozen native scope',{skip:process.platform!=='darwin'},async t=>{
+ const f=await publicCodeNativeFixture(t),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs'),runtime=createPublicCodePreflight(f);
+ writeFileSync(f.registry,readFileSync(f.registry,'utf8').replace('Fixture','Changed'));
+ await assert.rejects(()=>runtime.preflight(),/PUBLIC_CODE_PREFLIGHT_SOURCE/);assert.deepEqual(f.calls,[]);
 });

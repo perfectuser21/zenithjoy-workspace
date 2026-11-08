@@ -11114,3 +11114,21 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；公共102限采样本凭真实中央独立判词及同源身份交103，保原PG/recipient校验"
+
+  - id: phone-public-code-preflight
+    path: services/phone-adb-controller/__tests__/public-code-preflight.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；共享101/102 Code native预检、ROM协议、nofork闭合及取消unknown永久回归；不替代真实云手机验收"
+
+  - id: phone-public-preflight-route
+    path: services/phone-adb-controller/__tests__/public-preflight-route.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共profile固定ADB instance policy路径与原始字节哈希，未知或更换来源拒绝"
