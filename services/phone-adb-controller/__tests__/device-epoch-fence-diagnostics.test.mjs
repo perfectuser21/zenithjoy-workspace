@@ -42,3 +42,10 @@ test('authority读回期间已收到EXIT/EOF仍正确收回，不把可选CloseS
  const {runDiagnostic}=await load(),f=await fixture(),directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-eof-'));const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
  try{const r=await runDiagnostic({query:'sdk',scope,directory,readAuthority:async()=>{await new Promise(r=>setTimeout(r,15));return {scope,lease_until:new Date(Date.now()+60000).toISOString()};}});assert.equal(r.wire_complete,true);assert.equal(r.exit_code,0);}finally{await f.close();rmSync(directory,{recursive:true,force:true});}
 });
+test('补充诊断固定只读活动与元数据；proc路径仅接受维护scope整数PID',async()=>{
+ const {compileDiagnosticCommand,SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,PROCESS_DIAGNOSTIC_COMMANDS}=await load();
+ assert.equal(compileDiagnosticCommand('activity_starter',{}),'exec /system/bin/dumpsys activity starter');
+ assert.match(SUPPLEMENTAL_DIAGNOSTIC_COMMANDS.exit_guardian_metadata,/^exec \/system\/bin\/toybox sha256sum /);
+ for(const q of Object.keys(PROCESS_DIAGNOSTIC_COMMANDS)){const command=compileDiagnosticCommand(q,{diagnostic_process_pid:195});assert.match(command,/\/proc\/195\//);assert.ok(!command.includes('environ'));for(const bad of ['195;reboot',0,-1,1.1,undefined])assert.throws(()=>compileDiagnosticCommand(q,{diagnostic_process_pid:bad}),/DIAGNOSTIC_PROCESS_PID/);}
+ assert.throws(()=>compileDiagnosticCommand('cat /proc/195/environ',{}),/DIAGNOSTIC_QUERY/);
+});
