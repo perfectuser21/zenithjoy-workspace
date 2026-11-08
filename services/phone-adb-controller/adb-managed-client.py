@@ -91,7 +91,7 @@ def parent_leaf(argv):
         raise ValueError('ADB_MANAGED_COLLECTION_PARENT_UNAVAILABLE') from error
 
 
-def client_version(binary, *, recheck=None):
+def client_version(binary, *, recheck=None, environment=None):
     if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
         code, stdout, _ = parent_leaf(['version'])
         text = stdout.decode('utf8')
@@ -99,7 +99,7 @@ def client_version(binary, *, recheck=None):
             raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH')
         return text
     try:
-        output, retried = route_module().verified_client_version(binary)
+        output, retried = route_module().verified_client_version(binary, **({'environment': environment} if environment is not None else {}))
     except ValueError as error:
         if str(error) == 'ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH':
             raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH') from error
@@ -130,8 +130,9 @@ def main(argv):
                            ('DOUYIN_ADB_PORT', str(policy['port']))]:
         if name in os.environ and os.environ[name] != expected:
             raise ValueError('ADB_MANAGED_ENV_ENDPOINT_MISMATCH')
+    version_options = {'environment': route.instance_module().adb_environment(os.environ)} if policy.get('schema_version') == 2 else {}
     if command == ['version']:
-        print(client_version(binary), end='')
+        print(client_version(binary, **version_options), end='')
         return 0
     # 检查整个host（包括forbidden端口），不能devices时跳过附加server守卫。
     if command[0] == 'devices':
@@ -159,14 +160,17 @@ def main(argv):
         else:
             route.select_route(serial, policy['endpoint'])
     verify_target()
-    client_version(binary, recheck=verify_target)
-    env = dict(os.environ, ADB_SERVER_SOCKET=policy['endpoint'])
+    client_version(binary, recheck=verify_target, **version_options)
+    ambient = route.instance_module().adb_environment(os.environ) if policy.get('schema_version') == 2 else os.environ
+    env = dict(ambient, ADB_SERVER_SOCKET=policy['endpoint'])
     for name in ('ANDROID_ADB_SERVER_PORT', 'ANDROID_ADB_SERVER_ADDRESS', 'ANDROID_SERIAL',
                  'ADB_VENDOR_KEYS', 'ADB_LIBUSB', 'ADB_LOCAL_TRANSPORT_MAX_PORT'):
         env.pop(name, None)
     # numeric -H is deliberately not localhost: a missing server must not be spawned.
     actual = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial, *command]
     if policy.get('schema_version') == 2:
+        route.instance_module().verify_binary(policy)
+        route.instance_module().authorize_epoch(policy, serial, os.environ.get('WFR_RUN_DIR'))
         route.instance_module().verify_binary(policy)
     if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
         code, stdout, stderr = parent_leaf(actual)

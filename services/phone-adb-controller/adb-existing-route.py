@@ -217,11 +217,12 @@ def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2
     return matches[0][0]
 
 
-def verified_client_version(binary):
+def verified_client_version(binary, *, environment=None):
     """Bound local version startup jitter to three reads; never invoke server lifecycle."""
     for attempt in range(3):
         try:
-            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2)
+            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2,
+                                    **({'env': environment} if environment is not None else {}))
         except subprocess.TimeoutExpired:
             if attempt < 2:
                 continue

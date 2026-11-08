@@ -113,9 +113,12 @@ def verify_binary(policy):
          and sha(path.read_bytes()) == policy['adb_sha256'], 'BINARY')
 
 
-def authorize_start(policy, config, receipt, runner=subprocess.run):
-    # 每次启动均fresh核Task/lease；epoch租约迁移后旧receipt不能用于守护重启，须维护controller重新授权。
-    need(isinstance(receipt, str) and Path(receipt).is_absolute(), 'STARTUP_RECEIPT_REQUIRED')
+def adb_environment(environment):
+    return {k: v for k, v in environment.items()
+            if k in ('HOME', 'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TZ')}
+
+
+def verifier_context(policy, config):
     row = read_instance_policy(config, policy)
     doc, registry_sha = registry()
     verifier = doc['startup_verifier']
@@ -125,21 +128,58 @@ def authorize_start(policy, config, receipt, runner=subprocess.run):
     need(str(Path(node['path']).resolve(strict=True)) == node['path']
          and stat.S_ISREG(node_info.st_mode) and not node_info.st_mode & 0o022 and os.access(node['path'], os.X_OK)
          and sha(Path(node['path']).read_bytes()) == node['sha256'], 'VERIFIER_BINARY')
-    policy_sha = sha(read_file(Path(config), private=True))
     token = os.environ.get('BRAIN_INTERNAL_TOKEN')
     need(isinstance(token, str) and token and token.strip() == token
          and not any(c in token for c in ('\r', '\n', '\x00')), 'CREDENTIAL_REQUIRED')
-    verifier_env = {k: v for k, v in os.environ.items() if k in ('HOME', 'PATH', 'LANG', 'TMPDIR')}
-    verifier_env['BRAIN_INTERNAL_TOKEN'] = token
-    result = runner([node['path'], str(HERE / verifier['module']), 'verify-startup', '--receipt', receipt,
-                     '--instance-id', row['instance_id'], '--registry-sha256', registry_sha,
-                     '--source', manifest['source_commit'], '--policy-sha256', policy_sha],
-                    env=verifier_env,
+    env = {k: v for k, v in os.environ.items() if k in ('HOME', 'PATH', 'LANG', 'TMPDIR')}
+    env['BRAIN_INTERNAL_TOKEN'] = token
+    return {'row': row, 'registry_sha256': registry_sha, 'manifest': manifest,
+            'node': node, 'module': str(HERE / verifier['module']), 'env': env,
+            'policy_sha256': sha(read_file(Path(config), private=True))}
+
+
+def verifier_answer(context, arguments, runner):
+    result = runner([context['node']['path'], context['module'], *arguments], env=context['env'],
                     capture_output=True, text=True, timeout=15)
-    expected = {'protocol': 'device-epoch-fence-startup-verification/v1', 'authorized': True,
-                'action': 'start_private_server', 'instance_id': row['instance_id'], 'endpoint': policy['endpoint'],
-                'source_commit': manifest['source_commit'], 'registry_sha256': registry_sha, 'policy_sha256': policy_sha}
-    need(result.returncode == 0 and len(result.stdout.encode()) <= 8192, 'STARTUP_AUTHORITY')
+    need(result.returncode == 0 and len(result.stdout.encode()) <= 8192, 'VERIFIER_AUTHORITY')
     answer = json.loads(result.stdout)
-    need(isinstance(answer, dict) and answer.get('authorized') is True and answer == expected, 'STARTUP_AUTHORITY')
+    need(isinstance(answer, dict) and answer.get('authorized') is True, 'VERIFIER_AUTHORITY')
+    return answer
+
+
+def authorize_start(policy, config, receipt, runner=subprocess.run):
+    # 每次启动均fresh核Task/lease；epoch租约迁移后旧receipt不能用于守护重启，须维护controller重新授权。
+    need(isinstance(receipt, str) and Path(receipt).is_absolute(), 'STARTUP_RECEIPT_REQUIRED')
+    c = verifier_context(policy, config)
+    answer = verifier_answer(c, ['verify-startup', '--receipt', receipt, '--instance-id', c['row']['instance_id'],
+                                '--registry-sha256', c['registry_sha256'], '--source', c['manifest']['source_commit'],
+                                '--policy-sha256', c['policy_sha256']], runner)
+    expected = {'protocol': 'device-epoch-fence-startup-verification/v1', 'authorized': True,
+                'action': 'start_private_server', 'instance_id': c['row']['instance_id'], 'endpoint': policy['endpoint'],
+                'source_commit': c['manifest']['source_commit'], 'registry_sha256': c['registry_sha256'],
+                'policy_sha256': c['policy_sha256']}
+    need(answer == expected, 'STARTUP_AUTHORITY')
     return expected
+
+
+def authorize_epoch(policy, serial, run_dir, runner=subprocess.run):
+    # Task、immutable record及epoch只由受保护run-definition派生；Python不另接任意引用或复制动态判断。
+    need(isinstance(run_dir, str) and Path(run_dir).is_absolute()
+         and str(Path(run_dir).resolve()) == run_dir, 'EPOCH_RUN_DIR')
+    doc, _ = registry()
+    rows = [r for r in doc['instances'] if r['kind'] == 'managed' and r['instance_id'] == policy.get('instance_id')]
+    need(len(rows) == 1, 'EPOCH_INSTANCE')
+    c = verifier_context(policy, rows[0]['policy_path'])
+    answer = verifier_answer(c, ['verify-epoch', '--run-dir', run_dir], runner)
+    keys = {'protocol', 'authorized', 'epoch_id', 'task_id', 'run_id', 'source_commit', 'instance_id',
+            'endpoint', 'serial', 'old_route_absent', 'original_execution_stopped', 'android_internal'}
+    need(set(answer) == keys and answer['protocol'] == 'device-epoch-fence-admission/v1'
+         and answer['instance_id'] == policy['instance_id'] and answer['endpoint'] == policy['endpoint']
+         and answer['serial'] == serial and answer['source_commit'] == c['manifest']['source_commit']
+         and answer['old_route_absent'] is True and answer['original_execution_stopped'] is False
+         and answer['android_internal'] == 'not_attested'
+         and isinstance(answer['epoch_id'], str) and re.fullmatch('[-A-Za-z0-9_]{1,120}', answer['epoch_id'])
+         and isinstance(answer['run_id'], str) and re.fullmatch('[-A-Za-z0-9_]{1,200}', answer['run_id'])
+         and isinstance(answer['task_id'], str) and re.fullmatch(
+             '[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}', answer['task_id']), 'EPOCH_AUTHORITY')
+    return answer

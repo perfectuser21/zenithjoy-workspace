@@ -86,8 +86,7 @@ def clean_environment(environment):
 
 def instance_environment(environment):
     # daemon及version仅需系统运行环境；Brain token仅单独进入固定verifier child。
-    return {k: v for k, v in environment.items()
-            if k in ('HOME', 'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TZ')}
+    return route.instance_module().adb_environment(environment)
 
 
 def foreground_command(policy):
