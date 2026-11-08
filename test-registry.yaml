@@ -11121,7 +11121,7 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / public-code-phone-darwin-test / node --test --test-concurrency=1 services/phone-adb-controller/__tests__/public-code-preflight.test.mjs services/phone-adb-controller/__tests__/phone-epoch-producer.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；共享101/102 Code native预检、ROM协议、nofork闭合及取消unknown永久回归；不替代真实云手机验收"
 
   - id: phone-public-preflight-route
@@ -11175,7 +11175,7 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / public-code-phone-darwin-test / node --test --test-concurrency=1 services/phone-adb-controller/__tests__/public-code-preflight.test.mjs services/phone-adb-controller/__tests__/phone-epoch-producer.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
 
   - id: phone-device-epoch-fence-sdk31
