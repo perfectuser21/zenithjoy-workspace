@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {createPhoneEpochGuard} from '../phone-epoch-admission.mjs';
+test('legacy policy has no epoch override or extra validator',()=>{assert.equal(createPhoneEpochGuard({frozen:{collection_phone_scope:{policy:{schema_version:1}}}}),undefined);});
+test('schema2 missing authentic run authority is sticky resource unknown, not a producer stop claim',async()=>{const state={};const guard=createPhoneEpochGuard({root:'/nonexistent',env:{WFR_RUN_DIR:'/nonexistent'},frozen:{collection_phone_scope:{policy:{schema_version:2}}},state});await assert.rejects(guard(),e=>e.epochFenceLost===true&&e.resourceUnknown===true&&!Object.hasOwn(e,'executionStopped'));assert.equal(state.executionUnknown,true);assert.equal(state.epochFenceLost,true);});
