@@ -1,6 +1,8 @@
 import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync} from 'node:fs';
 import {join,resolve,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
+import {freezePreflightProfile} from './preflight-control-scope.mjs';
+import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 export const hash=v=>createHash('sha256').update(Buffer.isBuffer(v)||typeof v==='string'?v:JSON.stringify(canonical(v))).digest('hex');
 const fail=s=>{throw Error('PUBLIC_DOMAIN_'+s);};
@@ -32,10 +34,15 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  if(!fixed||fixed.machine!==identity.machine_id||fixed.profile!==env.P||fixed.serial!==env.SERIAL||fixed.line!==env.LEADGEN_LINE||!fixed.account)fail('RESOURCE_IDENTITY');
  if(template.deployment.target!==logicalHost(fixed.machine)||template.release.target!==logicalHost(fixed.machine))fail('RESOURCE_IDENTITY');
  if(cfg.workflow_key!=='douyin_comment_scoring'){
+  if(!template.preflight_profile||hash(freezePreflightProfile({env}))!==hash(template.preflight_profile))fail('PREFLIGHT_PROFILE');
   const scope=template[cfg.workflow_key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
-  if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==logicalHost(fixed.machine)||scope.policy?.host_id!==logicalHost(fixed.machine)||scope.policy?.endpoint!=='tcp:127.0.0.1:5041')fail('RESOURCE_SCOPE');
+  if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==logicalHost(fixed.machine)||scope.policy?.host_id!==logicalHost(fixed.machine))fail('RESOURCE_SCOPE');
+  if(scope.policy.schema_version===2){
+   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope}))!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
+   env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
+  }else if(scope.policy?.endpoint!=='tcp:127.0.0.1:5041'||template.public_preflight_route)fail('RESOURCE_SCOPE');
  }
- if(cfg.workflow_key==='douyin_comment_scoring'?(env.P!=='mmv-scoring'||env.SERIAL!=='none'):!(env.LEADGEN_MMV_DEVICE_RUNTIME==='1'&&env.DOUYIN_ADB_PORT==='5041'&&env.ADB_SERVER_SOCKET==='tcp:127.0.0.1:5041'))fail('RESOURCE_ROUTE');
+ if(cfg.workflow_key==='douyin_comment_scoring'?(env.P!=='mmv-scoring'||env.SERIAL!=='none'):!(env.LEADGEN_MMV_DEVICE_RUNTIME==='1'&&env.DOUYIN_ADB_PORT===(template.public_preflight_route?(template.discovery_phone_scope||template.collection_phone_scope).policy.endpoint.split(':').at(-1):'5041')&&env.ADB_SERVER_SOCKET===(template.public_preflight_route?(template.discovery_phone_scope||template.collection_phone_scope).policy.endpoint:'tcp:127.0.0.1:5041')))fail('RESOURCE_ROUTE');
  const planned=profile.contract?.activities||[];
  if(planned.length!==template.activities.length||planned.some(a=>!identity.run_binding.activities[a.key]||profile.metadata?.[a.key]?.executor_kind!=='code'))fail('CODE_ACTIVITIES_REQUIRED');
  const runtime=join(dir,'runtime');mkdirSync(dir,{recursive:true,mode:0o700});mkdirSync(runtime,{mode:0o700});

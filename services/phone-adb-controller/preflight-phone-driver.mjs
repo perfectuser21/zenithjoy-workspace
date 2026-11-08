@@ -1,10 +1,10 @@
 // Parent executes the preflight sequence; only fixed ADB/local leaves cross the native boundary.
 import {readFileSync,writeFileSync,lstatSync,chmodSync,openSync,fsyncSync,closeSync,constants} from 'node:fs';import {join,dirname} from 'node:path';import {randomUUID} from 'node:crypto';import {inflateSync} from 'node:zlib';
 const packageName='com.ss.android.ugc.aweme';
-export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile,serial,model,width,height,expectedAccount,deadlineMs,assertResources,purpose='preflight'}){
+export function createPreflightPhoneDriver({adb,local,evidenceRoot,owner,profile,serial,model,width,height,expectedAccount,deadlineMs,assertResources,purpose='preflight',signal}){
  let sealed=false;
- const active=async()=>{if(sealed||Date.now()>=deadlineMs)throw Error('PREFLIGHT_PHONE_CLOSED');await assertResources();if(sealed||Date.now()>=deadlineMs)throw Error('PREFLIGHT_PHONE_CLOSED');};
- const call=async(...args)=>{await active();return adb(...args);};
+ const active=async()=>{if(sealed||signal?.aborted||Date.now()>=deadlineMs)throw Error('PREFLIGHT_PHONE_CLOSED');await assertResources();if(sealed||signal?.aborted||Date.now()>=deadlineMs)throw Error('PREFLIGHT_PHONE_CLOSED');};
+ const call=async(...args)=>{await active();const result=await adb(...args);await active();return result;};
  const wait=async ms=>{await active();await new Promise(r=>setTimeout(r,Math.max(0,Math.min(ms,deadlineMs-Date.now()))));await active();};
  const evidence=id=>{if(!/^[-A-Za-z0-9_.]{1,160}$/.test(id||'')||!id.startsWith(owner+'-'))throw Error('PREFLIGHT_EVIDENCE_SCOPE');return join(evidenceRoot,id);};
  const absent=path=>{try{lstatSync(path);}catch(error){if(error.code==='ENOENT')return;throw error;}throw Error('PREFLIGHT_EVIDENCE_EXISTS');};

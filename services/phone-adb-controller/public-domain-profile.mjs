@@ -4,6 +4,8 @@ import {readFileSync,lstatSync,realpathSync} from 'node:fs';
 import {join,isAbsolute} from 'node:path';
 import {digest,canonical} from './runtime-definition.mjs';
 import {preflightPgDeployment,preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
+import {freezePreflightProfile} from './preflight-control-scope.mjs';
+import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const HASH=/^[a-f0-9]{64}$/;
 const need=(ok,reason)=>{if(!ok)throw Error('PUBLIC_DOMAIN_PROFILE_'+reason);};
@@ -95,6 +97,11 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  // cleanup is also an Activity key: retain its original AV A4 acceptance
  // for both per-Activity validation and the aggregate cleanup scope.
  const template={...f,public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
+ if(w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
+ if(w.payload.key!=='douyin_comment_scoring'){
+  const scope=template.discovery_phone_scope||template.collection_phone_scope;
+  if(scope){const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});if(route)template.public_preflight_route=route;}
+ }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
    config:{workflow_key:w.payload.key,resources:clone(resources),company:clone(company),env:clone(env),step_spec,snapshot:template}}};
