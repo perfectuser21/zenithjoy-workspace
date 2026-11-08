@@ -1,3 +1,4 @@
+import {readPublicDomainUpstream} from './public-domain-upstream.mjs';
 // Server-owned Activity primitives: the Agent supplies work, never authority.
 import {createHash,randomUUID} from 'node:crypto';
 import {appendFileSync,openSync,closeSync,writeFileSync,readFileSync,fsyncSync,mkdirSync,lstatSync,readdirSync} from 'node:fs';
@@ -230,18 +231,19 @@ export async function verifyAgentUpstream({env,state,queue,sampleInput,profile,s
     appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.companyConfig)+'\n',{mode:0o600});
     const sourceRun=env.LEADGEN_SOURCE_RUN;
     if(!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun||''))throw Error('102缺有效上游101运行号');
-    const upstreamDir=resolve(env.WFR_RUN_DIR,'..',`douyin_video_discovery-${sourceRun}`);
-    const upstream=readFrozen(upstreamDir),current=readFrozen(env.WFR_RUN_DIR);
+    const current=readFrozen(env.WFR_RUN_DIR);
+    const internal=current.public_domain?await readPublicDomainUpstream({env,current}):null;
+    const upstreamDir=internal?.upstreamDir||resolve(env.WFR_RUN_DIR,'..',`douyin_video_discovery-${sourceRun}`);
+    const upstream=internal?.upstream||readFrozen(upstreamDir);
     if(upstream.run_identity?.capability!=='douyin_video_discovery'||upstream.run_identity.tag!==sourceRun
       ||upstream.run_identity.profile!==profile||upstream.deployment.source_commit!==current.deployment.source_commit&&!current.producer_descriptor)throw Error('上游101冻结身份或发布来源不一致');
-    const final=JSON.parse(readFileSync(join(upstreamDir,'split-result.json'),'utf8'));
+    const final=internal?.final||JSON.parse(readFileSync(join(upstreamDir,'split-result.json'),'utf8'));
     const collect=Array.isArray(final?.results)?final.results.filter(item=>item?.activity==='collect_videos'):[];
     const runPrefix=`douyin_video_discovery-${sourceRun}__`;
     const attempt=typeof final?.run_id==='string'&&final.run_id.startsWith(runPrefix)?final.run_id.slice(runPrefix.length):'';
-    if(final?.status!=='completed'||final.workflow_key!=='douyin_video_discovery'
-      ||!/^a[1-9][0-9]*$/.test(attempt)
+    if((internal?final?.status!=='validated'||final.execution_stopped!==true:final?.status!=='completed'||!/^a[1-9][0-9]*$/.test(attempt))||final.workflow_key!=='douyin_video_discovery'
       ||final.source_commit!==upstream.deployment.source_commit||final.profile!==profile
-      ||final.evidence_status!=='sent'||collect.length!==1
+      ||!internal&&final.evidence_status!=='sent'||collect.length!==1
       ||collect[0].status!=='completed'||collect[0].verification?.verified!==true)throw Error('上游101终态或collect_videos验收未通过');
     const progressRaw=readFileSync(join(upstreamDir,'discovery-progress.json'));
     const input=JSON.parse(progressRaw);
@@ -256,7 +258,7 @@ export async function verifyAgentUpstream({env,state,queue,sampleInput,profile,s
     if(ids.length!==input.videos.length||input.captures.some(v=>!ids.includes(v.videoId))||ids.some(id=>!input.captures.some(v=>v.videoId===id)))throw Error('上游真实取链与保存ID清单不一致');
     const rows=await queue('inspect_videos',{video_ids:ids});
     if(!Array.isArray(rows)||rows.length!==ids.length||ids.some(id=>rows.filter(r=>r.video_id===id).length!==1))throw Error('PG读回缺上游真实视频ID');
-    const own=JSON.parse(readFileSync(env.OWN_ACCOUNTS_CONF||join(env.HOME,'bin-harvest/config/own-accounts.json'),'utf8'));
+    const own=JSON.parse(readFileSync((current.public_domain?join(env.WF_HOME,'config/own-accounts.json'):env.OWN_ACCOUNTS_CONF||join(env.HOME,'bin-harvest/config/own-accounts.json')),'utf8'));
     if(!Array.isArray(own.nicknames)||!Array.isArray(own.ids))throw Error('自家账号配置缺失');
     const normalize=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
     const ownNames=new Set([...own.nicknames,...own.ids].map(normalize));

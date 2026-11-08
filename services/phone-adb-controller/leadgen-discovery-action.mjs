@@ -1,3 +1,4 @@
+import {canonicalRunId} from './public-domain-authority.mjs';
 // 101只负责发现与本次封闭手机范围，不消费102评论或新业务额度。
 import {readFileSync,appendFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
@@ -16,7 +17,7 @@ export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,
     if(fixed&&canonical(sources)!==canonical(fixed.sources))throw Error('DISCOVERY_INPUT_SOURCE_MISMATCH');
     if(keywordResult.config)appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(keywordResult.config)+'\n',{mode:0o600});
     discovery=createDiscoveryHandlers({phone,execute:bounded,queue,profile,run,root,
-      discoveryInput:fixed,sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,sourceCommit,runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,budgetDeadline:()=>state.budgetDeadline||0,captureBudgetMs:env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?discoveryCaptureBudgetMs:0});
+      discoveryInput:fixed,sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,sourceCommit,runId:canonicalRunId(env),budgetDeadline:()=>state.budgetDeadline||0,captureBudgetMs:env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?discoveryCaptureBudgetMs:0});
     return discovery;
   };
   const collect=async()=>{

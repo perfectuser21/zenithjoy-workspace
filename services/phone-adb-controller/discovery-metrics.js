@@ -40,7 +40,7 @@ function nativeCounts(xml,nativeMetrics){
 function buildObservation(input,nativeMetrics){
  const {run,run_id,profile,source_commit,line_key,video_id,video_url,observed_at,evidence_id,xml}=input;
  if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/.test(run||'')||!/^[-A-Za-z0-9_]+$/.test(run_id||'')
-   ||!run_id.startsWith('douyin_video_discovery-'+run+'__')||!/^a?[1-9]\d*$/.test(run_id.slice(('douyin_video_discovery-'+run+'__').length))||!/^[-A-Za-z0-9_.]+$/.test(profile||'')||!/^[-A-Za-z0-9_]+$/.test(line_key||'')||!/^\d{16,24}$/.test(video_id||'')
+   ||!(run_id.startsWith('douyin_video_discovery-'+run+'__')&&/^a?[1-9]\d*$/.test(run_id.slice(('douyin_video_discovery-'+run+'__').length))||/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(run_id))||!/^[-A-Za-z0-9_.]+$/.test(profile||'')||!/^[-A-Za-z0-9_]+$/.test(line_key||'')||!/^\d{16,24}$/.test(video_id||'')
    ||video_url!==`https://www.douyin.com/video/${video_id}`||! /^[a-f0-9]{40}$/.test(source_commit||'')||typeof observed_at!=='string'||!Number.isFinite(Date.parse(observed_at))||new Date(observed_at).toISOString()!==observed_at
    ||typeof evidence_id!=='string'||!evidence_id.startsWith(run+'-candidate')||!/-link-t[1-3]$/.test(evidence_id)||!/^[A-Za-z0-9_-]+$/.test(evidence_id))throw Error('METRICS_SCOPE_INVALID');
  const observation={version:1,run,run_id,profile,source_commit,line_key,video_id,video_url,observed_at,evidence_id,...nativeCounts(xml,nativeMetrics),evidence:{kind:'android_ui_xml',sha256:hash(xml),xml}};

@@ -1,3 +1,4 @@
+import {canonicalRunId} from './public-domain-authority.mjs';
 // 101的手机请求归还能力仅用于原cleanup；不表示OS全后代停止，不授予采集恢复。
 import {readFileSync,writeFileSync,lstatSync,realpathSync,readdirSync,mkdirSync,symlinkSync} from 'node:fs';
 import {join,resolve,isAbsolute} from 'node:path';
@@ -102,7 +103,7 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  if(!spec)fail('SCOPE_REQUIRED');
  if(!['collect','cleanup'].includes(purpose))fail('PURPOSE_INVALID');
  const binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen),globalDeadline=(Number(env.WF_RUN_START_TS)+Number(env.WF_RUN_MAX_SECONDS))*1000;
- const identity={purpose:'cleanup_only',task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collect_videos',owner:env.WFR_TAG,target:frozen.deployment.target,account:state.account,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id,work_deadline_ms:state.discoveryWorkDeadline??state.budgetDeadline,global_deadline_ms:globalDeadline,route:spec.policy?.endpoint,client_sha256:spec.policy?.adb_sha256};
+ const identity={purpose:'cleanup_only',task_id:taskId??null,run_id:canonicalRunId(env),attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collect_videos',owner:env.WFR_TAG,target:frozen.deployment.target,account:state.account,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id,work_deadline_ms:state.discoveryWorkDeadline??state.budgetDeadline,global_deadline_ms:globalDeadline,route:spec.policy?.endpoint,client_sha256:spec.policy?.adb_sha256};
  if(!lockHeld||state.executionUnknown||state.currentActivity!==(purpose==='collect'?'collect_videos':'cleanup')||!Number.isSafeInteger(globalDeadline)||Date.now()>=globalDeadline||!Number.isSafeInteger(identity.work_deadline_ms)||identity.work_deadline_ms>=globalDeadline)fail('IDENTITY_INVALID');
  for(const k of ['task_id','run_id','attempt','source_commit','profile','serial','target'])if(spec[k]!==identity[k])fail('IDENTITY_INVALID');
  if(binding.run_id!==identity.run_id||frozen.deployment.source_commit!==sourceCommit||!spec.expected_account||spec.expected_account!==state.account)fail('IDENTITY_INVALID');

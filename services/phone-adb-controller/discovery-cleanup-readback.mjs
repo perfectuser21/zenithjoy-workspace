@@ -2,6 +2,7 @@ import {readFileSync,writeFileSync,lstatSync,realpathSync,mkdirSync,chmodSync} f
 import {join,dirname,basename,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
+import {publicDomainScopeMatches} from './public-domain-authority.mjs';
 export const DESKTOP_PACKAGES_PYTHON=`import sys,json,re,xml.etree.ElementTree as E
 r=E.fromstring(sys.stdin.read())
 assert r.tag=='hierarchy'
@@ -41,8 +42,11 @@ print(json.dumps(sorted(set(n.get('package','') for n in r.iter('node') if not h
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=['run','run_id','source_commit','profile','serial'];
 const invalid=()=>{throw Error('CLEANUP_NATIVE_READBACK_INVALID');};
-function checkScope(scope){
- if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/.test(scope.run||'')||!scope.run_id?.startsWith('douyin_video_discovery-'+scope.run+'__')||!/^a?[1-9]\d*$/.test(scope.run_id.split('__').at(-1))||! /^[a-f0-9]{40}$/.test(scope.source_commit||'')||!/^[-A-Za-z0-9_.]+$/.test(scope.profile||'')||!/^[-A-Za-z0-9_.:]+$/.test(scope.serial||''))invalid();
+function checkScope(scope,runDir){
+ const legacy=scope.run_id?.startsWith('douyin_video_discovery-'+scope.run+'__')&&/^a?[1-9]\d*$/.test(scope.run_id.split('__').at(-1));
+ const internal=publicDomainScopeMatches(runDir,scope);
+ if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/.test(scope.run||'')||!legacy&&!internal||! /^[a-f0-9]{40}$/.test(scope.source_commit||'')||!/^[-A-Za-z0-9_.]+$/.test(scope.profile||'')||!/^[-A-Za-z0-9_.:]+$/.test(scope.serial||''))invalid();
+ return internal?'a1':scope.run_id.split('__').at(-1);
 }
 function fields(stdout){
  if(typeof stdout!=='string'||stdout.length>16000)invalid();const result={};
@@ -74,13 +78,13 @@ function writePrivate(file,bytes){
  writeFileSync(file,bytes,{mode:0o600});chmodSync(file,0o600);
 }
 export function captureCleanupReadback({runDir,evidenceRoot,scope,close_stdout,desktop_stdout,pngFile,xmlFile,evidenceId,nativeOptions}){
- checkScope(scope);const attempt=scope.run_id.split('__').at(-1);
+ const attempt=checkScope(scope,runDir);
  if(evidenceId!==`${scope.run}-${attempt}-cleanup-desktop`||basename(pngFile)!==evidenceId+'.png'||basename(xmlFile)!==evidenceId+'.xml')invalid();
  const png=readRegular(resolve(pngFile),evidenceRoot,12*1024*1024),xml=readRegular(resolve(xmlFile),evidenceRoot,1024*1024);
  const folder=join(runDir,'cleanup-readback');mkdirSync(folder,{recursive:true,mode:0o700});
  if(lstatSync(folder).isSymbolicLink()||realpathSync(dirname(folder))!==realpathSync(runDir))invalid();
  for(const [name,bytes] of [['desktop.png',png],['desktop.xml',xml]])writePrivate(join(folder,name),bytes);
- const attemptEvidence={version:1,...Object.fromEntries(keys.map(k=>[k,scope[k]])),observed_at:new Date().toISOString(),evidence_id:evidenceId,close_stdout,desktop_stdout,png_sha256:hash(png),xml_sha256:hash(xml)};
+ const attemptEvidence={version:1,...Object.fromEntries(keys.map(k=>[k,scope[k]])),...(publicDomainScopeMatches(runDir,scope)?{task_id:scope.task_id}:{}),observed_at:new Date().toISOString(),evidence_id:evidenceId,close_stdout,desktop_stdout,png_sha256:hash(png),xml_sha256:hash(xml)};
  writePrivate(join(runDir,'cleanup-attempt.json'),JSON.stringify(attemptEvidence));
  const launcher=checkNative(close_stdout,desktop_stdout,xml.toString('utf8'),png,nativeOptions),body={...attemptEvidence,launcher};
  const proof={...body,digest:hash(JSON.stringify(body))},file=join(runDir,'cleanup-readback.json');
@@ -88,8 +92,9 @@ export function captureCleanupReadback({runDir,evidenceRoot,scope,close_stdout,d
 }
 export function verifyCleanupReadback({runDir,scope,digest,nativeOptions}){
  try{
-  checkScope(scope);const proof=JSON.parse(readRegular(join(runDir,'cleanup-readback.json'),runDir,32768,true));
+  checkScope(scope,runDir);const proof=JSON.parse(readRegular(join(runDir,'cleanup-readback.json'),runDir,32768,true));
   for(const key of keys)if(proof[key]!==scope[key])return false;
+  if(publicDomainScopeMatches(runDir,scope)&&proof.task_id!==scope.task_id)return false;
   if(digest!==undefined&&proof.digest!==digest)return false;const {digest:actual,...body}=proof;if(hash(JSON.stringify(body))!==actual)return false;
   const folder=join(runDir,'cleanup-readback');if(lstatSync(folder).isSymbolicLink()||realpathSync(dirname(folder))!==realpathSync(runDir))return false;
   const png=readRegular(join(folder,'desktop.png'),folder,12*1024*1024,true),xml=readRegular(join(folder,'desktop.xml'),folder,1024*1024,true);

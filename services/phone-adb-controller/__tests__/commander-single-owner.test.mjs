@@ -83,6 +83,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
  const context=vm.createContext({process:fakeProcess,console,Buffer,setTimeout,clearTimeout,Date});
  const frozen={deployment:{source_commit:'a'.repeat(40)},activities:[{reference:{slot_key:'work'},version:{payload:{contract:{key:'work',budget:{max_duration_s:60}}}}}]};
  const modules={
+  './public-domain-authority.mjs':await import(url.pathToFileURL(path.join(path.dirname(process.argv[2]),'public-domain-authority.mjs')).href),
   'node:fs':fs,'node:path':path,'node:url':url,'node:crypto':crypto,
   './activity-commander.mjs':{runWorkflow:async options=>{let result;try{result=await options.handlers.work();}catch(error){fs.writeFileSync(path.join(directory,'actual-error.json'),JSON.stringify({name:error.name,message:error.message}));throw error;}assert.equal(result.status,'partial');return {status:'partial',results:[]};}},
   './leadgen-handlers.mjs':{parseCollection:()=>{},createHandlers:()=>({state:{},work:async()=>{throw Error('business after stop');}})},

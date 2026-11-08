@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {readFrozen} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
+import {publicDomainScopeMatches} from './public-domain-authority.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function verifiedCollectionPanelFailure(result,{evidenceRoot,videoId,owner,attempt,startedAt}){
@@ -31,7 +32,8 @@ function identity(frozen,binding,env){
     ||association.run_id!==binding.run_id||association.device_name!==scope.serial||association.source_commit!==scope.source_commit
     ||association.runtime_snapshot_sha256!==frozen.snapshot_sha256)throw Error('COLLECTION_ACCEPTANCE_PROBE_TASK_ASSOCIATION_INVALID');
  }else if(binding.task_id!==scope.task_id)throw Error('COLLECTION_ACCEPTANCE_PROBE_BINDING_INVALID');
- if(binding.run_id!==scope.run_id||scope.run_id!==env.WFR_RUN_ID+'__'+env.WFR_ATTEMPT||scope.attempt!==env.WFR_ATTEMPT||scope.profile!==env.P||scope.serial!==env.SERIAL||scope.source_commit!==frozen.deployment.source_commit||scope.target!==frozen.deployment.target||!env.WFR_TAG)throw Error('COLLECTION_ACCEPTANCE_PROBE_BINDING_INVALID');
+ const internal=publicDomainScopeMatches(env.WFR_RUN_DIR,{...scope,run:env.WFR_TAG});
+ if(binding.run_id!==scope.run_id||scope.run_id!==(internal?env.WFR_RUN_ID:env.WFR_RUN_ID+'__'+env.WFR_ATTEMPT)||scope.attempt!==env.WFR_ATTEMPT||scope.profile!==env.P||scope.serial!==env.SERIAL||scope.source_commit!==frozen.deployment.source_commit||scope.target!==frozen.deployment.target||!env.WFR_TAG)throw Error('COLLECTION_ACCEPTANCE_PROBE_BINDING_INVALID');
  return {version:1,kind:probe.kind,video_id:probe.video_id,task_id:scope.task_id,run_id:binding.run_id,attempt:scope.attempt,source_commit:scope.source_commit,profile:scope.profile,serial:scope.serial,target:scope.target,owner:env.WFR_TAG,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};
 }
 function verifiedArtifact(path,digest,root){

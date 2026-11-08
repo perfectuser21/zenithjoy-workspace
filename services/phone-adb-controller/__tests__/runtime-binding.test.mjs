@@ -104,6 +104,7 @@ const env={HOME:dir,WF_HOME:runtime,WFR_RUN_DIR:dir,WFR_ATTEMPT:'a1',WFR_RUN_ID:
 const proc={env,argv:['node','not-main'],execPath:process.execPath,pid:process.pid,stdout:{write(){}},stderr:{write(){}},exitCode:0};
 const context=vm.createContext({process:proc,console,Date,Map,Set,Buffer,JSON});
 const modules={
+ './public-domain-authority.mjs':await import(pathToFileURL(root+'public-domain-authority.mjs')),
  './activity-commander.mjs':{runWorkflow:async options=>{await options.handlers.preflight();throw Error('unexpected preflight success');}},
  './leadgen-handlers.mjs':{createHandlers:options=>{result.task_own=Object.hasOwn(options,'taskId');result.task_is_null=options.taskId===null;return createHandlers({...options,execute:async(command,args,opts)=>{if(args[0]?.endsWith('/adb-existing-route.py'))return {code:0,stdout:'5042\\n',stderr:''};result.calls.push(command==='adb'?'adb-read-state':'controller');if(command==='adb')return {code:0,stdout:'device\\n',stderr:''};return execInput(command,args,opts);}});},parseCollection:()=>{}},
  './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{}},

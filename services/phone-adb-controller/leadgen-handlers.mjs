@@ -1,3 +1,4 @@
+import {canonicalRunId,readPublicDomainBinding} from './public-domain-authority.mjs';
 import {isNativePhoneRuntime} from './native-phone-runtime.mjs';
 import {isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {verifyNoComments,createNoComments} from './no-comments-evidence.mjs';
@@ -72,10 +73,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const managedAdb=Object.hasOwn(env,'ZJ_ADB_HOST_CONFIG')||existsSync(hostPolicy)||(()=>{try{return lstatSync(hostPolicy).isSymbolicLink();}catch{return false;}})();
   const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
   let locked=false,leased=[],qualified=[],historyScoped=0,preflightScope;
-  const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,outreach_scope:outreachScope};
+  const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:canonicalRunId(env),outreach_scope:outreachScope};
   const needsCentralLock=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
   let central=centralLease||null;
-  const getCentral=()=>central??=createCentralDeviceLease({brainUrl:env.BRAIN_URL,token:env.BRAIN_INTERNAL_TOKEN,
+  const getCentral=()=>central??=createCentralDeviceLease({...(readPublicDomainBinding(env.WFR_RUN_DIR)?{publicDomainDirectory:env.WFR_RUN_DIR}:{}),brainUrl:env.BRAIN_URL,token:env.BRAIN_INTERNAL_TOKEN,
     deviceName:serial,taskId,runId:state.run_id,expectedProjectId:env.WF_BRAIN_PROJECT_ID,
     runSeconds:Number(env.WF_RUN_MAX_SECONDS||1800)});
   const verifyPhoneAssociation=async({frozen,binding,scope})=>{
@@ -131,7 +132,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     }
     return r.stdout;
   };
-  const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
+  const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:canonicalRunId(env),taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
   const legacyPhone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope||collectionScope,checked,nativeReceipt,getAgentDeadline:()=>state.agentPhoneDeadline??null});
   const phone=(command,...args)=>trustedPhone&&state.currentActivity==='collect_videos'?phoneRuntime.phone(command,...args):legacyPhone(command,...args);
   const returnedContext=()=>{const frozen=readFrozen(env.WFR_RUN_DIR),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);return {task_id:taskId??null,run_id:state.run_id,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile,serial,activity:'collection',owner:run,target:frozen.deployment.target,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};};
@@ -942,7 +943,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
           const pg=await queue('sample_readback',{video_id:v.video_id,video_url:v.video_url,rows:wanted});
           if(pg.verified!==true||pg.video_id!==v.video_id||pg.coverage!==stored.coverage||!Array.isArray(pg.rows)||pg.rows.length!==stored.coverage)throw Error('采样完整身份独立PG读回缺失');
           sampleReceipts.push({video_url:v.video_url,pg_rows:pg.rows,video_id:v.video_id,source_run:sampleInput.source_run,comment_limit:sampleInput.comment_limit,stop_reason:stopReason,coverage:stored.coverage,comments:stored.comments,comments_inserted:stored.inserted,history_verified:stored.history_verified,all_comments_scanned:!quota});
-          writeFileSync(join(env.WFR_RUN_DIR,`${run}-sampling-readback.json`),JSON.stringify({run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,sampling_input:sampleInput,verified:true,videos:sampleReceipts}),{mode:0o600});
+          writeFileSync(join(env.WFR_RUN_DIR,`${run}-sampling-readback.json`),JSON.stringify({run_id:canonicalRunId(env),sampling_input:sampleInput,verified:true,videos:sampleReceipts}),{mode:0o600});
         }
         comments+=stored.comments;
         if(partial)failures.push({video_id:v.video_id,code:7,reason:'采集在预算或停止边界结束，已保存核验评论，视频仍未采完',comments_saved:stored.comments});
@@ -980,7 +981,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(locked){try{const refreshed=await phone('lock-refresh',run);if(!refreshed.startsWith('lock=refreshed'))throw Error('锁所有权不可确认');
         const close_stdout=await phone('close-app');closed=true;const desktop_stdout=await phone('return-safe-desktop');
         if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'){
-          const evidenceId=`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`,scope={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial};
+          const evidenceId=`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`,scope={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial,...(readPublicDomainBinding(env.WFR_RUN_DIR)?{task_id:taskId}:{})};
           const pngFile=(await phone('snapshot-evidence',evidenceId)).split('\n')[0],xmlFile=(await phone('ui-evidence',evidenceId)).trim();
           cleanupProof=captureCleanupReadback({runDir:env.WFR_RUN_DIR,evidenceRoot:env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',profile),scope,close_stdout,desktop_stdout,pngFile,xmlFile,evidenceId});
           if(!verifyCleanupReadback({runDir:env.WFR_RUN_DIR,scope,digest:cleanupProof.digest}))throw Error('CLEANUP_NATIVE_READBACK_INVALID');

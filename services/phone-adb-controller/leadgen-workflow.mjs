@@ -1,3 +1,4 @@
+import {readPublicDomainBinding} from './public-domain-authority.mjs';
 import {createNativePhoneRuntime,isNativePhoneRuntime} from './native-phone-runtime.mjs';
 import {createNativeScoringWorkflow,isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
 import {readFileSync,writeFileSync,appendFileSync,existsSync,openSync,closeSync,fsyncSync,fstatSync,lstatSync,realpathSync,constants} from 'node:fs';
@@ -227,7 +228,7 @@ export async function verifyWorkflowActivity({root,runDir:dir,frozen,env,binding
     const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>0&&receipts.every(r=>r.commander_status==='available'))};
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
       const valid=result.result?.cleanup_readback_verified===1&&verifyCleanupReadback({runDir:dir,digest:result.result.cleanup_readback_digest,
-        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL},nativeOptions:preflightRuntime?.desktopVerificationOptions()});
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,...(readPublicDomainBinding(dir)?{task_id:binding.task_id}:{})},nativeOptions:preflightRuntime?.desktopVerificationOptions()});
       metrics.close_app_attempts=metrics.safe_desktop_visible=Number(valid);
     }
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
