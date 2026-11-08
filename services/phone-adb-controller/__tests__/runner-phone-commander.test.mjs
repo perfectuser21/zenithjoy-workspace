@@ -144,3 +144,17 @@ test('dispatch deadline tightening leaves foreign commands and parameters for th
   assert.equal(gateway.frames.length,0,'deadline handling cannot correct foreign authority into a dispatch');
  },{gateway});
 });
+
+ test('cleanup在旧Worker截止后用封闭通道结束Observer，不能再派旧模型',async()=>{
+ await realPhone(async({router,cold,q,activities,requests,allocated,proofs})=>{
+  await router.selectActivity(activities[1]);
+  const previous=requests[1],cleanup=requests[2],realNow=Date.now,now=previous.worker_deadline_ms+1;
+  cleanup.worker_deadline_ms=now+1000;cleanup.receipt_deadline_ms=now+2000;cleanup.deadline_ms=now+3000;
+  Date.now=()=>now;
+  try{await router.selectActivity(activities[2],{deadline_ms:cleanup.deadline_ms});}
+  finally{Date.now=realNow;}
+  assert.deepEqual(allocated,['preflight','collect_videos','cleanup']);
+  assert.equal(proofs[1].execution_stopped,true);
+  assert.equal(cold.runnerCommanderClosureKnown(proofs[1],q),true);
+ });
+ });

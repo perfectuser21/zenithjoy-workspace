@@ -388,7 +388,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -409,14 +409,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -445,6 +445,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -500,7 +507,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -549,7 +556,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -612,7 +619,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -783,13 +790,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175",
+      "code_digest": "9f8390479898580b04e04b020588ee3ef6ebea0c6184de6d093f806ce1b83ac2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "022a929b5fd3b25b7aafa4ef231c06d6dc31aeacba136febb78befc6e2381d81",
-        "current_code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "032026f064e58f5e6ff19c9f0831c415bd0769e99e4c897d3f215eccae57e175",
+        "current_code_digest": "9f8390479898580b04e04b020588ee3ef6ebea0c6184de6d093f806ce1b83ac2"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1228,7 +1235,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -1249,14 +1256,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -1285,6 +1292,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -1340,7 +1354,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -1389,7 +1403,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -1452,7 +1466,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -1606,13 +1620,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260",
+      "code_digest": "d824ef2627fed8008ec08b680fff11280f28ffda8c6a66ff213f4af631a38366",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "新增精确cloud7预检只读SDK隔离的一次性非重放迁移程序，独立CLI执行；原Activity执行与OLD_EXECUTION_TERMINATION_UNKNOWN严闸不变，原Worker方法及输入输出不变。其余仅云手机review/policy哈希更新，104未获新权限。 本轮同步生成的101/102步骤清单仅更新合同哈希，步骤、成功标准和路由保持相同。",
-        "reviewed_by": "codex-cloud8-ci-continuation (generated-step hash delta review)",
-        "previous_code_digest": "2f6d865eaf5058b99c7e5590c9e03c14dbdab85f544ab78bf9a69fca96012bd6",
-        "current_code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260",
+        "current_code_digest": "d824ef2627fed8008ec08b680fff11280f28ffda8c6a66ff213f4af631a38366"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1995,7 +2009,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -2016,14 +2030,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -2052,6 +2066,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -2107,7 +2128,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -2156,7 +2177,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -2219,7 +2240,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -2376,13 +2397,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd",
+      "code_digest": "eeafaaca4727cd16d95065f3573d381acfecec9f4123f08bda73446835ee5f8d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "92566079be88eee2b1cf9e7399fc931cca7c65389146453a8c9b5f6752dee867",
-        "current_code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "52407bd2b384f156abb278768b03521e2284e97d55ed66ca3a05cf3b3f8b24fd",
+        "current_code_digest": "eeafaaca4727cd16d95065f3573d381acfecec9f4123f08bda73446835ee5f8d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2793,7 +2814,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -2814,14 +2835,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -2850,6 +2871,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -2905,7 +2933,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -2954,7 +2982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -3017,7 +3045,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -3230,13 +3258,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b",
+      "code_digest": "3e576977984d0037de6b9a5c717bdbb37d0a7c303409fb95dbde911626dd560c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "6531451463e0d332631e189599764f24a847fe682e47ea70aad65811612b5e45",
-        "current_code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "91e999ef60e7b87a6b305fdb108827902615edb791bd003fa12b32efaf99a05b",
+        "current_code_digest": "3e576977984d0037de6b9a5c717bdbb37d0a7c303409fb95dbde911626dd560c"
       }
     },
     "douyin_video_processing.collection": {
@@ -3619,7 +3647,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -3640,14 +3668,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -3676,6 +3704,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -3731,7 +3766,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -3780,7 +3815,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -3843,7 +3878,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -4022,13 +4057,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706",
+      "code_digest": "425be4faee4a17e571d19d4730cb2042168e4d335c48e4c145413a6b5c5c9702",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "7df3f3ca397e996b2315a5dc2d8c869ba153e6ffc8b60612b153bca9f8000fda",
-        "current_code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "c81caded470e0f003ad2632409098bee2b0b6c044d2f9cdc14119ab102b55706",
+        "current_code_digest": "425be4faee4a17e571d19d4730cb2042168e4d335c48e4c145413a6b5c5c9702"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4446,7 +4481,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -4467,14 +4502,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -4503,6 +4538,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -4558,7 +4600,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -4607,7 +4649,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -4670,7 +4712,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -4823,13 +4865,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9",
+      "code_digest": "70920ca445bc8aec9f1336c75373fd7a54b6a8a9a7c8b2bada6b8e2c6200b8b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。 本轮同步生成的101/102步骤清单仅更新合同哈希，步骤、成功标准和路由保持相同。",
-        "reviewed_by": "codex-cloud8-ci-continuation (generated-step hash delta review)",
-        "previous_code_digest": "28d26feeb2af565574316afb2dd2c88fabc6dfeff14e9dd84d8200bfdbdb213f",
-        "current_code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9",
+        "current_code_digest": "70920ca445bc8aec9f1336c75373fd7a54b6a8a9a7c8b2bada6b8e2c6200b8b2"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5219,7 +5261,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -5240,14 +5282,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -5276,6 +5318,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -5331,7 +5380,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -5380,7 +5429,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -5443,7 +5492,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -5607,13 +5656,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c",
+      "code_digest": "258afbd84c8a0a64de4f7928d93be18174c394835026077f6ddeeea00c36397d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "89a35a3cef2c06e2f161194b102f54ba36e76753642654129bdfdc2aa7ac6f17",
-        "current_code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "bc56d38db472605af7f812cd85ce2c9183c0acd8268a371c6a7b5e1d3c71a76c",
+        "current_code_digest": "258afbd84c8a0a64de4f7928d93be18174c394835026077f6ddeeea00c36397d"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6010,7 +6059,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -6031,14 +6080,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -6067,6 +6116,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -6122,7 +6178,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "f05d70bbf1bf9d2e140e93a197c163b05c98d96974052e210ff3d51dfda3d9eb"
+          "sha256": "25111d76ed6d03cdc6beb7ba872d661fd36418f05608910661603569501179a8"
         },
         {
           "kind": "code",
@@ -6171,7 +6227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -6234,7 +6290,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -6433,13 +6489,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455",
+      "code_digest": "a71da23c822c266fab49c0e3b901e9fbe9b1202112537bd3af3e276ac4dc020c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "d30ed11999d51e9bfb157e3107d9a2d17325f6852e3253f0785493c78d6f8122",
-        "current_code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "abfb659d1967a6d82f5d6c755f673a37823f2164813b4522ca8e71338ec48455",
+        "current_code_digest": "a71da23c822c266fab49c0e3b901e9fbe9b1202112537bd3af3e276ac4dc020c"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6626,7 +6682,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -6647,14 +6703,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -6683,6 +6739,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -6941,7 +7004,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -7004,7 +7067,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -7193,13 +7256,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb",
+      "code_digest": "fd2a5485efaf06f64e1a4ba891da158f437fc1523f2a1659f3224127b6a030c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "b134fe4acf95a56b46db05105676e8f109f6d842d6ecaa5c56f257966ffbe738",
-        "current_code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "96b3474e84ee045b358a140c357d638d42a1d740ec94458f9f009c36f4052bfb",
+        "current_code_digest": "fd2a5485efaf06f64e1a4ba891da158f437fc1523f2a1659f3224127b6a030c6"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7386,7 +7449,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -7407,14 +7470,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -7443,6 +7506,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -7701,7 +7771,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -7764,7 +7834,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -7928,13 +7998,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb",
+      "code_digest": "afd451e2ae980f70c2b154ec1e6d276bd62d72a949df0dc56695b17b86d09047",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "017c1c44b3332170894b2d1eeba95d48d30f4b560fcb1b5c31b815f0513feb21",
-        "current_code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "52b553ca6b5a6998ec34d595e5a80a9dd26ddee35f1c700e18a839f3328b35eb",
+        "current_code_digest": "afd451e2ae980f70c2b154ec1e6d276bd62d72a949df0dc56695b17b86d09047"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8121,7 +8191,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -8142,14 +8212,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -8178,6 +8248,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -8436,7 +8513,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -8499,7 +8576,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -8656,13 +8733,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da",
+      "code_digest": "638c743a044f3c0c2462163a3e6e78d341324b8d22ec460cae5e5d856a4f8b8f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "2054ac8efbf6446de71baea2d282add59e6183d144528abf83fec218507540da",
-        "current_code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "7041cef6bc9e694ed7678904a720f9389a4fbf0bad88333d6d991f91deca92da",
+        "current_code_digest": "638c743a044f3c0c2462163a3e6e78d341324b8d22ec460cae5e5d856a4f8b8f"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8849,7 +8926,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-parent-loop.mjs",
           "revision": "contract",
-          "sha256": "e8565d1076fb47a1a5c45ece188d1aaf55934dad2c791676411d017495255a60"
+          "sha256": "183ff8a4a44e21045ac39ada62f4599342b2972a91e998ecb0ec8d8de5b3a9ab"
         },
         {
           "kind": "code",
@@ -8870,14 +8947,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runner-official-commander.mjs",
           "revision": "contract",
-          "sha256": "9394ddd02cb31864e6e08a95985f14108c15269e798539b660e9db940239b56f"
+          "sha256": "1da2bbd524908874ee5ff497a4661f44cb7330975057f9fa8a1be18eb5eaa8b3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-agent-control.mjs",
           "revision": "contract",
-          "sha256": "f77766f7cbd0ac68adb12f1682bb432aedd31b4ccf71ec2dc2a0c0ee1cc36c51"
+          "sha256": "f132d7c9ccd6db26665214090cbffddb667c6feb9044db9a98e055ac01458c36"
         },
         {
           "kind": "code",
@@ -8906,6 +8983,13 @@
           "path": "services/phone-adb-controller/official-model-turn.mjs",
           "revision": "contract",
           "sha256": "046892302e41f08862e225e56bcde6f2815772b2dd24c8a972407afbb6a37454"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/raw-turn-budget.mjs",
+          "revision": "contract",
+          "sha256": "8447a3c646fadc8930d3526387a4ac35556392c0d0d186abb136b72a89275fa4"
         },
         {
           "kind": "code",
@@ -9164,7 +9248,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "dc989dfffb22fd9d9d7c8a412a04acc7fca3d2dc11a854b488ccf9362f8fe942"
+          "sha256": "74f4cdaf88389f53974807939e1eb60941ff310f5780df199bcd487400ac3d99"
         },
         {
           "kind": "code",
@@ -9227,7 +9311,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "61fbc644622b1de22b60d809876cdffc65df674006c729b866aa8c1edc3a6dc6"
+          "sha256": "9481e8a1d1aac5623b692625df2c51343ec1b706eb3230cf6d24fa563b8d7407"
         },
         {
           "kind": "code",
@@ -9394,13 +9478,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8",
+      "code_digest": "0acad840091be466c077300bdbf02a8f2774b81796d4cb406db54600753e68df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享cloud-phone-test来源审查补充精确cloud7历史隔离迁移合同并更新review哈希；普通命令、Activity方法、成功标准、工具接口和104权限均未改变。独立迁移程序只绑定processing.preflight，不进入本Activity执行路径。",
-        "reviewed_by": "/root/recovery_contract_review",
-        "previous_code_digest": "743e70a4a0664a94e99ad961f109983551e04f794a32109336bf8ff305453893",
-        "current_code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8"
+        "reason": "独立复审原方法与合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取，原生新鲜账号门保留；同源schema不扩授权，单轮模型窗口收紧原预算；精确官方停止加Caller完整封闭只证明已停，失败仍非PASS且native/ACK未知仍隔离；cleanup只关闭旧Observer，104不进入raw执行，发布与冻结依赖闭包完整。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，含launcher补丁复审）",
+        "previous_code_digest": "a13f6173a09381341088d7b8274dbd07585dbe74b90222ee3dbe42a8a9b63eb8",
+        "current_code_digest": "0acad840091be466c077300bdbf02a8f2774b81796d4cb406db54600753e68df"
       }
     }
   },

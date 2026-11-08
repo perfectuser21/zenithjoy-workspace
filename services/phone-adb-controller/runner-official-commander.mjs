@@ -107,7 +107,10 @@ async function createRunnerActivityCommander({runtimeRoot,runDir,source,activiti
    const adjacent=policy.keys.indexOf(selected.key)===policy.keys.indexOf(current.activity)+1;
    const cleanupTransition=policy.phone&&selected.key==='cleanup'&&!adjacent;
    if(entries.some(e=>e.activity===selected.key)||!adjacent&&(!cleanupTransition||nativePhoneDomain.isNativePhoneRuntime(nativePhoneRuntime)!==true))throw deny();
-   const previous=current;if(await previous.observer.waitForIdle({deadlineMs:Math.min(previous.request.worker_deadline_ms,input.deadline_ms??Infinity),signal:input.signal})!==true)throw deny();
+   const previous=current;
+   // Cleanup revokes the old lane before waiting. Its close uses the original
+   // receipt/cleanup budget and cannot dispatch another old Worker/model turn.
+   if(selected.key!=='cleanup'&&await previous.observer.waitForIdle({deadlineMs:Math.min(previous.request.worker_deadline_ms,input.deadline_ms??Infinity),signal:input.signal})!==true)throw deny();
    const proof=await previous.observer.close();previous.closed=true;previous.proof=proof;if(!runnerCommanderClosureKnown(proof,first)){invalid=true;throw deny();}
    active();try{const request=prepare(selected,input);
     if(cleanupTransition&&(typeof nativePhoneDomain.authorizeNativePhoneCleanupTransition!=='function'||await nativePhoneDomain.authorizeNativePhoneCleanupTransition(nativePhoneRuntime,{request})!==true))throw deny();

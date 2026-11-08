@@ -94,7 +94,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const directory=join(runDir,'agent-tools',scope.activity);mkdirSync(directory,{recursive:true,mode:0o700});
   const stat=lstatSync(directory);if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)!==0)throw Error('AGENT_TOOL_JOURNAL_INVALID');
   syncDirectory(dirname(directory));syncDirectory(runDir);
-  const scopeKey=hash(scope),receipts=[];let result=null,settled=false,busy=false;
+  const scopeKey=hash(scope),receipts=[],preflightSteps=['wake','unlock','open-app','account-current'],completedPreflightPhone=new Set();let result=null,settled=false,busy=false;
   const rawTermination=proof=>{
     if(scope.execution_transport!=='raw-model-v1')return;
     const state=primitives.executionState?.()||{};
@@ -188,7 +188,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     if(!/^[A-Za-z0-9_-]+$/.test(readEid)||!readEid.startsWith(scope.run+'-'))throw Error('AGENT_TOOL_EVIDENCE_ID_INVALID');
     const trusted=readPhone.has(command)?(['ui-evidence','snapshot-evidence'].includes(command)?[readEid]:[]):await primitives.validatePhone(command,args,{...scope,evidence_id:eid});
     if(!Array.isArray(trusted))throw Error('AGENT_TOOL_PHONE_ADMISSION_INVALID');
-    busy=true;try{return await primitives.phone(command,...trusted);}finally{busy=false;}
+    busy=true;try{const value=await primitives.phone(command,...trusted);if(scope.activity==='preflight'&&preflightSteps.includes(command))completedPreflightPhone.add(command);return value;}finally{busy=false;}
   };
   const lifecycle=async(operation,fn)=>{
     await guard();if(busy)return {deferred:true};if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});
@@ -205,8 +205,18 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   return {business,phone,canReadback,
     ...(typeof primitives.closeNativeScope==='function'?{closeNativeScope:proof=>primitives.closeNativeScope(proof,scope)}:{}),
     heartbeat:async()=>{if(unresolved().length)return {deferred:true,commit_unknown:true};try{return await lifecycle('resource_heartbeat',()=>primitives.heartbeat?.(scope));}catch(error){primitives.resourceUnknown?.(error,scope);error.executionStopped=false;throw error;}},
-    inspect:async()=>({scope:structuredClone(scope),phone_capabilities:scope.serial==='none'?[]:[...readPhone,...phoneBySlot[scope.activity]],business_capabilities:[...slots[scope.activity]],
-      pending_write_readbacks:unresolved().map(row=>({operation:row.value.operation,readback_operations:readbackFor[row.value.operation]||[]})),...await primitives.inspect?.(scope)}),
+    inspect:async()=>{
+      const facts=await primitives.inspect?.(scope),preflight=scope.activity==='preflight';
+      const companyAdmitted=preflight&&prepared&&object(facts?.company)&&Boolean(facts.company.company_id&&facts.company.tenant_id&&facts.company.device_binding);
+      const commands=scope.serial==='none'?[]:[...readPhone,...phoneBySlot[scope.activity]];
+      const nextPreflight=preflightSteps.find(command=>!completedPreflightPhone.has(command));
+      return {...facts,scope:structuredClone(scope),phone_capabilities:commands,business_capabilities:[...slots[scope.activity]],
+        tool_contract:{business:Object.fromEntries(slots[scope.activity].map(op=>[op,{input_keys:[...schemas[op]]}])),
+          ...(preflight?{phone:Object.fromEntries(commands.map(command=>[command,{args:[]}]))}:{})},
+        ...(preflight?{bootstrap:{resources_prepared:prepared,company_config_admitted:companyAdmitted,native_phone_steps_completed:preflightSteps.filter(command=>completedPreflightPhone.has(command)),
+          ...(companyAdmitted&&!facts.account&&nextPreflight?{next_required_intent:{type:'phone',command:nextPreflight,args:[]},instruction:'资源与公司已由Code准入，不等于应用已打开；执行next_required_intent并读回原生结果。仅成功返回的wake、unlock、open-app前置被记录，account-current仍须新鲜前台和原生账号证据。context或模型文字不能替代验收。'}:{})}}:{}),
+        pending_write_readbacks:unresolved().map(row=>({operation:row.value.operation,readback_operations:readbackFor[row.value.operation]||[]}))};
+    },
     prepare:async()=>{if(prepared)return;const result=await lifecycle('resource_prepare',()=>primitives.prepare?.(scope));if(!result?.deferred)prepared=true;return result;},
     settle:async proof=>{if(proof?.execution_stopped!==true||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');rawTermination(proof);if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});await guard();if(typeof primitives.settle!=='function')throw Error('AGENT_TOOL_RESULT_ADAPTER_UNAVAILABLE');result=await primitives.settle({scope,receipts:structuredClone(receipts),proof});settled=true;return result;},
     release:async proof=>{if(proof?.execution_stopped!==true||!settled||busy)throw Error('AGENT_TOOL_TERMINATION_UNVERIFIED');rawTermination(proof);if(scope.activity!=='cleanup')throw Error('AGENT_TOOL_RELEASE_NOT_CLEANUP');const released=await lifecycle('resource_release',()=>primitives.release?.(proof,scope));if(!object(released))throw Error('AGENT_TOOL_RELEASE_UNVERIFIED');result={...result,...released};return released;},

@@ -100,7 +100,13 @@ export async function runActivitySkillParentLoop({request,scope,broker,control,s
      const stopFacts=control.verifyStopReceipt(stopped,{request:q,index});
      if(!object(stopFacts))throw Error('PARENT_LOOP_OFFICIAL_STOP_INVALID');
      officialStopped=true;
-     record(`turn-${index}-stop`,{verified:true});
+     // Only the private Caller verifier may resolve a missing model response.
+     // The task still failed; no intent from that turn can run after sealing.
+     modelUnknown=!(stopFacts.index===index&&stopFacts.official_execution_stopped===true
+       &&stopFacts.external_effect_unknown===false&&stopFacts.previous_caller_stop_unproven===false
+       &&['not_started','ok','error','aborted','timeout'].includes(stopFacts.status)
+       &&Number.isFinite(stopFacts.ended_at)&&stopFacts.ended_at<=Date.now()+1000);
+     record(`turn-${index}-stop`,{verified:true,model_execution_unknown:modelUnknown});
     }catch{record(`turn-${index}-stop`,{verified:false});}
     break;
    }
