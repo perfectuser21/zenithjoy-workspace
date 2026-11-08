@@ -39,13 +39,18 @@ export function validateReviewFacts(f){
 async function readBrain(path){
  need(/^\/api\/brain\/(?:tasks\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/definition|device-locks)$/.test(path),'BRAIN_READ_PATH');const token=process.env.BRAIN_INTERNAL_TOKEN;need(typeof token==='string'&&token&&!/[\r\n]/.test(token),'EXPLICIT_CREDENTIAL_REQUIRED');const r=await fetch('http://127.0.0.1:5221'+path,{headers:{'X-Internal-Token':token},redirect:'error',signal:AbortSignal.timeout(10000)});need(r.status===200&&r.headers.get('content-type')?.startsWith('application/json'),'BRAIN_READ');const text=await r.text();need(Buffer.byteLength(text)<=8*1024*1024,'BRAIN_READ_LIMIT');return JSON.parse(text);
 }
-export function reviewSource(){
- const repo=resolve(here,'../..'),git=(...args)=>execFileSync('git',['-C',repo,...args],{encoding:'utf8',timeout:10000,stdio:['ignore','pipe','pipe']}),commit=git('rev-parse','HEAD').trim(),files={};
- const queue=['device-epoch-fence-review.mjs'];
- while(queue.length){const n=queue.shift();if(Object.hasOwn(files,'services/phone-adb-controller/'+n))continue;need(!n.startsWith('../')&&queue.length<512,'REVIEW_IMPORT_SCOPE');const path='services/phone-adb-controller/'+n,b=bytes(join(here,n));need(b.equals(Buffer.from(git('show',commit+':'+path))),'REVIEW_SOURCE_DIRTY');files[path]=sha(b);
- for(const match of b.toString().matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"](\.[^'"]+)['"]/g)){const dependency=resolve(dirname(join(here,n)),match[1]);need(dependency.startsWith(here+'/'),'REVIEW_IMPORT_SCOPE');queue.push(dependency.slice(here.length+1));}}
- return {commit,files};
+export function reviewSource({runtimeRoot=here,repositoryRoot=resolve(here,'../..')}={}){
+ need(resolve(runtimeRoot)===runtimeRoot&&realpathSync(runtimeRoot)===runtimeRoot,'REVIEW_SOURCE_ROOT');let manifest=null,git,commit;
+ const manifestPath=join(runtimeRoot,'deployment-manifest.json');let present=true;try{lstatSync(manifestPath);}catch(e){if(e.code==='ENOENT')present=false;else throw e;}
+ if(present){manifest=JSON.parse(bytes(manifestPath));need(manifest.source_repo==='perfectuser21/zenithjoy-workspace'&&/^[a-f0-9]{40}$/.test(manifest.source_commit||'')&&manifest.target==='mmv'&&Array.isArray(manifest.files),'REVIEW_DEPLOYMENT_SOURCE');commit=manifest.source_commit;}
+ else{git=(...args)=>execFileSync('git',['-C',repositoryRoot,...args],{encoding:'utf8',timeout:10000,stdio:['ignore','pipe','pipe']});commit=git('rev-parse','HEAD').trim();}
+ const files={},queue=['device-epoch-fence-review.mjs'];
+ while(queue.length){const n=queue.shift();if(Object.hasOwn(files,'services/phone-adb-controller/'+n))continue;need(!n.startsWith('../')&&queue.length<512,'REVIEW_IMPORT_SCOPE');const path='services/phone-adb-controller/'+n,b=bytes(join(runtimeRoot,n));
+  if(manifest){const rows=manifest.files.filter(r=>r.path===path);need(rows.length===1&&rows[0].deployed_path===n&&rows[0].content_sha256===sha(b),'REVIEW_SOURCE_BYTES');}else need(b.equals(Buffer.from(git('show',commit+':'+path))),'REVIEW_SOURCE_DIRTY');files[path]=sha(b);
+  for(const match of b.toString().matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"](\.[^'"]+)['"]/g)){const dependency=resolve(dirname(join(runtimeRoot,n)),match[1]);need(dependency.startsWith(runtimeRoot+'/'),'REVIEW_IMPORT_SCOPE');queue.push(dependency.slice(runtimeRoot.length+1));}
+ }return {commit,files};
 }
+
 export async function inspectReview({taskId,stateFile,read=readBrain,home=userInfo().homedir,source=reviewSource,daemon=readOldDaemon}={}){
  need(uuid.test(taskId||'')&&typeof stateFile==='string'&&resolve(stateFile)===stateFile&&stateFile.startsWith(join(home,'.local/share')+'/'),'REVIEW_INPUT');
  const raw={},json=p=>{const b=bytes(p);raw[p]=sha(b);return JSON.parse(b);},v=await read('/api/brain/tasks/'+taskId),m=v.task??v,p=m.payload;
