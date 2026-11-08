@@ -125,3 +125,14 @@ test('prepare failure诊断只记录规范code并限制cause深度，拒绝任�
   const text=readFileSync(join(folder,name),'utf8'),diagnostic=JSON.parse(text);assert.equal(diagnostic.error_code,null);assert.deepEqual(diagnostic.cause_codes,['NATIVE_PHONE_CAUSE_0','NATIVE_PHONE_CAUSE_1','NATIVE_PHONE_CAUSE_2','NATIVE_PHONE_CAUSE_3']);assert.equal(text.includes(secret),false);assert.equal(Object.hasOwn(diagnostic,'stack'),false);assert.equal(Object.hasOwn(diagnostic,'message'),false);assert.equal(Object.hasOwn(diagnostic,'diagnostics'),false);
  },{scope:{activity:'preflight'},primitives:{prepare:async()=>{throw failure;}}});
 });
+
+ test('预检首轮上下文提供已准入bootstrap和真实空参schema，账号仍须原生读取',async()=>using(async tools=>{
+ await tools.prepare();const context=await tools.inspect();
+ assert.equal(context.bootstrap.company_config_admitted,true);
+ assert.deepEqual(context.bootstrap.next_required_intent,{type:'phone',command:'account-current',args:[]});
+ assert.deepEqual(context.tool_contract.business.company_config,{input_keys:[]});
+ assert.deepEqual(context.tool_contract.phone['account-current'],{args:[]});
+ assert.equal(context.account,null);
+ await assert.rejects(()=>tools.business('company_config',{company_id:'foreign'}),/INPUT_SCOPE/);
+ await assert.rejects(()=>tools.phone('account-current','invented'),/PREFLIGHT_ARGS/);
+ },{scope:scope('preflight'),primitives:{inspect:async()=>({company:{company_id:'server-company',tenant_id:'server-tenant',device_binding:{profile:'fixture'}},account:null}),validatePhone:async(_command,args)=>{if(args.length)throw Error('PREFLIGHT_ARGS');return [];}}}));
