@@ -41,6 +41,8 @@ class Cloud8Tests(unittest.TestCase):
   self.assertEqual(self.m.SUCCESSOR['run_tag'],'potato20261108_101_cloud9')
   self.assertNotEqual(self.m.IDENTITY['owner'],self.m.SUCCESSOR['run_tag'])
   self.assertEqual(self.m.PROTOCOL,'cloud8-observer-quarantine-supersession/v1')
+  self.assertEqual(self.m.FIX_TASK,'ffd2d337-b10e-4f96-8e3e-bd35cd57bac1')
+  self.assertEqual(self.m.CLAIM['claimed_by'],'codex-cloud-leadgen-e2e')
  def test_original_archive_exact_inventory_and_bytes_are_required(self):
   evidence=self.run/'evidence';evidence.mkdir();ledger=self.run/'ledger';ledger.mkdir();put(ledger/'result.json',{'execution_stopped':False})
   archive=evidence/'cloud8-original-runtime-evidence.tar.gz'

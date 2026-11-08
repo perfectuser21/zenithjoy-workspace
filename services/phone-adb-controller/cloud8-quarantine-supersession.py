@@ -20,8 +20,8 @@ _tx = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_tx)
 read_bytes, load, lines, sha, need, relative = _tx.read_bytes, _tx.load, _tx.lines, _tx.sha, _tx.need, _tx.relative
 TASK = 'deeb4021-2b05-45e5-b8a6-712a38cdd0c7'
-FIX_TASK = '000e3f10-978f-4c4c-9720-8386a5aae210'
-CLAIM = dict(claimed_by='codex-cloud8-nonreplay-authority', claimed_at='2026-11-08T10:22:51.535Z')
+FIX_TASK = 'ffd2d337-b10e-4f96-8e3e-bd35cd57bac1'
+CLAIM = dict(claimed_by='codex-cloud-leadgen-e2e', claimed_at='2026-11-08T10:09:59.271Z')
 COMMIT = '41490a0aba7cbea0de32d15f575ee2169dd4198f'
 TAG = 'potato20261107_101_cloud8'
 RUN = 'douyin_video_discovery-'+TAG+'__a1'

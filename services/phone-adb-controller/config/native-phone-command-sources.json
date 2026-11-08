@@ -10,7 +10,7 @@
       "device_sdk": 31,
       "review": {
         "path": "config/native-phone-reviews/cloud-phone-test-sdk31.md",
-        "sha256": "43dc8c916d3d747167a99e1d57ad62a09db4a7fefd782b0828f47d12fd13d8ad"
+        "sha256": "19684124501403510d0ca309d9509da2900b53ef0b01954a0ac9dada991247df"
       },
       "pillow": {
         "path": "config/native-phone-pillow-mmv.json",
