@@ -57,7 +57,7 @@ class Cloud8Tests(unittest.TestCase):
    if 'merge-base' in argv:raise subprocess.CalledProcessError(1,argv)
    self.fail('must reject unmerged authority before reading deployable source')
   with patch.object(self.m.subprocess,'check_output',side_effect=git):
-   with self.assertRaises(subprocess.CalledProcessError):self.m.source_authority()
+   with self.assertRaisesRegex(ValueError,"RECOVERY_SOURCE_NOT_MAIN"):self.m.source_authority()
  def test_private_transaction_does_not_mutate_cloud7_entry_identity(self):
   spec=importlib.util.spec_from_file_location('original_cloud7',SOURCE.parent/'cloud7-quarantine-supersession.py')
   original=importlib.util.module_from_spec(spec);spec.loader.exec_module(original)

@@ -32,4 +32,4 @@ Pillow只用于原本地filter与原视觉编码，策略另固定MMV既有PIL�
 
 `inspect` 只读检查候选，显式 not_recovery_authority=true；`plan/apply` 均要求实现及本审查原件已合并 origin/main，固定恢复 Task 当前 claim，旧 Task failed，中央无 owner，同 inode 双根 guard，六文件精确 epoch CAS、持久 intent 和只读 free 读回。只迁移旧 quarantine 整目录，不写中央锁，不重放旧活动。
 
-后继限定 `potato20261108_101_cloud9` 的 101、mmv/broker mmv、cloud-phone-test、原 serial/5041、账号 77980009922、yuesheng。后继必须由真实 Commander-v2 使用 Brain 产生并匹配实际 task/binding 的原 JSON；本 authority 不启动后继、不授权旧五参 CLI、不豁免新 claim、双锁与账号实屏预检，亦不授权 104。
+后继限定 `potato20261108_101_cloud9` 的 101、mmv/broker mmv、cloud-phone-test、原 serial/5041、账号 77980009922、yuesheng。后继必须使用正式 Skill 的 `PUBLIC_FULL_FROZEN_WORKFLOW_CLI`，以真实新 Task、冻结 workflow/source、run/binding ACK 进入 agent Primary 与 Runner official observer 完整链，并在预算修复合并、部署后执行；不得借用仅适用于其他嵌套 commander/wf-launch 合同的入口。本 authority 不启动后继，不豁免新 claim、双锁与账号实屏预检，亦不授权 104。

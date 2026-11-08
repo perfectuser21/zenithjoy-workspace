@@ -30,7 +30,7 @@ EPOCH = 'd185baf6-b32f-4de5-801f-52ee6bb35f26'
 SERIAL = '47.100.213.173:10001'
 PROTOCOL = 'cloud8-observer-quarantine-supersession/v1'
 IDENTITY = dict(task_id=TASK,run_id=RUN,binding_id=BINDING,source_commit=COMMIT,profile='cloud-phone-test',serial=SERIAL,owner=TAG,epoch=EPOCH)
-SUCCESSOR = dict(run_tag='potato20261108_101_cloud9',workflow_key='douyin_video_discovery',host='mmv',broker_host='mmv',profile='cloud-phone-test',serial=SERIAL,adb_endpoint='tcp:127.0.0.1:5041',expected_account='77980009922',line='yuesheng',required_entry='commander-v2-brain-bound-json')
+SUCCESSOR = dict(run_tag='potato20261108_101_cloud9',workflow_key='douyin_video_discovery',host='mmv',broker_host='mmv',profile='cloud-phone-test',serial=SERIAL,adb_endpoint='tcp:127.0.0.1:5041',expected_account='77980009922',line='yuesheng',required_entry='PUBLIC_FULL_FROZEN_WORKFLOW_CLI-task-run-ack-agent-primary-official-observer')
 LOCK_FIELDS = dict(owner=TAG,preflight_epoch=EPOCH,preflight_proof_required=EPOCH,standalone_review_required=TAG,preflight_quarantined=EPOCH,acquired_at='1794083228')
 PINS = dict(archive='8996c496d9ecc7b86cdd1b8c772e0bbbb81dbce2d684ae6a1cebb81468a31ef2',marker='93f87e8203feda81381ab49c8e303351a67529c5264c04047053f01e6b03a05a')
 LEAVES = [('calibration-positive',49570,0),('calibration-negative',49571,1),('owner',49572,0),('owner',49695,0),('owner',55819,0),('owner',59212,0)]
@@ -77,7 +77,9 @@ def source_authority(require_main=True):
  repo=_here.parents[1]
  def git(*args):return subprocess.check_output(['git','-C',str(repo),*args],timeout=10,stderr=subprocess.DEVNULL)
  commit=git('rev-parse','HEAD').decode().strip()
- if require_main:git('merge-base','--is-ancestor',commit,'origin/main')
+ if require_main:
+  try:git('merge-base','--is-ancestor',commit,'origin/main')
+  except subprocess.CalledProcessError:need(False,'CLOUD8_RECOVERY_SOURCE_NOT_MAIN')
  names=['cloud8-quarantine-supersession.py','cloud7-quarantine-supersession.py','config/native-phone-reviews/cloud-phone-test-sdk31.md']
  files={}
  for name in names:
