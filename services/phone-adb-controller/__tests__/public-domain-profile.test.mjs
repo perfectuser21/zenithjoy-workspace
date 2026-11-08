@@ -45,7 +45,7 @@ test('assembles formal source identity and original budgets with offline verifie
   assert.equal(p.metadata.scoring.identity.reference_id,uuid(5));assert.equal(p.metadata.scoring.identity.activity_definition_version_id,uuid(3));
   assert.equal(p.preconditions.scoring.acceptance.ref,p.metadata.scoring.questions.A2.ref);assert.equal(p.validators.scoring.acceptance.ref,p.metadata.scoring.questions.A4.ref);
   assert.deepEqual(p.contract.activities[0].budget,{max_duration_s:90,heartbeat_s:10});
-  assert.equal(p.domain_adapter.budget.max_duration_s,90);assert.equal(p.domain_adapter.budget.cleanup_grace_s,20);
+  assert.equal(p.domain_adapter.budget.max_duration_s,70);assert.equal(p.domain_adapter.budget.cleanup_grace_s,20);
   assert.equal(p.cleanup_required,false);assert.deepEqual(p.resources,[]);
   assert.equal(out.definition.release_id,uuid(6));assert.equal(out.definition.workflow_definition_version_id,uuid(1));assert.equal(out.route.machine_id,'us-mac-m4');assert.deepEqual(out.brain_profiles,{profiles:{'cloud-103':{machine_id:'us-mac-m4',profile_sha256:out.profile_sha256}}});
   const noPolicy=structuredClone(input);delete noPolicy.frozen.workflow_version.payload.contract.recovery;const w=noPolicy.frozen.workflow_version;w.payload_sha256=digest({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});noPolicy.frozen.release.payload.workflows=[w];const r=noPolicy.frozen.release;r.manifest_sha256=digest({target:r.target,environment:r.environment,payload:r.payload});delete noPolicy.frozen.snapshot_sha256;noPolicy.frozen.snapshot_sha256=digest(noPolicy.frozen);const b=buildPublicDomainProfile(noPolicy).profile.domain_adapter.budget;assert.ok(b.max_duration_s+b.cleanup_grace_s<=90,'no source budget can be enlarged to reserve close time');
@@ -57,4 +57,61 @@ test('assembles formal source identity and original budgets with offline verifie
   writeFileSync(join(input.sourceRoot,'_dependencies/preflight-pg/node_modules/pg/package.json'),'{}',{mode:0o600});
   assert.throws(()=>buildPublicDomainProfile(input),/PREFLIGHT_PG_/);
  }finally{rmSync(input.sourceRoot,{recursive:true,force:true});}
+});
+
+
+import {parseActivityContract} from '../common-runner/activity-contract.js';
+// Shapes independently read from the real 1255614a release; fixture identities
+// remain deterministic test identities and never stand in for a real ACK.
+const original125Shapes={
+ douyin_video_discovery:[['preflight','setup',300,60],['collect_videos','source',2400,60],['cleanup','finalize',120,30]],
+ douyin_video_processing:[['preflight','setup',300,60],['dedup','batch_end',600,60],['qualification','per_item',1800,60],['collection','per_item',7200,300],['cleanup','finalize',120,30]],
+ douyin_comment_scoring:[['scoring','batch_end',1800,120],['mark_leads','batch_end',1800,120]],
+};
+function sign(v){v.payload_sha256=digest({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});}
+function reseal(x){
+ const f=x.frozen,r=f.release;r.manifest_sha256=digest({target:r.target,environment:r.environment,payload:r.payload});
+ const raw=JSON.stringify(f.deployment);writeFileSync(join(x.sourceRoot,'deployment-manifest.json'),raw,{mode:0o600});f.files['runtime/deployment-manifest.json']=digest(raw);
+ delete f.snapshot_sha256;f.snapshot_sha256=digest(f);
+}
+function originalShape(x,flow){
+ const f=x.frozen,w=f.workflow_version,prototype=structuredClone(f.activities[0].version);
+ w.payload.key=flow;delete w.payload.contract.recovery;
+ f.activities=original125Shapes[flow].map(([key,phase,max_duration_s,heartbeat_s],i)=>{
+  const av=structuredClone(prototype);av.id=uuid(100+i);av.activity_id=uuid(200+i);av.payload.activity_id=av.activity_id;
+  const c=av.payload.contract;c.key=key;c.order=i+1;c.budget={max_duration_s,heartbeat_s};
+  c.runtime={phase,entry:'leadgen-activity.sh',args:'WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG'};sign(av);
+  const reference={reference_id:uuid(300+i),activity_id:av.activity_id,activity_version_id:av.id,slot_key:key,sequence_no:i+1};
+  return {reference,version:av};
+ });
+ w.payload.activities=f.activities.map(a=>a.reference);sign(w);f.release.payload.workflows=[w];f.release.payload.activities=f.activities.map(a=>a.version);
+ const step='plans/'+flow+'.steps.json';writeFileSync(join(x.sourceRoot,step),'{}',{mode:0o600});
+ if(!f.deployment.files.some(row=>row.deployed_path===step))f.deployment.files.push({deployed_path:step,content_sha256:digest('{}')});
+ if(flow!=='douyin_comment_scoring')x.resources={machine:'us-mac-m4',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',account:'77980009922'};
+ reseal(x);return x;
+}
+for(const flow of Object.keys(original125Shapes))test('real '+flow+' AV shapes compile through the public contract parser without inventing foreach bindings',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),flow);
+ try{
+  const original=structuredClone(x.frozen.activities),p=buildPublicDomainProfile(x).profile;
+  const parsed=parseActivityContract(p.contract);
+  assert.equal(parsed.activities.length,original.length);
+  for(let i=0;i<original.length;i++){
+   const sourceContract=original[i].version.payload.contract,a=parsed.activities[i];
+   assert.equal(a.runtime.protocol,'json-stdio-v1');
+   assert.equal(a.runtime.phase,sourceContract.runtime.phase==='finalize'?'finalize':'source');
+   assert.equal(a.runtime.per_item,undefined,'whole-batch native handlers own their original iteration');
+   assert.deepEqual(a.budget,sourceContract.budget,'including collection 7200s must not be silently cut');
+   assert.deepEqual(p.domain_adapter.config.snapshot.activities[i],original[i],'original AV and declared business contract remain immutable');
+  }
+  const b=p.domain_adapter.budget,total=original.reduce((n,a)=>n+a.version.payload.contract.budget.max_duration_s,0);
+  assert.ok(b.max_duration_s+b.cleanup_grace_s<=total);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+test('workflow total timeout includes reserved cleanup rather than adding cleanup to the total',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=await fixture();
+ try{const p=buildPublicDomainProfile(x).profile,b=p.domain_adapter.budget;
+  assert.ok(b.max_duration_s+b.cleanup_grace_s<=90,'source recovery total is 90s including the original 20s cleanup reserve');
+  assert.equal(b.cleanup_grace_s,20);assert.equal(b.max_duration_s,70);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
