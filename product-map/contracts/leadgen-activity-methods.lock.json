@@ -1193,14 +1193,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "12a3fcac54a24bfa7cd411f3c5b875668746d09adf298d0c86a59daa990cb3de"
+          "sha256": "906118735b878380f103ed1cd96911d9c926b3129d444ba4d19b16f751db6426"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "90d6966d5e25bfd85339df674c8805ea3302b1a554cd3a7ee4839b638fa352a4"
+          "sha256": "037359a00938f9a16c3b17b784d565f56d6b9482d8d4a677d5ca2dac6b4687fe"
         },
         {
           "kind": "code",
@@ -1620,13 +1620,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "77b5284270015f2d1c5016ecbe8bbd60d0f0565d7ed97090e8d151d441f80e80",
+      "code_digest": "eaebad5970264ff31dbfddbe0331b8e1d94ec220f5f1323bb8ea382cc87c275d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。 步骤原契约SHA同步，无判据修改；独立核对四份生成物仅contract_sha256更新且gen-step-dod --check通过。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成2b885ea）",
         "previous_code_digest": "3670833d13db6724f0452ab22fb7df3764ee5918505aa80a774ab525dc562260",
-        "current_code_digest": "77b5284270015f2d1c5016ecbe8bbd60d0f0565d7ed97090e8d151d441f80e80"
+        "current_code_digest": "eaebad5970264ff31dbfddbe0331b8e1d94ec220f5f1323bb8ea382cc87c275d"
       }
     },
     "douyin_video_processing.dedup": {
@@ -4453,14 +4453,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "12a3fcac54a24bfa7cd411f3c5b875668746d09adf298d0c86a59daa990cb3de"
+          "sha256": "906118735b878380f103ed1cd96911d9c926b3129d444ba4d19b16f751db6426"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "90d6966d5e25bfd85339df674c8805ea3302b1a554cd3a7ee4839b638fa352a4"
+          "sha256": "037359a00938f9a16c3b17b784d565f56d6b9482d8d4a677d5ca2dac6b4687fe"
         },
         {
           "kind": "code",
@@ -4865,13 +4865,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c7c5b5367fb6e28d1975566b09958e0ed4551b1b6d49ad7e7d215c0948cd0033",
+      "code_digest": "6298058d80bf6af5c5943e61f011e169074dea0c5e30dc9eb3fc5419fc18274b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。",
-        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成20149f7）",
+        "reason": "独立核对原方法及合同：资源准入与UI前置分开，仅成功原生wake/unlock/open-app回执推进账号读取；同源context/schema不扩大授权；单轮模型预算收紧原总截止；精确官方停止与全部Caller封闭仅证明停止，失败不转业务PASS，native及丢ACK未知继续隔离；cleanup只关闭旧Observer。集成仅新增固定cloud8非重放审查及其registry摘要，限定原task/run/binding/source/epoch和后继101，不修改正常phone命令或104权限，不改旧unknown/pending；原生控制器按path+enabler_key逐项核对字节不变。 步骤原契约SHA同步，无判据修改；独立核对四份生成物仅contract_sha256更新且gen-step-dod --check通过。",
+        "reviewed_by": "Codex 独立审查 /root/cloud_preflight_review（2026-11-08，集成2b885ea）",
         "previous_code_digest": "9b10ee8bf5e2e02064e8fa0e7a5c622ac993e94af899831c687faec1487ea8f9",
-        "current_code_digest": "c7c5b5367fb6e28d1975566b09958e0ed4551b1b6d49ad7e7d215c0948cd0033"
+        "current_code_digest": "6298058d80bf6af5c5943e61f011e169074dea0c5e30dc9eb3fc5419fc18274b"
       }
     },
     "douyin_comment_scoring.scoring": {
