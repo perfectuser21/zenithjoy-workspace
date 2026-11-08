@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "owners": {
+    "workflow-be5107f20ac2317d90a65f2d4701300e.c96c3b86-7cff-4f83-a26e-a3403e29b661.diagnostic.json": {
+      "sha256": "82ef56dbc1603715410a99c6ede6b62c601bb286b98a66592b2166bb3385be91",
+      "bytes": 589,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json": {
+      "sha256": "7ba00764d2ba025313161248489245df431de31925d35532791aa8119bd17e0b",
+      "bytes": 480,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.2051d1de-fc5d-43b9-bed0-640985581e4a.returned.json": {
+      "sha256": "91729926f71d0d048d9a5d4c481c52b46579933534162183aa23820078a73aed",
+      "bytes": 53517,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.2051d1de-fc5d-43b9-bed0-640985581e4a.returned.original.json": {
+      "sha256": "944b5dfe828d5aab060bca66ee7834c0dc4c19762982c5bf6250cf0bfa00b410",
+      "bytes": 480,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.c429b20e-325a-4593-93b6-5b289c375181.returned.json": {
+      "sha256": "8dcba6cf74a01e53e6e9cf3b983cab7b4ae0ecbc5b101c2b88b37b0b6de996c6",
+      "bytes": 18684,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.c429b20e-325a-4593-93b6-5b289c375181.returned.original.json": {
+      "sha256": "1066ca3f6a3327f1cb8b6bbcdaad91b6781cb471e26f388e9fb123261574c72e",
+      "bytes": 480,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.dc69db53-2574-4dd9-abb6-3451413760ad.returned.json": {
+      "sha256": "198f934f44172c9358f5c2f940e35997baa1704e5958583e44d414da3e582d57",
+      "bytes": 51559,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.dc69db53-2574-4dd9-abb6-3451413760ad.returned.original.json": {
+      "sha256": "0e91a553b15938831ef7fe05ae3ac5241aed9420d6a7d460aef166f0e7317ab2",
+      "bytes": 480,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    },
+    "workflow-be5107f20ac2317d90a65f2d4701300e.pending.json.guard": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "uid": 501,
+      "mode": "0o600",
+      "nlink": 1,
+      "is_symlink": false
+    }
+  },
+  "owner_prefix": "workflow-be5107f20ac2317d90a65f2d4701300e",
+  "launcher": {
+    "launch.py": "9cfd0fa70ac3c8822e314692a04382bd17a8c9e091f314489891b3920a14f765",
+    "launch.json": "6d440130a4fc2374982e78624701bfbde675c1f18156fb4dac074087aedcbe7c",
+    "exit.json": "e4ec675ed23469dc7439441f2aaf829f135acccb473cb3f42374aabd1c8c20cd"
+  }
+}

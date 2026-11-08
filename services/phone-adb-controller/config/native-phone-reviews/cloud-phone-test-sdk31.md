@@ -33,3 +33,14 @@ Pillow只用于原本地filter与原视觉编码，策略另固定MMV既有PIL�
 `inspect` 只读检查候选，显式 not_recovery_authority=true；`plan/apply` 均要求实现及本审查原件已合并 origin/main，固定真实验证主任务 `ffd2d337-b10e-4f96-8e3e-bd35cd57bac1` 当前 claim（codex-cloud-leadgen-e2e / 2026-11-08T10:09:59.271Z），代码交付单 000e3f10 独立收尾，旧 Task failed，中央无 owner，同 inode 双根 guard，六文件精确 epoch CAS、持久 intent 和只读 free 读回。只迁移旧 quarantine 整目录，不写中央锁，不重放旧活动。
 
 后继限定 `potato20261108_101_cloud9` 的 101、mmv/broker mmv、cloud-phone-test、原 serial/5041、账号 77980009922、yuesheng。后继必须使用正式 Skill 的 `PUBLIC_FULL_FROZEN_WORKFLOW_CLI`，以真实新 Task、冻结 workflow/source、run/binding ACK 进入 agent Primary 与 Runner official observer 完整链，并在预算修复合并、部署后执行；不得借用仅适用于其他嵌套 commander/wf-launch 合同的入口。本 authority 不启动后继，不豁免新 claim、双锁与账号实屏预检，亦不授权 104。
+
+
+## cloud9 固定来源RECV未知的非重放 supersession
+
+`cloud9-quarantine-supersession.py` 只处理 Task `8e8fbff5-21dd-4e4b-83ed-f06d9b4ea68d`、run `douyin_video_discovery-potato20261108_101_cloud9__a1`、source `1255614a804af02f11f7e792bf517d71fa3a94a1`、binding `bd948684-3ff1-4122-a948-59b4a5439d57`、epoch `942b1338-68f8-41b8-872a-35e7d8bb3e39`。固定 archive SHA256 `fb95bdee9a6b8cae6b2e84e18b8692c97a9cd619e220329570b979eecc340d76` 的986个原文件、冻结代码、六份 Caller 终态及其引用、两活动 observer、无fork本地叶子、原父wait回执与九个 owner 文件全部逐字节保留核验。
+
+唯一未知是 cleanup/source 第18号 `/system/framework/uiautomator.jar` 的只读 ADB sync RECV。四个 write intent 必须逐字节等于指定serial的transport、sync、固定路径RECV、QUIT；无SEND或shell、无后续Worker和命令能力。preflight其余19份源和4个只读命令已有真实返回；全部Caller、observer与本地producer封闭。即使旧只读流远端终止不可恢复，也不能发写指令。不得把此非干扰证明称为原远端停证；原 `execution_stopped=false`、unknown、reserved pending及错误全部保留。
+
+只读inspect不创建授权。plan/apply要求已合并来源、原Task failed（状态本身不是停证）、真实验证主任务ffd2d337当前claim及精确本地双根guard/inode/六字段。中央只接受原Task owner或真实None；在封闭/非干扰与本地CAS全部核准后，唯一允许写入是既有Brain设备锁endpoint按原locked_by精确CAS释放，必须收到成功响应且独立GET为None。None仅为并发状态，不能当停证。中央intent无returned即阻断再次apply，不以重查free或过期猜上次POST成功。随后使用固定cloud7私有事务原子rename本地隔离，旧目录与字段不变；任何新owner、漂移、失ACK、未知提交均中止并保留屏障。
+
+后继仅 `potato20261108_101_cloud10`，mmv/broker mmv、cloud-phone-test、原serial/5041、77980009922、yuesheng，使用正式 `PUBLIC_FULL_FROZEN_WORKFLOW_CLI` 完整Code模式的新Task/run/冻结ACK，不带raw transport。不启动后继，不豁免新双锁和当前账号实屏核验，不授权104。

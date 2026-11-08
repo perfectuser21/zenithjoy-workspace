@@ -10997,3 +10997,21 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition#step1；预检模型窗口分配、正式deploy文件打包后Node真实加载、固定Activity源码摘要及receiver缺依赖拒绝；不运行真实手机"
+
+  - id: cloud9-quarantine-supersession
+    path: services/phone-adb-controller/__tests__/cloud9-quarantine-supersession.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定只读RECV未知非重放迁移、中央精确owner CAS与失ACK阻断，不接触手机"
+
+  - id: cloud9-quarantine-supersession-python
+    path: services/phone-adb-controller/__tests__/cloud9-quarantine-supersession.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: cloud9-quarantine-supersession.test.mjs invokes Python unittest
+    note: "私有目录永久回归；四wire、producer关闭、原件与owner保护、release未知不重试、rename竞态"
