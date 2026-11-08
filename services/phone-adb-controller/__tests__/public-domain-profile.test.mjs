@@ -87,7 +87,10 @@ function originalShape(x,flow){
  w.payload.activities=f.activities.map(a=>a.reference);sign(w);f.release.payload.workflows=[w];f.release.payload.activities=f.activities.map(a=>a.version);
  const step='plans/'+flow+'.steps.json';writeFileSync(join(x.sourceRoot,step),'{}',{mode:0o600});
  if(!f.deployment.files.some(row=>row.deployed_path===step))f.deployment.files.push({deployed_path:step,content_sha256:digest('{}')});
- if(flow!=='douyin_comment_scoring')x.resources={machine:'us-mac-m4',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',account:'77980009922'};
+ if(flow!=='douyin_comment_scoring'){
+  x.resources={machine:'us-mac-m4',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',account:'77980009922'};
+  const registry=join(x.sourceRoot,'profiles.tsv');writeFileSync(registry,'profile\tserial\tmodel\twidth\theight\tenabled\ncloud-phone-test\t47.100.213.173:10001\tFixture\t720\t1280\ttrue\n',{mode:0o600});x.env.DOUYIN_PHONE_REGISTRY=registry;
+ }
  reseal(x);return x;
 }
 for(const flow of Object.keys(original125Shapes))test('real '+flow+' AV shapes compile through the public contract parser without inventing foreach bindings',async()=>{
@@ -130,5 +133,15 @@ test('workflow cleanup scope shares the original cleanup Activity A4 acceptance 
  try{
   const p=buildPublicDomainProfile(x).profile;
   assert.equal(p.validators.cleanup.acceptance.ref,p.metadata.cleanup.questions.A4.ref,'validateActivity and validateWorkflow use this same cleanup key');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+for(const flow of ['douyin_video_discovery','douyin_video_processing'])test(flow+' public profile freezes real registry bytes/model/dimensions for shared Code preflight',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),flow);
+ try{
+  const p=buildPublicDomainProfile(x).profile,fixed=p.domain_adapter.config.snapshot.preflight_profile;
+  assert.deepEqual(fixed,{schema_version:1,path:x.env.DOUYIN_PHONE_REGISTRY,sha256:digest(readFileSync(x.env.DOUYIN_PHONE_REGISTRY)),profile:x.resources.profile,serial:x.resources.serial,model:'Fixture',width:720,height:1280,enabled:true});
+  writeFileSync(x.env.DOUYIN_PHONE_REGISTRY,'profile\tserial\tmodel\twidth\theight\tenabled\ncloud-phone-test\tOTHER\tFixture\t720\t1280\ttrue\n');
+  assert.throws(()=>buildPublicDomainProfile(x),/PREFLIGHT_PROFILE_INVALID/);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
