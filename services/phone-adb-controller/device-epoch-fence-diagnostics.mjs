@@ -43,7 +43,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
   const wait=()=>new Promise(r=>c.wakes.add(r));
   c.read=async n=>{while(c.buffer.length<n){check();if(c.eof||c.closed)throw fail('DIAGNOSTIC_TRUNCATED');await wait();}check();const b=c.buffer.subarray(0,n);c.buffer=c.buffer.subarray(n);return b;};
   c.chunk=async()=>{while(!c.buffer.length&&!c.eof){check();if(c.closed)throw fail('DIAGNOSTIC_TRUNCATED');await wait();}check();const b=c.buffer;c.buffer=Buffer.alloc(0);return b.length?b:null;};
-  c.write=async bytes=>{await admit();check();if(c.eof||c.closed)throw fail('DIAGNOSTIC_SOCKET');await new Promise((r,j)=>socket.write(bytes,e=>e?j(fail('DIAGNOSTIC_SOCKET')):r()));};
+  c.write=async (bytes,{optionalClose=false}={})=>{await admit();check();if(optionalClose&&c.eof)return;if(c.eof||c.closed)throw fail('DIAGNOSTIC_SOCKET');await new Promise((r,j)=>socket.write(bytes,e=>e?j(fail('DIAGNOSTIC_SOCKET')):r()));};
   c.finish=async()=>{while(!c.eof){check();if(c.closed)throw fail('DIAGNOSTIC_TRUNCATED');await wait();}if(c.buffer.length)throw fail('DIAGNOSTIC_TRAILING');await c.closePromise;check();};
   await new Promise((r,j)=>{socket.once('connect',r);socket.once('error',()=>j(fail('DIAGNOSTIC_SOCKET')));socket.once('close',()=>j(fail(failure??'DIAGNOSTIC_SOCKET')));socket.connect(Number(endpoint[1]),'127.0.0.1');});return c;
  }
@@ -51,7 +51,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
  try{
   const f=await connect();await f.write(adbRequest('host-serial:'+q.serial+':features'));await status(f);const features=(await f.read(adbPayloadLength(await f.read(4),4096))).toString().split(',');if(!features.includes('shell_v2')||features.some(x=>!/^[a-z][a-z0-9_]*$/.test(x))||new Set(features).size!==features.length)throw fail('DIAGNOSTIC_SHELL_V2_REQUIRED');await f.finish();
   const c=await connect();await c.write(adbRequest('host:transport:'+q.serial));await status(c);await c.write(adbRequest('shell,v2,raw:'+DIAGNOSTIC_COMMANDS[query]));await status(c);
-  if(!c.eof)await c.write(closeStdinFrame());const decoder=createShellV2Decoder({maxBytes:8*1024*1024});let chunk;while((chunk=await c.chunk())!==null)decoder.push(chunk);parsed=decoder.finish();await c.finish();await admit();
+  if(!c.eof)await c.write(closeStdinFrame(),{optionalClose:true});const decoder=createShellV2Decoder({maxBytes:8*1024*1024});let chunk;while((chunk=await c.chunk())!==null)decoder.push(chunk);parsed=decoder.finish();await c.finish();await admit();
  }catch(e){failure??=/^(?:DIAGNOSTIC_|ADB_SHELL_V2_)[A-Z_]+$/.test(e.code||'')?e.code:'DIAGNOSTIC_FAILED';}
  finally{for(const c of channels)if(!c.closed)c.socket.destroy();await Promise.all(channels.map(c=>c.closePromise));for(const c of channels){fsyncSync(c.raw);closeSync(c.raw);}clearTimeout(timer);}
  const files={};for(const c of channels)files[`socket-${c.index}.raw`]=sha(readFileSync(join(directory,`socket-${c.index}.raw`)));
