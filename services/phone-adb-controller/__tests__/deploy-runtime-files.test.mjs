@@ -102,3 +102,11 @@ test('新widget、producer及0353恢复的实际部署数组覆盖双机和RPC�
  const lines=r.stdout.trim().split('\n');for(const name of ['producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','single-video-recovery-0353.js','single-video-recovery-0353-authority.js']){for(const group of ['MMV','DEVICE','RPC'])assert.ok(lines.includes(group+':'+name),group+':'+name);assert.ok(RPC_FILES.includes(name));}
  for(const group of ['MMV','DEVICE'])assert.ok(lines.includes(group+':clipboard-widget-cancel.py'));
 });
+
+test('公共domain与只读隔离恢复进入双机正式运行闭包',()=>{
+ const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const arrays=source.slice(source.indexOf('MMV_JS_FILES=('),source.indexOf('# 在任何SSH前'));
+ const result=spawnSync('/bin/bash',['-c',arrays+'\nprintf "MMV:%s\\n" "${MMV_RUNTIME_FILES[@]}";printf "DEVICE:%s\\n" "${DEVICE_NODE_FILES[@]}"'],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);const lines=result.stdout.trim().split('\n');
+ for(const file of ['leadgen-public-domain.mjs','public-domain-authority.mjs','public-domain-snapshot.mjs','public-domain-pg.mjs','public-domain-upstream.mjs','native-preflight-quarantine-review.mjs','native-preflight-quarantine-evidence.mjs','native-preflight-quarantine-lock.py'])for(const group of ['MMV','DEVICE'])assert.ok(lines.includes(group+':'+file),group+':'+file);
+});
