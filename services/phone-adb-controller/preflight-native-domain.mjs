@@ -2,12 +2,12 @@
 import {createConnection} from 'node:net';import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';import {startPreflightLocalLeaves,preflightLocalLeafReturned} from './preflight-local-leaves.mjs';
 const records=new WeakMap(),returnedErrors=new WeakSet();
 export function preflightDomainClosure(domain){const r=records.get(domain);return r?.proof?.execution_stopped===true?r.capability:null;}
-export async function startPreflightNativeDomain({root,directory,sourceFiles,python,policy,serial,workerDeadlineMs,receiptDeadlineMs,env=process.env}){
+export async function startPreflightNativeDomain({root,directory,sourceFiles,python,policy,serial,workerDeadlineMs,receiptDeadlineMs,env=process.env,assertAdmission}){
  if(!Number.isSafeInteger(workerDeadlineMs)||!Number.isSafeInteger(receiptDeadlineMs)||workerDeadlineMs>=receiptDeadlineMs||Date.now()>=workerDeadlineMs)throw Error('PREFLIGHT_NATIVE_DEADLINE');
  const local=await startPreflightLocalLeaves({root,directory,sourceFiles,python,deadlineMs:workerDeadlineMs,receiptDeadlineMs,env});let adb;
  try{
   if(Date.now()>=workerDeadlineMs)throw Error('PREFLIGHT_NATIVE_DEADLINE');
-  adb=await startCollectionLeafProducer({directory,policy,serial,deadlineMs:receiptDeadlineMs,admissionDeadlineMs:workerDeadlineMs,env});
+  adb=await startCollectionLeafProducer({directory,policy,serial,deadlineMs:receiptDeadlineMs,admissionDeadlineMs:workerDeadlineMs,env,assertAdmission});
  }catch(error){await local.close();throw error;}
  let sealed=false,failed=false,pending=0,commandFailures=0,closing;
  const active=()=>{if(sealed||Date.now()>=workerDeadlineMs)throw Error('PREFLIGHT_NATIVE_CLOSED');};

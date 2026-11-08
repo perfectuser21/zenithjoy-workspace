@@ -97,14 +97,15 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  // cleanup is also an Activity key: retain its original AV A4 acceptance
  // for both per-Activity validation and the aggregate cleanup scope.
  const template={...f,public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
+ const domainEnv=clone(env);delete domainEnv.ZJ_ADB_HOST_CONFIG;
  if(w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
  if(w.payload.key!=='douyin_comment_scoring'){
   const scope=template.discovery_phone_scope||template.collection_phone_scope;
-  if(scope){const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});if(route)template.public_preflight_route=route;}
+  if(scope){const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;}}
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,resources:clone(resources),company:clone(company),env:clone(env),step_spec,snapshot:template}}};
+   config:{workflow_key:w.payload.key,resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};

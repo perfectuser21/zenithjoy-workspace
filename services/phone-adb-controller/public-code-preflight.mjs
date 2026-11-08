@@ -29,6 +29,7 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
   }catch(error){throw resourceUnknown(error);}
  };
  const releaseCentral=async()=>{try{return await lease.release();}catch(error){throw resourceUnknown(error);}};
+ const assertLocal=()=>{try{if(!owned||readFileSync(join(rootLock,env.SERIAL+'.lock','owner'),'utf8').trim()!==env.WFR_TAG||readFileSync(join(rootLock,env.SERIAL+'.lock','preflight_epoch'),'utf8').trim()!==epoch)throw fail('OWNER_CHANGED');}catch(error){throw resourceUnknown(error);}};
  const perform=async(purpose,signal,body)=>{
   if(unsafe||current||state.executionUnknown)throw fail('PREVIOUS_UNKNOWN');
   const deadline=Math.min(state.budgetDeadline,purpose==='cleanup'?formal.cleanup_deadline_ms:formal.deadline_ms);
@@ -36,7 +37,7 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
   // Reserve protocol closure inside the original Activity budget, never 120s per shell tree.
   let io,driver,result,error;const workerDeadlineMs=deadline-10000;
   try{
-   current={purpose};io=await startPublicCodePreflightIO({root,env,frozen,state,lease,purpose,workerDeadlineMs,receiptDeadlineMs:deadline,signal});
+   current={purpose};io=await startPublicCodePreflightIO({root,env,frozen,state,lease,purpose,workerDeadlineMs,receiptDeadlineMs:deadline,signal,prepareLocal:local=>lock(local,purpose==='preflight'?'acquire':'refresh'),assertLocal});
    driver=createPreflightPhoneDriver({adb:io.adb,local:io.local,evidenceRoot:spec.evidence_root,owner:env.WFR_TAG,profile:env.P,serial:env.SERIAL,...frozen.preflight_profile,expectedAccount:spec.expected_account,deadlineMs:workerDeadlineMs,assertResources:async()=>{await io.assertResources();if(owned){if(readFileSync(join(rootLock,env.SERIAL+'.lock','owner'),'utf8').trim()!==env.WFR_TAG||readFileSync(join(rootLock,env.SERIAL+'.lock','preflight_epoch'),'utf8').trim()!==epoch)throw fail('OWNER_CHANGED');}},purpose,signal});
    result=await body({io,driver});
   }catch(e){error=e;}
@@ -54,7 +55,7 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
   async preflight({signal}={}){
    if(state.company_config?.expected_sender!==spec.expected_account)throw fail('COMPANY_ACCOUNT');
    return perform('preflight',signal,async({io,driver})=>{
-    await lock(io.local,'acquire');await driver.run('preflight');await driver.run('wake');await driver.run('unlock');await driver.run('open-app');
+    await driver.run('preflight');await driver.run('wake');await driver.run('unlock');await driver.run('open-app');
     const output=await driver.run('account-current',env.WFR_TAG+'-account'),id=output.match(/^douyin_id=(.+)$/m)?.[1]?.trim();
     if(id!==spec.expected_account)throw fail('ACCOUNT');state.account=id;
     return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,central_lock_task_id:state.task_id,central_lock_run_id:state.run_id};
@@ -69,7 +70,7 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
    }
    if(!owned){const released=lease.attempted?await releaseCentral():false;return {status:'skipped',no_lock:true,central_lock_released:Number(released)};}
    const result=await perform('cleanup',signal,async({io,driver})=>{
-    await lock(io.local,'refresh');const close_stdout=await driver.run('close-app'),desktop_stdout=await driver.run('return-safe-desktop'),evidenceId=`${env.WFR_TAG}-${env.WFR_ATTEMPT}-cleanup-desktop`;
+    const close_stdout=await driver.run('close-app'),desktop_stdout=await driver.run('return-safe-desktop'),evidenceId=`${env.WFR_TAG}-${env.WFR_ATTEMPT}-cleanup-desktop`;
     const pngFile=(await driver.run('snapshot-evidence',evidenceId)).trim(),xmlFile=(await driver.run('ui-evidence',evidenceId)).trim();
     const launcher=desktop_stdout.match(/^launcher=(.+)$/m)?.[1],xml=readFileSync(xmlFile,'utf8'),png=readFileSync(pngFile);
     const packages=JSON.parse(await io.desktop(launcher,xml));

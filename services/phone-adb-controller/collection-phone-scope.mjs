@@ -1,9 +1,11 @@
+import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {canonicalRunId} from './public-domain-authority.mjs';
 // 本能力只表示固定collection闭包的同步手机请求已归还，绝不表示OS全后代已停。
 import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,fstatSync,realpathSync,readlinkSync,symlinkSync,openSync,closeSync,constants,existsSync} from 'node:fs';
 import {join,resolve,isAbsolute} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {readFrozen} from './runtime-definition.mjs';
+import {selectPublicPreflightScope} from './public-preflight-route.mjs';
 import {prepareCollectionAcceptanceProbe,validateCollectionAcceptanceProbe,verifiedCollectionPanelFailure,verifyCollectionAcceptanceConsumption} from './collection-acceptance-probe.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
@@ -100,9 +102,9 @@ export async function startCollectionReturnedScope({evidence,context,purpose}){
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});
  for(const [name,key]of [['python3','python'],['node','node'],['zsh','zsh']])symlinkSync(pinnedTool(r.specification.executables[key]),join(bin,name));
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(r.specification.policy),{flag:'wx',mode:0o600});
- let producer;try{producer=await startCollectionLeafProducer({directory,policy:r.specification.policy,serial:r.identity.serial,deadlineMs:deadline,env:r.env});}catch(error){r.phase='closed';r.state.executionUnknown=true;error.executionStopped=false;throw error;}
+ let producer;try{producer=await startCollectionLeafProducer({directory,policy:r.specification.policy,serial:r.identity.serial,deadlineMs:deadline,env:r.env,assertAdmission:createPhoneEpochGuard({root:join(r.runDir,'runtime'),env:r.env,frozen:readFrozen(r.runDir),state:r.state})});}catch(error){r.phase='closed';r.state.executionUnknown=true;error.executionStopped=false;throw error;}
  let closing;
- return {purpose,zsh:pinnedTool(r.specification.executables.zsh),env:{...r.scopedEnv,...producer.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:directory,WFR_COLLECTION_POLICY_FILE:policyFile,WFR_COLLECTION_ACCEPTANCE_INPUT:''},
+ return {purpose,zsh:pinnedTool(r.specification.executables.zsh),env:{...r.scopedEnv,...producer.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:directory,WFR_COLLECTION_POLICY_FILE:r.specification.policy.schema_version===2?r.specification.policy_binding.policy_path:policyFile,WFR_COLLECTION_ACCEPTANCE_INPUT:''},
   assertEvidence:()=>{if(!returnedFresh(r,{active:true}))throw Error('COLLECTION_RETURNED_SCOPE_CHANGED');},
   close:()=>closing??=(async()=>{try{
    const s=await producer.seal();await producer.close();
@@ -130,7 +132,7 @@ export function readCollectionPhoneScopeInput(path){
   fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);const st=fstatSync(fd);
   if(!st.isFile()||(st.mode&0o777)!==0o600||st.uid!==process.getuid()||st.size>65536)throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');
   const value=JSON.parse(readFileSync(fd,'utf8'));
-  const keys=['version','task_id','run_id','attempt','source_commit','profile','serial','target','evidence_root','policy','executables','expected_account','acceptance_probe','evidence_alias','evidence_identity'];
+  const keys=['version','task_id','run_id','attempt','source_commit','profile','serial','target','evidence_root','policy','policy_binding','executables','expected_account','acceptance_probe','evidence_alias','evidence_identity'];
   if(!value||typeof value!=='object'||Object.keys(value).some(k=>!keys.includes(k))||value.version!==1||!Object.hasOwn(value,'task_id')||value.task_id!==null&&typeof value.task_id!=='string'||!/^a[1-9][0-9]*$/.test(value.attempt||'')||!/^[a-f0-9]{40}$/.test(value.source_commit||'')||!['run_id','profile','serial','target','evidence_root'].every(k=>typeof value[k]==='string'&&value[k]))throw Error('COLLECTION_SCOPE_INPUT_INVALID');
   if(value.acceptance_probe)validateCollectionAcceptanceProbe(value.acceptance_probe);
   evidenceBinding(value);
@@ -138,9 +140,9 @@ export function readCollectionPhoneScopeInput(path){
  }catch(error){if(error.code==='ELOOP')throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');throw error;}finally{if(fd!==undefined)closeSync(fd);}
 }
 // 模板是发布清单内已批准的只读输入；续跑永远取原快照，不追当前模板。
-export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_WORKFLOW}){
+export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_WORKFLOW,instanceId,epochId}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_processing')return undefined;
- if(existsSync(join(env.WFR_RUN_DIR,'run-definition.json')))return readFrozen(env.WFR_RUN_DIR).collection_phone_scope;
+ if(existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))){const scope=readFrozen(env.WFR_RUN_DIR).collection_phone_scope;if((instanceId!==undefined&&scope?.policy?.instance_id!==instanceId)||(epochId!==undefined&&scope?.policy_binding?.epoch_fence?.epoch_id!==epochId))throw Error('COLLECTION_FROZEN_INSTANCE_MISMATCH');return scope;}
  const manifest=JSON.parse(readFileSync(env.WF_DEPLOYMENT_MANIFEST||join(root,'deployment-manifest.json'),'utf8'));
  const relative='config/collection-phone-hosts.json',entry=manifest.files?.find(x=>x.deployed_path===relative);
  if(!entry)return undefined;
@@ -155,7 +157,7 @@ export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_W
  const specification={...structuredClone(matches[0]),version:1,task_id:taskIds[0]||null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};
  if(specification.evidence_alias)specification.evidence_identity=evidenceIdentity(specification);
  else if(specification.evidence_identity)throw Error('COLLECTION_EVIDENCE_ALIAS_INVALID');
- return specification;
+ return selectPublicPreflightScope({root,manifest,scope:specification,instanceId,epochId});
 }
 function pinnedTool(tool){
  if(!tool||!isAbsolute(tool.path||'')||!/^[a-f0-9]{64}$/.test(tool.sha256||''))throw Error('COLLECTION_INTERPRETER_PIN_REQUIRED');
@@ -192,9 +194,9 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
  if(policy?.host_id!==identity.target||!['xian-m4','mmv'].includes(policy.host_id))throw Error('COLLECTION_PHONE_HOST_INVALID');
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(policy),{flag:'wx',mode:0o600});
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});for(const [name,path] of [['python3',python],['node',node],['zsh',zsh]])symlinkSync(path,join(bin,name));
- const producer=await startCollectionLeafProducer({directory,policy,serial:identity.serial,deadlineMs:identity.deadline_ms,env});
+ const producer=await startCollectionLeafProducer({directory,policy,serial:identity.serial,deadlineMs:identity.deadline_ms,env,assertAdmission:createPhoneEpochGuard({root,env,frozen,state})});
  let acceptanceEnv;try{acceptanceEnv=prepareCollectionAcceptanceProbe({frozen,binding,env,qualifiedVideoIds,directory,producer});}catch(error){await producer.close();throw error;}
- const scopedEnv={...producer.env,WFR_COLLECTION_ACCEPTANCE_INPUT:'',...acceptanceEnv,...(fixedEvidence?{DOUYIN_PHONE_TMP_ROOT:specification.evidence_alias.target}:{}),WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
+ const scopedEnv={...producer.env,WFR_COLLECTION_ACCEPTANCE_INPUT:'',...acceptanceEnv,...(fixedEvidence?{DOUYIN_PHONE_TMP_ROOT:specification.evidence_alias.target}:{}),WFR_COLLECTION_POLICY_FILE:policy.schema_version===2?specification.policy_binding.policy_path:policyFile,DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
  return {env:scopedEnv,zsh,assertEvidence:()=>{if(!evidenceStillQuiet(evidence,specification))throw Error('COLLECTION_EVIDENCE_IDENTITY_OR_RECORDING_CHANGED');},panelFailure:(result,videoId,startedAt)=>verifiedCollectionPanelFailure(result,{evidenceRoot:evidence,videoId,owner:identity.owner,attempt:identity.attempt,startedAt})&&verifyCollectionAcceptanceConsumption({frozen,binding,env}),
   finish:async result=>{
    const status=await producer.seal();await producer.close();

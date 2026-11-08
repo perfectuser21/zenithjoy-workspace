@@ -20,7 +20,8 @@ export function createNativePhoneEvidenceRead({commandSource,...options}={}){
  if(canonical(p.claim)!==canonical(q.claim)||q.worker_deadline_ms>p.worker_deadline_ms||q.cleanup_deadline_ms>p.cleanup_deadline_ms)throw fail('EVIDENCE_SCOPE');
  return createRead(options,()=>readNativePhoneCommandSource(commandSource,{source:options.source}));
 }
-function createRead({runtimeRoot,source,directory,scope,readAuthority}={},evidenceSource){
+function createRead({runtimeRoot,source,directory,scope,readAuthority,freshFrameAdmission=false}={},evidenceSource){
+ if(typeof freshFrameAdmission!=='boolean')throw fail('SCOPE');
  let q,fixed;try{q=structuredClone(scope);fixed=structuredClone(source);}catch{throw fail('SCOPE');}
  const ip=q?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9][0-9]{0,4})$/),uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
  if(!q||q.protocol!=='native-phone-adb-read/v1'||!uuid.test(q.task_id||'')||!uuid.test(q.binding_id||'')||!/^[-A-Za-z0-9_.]{1,150}$/.test(q.run_id||'')||!/^[-A-Za-z0-9_.]{1,80}$/.test(q.profile||'')||!(/^[-A-Za-z0-9_.]{1,80}$/.test(q.serial||'')||isCanonicalTcpDeviceSerial(q.serial))||!ip||Number(ip[1])>65535||!/^[a-f0-9]{40}$/.test(q.source_commit||'')||fixed?.commit!==q.source_commit||!Number.isSafeInteger(q.epoch)||q.epoch<0||!Number.isSafeInteger(q.worker_deadline_ms)||!Number.isSafeInteger(q.cleanup_deadline_ms)||q.worker_deadline_ms>=q.cleanup_deadline_ms||typeof readAuthority!=='function'||!q.claim?.claimed_by||!Number.isFinite(Date.parse(q.claim?.claimed_at)))throw fail('SCOPE');
@@ -42,14 +43,14 @@ function createRead({runtimeRoot,source,directory,scope,readAuthority}={},eviden
  let sourceAdmission;
  const admit=async({fresh=false}={})=>{
   guard();evidenceSource?.();verifySource();verifyJournal();guard();let value;
-  if(!evidenceSource&&!fresh&&sourceAdmission&&Date.now()<sourceAdmission.until)value=sourceAdmission.value;
+  if(!freshFrameAdmission&&!evidenceSource&&!fresh&&sourceAdmission&&Date.now()<sourceAdmission.until)value=sourceAdmission.value;
   else{
    try{value=await readAuthority();}catch(error){throw Object.assign(fail('AUTHORITY'),{authority_error:/^[A-Z][A-Z0-9_]{0,95}$/.test(error?.code||'')?error.code:'UNCLASSIFIED'});}
    guard();verifySource();verifyJournal();guard();
    // Copy the response into the Code-owned instance; caller JSON cannot extend
    // a cached scope, claim, lease, deadline or the one-second validity window.
    value=structuredClone(value);
-   if(!evidenceSource)sourceAdmission={value,until:Math.min(Date.now()+1000,q.worker_deadline_ms,Date.parse(value?.lease_until))};
+   if(!freshFrameAdmission&&!evidenceSource)sourceAdmission={value,until:Math.min(Date.now()+1000,q.worker_deadline_ms,Date.parse(value?.lease_until))};
   }
   if(!value||canonical(value.scope)!==canonical(q)||value.claimed_by!==q.claim.claimed_by||value.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(value.lease_until))||Date.parse(value.lease_until)<=Date.now())throw fail('AUTHORITY');
  };

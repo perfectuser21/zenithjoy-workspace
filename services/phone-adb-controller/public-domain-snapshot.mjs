@@ -38,7 +38,7 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   const scope=template[cfg.workflow_key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
   if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==logicalHost(fixed.machine)||scope.policy?.host_id!==logicalHost(fixed.machine))fail('RESOURCE_SCOPE');
   if(scope.policy.schema_version===2){
-   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope}))!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
+   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
    env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
   }else if(scope.policy?.endpoint!=='tcp:127.0.0.1:5041'||template.public_preflight_route)fail('RESOURCE_SCOPE');
  }

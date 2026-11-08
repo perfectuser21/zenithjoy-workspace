@@ -145,3 +145,18 @@ for(const flow of ['douyin_video_discovery','douyin_video_processing'])test(flow
   assert.throws(()=>buildPublicDomainProfile(x),/PREFLIGHT_PROFILE_INVALID/);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
+
+for(const flow of ['douyin_video_discovery','douyin_video_processing'])test(flow+' derives whole-run ADB environment from frozen declared instance instead of stale assembly env',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),{freezePublicPreflightRoute}=await import('../public-preflight-route.mjs'),x=originalShape(await fixture(),flow);
+ try{
+  const policy={schema_version:2,instance_id:'mmv-cloud-epoch2',host_id:'mmv',transport:'tcp',endpoint:'tcp:127.0.0.1:5042',forbidden_ports:[],adb_bin:'/fixed/adb',adb_realpath:'/fixed/adb',adb_sha256:'a'.repeat(64)},privatePath=join(x.sourceRoot,'epoch2.json');
+  writeFileSync(privatePath,JSON.stringify(policy),{mode:0o600});mkdirSync(join(x.sourceRoot,'config'),{recursive:true});const relative='config/adb-host-instances.json';
+  const raw=JSON.stringify({schema_version:1,instances:[{instance_id:policy.instance_id,kind:'managed',policy_path:privatePath,policy,coexists_with:['legacy']}]});writeFileSync(join(x.sourceRoot,relative),raw);
+  x.frozen.deployment.files.push({path:'services/phone-adb-controller/'+relative,deployed_path:relative,content_sha256:digest(raw)});
+  const scope={target:'mmv',profile:x.resources.profile,serial:x.resources.serial,expected_account:x.resources.account,policy};scope.policy_binding=freezePublicPreflightRoute({root:x.sourceRoot,files:{[relative]:digest(raw)},scope});
+  x.frozen[flow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope']=scope;Object.assign(x.env,{DOUYIN_ADB_PORT:'5041',ADB_SERVER_SOCKET:'tcp:127.0.0.1:5041',ZJ_ADB_HOST_CONFIG:'/request-must-not-select-policy'});reseal(x);
+  const p=buildPublicDomainProfile(x).profile,cfg=p.domain_adapter.config;
+  assert.equal(cfg.env.DOUYIN_ADB_PORT,'5042');assert.equal(cfg.env.ADB_SERVER_SOCKET,policy.endpoint);assert.equal(cfg.env.ZJ_ADB_HOST_CONFIG,undefined);
+  assert.deepEqual(cfg.snapshot.public_preflight_route,scope.policy_binding);assert.deepEqual(cfg.snapshot[flow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'].policy,policy);assert.equal(x.env.DOUYIN_ADB_PORT,'5041','builder does not mutate caller assembly input');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});

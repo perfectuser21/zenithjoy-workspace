@@ -11159,3 +11159,66 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；ADB显式实例与只读维护authority永久回归，不等于现场解封或新server已授权启动"
+
+  - id: phone-phone-epoch-admission
+    path: services/phone-adb-controller/__tests__/phone-epoch-admission.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-phone-epoch-producer
+    path: services/phone-adb-controller/__tests__/phone-epoch-producer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-device-epoch-fence-sdk31
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-sdk31.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-device-epoch-fence-transport
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-transport.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-device-epoch-fence-central
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-central.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-device-epoch-fence-admission
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-admission.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-device-epoch-fence-lock
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-lock.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
