@@ -9,3 +9,6 @@ test('定向lsof逐次fresh PID/start/port：PID复用或别PID占port即拒',as
  const options={readBytes:()=>raw,run:(bin,args)=>{calls++;if(bin.endsWith('/lsof')){if(args.includes('-d'))return 'n/adb\n';assert.ok(args.includes('-p'));assert.equal(args[args.indexOf('-p')+1],'91186');return `p${other?91187:91186}\nu${process.getuid()}\nf13\nn127.0.0.1:5041\n`;}return args.includes('lstart=')?(changed?'new-start':'old-start'):'adb fixed';}};
  assert.deepEqual(readBoundAdbDaemon(expected,options),expected);const first=calls;changed=true;assert.throws(()=>readBoundAdbDaemon(expected,options),/EPOCH_DAEMON_IDENTITY/);assert.ok(calls>first);changed=false;other=true;assert.throws(()=>readBoundAdbDaemon(expected,options),/EPOCH_DAEMON_LISTENER/);
 });
+test('heartbeat/progress/span变化不改变authority；claim/真实run/owner变化必须不同',async()=>{
+ const {businessAuthorityProjection}=await load(),f=fixture(),later=structuredClone(f);later.task.updated_at='later';later.task.result.common_runner.progress={done:2};later.taskRun.updated_at='later';later.taskRun.context={span_count:5};later.central.expires_at=new Date(Date.now()+120000).toISOString();later.central.lease_version='89';assert.deepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));later.links.task_id=id('d');assert.notDeepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
+});
