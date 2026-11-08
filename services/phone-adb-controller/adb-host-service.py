@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""M4唯一ADB前台服务。status不启动；stage不激活，切换仅属维护入口。"""
+"""ADB前台服务：默认单实例不变；显式受审实例须维护启动授权。"""
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import fcntl
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -17,11 +16,13 @@ import stat
 import subprocess
 import sys
 import time
+import types
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location('adb_existing_route', HERE / 'adb-existing-route.py')
-route = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(route)
+route_path = HERE / 'adb-existing-route.py'
+route = types.ModuleType('adb_existing_route')
+route.__file__ = str(route_path)
+exec(compile(route_path.read_bytes(), str(route_path), 'exec'), route.__dict__)
 POLICY = {'schema_version': 1, 'host_id': 'xian-m4', 'transport': 'usb',
           'endpoint': 'tcp:127.0.0.1:5037', 'forbidden_ports': [5041, 5042],
           'adb_bin': '/opt/homebrew/bin/adb'}
@@ -65,6 +66,13 @@ def validate_host(policy, hostname=None, uid=None):
     require(uid != 0, 'ROOT_FORBIDDEN')
     # 与runtime-host.mjs相同的规范机器名规则；不信环境里的宿主声明。
     name = hostname.lower().split('.')[0]
+    if policy.get('schema_version') == 2:
+        row = route.instance_module().registry()[0]
+        expected = [r for r in row['instances'] if r['instance_id'] == policy.get('instance_id') and r['kind'] == 'managed']
+        require(len(expected) == 1 and {k: v for k, v in policy.items() if k != 'port'} == expected[0]['policy']
+                and policy.get('endpoint') == 'tcp:127.0.0.1:' + str(policy.get('port')), 'INSTANCE_POLICY')
+        require(name in ('r10-7', 'aad17-2') and policy['host_id'] == 'mmv', 'HOST_IDENTITY')
+        return
     require('m4-xian' in name, 'HOST_IDENTITY')
     require(all(policy.get(k) == v for k, v in POLICY.items())
             and policy.get('port', 5037) == 5037, 'POLICY_MISMATCH')
@@ -78,17 +86,26 @@ def clean_environment(environment):
 
 def foreground_command(policy):
     # adb服务端listen语法不接受hostname；不加-a时仍仅默认loopback监听。
+    if policy.get('schema_version') == 2:
+        require(policy.get('endpoint') == 'tcp:127.0.0.1:' + str(policy.get('port')), 'INSTANCE_ENDPOINT')
+        route.instance_module().verify_binary(policy)
+        return [policy['adb_realpath'], '-L', 'tcp:' + str(policy['port']), 'server', 'nodaemon']
     return [policy['adb_bin'], '-L', 'tcp:5037', 'server', 'nodaemon']
 
 
 def check_client(policy, environment, runner=subprocess.run):
-    result = runner([policy['adb_bin'], 'version'], env=environment,
+    if policy.get('schema_version') == 2:
+        route.instance_module().verify_binary(policy)
+    binary = policy['adb_realpath'] if policy.get('schema_version') == 2 else policy['adb_bin']
+    result = runner([binary, 'version'], env=environment,
                     capture_output=True, text=True, timeout=3)
     require(result.returncode == 0 and re.search(
         r'^Android Debug Bridge version 1\.0\.41\r?$', result.stdout, re.M), 'CLIENT_PROTOCOL')
 
 
 def ensure_absent(policy, probe=route.smart_request):
+    if policy.get('schema_version') == 2:
+        require(policy.get('endpoint') == 'tcp:127.0.0.1:' + str(policy.get('port')), 'INSTANCE_ENDPOINT')
     deadline = time.monotonic() + 2
     for port in [policy['port'], *policy['forbidden_ports']]:
         # 所有响应（包括错误协议）都意味着已有服务，绝不通过adb抢占。
@@ -96,7 +113,7 @@ def ensure_absent(policy, probe=route.smart_request):
 
 
 @contextmanager
-def service_lock(path):
+def service_lock(path, shared=False):
     try:
         fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     except OSError as error:
@@ -106,12 +123,24 @@ def service_lock(path):
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
                 and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1, 'LOCK_INVALID')
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ValueError('ADB_SERVICE_LOCKED') from error
         yield fd
     finally:
         os.close(fd)
+
+
+@contextmanager
+def instance_service_locks(directory, policy):
+    require(re.fullmatch('[a-z][a-z0-9-]{2,63}', policy.get('instance_id', ''))
+            and type(policy.get('port')) is int and 1 <= policy['port'] <= 65535, 'INSTANCE_LOCK_SCOPE')
+    with ExitStack() as locks:
+        # 原默认EX与所有新实例SH互斥；只允许受审实例之间共享global gate。
+        locks.enter_context(service_lock(str(directory / 'adb-host.lock'), shared=True))
+        own = locks.enter_context(service_lock(str(directory / ('adb-host.instance-' + policy['instance_id'] + '.lock'))))
+        locks.enter_context(service_lock(str(directory / ('adb-host.port-' + str(policy['port']) + '.lock'))))
+        yield own
 
 
 def status(policy, inspector=route.inspect_managed_host):
@@ -128,7 +157,7 @@ def stop_child(child, signum):
     require(child.poll() is not None, 'STOP_UNCONFIRMED')
 
 
-def run_service(policy, config):
+def run_service(policy, config, maintenance_receipt=None):
     validate_host(policy)
     user = pwd.getpwuid(os.geteuid())
     require(os.environ.get('HOME') == user.pw_dir, 'HOME_MISMATCH')
@@ -137,11 +166,19 @@ def run_service(policy, config):
     private_directory(lock_directory)
     # 锁按宿主/用户固定，不能用另一个config目录逃过同一supervisor互斥。
     lock_path = str(lock_directory / 'adb-host.lock')
-    with service_lock(lock_path) as lock_fd:
+    multi = policy.get('schema_version') == 2
+    owned_locks = instance_service_locks(lock_directory, policy) if multi else service_lock(lock_path)
+    with owned_locks as lock_fd:
+        def authorize():
+            if multi:
+                require(load_policy(config) == policy, 'INSTANCE_CONFIG_CHANGED')
+                route.instance_module().authorize_start(policy, config, maintenance_receipt)
+        authorize()
         ensure_absent(policy)
         check_client(policy, environment)
         # 再核一次，避免version检查期间新服务出现；不向既有server发任何停止命令。
         ensure_absent(policy)
+        authorize()
         child = subprocess.Popen(foreground_command(policy), env=environment, close_fds=True)
         old_handlers = {}
         def forward(signum, _frame):
@@ -237,13 +274,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['run', 'status'])
     parser.add_argument('--config', required=True)
+    parser.add_argument('--maintenance-receipt')
     args = parser.parse_args()
     policy = load_policy(args.config)
     validate_host(policy)
     if args.command == 'status':
         print(json.dumps(status(policy)))
     else:
-        run_service(policy, args.config)
+        run_service(policy, args.config, args.maintenance_receipt)
 
 
 if __name__ == '__main__':
@@ -251,5 +289,5 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         message = str(error)
-        print(message if message.startswith(('ADB_SERVICE_', 'ADB_HOST_', 'ADB_ROUTE_')) else 'ADB_SERVICE_FAILED', file=sys.stderr)
+        print(message if message.startswith(('ADB_SERVICE_', 'ADB_HOST_', 'ADB_ROUTE_', 'ADB_INSTANCE_')) else 'ADB_SERVICE_FAILED', file=sys.stderr)
         sys.exit(2)
