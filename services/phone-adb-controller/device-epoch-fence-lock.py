@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""内部文件事务机制，不产生停止或网络授权。仅受审Node维护controller持有stdin能力。"""
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import sys
+
+
+def need(value, code):
+    if not value:
+        raise ValueError('EPOCH_LOCK_' + code)
+
+
+def raw_file(path):
+    need(path.resolve(strict=True) == path and not path.is_symlink(), 'PATH')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        s = os.fstat(fd)
+        need(stat.S_ISREG(s.st_mode) and s.st_uid == os.geteuid() and s.st_nlink == 1
+             and not s.st_mode & 0o022 and s.st_size <= 65536, 'FILE')
+        raw = os.read(fd, 65537)
+        e = os.fstat(fd)
+        need(len(raw) == s.st_size and (s.st_dev, s.st_ino, s.st_mtime_ns, s.st_ctime_ns)
+             == (e.st_dev, e.st_ino, e.st_mtime_ns, e.st_ctime_ns), 'FILE_DRIFT')
+        return raw
+    finally:
+        os.close(fd)
+
+
+def sync_dir(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def write_once(path, value):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        raw = (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
+        with os.fdopen(fd, 'wb', closefd=False) as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+    sync_dir(path.parent)
+
+
+def snapshot(root, serial):
+    r = root.lstat()
+    need(root.is_absolute() and root.resolve(strict=True) == root and stat.S_ISDIR(r.st_mode)
+         and not root.is_symlink() and r.st_uid == os.geteuid() and stat.S_IMODE(r.st_mode) == 0o700, 'ROOT')
+    marker_raw = raw_file(root / '.migration-complete.json')
+    marker = json.loads(marker_raw)
+    need(marker.get('schema_version') == 1 and marker.get('state') == 'complete', 'MIGRATION')
+    legacy = Path(marker['legacy_root'])
+    need(legacy.is_absolute() and legacy.resolve(strict=True) == legacy
+         and not os.path.lexists(legacy / (serial + '.lock')), 'LEGACY')
+    guards = []
+    for path in (root / (serial + '.guard'), legacy / (serial + '.guard')):
+        s = path.lstat()
+        need(path.resolve(strict=True) == path and not path.is_symlink() and stat.S_ISREG(s.st_mode)
+             and s.st_uid == os.geteuid() and stat.S_IMODE(s.st_mode) == 0o600
+             and s.st_nlink == 2 and s.st_size == 0, 'GUARD')
+        guards.append({'path': str(path), 'dev': s.st_dev, 'ino': s.st_ino, 'nlink': s.st_nlink})
+    need((guards[0]['dev'], guards[0]['ino']) == (guards[1]['dev'], guards[1]['ino']), 'GUARD_ALIAS')
+    lock = root / (serial + '.lock')
+    s = lock.lstat()
+    need(lock.resolve(strict=True) == lock and not lock.is_symlink() and stat.S_ISDIR(s.st_mode)
+         and s.st_uid == os.geteuid() and stat.S_IMODE(s.st_mode) in (0o700, 0o755), 'QUARANTINE')
+    names = ['owner', 'pid', 'acquired_at', 'standalone_review_required']
+    need(sorted(p.name for p in lock.iterdir()) == sorted(names), 'FIELDS')
+    fields = {name: raw_file(lock / name).decode() for name in names}
+    need(re.fullmatch(r'[-A-Za-z0-9_]{1,120}\n', fields['owner'])
+         and fields['standalone_review_required'] == fields['owner']
+         and re.fullmatch(r'[1-9][0-9]*\n', fields['pid'])
+         and re.fullmatch(r'[0-9]+\n', fields['acquired_at']), 'OWNER')
+    return {'root': {'dev': r.st_dev, 'ino': r.st_ino}, 'marker_sha256': hashlib.sha256(marker_raw).hexdigest(),
+            'lock': {'dev': s.st_dev, 'ino': s.st_ino, 'mode': stat.S_IMODE(s.st_mode)},
+            'fields': fields, 'guards': guards, 'guard_count': 1}
+
+
+def emit(value):
+    print(json.dumps(value, separators=(',', ':')), flush=True)
+
+
+def message():
+    line = sys.stdin.buffer.readline(1024 * 1024)
+    need(line and line.endswith(b'\n') and len(line) < 1024 * 1024, 'PROTOCOL')
+    return json.loads(line)
+
+
+def main():
+    mode, root, serial = sys.argv[1:4]
+    root = Path(root)
+    need(mode in ('inspect', 'serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
+    before = snapshot(root, serial)
+    # 两根是同一硬链：只open/flock一次，避免重复锁同inode自锁。
+    fd = os.open(before['guards'][0]['path'], os.O_RDWR | os.O_NOFOLLOW)
+    try:
+        s = os.fstat(fd)
+        need((s.st_dev, s.st_ino) == (before['guards'][0]['dev'], before['guards'][0]['ino']), 'GUARD_DRIFT')
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        need(snapshot(root, serial) == before, 'SNAPSHOT_DRIFT')
+        if mode == 'inspect':
+            need(len(sys.argv) == 4, 'ARGUMENTS')
+            emit(before)
+            return
+        need(len(sys.argv) == 6 and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
+             and re.fullmatch(r'[a-f0-9]{64}', sys.argv[5]), 'ARGUMENTS')
+        task, plan = sys.argv[4:6]
+        prefix = root / ('.device-epoch-fence-' + task + '-' + plan)
+        need(not any(os.path.lexists(str(prefix) + suffix) for suffix in ('.pending.json', '.completed.json', '.superseded')), 'PREVIOUS_UNKNOWN')
+        emit({'event': 'locked', 'snapshot': before})
+        prepare = message()
+        need(prepare == {'action': 'prepare', 'expected': before} and snapshot(root, serial) == before, 'PREPARE_CAS')
+        write_once(Path(str(prefix) + '.pending.json'), {'protocol': 'device-epoch-fence-file-transaction/v1', 'task_id': task,
+                   'plan_sha256': plan, 'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared'})
+        emit({'event': 'prepared'})
+        commit = message()
+        need(set(commit) == {'action', 'proof_sha256'} and commit['action'] == 'commit'
+             and re.fullmatch(r'[a-f0-9]{64}', commit['proof_sha256']) and snapshot(root, serial) == before, 'COMMIT_CAS')
+        # Node已完成真正的fence/中央强CAS及fresh读回。这里只执行一次原目录rename，不写原始字段。
+        archive = Path(str(prefix) + '.superseded')
+        need(not os.path.lexists(archive), 'ARCHIVE_EXISTS')
+        os.rename(root / (serial + '.lock'), archive)
+        sync_dir(root)
+        result = {'event': 'committed', 'archive_path': str(archive), 'lock_ino': before['lock']['ino'],
+                  'proof_sha256': commit['proof_sha256'], 'original_execution_stopped': False}
+        write_once(Path(str(prefix) + '.completed.json'), result)
+        emit(result)
+    finally:
+        os.close(fd)
+
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(ValueError('EPOCH_LOCK_DEADLINE')))
+    signal.alarm(600)
+    try:
+        main()
+    except Exception as error:
+        code = str(error) if re.fullmatch(r'EPOCH_LOCK_[A-Z_]+', str(error)) else 'EPOCH_LOCK_UNKNOWN'
+        print(code, file=sys.stderr)
+        sys.exit(2)
