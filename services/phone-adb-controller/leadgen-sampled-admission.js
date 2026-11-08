@@ -102,7 +102,8 @@ async function admittedRows(pool,{lineKey,run,sourceRun,sourceCommit,readProof=r
     ||video.process_status!=='待判定'||video.judgment_status!=='matched')fail('VIDEO_SCOPE_INVALID');
   const proof=await readProof(sourceRun);
   const sample=proof?.sampling_input;
-  if(proof?.run_id!==`douyin_video_processing-${sourceRun}__a1`
+  const publicProof=UUID.test(proof?.run_id||'')&&(await import('./public-domain-sampling.mjs')).isPublicSamplingProof(proof,{lineKey,run,sourceRun,sourceCommit});
+  if(!publicProof&&(proof?.run_id!==`douyin_video_processing-${sourceRun}__a1`
     ||proof.business_outcome!=='pass'||proof.evidence_status!=='verified'
     ||!Array.isArray(proof.gaps)||proof.gaps.length||!Number.isInteger(proof.span_count)
     ||proof.span_count<1||proof.span_count!==proof.expected_count
@@ -110,15 +111,15 @@ async function admittedRows(pool,{lineKey,run,sourceRun,sourceCommit,readProof=r
     ||sample?.workflow_key!=='douyin_video_processing'||sample.run_tag!==sourceRun
     ||sample.line!==lineKey||sample.source_run!==proof.source_run
     ||!Number.isSafeInteger(sample.comment_limit)||sample.comment_limit<1||sample.comment_limit>50
-    ||!SHA.test(proof.source_commit||''))fail('RUN_PROOF_INVALID');
-  if(proof.identity_bound!==true)fail('RUN_BINDING_INVALID');
+    ||!SHA.test(proof.source_commit||'')))fail('RUN_PROOF_INVALID');
+  if(!publicProof&&proof.identity_bound!==true)fail('RUN_BINDING_INVALID');
   const pinned=sourceRun===LEGACY.run;
   if(pinned){
     if(videos.length!==1)fail('LEGACY_VIDEO_SET_INVALID');
     if(lineKey!==LEGACY.line||proof.source_commit!==LEGACY.source_commit
       ||proof.binding_id!==LEGACY.binding_id||videos[0].video_id!==LEGACY.video_id
       ||sample.comment_limit!==LEGACY.limit)fail('LEGACY_SCOPE_INVALID');
-  }else if(proof.source_commit!==sourceCommit||proof.identity_bound!==true)fail('SOURCE_COMMIT_MISMATCH');
+  }else if(proof.source_commit!==sourceCommit||!publicProof&&proof.identity_bound!==true)fail('SOURCE_COMMIT_MISMATCH');
   const frozen=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE run_id=$1',[sourceRun])).rows;
   const scoring=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE run_id=$1',[run])).rows;
   if(frozen.length!==1||scoring.length!==1)fail('FROZEN_CONFIG_MISSING');

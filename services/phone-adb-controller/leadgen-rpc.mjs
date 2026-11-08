@@ -1,3 +1,5 @@
+import {readPublicDomainSamplingProof} from './public-domain-sampling.mjs';
+import {publicDomainPgRequired,loadPublicDomainPg,verifyPublicDomainTask,verifyPublicDomainCompany} from './public-domain-pg.mjs';
 // mmv执行端：每次请求先核固定发布SHA及完整声明文件，再允许队列或模型动作。
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -61,8 +63,14 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
 export async function handleRpc(input, deps = {}) {
   (deps.verify || verifyRpcSource)(input.source);
   let pool;
+  const isPublic=publicDomainPgRequired(root);
+  if(isPublic&&['commander','commander_readback','activity_skill','activity_skill_authority','activity_skill_stop','outreach','outreach_policy'].includes(input.kind))throw Error('RPC_PUBLIC_DOMAIN_OPERATION_REFUSED');
+  if(isPublic&&!deps.pool)await verifyPublicDomainTask({runtimeRoot:root});
+  const fixedPool=isPublic&&!deps.pool?loadPublicDomainPg({runtimeRoot:root,input}):null;
+  const getPool=()=>fixedPool||require('./leadgen-db-connect.js').getPool();
   try {
-    if(input.kind==='outreach'){pool=deps.pool||require('./leadgen-db-connect.js').getPool();return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit,pool})};}
+    if(fixedPool)await verifyPublicDomainCompany({runtimeRoot:root,pool:fixedPool});
+    if(input.kind==='outreach'){pool=deps.pool||getPool();return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit,pool})};}
     if(input.kind==='outreach_policy')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachPolicy(input)};
     if(input.kind==='resolve_share_link')return {ok:true,result:await resolveCopiedShareLink(input.url,{execute:deps.resolveExec||exec})};
     if(['activity_skill','activity_skill_authority','activity_skill_stop'].includes(input.kind)){
@@ -85,7 +93,7 @@ export async function handleRpc(input, deps = {}) {
       return { ok: true, decision: await openClawCommander({execute:deps.commanderExecute,home:deps.commanderHome})(input.receipt) };
     }
     if (input.kind === 'keywords') {
-      pool = deps.pool || require('./leadgen-db-connect.js').getPool();
+      pool = deps.pool || getPool();
       const result = await require('./next-keywords.js').companyKeywords(pool,
         { lineHint: input.line, runId: input.run, limit: input.limit, keywords: input.keywords }, deps);
       return { ok: true, result: result.keywords, config: result.config };
@@ -99,14 +107,14 @@ export async function handleRpc(input, deps = {}) {
       if(errors.length)throw Error('RPC_VERIFY_CHECKS_INVALID');
       const spec=JSON.parse(readFileSync(resolve(root,'plans',`${input.workflow}.steps.json`),'utf8'));
       const {runProbes,runSteps,resolveLineKey}=await import('./verify-step.mjs');
-      pool=deps.pool||require('./leadgen-db-connect.js').getPool();
+      pool=deps.pool||getPool();
       const params={runTag:input.run,lineKey:resolveLineKey(input.line),metrics:input.metrics||{},word:''};
       const probes=await runProbes({doc,stage:input.stage,params,deps:{pool},timeoutMs:45000});
       const steps=await runSteps({spec,stage:input.stage,params,deps:{pool},timeoutMs:45000});
       return {ok:true,result:{...probes,steps}};
     }
-    pool = deps.pool || require('./leadgen-db-connect.js').getPool();
-    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request,{sourceCommit:input.source.commit,execution:input.source.execution,resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec})}) };
+    pool = deps.pool || getPool();
+    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request,{sourceCommit:input.source.commit,execution:input.source.execution,...(isPublic?{sampledAdmission:{readProof:sourceRun=>readPublicDomainSamplingProof({runtimeRoot:root,sourceRun,lineKey:require('./line-routes.js').routeOf(input.request.line).key})}}:{}),resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec})}) };
     if (input.kind === 'qualify') {
       const args = input.request;
       if (!['judge'].includes(args?.cmd) || !/^\d{16,24}$/.test(args.videoId || '')) throw Error('RPC_QUALIFY_INVALID');
@@ -114,7 +122,7 @@ export async function handleRpc(input, deps = {}) {
       return { ok: true, result: await require('./qualify-video.js').runQualify({ cmd: args.cmd, args, pool }) };
     }
     throw Error('RPC_KIND_INVALID');
-  } finally { if (pool && !deps.pool) await pool.end(); }
+  } finally { if (!deps.pool && (pool||fixedPool)) await (pool||fixedPool).end(); }
 }
 
 const recoveryReasons=new Set([

@@ -11015,3 +11015,102 @@ tests:
     product: AI员工
     execution: cloud9-quarantine-supersession.test.mjs invokes Python unittest
     note: "私有目录永久回归；四wire、producer关闭、原件与owner保护、release未知不重试、rename竞态"
+
+  - id: phone-native-preflight-quarantine-review
+    path: services/phone-adb-controller/__tests__/native-preflight-quarantine-review.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共Worker同进程业务域或只读隔离恢复永久回归；不替代真实云手机验收"
+
+  - id: phone-public-domain-authority
+    path: services/phone-adb-controller/__tests__/public-domain-authority.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共Worker同进程业务域或只读隔离恢复永久回归；不替代真实云手机验收"
+
+  - id: phone-public-domain-package
+    path: services/phone-adb-controller/__tests__/public-domain-package.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共Worker同进程业务域或只读隔离恢复永久回归；不替代真实云手机验收"
+
+  - id: phone-public-domain-upstream
+    path: services/phone-adb-controller/__tests__/public-domain-upstream.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共Worker同进程业务域或只读隔离恢复永久回归；不替代真实云手机验收"
+
+  - id: phone-public-domain
+    path: services/phone-adb-controller/__tests__/public-domain.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共Worker同进程业务域或只读隔离恢复永久回归；不替代真实云手机验收"
+
+  - id: phone-public-domain-profile
+    path: services/phone-adb-controller/__tests__/public-domain-profile.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共profile固定编译、canonical清理或环境隔离永久回归"
+
+  - id: phone-public-domain-scope-review
+    path: services/phone-adb-controller/__tests__/public-domain-scope-review.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共profile固定编译、canonical清理或环境隔离永久回归"
+
+  - id: phone-public-domain-env-review
+    path: services/phone-adb-controller/__tests__/public-domain-env-review.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共profile固定编译、canonical清理或环境隔离永久回归"
+
+  - id: phone-public-domain-step-checks
+    path: services/phone-adb-controller/__tests__/public-domain-step-checks.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；独立业务观测映射冻结Step，声明不能冒充执行"
+
+  - id: phone-public-domain-worker-cross-repo
+    path: services/phone-adb-controller/__tests__/public-domain-worker.integration.mjs
+    type: integration
+    ci: unverified
+    status: pending-ci
+    product: AI员工
+    execution: manual cross-repo / CECELIA_PUBLIC_RUNNER_ROOT fixed clean Cecelia source / node --test services/phone-adb-controller/__tests__/public-domain-worker.integration.mjs
+    note: "真实公共Worker与ZJ domain产品生命周期；明确外部固定源码依赖，非默认CI自动覆盖，缺源失败不skip；不替代云手机验收"
+
+  - id: phone-public-domain-sampling
+    path: services/phone-adb-controller/__tests__/public-domain-sampling.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；公共102限采样本凭真实中央独立判词及同源身份交103，保原PG/recipient校验"

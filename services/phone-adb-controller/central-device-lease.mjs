@@ -1,3 +1,4 @@
+import {publicDomainAuthority,publicDomainTaskMatches} from './public-domain-authority.mjs';
 import {openSync,closeSync,writeFileSync,readFileSync,fstatSync,constants} from 'node:fs';
 import {join} from 'node:path';
 const TASK_ID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
@@ -30,7 +31,7 @@ export async function verifyCentralTaskAssociation({lease,workflowKey,companyLin
     runtime_snapshot_sha256:snapshotSha256,central_owner:taskId};
 }
 
-export function createCentralDeviceLease({brainUrl,token,deviceName,taskId,runId,expectedProjectId,fetcher=globalThis.fetch,now=Date.now,runSeconds=1800}){
+export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,deviceName,taskId,runId,expectedProjectId,fetcher=globalThis.fetch,now=Date.now,runSeconds=1800}){
   if(!TASK_ID.test(taskId||'')||!runId)throw Error('CENTRAL_LOCK_TASK_REQUIRED');
   if(expectedProjectId&&!TASK_ID.test(expectedProjectId))throw Error('CENTRAL_LOCK_PROJECT_INVALID');
   if(!/^https?:\/\/[^/]+$/.test((brainUrl||'').replace(/\/$/,''))||!token||!deviceName)throw Error('CENTRAL_LOCK_CONFIG_REQUIRED');
@@ -89,6 +90,10 @@ export function createCentralDeviceLease({brainUrl,token,deviceName,taskId,runId
   async function verifyTask({workflowKey,companyLine,sourceCommit,runTag}){
     const task=await request('/tasks/'+taskId);
     const p=task.payload;
+    if(publicDomainDirectory){
+      if(!publicDomainTaskMatches(task,publicDomainDirectory)||publicDomainAuthority(publicDomainDirectory)?.binding.run_id!==runId)throw Error('CENTRAL_LOCK_PUBLIC_TASK_MISMATCH');
+      return task;
+    }
     if(task.id!==taskId||task.status!=='in_progress'||!TASK_ID.test(task.project_id||'')
       ||(expectedProjectId&&task.project_id!==expectedProjectId)
       ||!p||p.workflow_key!==workflowKey||p.device_serial!==deviceName||p.company_line!==companyLine

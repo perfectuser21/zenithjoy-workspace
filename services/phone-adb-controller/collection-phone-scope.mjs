@@ -1,3 +1,4 @@
+import {canonicalRunId} from './public-domain-authority.mjs';
 // 本能力只表示固定collection闭包的同步手机请求已归还，绝不表示OS全后代已停。
 import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,fstatSync,realpathSync,readlinkSync,symlinkSync,openSync,closeSync,constants,existsSync} from 'node:fs';
 import {join,resolve,isAbsolute} from 'node:path';
@@ -65,7 +66,7 @@ function returnedFresh(r,{active=false}={}){
   const i=r.identity,e=r.env,s=r.state,frozen=readFrozen(r.runDir),binding=readBinding(r.runDir,e.WFR_ATTEMPT,frozen);
   return !s.executionUnknown&&s.account===r.account&&!s.remainingVideoIds?.length
    &&s.run_id===i.run_id&&s.task_id===i.task_id&&s.source_commit===i.source_commit&&s.run===i.owner&&s.profile===i.profile
-   &&e.WFR_RUN_DIR===r.runDir&&`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT}`===i.run_id&&e.WFR_ATTEMPT===i.attempt&&e.WFR_TAG===i.owner&&e.P===i.profile&&e.SERIAL===i.serial
+   &&e.WFR_RUN_DIR===r.runDir&&canonicalRunId(e)===i.run_id&&e.WFR_ATTEMPT===i.attempt&&e.WFR_TAG===i.owner&&e.P===i.profile&&e.SERIAL===i.serial
    &&binding.id===i.binding_id&&(binding.task_id===i.task_id||binding.task_id===null&&r.taskAssociation?.task_id===i.task_id&&r.taskAssociation.binding_id===i.binding_id)&&binding.run_id===i.run_id
    &&(active||r.generation===(generations.get(s)||0))&&Date.now()<r.globalDeadline
    &&frozen.snapshot_sha256===i.snapshot_sha256&&evidenceStillQuiet(r.evidence,r.specification)
@@ -166,7 +167,7 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
  let frozen;try{frozen=readFrozen(env.WFR_RUN_DIR);}catch(error){if(error.code==='ENOENT')return null;throw error;}
  if(!frozen.collection_phone_scope)return null;
  const specification=structuredClone(frozen.collection_phone_scope),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);
- const identity={task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collection',owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};
+ const identity={task_id:taskId??null,run_id:canonicalRunId(env),attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collection',owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};
  if(specification.version!==1||binding.run_id!==identity.run_id||frozen.deployment.source_commit!==sourceCommit||state.currentActivity!=='collection'||!Number.isSafeInteger(identity.deadline_ms)||Date.now()>=identity.deadline_ms||state.executionUnknown)throw Error('COLLECTION_PHONE_SCOPE_IDENTITY_INVALID');
  for(const key of ['task_id','run_id','attempt','source_commit','profile','serial','target'])if(specification[key]!==identity[key])throw Error('COLLECTION_PHONE_SCOPE_IDENTITY_INVALID');
  let taskAssociation=null;

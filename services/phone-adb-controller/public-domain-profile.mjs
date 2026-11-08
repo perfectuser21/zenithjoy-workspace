@@ -61,17 +61,21 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  need(same(pg,d.dependencies?.preflight_pg),'PG_DEPLOYMENT');
  for(const row of pg.files){file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
  const entry='leadgen-public-domain.mjs',metadata={},preconditions={},validators={},activities=[],expected_path=[];
+ const runtime_snapshot_sha256=digest(files);
  for(const ref of refs){
   need(UUID.test(ref.reference_id||'')&&UUID.test(ref.activity_id||'')&&UUID.test(ref.activity_version_id||'')&&typeof ref.slot_key==='string'&&!metadata[ref.slot_key],'ACTIVITY_IDENTITY');
   const original=f.activities.find(a=>a.reference.slot_key===ref.slot_key);need(original&&same(original.reference,ref),'FROZEN_ACTIVITY');
   const av=original.version;checkedVersion(av,d.source_commit);need(av.id===ref.activity_version_id&&av.payload.activity_id===ref.activity_id&&r.payload.activities.some(v=>same(v,av)),'ACTIVITY_RELEASE');
-  const c=clone(av.payload.contract);need(Number.isSafeInteger(c.budget?.max_duration_s)&&c.budget.max_duration_s>0&&c.budget.max_duration_s<=3600
+  const c=clone(av.payload.contract);need(Number.isSafeInteger(c.budget?.max_duration_s)&&c.budget.max_duration_s>0&&c.budget.max_duration_s<=14400
    &&Number.isSafeInteger(c.budget.heartbeat_s)&&c.budget.heartbeat_s>0&&c.budget.heartbeat_s<=c.budget.max_duration_s,'ACTIVITY_BUDGET');
-  need(['setup','source','process','item','finalize'].includes(c.runtime?.phase),'ACTIVITY_PHASE');
-  // Entry is the fixed domain facade; business implementation remains the
-  // original frozen Activity version and its original ordered contract.
-  activities.push({...c,key:ref.slot_key,runtime:{...c.runtime,entry}});
-  const m=metadataFor(w,ref,av,entry,files[entry]);metadata[ref.slot_key]=m;
+  need(['setup','source','per_item','batch_end','finalize'].includes(c.runtime?.phase),'ACTIVITY_PHASE');
+  // Native handlers already own their frozen whole-batch iteration. Match the
+  // mature leadgen adapter: public Runner invokes each handler once; original
+  // phase/foreach policy stays intact in the snapshot and declared metadata.
+  const runtime={...c.runtime,protocol:'json-stdio-v1',phase:c.runtime.phase==='finalize'?'finalize':'source',entry};
+  delete runtime.per_item;
+  activities.push({...c,key:ref.slot_key,runtime});
+  const m=metadataFor(w,ref,av,entry,files[entry]);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
   preconditions[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A2.ref}};
   validators[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A4.ref}};
   expected_path.push({reference_id:ref.reference_id,activity_id:ref.activity_id,activity_definition_version_id:av.id});
@@ -80,7 +84,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  const cleanup=activities.filter(a=>a.runtime.phase==='finalize'),work=activities.filter(a=>a.runtime.phase!=='finalize');
  const sum=xs=>xs.reduce((n,a)=>n+a.budget.max_duration_s,0),policy=w.payload.contract.recovery;
  const cleanup_grace_s=Math.min(cleanup.length?sum(cleanup):Math.min(30,sum(work)-1),policy?.cleanup_timeout_sec??(cleanup.length?sum(cleanup):Math.min(30,sum(work)-1)));
- const max_duration_s=Math.min(sum(work),policy?.total_timeout_sec??(cleanup.length?sum(work):sum(work)-cleanup_grace_s));
+ const max_duration_s=Math.min(sum(work),policy?.total_timeout_sec!==undefined?policy.total_timeout_sec-cleanup_grace_s:(cleanup.length?sum(work):sum(work)-cleanup_grace_s));
  need(Number.isSafeInteger(max_duration_s)&&max_duration_s>0&&Number.isSafeInteger(cleanup_grace_s)&&cleanup_grace_s>0&&max_duration_s+cleanup_grace_s<=14400,'WORKFLOW_BUDGET');
  need(commander?.kind==='openclaw'&&commander.skill?.version&&files[commander.skill?.entry]
   &&Number.isSafeInteger(commander.timeout_s)&&commander.timeout_s>0&&commander.timeout_s<=300,'COMMANDER');
@@ -88,13 +92,14 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  need(new RegExp('(?:^|\\n) *(?:version|version:)').test(skill)&&skill.includes(commander.skill.version),'COMMANDER_VERSION');
  const step_spec=`plans/${w.payload.key}.steps.json`;need(files[step_spec],'STEP_SPEC');
  validators.workflow={entry,timeout_s:30,acceptance:{ref:`workflow-definition:${w.id}#acceptance`}};
- if(cleanup.length)validators.cleanup={entry,timeout_s:30,acceptance:{ref:`workflow-definition:${w.id}#cleanup`}};
+ // cleanup is also an Activity key: retain its original AV A4 acceptance
+ // for both per-Activity validation and the aggregate cleanup scope.
  const template={...f,public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
    config:{workflow_key:w.payload.key,resources:clone(resources),company:clone(company),env:clone(env),step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
- const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256:digest(files),expected_path};
+ const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};
  return {profile,profile_sha256,definition,route,worker_config:{schema_version:1,profiles:{[profileId]:profile}},brain_profiles:{profiles:{[profileId]:route}}};
 }

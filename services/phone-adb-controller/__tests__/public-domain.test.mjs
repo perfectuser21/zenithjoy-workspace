@@ -13,3 +13,7 @@ test('factory rejects 104 and never starts another runner/Commander',async()=>{
 test('factory fails before side effects on absent fixed deadlines',async()=>{
  await assert.rejects(createWorkflowDomain({identity:identity(),profile:{domain_adapter:{config:{workflow_key:'douyin_video_discovery'}}},runDirectory:'/tmp/denied-public-domain'}),/PUBLIC_DOMAIN_DEADLINE/);
 });
+test('101 real metrics accept canonical public run UUID while preserving the business batch tag',async()=>{
+ const {createRequire}=await import('node:module');const metrics=createRequire(import.meta.url)('../discovery-metrics.js');
+ const run_id=randomUUID(),run='public101';const m=metrics.buildObservation({run,run_id,profile:'cloud-phone-test',source_commit:'a'.repeat(40),line_key:'yuesheng',video_id:'7693970762462579121',video_url:'https://www.douyin.com/video/7693970762462579121',observed_at:'2026-11-09T00:00:00.000Z',evidence_id:run+'-candidate1-link-t1',xml:'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="未点赞，喜欢67，按钮"/><node package="com.ss.android.ugc.aweme" content-desc="评论4，按钮"/></hierarchy>'});assert.equal(m.run_id,run_id);assert.equal(m.run,run);assert.equal(m.comment_total.value,4);
+});
