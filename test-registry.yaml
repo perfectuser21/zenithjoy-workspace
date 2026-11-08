@@ -10970,3 +10970,12 @@ tests:
     product: AI员工
     execution: cloud7-quarantine-supersession.test.mjs invokes Python unittest
     note: "私有目录测试真实guard/原子rename/断电重入，拒绝新命令、Worker、副作用与外来owner"
+
+  - id: phone-preflight-raw-turn-budget-package
+    path: services/phone-adb-controller/__tests__/raw-turn-budget.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition#step1；预检模型窗口分配、正式deploy文件打包后Node真实加载、固定Activity源码摘要及receiver缺依赖拒绝；不运行真实手机"
