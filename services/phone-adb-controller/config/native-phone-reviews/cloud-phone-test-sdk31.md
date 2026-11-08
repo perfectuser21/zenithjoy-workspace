@@ -21,3 +21,15 @@ Pillow只用于原本地filter与原视觉编码，策略另固定MMV既有PIL�
 计划和执行均核对原 blocked Task、固定 recovery Task 的当前 claim 及中央无外来 owner；这些只是授权和并发条件。代码须是已合并 main 的原件，并把 recovery source、review/policy hash 绑定到持久计划。持迁移双根的同 inode guard，fsync plan/intent 后只原子迁移整个六文件 quarantine 目录到唯一 `.superseded` 路径；原 owner/epoch/内容和目录 inode 保持。用原 frozen phone-lock-root 对双活动根真实读回 free，再落 returned；任何漂移、外来 owner、冲突或提交未知均保留屏障，重入只完成同一事务。
 
 此迁移只授权 mmv/broker mmv、cloud-phone-test、47.100.213.173:10001、5041、77980009922、yuesheng 的全新 cloud8 `douyin_video_discovery` 101 Task。新 Task 必须 start:true + lease_seconds 领取并独立取得本轮锁与完整预检；旧执行结果仍 unknown，不回填 EXIT、EOF、socket-close、read_returned 或 execution_stopped=true。新运行正常清理、收据和双锁 free 要按其原合同验收。104、其他宿主、旧 run、任意身份/hash override 均不授权。
+
+## cloud8 observer 隔离的非重放 supersession
+
+`cloud8-quarantine-supersession.py` 仅处理原 Task `deeb4021-2b05-45e5-b8a6-712a38cdd0c7`、run `douyin_video_discovery-potato20261107_101_cloud8__a1`、source `41490a0aba7cbea0de32d15f575ee2169dd4198f`、binding `0ff7412e-c9b3-4e6a-8849-29eb1860efd6`、epoch `d185baf6-b32f-4de5-801f-52ee6bb35f26`。复用 cloud7 独立模块实例的已审 CAS 事务，不修改 cloud7 入口或常量。原失败、aggregate execution_stopped=false、最后 owner unknown 和未决 pending 原件全部保留。
+
+非干扰依据：原 Worker、手机 native、SDK 与 Caller 已封闭；唯一未知是 observer bounded-owner 的归档协议状态。原冻结 Python helper 只能通过固定 JSON 协议管理派生 observer session 的本地 owner 文件，无手机、业务、网络或 shell 执行入口；原 sandbox 禁止 fork，原完整六叶库存的 process、stdin、stdout、stderr 和共享锁 FD 均已关闭。不得以当前 PID、时间、中央 free 或新诊断代替这些原始事实。旧 owner pending 只阻止旧 session，不迁移、不删除、不重标签；后继使用新的 run/binding/task 派生 session。
+
+固定 archive SHA256 `8996c496d9ecc7b86cdd1b8c772e0bbbb81dbce2d684ae6a1cebb81468a31ef2` 覆盖原完整 ledger；逐字节核对原文件全集、冻结源码、三份 Caller/各自 artifacts、原手机关闭事实、四个 SDK 终态、唯一 observer 完整六叶快照和七个 owner 原件。任何额外能力、缺失关闭、身份/内容/库存漂移均拒绝。
+
+`inspect` 只读检查候选，显式 not_recovery_authority=true；`plan/apply` 均要求实现及本审查原件已合并 origin/main，固定恢复 Task 当前 claim，旧 Task failed，中央无 owner，同 inode 双根 guard，六文件精确 epoch CAS、持久 intent 和只读 free 读回。只迁移旧 quarantine 整目录，不写中央锁，不重放旧活动。
+
+后继限定 `potato20261108_101_cloud9` 的 101、mmv/broker mmv、cloud-phone-test、原 serial/5041、账号 77980009922、yuesheng。后继必须由真实 Commander-v2 使用 Brain 产生并匹配实际 task/binding 的原 JSON；本 authority 不启动后继、不授权旧五参 CLI、不豁免新 claim、双锁与账号实屏预检，亦不授权 104。
