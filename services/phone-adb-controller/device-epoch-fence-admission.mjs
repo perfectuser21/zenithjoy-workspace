@@ -1,26 +1,23 @@
 // 新schema2每个phone IO的唯一fresh fence准入；不继承maintenance中央owner。
 import {join,dirname,resolve} from 'node:path';import {userInfo} from 'node:os';import {fileURLToPath} from 'node:url';
 import {lstatSync,readdirSync,realpathSync,mkdirSync} from 'node:fs';import {randomUUID,createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';
-import {bytes,readBrain,reviewSource} from './device-epoch-fence-review.mjs';
+import {readBrain,reviewSource} from './device-epoch-fence-review.mjs';
+import {bytes,recordBytes,validateEpochRecord,freezeFenceReference} from './device-epoch-fence-reference.mjs';
+export {freezeFenceReference};
 import {readFrozen,digest,canonical} from './runtime-definition.mjs';
 import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,sha=b=>createHash('sha256').update(b).digest('hex');
 const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});},same=(a,b)=>canonical(a)===canonical(b),phone=f=>f.discovery_phone_scope??f.collection_phone_scope;
-function recordBytes(path){const s=lstatSync(path),root=lstatSync(dirname(path));need(s.uid===process.getuid()&&(s.mode&0o777)===0o600&&root.isDirectory()&&!root.isSymbolicLink()&&(root.mode&0o777)===0o700,'EPOCH_RECORD_MODE');return bytes(path);}
-export function validateEpochRecord(record,spec){
- need(record?.protocol==='device-epoch-fence-record/v1'&&uuid.test(record.epoch_id||'')&&record.status==='fenced'&&record.authority_basis==='old-route-fenced-observed-noninterference/v1'&&record.original_execution_stopped===false&&record.android_internal==='not_attested','EPOCH_RECORD');
- need(spec?.policy?.schema_version===2&&record.resource?.serial===spec.serial&&record.resource.profile===spec.profile&&record.resource.expected_account===spec.expected_account&&record.new_route?.instance_id===spec.policy.instance_id&&record.new_route.endpoint===spec.policy.endpoint&&record.runtime_source?.commit===spec.source_commit,'EPOCH_RECORD_SCOPE');return record;
-}
-export function freezeFenceReference({scope,epochId,home=userInfo().homedir}){
- need(uuid.test(epochId||'')&&typeof scope?.serial==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(scope.serial),'EPOCH_REFERENCE');const path=join(home,'.local/share/zenithjoy/device-epoch-fences',scope.serial,epochId+'.json'),raw=recordBytes(path),record=validateEpochRecord(JSON.parse(raw),scope);need(record.epoch_id===epochId,'EPOCH_REFERENCE_ID');
- const policyRaw=bytes(record.new_route.policy_path);need(sha(policyRaw)===record.new_route.policy_sha256&&same(JSON.parse(policyRaw),scope.policy),'EPOCH_REFERENCE_POLICY');return {protocol:'device-epoch-fence-reference/v1',epoch_id:epochId,path,sha256:sha(raw)};
-}
 export function readBoundAdbDaemon(expected,{run=(bin,args)=>execFileSync(bin,args,{encoding:'utf8',env:{PATH:'/usr/bin:/bin:/usr/sbin',LANG:'C',LC_ALL:'C',TZ:'UTC'},timeout:3000,stdio:['ignore','pipe','pipe']}),readBytes=bytes}={}){
  const port=expected?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/)?.[1];need(port&&Number.isSafeInteger(expected.pid)&&expected.pid>0&&expected.uid===process.getuid(),'EPOCH_DAEMON_SCOPE');
  // expected PID是record固定事实，不每frame扫描全系统listener；PID复用/被别PID占port均拒。
  const raw=run('/usr/sbin/lsof',['-nP','-a','-p',String(expected.pid),'-iTCP:'+port,'-sTCP:LISTEN','-Fpun']),pids=[...raw.matchAll(/^p([1-9]\d*)$/gm)].map(m=>Number(m[1])),uids=[...raw.matchAll(/^u([0-9]+)$/gm)].map(m=>Number(m[1]));need(pids.length===1&&pids[0]===expected.pid&&uids.length===1&&uids[0]===expected.uid&&raw.split('\n').includes('n127.0.0.1:'+port),'EPOCH_DAEMON_LISTENER');
  const start=run('/bin/ps',['-p',String(expected.pid),'-o','lstart=']).trim(),command=run('/bin/ps',['-p',String(expected.pid),'-o','command=']).trim(),images=run('/usr/sbin/lsof',['-a','-p',String(expected.pid),'-d','txt','-Fn']);need(start===expected.start_identity&&command===expected.command&&images.split('\n').includes('n'+expected.executable)&&sha(readBytes(expected.executable))===expected.executable_sha256&&sha(readBytes(expected.policy_path))===expected.policy_sha256,'EPOCH_DAEMON_IDENTITY');return structuredClone(expected);
+}
+export function businessAuthorityProjection(value){
+ const task=value.task,c=task?.result?.common_runner,b=value.binding,r=value.taskRun,l=value.central;
+ return {task:{id:task?.id,status:task?.status,claimed_by:task?.claimed_by,claimed_at:task?.claimed_at,common_runner:c&&Object.fromEntries(['run_id','task_id','machine_id','profile_sha256','run_binding'].map(k=>[k,c[k]]))},binding:b&&{...Object.fromEntries(['id','run_id','source_kind','workflow_id','workflow_definition_version_id','attempt_key','task_run_id','release_id','observation_id'].map(k=>[k,b[k]])),runtime_snapshot_sha256:b.payload?.runtime_snapshot_sha256},links:value.links&&{task_id:value.links.task_id,task_run_id:value.links.task_run_id},task_run:r&&Object.fromEntries(['id','task_id','run_id','status','ended_at'].map(k=>[k,r[k]])),central:l&&{device_name:l.device_name,locked_by:l.locked_by}};
 }
 export function verifyEpochFacts(f){
  const {record:r,frozen,task,binding:b,links,taskRun,central:c}=f,spec=phone(frozen),p=frozen.public_domain;validateEpochRecord(r,spec);
@@ -45,7 +42,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen}={}){
  const initial=await readBusiness(),source=reviewSource(),oldDaemon=readBoundAdbDaemon(record.old_route),newDaemon=readBoundAdbDaemon(record.new_route),archive=archiveSnapshot(record),activeOwner=bytes(join(userInfo().homedir,'.local/share/zenithjoy/phone-locks',spec.serial+'.lock','owner')).toString();
  const evidenceRoot=join(env.WFR_RUN_DIR,'epoch-fence-admission');try{mkdirSync(evidenceRoot,{mode:0o700});}catch(e){if(e.code!=='EEXIST')throw e;}const rs=lstatSync(evidenceRoot);need(rs.isDirectory()&&!rs.isSymbolicLink()&&realpathSync(evidenceRoot)===evidenceRoot&&(rs.mode&0o777)===0o700&&rs.uid===process.getuid(),'EPOCH_EVIDENCE_ROOT');const directory=join(evidenceRoot,randomUUID());mkdirSync(directory,{mode:0o700});
  async function inventory(route,label){const out=join(directory,label);mkdirSync(out,{mode:0o700});const scope={endpoint:route.endpoint,serial:spec.serial};const result=await hostOperation({operation:'inventory',scope,directory:out,readAuthority:async()=>{readBoundAdbDaemon(route);return {scope,authorized_action:'inventory',lease_until:initial.central.expires_at};}});need(result.wire_complete,'EPOCH_HOST_INVENTORY');return parseDeviceInventory(result.response);}
- const newInventory=await inventory(record.new_route,'new'),oldInventory=await inventory(record.old_route,'old'),fresh=await readBusiness();need(same(initial,fresh),'EPOCH_BUSINESS_DRIFT');
+ const newInventory=await inventory(record.new_route,'new'),oldInventory=await inventory(record.old_route,'old'),fresh=await readBusiness();need(same(businessAuthorityProjection(initial),businessAuthorityProjection(fresh)),'EPOCH_BUSINESS_DRIFT');
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
  readBoundAdbDaemon(record.old_route);readBoundAdbDaemon(record.new_route);need(sha(recordBytes(ref.path))===ref.sha256&&sha(bytes(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
  return verifyEpochFacts({record,frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,policySha256:sha(policyRaw),source,archive,activeOwner});

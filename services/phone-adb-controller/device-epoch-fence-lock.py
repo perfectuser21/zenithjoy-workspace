@@ -3,6 +3,9 @@
 import fcntl
 import hashlib
 import json
+import importlib.util
+import marshal
+import struct
 import os
 from pathlib import Path
 import re
@@ -98,6 +101,20 @@ def message():
 
 
 def main():
+    if len(sys.argv) == 4 and sys.argv[1] == 'verify-bytecode':
+        source, cache = map(Path, sys.argv[2:4])
+        data, raw = raw_file(source), raw_file(cache)
+        need(len(raw) >= 16 and raw[:4] == importlib.util.MAGIC_NUMBER
+             and struct.unpack('<I', raw[4:8])[0] == 0
+             and struct.unpack('<I', raw[8:12])[0] == int(source.stat().st_mtime)
+             and struct.unpack('<I', raw[12:16])[0] == len(data), 'BYTECODE_HEADER')
+        code = marshal.loads(raw[16:])
+        expected = compile(data, str(source), 'exec', dont_inherit=True, optimize=0)
+        need(code == expected and all(getattr(code, name) == getattr(expected, name) for name in dir(expected)
+             if name.startswith('co_') and not callable(getattr(expected, name)) and name != 'co_lnotab'), 'BYTECODE_SOURCE')
+        emit({'code_matches': True, 'source_sha256': hashlib.sha256(data).hexdigest(),
+              'cache_sha256': hashlib.sha256(raw).hexdigest()})
+        return
     mode, root, serial = sys.argv[1:4]
     root = Path(root)
     need(mode in ('inspect', 'serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')

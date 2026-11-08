@@ -1,9 +1,10 @@
 // 设备epoch维护只读入口。没有disconnect、start-server、解锁或历史状态写回入口。
-import {readFileSync,lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,fstatSync,readSync,constants,writeSync,fsyncSync} from 'node:fs';
+import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,writeSync,fsyncSync} from 'node:fs';
 import {join,dirname,resolve,basename} from 'node:path';
 import {userInfo} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {createHash} from 'node:crypto';
+import {bytes,canonical,digest as sha} from './device-epoch-fence-reference.mjs';
+export {bytes};
 import {execFileSync} from 'node:child_process';
 import {runDiagnostic,DIAGNOSTIC_COMMANDS,SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,PROCESS_DIAGNOSTIC_COMMANDS} from './device-epoch-fence-diagnostics.mjs';
 import {readFrozen,validateFrozenProjection} from './device-epoch-fence-public-snapshot.mjs';
@@ -11,11 +12,7 @@ export {validateFrozenProjection};
 import {readReleaseProof} from './device-epoch-fence-central.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});};
-const sha=b=>createHash('sha256').update(b).digest('hex');
-const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
-export function bytes(path){
- let fd;try{need(realpathSync(path)===resolve(path),'REVIEW_PATH');fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);const s=fstatSync(fd);need(s.isFile()&&s.uid===process.getuid()&&!(s.mode&0o022)&&s.nlink===1&&s.size<=32*1024*1024,'REVIEW_FILE');const b=Buffer.alloc(s.size+1);let n=0,k;while(n<b.length&&(k=readSync(fd,b,n,b.length-n,null))>0)n+=k;const e=fstatSync(fd);need(n===s.size&&e.dev===s.dev&&e.ino===s.ino&&e.ctimeMs===s.ctimeMs&&e.mtimeMs===s.mtimeMs,'REVIEW_FILE_DRIFT');return b.subarray(0,n);}finally{if(fd!==undefined)closeSync(fd);}
-}
+
 export function readOldDaemon({home=userInfo().homedir,endpoint,policy}){
  const port=endpoint.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/)?.[1];need(port,'OLD_DAEMON_ENDPOINT');
  const run=(bin,args)=>execFileSync(bin,args,{encoding:'utf8',env:{PATH:'/usr/bin:/bin:/usr/sbin',LANG:'C',LC_ALL:'C',TZ:'UTC'},timeout:5000,stdio:['ignore','pipe','pipe']});

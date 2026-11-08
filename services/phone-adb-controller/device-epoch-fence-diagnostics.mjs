@@ -1,6 +1,6 @@
 // 固定只读诊断。自身 EXIT/EOF/CLOSE 只证明本次 wire 收回，不证明旧运行停止。
 import {Socket} from 'node:net';
-import {createHash} from 'node:crypto';
+import {digest as sha,canonical} from './device-epoch-fence-reference.mjs';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {lstatSync,realpathSync,readdirSync,openSync,writeSync,fsyncSync,closeSync,constants,readFileSync} from 'node:fs';
@@ -30,11 +30,9 @@ export function compileDiagnosticCommand(query,scope){
   return 'exec /system/bin/toybox '+(query==='process_fds'?'ls -l ':'cat ')+'/proc/'+pid+'/'+PROCESS_DIAGNOSTIC_COMMANDS[query];
  }throw fail('DIAGNOSTIC_QUERY');
 }
-const sha=b=>createHash('sha256').update(b).digest('hex');
 const fail=code=>Object.assign(new Error(code),{code});
-const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
 const here=dirname(fileURLToPath(import.meta.url));
-export function diagnosticSource(){return Object.fromEntries(['device-epoch-fence-diagnostics.mjs','adb-shell-v2-protocol.mjs'].map(n=>[n,sha(readFileSync(join(here,n)))]));}
+export function diagnosticSource(){return Object.fromEntries(['device-epoch-fence-diagnostics.mjs','adb-shell-v2-protocol.mjs','device-epoch-fence-reference.mjs'].map(n=>[n,sha(readFileSync(join(here,n)))]));}
 export async function runDiagnostic({query,scope,directory,readAuthority,timeoutMs=30000}={}){
  const command=compileDiagnosticCommand(query,scope);
  const q=structuredClone(scope),endpoint=q?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/);

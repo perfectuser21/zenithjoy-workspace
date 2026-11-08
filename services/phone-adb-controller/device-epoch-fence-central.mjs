@@ -1,6 +1,7 @@
+import {canonical} from './device-epoch-fence-reference.mjs';
 // 仅本次真正强CAS成功且fresh读回free才签发进程内cap；网络未知永不自动重试。
 const receipts=new WeakMap(),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});},canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});};
 const version=v=>typeof v==='string'&&/^[1-9][0-9]{0,9}$/.test(v)&&BigInt(v)<=4294967295n;
 const row=value=>({device_name:value.device_name,locked_by:value.locked_by,locked_at:value.locked_at,expires_at:value.expires_at,lease_version:value.lease_version});
 async function request(path,method='GET',body){

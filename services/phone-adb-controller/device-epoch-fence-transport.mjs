@@ -1,9 +1,8 @@
 // 唯一受控host请求原语；不会启动/重启ADB，不提供任意命令或自动重试。
 import {Socket} from 'node:net';import {join,resolve} from 'node:path';
 import {lstatSync,realpathSync,readdirSync,openSync,writeSync,fsyncSync,closeSync,constants} from 'node:fs';
-import {createHash} from 'node:crypto';import {adbRequest,adbPayloadLength} from './adb-shell-v2-protocol.mjs';
-const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});},sha=b=>createHash('sha256').update(b).digest('hex');
-const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+import {digest as sha,canonical} from './device-epoch-fence-reference.mjs';import {adbRequest,adbPayloadLength} from './adb-shell-v2-protocol.mjs';
+const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});};
 export function parseDeviceInventory(raw){
  need(typeof raw==='string'&&!/[^\x20-\x7e\t\n]/.test(raw),'HOST_INVENTORY');if(!raw)return [];need(raw.endsWith('\n'),'HOST_INVENTORY');const ids=new Set();return raw.trimEnd().split('\n').map(line=>{const m=line.match(/^([A-Za-z0-9_.:-]+)\t(device|offline|unauthorized|bootloader|recovery|sideload)(?: +(.*))?$/);need(m&&!ids.has(m[1]),'HOST_INVENTORY');ids.add(m[1]);return {serial:m[1],state:m[2],properties:m[3]??''};});
 }
