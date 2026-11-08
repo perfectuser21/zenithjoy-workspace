@@ -38,3 +38,7 @@ test('旧listener PID/start换代在下一connect/write前拒绝，不再发命�
  const {runDiagnostic}=await load(),f=await fixture(),directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-daemon-'));let reads=0;const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04',old_daemon:{pid:91186,start_identity:'old'}};
  try{const result=await runDiagnostic({query:'sdk',scope,directory,readAuthority:async()=>({scope:++reads>=3?{...scope,old_daemon:{pid:91187,start_identity:'new'}}:scope,lease_until:new Date(Date.now()+60000).toISOString()})});assert.equal(result.wire_complete,false);assert.equal(result.error_code,'DIAGNOSTIC_AUTHORITY');assert.deepEqual(f.services,['host-serial:47.100.213.173:10001:features']);}finally{await f.close();rmSync(directory,{recursive:true,force:true});}
 });
+test('authority读回期间已收到EXIT/EOF仍正确收回，不把可选CloseStdin当失败',async()=>{
+ const {runDiagnostic}=await load(),f=await fixture(),directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-eof-'));const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ try{const r=await runDiagnostic({query:'sdk',scope,directory,readAuthority:async()=>{await new Promise(r=>setTimeout(r,15));return {scope,lease_until:new Date(Date.now()+60000).toISOString()};}});assert.equal(r.wire_complete,true);assert.equal(r.exit_code,0);}finally{await f.close();rmSync(directory,{recursive:true,force:true});}
+});
