@@ -129,7 +129,7 @@ test('prepare failure诊断只记录规范code并限制cause深度，拒绝任�
  test('预检首轮上下文提供已准入bootstrap和真实空参schema，账号仍须原生读取',async()=>using(async tools=>{
  await tools.prepare();const context=await tools.inspect();
  assert.equal(context.bootstrap.company_config_admitted,true);
- assert.deepEqual(context.bootstrap.next_required_intent,{type:'phone',command:'account-current',args:[]});
+ assert.deepEqual(context.bootstrap.next_required_intent,{type:'phone',command:'wake',args:[]});
  assert.deepEqual(context.tool_contract.business.company_config,{input_keys:[]});
  assert.deepEqual(context.tool_contract.phone['account-current'],{args:[]});
  assert.equal(context.account,null);
