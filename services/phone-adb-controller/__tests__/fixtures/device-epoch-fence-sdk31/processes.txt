@@ -1,0 +1,9 @@
+  UID   PID  PPID NAME                        ARGS                       
+    0     1     0 init                        init second_stage
+ 2000   195     1 sh                          sh
+    0   745     1 adbd                        adbd --root_seclabel=u:r:su:s0
+    0  1179  1178 sh                          sh /data/bin/openclaw start-daemon
+    0  1180  1179 sh                          sh /data/bin/bash-openclaw -c openclaw start-daemon
+    0  2673   745 toybox                      toybox ps -A -o UID,PID,PPID,NAME,ARGS
+    0 15579     1 sh                          sh /data/local/tmp/zj-network-probe/network-probe.sh
+    0 16466     1 sh                          sh /data/local/tmp/zj-exit-guardian/guardian.sh

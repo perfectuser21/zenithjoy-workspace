@@ -1,0 +1,19 @@
+ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)
+    mResumedActivity: ActivityRecord{c3afd7d u0 redacted/.Activity t0}
+      * Hist #0: ActivityRecord{c3afd7d u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_SHOWN
+      * Hist #0: ActivityRecord{c8ff921 u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_NOT_SHOWN
+      * Hist #0: ActivityRecord{d36923b u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_REMOVED
+      * Hist #0: ActivityRecord{3bce8dc u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_REMOVED
+      * Hist #1: ActivityRecord{fc3b2f4 u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_NOT_SHOWN
+      * Hist #0: ActivityRecord{f9ac615 u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_NOT_SHOWN
+      * Hist #1: ActivityRecord{34940e2 u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_NOT_SHOWN
+      * Hist #0: ActivityRecord{c471024 u0 redacted/.Activity t0}
+          keysPaused=false inHistory=true idle=true mStartingWindowState=STARTING_WINDOW_NOT_SHOWN
+  mVisibilityTransactionDepth=0

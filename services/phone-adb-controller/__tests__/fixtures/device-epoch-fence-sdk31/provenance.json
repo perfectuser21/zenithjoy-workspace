@@ -1,0 +1,57 @@
+{
+  "protocol": "device-epoch-fence-sdk31-fixture/v1",
+  "source_commit": "3d2b6697142a82686629ab6dd53fa2006325ef73",
+  "purpose": "仅必要系统字段的结构回归；进程取8条相关行、input取状态队列、Activity去组件、bootID脱敏；不是完整库存或恢复授权。完整raw600保留现场真身，original_stdout_sha256可独立核。",
+  "files": {
+    "processes": {
+      "original_stdout_sha256": "ea048abd0cd7307f85d3fb8096a31a705899ef7f0df7d02064ed439f81c025e1",
+      "fixture_sha256": "7fb9a9c8e970f8c6dae524bdef8cc422bfcc30407e52f7841a8f163a8ca26e5b",
+      "wire_complete": true,
+      "exit_code": 0,
+      "source": {
+        "device-epoch-fence-diagnostics.mjs": "01b8a31fed146d8d09b52656fdfb6808df5cd6983d0815e30e7282c5bdf85bb3",
+        "adb-shell-v2-protocol.mjs": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
+      }
+    },
+    "input": {
+      "original_stdout_sha256": "6a7ec593c77d96666481397fb693a24f84045a25601599955d57e94683ea6925",
+      "fixture_sha256": "90e688ce4eca6213175c27ec07abd79abfe5d1fae1c21b26730ec4802edb02f5",
+      "wire_complete": true,
+      "exit_code": 0,
+      "source": {
+        "device-epoch-fence-diagnostics.mjs": "01b8a31fed146d8d09b52656fdfb6808df5cd6983d0815e30e7282c5bdf85bb3",
+        "adb-shell-v2-protocol.mjs": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
+      }
+    },
+    "activity": {
+      "original_stdout_sha256": "bc1223812918789aee311051119515319c67273826ab2d98951ab623af131c6f",
+      "fixture_sha256": "a5fe5813b3e916de2345d972bbcc6cb06597ea4399937b138364a3998820a0ee",
+      "wire_complete": true,
+      "exit_code": 0,
+      "source": {
+        "device-epoch-fence-diagnostics.mjs": "01b8a31fed146d8d09b52656fdfb6808df5cd6983d0815e30e7282c5bdf85bb3",
+        "adb-shell-v2-protocol.mjs": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
+      }
+    },
+    "sdk": {
+      "original_stdout_sha256": "32c2643e0dc65524c9f1f6f9f00937322fd68d59986bc381d9ff2285d23e353d",
+      "fixture_sha256": "32c2643e0dc65524c9f1f6f9f00937322fd68d59986bc381d9ff2285d23e353d",
+      "wire_complete": true,
+      "exit_code": 0,
+      "source": {
+        "device-epoch-fence-diagnostics.mjs": "01b8a31fed146d8d09b52656fdfb6808df5cd6983d0815e30e7282c5bdf85bb3",
+        "adb-shell-v2-protocol.mjs": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
+      }
+    },
+    "boot_id": {
+      "original_stdout_sha256": "236cf3a6064bc84249b035e3f4844297e06f4a7264f04fa712a4c91db1989528",
+      "fixture_sha256": "2b26811a985aeb82c6ed3250a0c174caab1be3e494d038766254f4ad88263f1e",
+      "wire_complete": true,
+      "exit_code": 0,
+      "source": {
+        "device-epoch-fence-diagnostics.mjs": "01b8a31fed146d8d09b52656fdfb6808df5cd6983d0815e30e7282c5bdf85bb3",
+        "adb-shell-v2-protocol.mjs": "1e8b07c7ad2d009e9ad0c302a4d3e3443507bbf986a91184d9898d7e240f6400"
+      }
+    }
+  }
+}
