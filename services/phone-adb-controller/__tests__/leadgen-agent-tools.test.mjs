@@ -136,3 +136,10 @@ test('prepare failure诊断只记录规范code并限制cause深度，拒绝任�
  await assert.rejects(()=>tools.business('company_config',{company_id:'foreign'}),/INPUT_SCOPE/);
  await assert.rejects(()=>tools.phone('account-current','invented'),/PREFLIGHT_ARGS/);
  },{scope:scope('preflight'),primitives:{inspect:async()=>({company:{company_id:'server-company',tenant_id:'server-tenant',device_binding:{profile:'fixture'}},account:null}),validatePhone:async(_command,args)=>{if(args.length)throw Error('PREFLIGHT_ARGS');return [];}}}));
+
+test('失败open-app不推进bootstrap到账号读取，已准入资源不能掩盖原生失败',async()=>using(async tools=>{
+ await tools.prepare();await tools.phone('wake');await tools.phone('unlock');
+ await assert.rejects(()=>tools.phone('open-app'),/NATIVE_OPEN_FAILED/);
+ const context=await tools.inspect();assert.equal(context.bootstrap.next_required_intent.command,'open-app');
+ assert.deepEqual(context.bootstrap.native_phone_steps_completed,['wake','unlock']);assert.equal(context.account,null);
+},{scope:scope('preflight'),primitives:{inspect:async()=>({company:{company_id:'server-company',tenant_id:'server-tenant',device_binding:{profile:'fixture'}},account:null}),validatePhone:async()=>[],phone:async command=>{if(command==='open-app')throw Error('NATIVE_OPEN_FAILED');return '';}}}));
