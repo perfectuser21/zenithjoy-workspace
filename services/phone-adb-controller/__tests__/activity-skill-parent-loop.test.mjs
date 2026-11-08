@@ -225,3 +225,14 @@ test('parent context watermark is private to the original broker object, never c
  assert.equal(first.broker.isParentContextCurrent(context),true);assert.equal(first.broker.isParentContextCurrent(structuredClone(context)),false);assert.equal(other.broker.isParentContextCurrent(context),false);
  await first.broker.abort('Code cancelled original scope');assert.equal(first.broker.isParentContextCurrent(context),false);
 });
+
+for(const unsafe of [false,true])test('精确官方停止回执允许失败域known-stopped但未知外部效果仍隔离 '+unsafe,async t=>{
+ const state=await fixture(t,{stopKnown:true,workerMs:35,turns:async()=>new Promise(()=>{})});
+ const verify=state.control.verifyStopReceipt.bind(state.control);
+ state.control.verifyStopReceipt=(receipt,context)=>({...verify(receipt,context),index:context.index,official_execution_stopped:true,external_effect_unknown:unsafe,previous_caller_stop_unproven:false,ended_at:Date.now()});
+ const out=await module.runActivitySkillParentLoop(state);
+ assert.equal(out.reason,'official_turn_unverified');
+ assert.equal(out.official_execution_stopped,true);
+ assert.equal(out.model_execution_unknown,unsafe);
+ assert.deepEqual(state.effects,[]);assert.equal(state.isControlClosed(),true);
+});
