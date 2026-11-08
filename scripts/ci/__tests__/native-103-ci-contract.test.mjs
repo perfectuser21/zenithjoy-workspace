@@ -61,3 +61,16 @@ test('native phone 101 runs in the same required Darwin PG owner with pinned Pil
  assert.equal(future.status,0,future.stderr);
  assert.deepEqual(future.stdout.trim().split('\n'),['services/phone-adb-controller/__tests__/native-phone-source-delivery.test.mjs'],'formal Source packaging keeps Linux selection; public 101 stays in required Darwin');
 });
+
+test('public Code preflight and epoch producer native regressions require an owned hosted Darwin job',()=>{
+ const doc=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const key='public-code-phone-darwin-test',job=doc.jobs[key];assert.ok(job,'Linux platform skips do not cover the public Code native boundary');
+ assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],10);
+ const commands=job.steps.filter(s=>s.run).map(s=>s.run).join('\n');
+ for(const name of ['public-code-preflight.test.mjs','phone-epoch-producer.test.mjs'])assert.ok(commands.includes('services/phone-adb-controller/__tests__/'+name),name);
+ assert.match(commands,/process\.platform.*darwin/);assert.match(commands,/PREFLIGHT_TEST_PYTHON_BIN/);
+ assert.ok(doc.jobs['l3-passed'].needs.includes(key));assert.ok(gates.code.always.includes(key));
+ const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}]))};
+ assert.doesNotThrow(()=>checkGate('code',needs));needs[key]={result:'skipped'};assert.throws(()=>checkGate('code',needs),/public-code-phone-darwin-test=skipped/);
+ assert.equal(doc.jobs['collection-phone-darwin-test']['timeout-minutes'],10,'existing Darwin budget remains unchanged');
+});
