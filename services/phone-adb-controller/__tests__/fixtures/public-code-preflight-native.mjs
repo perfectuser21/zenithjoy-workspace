@@ -43,5 +43,5 @@ export async function publicCodeNativeFixture(t,{workflow='douyin_video_discover
  const frozen={execution_mode:'code',deployment:{source_commit:state.source_commit},preflight_profile:(await load('preflight-control-scope.mjs')).freezePreflightProfile({env}),files,[workflow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope']:{policy,executables:{python:{path:realpathSync(preflightTestPython),sha256:hash(readFileSync(preflightTestPython))}},profile,serial,expected_account:account,evidence_root:evidence}};frozen.snapshot_sha256=definitions.digest(frozen);writeFileSync(join(directory,'run-definition.json'),JSON.stringify(frozen));
  const claim={claimed_by:'common-runner',claimed_at:new Date().toISOString()};let held=true;
  const lease={attempted:true,verifyTask:async()=>({...claim}),verifyHeld:async()=>{assert.equal(held,true);},release:async()=>{held=false;return true;}};
- return {directory,root,home,locks,env,state,frozen,lease,load,calls,dumpStarted,registry};
+ return {directory,root,home,locks,env,state,frozen,lease,load,calls,adbRequests:adb.requests,dumpStarted,registry};
 }

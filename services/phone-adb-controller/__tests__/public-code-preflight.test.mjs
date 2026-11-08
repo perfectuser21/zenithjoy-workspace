@@ -83,6 +83,8 @@ test('acquire lock published before receipt failure remains resource unknown and
  const f=await publicCodeNativeFixture(t),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs'),runtime=createPublicCodePreflight(f),evidence=f.frozen.discovery_phone_scope.evidence_root;
  chmodSync(evidence,0o500);try{await assert.rejects(()=>runtime.preflight(),/PREFLIGHT_LOCAL_REQUEST_FAILED/);}finally{chmodSync(evidence,0o700);}
  assert.equal(readFileSync(join(f.locks,f.env.SERIAL+'.lock/owner'),'utf8').trim(),f.env.WFR_TAG);
+ assert.deepEqual(f.calls,[],'phone commands must wait for the original local owner/epoch ACK');
+ assert.equal(f.adbRequests.some(r=>r?.id==='RECV'),false,'even ROM bytes require the local admission before connecting');
  await assert.rejects(()=>runtime.cleanup(),/PUBLIC_CODE_PREFLIGHT_PREVIOUS_UNKNOWN/);
  assert.equal(f.state.executionUnknown,true);assert.equal((await runtime.quarantine()).verified,true);
  assert.equal(existsSync(join(f.locks,f.env.SERIAL+'.lock/preflight_quarantined')),true);
