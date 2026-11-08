@@ -160,3 +160,30 @@ for(const flow of ['douyin_video_discovery','douyin_video_processing'])test(flow
   assert.deepEqual(cfg.snapshot.public_preflight_route,scope.policy_binding);assert.deepEqual(cfg.snapshot[flow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'].policy,policy);assert.equal(x.env.DOUYIN_ADB_PORT,'5041','builder does not mutate caller assembly input');
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
+
+// Only source packaging is exercised: synthetic definition IDs issue no grant,
+// epoch record, ACK or device operation. Every E dependency is real fixed Git bytes.
+test('official builder and public snapshot preserve the real epoch closure in per-run runtime',async()=>{
+ const {reviewSource}=await import('../device-epoch-fence-review.mjs');
+ const {preparePublicDomainSnapshot}=await import('../public-domain-snapshot.mjs');
+ const {pathToFileURL}=await import('node:url');
+ const actual=reviewSource(),input=await fixture();
+ try{
+  rmSync(join(input.sourceRoot,'_dependencies'),{recursive:true,force:true});
+  await installPreflightPg({runtimeRoot:input.sourceRoot,sourceCommit:actual.commit});
+  const names=new Set([...input.frozen.deployment.files.map(r=>r.deployed_path),...Object.keys(actual.files).map(p=>p.slice('services/phone-adb-controller/'.length))]);
+  for(const name of names){const path=new URL('../'+name,import.meta.url);if(!existsSync(path))continue;mkdirSync(join(input.sourceRoot,name,'..'),{recursive:true});writeFileSync(join(input.sourceRoot,name),readFileSync(path),{mode:0o600});}
+  const f=input.frozen;for(const v of [f.workflow_version,...f.activities.map(a=>a.version)]){v.source_commit=actual.commit;v.payload_sha256=digest({source:{repo:v.source_repo,path:v.source_path,commit:actual.commit},payload:v.payload});}
+  f.release.environment='staging:'+actual.commit;f.release.payload.components[0].revision=actual.commit;
+  Object.assign(f.deployment,{source_repo:'perfectuser21/zenithjoy-workspace',source_commit:actual.commit,environment:f.release.environment,files:[...names].map(name=>({path:'services/phone-adb-controller/'+name,deployed_path:name,content_sha256:digest(readFileSync(join(input.sourceRoot,name)))})),dependencies:{preflight_pg:preflightPgDeployment({runtimeRoot:input.sourceRoot,sourceCommit:actual.commit})}});
+  input.observation.payload.environment=f.release.environment;input.observation.payload.components=f.release.payload.components;reseal(input);
+  const {profile}= (await import('../public-domain-profile.mjs')).buildPublicDomainProfile(input);
+  const identity={run_id:uuid(900),task_id:uuid(901),machine_id:'us-mac-m4',profile_sha256:digest(profile),input:{upstream:{run_id:uuid(902),task_id:uuid(903),run_directory:'/fixture/upstream',profile_sha256:'b'.repeat(64)}},run_binding:{workflow_id:f.workflow_version.payload.workflow_id,workflow_definition_version_id:f.workflow_version.id,activities:Object.fromEntries(f.activities.map(a=>[a.reference.slot_key,{reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id}]))}};
+  const prepared=preparePublicDomainSnapshot({identity,profile,runDirectory:join(input.sourceRoot,'isolated-run'),deadline_ms:Date.now()+70000,cleanup_deadline_ms:Date.now()+90000});
+  const loaded=await import(pathToFileURL(join(prepared.runtime,'device-epoch-fence-review.mjs')));
+  const proof=loaded.reviewSource({runtimeRoot:prepared.runtime,repositoryRoot:'/no-git'});
+  assert.equal(proof.commit,actual.commit);assert.deepEqual(proof.files,actual.files);
+  const mf=JSON.parse(readFileSync(join(prepared.runtime,'deployment-manifest.json')));
+  for(const [name,hash] of Object.entries(actual.files)){const row=mf.files.find(r=>r.path===name);assert.ok(row,name);assert.equal(row.content_sha256,hash);assert.equal(digest(readFileSync(join(prepared.runtime,row.deployed_path))),hash);}
+ }finally{rmSync(input.sourceRoot,{recursive:true,force:true});}
+});
