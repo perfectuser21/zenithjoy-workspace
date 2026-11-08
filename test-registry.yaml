@@ -11222,3 +11222,12 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；固定epoch准入与真实producer闭合永久回归，不冒充现场手机验收"
+
+  - id: phone-device-epoch-fence-controller
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-controller.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；计划与明确批准后固定顺序隔离恢复，helper死亡、PID复用与未知失败封闭；不冒充现场停止证明"
