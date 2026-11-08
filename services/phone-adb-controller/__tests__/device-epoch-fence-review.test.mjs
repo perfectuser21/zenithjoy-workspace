@@ -27,3 +27,7 @@ test('正式flat部署manifest完整闭包可校验；缺依赖/脏字节/错误
  fs.writeFileSync(path.join(root,'dep.mjs'),b+'//drift');assert.throws(()=>reviewSource(options),/REVIEW_SOURCE_BYTES/);fs.writeFileSync(path.join(root,'dep.mjs'),b);manifest.files.pop();write();assert.throws(()=>reviewSource(options),/REVIEW_SOURCE_BYTES/);manifest.source_repo='wrong';write();assert.throws(()=>reviewSource(options),/REVIEW_DEPLOYMENT_SOURCE/);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+test('post-CAS仅接受真正本进程release cap的精确free版本，不伪原owner',async()=>{
+ const {validateReviewFacts}=await load(),{releaseCentralLease}=await import('../device-epoch-fence-central.mjs'),f=facts();f.central.lease_version='77';const scope={maintenance_task_id:maintenance,serial,claim:{claimed_by:f.maintenance.claimed_by,claimed_at:f.maintenance.claimed_at}},free={device_name:serial,locked_by:null,locked_at:null,expires_at:null,expired:false,lease_version:'78'};let sent=false;
+ const r=await releaseCentralLease({scope,lease:f.central,read:async path=>path.includes('/tasks/')?{task:f.maintenance}:{success:true,locks:[sent?free:f.central]},post:async()=>{sent=true;return {status:200,body:{success:true,released:free}};}});f.central=free;assert.doesNotThrow(()=>validateReviewFacts(f,r.receipt));assert.throws(()=>validateReviewFacts(f,JSON.parse(JSON.stringify(r.receipt))),/CENTRAL_RECEIPT/);f.central={...free,lease_version:'79'};assert.throws(()=>validateReviewFacts(f,r.receipt),/CENTRAL_POST_RELEASE/);
+});
