@@ -69,11 +69,14 @@ export async function inspectReview({taskId,stateFile,read=readBrain,home=userIn
  result.scope={...result.scope,original_evidence_sha256:sha(canonical(raw)),central_binding_sha256:sha(canonical(b)),local_quarantine:{dev:st.dev,ino:st.ino,mode:st.mode&0o777,fields_sha256:sha(canonical(local)),guards},review_source:source(),old_daemon:daemon({home,endpoint:result.scope.endpoint,policy})};
  return {...result,files:raw,local_quarantine:{path:lockPath,dev:st.dev,ino:st.ino,fields:local},original_binding:b,company:cfg.company,required_next:['original-controller-fixed-source-closure','old-route-continuously-revoked','private-epoch-route-authority','sdk31-reviewed-remote-quiescence','current-maintenance-central-and-local-CAS-readbacks']};
 }
-export async function diagnoseReview({taskId,stateFile,directory,read,home,source,processPid,supplemental=false}={}){
+export const diagnosticExitCode=result=>Array.isArray(result?.diagnostics)&&result.diagnostics.some(r=>!r.wire_complete||r.exit_code!==0)?2:0;
+export function validateDiagnosticQuery(query){need(Object.hasOwn(DIAGNOSTIC_COMMANDS,query)||Object.hasOwn(SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,query),'DIAGNOSTIC_QUERY');return query;}
+export async function diagnoseReview({taskId,stateFile,directory,read,home,source,processPid,supplemental=false,query:singleQuery}={}){
+ if(singleQuery!==undefined)validateDiagnosticQuery(singleQuery);
  const initial=await inspectReview({taskId,stateFile,read,home,source});need(realpathSync(directory)===resolve(directory)&&readdirSync(directory).length===0,'DIAGNOSTIC_OUTPUT');
  const scope={...initial.scope,...(processPid===undefined?{}:{diagnostic_process_pid:processPid})};
  const readAuthority=async()=>{const current=await inspectReview({taskId,stateFile,read,home,source});need(canonical(current)===canonical(initial),'REVIEW_AUTHORITY_DRIFT');return {scope,lease_until:current.central_readback.expires_at};};
- const queries=processPid!==undefined?PROCESS_DIAGNOSTIC_COMMANDS:supplemental?SUPPLEMENTAL_DIAGNOSTIC_COMMANDS:DIAGNOSTIC_COMMANDS;
+ const queries=singleQuery!==undefined?{[singleQuery]:true}:processPid!==undefined?PROCESS_DIAGNOSTIC_COMMANDS:supplemental?SUPPLEMENTAL_DIAGNOSTIC_COMMANDS:DIAGNOSTIC_COMMANDS;
  const results=[];for(const query of Object.keys(queries)){const out=join(directory,query);mkdirSync(out,{mode:0o700});const result=await runDiagnostic({query,scope,directory:out,readAuthority});results.push(result);if(!result.wire_complete||result.exit_code!==0)break;}
  return {protocol:'device-epoch-fence-review/v1',review:initial,diagnostics:results,original_execution_stopped:false,remote_quiescence:'unknown',resource_authority:'not_attested',reason:'SDK31_RAW_REQUIRES_REVIEWED_PARSER'};
 }
@@ -101,6 +104,8 @@ export async function main(args=process.argv.slice(2)){
  let result;
  if(args[0]==='verify-startup'){
   need(args.length===11&&args[1]==='--receipt'&&args[3]==='--instance-id'&&args[5]==='--registry-sha256'&&args[7]==='--source'&&args[9]==='--policy-sha256','STARTUP_USAGE');result=await verifyStartupReceipt({receiptPath:args[2],instanceId:args[4],registrySha256:args[6],sourceCommit:args[8],policySha256:args[10]});
+ }else if(args[0]==='diagnose-query'){
+  need(args.length===5,'DIAGNOSTIC_QUERY_USAGE');result=await diagnoseReview({taskId:args[1],stateFile:args[2],query:args[3],directory:args[4]});
  }else if(args[0]==='diagnose-runtime'){
   need(args.length===4,'DIAGNOSTIC_RUNTIME_USAGE');result=await diagnoseReview({taskId:args[1],stateFile:args[2],directory:args[3],supplemental:true});
  }else if(args[0]==='diagnose-process'){
@@ -109,6 +114,6 @@ export async function main(args=process.argv.slice(2)){
   need(args.length===5,'STARTUP_PLAN_USAGE');result=await planStartupReceipt({taskId:args[1],stateFile:args[2],instanceId:args[3],directory:args[4]});
  }else{
   need(args.length===(args[0]==='diagnose'?4:3)&&['inspect','diagnose'].includes(args[0]),'USAGE_inspect_TASK_STATE_or_diagnose_TASK_STATE_EMPTY_DIRECTORY');const options={taskId:args[1],stateFile:args[2],directory:args[3]};result=await (args[0]==='inspect'?inspectReview(options):diagnoseReview(options));
- }process.stdout.write(JSON.stringify(result)+'\n');
+ }process.stdout.write(JSON.stringify(result)+'\n');process.exitCode=diagnosticExitCode(result);
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().catch(e=>{process.stderr.write((/^[A-Z][A-Z0-9_]+$/.test(e.code||'')?e.code:'DEVICE_EPOCH_FENCE_UNKNOWN')+'\n');process.exitCode=2;});
