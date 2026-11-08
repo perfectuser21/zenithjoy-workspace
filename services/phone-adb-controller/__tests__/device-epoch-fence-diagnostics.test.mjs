@@ -34,3 +34,7 @@ test('调用者不能注入命令或修改远端，authority 不符不得连接'
  const result=await runDiagnostic({query:'sdk',scope:{endpoint:'tcp:127.0.0.1:1',serial:'x',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'},directory,readAuthority:async()=>({})});assert.equal(result.wire_complete,false);assert.equal(result.error_code,'DIAGNOSTIC_AUTHORITY');
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
+test('旧listener PID/start换代在下一connect/write前拒绝，不再发命令',async()=>{
+ const {runDiagnostic}=await load(),f=await fixture(),directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-daemon-'));let reads=0;const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04',old_daemon:{pid:91186,start_identity:'old'}};
+ try{const result=await runDiagnostic({query:'sdk',scope,directory,readAuthority:async()=>({scope:++reads>=3?{...scope,old_daemon:{pid:91187,start_identity:'new'}}:scope,lease_until:new Date(Date.now()+60000).toISOString()})});assert.equal(result.wire_complete,false);assert.equal(result.error_code,'DIAGNOSTIC_AUTHORITY');assert.deepEqual(f.services,['host-serial:47.100.213.173:10001:features']);}finally{await f.close();rmSync(directory,{recursive:true,force:true});}
+});
