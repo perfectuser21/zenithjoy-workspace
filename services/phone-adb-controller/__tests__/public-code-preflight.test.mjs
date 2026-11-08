@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,writeFileSync,readFileSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,readFileSync,existsSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createPreflightPhoneDriver} from '../preflight-phone-driver.mjs';
@@ -77,4 +77,13 @@ test('shared 102 native cleanup preserves original video lease release after qua
  await assert.rejects(()=>handlers.qualification(),/FIXTURE_QUALIFICATION_REFUSED/);
  handlers.state.budgetDeadline=Date.now()+120000;const cleanup=await handlers.cleanup();
  assert.equal(cleanup.no_lock,true);assert.equal(calls.filter(op=>op==='release_video').length,1,'new phone cleanup must preserve original queue lease return');
+});
+
+test('acquire lock published before receipt failure remains resource unknown and cannot release central as no-lock',{skip:process.platform!=='darwin'},async t=>{
+ const f=await publicCodeNativeFixture(t),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs'),runtime=createPublicCodePreflight(f),evidence=f.frozen.discovery_phone_scope.evidence_root;
+ chmodSync(evidence,0o500);try{await assert.rejects(()=>runtime.preflight(),/PREFLIGHT_LOCAL_REQUEST_FAILED/);}finally{chmodSync(evidence,0o700);}
+ assert.equal(readFileSync(join(f.locks,f.env.SERIAL+'.lock/owner'),'utf8').trim(),f.env.WFR_TAG);
+ await assert.rejects(()=>runtime.cleanup(),/PUBLIC_CODE_PREFLIGHT_PREVIOUS_UNKNOWN/);
+ assert.equal(f.state.executionUnknown,true);assert.equal((await runtime.quarantine()).verified,true);
+ assert.equal(existsSync(join(f.locks,f.env.SERIAL+'.lock/preflight_quarantined')),true);
 });
