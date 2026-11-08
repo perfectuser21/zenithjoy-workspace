@@ -13,13 +13,30 @@ export const DIAGNOSTIC_COMMANDS=Object.freeze({
  activity:'exec /system/bin/dumpsys activity activities',
  window:'exec /system/bin/dumpsys window windows'
 });
+export const SUPPLEMENTAL_DIAGNOSTIC_COMMANDS=Object.freeze({
+ activity_starter:'exec /system/bin/dumpsys activity starter',
+ activity_processes:'exec /system/bin/dumpsys activity -a processes',
+ process_details:'exec /system/bin/toybox ps -A -o UID,PID,PPID,TTY,STAT,WCHAN,NAME,ARGS',
+ network_probe_metadata:'exec /system/bin/toybox sha256sum /data/local/tmp/zj-network-probe/network-probe.sh',
+ exit_guardian_metadata:'exec /system/bin/toybox sha256sum /data/local/tmp/zj-exit-guardian/guardian.sh',
+ openclaw_entry_metadata:'exec /system/bin/toybox sha256sum /data/bin/openclaw /data/bin/bash-openclaw'
+});
+export const PROCESS_DIAGNOSTIC_COMMANDS=Object.freeze({process_stat:'stat',process_status:'status',process_cmdline:'cmdline',process_fds:'fd',process_wchan:'wchan'});
+export function compileDiagnosticCommand(query,scope){
+ if(Object.hasOwn(DIAGNOSTIC_COMMANDS,query))return DIAGNOSTIC_COMMANDS[query];
+ if(Object.hasOwn(SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,query))return SUPPLEMENTAL_DIAGNOSTIC_COMMANDS[query];
+ if(Object.hasOwn(PROCESS_DIAGNOSTIC_COMMANDS,query)){
+  const pid=scope?.diagnostic_process_pid;if(!Number.isSafeInteger(pid)||pid<1||pid>2147483647)throw fail('DIAGNOSTIC_PROCESS_PID');
+  return 'exec /system/bin/toybox '+(query==='process_fds'?'ls -l ':'cat ')+'/proc/'+pid+'/'+PROCESS_DIAGNOSTIC_COMMANDS[query];
+ }throw fail('DIAGNOSTIC_QUERY');
+}
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const fail=code=>Object.assign(new Error(code),{code});
 const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
 const here=dirname(fileURLToPath(import.meta.url));
 export function diagnosticSource(){return Object.fromEntries(['device-epoch-fence-diagnostics.mjs','adb-shell-v2-protocol.mjs'].map(n=>[n,sha(readFileSync(join(here,n)))]));}
 export async function runDiagnostic({query,scope,directory,readAuthority,timeoutMs=30000}={}){
- if(!Object.hasOwn(DIAGNOSTIC_COMMANDS,query))throw fail('DIAGNOSTIC_QUERY');
+ const command=compileDiagnosticCommand(query,scope);
  const q=structuredClone(scope),endpoint=q?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/);
  if(!endpoint||Number(endpoint[1])>65535||!/^[-a-zA-Z0-9_.:]{1,100}$/.test(q.serial||'')||!/^[-a-f0-9]{36}$/.test(q.maintenance_task_id||'')||typeof readAuthority!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>30000)throw fail('DIAGNOSTIC_SCOPE');
  const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o700||realpathSync(directory)!==resolve(directory)||readdirSync(directory).length)throw fail('DIAGNOSTIC_JOURNAL');
@@ -29,7 +46,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
  const expired=()=>Date.now()>=deadline;
  const deadline=Date.now()+timeoutMs;
  const admit=async()=>{if(expired())throw fail('DIAGNOSTIC_DEADLINE');verifyDirectory();if(canonical(diagnosticSource())!==canonical(source))throw fail('DIAGNOSTIC_SOURCE_DRIFT');const a=await readAuthority();if(expired())throw fail('DIAGNOSTIC_DEADLINE');if(canonical(a?.scope)!==canonical(q)||!Number.isFinite(Date.parse(a?.lease_until))||Date.parse(a.lease_until)<=Date.now())throw fail('DIAGNOSTIC_AUTHORITY');};
- save('intent.json',Buffer.from(JSON.stringify({protocol:'device-epoch-fence-diagnostic/v1',query,command:DIAGNOSTIC_COMMANDS[query],scope:q,source,started_at:started})+'\n'));
+ save('intent.json',Buffer.from(JSON.stringify({protocol:'device-epoch-fence-diagnostic/v1',query,command,scope:q,source,started_at:started})+'\n'));
  const timer=setTimeout(()=>{failure??='DIAGNOSTIC_DEADLINE';for(const c of channels)c.socket.destroy();},timeoutMs);
  async function connect(){
   await admit();const index=channels.length,socket=new Socket(),c={socket,buffer:Buffer.alloc(0),eof:false,closed:false,error:null,total:0,wakes:new Set(),index};channels.push(c);
@@ -50,7 +67,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
  const status=async c=>{const ack=(await c.read(4)).toString();if(ack==='OKAY')return;if(ack==='FAIL'){await c.read(adbPayloadLength(await c.read(4),4096));throw fail('DIAGNOSTIC_ADB_FAIL');}throw fail('DIAGNOSTIC_ACK');};
  try{
   const f=await connect();await f.write(adbRequest('host-serial:'+q.serial+':features'));await status(f);const features=(await f.read(adbPayloadLength(await f.read(4),4096))).toString().split(',');if(!features.includes('shell_v2')||features.some(x=>!/^[a-z][a-z0-9_]*$/.test(x))||new Set(features).size!==features.length)throw fail('DIAGNOSTIC_SHELL_V2_REQUIRED');await f.finish();
-  const c=await connect();await c.write(adbRequest('host:transport:'+q.serial));await status(c);await c.write(adbRequest('shell,v2,raw:'+DIAGNOSTIC_COMMANDS[query]));await status(c);
+  const c=await connect();await c.write(adbRequest('host:transport:'+q.serial));await status(c);await c.write(adbRequest('shell,v2,raw:'+command));await status(c);
   if(!c.eof)await c.write(closeStdinFrame(),{optionalClose:true});const decoder=createShellV2Decoder({maxBytes:8*1024*1024});let chunk;while((chunk=await c.chunk())!==null)decoder.push(chunk);parsed=decoder.finish();await c.finish();await admit();
  }catch(e){failure??=/^(?:DIAGNOSTIC_|ADB_SHELL_V2_)[A-Z_]+$/.test(e.code||'')?e.code:'DIAGNOSTIC_FAILED';}
  finally{for(const c of channels)if(!c.closed)c.socket.destroy();await Promise.all(channels.map(c=>c.closePromise));for(const c of channels){fsyncSync(c.raw);closeSync(c.raw);}clearTimeout(timer);}
