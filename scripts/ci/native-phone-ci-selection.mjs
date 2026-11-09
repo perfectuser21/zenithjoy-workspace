@@ -1,6 +1,5 @@
 // Approved 101 test closure only; 102 audio exploration and Source packaging stay separate.
 export const PHONE_DARWIN_SUITES=Object.freeze([
- 'official-cli-quarantine.test.mjs',
  'native-phone-adb-read.test.mjs','native-phone-clip-state.test.mjs','native-phone-command-source.test.mjs',
  'native-phone-foreground.test.mjs','native-phone-integration.test.mjs','native-phone-link-macros.test.mjs',
  'native-phone-link-resolver.test.mjs','native-phone-local-producer.test.mjs','native-phone-preflight-adapter.test.mjs',
