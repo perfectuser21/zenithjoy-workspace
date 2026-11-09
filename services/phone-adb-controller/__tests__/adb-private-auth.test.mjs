@@ -96,3 +96,14 @@ test('五份已批准provider原件逐一受私有路径与字节hash保护，�
   source=pathlib.Path(original['path']);raw=source.read_bytes();source.write_bytes(b'changed-provider-original');rejected(lambda:a.validate_auth(str(path),p['instance_id'],answer['auth']));source.write_bytes(raw)
  assert a.validate_auth(str(path),p['instance_id'],answer['auth'])['key_path']==ref['key']['path']
 `));
+test('真实主wait已持锁时本人SIGTERM正常v2退出，不能在handler内嵌套wait自耗',()=>py(`with tempfile.TemporaryDirectory() as d:
+ r,p,path,receipt,answer,ref=fixture(d);worker=r/'wait-worker.py';worker.write_text('import os,sys,pathlib,types,json,subprocess,threading,time\\nr=pathlib.Path('+repr(str(r))+')\\np=r/"adb-host-service.py";s=types.ModuleType("svc");s.__file__=str(p);exec(compile(p.read_bytes(),str(p),"exec"),s.__dict__)\\npolicy='+repr(p)+'\\nanswer='+repr(answer)+'\\ns.validate_host=lambda *a:None;s.pwd.getpwuid=lambda *a:types.SimpleNamespace(pw_dir=str(r));os.environ["HOME"]=str(r);s.load_policy=lambda *a:policy;s.ensure_absent=lambda *a:None;s.check_client=lambda *a:None;i=s.route.instance_module();i.authorize_start=lambda *a:answer;s.route.instance_module=lambda:i\\nreal=subprocess.Popen\\ndef popen(*a,**kw):\\n c=real(["/bin/sleep","30"]);print("CHILD "+str(c.pid),flush=True)\\n def watch():\\n  while not c._waitpid_lock.locked():time.sleep(.001)\\n  print("WAITING",flush=True)\\n threading.Thread(target=watch,daemon=True).start();return c\\ns.subprocess.Popen=popen;s.run_service(policy,str(r/"policy.json"),str(r/"startup.json"))\\n')
+ owned=subprocess.Popen([sys.executable,'-I',str(worker)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);child_id=None
+ try:
+  assert owned.stdout.readline().startswith('CHILD ');assert owned.stdout.readline().strip()=='WAITING';owned.send_signal(signal.SIGTERM)
+  try:code=owned.wait(timeout=2)
+  except subprocess.TimeoutExpired:raise AssertionError('nested wait blocks legitimate v2 shutdown')
+  assert code==0,owned.stderr.read()
+ finally:
+  if owned.poll() is None:owned.kill();owned.wait(timeout=2)
+`));
