@@ -221,6 +221,18 @@ def listeners(port, child_pid=None):
     return found
 
 
+def supervisor_argv(supervisor, old_root, policy_path, source_commit):
+    # context() has already verified the old image's fixed service SHA. Keep
+    # the observer's raw argv/hash intact; normalize only this exact grammar.
+    argv = shlex.split(supervisor['_argv'])
+    if source_commit == OLD_SOURCE and argv[1:4] == ['-I', '-B', '-S']:
+        argv = [argv[0], *argv[4:]]
+    need(len(argv) in (7, 8) and Path(argv[0]).resolve(strict=True) == Path(supervisor['executable'])
+         and argv[1:6] == [str(old_root / 'adb-host-service.py'), 'run', '--config', policy_path, '--maintenance-receipt']
+         and (len(argv) == 7 or argv[7] == '--resume-reserved-start' and source_commit != OLD_SOURCE))
+    return Path(argv[6])
+
+
 def inspect(document):
     instance, policy, port, old_root, locks = context(document)
     states = [lock_state(path) for path in locks]
@@ -236,11 +248,7 @@ def inspect(document):
     child = process_identity(candidate['child_pid'], expected.get('child') if expected else None)
     need(supervisor is not None and child is not None and child['ppid'] == supervisor['pid'])
     need(supervisor['uid'] == child['uid'] == os.geteuid())
-    argv = shlex.split(supervisor['_argv'])
-    need(len(argv) in (7, 8) and Path(argv[0]).resolve(strict=True) == Path(supervisor['executable'])
-         and argv[1:6] == [str(old_root / 'adb-host-service.py'), 'run', '--config', document['policy_path'], '--maintenance-receipt']
-         and (len(argv) == 7 or argv[7] == '--resume-reserved-start' and document['supervisor_source']['source_commit'] != OLD_SOURCE))
-    instance.read_file(Path(argv[6]), private=True)
+    instance.read_file(supervisor_argv(supervisor, old_root, document['policy_path'], document['supervisor_source']['source_commit']), private=True)
     need(child['executable'] == policy['adb_realpath'] and child['executable_sha256'] == policy['adb_sha256']
          and shlex.split(child['_argv']) == [policy['adb_realpath'], '-L', 'tcp:' + str(port), 'server', 'nodaemon'])
     listening = listeners(port, child['pid'])
