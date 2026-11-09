@@ -9,7 +9,7 @@ import { parse } from 'yaml';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profiles = [
-  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
+  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
   { name: 'runtime', file: 'ci-l4-runtime.yml', gate: 'l4-passed', routes: ['dashboard', 'api', 'agent', 'ci', 'staff_hub'], always: [] },
   { name: 'integration', file: 'ci-l4-integration.yml', gate: 'integration-gate', routes: ['api'], always: [] },
 ];
