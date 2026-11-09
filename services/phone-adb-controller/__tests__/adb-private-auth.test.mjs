@@ -83,3 +83,6 @@ test('版本检查即使被喂入key和token也只传最小环境；helper污染
  helper=r/'adb-private-auth.py';info=helper.stat();cache=pathlib.Path(importlib.util.cache_from_source(str(helper)));cache.parent.mkdir(exist_ok=True);cache.write_bytes(b._code_to_timestamp_pyc(compile('raise RuntimeError("POISON_CACHE_EXECUTED")',str(helper),'exec'),int(info.st_mtime),info.st_size))
  assert i.authenticated_environment(p,str(path),answer,{})=={'ADB_VENDOR_KEYS':ref['key']['path']}
 `));
+test('Node授权后manifest身份漂移，最终daemon环境重核不能沿用旧source',()=>py(`with tempfile.TemporaryDirectory() as d:
+ r,p,path,receipt,answer,ref=fixture(d);s=load(r,'adb-host-service');i=s.route.instance_module();manifest=r/'deployment-manifest.json';doc=json.loads(manifest.read_bytes());doc['source_commit']='b'*40;manifest.write_text(json.dumps(doc));rejected(lambda:i.authenticated_environment(p,str(path),answer,{}))
+`));
