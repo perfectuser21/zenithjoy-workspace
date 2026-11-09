@@ -11231,3 +11231,11 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；计划与明确批准后固定顺序隔离恢复，helper死亡、PID复用与未知失败封闭；不冒充现场停止证明"
+
+  - id: leadgen-activity-skill-public-source
+    path: services/phone-adb-controller/__tests__/activity-skill-public-source.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "公共Skill首发live authority与中央TaskRun闭合离线合同，不冒实机通过"

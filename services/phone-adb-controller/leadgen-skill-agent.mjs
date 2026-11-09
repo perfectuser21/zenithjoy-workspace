@@ -5,6 +5,7 @@ import {join,dirname,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {publicSkillAuthority,verifyPublicSkillCurrent} from './skill-public-authority.mjs';
 import {execInput,executionDidNotStart} from './leadgen-client.mjs';
 import {digest as contractDigest,validateDiscoveryInput} from './runtime-definition.mjs';
 import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './activity-commander.mjs';
@@ -114,20 +115,22 @@ function verifyMethod(q){
  if(method!==q.method.text||sha(method)!==q.method.sha256||support!==q.method.support?.text||sha(support)!==q.method.support?.sha256)throw Error('RPC_SKILL_METHOD_BYTES_MISMATCH');
  return true;
 }
-export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLocalMethod=verifyMethod}={}){
+export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLocalMethod=verifyMethod,publicRunDirectory}={}){
  const {binding}=await get('/api/brain/runs/'+encodeURIComponent(q.run_id)+'/definition');
  const value=k=>binding?.[k]??binding?.payload?.[k];
- if(q.mode==='execute')for(const key of ['id','run_id','actor','workflow_id','workflow_definition_version_id','release_id','observation_id','runtime_snapshot_sha256','external_origin','task_id']){
+ const publicPrimary=q.public_domain!==undefined;
+ if(publicPrimary)publicSkillAuthority(q,publicRunDirectory,binding);
+ if(q.mode==='execute')for(const key of ['id','run_id','actor','workflow_id','workflow_definition_version_id','release_id','observation_id','runtime_snapshot_sha256','external_origin','task_id','source_kind','task_run_id','attempt_key']){
   if(Object.hasOwn(binding||{},key)&&Object.hasOwn(binding?.payload||{},key)&&JSON.stringify(binding[key])!==JSON.stringify(binding.payload[key]))throw Error('RPC_SKILL_PRIMARY_BINDING_CONFLICT');
  }
- if(!binding||binding.id!==q.binding_id||binding.run_id!==q.run_id||value('external_origin')!=='zenithjoy:'+q.broker_host)throw Error('RPC_SKILL_RUN_BINDING_MISMATCH');
- if(q.mode==='execute'&&value('actor')!=='runtime:phone-adb-controller:agent-v1')throw Error('RPC_SKILL_PRIMARY_BINDING_REQUIRED');
+ if(!binding||binding.id!==q.binding_id||binding.run_id!==q.run_id||!publicPrimary&&value('external_origin')!=='zenithjoy:'+q.broker_host)throw Error('RPC_SKILL_RUN_BINDING_MISMATCH');
+ if(q.mode==='execute'&&!publicPrimary&&value('actor')!=='runtime:phone-adb-controller:agent-v1')throw Error('RPC_SKILL_PRIMARY_BINDING_REQUIRED');
  if(q.mode==='execute'&&q.transport_generation!==undefined)throw Error('RPC_SKILL_PRIMARY_GENERATION_UNSUPPORTED');
- for(const [key,field] of [['workflow_definition_version_id','workflow_definition_version_id'],['release_id','release_id'],['observation_id','observation_id'],['runtime_snapshot_sha256','runtime_snapshot_sha256']])if(value(key)!==q[field])throw Error('RPC_SKILL_SOURCE_BINDING_MISMATCH');
+ for(const [key,field] of [['workflow_definition_version_id','workflow_definition_version_id'],['release_id','release_id'],['observation_id','observation_id'],['runtime_snapshot_sha256','runtime_snapshot_sha256']])if(value(key)!==(publicPrimary&&key==='runtime_snapshot_sha256'?q.public_domain.runtime_snapshot_sha256:q[field]))throw Error('RPC_SKILL_SOURCE_BINDING_MISMATCH');
  const {version:wf}=await get('/api/brain/workflows/'+value('workflow_id')+'/versions/'+q.workflow_definition_version_id);
  if(wf.source_commit!==q.source_commit)throw Error('RPC_SKILL_SOURCE_REVISION_MISMATCH');
  if(q.mode==='execute'&&!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(wf.payload.key))throw Error('RPC_SKILL_PRIMARY_WORKFLOW_UNSUPPORTED');
- if(q.mode==='execute'){
+ if(q.mode==='execute'&&!publicPrimary){
   const invalid=()=>{throw Error('RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID');};
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(q.task_id||'')||q.workflow_key!==wf.payload.key
     ||!/^[-A-Za-z0-9_]{1,120}$/.test(q.run_tag||'')||typeof q.profile!=='string'||!q.profile||typeof q.line!=='string'||!q.line
@@ -186,6 +189,7 @@ export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLo
   const declarations=[...metadata.matchAll(/^  primary_execution: *(\S+) *$/gm)];
   if((front?.match(/^metadata:$/gm)||[]).length!==1||declarations.length!==1||declarations[0][1]!=='agent-v1')throw Error('RPC_SKILL_PRIMARY_METHOD_UNSUPPORTED');
  }
+ if(publicPrimary)await verifyPublicSkillCurrent(q,publicRunDirectory,binding,get);
  return true;
 }
 export function verifyCommanderWorkspace({home=homedir()}={}){
