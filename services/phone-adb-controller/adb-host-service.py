@@ -11,6 +11,7 @@ import plistlib
 import pwd
 import re
 import signal
+import select
 import socket
 import stat
 import subprocess
@@ -224,6 +225,39 @@ def run_service(policy, config, maintenance_receipt=None):
             ensure_absent(policy)
 
 
+def reserved_start(policy, config, receipt, timeout=30):
+    # A PID reservation is timing only, never startup authority. After this
+    # barrier run_service still performs both fresh fixed Node verifications.
+    require(policy.get('schema_version') == 2 and isinstance(receipt, str)
+            and Path(receipt).is_absolute() and 0 < timeout <= 30, 'RESUME_BARRIER')
+    instance = route.instance_module()
+    instance.read_instance_policy(config, policy)
+    instance.source_manifest(extra=('adb-private-supervisor.py', 'adb-process-observation.py'))
+    path = HERE / 'adb-private-supervisor.py'
+    helper = types.ModuleType('adb_private_supervisor')
+    helper.__file__ = str(path)
+    exec(compile(instance.read_file(path), str(path), 'exec'), helper.__dict__)
+    identity = helper.kernel_identity(os.getpid())
+    require(identity is not None and identity['uid'] == os.geteuid(), 'RESUME_BARRIER')
+    print(json.dumps({'event': 'resume-startup-reserved', 'pid': os.getpid(),
+                      'uid': identity['uid'], 'kernel_start': identity['start']}), flush=True)
+    deadline = time.monotonic() + timeout
+    raw = b''
+    while b'\n' not in raw:
+        remaining = deadline - time.monotonic()
+        require(remaining > 0 and select.select([sys.stdin.fileno()], [], [], remaining)[0], 'RESUME_BARRIER')
+        chunk = os.read(sys.stdin.fileno(), 4097-len(raw))
+        require(chunk and len(raw)+len(chunk) <= 4096, 'RESUME_BARRIER')
+        raw += chunk
+    message = json.loads(raw)
+    require(isinstance(message, dict) and set(message) == {'action', 'receipt_sha256'}
+            and message['action'] == 'authorize_reserved_start'
+            and re.fullmatch('[a-f0-9]{64}', message.get('receipt_sha256', '')), 'RESUME_BARRIER')
+    original = instance.read_file(Path(receipt), private=True)
+    require(hashlib.sha256(original).hexdigest() == message['receipt_sha256']
+            and json.loads(original).get('protocol') == 'device-epoch-fence-resume-startup/v1', 'RESUME_BARRIER')
+
+
 def launchd_definition(python, service, home, username):
     return {'Label': LABEL, 'UserName': username,
             'ProgramArguments': [python, service, 'run', '--config', str(Path(home) / '.config/zenithjoy/adb-service.json')],
@@ -297,12 +331,16 @@ def main():
     parser.add_argument('command', choices=['run', 'status'])
     parser.add_argument('--config', required=True)
     parser.add_argument('--maintenance-receipt')
+    parser.add_argument('--resume-reserved-start', action='store_true')
     args = parser.parse_args()
     policy = load_policy(args.config)
     validate_host(policy)
+    require(not args.resume_reserved_start or args.command == 'run', 'RESUME_BARRIER')
     if args.command == 'status':
         print(json.dumps(status(policy)))
     else:
+        if args.resume_reserved_start:
+            reserved_start(policy, args.config, args.maintenance_receipt)
         run_service(policy, args.config, args.maintenance_receipt)
 
 

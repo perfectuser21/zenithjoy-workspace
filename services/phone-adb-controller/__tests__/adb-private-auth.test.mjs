@@ -129,3 +129,17 @@ with tempfile.TemporaryDirectory() as d:
  try:sys.stdin=os.fdopen(read);sys.stdout=io.StringIO();rejected(lambda:s.reserved_start(p,str(path),str(receipt),timeout=.01))
  finally:os.close(write);sys.stdin.close();sys.stdin,sys.stdout=oldin,oldout
 `));
+test('正式main reserved入口收到正确barrier后仍执行原两次fresh授权，barrier不授权限',()=>py(`import io
+with tempfile.TemporaryDirectory() as d:
+ r,p,path,receipt,answer,ref=fixture(d);s=load(r,'adb-host-service');i=s.route.instance_module();events=[];s.validate_host=lambda *a:None;s.pwd.getpwuid=lambda *a:types.SimpleNamespace(pw_dir=str(r));os.environ['HOME']=str(r);s.ensure_absent=lambda *a:None;s.check_client=lambda *a:None;s.route.instance_module=lambda:i
+ def authorize(*a):events.append('node-fresh');return answer
+ i.authorize_start=authorize
+ class Child:
+  pid=777
+  def poll(self):return 0
+  def wait(self,timeout=None):return 0
+ def launch(*a,**kw):events.append('daemon');return Child()
+ s.subprocess.Popen=launch;read,write=os.pipe();os.write(write,(json.dumps({'action':'authorize_reserved_start','receipt_sha256':hashlib.sha256(receipt.read_bytes()).hexdigest()})+chr(10)).encode());os.close(write);oldin,oldout,oldargv=sys.stdin,sys.stdout,sys.argv
+ try:sys.stdin=os.fdopen(read);sys.stdout=io.StringIO();sys.argv=['service','run','--config',str(path),'--maintenance-receipt',str(receipt),'--resume-reserved-start'];s.main();assert events==['node-fresh','node-fresh','daemon']
+ finally:sys.stdin.close();sys.stdin,sys.stdout,sys.argv=oldin,oldout,oldargv
+`));
