@@ -1,5 +1,5 @@
 // 设备epoch维护只读入口。没有disconnect、start-server、解锁或历史状态写回入口。
-import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,fsyncSync} from 'node:fs';
+import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,fsyncSync,mkdtempSync,linkSync,unlinkSync,rmSync} from 'node:fs';
 import {join,dirname,resolve,basename} from 'node:path';
 import {userInfo} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -99,11 +99,20 @@ export async function verifyStartupReceipt(options={}){
  need(Date.parse(r.expires_at)>Date.now(),'STARTUP_RECEIPT_EXPIRED');
  return {protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',instance_id:instanceId,endpoint:r.endpoint,source_commit:sourceCommit,registry_sha256:registrySha256,policy_sha256:policySha256};
 }
+// 只在完整写入、fsync及字节读回后发布；目标存在时不覆盖，失败不留下半份授权凭证。
+export function persistStartupReceipt(target,receipt,{write=writeAll}={}){
+ need(typeof target==='string'&&resolve(target)===target,'STARTUP_OUTPUT');const parent=dirname(target),p=lstatSync(parent);need(p.isDirectory()&&!p.isSymbolicLink()&&realpathSync(parent)===parent&&p.uid===process.getuid()&&!(p.mode&0o022),'STARTUP_OUTPUT_PARENT');
+ const temporary=mkdtempSync(join(parent,'.startup-receipt-')),staged=join(temporary,'receipt.json'),raw=Buffer.from(JSON.stringify(receipt)+'\n');let linked=false,identity;
+ const syncParent=()=>{const fd=openSync(parent,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(fd);}finally{closeSync(fd);}};
+ try{const fd=openSync(staged,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{write(fd,raw);fsyncSync(fd);}finally{closeSync(fd);}need(sha(bytes(staged))===sha(raw),'STARTUP_RECEIPT_WRITE');identity=lstatSync(staged);linkSync(staged,target);linked=true;unlinkSync(staged);syncParent();need(sha(bytes(target))===sha(raw)&&(lstatSync(target).mode&0o777)===0o600,'STARTUP_RECEIPT_WRITE');return receipt;}
+ catch(error){if(linked){const current=lstatSync(target);if(current.dev===identity.dev&&current.ino===identity.ino){unlinkSync(target);syncParent();}}throw error;}
+ finally{rmSync(temporary,{recursive:true,force:true});}
+}
 export async function planStartupReceipt({taskId,stateFile,instanceId,directory,inspect=inspectReview,instance=readStartupInstance,registryPath=join(here,'config/adb-host-instances.json')}={}){
  const review=await inspect({taskId,stateFile}),registryRaw=bytes(registryPath),registry=JSON.parse(registryRaw),row=registry.instances?.find(r=>r.instance_id===instanceId&&r.kind==='managed');need(row,'STARTUP_INSTANCE');const registrySha256=sha(registryRaw),policySha256=sha(bytes(row.policy_path)),fixed=instance({instanceId,registrySha256,policySha256}),now=Date.now();
  const approved=review.network_approval;need(approved?.protocol==='device-epoch-fence-approval/v1'&&/^[a-f0-9]{64}$/.test(approved.plan_sha256||'')&&typeof approved.approved_by==='string'&&approved.approved_by.trim()&&typeof approved.approval_ref==='string'&&approved.approval_ref.trim()&&Number.isFinite(Date.parse(approved.approved_at))&&Date.parse(approved.approved_at)<=Date.now()&&canonical(approved.actions)===canonical(FENCE_ACTIONS)&&canonical(approved.approved_scope)===canonical(approvalScopeFor({scope:review.scope,instance:fixed,sourceCommit:review.scope.review_source.commit})),'STARTUP_EXPLICIT_APPROVAL');
  const r={operation_plan_sha256:approved.plan_sha256,protocol:'device-epoch-fence-startup/v1',action:'start_private_server',issued_at:new Date(now).toISOString(),expires_at:new Date(Math.min(now+120000,Date.parse(review.central_readback.expires_at))).toISOString(),task_id:taskId,state_file:stateFile,...fixed,source_authority:review.scope.review_source,review,old_daemon:review.scope.old_daemon};
- need(typeof directory==='string'&&resolve(directory)===directory,'STARTUP_OUTPUT');const fd=openSync(directory,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeSync(fd,JSON.stringify(r)+'\n');fsyncSync(fd);}finally{closeSync(fd);}return r;
+ persistStartupReceipt(directory,r);return r;
 }
 export async function main(args=process.argv.slice(2)){
  let result;
