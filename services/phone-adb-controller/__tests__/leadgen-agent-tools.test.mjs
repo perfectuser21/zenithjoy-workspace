@@ -1,4 +1,6 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,readdirSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -322,6 +324,7 @@ for(const boundary of ['resources','input'])test('心跳结束后'+boundary+'异
   validating=true;heartbeatFinish.resolve({renewed:true});await heartbeat;await validationEntered.promise;
   t.mock.timers.setTime(now+1100);validationFinish.resolve();
   const error=await business;assert.equal(error?.message,'AGENT_TOOL_DEADLINE');assert.equal(writes,0);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
   const original=(await tools.inspect()).scope;assert.equal(original.worker_deadline_ms,now+1000);assert.equal(original.deadline_ms,now+10000);
  },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{heartbeatEntered.resolve();return heartbeatFinish.promise;},assertResources:boundary==='resources'?validate:async()=>true,validateInput:async(_op,input)=>{if(boundary==='input')await validate();return input;},queue:async()=>{writes++;return {inserted:true};}}});
 });
@@ -350,4 +353,19 @@ for(const boundary of ['resources','input'])test(boundary+'异步校验自身失
  await using(async tools=>{
   await assert.rejects(()=>tools.business('discover',{video}),error=>error===failure);assert.equal(writes,0);
  },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{assertResources:boundary==='resources'?reject:async()=>true,validateInput:boundary==='input'?reject:async(_op,input)=>input,queue:async()=>{writes++;return {};}}});
+});
+
+
+test('intent真实落盘耗时跨worker截止不发队列，原未决记录保留',async t=>{
+ const now=Date.now(),realFsync=fs.fsyncSync;let armed=false,writes=0,expiredDuringSync=false;
+ t.mock.timers.enable({apis:['Date'],now});
+ t.mock.method(fs,'fsyncSync',fd=>{realFsync(fd);if(armed){armed=false;expiredDuringSync=true;t.mock.timers.setTime(now+1100);}});
+ syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+ await using(async(tools,_calls,runDir)=>{
+  await assert.rejects(()=>tools.business('discover',{video}),error=>error.message==='AGENT_TOOL_DEADLINE');
+  assert.equal(expiredDuringSync,true);assert.equal(writes,0);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'discover',readback_operations:['discover_readback']}]);
+  const names=readdirSync(join(runDir,'agent-tools','collect_videos'));assert.equal(names.filter(n=>n.endsWith('.intent.json')).length,1);assert.equal(names.some(n=>n.endsWith('.result.json')),false);
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);assert.equal(writes,0);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{validateInput:async(_op,input)=>{armed=true;return input;},queue:async()=>{writes++;return {};}}});
 });
