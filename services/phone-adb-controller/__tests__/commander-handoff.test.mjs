@@ -69,6 +69,15 @@ test('official bind rejects malformed, guessed, wrong-model, foreign, expired an
  assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:{...f.raw,runId:'1234abcd-0000-4000-8000-000000000099'}}).status,0);
  assert.deepEqual(readFileSync(join(f.dir,'agent-binding.json')),binding);assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),raw);
 });
+test('typed primary bind cannot widen into raw transport, a revoked generation or an unclaimed spawn',()=>{
+ for(const field of ['execution_transport','max_turns','transport_generation']){
+  const f=primarySpawnFixture(),path=join(f.dir,'activity-request.json'),q=JSON.parse(readFileSync(path));writeFileSync(path,JSON.stringify({...q,[field]:null}));
+  assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+ for(const change of [f=>writeFileSync(join(f.dir,'generation-revoked.json'),'{}'),f=>{const p=join(f.dir,'spawn-claimed.json'),c=JSON.parse(readFileSync(p));delete c.claimed_at;writeFileSync(p,JSON.stringify(c));}]){
+  const f=primarySpawnFixture();change(f);assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+});
 test('binding-ready waits read-only for the parent atomic commit and retains the original worker cutoff',async()=>{
  const f=primarySpawnFixture();let out='',err='';const child=spawn('python3',[HELPER,'binding-ready',f.dir]);
  const done=new Promise(resolve=>child.on('close',code=>resolve(code)));child.stdout.on('data',v=>out+=v);child.stderr.on('data',v=>err+=v);
