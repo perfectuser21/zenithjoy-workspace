@@ -204,6 +204,20 @@ for(const discovery of [false,true])test(`Agent电话${discovery?'101':'102'}非
  const actual=await wired.executeAgent(activities[1],{context:{task_id:taskId}});assert.equal(actual.status,'completed');assert.equal(cleanup,1);assert.equal(released,1);
  assert.ok(cleanupDeadline>Date.now());assert.ok(cleanupDeadline<=(Number(f.env.WF_RUN_START_TS)+180)*1000);
 });
+for(const [discovery,total]of [[true,2820],[false,10020]])test('new '+(discovery?'101':'102')+' cleanup300 borrows180 from main while the original120 grace and global end stay fixed',async t=>{
+ const original=Date.now;let now=Math.floor(original()/1000)*1000;Date.now=()=>now;
+ try{
+  const f=officialFixture(phoneFixture(t,{discovery})),start=now,end=start+total*1000;Object.assign(f.env,{WF_RUN_START_TS:String(start/1000),WF_RUN_MAX_SECONDS:String(total)});f.frozen.agent_input=agentInput(f.env);
+  f.frozen.activities.find(a=>a.reference.slot_key==='cleanup').version.payload.contract.budget.max_duration_s=300;
+  now=end-300000;let releases=0,started=[];
+  const activities=[{key:'preflight',budget:{max_duration_s:600}},{key:'cleanup',budget:{max_duration_s:300}}];
+  const handlers={...supportedNativeFixture,state:{},createAgentTools:async(activity,scope)=>{started.push(activity.key);assert.equal(scope.deadline_ms,end-10000);assert.equal(scope.worker_deadline_ms,now+232000);return {prepare:async()=>{},settle:async()=>{},release:async()=>{releases++;},inspect:async()=>({}),phone:async()=>{throw Error('no phone in budget fixture');},business:async()=>{throw Error('no business in budget fixture');},getResult:()=>({saved:1})};}};
+  const wired=workflow.createWorkflowExecution({...f,activities,handlers,taskId,rpc:async q=>q.kind==='activity_skill_authority'?{authorized:true}:{result:receipt(q.request)}});
+  await assert.rejects(()=>wired.executeAgent(activities[0],{context:{task_id:taskId}}),/DEADLINE/);assert.deepEqual(started,[]);
+  const result=await wired.executeAgent(activities[1],{context:{task_id:taskId}});assert.equal(result.execution_stopped,true);assert.deepEqual(started,['cleanup']);assert.equal(releases,1);
+  assert.equal(handlers.state.budgetDeadline,end);assert.equal((end-120000)-now,180000);assert.equal(end-now,300000);
+ }finally{Date.now=original;}
+});
 
 test('旧Code102不引入Agent预留语义，103纯Skill无手机预算预留',async t=>{
  const f=phoneFixture(t);Object.assign(f.env,{LEADGEN_EXECUTION_MODE:'code',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)-160),WF_RUN_MAX_SECONDS:'180'});delete f.frozen.execution_mode;delete f.frozen.agent_input;let code=0;

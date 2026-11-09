@@ -125,6 +125,7 @@ for(const flow of Object.keys(original125Shapes))test('real '+flow+' AV shapes c
   }
   const b=p.domain_adapter.budget,total=original.reduce((n,a)=>n+a.version.payload.contract.budget.max_duration_s,0);
   assert.ok(b.max_duration_s+b.cleanup_grace_s<=total);
+  if(flow==='douyin_comment_scoring'){assert.deepEqual(b,{max_duration_s:3570,cleanup_grace_s:30});assert.equal(p.cleanup_required,false);assert.equal(p.contract.activities.some(a=>a.runtime.phase==='finalize'),false);}
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
 test('workflow total timeout includes reserved cleanup rather than adding cleanup to the total',async()=>{
