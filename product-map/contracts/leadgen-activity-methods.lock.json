@@ -511,7 +511,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "ebd3002a8a75e74f89d9f8041c4d06b7e692ef467bcf2454ed3592841b777fb6",
+      "code_digest": "9f9de9f0d2edc2b4d32447c1567e65bce05076cc37941be13703dfdd44116257",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "73cf5dbcd814a52c29cb93fe5c8e3db05ec10dd1485c06ed966abfec263126cf",
-        "current_code_digest": "ebd3002a8a75e74f89d9f8041c4d06b7e692ef467bcf2454ed3592841b777fb6"
+        "reason": "独立核对采集候选输入、视频额度、原生指标准入与discover持久身份均未变；phone等待同一已在飞heartbeat后重新准入，business提前占槽只阻止交叉提交。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "ebd3002a8a75e74f89d9f8041c4d06b7e692ef467bcf2454ed3592841b777fb6",
+        "current_code_digest": "9f9de9f0d2edc2b4d32447c1567e65bce05076cc37941be13703dfdd44116257"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1369,7 +1369,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -1642,7 +1642,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7cd3fd5b135bbf86fdcc833c923832c40b0a0555dc0d7daef2f5e11f252ef432"
+      "code_digest": "af2274da5f34c4b17d5691ed5c34679a62dc701d36ac9c1e8746245283b1f921",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立核对wake/unlock/open-app/account-current顺序及完成记账、账号/资源准入未变；只消除成功心跳期间误报commit-unknown，最终phone仍受较早worker截止保护。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "7cd3fd5b135bbf86fdcc833c923832c40b0a0555dc0d7daef2f5e11f252ef432",
+        "current_code_digest": "af2274da5f34c4b17d5691ed5c34679a62dc701d36ac9c1e8746245283b1f921"
+      }
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.2.1",
@@ -2147,7 +2154,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -2423,13 +2430,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "c3f4a1051328668248e6d3e6a80293336a86612b43b205b1f80a0ba78b2bbab2",
+      "code_digest": "dc813d217dd858a7d7715041d5021d4dae701743cf3d5aa01b49decc1d2b78bd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "baa582b43aca1a6786813c013d0f9be2c7260c1adbff3a749fd7495fa4bc3a69",
-        "current_code_digest": "c3f4a1051328668248e6d3e6a80293336a86612b43b205b1f80a0ba78b2bbab2"
+        "reason": "独立核对101来源校验、claim/inspect操作schema及原写入身份未变；business仅将busy占槽移到异步guard前，原已确认重入返回旧回执和未知只读回合同保留。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "c3f4a1051328668248e6d3e6a80293336a86612b43b205b1f80a0ba78b2bbab2",
+        "current_code_digest": "dc813d217dd858a7d7715041d5021d4dae701743cf3d5aa01b49decc1d2b78bd"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2963,7 +2970,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -3295,13 +3302,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "34adfe224903350b67f6b61fbeacd2cbd476f292e81ce685e997f8ba4f6e1446",
+      "code_digest": "968bbf5d9f4d6fd1fc4de108c116dabe80427be0109ad9dd1996f5da840ba572",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "5624f06806d735af7152380914e4456662e8c1b52f6af415c2d33dbc88daf4b9",
-        "current_code_digest": "34adfe224903350b67f6b61fbeacd2cbd476f292e81ce685e997f8ba4f6e1446"
+        "reason": "独立核对原VID、qualification/native证据准入、录制工具及业务政策调用接口未变；没有新增采样、录音或重试，心跳协调不借用cleanup窗口发phone。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "34adfe224903350b67f6b61fbeacd2cbd476f292e81ce685e997f8ba4f6e1446",
+        "current_code_digest": "968bbf5d9f4d6fd1fc4de108c116dabe80427be0109ad9dd1996f5da840ba572"
       }
     },
     "douyin_video_processing.collection": {
@@ -3807,7 +3814,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -4105,13 +4112,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "3b270658b923c13713669b6d64e819817658774420d5ea9f06324b5aa8b7d617",
+      "code_digest": "bcd664c1e18a035e0b1391605150e56be0c36e58c13c0c527b9689980b579b7f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "13efa92c34b058c87d7e11d4002cf68ebd249ab402e8f67088647cf5dfdccaff",
-        "current_code_digest": "3b270658b923c13713669b6d64e819817658774420d5ea9f06324b5aa8b7d617"
+        "reason": "独立核对评论限额、原生recipient证据准入和collect/collect_partial持久身份未变；同槽串行防止phone与晚到business交叉，未知提交仍只允许原匹配readback。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "3b270658b923c13713669b6d64e819817658774420d5ea9f06324b5aa8b7d617",
+        "current_code_digest": "bcd664c1e18a035e0b1391605150e56be0c36e58c13c0c527b9689980b579b7f"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4652,7 +4659,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -4924,7 +4931,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "26e2a7a39c0a3da845e8e1efa2ce8e9ad9eb35042766ed751a53d58bf1a3f83e"
+      "code_digest": "33ae5b01b01c34b9d40a62e5efbc3493e251e1c33316b43d24d4f28dbc743e09",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立核对settle后仅cleanup可release、原停止证明和未决intent拒绝规则未变；通用guard/settle保留原scope收尾窗口，phone仅用较早worker截止，不授予新清场或解锁权限。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "26e2a7a39c0a3da845e8e1efa2ce8e9ad9eb35042766ed751a53d58bf1a3f83e",
+        "current_code_digest": "33ae5b01b01c34b9d40a62e5efbc3493e251e1c33316b43d24d4f28dbc743e09"
+      }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.7.2",
@@ -5436,7 +5450,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -5719,13 +5733,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "fbe8dcb679feff4395a31dbef5a23f7e7b3cbe1ebab68bc1bc4ae75318d670cd",
+      "code_digest": "9904ebb0df9404094e74103c0557bad855f4397f1fd9c235b2e5291416987688",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "c68eb3712c647fed14166a1e7932fde3b3d26c2cad607e89f4a247259a1755f5",
-        "current_code_digest": "fbe8dcb679feff4395a31dbef5a23f7e7b3cbe1ebab68bc1bc4ae75318d670cd"
+        "reason": "独立核对serial=none仍禁止phone、单条score及scope额度/schema未变，评分政策与结果写入身份不变；共享工具仅串行原business准入和心跳，不新增评分或未知重写。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "fbe8dcb679feff4395a31dbef5a23f7e7b3cbe1ebab68bc1bc4ae75318d670cd",
+        "current_code_digest": "9904ebb0df9404094e74103c0557bad855f4397f1fd9c235b2e5291416987688"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6245,7 +6259,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-agent-tools.mjs",
           "revision": "contract",
-          "sha256": "01a115d3a3775bc1c333a138e53b91023b2d0472b42bbdf04f783512ab8bf8b7"
+          "sha256": "847e5a2219c1a9f979808f736f08d476d79b60fe29408772b2124137b5111ca6"
         },
         {
           "kind": "code",
@@ -6563,13 +6577,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f34ba988170fbc8dfac74ff51b726f8c1f218cc1d5f39f329f32ad2ee0337d60",
+      "code_digest": "368eb14eebcd5097baeb8093fc2fefd15ba86cc7d4e6c998bcf4bb782589f743",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "11f447c587fd7b9231b764a8e016e52b0d9205b3f80ae52c89454b347942f6a0",
-        "current_code_digest": "f34ba988170fbc8dfac74ff51b726f8c1f218cc1d5f39f329f32ad2ee0337d60"
+        "reason": "独立核对mark_leads允许的业务操作、原生资格及配送操作schema未变，原持久写入/只读回身份保留；共享操作槽和heartbeat等待不增加触达、104发送或跨租户权限。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
+        "reviewed_by": "cloud9_failure_audit",
+        "previous_code_digest": "f34ba988170fbc8dfac74ff51b726f8c1f218cc1d5f39f329f32ad2ee0337d60",
+        "current_code_digest": "368eb14eebcd5097baeb8093fc2fefd15ba86cc7d4e6c998bcf4bb782589f743"
       }
     },
     "douyin_lead_outreach.preflight": {
