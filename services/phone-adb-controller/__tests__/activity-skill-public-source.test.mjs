@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {verifySkillRequest} from '../leadgen-skill-agent.mjs';
+import {registerPublicDomainAuthority} from '../public-domain-authority.mjs';
+import {digest} from '../runtime-definition.mjs';
+const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+function fixture(){
+ const dir=mkdtempSync(join(tmpdir(),'skill-public-')),source='a'.repeat(40),runtime='c'.repeat(64);
+ const run_binding={run_binding_id:uuid(3),workflow_id:uuid(4),workflow_definition_version_id:uuid(5),source_kind:'internal',attempt_key:'task:1',activities:{scoring:{reference_id:uuid(6),activity_id:uuid(7),activity_definition_version_id:uuid(8)}}};
+ const identity={mode:'formal',run_id:uuid(1),task_id:uuid(2),machine_id:'us-mac-m4',profile_sha256:'b'.repeat(64),run_binding,input:{profile:'mmv-scoring',serial:'none',line:'main',limit:2}};
+ const agent_input={schema_version:1,workflow_key:'douyin_comment_scoring',task_id:uuid(2),run_tag:'public_run',profile:'mmv-scoring',serial:'none',line:'main',source_run:null,limit:2,comment_limit:null,run_max_seconds:1800,run_start_ts:Math.floor(Date.now()/1000),discovery_filters:null,collection_budget_s:null};
+ const wf={id:uuid(5),source_commit:source,payload:{key:agent_input.workflow_key,activities:[{slot_key:'scoring',reference_id:uuid(6),activity_id:uuid(7),activity_version_id:uuid(8)}]}};
+ const pd={protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,run_binding,company:{tenant_id:uuid(10),company_id:uuid(11),version:1,policy_id:'original'},runtime_snapshot_sha256:runtime};
+ const frozen={execution_mode:'agent',agent_input,workflow_version:wf,public_domain:pd,files:{},deployment:{source_commit:source,target:'mmv'},release:{id:uuid(12)}};
+ frozen.snapshot_sha256=digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
+ const snapshot_authority={local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:runtime};
+ const unregister=registerPublicDomainAuthority({runDirectory:dir,identity,business_scope:{run:'public_run',run_id:identity.run_id,task_id:identity.task_id,source_commit:source,profile:'mmv-scoring',serial:'none',attempt:'a1'},snapshot_authority,deadline_ms:Date.now()+60000,cleanup_deadline_ms:Date.now()+120000});
+ const av={contract_sha256:digest({budget:{max_duration_s:30}}),payload:{definition_key:'douyin_comment_scoring.scoring',contract:{budget:{max_duration_s:30}},implementation_bindings:[{kind:'skill',status:'verified',repo:'perfectuser21/zenithjoy-workspace',revision:source,name:'method1',version:'1',content_sha256:'x'}]}};
+ const binding={id:uuid(3),run_id:uuid(1),workflow_id:uuid(4),workflow_definition_version_id:uuid(5),source_kind:'internal',task_run_id:uuid(9),actor:'common-runner',external_origin:null,release_id:uuid(12),observation_id:uuid(13),attempt_key:'task:1',payload:{runtime_snapshot_sha256:runtime}};
+ const task={id:uuid(2),status:'in_progress',claimed_by:'common-runner',result:{common_runner:{...identity}}};
+ const q={...agent_input,mode:'execute',run_id:uuid(1),binding_id:uuid(3),source_commit:source,workflow_definition_version_id:uuid(5),release_id:uuid(12),observation_id:uuid(13),runtime_snapshot_sha256:frozen.snapshot_sha256,activity_key:'scoring',broker_host:'mmv',deadline_ms:Date.now()+10000,public_domain:{identity,run_binding,...{runtime_snapshot_sha256:runtime,local_snapshot_sha256:frozen.snapshot_sha256}},method:{reference_id:uuid(6),activity_version_id:uuid(8),name:'method1',version:'1',sha256:'x',text:'---\nmetadata:\n  primary_execution: agent-v1\n---\nmethod',contract:{activity_version_id:uuid(8),definition_key:av.payload.definition_key,sha256:av.contract_sha256,payload:av.payload.contract}}};
+ let hook=()=>{};
+ const get=async path=>{await hook(path);if(path.endsWith('/definition'))return {binding};if(path.endsWith('/reconciliation'))return {links:{task_run_id:uuid(9),task_id:uuid(2)}};if(path.includes('/tasks/'))return {task};if(path.includes('/workflows/'))return {version:wf};return {version:av};};
+ return {q,get,task,binding,unregister,setHook:fn=>hook=fn,options:{get,verifyMethod:()=>true,publicRunDirectory:dir},close(){unregister();rmSync(dir,{recursive:true,force:true});}};
+}
+test('公共首发严格同live授权、内部binding、冻结输入及Method通过',async()=>{const x=fixture();try{assert.equal(await verifySkillRequest(x.q,x.options),true);}finally{x.close();}});
+test('公共标记不能独自绕过legacy来源门',async()=>{const x=fixture();try{await assert.rejects(()=>verifySkillRequest(x.q,{get:x.get,verifyMethod:()=>true}));}finally{x.close();}});
+test('公共源、TaskRun归属、完整身份及输入篡改均拒绝',async()=>{const x=fixture();try{for(const mutate of [q=>q.public_domain.identity.machine_id='other',q=>q.limit=3,q=>q.line='other',q=>q.public_domain.runtime_snapshot_sha256='f'.repeat(64),q=>q.public_domain.local_snapshot_sha256='f'.repeat(64),q=>q.method.reference_id=uuid(20)]){const q=structuredClone(x.q);mutate(q);await assert.rejects(()=>verifySkillRequest(q,x.options));}x.binding.actor='other';await assert.rejects(()=>verifySkillRequest(x.q,x.options));}finally{x.close();}});
+test('中央AV await期间Task取消或本地授权撤销不可放行',async()=>{for(const revoke of [x=>x.task.status='cancelled',x=>x.unregister()]){const x=fixture();try{x.setHook(path=>{if(path.includes('/activities/'))revoke(x);});await assert.rejects(()=>verifySkillRequest(x.q,x.options));}finally{x.close();}}});
