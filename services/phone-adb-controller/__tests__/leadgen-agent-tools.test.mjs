@@ -198,3 +198,15 @@ test('心跳后并发手机请求只有一个占槽，fresh guard期间新心跳
   assert.equal(outcomes.filter(x=>x.ok).length,1);assert.equal(actions,1);
  },{scope:scope('preflight'),primitives:{assertResources:async()=>{guards++;if(phase==='phone'&&guards===2){phoneGuard.resolve();await guardRelease.promise;}return true;},heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
 });
+
+test('business异步准入期间先占操作槽，手机不得与稍后提交的写入交叉',async()=>{
+ const entered=deferred(),release=deferred();let firstGuard=true,actions=0,writes=0;
+ await using(async tools=>{
+  const business=tools.business('discover',{video});await entered.promise;
+  const phone=tools.phone('open-search').then(()=>null,error=>error);
+  await nextTurn();const beforeRelease=actions;
+  release.resolve();await business;
+  const error=await phone;assert.equal(beforeRelease,0);assert.match(error?.message||'',/BUSY|UNKNOWN/);assert.equal(writes,1);
+  await tools.phone('open-search');assert.equal(actions,1);
+ },{primitives:{assertResources:async()=>{if(firstGuard){firstGuard=false;entered.resolve();await release.promise;}return true;},validatePhone:async()=>[],phone:async()=>{actions++;return '';},queue:async()=>{writes++;return {inserted:true};}}});
+});
