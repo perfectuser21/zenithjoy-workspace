@@ -90,3 +90,8 @@ test('a terminal timestamp beyond the unchanged receipt deadline cannot mint an 
  const f=fixture(t,'outside-budget');f.request.receipt_deadline_ms=Date.now()+900;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));
  const result=await api.runOfficialSkillOwner(f);assert.equal(result.execution_stopped,false);assert.equal(api.officialOwnerTerminated(result,f.request),false);
 });
+test('mutating a nested official terminal cannot reuse its in-process stop capability',async t=>{
+ const f=fixture(t),run=await api.runOfficialSkillOwner(f);assert.equal(api.officialOwnerRunTerminated(run,f.request),true);
+ run.terminal.runId='foreign-run';assert.equal(api.officialOwnerRunTerminated(run,f.request),false);
+ await assert.rejects(()=>api.closeOfficialSkillOwner({...f,result:run}));
+});
