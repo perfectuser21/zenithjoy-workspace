@@ -12,6 +12,7 @@ const key=v=>JSON.stringify(v);
 const stopped=new WeakMap(),outerOnly=new WeakMap();
 const fail=(code,unknown=false)=>Object.assign(Error('OFFICIAL_CLI_'+code),{code:'OFFICIAL_CLI_'+code,executionStopped:!unknown,resourceUnknown:unknown,notStarted:!unknown});
 const cli=new Set(['runtime-contract','preflight','foreground','wake','unlock','open-app','account-current','snapshot-evidence','ui-evidence','close-app','return-safe-desktop','lock-acquire','lock-acquire-new','lock-refresh','lock-status','lock-release','lock-release-exact','lock-quarantine','open-search','search-time-layer','search-video-tab','search-video-cards','search-kw-matches','search-grid-scroll','back-to-results','back-evidence','tap-evidence','swipe-evidence','current-video-link','open-video','open-comments','commenter-identity','set-playback-speed','native-audio-evidence','detail-restored']);
+const metadata=new Set(['runtime-contract','lock-acquire','lock-acquire-new','lock-refresh','lock-status','lock-release','lock-release-exact','lock-quarantine']);
 const recording=new Set(['record-start','record-stop','record-status','record-extract-audio']);
 const identity=(command,args,receipt,root,frozen)=>key({command,args,receipt,root,snapshot_sha256:frozen?.snapshot_sha256});
 export const isOfficialCliOperationStopped=(result,{command,args,receipt,root,frozen}={})=>stopped.get(result)===identity(command,args,receipt,root,frozen);
@@ -27,7 +28,8 @@ export function describeOfficialCliInvocation({root,command,args,executables,pro
  if(argv[0]!=='--profile'||argv[1]!==profile)throw fail('PROFILE');let offset=2;
  if(argv[2]==='--lock-owner'){if(argv[3]!==owner)throw fail('OWNER');offset=4;}
  const operation=argv[offset];if(!cli.has(operation)&&!recording.has(operation))throw fail('UNREVIEWED_OPERATION');
- return {kind:recording.has(operation)?'recording-outer-only':'synchronous-cli',operation,binary:executables.zsh.path,args:['-f',controller,...argv]};
+ if(metadata.has(operation)){const tail=argv.slice(offset+1);if(offset!==2||(['runtime-contract','lock-status'].includes(operation)?tail.length!==0:tail.length!==1||tail[0]!==owner))throw fail('OWNER');}
+ return {kind:metadata.has(operation)?'local-metadata':recording.has(operation)?'recording-outer-only':'synchronous-cli',operation,binary:executables.zsh.path,args:['-f',controller,...argv]};
 }
 export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertAdmission,scope}={}){
  if(realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||!frozen||!/^([a-f0-9]{64})$/.test(frozen.snapshot_sha256||'')||frozen.agent_input?.task_id!==taskId||typeof binding?.run_id!=='string')throw fail('SCOPE');
@@ -48,14 +50,14 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
   for(const program of Object.values(executables)){const path=program.path,s=lstatSync(path);if(realpathSync(path)!==path||!s.isFile()||s.mode&0o022||sha(readFileSync(path))!==program.sha256)throw fail('PINNED_RUNTIME');}
  };
  const active=()=>{if(Date.now()>=deadline)throw fail('DEADLINE');if(sealed||unknown)throw fail('CLOSED',unknown);verify();};
- const admission=async()=>{active();if((await epoch())?.authorized!==true)throw fail('EPOCH',true);active();};
+ const admission=async({phase='execute',resourceOnly=false}={})=>{active();if(resourceOnly&&!assertAdmission)throw fail('LOCAL_AUTHORITY');if((await epoch({phase,resourceOnly,activity,task_id:taskId,run_id:binding.run_id}))?.authorized!==true)throw fail('EPOCH',true);active();};
  function receiptScope(receipt){if(!receipt||(!slots.includes(receipt.activity)||activity!==undefined&&receipt.activity!==activity)||Object.entries(fixed).some(([k,v])=>receipt[k]!==v)||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(receipt.operationId||''))throw fail('RECEIPT');return receipt;}
  async function execute(command,args,options={}){
   active();const receipt=structuredClone(receiptScope(options.receipt)),request=identity(command,args,receipt,root,f),plan=describeOfficialCliInvocation({root,command,args,executables,profile:fixed.profile,owner:fixed.owner,serial:fixed.serial});
   const marker=join(fixed.runDir,'native-operations',receipt.operationId+'.unknown');if(existsSync(marker)){unknown=true;throw fail('PREVIOUS_UNKNOWN',true);}
   let dispatched=false;
   const operation=(async()=>{
-   await admission();
+   await admission({phase:'before',resourceOnly:plan.kind==='local-metadata'});
    const clean={...base,...options.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:bin,ENV:'',BASH_ENV:'',DOUYIN_BYPASS_REPORT:'off',DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:executables.python.path,DOUYIN_LOCATE_SCRIPT:join(root,'locate-element.py'),DOUYIN_CURL_BIN:'/usr/bin/curl',DOUYIN_SIPS_BIN:'/usr/bin/sips',WFR_NATIVE_UNKNOWN_FILE:marker,P:fixed.profile,SERIAL:fixed.serial,WFR_TAG:fixed.owner,WFR_RUN_DIR:fixed.runDir};
    for(const name of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(name)||['DOUYIN_LOCK_GUARDED','DOUYIN_LOCK_GUARD_FD','DOUYIN_BYPASS_REPORT_BIN'].includes(name))delete clean[name];
    if(clean.DOUYIN_PHONE_LOCK_TEST_MODE==='1')throw fail('TEST_ENV');
@@ -64,12 +66,12 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
    const actual={...options,env:clean,receipt,timeoutMs:Math.min(options.timeoutMs??180000,300000,deadline-Date.now())};
    dispatched=true;const result=await execInput(plan.binary,plan.args,actual);
    if(!executionOuterReturned(result,plan.binary,plan.args,receipt)||!Number.isInteger(result.code)||existsSync(marker)||/NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN|RECORD_CAPTURE_EXIT_UNVERIFIED/.test(result.stderr||''))throw fail('STOP_UNKNOWN',true);
-   await admission();outerOnly.set(result,request);if(plan.kind!=='recording-outer-only')stopped.set(result,request);return result;
+   await admission({phase:'after',resourceOnly:plan.kind==='local-metadata'});outerOnly.set(result,request);if(plan.kind!=='recording-outer-only')stopped.set(result,request);return result;
   })();pending.add(operation);
   try{return await operation;}catch(error){if(dispatched||error.resourceUnknown||error.executionStopped===false||!error.notStarted)unknown=true;throw error;}finally{pending.delete(operation);}
  }
  const snapshot=()=>Object.freeze({domain:'official-cli-synchronous/v1',sealed,pending:pending.size,unknown,execution_unknown:unknown,execution_stopped:sealed&&!unknown&&!pending.size});
- return Object.freeze({execute,snapshot,prepare:async()=>{await admission();return true;},close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);return snapshot();}});
+ return Object.freeze({execute,snapshot,prepare:async()=>{await admission({phase:'prepare',resourceOnly:true});return true;},close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);return snapshot();}});
 }
 
 // Reviewed baseline: 1d46b5d72; eda2ea5cd controller adds recording-only observer hooks. Only the finite synchronous call graph above is admitted.
