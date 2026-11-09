@@ -1,2 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {createFenceRuntime} from '../device-epoch-fence-runtime.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {createFenceRuntime,fenceArchivePath} from '../device-epoch-fence-runtime.mjs';
 test('正式旧/新共用runtime构造不发任何IO，默认实际home有效',()=>{let calls=0;const r=createFenceRuntime({plan:{},directory:'/nonexistent-fixture',oldRoute:{},getNewRoute:()=>({}),approval:async()=>{calls++;},withGuard:async()=>{calls++;},validateTaskApproval:()=>{calls++;}});assert.equal(typeof r.io.oldInventory,'function');assert.equal(typeof r.io.observeNoninterference,'function');assert.equal(typeof r.io.createRecord,'function');assert.equal(r.getCentral(),null);assert.equal(calls,0);});
+
+test('正式默认archive路径只计算不发IO，默认home不引用局部变量',()=>{const path=fenceArchivePath({task_id:'fixture',plan_sha256:'a'.repeat(64)});assert.ok(path.endsWith('/.device-epoch-fence-fixture-'+ 'a'.repeat(64)+'.superseded'));});
