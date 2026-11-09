@@ -9,7 +9,7 @@ import {releaseCentralLease,readReleaseProof} from './device-epoch-fence-central
 import {readBoundAdbDaemon} from './device-epoch-fence-admission.mjs';
 import {save,ensureRecordRoot,privateDirectory} from './device-epoch-fence-files.mjs';
 const need=(v,c)=>{if(!v)throw Object.assign(Error(c),{code:c});},lstatExists=existsSync;
-export function fenceArchivePath(plan,root=join(home,'.local/share/zenithjoy/phone-locks')){const prefix=plan.prior?'.device-epoch-fence-resume-'+plan.task_id+'-'+plan.prior.prior_plan_sha256+'-'+plan.plan_sha256:'.device-epoch-fence-'+plan.task_id+'-'+plan.plan_sha256;return join(root,prefix+'.superseded');}
+export function fenceArchivePath(plan,root=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks')){const prefix=plan.prior?'.device-epoch-fence-resume-'+plan.task_id+'-'+plan.prior.prior_plan_sha256+'-'+plan.plan_sha256:'.device-epoch-fence-'+plan.task_id+'-'+plan.plan_sha256;return join(root,prefix+'.superseded');}
 export function createFenceRuntime({plan,directory,oldRoute,getNewRoute,approval,withGuard,checkOperationTime=()=>{},read=readBrain,post,validateTaskApproval,home=userInfo().homedir,source=reviewSource,bindDaemon=readBoundAdbDaemon,ensureRecords=ensureRecordRoot,diagnostic=runDiagnostic}={}){
  const observedCapabilities=new WeakSet();let counter=0,lastCentral=null;
  const sub=label=>{const dir=join(directory,String(counter++).padStart(4,'0')+'-'+label);mkdirSync(dir,{mode:0o700});return dir;};
