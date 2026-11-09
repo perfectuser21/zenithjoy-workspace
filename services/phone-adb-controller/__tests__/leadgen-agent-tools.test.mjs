@@ -220,3 +220,18 @@ test('异步phone准入越过worker原截止时不得发指令，即使scope收�
   const error=await phone;assert.match(error?.message||'',/DEADLINE/);assert.equal(actions,0);
  },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{validatePhone:async()=>{entered.resolve();await release.promise;return [];},phone:async()=>{actions++;return '';}}});
 });
+
+test('等待心跳到原截止只结束waiter，原heartbeat保持一次且自行结算原intent',async t=>{
+ const now=Date.now(),entered=deferred(),finish=deferred();let refreshes=0,actions=0;
+ t.mock.timers.enable({apis:['Date','setTimeout'],now});
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const phone=tools.phone('open-app').then(()=>null,error=>error);await nextTurn();
+  t.mock.timers.tick(1001);const error=await phone;assert.match(error?.message||'',/DEADLINE/);
+  assert.equal(actions,0);assert.equal(refreshes,1);assert.equal(tools.heartbeat(),heartbeat,'等待超时不得换job或重发');
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  finish.resolve({renewed:true});await heartbeat;assert.equal(refreshes,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+  await assert.rejects(()=>tools.phone('open-app'),/DEADLINE/);assert.equal(actions,0);
+ },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});
