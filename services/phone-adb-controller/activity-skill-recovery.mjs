@@ -41,9 +41,11 @@ export function frozenMethod(frozen,slot,runDir){
  if(name!==b.name||!/^\d+\.\d+\.\d+$/.test(version||'')||version!==b.version||ref!==a.version.payload.definition_key)throw Error('SKILL_METHOD_VERSION_MISMATCH');
  const supportPath='runtime/skills/leadgen-activity-execution.md',support=readFileSync(join(runDir,supportPath),'utf8');
  if(hash(support)!==frozen.files[supportPath])throw Error('SKILL_SUPPORT_BYTES_MISMATCH');
+ let hostSupport;
+ if(frozen.primary_host==='official-child-v1'){const path='runtime/skills/leadgen-official-child-host.md',text=readFileSync(join(runDir,path),'utf8');if(hash(text)!==frozen.files[path])throw Error('SKILL_HOST_SUPPORT_BYTES_MISMATCH');hostSupport={sha256:hash(text),text};}
  const contract=a.version.payload.contract;
  if(!contract||typeof contract!=='object'||Array.isArray(contract)||a.version.contract_sha256&&a.version.contract_sha256!==contractDigest(contract))throw Error('SKILL_ACTIVITY_CONTRACT_INVALID');
- return {name,version,path,activity_ref:ref,activity_version_id:a.version.id,reference_id:a.reference.reference_id,sha256:hash(text),text,support:{sha256:hash(support),text:support},
+ return {name,version,path,activity_ref:ref,activity_version_id:a.version.id,reference_id:a.reference.reference_id,sha256:hash(text),text,support:{sha256:hash(support),text:support},...(hostSupport?{host_support:hostSupport}:{}),
   contract:{activity_version_id:a.version.id,definition_key:a.version.payload.definition_key,sha256:contractDigest(contract),payload:structuredClone(contract)}};
 }
 export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,verify}){
