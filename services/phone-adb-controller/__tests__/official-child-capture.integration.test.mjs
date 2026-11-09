@@ -1,7 +1,7 @@
 // Real local detached capture, media decoding, primitive lifecycle, socket broker
 // and primary executor. Phone/epoch/model I/O is a deterministic fixture only.
 import test from 'node:test';import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,cpSync,rmSync,realpathSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,cpSync,rmSync,realpathSync,existsSync} from 'node:fs';
 import {join,dirname} from 'node:path';import {tmpdir} from 'node:os';import {pathToFileURL,fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import http from 'node:http';
 const hash=b=>createHash('sha256').update(b).digest('hex'),id=()=>randomUUID();
@@ -18,7 +18,7 @@ else:
  startup=json.loads(pathlib.Path(str(p)+'.capture-startup.json').read_text());os.kill(startup['pid'],signal.SIGTERM);time.sleep(.15);seconds=5;media=str(p)+'.rec.wav';pcm=b''.join(struct.pack('<h',round(5000*math.sin(i*2*math.pi*440/16000))) for i in range(80000));header=b'RIFF'+struct.pack('<I',36+len(pcm))+b'WAVEfmt '+struct.pack('<IHHIIHH',16,1,1,16000,32000,2,16)+b'data'+struct.pack('<I',len(pcm));pathlib.Path(media).write_bytes(header+pcm);os.chmod(media,0o600)
  subprocess.run([sys.executable,str(root/'decode-recording.py'),'--media',media,'--ffmpeg',os.environ['FIXTURE_FFMPEG'],'--requested-seconds','5','--evidence-file',str(p)+'.decode.json'],check=True,stdout=subprocess.DEVNULL);print('record=stopped')
 `;
-async function fixture(t,{leaseExpiresAt}={}){
+async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false}={}){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'official-capture-chain-'))),runtime=join(dir,'runtime'),evidence=join(dir,'evidence');mkdirSync(evidence,{mode:0o700});
  cpSync(controller,runtime,{recursive:true,filter:p=>!p.includes('/__tests__')&&!p.includes('/node_modules')});
  writeFileSync(join(runtime,'fixture-server'),'fixed server');
@@ -27,6 +27,7 @@ async function fixture(t,{leaseExpiresAt}={}){
  const policy={schema:'scrcpy-sdk31-pinned-v1',version:'5.0.1',client_sha256:hash(readFileSync(join(runtime,'fixture-client'))),server_sha256:hash(readFileSync(join(runtime,'fixture-server')))};writeFileSync(join(runtime,'runtime/runtime-policy.json'),JSON.stringify(policy));
  writeFileSync(join(runtime,'fixture-capture-cli.py'),cli);
  writeFileSync(join(runtime,'douyin-phone-adb'),'#!/bin/zsh\nexec "$DOUYIN_PYTHON_BIN" "${0:A:h}/fixture-capture-cli.py" "$@"\n',{mode:0o700});
+ if(failedCli)writeFileSync(join(runtime,'douyin-phone-adb'),'#!/bin/zsh\nprintf started > "$FIXTURE_EVIDENCE/failed-cli-started"\nexit 2\n',{mode:0o700});
  const closure=join(runtime,'official-cli-closure.mjs');writeFileSync(closure,readFileSync(closure,'utf8').replace(/ "douyin-phone-adb":.*\n/,' "douyin-phone-adb": "'+hash(readFileSync(join(runtime,'douyin-phone-adb')))+'",\n'));
  const primitive=join(runtime,'official-child-primitives.mjs');writeFileSync(primitive,readFileSync(primitive,'utf8').replace('const proof=await createPhoneEpochGuard({root,env,frozen,state})();','const proof=await Promise.resolve({authorized:true});'));
  const python=realpathSync(spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).stdout.trim()),program=path=>({path:realpathSync(path),sha256:hash(readFileSync(realpathSync(path)))});
@@ -39,7 +40,7 @@ async function fixture(t,{leaseExpiresAt}={}){
  const identity={run_id,task_id,machine_id:'us-mac-m4',mode:'formal',profile_sha256:'b'.repeat(64),run_binding};
  const frozen={execution_mode:'agent',primary_host:'official-child-v1',agent_input:defs.agentInput(env),native_claim:claim,files,deployment:{source_commit:source,target:'mmv',observation_id:id()},release:{id:id()},workflow_version:{id:workflow_version,payload:{key:'douyin_video_processing',workflow_id}},public_domain:{...identity,protocol:'workflow-domain/v1',runtime_snapshot_sha256:runtimeHash},collection_phone_scope:{run_id,profile:env.P,serial:env.SERIAL,evidence_root:evidence,policy:{schema_version:2},executables:{python:program(python),node:program(process.execPath),zsh:program('/bin/zsh')}},activities:[{reference:{slot_key:'qualification',reference_id:ref,activity_id:activity},version:{id:av,payload:{definition_key:'douyin_video_processing.qualification',contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-102-qualification',path:'services/phone-adb-controller/'+path,version}]}}}]};frozen.snapshot_sha256=defs.digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
  const task={id:task_id,status:'in_progress',...claim,result:{common_runner:{...identity}}};
- const server=http.createServer(async(req,res)=>{for await(const c of req){};res.end(JSON.stringify(req.url.includes('device-locks')?{success:true,locks:[{device_name:env.SERIAL,locked_by:task_id,...(leaseExpiresAt==='missing'?{}:{expires_at:leaseExpiresAt??new Date(Date.now()+120000).toISOString()})}]}:task));});await new Promise(r=>server.listen(0,'127.0.0.1',r));env.BRAIN_URL='http://127.0.0.1:'+server.address().port;env.BRAIN_INTERNAL_TOKEN='unit-only';
+ const server=http.createServer(async(req,res)=>{for await(const c of req){};if(revokeAfterCli&&existsSync(join(evidence,'failed-cli-started')))task.status='cancelled';res.end(JSON.stringify(req.url.includes('device-locks')?{success:true,locks:[{device_name:env.SERIAL,locked_by:task_id,...(leaseExpiresAt==='missing'?{}:{expires_at:leaseExpiresAt??new Date(Date.now()+120000).toISOString()})}]}:task));});await new Promise(r=>server.listen(0,'127.0.0.1',r));env.BRAIN_URL='http://127.0.0.1:'+server.address().port;env.BRAIN_INTERNAL_TOKEN='unit-only';
  const authority=await load('public-domain-authority.mjs'),stop=authority.registerPublicDomainAuthority({runDirectory:dir,identity,business_scope:{run:tag,run_id,task_id,source_commit:source,profile:env.P,serial:env.SERIAL,attempt:'a1'},snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:runtimeHash},deadline_ms:Date.now()+90000,cleanup_deadline_ms:Date.now()+100000}),binding=authority.readPublicDomainBinding(dir),state={};
  t.after(async()=>{stop();await new Promise(r=>server.close(r));for(const p of readdirSync(evidence).filter(p=>p.endsWith('.record.pid')))try{process.kill(Number(readFileSync(join(evidence,p),'utf8')),'SIGKILL');}catch{}rmSync(dir,{recursive:true,force:true});});
  return {load,dir,runtime,evidence,frozen,env,binding,state,contract,task};
@@ -51,4 +52,33 @@ for(const [omitStop,badLease,revokeTask] of [[false,undefined],[true,undefined],
  if(badLease){await assert.rejects(execute(f.contract,{context:{task_id:f.binding.task_id}}));assert.equal(operations,0);assert.equal(activeSeen,false);assert.equal(readdirSync(f.evidence).some(p=>p.endsWith('.record.pid')),false);return;}
  let outcome;if(omitStop)await assert.rejects(execute(f.contract,{context:{task_id:f.binding.task_id}}),error=>error.executionStopped===false);else outcome=await execute(f.contract,{context:{task_id:f.binding.task_id}});assert.equal(activeSeen,true);assert.equal(operations,omitStop||revokeTask?1:2);
  if(revokeTask){assert.equal(outcome.execution_stopped,false);assert.equal((await p.close()).execution_stopped,false);const pid=Number(readFileSync(join(f.evidence,eid+'.record.pid'),'utf8'));assert.doesNotThrow(()=>process.kill(pid,0));}else if(omitStop){assert.equal((await p.close()).execution_stopped,false);}else{assert.equal(outcome.status,'completed');assert.equal(outcome.result.recording_closed,true);assert.equal((await p.close()).execution_stopped,true);}
+});
+
+for(const mode of ['known-code2','no-cli','clone-proof','foreign-proof','after-authority','marker'])test('未launch物理域封闭保持业务未知: '+mode,async t=>{
+ const f=await fixture(t,{failedCli:true,revokeAfterCli:mode==='after-authority'});
+ const {createOfficialChildPrimitives,officialChildOperationReturned}=await f.load('official-child-primitives.mjs'),p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const {createActivitySkillExecutor}=await f.load('activity-skill-executor.mjs'),{createLeadgenAgentTools}=await f.load('leadgen-agent-tools.mjs');
+ let preparations=0,dispatches=0,tools,scope,closedProof;
+ const execute=createActivitySkillExecutor({runDir:f.dir,frozen:f.frozen,binding:f.binding,env:f.env,deadlineFor:()=>Date.now()+60000,supportsNativeScope:a=>p.supports(a),nativeState:()=>p.snapshot(),rpc:async()=>{dispatches++;throw Error('NO_SKILL_DISPATCH');},createTools:async(a,q)=>{
+  scope=q;await p.begin(q);
+  const raw=createLeadgenAgentTools({runDir:f.dir,scope:q,primitives:{assertResources:async()=>true,prepare:async()=>{
+   preparations++;
+   if(mode!=='no-cli'){
+    const command=join(f.runtime,'douyin-phone-adb'),args=['--profile',f.env.P,'runtime-contract'],receipt={runDir:f.dir,operationId:'failed-cli',runId:f.binding.run_id,taskId:f.binding.task_id,profile:f.env.P,serial:f.env.SERIAL,sourceCommit:f.frozen.deployment.source_commit,owner:f.env.WFR_TAG,activity:a.key};
+    if(mode==='marker'){mkdirSync(join(f.dir,'native-operations'),{recursive:true});writeFileSync(join(f.dir,'native-operations','failed-cli.unknown'),'sticky');}
+    const r=await p.execute(command,args,{receipt});assert.equal(r.code,2);assert.equal(officialChildOperationReturned(r,{command,args,receipt,root:f.runtime,frozen:f.frozen}),true);
+   }
+   throw Object.assign(Error('KNOWN_FAILED_PREPARE'),{executionStopped:true});
+  }}});
+  tools=typeof p.wrapTools==='function'?p.wrapTools(a,q,raw):raw;
+  if(tools.closeNativeScope){const close=tools.closeNativeScope;tools={...tools,closeNativeScope:proof=>{closedProof=proof;return close(mode==='clone-proof'?{...proof}:mode==='foreign-proof'?{agent_not_launched:true,executionStopped:true}:proof);}};}
+  return tools;
+ }});
+ let error;try{await execute(f.contract,{context:{task_id:f.binding.task_id}});}catch(e){error=e;}
+ assert.ok(error);assert.equal(error.message,'AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED');assert.equal(error.externalEffect,'unknown');
+ const safe=['known-code2','no-cli'].includes(mode);assert.equal(error.executionStopped,safe);assert.equal(dispatches,0);assert.equal(preparations,1);
+ const journal=join(f.dir,'agent-tools','qualification'),names=readdirSync(journal),before=Object.fromEntries(names.map(n=>[n,readFileSync(join(journal,n),'utf8')]));
+ assert.equal(names.filter(n=>n.endsWith('.failure.json')).length,1);assert.equal(names.filter(n=>n.endsWith('.intent.json')).length,1);assert.equal(names.some(n=>n.endsWith('.result.json')),false);
+ await assert.rejects(tools.prepare(),/COMMIT_UNKNOWN/);assert.equal(preparations,1);assert.deepEqual(Object.fromEntries(readdirSync(journal).map(n=>[n,readFileSync(join(journal,n),'utf8')])),before);
+ assert.equal((await p.close()).execution_stopped,safe);if(typeof p.wrapTools==='function')assert.ok(closedProof);assert.equal(p.snapshot().active,!safe);
 });
