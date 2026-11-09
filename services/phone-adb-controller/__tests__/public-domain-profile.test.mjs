@@ -187,3 +187,30 @@ test('official builder and public snapshot preserve the real epoch closure in pe
   for(const [name,hash] of Object.entries(actual.files)){const row=mf.files.find(r=>r.path===name);assert.ok(row,name);assert.equal(row.content_sha256,hash);assert.equal(digest(readFileSync(join(prepared.runtime,row.deployed_path))),hash);}
  }finally{rmSync(input.sourceRoot,{recursive:true,force:true});}
 });
+
+for(const [phone,serial,account] of [['xiaolongxia','ANGYVB4311010223','90915521618'],['yueshengyun-work','e6c7ef34','37358506855']])test('formal xian-mac-m4 builder preserves released USB scope '+phone,async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),'douyin_video_discovery');
+ try{
+  const relative='config/collection-phone-hosts.json',raw=readFileSync(new URL('../'+relative,import.meta.url)),row=JSON.parse(raw).hosts.find(h=>h.profile===phone);
+  mkdirSync(join(x.sourceRoot,'config'),{recursive:true});writeFileSync(join(x.sourceRoot,relative),raw,{mode:0o600});
+  x.frozen.deployment.files.push({deployed_path:relative,content_sha256:digest(raw)});
+  x.resources={machine:'xian-mac-m4',profile:phone,serial,line:'yuesheng',account};
+  x.frozen.deployment.target=x.frozen.release.target=x.observation.payload.target='xian-m4';
+  x.frozen.discovery_phone_scope=structuredClone(row);
+  writeFileSync(x.env.DOUYIN_PHONE_REGISTRY,'profile\tserial\tmodel\twidth\theight\tenabled\n'+phone+'\t'+serial+'\tFixture\t720\t1280\ttrue\n');reseal(x);
+  const {profile}=buildPublicDomainProfile(x),cfg=profile.domain_adapter.config;
+  assert.equal(cfg.resources.machine,'xian-mac-m4');assert.equal(cfg.env.DOUYIN_ADB_PORT,'5037');assert.equal(cfg.env.ADB_SERVER_SOCKET,row.policy.endpoint);assert.equal(cfg.env.LEADGEN_MMV_DEVICE_RUNTIME,undefined);
+  for(const change of [y=>y.resources.account='borrowed',y=>y.frozen.discovery_phone_scope.policy.endpoint='tcp:127.0.0.1:5041',y=>y.resources.machine='us-mac-m4']){const y=structuredClone(x);change(y);reseal(y);assert.throws(()=>buildPublicDomainProfile(y),/PUBLIC_DOMAIN_PROFILE_/);}
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+test('103 public preparation consumes committed queue without a parent run',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),{preparePublicDomainSnapshot}=await import('../public-domain-snapshot.mjs'),x=await fixture();
+ try{
+  delete x.env.LEADGEN_SOURCE_RUN;const {profile}=buildPublicDomainProfile(x),f=x.frozen;
+  const identity={run_id:uuid(910),task_id:uuid(911),machine_id:'us-mac-m4',profile_sha256:digest(profile),input:{},run_binding:{workflow_id:f.workflow_version.payload.workflow_id,workflow_definition_version_id:f.workflow_version.id,activities:Object.fromEntries(f.activities.map(a=>[a.reference.slot_key,{reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id}]))}};
+  const args={identity,profile,runDirectory:join(x.sourceRoot,'queue-run'),deadline_ms:Date.now()+70000,cleanup_deadline_ms:Date.now()+90000};
+  const result=preparePublicDomainSnapshot(args);assert.equal(result.env.LEADGEN_SOURCE_RUN,undefined);assert.equal(result.snapshot.public_domain.upstream,undefined);
+  identity.input={source_run:'partial102'};assert.throws(()=>preparePublicDomainSnapshot({...args,runDirectory:join(x.sourceRoot,'bad-run')}),/PUBLIC_DOMAIN_UPSTREAM/);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
