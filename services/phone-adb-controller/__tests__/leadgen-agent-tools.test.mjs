@@ -210,3 +210,13 @@ test('business异步准入期间先占操作槽，手机不得与稍后提交的
   await tools.phone('open-search');assert.equal(actions,1);
  },{primitives:{assertResources:async()=>{if(firstGuard){firstGuard=false;entered.resolve();await release.promise;}return true;},validatePhone:async()=>[],phone:async()=>{actions++;return '';},queue:async()=>{writes++;return {inserted:true};}}});
 });
+
+test('异步phone准入越过worker原截止时不得发指令，即使scope收尾窗尚未结束',async t=>{
+ const now=Date.now(),entered=deferred(),release=deferred();let actions=0;
+ t.mock.timers.enable({apis:['Date'],now});
+ await using(async tools=>{
+  const phone=tools.phone('open-app').then(()=>null,error=>error);await entered.promise;
+  t.mock.timers.setTime(now+2000);release.resolve();
+  const error=await phone;assert.match(error?.message||'',/DEADLINE/);assert.equal(actions,0);
+ },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{validatePhone:async()=>{entered.resolve();await release.promise;return [];},phone:async()=>{actions++;return '';}}});
+});
