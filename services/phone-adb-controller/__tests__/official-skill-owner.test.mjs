@@ -27,7 +27,7 @@ if method=='agent':
 elif method=='agent.wait':
  assert params['runId']==intent['owner_run_id']
  if v=='pending':print(json.dumps({'runId':params['runId'],'status':'timeout'}))
- else:print(json.dumps({'runId':'wrong' if v=='wrong-terminal' else params['runId'],'status':'error','startedAt':intent['started_at_ms'],'endedAt':int(time.time()*1000)}))
+ else:print(json.dumps({'runId':'wrong' if v=='wrong-terminal' else params['runId'],'status':'error','startedAt':intent['started_at_ms'],'endedAt':intent['receipt_deadline_ms']+1 if v=='outside-budget' else int(time.time()*1000)}))
 else:raise RuntimeError('unexpected RPC')
 `,{mode:0o700});
  return {directory,request,parent,message:'parent instruction literal $(false)',authorize:async()=>true,execute:(_command,args,options)=>execInput(cli,args,options)};
@@ -63,4 +63,12 @@ test('official terminal archives only its real branded owner reservation without
   assert.equal(files.some(name=>name.endsWith('.returned.json')),false);
   assert.equal(files.filter(name=>name.endsWith('.official_terminal.json')).length,1);
  }finally{await turn.close();}
+});
+test('mutable source during trusted admission cannot dispatch a mismatched frozen owner intent',async t=>{
+ const f=fixture(t);f.authorize=async()=>{f.request.source_commit='c'.repeat(40);return true;};
+ await assert.rejects(()=>api.runOfficialSkillOwner(f));assert.equal(existsSync(join(f.directory,'calls.jsonl')),false);assert.equal(existsSync(join(f.directory,'owner-rpc-intent.json')),false);
+});
+test('a terminal timestamp beyond the unchanged receipt deadline cannot mint an owner stop proof',async t=>{
+ const f=fixture(t,'outside-budget');f.request.receipt_deadline_ms=Date.now()+900;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));
+ const result=await api.runOfficialSkillOwner(f);assert.equal(result.execution_stopped,false);assert.equal(api.officialOwnerTerminated(result,f.request),false);
 });
