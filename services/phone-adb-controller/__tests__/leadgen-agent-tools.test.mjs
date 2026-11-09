@@ -235,3 +235,79 @@ test('等待心跳到原截止只结束waiter，原heartbeat保持一次且自�
   await assert.rejects(()=>tools.phone('open-app'),/DEADLINE/);assert.equal(actions,0);
  },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
 });
+
+test('已提交discover在飞心跳期间读回等待确认，只读一次且不重发写入',async()=>{
+ const entered=deferred(),finish=deferred();
+ await using(async(tools,calls)=>{
+  await tools.business('discover',{video});
+  const heartbeat=tools.heartbeat();await entered.promise;
+  let settled=false;const readback=tools.business('discover_readback',{video}).then(value=>{settled=true;return {value};},error=>{settled=true;return {error};});
+  await nextTurn();const before={settled,readbacks:calls.filter(c=>c.op==='discover_readback').length};
+  finish.resolve({renewed:true});await heartbeat;const outcome=await readback;
+  assert.deepEqual(before,{settled:false,readbacks:0});assert.equal(outcome.error,undefined);assert.equal(outcome.value.metrics_verified,true);
+  assert.deepEqual(calls.map(c=>c.op),['discover','discover_readback']);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+ },{primitives:{heartbeat:async()=>{entered.resolve();return finish.promise;}}});
+});
+
+for(const kind of ['business','phone'])test(kind+'等待链式心跳的当前确认后才执行一次',async()=>{
+ const entered=deferred(),first=deferred(),second=deferred();let refreshes=0,actions=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const following=heartbeat.then(()=>tools.heartbeat());
+  let settled=false;const operation=(kind==='business'?tools.business('discover_readback',{video}):tools.phone('ui-evidence')).then(value=>{settled=true;return {value};},error=>{settled=true;return {error};});
+  first.resolve({renewed:true});await nextTurn();const before={settled,refreshes,actions};
+  second.resolve({renewed:true});await following;const outcome=await operation;
+  assert.deepEqual(before,{settled:false,refreshes:2,actions:0});assert.equal(outcome.error,undefined);assert.equal(actions,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+ },{primitives:{heartbeat:async()=>{if(++refreshes===1){entered.resolve();return first.promise;}return second.promise;},queue:async()=>{actions++;return {metrics_verified:true};},phone:async()=>{actions++;return {native:true};}}});
+});
+
+test('真实两个business并发仍拒绝后者且只提交一个写入',async()=>{
+ const entered=deferred(),finish=deferred();let writes=0;
+ await using(async tools=>{
+  const first=tools.business('discover',{video});await entered.promise;
+  const second=tools.business('discover',{video:{...video,videoId:'2234567890123456'}}).then(()=>null,error=>error);
+  const error=await second;finish.resolve({inserted:true});await first;
+  assert.match(error?.message||'',/OPERATION_BUSY/);assert.equal(writes,1);
+ },{primitives:{queue:async()=>{writes++;entered.resolve();return finish.promise;}}});
+});
+
+for(const kind of ['business','phone'])test('心跳失败时等待的'+kind+'不得提交或消除未知',async()=>{
+ const entered=deferred(),finish=deferred();let writes=0,actions=0,unknown=0,refreshes=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat().catch(error=>error);await entered.promise;
+  const operation=(kind==='business'?tools.business('discover',{video}):tools.phone('ui-evidence')).then(()=>null,error=>error);
+  await nextTurn();finish.reject(Error('lost lease acknowledgement'));
+  assert.match((await heartbeat).message,/UNKNOWN/);assert.match((await operation).message,/UNKNOWN/);
+  assert.equal(writes,0);assert.equal(actions,0);assert.equal(refreshes,1);assert.equal(unknown,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);await assert.rejects(()=>tools.phone('ui-evidence'),/UNKNOWN/);
+  assert.equal(writes,0);assert.equal(actions,0);
+ },{primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},resourceUnknown:()=>unknown++,queue:async()=>{writes++;return {};},phone:async()=>{actions++;return {};}}});
+});
+
+for(const kind of ['business','phone'])test(kind+'等心跳只能使用原worker截止，不借用收尾窗口',async t=>{
+ const now=Date.now(),entered=deferred(),finish=deferred();let effects=0;
+ t.mock.timers.enable({apis:['Date','setTimeout'],now});
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const operation=(kind==='business'?tools.business('discover',{video}):tools.phone('ui-evidence')).then(()=>null,error=>error);
+  await nextTurn();t.mock.timers.tick(1001);const error=await operation;
+  const pending=(await tools.inspect()).pending_write_readbacks;
+  finish.resolve({renewed:true});await heartbeat;
+  assert.match(error?.message||'',/DEADLINE/);assert.equal(effects,0);
+  assert.deepEqual(pending,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  const original=(await tools.inspect()).scope;assert.equal(original.worker_deadline_ms,now+1000);assert.equal(original.deadline_ms,now+10000);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{entered.resolve();return finish.promise;},queue:async()=>{effects++;return {};},phone:async()=>{effects++;return {};}}});
+});
+
+for(const kind of ['business','phone'])test(kind+'先入槽时同tick心跳保持deferred，不交叉执行',async()=>{
+ const entered=deferred(),finish=deferred();let effects=0,refreshes=0;
+ await using(async tools=>{
+  const operation=kind==='business'?tools.business('discover',{video}):tools.phone('ui-evidence');
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const result=await heartbeat;finish.resolve();await operation;
+  assert.deepEqual(result,{deferred:true});assert.equal(effects,1);assert.equal(refreshes,0);
+ },{primitives:{heartbeat:async()=>{refreshes++;return {};},queue:async()=>{effects++;entered.resolve();await finish.promise;return {};},phone:async()=>{effects++;entered.resolve();await finish.promise;return {};}}});
+});
