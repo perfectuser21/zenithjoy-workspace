@@ -20,6 +20,7 @@ const globs = [
 ];
 const original = 'node --test ' + globs.join(' ');
 const epochKey='epoch-resume-darwin-test';
+const privateNative=['private-session-native.test.mjs','resume-delayed-authority-native.test.mjs','diagnostic-recovery-native.integration.test.mjs'];
 const continuationNative=['device-epoch-fence-stop-continuation-native.test.mjs','device-epoch-fence-continuation-native.integration.test.mjs'];
 const epochNative=['adb-private-auth.test.mjs','adb-private-supervisor.test.mjs','device-epoch-fence-resume-native.integration.test.mjs'];
 function command(w = workflow) {
@@ -55,8 +56,9 @@ function validate(w) {
   assert.deepEqual(epochJob.steps.slice(0,-1),nativeJob.steps.slice(0,setupEnd),'same checkout/skills/Node/npm/physical-Python preparation');
   assert.doesNotMatch(epochStep.run,/ffmpeg/);
   assert.deepEqual(captureNodeArgs(epochStep.run),['--test','--test-concurrency=1',...epochNative.map(name=>'services/phone-adb-controller/__tests__/'+name)]);
-  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)&&![...officialNative,...epochNative,...continuationNative].includes(arg.split('/').at(-1))).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
+  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)&&![...officialNative,...epochNative,...continuationNative,...privateNative].includes(arg.split('/').at(-1))).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
   const continuation=w.jobs['epoch-continuation-darwin-test'];assert.equal(continuation['runs-on'],'macos-latest');assert.equal(continuation['timeout-minutes'],10);assert.equal(continuation.if,undefined);assert.equal(continuation['continue-on-error'],undefined);assert.deepEqual(continuation.steps.slice(0,-1),epochJob.steps.slice(0,-1));assert.deepEqual(captureNodeArgs(continuation.steps.at(-1).run),['--test','--test-concurrency=1',...continuationNative.map(name=>'services/phone-adb-controller/__tests__/'+name)]);assert.ok(w.jobs['l3-passed'].needs.includes('epoch-continuation-darwin-test'));
+  const recoveryJob=w.jobs['epoch-private-recovery-darwin-test'];assert.equal(recoveryJob['runs-on'],'macos-latest');assert.equal(recoveryJob['timeout-minutes'],10);assert.equal(recoveryJob.if,undefined);assert.equal(recoveryJob['continue-on-error'],undefined);assert.deepEqual(recoveryJob.steps.slice(0,-1),epochJob.steps.slice(0,-1));assert.deepEqual(captureNodeArgs(recoveryJob.steps.at(-1).run),['--test','--test-concurrency=1',...privateNative.map(n=>'services/phone-adb-controller/__tests__/'+n)]);assert.ok(w.jobs['l3-passed'].needs.includes('epoch-private-recovery-darwin-test'));
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');

@@ -11415,3 +11415,51 @@ tests:
     status: active
     product: AI员工
     note: "独立required Darwin job真实continuation全main与startup/connect ACK未知，旧预算不变"
+
+  - id: private-recovery-device-epoch-fence-diagnostic-recovery
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-diagnostic-recovery.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "固定d7c只读SDK未知历史与真实Task事件闭包；非现场业务验收"
+
+  - id: private-recovery-device-epoch-fence-diagnostic-lock
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-diagnostic-lock.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "一次新diagnostic恢复guard保全部历史latch；非现场业务验收"
+
+  - id: private-recovery-device-epoch-fence-diagnostic-sequence
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-diagnostic-sequence.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "仅terminal后新一次启动/连接，stop信号0；非现场业务验收"
+
+  - id: private-recovery-private-session-native
+    path: services/phone-adb-controller/__tests__/private-session-native.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "required Darwin真实外层进程组退出后supervisor独立session保活；非现场业务验收"
+
+  - id: private-recovery-resume-delayed-authority-native
+    path: services/phone-adb-controller/__tests__/resume-delayed-authority-native.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "required Darwin真实九GET尖峰HTTP与fresh撤销阻断；非现场业务验收"
+
+  - id: private-recovery-diagnostic-recovery-native.integration
+    path: services/phone-adb-controller/__tests__/diagnostic-recovery-native.integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "required Darwin真实已确认终态恢复完整main；非现场业务验收"
