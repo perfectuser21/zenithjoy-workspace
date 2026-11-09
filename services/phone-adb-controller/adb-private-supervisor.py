@@ -264,7 +264,7 @@ def terminal(document):
     need(not any(row['held'] for row in states))
     # No signals, writes or lock deletion; existing JSON alone proves nothing.
     need(all(identity_terminal(expected[key]) for key in ('supervisor', 'child')) and not listeners(port))
-    return {'execution_stopped': True, 'listener_absent': True, 'instance_locks_released': True, 'locks': states}
+    return {'selected_identities_absent': True, 'listener_absent': True, 'instance_locks_released': True, 'locks': states}
 
 
 def run(document):
