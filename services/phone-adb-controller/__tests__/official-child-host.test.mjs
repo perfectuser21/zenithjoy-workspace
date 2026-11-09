@@ -13,13 +13,16 @@ import {spawnSync} from 'node:child_process';
 import {digest} from '../runtime-definition.mjs';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const legacyFixture=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/commander-global-v21.json.gz',import.meta.url))));
-test('public production dispatch uses one durable owner RPC and archives terminal independently of CLI success',()=>using(async x=>{
+for(const delivery of ['delivered','pending'])test('public production dispatch uses one durable owner RPC and preserves completion '+delivery,()=>using(async x=>{
  x.q.worker_deadline_ms=x.q.deadline_ms-2000;x.q.receipt_deadline_ms=x.q.deadline_ms-1000;
  let dispatches=0,waits=0;const dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q)),child=id(81),session='agent:skill-factory:subagent:owner-rpc-fixture';
  const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async(command,args)=>{
   if(command==='openclaw'){
    assert.deepEqual(args.slice(0,2),['gateway','call'],'public path must not use the blocking agent CLI');const params=JSON.parse(args[args.indexOf('--params')+1]);
    const intent=JSON.parse(readFileSync(join(dir,'owner-rpc-intent.json')));
+   if(args[2]==='sessions.describe')return {code:0,stdout:JSON.stringify({session:{key:intent.parent_session_key,sessionId:'owner-fixture',hasActiveRun:false,activeRunIds:[],snapshotAt:Date.now()}})};
+   if(args[2]==='chat.history')return {code:0,stdout:JSON.stringify({sessionKey:intent.parent_session_key,sessionId:'owner-fixture',pendingInputs:{total:0,queuedCount:0,items:[]}})};
+   if(args[2]==='tools.invoke')return {code:0,stdout:JSON.stringify({ok:true,toolName:'subagents',source:'core',output:{details:{status:'ok',action:'list',callerIsSubagent:false,callerSessionKey:intent.parent_session_key,requesterSessionKey:intent.parent_session_key,active:[],recent:[{runId:child,sessionKey:session,execution:{state:'finished'},pendingDescendants:0,deliveryStatus:delivery}]}}})};
    if(args[2]==='agent'){
     dispatches++;assert.equal(params.idempotencyKey,intent.owner_run_id);assert.equal(args.includes('--expect-final'),false);
     const request=JSON.parse(readFileSync(join(dir,'agent-request.json')));
@@ -35,8 +38,9 @@ test('public production dispatch uses one durable owner RPC and archives termina
   writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'error',endedAt:Date.now()}));return {code:0,stdout:''};
  }}});
  const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(dispatches,1);assert.equal(waits,1);
- assert.equal(result.result.owner_execution_stopped,true);assert.equal(result.result.child_execution_stopped,true);assert.equal(result.result.execution_stopped,true);assert.equal(result.result.status,'error');
+ assert.equal(result.result.owner_execution_stopped,delivery==='delivered');assert.equal(result.result.child_execution_stopped,true);assert.equal(result.result.execution_stopped,delivery==='delivered');assert.equal(result.result.status,delivery==='delivered'?'error':'unknown');
  assert.equal(existsSync(join(dir,'parent-cli-result.json')),false);assert.equal(existsSync(join(dir,'parent-owner-result.json')),true);
+ const closure=JSON.parse(readFileSync(join(dir,'parent-owner-closure.json')));assert.equal(closure.session_quiescent,delivery==='delivered');assert.equal(existsSync(join(dir,'agent-returned.json')),delivery==='delivered');
 }));
 function legacyWorkspace(home){
  const base=join(home,'.openclaw/commander'),workspace=join(home,'openclaw-root/workspaces-root/clawd-work-commander');

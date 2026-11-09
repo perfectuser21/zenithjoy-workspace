@@ -9,7 +9,7 @@ import {publicSkillAuthority,verifyPublicSkillCurrent} from './skill-public-auth
 import {execInput,executionDidNotStart} from './leadgen-client.mjs';
 import {digest as contractDigest,validateDiscoveryInput} from './runtime-definition.mjs';
 import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './activity-commander.mjs';
-import {runOfficialSkillOwner,officialOwnerTerminated} from './official-skill-owner.mjs';
+import {runOfficialSkillOwner,closeOfficialSkillOwner,officialOwnerRunTerminated,officialOwnerTerminated} from './official-skill-owner.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 export const skillRunKey=q=>createHash('sha256').update(JSON.stringify([q.run_id,q.activity_key,q.nonce])).digest('hex');
 function validate(q){
@@ -35,7 +35,7 @@ function ownerReturned(q,result){
  try{const body=JSON.parse(result.stdout);return ['ok','completed'].includes(body.status)&&typeof body.runId==='string'&&/^[-A-Za-z0-9_.:]{1,200}$/.test(body.runId);}catch{return false;}
 }
 function generationEvidence(q,dir,terminal){
- return {request_sha256:digest(q),binding_sha256:digest(official(q,dir)),parent_sha256:digest(privateJson(join(dir,officialParent(q)?'parent-owner-result.json':'parent-cli-result.json'))),terminal_sha256:digest(terminal)};
+ return {request_sha256:digest(q),binding_sha256:digest(official(q,dir)),parent_sha256:digest(privateJson(join(dir,officialParent(q)?'parent-owner-result.json':'parent-cli-result.json'))),...(officialParent(q)?{parent_scope_sha256:digest(privateJson(join(dir,'parent-owner-closure.json')))}:{}),terminal_sha256:digest(terminal)};
 }
 function previousGeneration(q,home){
  const previous=directory({...q,transport_generation:0},home);
@@ -412,6 +412,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   writeFileSync(join(dir,'parent-cli-result.json'),JSON.stringify(parentResult),{mode:0o600});
  }catch(error){writeFileSync(join(dir,'parent-cli-error.json'),JSON.stringify({reason:String(error.message).slice(0,200)}),{mode:0o600});if(executionDidNotStart(error,'openclaw',parentArgs)){await ownerTurn.notStarted(error,'openclaw',parentArgs);return {status:'blocked',execution_stopped:true,reason:'parent_cli_not_started'};}}
  const archiveOwner=raw=>officialParent(q)?ownerTurn.observedTerminal(parentResult):ownerTurn.returned(raw);
+ const closeOwner=async child=>{if(officialParent(q)&&officialOwnerRunTerminated(parentResult,q))parentResult=await closeOfficialSkillOwner({result:parentResult,request:q,child,directory:dir,execute});};
  try{
   const binding=official(q,dir);
   const awaited=await execute('python3',[helper,'await',dir],{timeoutMs:Math.max(1,receiptDeadline-Date.now())});
@@ -419,6 +420,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const terminal=JSON.parse(readFileSync(join(dir,'agent-terminal.json'),'utf8'));
   if(terminal.runId!==binding.child_run_id||terminal.endedAt==null||!['ok','error','aborted','timeout'].includes(terminal.status))throw Error('RPC_SKILL_TERMINAL_INVALID');
   if(terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id||terminal.terminalReceipt?.effective?.provider!=='openai'||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_MODEL_INVALID');
+  await closeOwner(binding);
   if(!ownerReturned(q,parentResult))return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
   await archiveOwner(JSON.stringify({parent_result:parentResult,terminal}));
   writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
@@ -429,6 +431,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
     const terminal=JSON.parse(readFileSync(join(dir,'child-stop-readback.json'),'utf8'));
     const binding=official(q,dir);
     if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null){
+     await closeOwner(binding);
      if(!ownerReturned(q,parentResult))return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
      await archiveOwner(JSON.stringify({parent_result:parentResult,stop_readback:terminal}));
      writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});

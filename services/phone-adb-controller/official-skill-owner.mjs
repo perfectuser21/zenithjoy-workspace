@@ -3,7 +3,7 @@
 import {openSync,writeSync,fsyncSync,closeSync,readFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
-const stopped=new WeakMap();
+const stopped=new WeakMap(),closed=new WeakMap();
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const fail=()=>{throw Error('RPC_SKILL_OWNER_SCOPE_INVALID');};
 function durable(path,value){
@@ -11,7 +11,8 @@ function durable(path,value){
  try{let offset=0;while(offset<bytes.length){const count=writeSync(fd,bytes,offset,bytes.length-offset);if(count<=0)fail();offset+=count;}fsyncSync(fd);}finally{closeSync(fd);}
  const parent=openSync(join(path,'..'),'r');try{fsyncSync(parent);}finally{closeSync(parent);}
 }
-export function officialOwnerTerminated(result,request){return stopped.get(result)?.scope_sha256===hash(request);}
+export function officialOwnerRunTerminated(result,request){return stopped.get(result)?.scope_sha256===hash(request);}
+export function officialOwnerTerminated(result,request){return closed.get(result)?.scope_sha256===hash(request);}
 export async function runOfficialSkillOwner({request,parent,directory,message,execute,authorize}){
  if(request?.protocol!=='leadgen-activity-v1'||request.mode!=='execute'||request.primary_host!=='official-child-v1'
   ||Object.hasOwn(request,'execution_transport')||Object.hasOwn(request,'transport_generation')
@@ -68,4 +69,46 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
  durable(join(directory,'parent-owner-result.json'),result);
  if(result.execution_stopped)stopped.set(result,{scope_sha256:scopeHash});
  return result;
+}
+// A finished RPC run does not rule out completion delivery starting another
+// turn in the same parent session. Only fresh, repeated official readbacks can
+// close that owner scope; this never turns its business result into success.
+export async function closeOfficialSkillOwner({result,request,child,directory,execute}){
+ if(!officialOwnerRunTerminated(result,request)||typeof execute!=='function')fail();
+ const scopeHash=hash(request),parent=result.parent_session_key,end=request.receipt_deadline_ms;
+ const identity=['run_id','task_id','parent_session_key','nonce','child_run_id','child_session_key'];
+ const current=()=>{
+  const binding=JSON.parse(readFileSync(join(directory,'agent-binding.json'))),intent=JSON.parse(readFileSync(join(directory,'owner-rpc-intent.json')));
+  if(hash(request)!==scopeHash||hash(JSON.parse(readFileSync(join(directory,'activity-request.json'))))!==scopeHash
+   ||intent.owner_run_id!==result.owner_run_id||intent.scope_sha256!==scopeHash||intent.parent_session_key!==parent
+   ||!child||identity.some(k=>binding[k]!==child[k])||binding.run_id!==request.run_id||binding.task_id!==request.task_id
+   ||binding.nonce!==request.nonce||binding.parent_session_key!==parent||Date.now()>=end)fail();
+ };
+ let reads=0,sessionId,verified=false;
+ const read=async(method,params)=>{
+  current();const start=Date.now(),remaining=end-start;
+  const raw=await execute('openclaw',['gateway','call',method,'--params',JSON.stringify(params),'--json','--timeout',String(Math.min(5000,remaining))],{timeoutMs:Math.min(5000,remaining),maxBuffer:1024*1024});
+  if(raw.code!==0||raw.signal)fail();const body=JSON.parse(raw.stdout);
+  durable(join(directory,`owner-closure-read-${String(++reads).padStart(3,'0')}.json`),{method,params,start_ms:start,end_ms:Date.now(),raw});current();return {body,start};
+ };
+ try{
+  for(let round=0;round<2;round++){
+   const {body:description,start}=await read('sessions.describe',{key:parent,agentId:'work-commander'}),row=description.session;
+   if(row?.key!==parent||typeof row.sessionId!=='string'||!row.sessionId||sessionId&&row.sessionId!==sessionId
+    ||row.hasActiveRun!==false||!Array.isArray(row.activeRunIds)||row.activeRunIds.length||!Number.isFinite(row.snapshotAt)
+    ||row.snapshotAt<start-1000||row.snapshotAt>Date.now()+1000)fail();sessionId=row.sessionId;
+   const {body:history}=await read('chat.history',{sessionKey:parent,limit:1}),queue=history.pendingInputs;
+   if(history.sessionKey!==parent||history.sessionId!==sessionId||queue?.total!==0||queue.queuedCount!==0||!Array.isArray(queue.items)||queue.items.length)fail();
+   const {body:core}=await read('tools.invoke',{name:'subagents',sessionKey:parent,args:{action:'list'}}),d=core.output?.details;
+   if(core.ok!==true||core.toolName!=='subagents'||core.source!=='core'||d?.status!=='ok'||d.action!=='list'
+    ||d.callerIsSubagent!==false||d.callerSessionKey!==parent||d.requesterSessionKey!==parent
+    ||!Array.isArray(d.active)||d.active.length||!Array.isArray(d.recent))fail();
+   const matches=d.recent.filter(r=>r.runId===child.child_run_id&&r.sessionKey===child.child_session_key);
+   if(matches.length!==1||matches[0].execution?.state!=='finished'||matches[0].pendingDescendants!==0||matches[0].deliveryStatus!=='delivered')fail();
+  }
+  current();verified=true;
+ }catch{/* An unfinished delivery or an uncertain census retains the original reservation. */}
+ const proof=Object.freeze({...result,protocol:'official-skill-owner-closure/v1',owner_run_execution_stopped:true,
+  execution_stopped:verified,session_quiescent:verified,session_id:sessionId??null,closure_read_count:reads});
+ durable(join(directory,'parent-owner-closure.json'),proof);if(verified)closed.set(proof,{scope_sha256:scopeHash});return proof;
 }
