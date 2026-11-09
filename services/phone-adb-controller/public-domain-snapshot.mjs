@@ -13,6 +13,7 @@ function privateWrite(file,bytes){const fd=openSync(file,constants.O_CREAT|const
 export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadline_ms,cleanup_deadline_ms}){
  const cfg=profile.domain_adapter.config,template=structuredClone(cfg.snapshot);
  if(!template?.deployment?.source_commit||!template.release?.id||!template.workflow_version?.id||!Array.isArray(template.activities)||!cfg.step_spec)fail('SNAPSHOT_REQUIRED');
+ if(cfg.primary_host==='raw-model-v1'&&[template.discovery_phone_scope,template.collection_phone_scope].some(s=>s?.policy?.schema_version===2))fail('RAW_EPOCH_UNSUPPORTED');
  if(!cfg.company||!['company_id','tenant_id'].every(k=>/^[a-f0-9-]{36}$/.test(cfg.company[k]||''))||!Number.isSafeInteger(cfg.company.version)||cfg.company.version<1||typeof cfg.company.policy_id!=='string'||!cfg.company.policy_id)fail('COMPANY');
  if(!isAbsolute(profile.cwd||'')||hash(profile)!==identity.profile_sha256)fail('PROFILE_DIGEST');
  const root=realpathSync(profile.cwd),dir=resolve(runDirectory);if(!isAbsolute(runDirectory)||dir!==runDirectory)fail('DIRECTORY');
