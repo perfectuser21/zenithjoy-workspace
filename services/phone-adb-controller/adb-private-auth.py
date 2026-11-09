@@ -85,7 +85,7 @@ def validate_auth(policy_path, instance_id, auth):
         value = credential[key_name]
         need(type(value) is int and value == 0 or isinstance(value, str) and value)
     provenance = ref['provenance']
-    need(isinstance(provenance, dict) and set(provenance) == {'attach', 'keypair'})
+    need(isinstance(provenance, dict) and set(provenance) == {'attach', 'keypair', 'keypair_readback', 'target', 'mapping'})
     for original in provenance.values():
         need(isinstance(original, dict) and set(original) == {'path', 'sha256'} and digest(original['sha256'])
              and sha(private(original['path'], root)) == original['sha256'])
