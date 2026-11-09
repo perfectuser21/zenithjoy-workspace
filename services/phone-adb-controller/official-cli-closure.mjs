@@ -38,39 +38,43 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
  if(!slots.length||['profile','serial'].some(k=>spec[k]!==fixed[k])||input.profile!==base.P||input.serial!==base.SERIAL||input.run_tag!==base.WFR_TAG)throw fail('SCOPE');
  const state={},epoch=assertAdmission||createPhoneEpochGuard({root,env:base,frozen:f,state});if(typeof epoch!=='function')throw fail('EPOCH');
  let sealed=false,unknown=false;const pending=new Set();
- const activity=scope?.activity;if(activity!==undefined&&!slots.includes(activity))throw fail('SCOPE');
+ const activity=scope?.activity;if(!slots.includes(activity)||scope.task_id!==taskId||scope.run_id!==binding.run_id||scope.binding_id!==binding.id||scope.snapshot_sha256!==f.snapshot_sha256||scope.source_commit!==fixed.sourceCommit||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.run!==fixed.owner||scope.workflow!==input.workflow_key||!Number.isSafeInteger(scope.deadline_ms)||scope.receipt_deadline_ms>=scope.deadline_ms||!Number.isSafeInteger(scope.worker_deadline_ms)||!Number.isSafeInteger(scope.receipt_deadline_ms)||scope.worker_deadline_ms>=scope.receipt_deadline_ms||Date.now()>=scope.worker_deadline_ms)throw fail('SCOPE');
+ const deadline=scope.worker_deadline_ms;
  const bin=join(base.WFR_RUN_DIR,'official-cli-bin'+(activity?'-'+activity:''));mkdirSync(bin,{mode:0o700});
  for(const [name,program]of Object.entries({python3:executables.python,node:executables.node,zsh:executables.zsh})){if(existsSync(join(bin,name)))throw fail('PREVIOUS_SCOPE');symlinkSync(program.path,join(bin,name));}
  const verify=()=>{
   const st=lstatSync(bin);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o700)throw fail('PINNED_RUNTIME');
-  for(const [name,digest]of Object.entries(REVIEWED)){const path=join(root,name),s=lstatSync(path);if(!s.isFile()||s.isSymbolicLink()||s.mode&0o022||sha(readFileSync(path))!==digest||f.files['runtime/'+name]!==digest)throw fail('SOURCE');}
+  for(const [name,digest]of Object.entries(REVIEWED)){const path=join(root,name),s=lstatSync(path);const expected=Array.isArray(digest)?digest:[digest],actual=sha(readFileSync(path));if(!s.isFile()||s.isSymbolicLink()||s.mode&0o022||!expected.includes(actual)||f.files['runtime/'+name]!==actual)throw fail('SOURCE');}
   for(const program of Object.values(executables)){const path=program.path,s=lstatSync(path);if(realpathSync(path)!==path||!s.isFile()||s.mode&0o022||sha(readFileSync(path))!==program.sha256)throw fail('PINNED_RUNTIME');}
  };
- const active=()=>{if(sealed||unknown)throw fail('CLOSED',unknown);verify();};
+ const active=()=>{if(Date.now()>=deadline)throw fail('DEADLINE');if(sealed||unknown)throw fail('CLOSED',unknown);verify();};
  const admission=async()=>{active();if((await epoch())?.authorized!==true)throw fail('EPOCH',true);active();};
  function receiptScope(receipt){if(!receipt||(!slots.includes(receipt.activity)||activity!==undefined&&receipt.activity!==activity)||Object.entries(fixed).some(([k,v])=>receipt[k]!==v)||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(receipt.operationId||''))throw fail('RECEIPT');return receipt;}
  async function execute(command,args,options={}){
   active();const receipt=structuredClone(receiptScope(options.receipt)),request=identity(command,args,receipt,root,f),plan=describeOfficialCliInvocation({root,command,args,executables,profile:fixed.profile,owner:fixed.owner,serial:fixed.serial});
-  const marker=join(fixed.runDir,'native-operations',receipt.operationId+'.unknown');if(existsSync(marker))throw fail('PREVIOUS_UNKNOWN',true);
+  const marker=join(fixed.runDir,'native-operations',receipt.operationId+'.unknown');if(existsSync(marker)){unknown=true;throw fail('PREVIOUS_UNKNOWN',true);}
+  let dispatched=false;
   const operation=(async()=>{
    await admission();
    const clean={...base,...options.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:bin,ENV:'',BASH_ENV:'',DOUYIN_BYPASS_REPORT:'off',DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:executables.python.path,DOUYIN_LOCATE_SCRIPT:join(root,'locate-element.py'),DOUYIN_CURL_BIN:'/usr/bin/curl',DOUYIN_SIPS_BIN:'/usr/bin/sips',WFR_NATIVE_UNKNOWN_FILE:marker,P:fixed.profile,SERIAL:fixed.serial,WFR_TAG:fixed.owner,WFR_RUN_DIR:fixed.runDir};
    for(const name of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(name)||['DOUYIN_LOCK_GUARDED','DOUYIN_LOCK_GUARD_FD','DOUYIN_BYPASS_REPORT_BIN'].includes(name))delete clean[name];
    if(clean.DOUYIN_PHONE_LOCK_TEST_MODE==='1')throw fail('TEST_ENV');
-   const actual={...options,env:clean,receipt,timeoutMs:Math.min(options.timeoutMs??180000,300000)};
-   const result=await execInput(plan.binary,plan.args,actual);
+   if(!Number.isFinite(options.timeoutMs??180000)||(options.timeoutMs??180000)<=0)throw fail('DEADLINE');
+   clean.PYTHONNOUSERSITE='1';clean.PYTHONSAFEPATH='1';
+   const actual={...options,env:clean,receipt,timeoutMs:Math.min(options.timeoutMs??180000,300000,deadline-Date.now())};
+   dispatched=true;const result=await execInput(plan.binary,plan.args,actual);
    if(!executionOuterReturned(result,plan.binary,plan.args,receipt)||!Number.isInteger(result.code)||existsSync(marker)||/NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN|RECORD_CAPTURE_EXIT_UNVERIFIED/.test(result.stderr||''))throw fail('STOP_UNKNOWN',true);
    await admission();outerOnly.set(result,request);if(plan.kind!=='recording-outer-only')stopped.set(result,request);return result;
   })();pending.add(operation);
-  try{return await operation;}catch(error){if(error.resourceUnknown||error.executionStopped===false||!error.notStarted)unknown=true;throw error;}finally{pending.delete(operation);}
+  try{return await operation;}catch(error){if(dispatched||error.resourceUnknown||error.executionStopped===false||!error.notStarted)unknown=true;throw error;}finally{pending.delete(operation);}
  }
  const snapshot=()=>Object.freeze({domain:'official-cli-synchronous/v1',sealed,pending:pending.size,unknown,execution_unknown:unknown,execution_stopped:sealed&&!unknown&&!pending.size});
- return Object.freeze({execute,snapshot,close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);return snapshot();}});
+ return Object.freeze({execute,snapshot,prepare:async()=>{await admission();return true;},close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);return snapshot();}});
 }
 
-// Reviewed baseline: 1d46b5d72. Only the finite synchronous call graph above is admitted.
+// Reviewed baseline: 1d46b5d72; eda2ea5cd controller adds recording-only observer hooks. Only the finite synchronous call graph above is admitted.
 const REVIEWED=Object.freeze({
- "douyin-phone-adb": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6",
+ "douyin-phone-adb": ["b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6", "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"],
  "phone-lock-lib.sh": "ed2840ffbd5ded0aaa2b142a4b14405946610575536a55740c38247d5c440271",
  "phone-lock-helper.py": "36d705de51e84a04c24db80e9417912959f27fa6d61513f6165b9760d5b59bcd",
  "phone-lock-root.py": "3c0dc46c221e80ae220c1174709a9cc6c9d47dfa3702ed6726d52a626a20f48a",
