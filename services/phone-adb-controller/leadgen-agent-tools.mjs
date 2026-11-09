@@ -131,6 +131,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const business=async(op,input={})=>{
     if(!slots[scope.activity].includes(op))throw Error('AGENT_TOOL_OPERATION_NOT_ALLOWED');
     if(!object(input)||Object.keys(input).some(key=>!schemas[op].includes(key)))throw Error('AGENT_TOOL_INPUT_SCOPE_INVALID');
+    while(heartbeatJob)await waitForHeartbeat();
     if(busy)throw Error('AGENT_TOOL_OPERATION_BUSY');
     const pending=unresolved();
     const readback=pending.length?pendingReadback(op,input):null;
@@ -194,7 +195,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const phone=async(command,...args)=>{
     if(scope.serial==='none'||!readPhone.has(command)&&!(phoneBySlot[scope.activity]||[]).includes(command))throw Error('AGENT_TOOL_PHONE_NOT_ALLOWED');
     if(args.some(arg=>typeof arg!=='string'||arg.length>1000||/[\0\r\n]/.test(arg)||arg.startsWith('--')))throw Error('AGENT_TOOL_PHONE_INPUT_INVALID');
-    await waitForHeartbeat();
+    while(heartbeatJob)await waitForHeartbeat();
     if(busy||unresolved().length)throw Error('AGENT_TOOL_PHONE_COMMIT_UNKNOWN_READBACK_REQUIRED');
     // Own the slot before asynchronous admission; another phone or heartbeat
     // must not pass its own guard while this request is being validated.
