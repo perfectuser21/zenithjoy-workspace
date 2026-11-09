@@ -11,12 +11,13 @@ export function validatePublicDomainIdentity(identity){
  return structuredClone(identity);
 }
 export const publicDomainRunId=identity=>validatePublicDomainIdentity(identity).run_id;
-export function registerPublicDomainAuthority({runDirectory,identity,business_scope,deadline_ms,cleanup_deadline_ms}){
+export function registerPublicDomainAuthority({runDirectory,identity,business_scope,snapshot_authority,deadline_ms,cleanup_deadline_ms}){
  validatePublicDomainIdentity(identity);
  if(!Number.isSafeInteger(deadline_ms)||deadline_ms<=Date.now()||!Number.isSafeInteger(cleanup_deadline_ms)||cleanup_deadline_ms<=deadline_ms)fail();
  const dir=realpathSync(runDirectory);if(authorities.has(dir))fail();
  if(business_scope&&(business_scope.run_id!==identity.run_id||business_scope.task_id!==identity.task_id||!business_scope.run||!business_scope.profile||!business_scope.serial||!/^[a-f0-9]{40}$/.test(business_scope.source_commit||'')||business_scope.attempt!=='a1'))fail();
- const b=identity.run_binding,record={identity:structuredClone(identity),...(business_scope?{business_scope:structuredClone(business_scope)}:{}),deadline_ms,cleanup_deadline_ms,binding:{id:b.run_binding_id,run_id:identity.run_id,task_id:identity.task_id,source_kind:'internal',workflow_id:b.workflow_id,workflow_definition_version_id:b.workflow_definition_version_id,attempt_key:b.attempt_key,activities:structuredClone(b.activities)}};
+ if(snapshot_authority&&!['local_snapshot_sha256','runtime_snapshot_sha256'].every(k=>/^[a-f0-9]{64}$/.test(snapshot_authority[k]||'')))fail();
+ const b=identity.run_binding,record={...(snapshot_authority?{snapshot_authority:structuredClone(snapshot_authority)}:{}),identity:structuredClone(identity),...(business_scope?{business_scope:structuredClone(business_scope)}:{}),deadline_ms,cleanup_deadline_ms,binding:{id:b.run_binding_id,run_id:identity.run_id,task_id:identity.task_id,source_kind:'internal',workflow_id:b.workflow_id,workflow_definition_version_id:b.workflow_definition_version_id,attempt_key:b.attempt_key,activities:structuredClone(b.activities)}};
  authorities.set(dir,record);return ()=>{if(authorities.get(dir)===record)authorities.delete(dir);};
 }
 export function publicDomainAuthority(runDirectory){try{const r=authorities.get(realpathSync(runDirectory));return r?structuredClone(r):null;}catch{return null;}}
