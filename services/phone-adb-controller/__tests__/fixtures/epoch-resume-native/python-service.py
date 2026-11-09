@@ -19,7 +19,7 @@ _native_run=subprocess.run
 def traced_run(args,*a,**kw):
  result=_native_run(args,*a,**kw)
  if len(args)>1 and str(args[1]).endswith('device-epoch-fence-review.mjs'):
-  with (_fixture_root/'verifier-subprocess.jsonl').open('a') as out:out.write(json.dumps({'code':result.returncode,'stderr':result.stderr,'stdout_length':len(result.stdout)})+'\n')
+  with (_fixture_root/'verifier-subprocess.jsonl').open('a') as out:out.write(json.dumps({'code':result.returncode,'stderr':result.stderr.decode('utf8',errors='replace') if isinstance(result.stderr,bytes) else result.stderr,'stdout_length':len(result.stdout)})+'\n')
  return result
 subprocess.run=traced_run
 __name__='fixture_service_core'
