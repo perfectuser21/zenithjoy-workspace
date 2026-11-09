@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {spawnSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 import {createOfficialCliClosure} from '../official-cli-closure.mjs';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,lstatSync,realpathSync,rmSync,renameSync,existsSync} from 'node:fs';
@@ -30,4 +31,15 @@ test('wrong owner and replaced original LockDir inode cannot receive a protectio
 test('foreign owner at capture and extra scope arguments cannot write a marker',darwin,async t=>{
  const foreign=rig(t,{owner:'foreign'});await foreign.facade.prepare();await foreign.facade.close();assert.deepEqual(await foreign.facade.quarantine(),{verified:false,not_owned:true,physical_actions:0});assert.equal(existsSync(join(foreign.lock,'standalone_review_required')),false);
  const r=rig(t);await r.facade.prepare();await r.facade.close();await assert.rejects(r.facade.quarantine({owner:'foreign',task_id:'other'}),/QUARANTINE/);assert.equal(existsSync(join(r.lock,'standalone_review_required')),false);
+});
+
+test('quarantine fixture honors a pinned physical interpreter and rejects a forking launcher under nofork',darwin,async t=>{
+ const directory=realpathSync(mkdtempSync(join(tmpdir(),'quarantine-python-shim-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const probed=spawnSync('/usr/bin/python3',['-I','-S','-c','import os,sys;print(os.path.realpath(sys.executable))'],{encoding:'utf8'});assert.equal(probed.status,0,probed.stderr);
+ const physical=realpathSync(process.env.PREFLIGHT_TEST_PYTHON_BIN||probed.stdout.trim()),shim=join(directory,'forking-python');
+ const quoted="'"+physical.replaceAll("'","'\\''")+"'";writeFileSync(shim,'#!/bin/sh\n'+quoted+' "$@" &\nwait "$!"\n',{mode:0o700});
+ const childEnv={...process.env};delete childEnv.NODE_TEST_CONTEXT;
+ const run=python=>spawnSync(process.execPath,['--test','--test-name-pattern=^same original owner is protected',fileURLToPath(import.meta.url)],{env:{...childEnv,PREFLIGHT_TEST_PYTHON_BIN:python},encoding:'utf8',timeout:20000});
+ const bad=run(shim);assert.notEqual(bad.status,0,'fixture must consume the explicitly selected shim so the real nofork boundary can reject its child: '+bad.stdout+bad.stderr);assert.match(bad.stdout+bad.stderr,/OFFICIAL_CLI_QUARANTINE_UNKNOWN/);
+ const good=run(physical);assert.equal(good.status,0,good.stdout+good.stderr);
 });
