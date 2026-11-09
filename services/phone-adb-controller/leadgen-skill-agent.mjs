@@ -381,10 +381,10 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
    `先使用精确官方内置session_status核自己session key=${parent}，缺即blocked，不tool_search猜别名。`,
    `用MMV gateway_exec执行node ${join(root,'leadgen-skill-agent.mjs')} claim ${dir}领取唯一spawn权；已有预留只读原receipt、不再spawn。`,
    `官方sessions_spawn一次：agentId=skill-factory, mode=run, context=isolated, cleanup=keep, completionTarget=parent；不设置model/fallback/taskName。runTimeoutSeconds不超过agent-request.worker_expires_at剩余（worker截止；expires_at仅供原handoff终态读回，不是Worker执行额度），不足即blocked，不续预算。`,
-   `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}并按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/host_support（若有）/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
+   `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}；经MMV gateway_exec执行python3 ${helper} binding-ready ${dir}在原worker截止内只读等待父绑定提交，未绑定不得执行任何业务。随后按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/host_support（若有）/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
    `源身份仍为${q.source_commit}，run=${q.run_id}，nonce=${q.nonce}；所有原件私有只读，不能改写。`,
-   `核spawn receipt resolvedProvider精确openai、resolvedModel只允许openai/gpt-6.1-sol或gpt-6.1-sol；错模型精确取消，不重派。全文原样保存${join(dir,'spawn-receipt.json')}。`,
-   `组合原agent-request+官方childSessionKey/runId经stdin调用python3 ${helper} bind ${dir}；然后python3 ${helper} await ${dir}读官方agent.wait，禁止history摘要/CLI child代替。`,
+   `将sessions_spawn返回值原样保存在rawSpawnReceipt变量，不读其属性、不猜string/object、不自行parse、组合身份或写spawn-receipt。使用结构化stdin将JSON.stringify({raw_spawn_receipt:rawSpawnReceipt})一次交给python3 ${helper} bind ${dir}；该固定代码统一解析、核官方provider/model/claim/source/身份并保留原件，最后提交绑定。失败不重派、不以缺失runId取消；保留未知。`,
+   `仅bind成功后python3 ${helper} await ${dir}读官方agent.wait；禁止history摘要/CLI child代替。`,
    `owner返回截止=${q.receipt_deadline_ms??q.deadline_ms}；不要等到Activity总截止才返回。错误/子超时精确stop当前绑定child，缺任一停止证明确unknown；不PATCH原Task、不发外部渠道、不放锁。`,
   ].join('\n');
  }

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {mkdtempSync,writeFileSync,readFileSync,existsSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
@@ -39,6 +39,34 @@ test('official primary binds the original string or object ToolReceipt once with
   assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),original);
   assert.equal(existsSync(join(f.dir,'child-abort.json')),false);
  }
+});
+test('official bind rejects malformed, guessed, wrong-model, foreign, expired and conflicting receipts',()=>{
+ for(const change of [()=>null,()=>[],()=>'{broken',r=>JSON.stringify(JSON.stringify(r)),r=>({...r,status:'error'}),r=>({...r,resolvedProvider:'other'}),r=>({...r,resolvedModel:'other'}),r=>({...r,runId:undefined}),r=>({...r,runId:'not-a-run'}),r=>({...r,childSessionKey:'agent:other:subagent:1234'})]){
+  const f=primarySpawnFixture();assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:change(f.raw)}).status,0);
+  assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+ for(const mutate of [f=>{f.request.nonce='foreign';writeFileSync(join(f.dir,'agent-request.json'),JSON.stringify(f.request));},f=>{const path=join(f.dir,'spawn-claimed.json'),claim=JSON.parse(readFileSync(path));writeFileSync(path,JSON.stringify({...claim,source_commit:'b'.repeat(40)}));},f=>writeFileSync(join(f.dir,'handoff-closed.json'),'{}'),f=>{const path=join(f.dir,'activity-request.json'),q=JSON.parse(readFileSync(path));writeFileSync(path,JSON.stringify({...q,worker_deadline_ms:1}));}]){
+  const f=primarySpawnFixture();mutate(f);assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+ const f=primarySpawnFixture();assert.notEqual(call(f.dir,'bind',f.receipt).status,0,'primary cannot bypass typed binding through legacy input');
+ assert.equal(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);
+ const binding=readFileSync(join(f.dir,'agent-binding.json')),raw=readFileSync(join(f.dir,'spawn-receipt.raw.json'));
+ assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:{...f.raw,runId:'1234abcd-0000-4000-8000-000000000099'}}).status,0);
+ assert.deepEqual(readFileSync(join(f.dir,'agent-binding.json')),binding);assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),raw);
+});
+test('binding-ready waits read-only for the parent atomic commit and retains the original worker cutoff',async()=>{
+ const f=primarySpawnFixture();let out='',err='';const child=spawn('python3',[HELPER,'binding-ready',f.dir]);
+ const done=new Promise(resolve=>child.on('close',code=>resolve(code)));child.stdout.on('data',v=>out+=v);child.stderr.on('data',v=>err+=v);
+ try{
+  await new Promise(resolve=>setTimeout(resolve,75));assert.equal(out,'');assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+  assert.equal(call(f.dir,'bind',{raw_spawn_receipt:JSON.stringify(f.raw)}).status,0);
+  assert.equal(await done,0,err);assert.deepEqual(JSON.parse(out),f.receipt);
+ }finally{if(child.exitCode===null)child.kill();}
+ const expired=primarySpawnFixture(),cutoff=Date.now()/1000+.15;
+ const request={...expired.request,worker_expires_at:cutoff};writeFileSync(join(expired.dir,'agent-request.json'),JSON.stringify(request));
+ const q=JSON.parse(readFileSync(join(expired.dir,'activity-request.json')));writeFileSync(join(expired.dir,'activity-request.json'),JSON.stringify({...q,worker_deadline_ms:cutoff*1000}));
+ const claim=JSON.parse(readFileSync(join(expired.dir,'spawn-claimed.json')));writeFileSync(join(expired.dir,'spawn-claimed.json'),JSON.stringify({...claim,worker_expires_at:cutoff}));
+ const started=Date.now(),result=call(expired.dir,'binding-ready');assert.notEqual(result.status,0);assert.equal(result.stdout,'');assert.ok(Date.now()-started<1500);assert.equal(existsSync(join(expired.dir,'agent-binding.json')),false);
 });
 test('正式交接：绑定父子run后接收原始完成结果，重复同回执幂等',()=>{
  const {dir,receipt}=setup();
