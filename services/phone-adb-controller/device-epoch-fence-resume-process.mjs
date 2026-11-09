@@ -27,3 +27,16 @@ export async function stopOwnedResumeSupervisor(cap,{plan,guard,assertAuthority,
  need(proof,'PRIVATE_TERMINAL_UNKNOWN');owned.terminal=proof;const result={protocol:'device-epoch-fence-resume-stop-proof/v1',resume_plan_sha256:plan.plan_sha256,stop_intent_sha256:digest(bytes(intentPath)),expected:owned.actual,facts:proof,original_execution_stopped:false};save(join(plan.execution_directory,'stop-terminal.json'),result);return result;
 }
 export function verifyOwnedResumeTerminal(cap,plan){const owned=caps.get(cap);need(owned&&owned.planSha===plan.plan_sha256&&owned.stopAttempted&&owned.terminal,'PRIVATE_TERMINAL_CAPABILITY');return owned.terminal;}
+
+// This cap states only a newly observed terminal after independent Ops. It
+// never re-labels the original signal attempt or grants a live/stop capability.
+export function readObservedStopContinuation(plan,readHelper=invokeResumeProcessHelper){
+ const {plan_sha256,...body}=plan;need(plan.mode==='observed_stop_continuation'&&digest(body)===plan_sha256&&['checkpoint_sha256','failed_resume_plan_sha256','ops_receipt_sha256'].every(k=>/^[a-f0-9]{64}$/.test(plan.stop_continuation?.[k]||'')),'OBSERVED_STOP_PLAN');
+ const facts=readHelper({action:'terminal',...context(plan),expected:plan.owned_supervisor.actual},plan);need(facts.selected_identities_absent===true&&facts.listener_absent===true&&facts.instance_locks_released===true,'PRIVATE_TERMINAL_UNKNOWN');
+ const cap=Object.freeze({protocol:'device-epoch-fence-observed-stop-cap/v1'});caps.set(cap,{kind:'observed-stop',planSha:plan_sha256,plan:structuredClone(plan),terminal:structuredClone(facts),persisted:false});return {cap,snapshot:facts};
+}
+export function verifyObservedStopContinuation(cap,plan){const owned=caps.get(cap);need(owned?.kind==='observed-stop'&&owned.planSha===plan.plan_sha256&&same(owned.plan,plan),'OBSERVED_STOP_CAPABILITY');return structuredClone(owned.terminal);}
+export async function persistObservedStopContinuation(cap,{plan,guard,assertAuthority,readHelper=invokeResumeProcessHelper}={}){
+ verifyObservedStopContinuation(cap,plan);const owned=caps.get(cap);need(!owned.persisted,'OBSERVED_STOP_PREVIOUS_UNKNOWN');await assertAuthority();await guard.assertAlive();const facts=readHelper({action:'terminal',...context(plan),expected:plan.owned_supervisor.actual},plan);need(facts.selected_identities_absent===true&&facts.listener_absent===true&&facts.instance_locks_released===true,'PRIVATE_TERMINAL_UNKNOWN');
+ const h=plan.stop_continuation,proof={protocol:'device-epoch-fence-observed-stop-proof/v1',resume_plan_sha256:plan.plan_sha256,failed_resume_plan_sha256:h.failed_resume_plan_sha256,history_checkpoint_sha256:h.checkpoint_sha256,ops_receipt_sha256:h.ops_receipt_sha256,expected:plan.owned_supervisor.actual,facts,original_execution_stopped:false,original_resume_status:'unknown',stop_signal_sent:false};owned.persisted=true;save(join(plan.execution_directory,'stop-terminal.json'),proof);return proof;
+}
