@@ -97,7 +97,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const directory=join(runDir,'agent-tools',scope.activity);mkdirSync(directory,{recursive:true,mode:0o700});
   const stat=lstatSync(directory);if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)!==0)throw Error('AGENT_TOOL_JOURNAL_INVALID');
   syncDirectory(dirname(directory));syncDirectory(runDir);
-  const scopeKey=hash(scope),receipts=[],preflightSteps=['wake','unlock','open-app','account-current'],completedPreflightPhone=new Set();let result=null,settled=false,busy=false;
+  const scopeKey=hash(scope),receipts=[],preflightSteps=['wake','unlock','open-app','account-current'],completedPreflightPhone=new Set();let result=null,settled=false,busy=false,heartbeatJob=null;
   const rawTermination=proof=>{
     if(scope.execution_transport!=='raw-model-v1')return;
     const state=primitives.executionState?.()||{};
@@ -126,6 +126,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     return null;
   };
   const canReadback=(op,input)=>{try{return pendingReadback(op,input)!==null;}catch{return false;}};
+  const executionDeadline=Math.min(scope.deadline_ms,scope.worker_deadline_ms??Infinity);
   async function guard(options={}){if(Date.now()>=scope.deadline_ms)throw Error('AGENT_TOOL_DEADLINE');if(await primitives.assertResources(scope,options)!==true)throw Error('AGENT_TOOL_RESOURCE_UNVERIFIED');if(Date.now()>=scope.deadline_ms)throw Error('AGENT_TOOL_DEADLINE');}
   const business=async(op,input={})=>{
     if(!slots[scope.activity].includes(op))throw Error('AGENT_TOOL_OPERATION_NOT_ALLOWED');
@@ -134,6 +135,8 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     const pending=unresolved();
     const readback=pending.length?pendingReadback(op,input):null;
     if(pending.length&&!readback)throw Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED');
+    busy=true;
+    try{
     await guard({readOnly:!!readback});
     if(['discover','discover_readback'].includes(op)){
       const id=input.video?.videoId??input.video?.video_id;if(!videoId.test(id||''))throw Error('AGENT_TOOL_VIDEO_INPUT_INVALID');
@@ -165,7 +168,6 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
       if(op==='score'&&intents().filter(row=>row.value.operation==='score').length>=scope.limit)throw Error('AGENT_TOOL_SCORE_LIMIT');
       durable(intentFile,intent);
     }
-    busy=true;
     try{
       let value;
       if(op==='keywords')value=await primitives.keywords(scope);
@@ -178,12 +180,28 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
       else if(readback)durable(join(directory,hash([pending[0].key,op,request,randomUUID()])+'.readback.json'),{original_intent_key:pending[0].key,operation:op,request,result:value,continues_execution:false,native_stop_proven:false,observed_at:new Date().toISOString()});
       return value;
     }catch(error){if(writeOps.has(op)){error.externalEffect='unknown';error.message='AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED';}throw error;}
-    finally{busy=false;}
+    }finally{busy=false;}
+  };
+  const waitForHeartbeat=async()=>{
+    const flight=heartbeatJob;if(!flight)return;
+    const deadline=executionDeadline,remaining=deadline-Date.now();
+    if(remaining<=0)throw Error('AGENT_TOOL_DEADLINE');
+    let timer;
+    try{await Promise.race([flight,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('AGENT_TOOL_DEADLINE')),remaining);})]);}
+    finally{clearTimeout(timer);}
+    if(Date.now()>=deadline)throw Error('AGENT_TOOL_DEADLINE');
   };
   const phone=async(command,...args)=>{
     if(scope.serial==='none'||!readPhone.has(command)&&!(phoneBySlot[scope.activity]||[]).includes(command))throw Error('AGENT_TOOL_PHONE_NOT_ALLOWED');
     if(args.some(arg=>typeof arg!=='string'||arg.length>1000||/[\0\r\n]/.test(arg)||arg.startsWith('--')))throw Error('AGENT_TOOL_PHONE_INPUT_INVALID');
-    if(busy||unresolved().length)throw Error('AGENT_TOOL_PHONE_COMMIT_UNKNOWN_READBACK_REQUIRED');await guard();
+    await waitForHeartbeat();
+    if(busy||unresolved().length)throw Error('AGENT_TOOL_PHONE_COMMIT_UNKNOWN_READBACK_REQUIRED');
+    // Own the slot before asynchronous admission; another phone or heartbeat
+    // must not pass its own guard while this request is being validated.
+    busy=true;
+    try{
+    if(Date.now()>=executionDeadline)throw Error('AGENT_TOOL_DEADLINE');
+    await guard();
     if(!readPhone.has(command)&&typeof primitives.validatePhone!=='function')throw Error('AGENT_TOOL_PHONE_ADMISSION_UNAVAILABLE');
     const eid=`${scope.run}-agent-${scope.activity}-${randomUUID()}`;
     if(readPhone.has(command)&&args.length)throw Error('AGENT_TOOL_PHONE_INPUT_INVALID');
@@ -191,7 +209,9 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     if(!/^[A-Za-z0-9_-]+$/.test(readEid)||!readEid.startsWith(scope.run+'-'))throw Error('AGENT_TOOL_EVIDENCE_ID_INVALID');
     const trusted=readPhone.has(command)?(['ui-evidence','snapshot-evidence'].includes(command)?[readEid]:[]):await primitives.validatePhone(command,args,{...scope,evidence_id:eid});
     if(!Array.isArray(trusted))throw Error('AGENT_TOOL_PHONE_ADMISSION_INVALID');
-    busy=true;try{const value=await primitives.phone(command,...trusted);if(scope.activity==='preflight'&&preflightSteps.includes(command))completedPreflightPhone.add(command);return value;}finally{busy=false;}
+    if(Date.now()>=executionDeadline)throw Error('AGENT_TOOL_DEADLINE');
+    const value=await primitives.phone(command,...trusted);if(scope.activity==='preflight'&&preflightSteps.includes(command))completedPreflightPhone.add(command);return value;
+    }finally{busy=false;}
   };
   const lifecycle=async(operation,fn)=>{
     await guard();if(busy)return {deferred:true};if(unresolved().length)throw Object.assign(Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED'),{externalEffect:'unknown'});
@@ -207,7 +227,14 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   let prepared=false;
   return {business,phone,canReadback,
     ...(typeof primitives.closeNativeScope==='function'?{closeNativeScope:proof=>primitives.closeNativeScope(proof,scope)}:{}),
-    heartbeat:async()=>{if(unresolved().length)return {deferred:true,commit_unknown:true};try{return await lifecycle('resource_heartbeat',()=>primitives.heartbeat?.(scope));}catch(error){primitives.resourceUnknown?.(error,scope);error.executionStopped=false;throw error;}},
+    heartbeat:()=>{
+      if(heartbeatJob)return heartbeatJob;
+      if(unresolved().length)return Promise.resolve({deferred:true,commit_unknown:true});
+      if(busy)return Promise.resolve({deferred:true});
+      const job=lifecycle('resource_heartbeat',()=>primitives.heartbeat?.(scope)).catch(error=>{primitives.resourceUnknown?.(error,scope);error.executionStopped=false;throw error;})
+        .finally(()=>{if(heartbeatJob===job)heartbeatJob=null;});
+      heartbeatJob=job;return job;
+    },
     inspect:async()=>{
       const facts=await primitives.inspect?.(scope),preflight=scope.activity==='preflight';
       const companyAdmitted=preflight&&prepared&&object(facts?.company)&&Boolean(facts.company.company_id&&facts.company.tenant_id&&facts.company.device_binding);

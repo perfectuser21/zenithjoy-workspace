@@ -11043,6 +11043,15 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；公共Worker同进程业务域或只读隔离恢复永久回归；不替代真实云手机验收"
 
+  - id: phone-public-domain-task-read-diagnostics
+    path: services/phone-adb-controller/__tests__/public-domain-task-read-diagnostics.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；Task准入阶段码及单次请求回归，不替代真实云手机验收"
+
   - id: phone-public-domain-upstream
     path: services/phone-adb-controller/__tests__/public-domain-upstream.test.mjs
     type: integration
