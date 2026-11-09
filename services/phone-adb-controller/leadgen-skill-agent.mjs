@@ -1,6 +1,6 @@
 // MMV transport: a real work-commander turn must spawn/bind an official child.
 // Parent prose/exit 0 are never accepted as the child's execution receipt.
-import {readFileSync,writeFileSync,mkdirSync,existsSync,lstatSync,realpathSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,lstatSync,realpathSync,readdirSync} from 'node:fs';
 import {join,dirname,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
@@ -77,7 +77,7 @@ async function verifyPreviousOwner(previous,q,execute){
  }catch{throw Error('RPC_SKILL_OWNER_TERMINATION_UNVERIFIED');}
 }
 export function claimSkillSpawn(dir,{home=homedir(),verifyWorkspace=verifyCommanderWorkspace}={}){
- const q=JSON.parse(readFileSync(join(dir,'activity-request.json'),'utf8'));validate(q);verifyWorkspace({home});
+ const q=JSON.parse(readFileSync(join(dir,'activity-request.json'),'utf8'));validate(q);verifyWorkspace({home,request:q});
  if(resolve(dir)!==directory(q,home)||existsSync(join(dir,'handoff-closed.json'))||Date.now()>=q.deadline_ms)throw Error('RPC_SKILL_SPAWN_SCOPE_INVALID');
  const request=JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'));
  if(request.nonce!==q.nonce||request.run_id!==q.run_id||request.expires_at!==q.deadline_ms/1000||(request.worker_expires_at!==undefined&&(request.worker_expires_at!==q.worker_deadline_ms/1000||Date.now()>=q.worker_deadline_ms)))throw Error('RPC_SKILL_SPAWN_REQUEST_MISMATCH');
@@ -192,17 +192,47 @@ export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLo
  if(publicPrimary)await verifyPublicSkillCurrent(q,publicRunDirectory,binding,get);
  return true;
 }
-export function verifyCommanderWorkspace({home=homedir()}={}){
+const workspaceHashes=Object.freeze({agents:'6076979066dc81b04b83a79b7a899b69ba69f980107cb13e0cf1cbd7a1ac0b08',expected:'327a3d46ba8b931e0df98568b5958da9f9e97db025a4e010e8f2e680f752035b',actual:'360f1e520b308dcd2db6b6e41f634e27107c90ae9b2832bbbeee2ea0fcb5489a',runtime:'dfc1cd1c76fef9e4cfee706f36400290a5cb52623b23be1cef4d26e43693772d'});
+const workspaceSha=b=>createHash('sha256').update(b).digest('hex');
+function publicWorkspaceScope(q){
+ const p=q?.public_domain,i=p?.identity,b=p?.run_binding,uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+ return q?.protocol==='leadgen-activity-v1'&&q.mode==='execute'&&q.primary_host==='official-child-v1'&&q.broker_host==='mmv'&&['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(q.workflow_key)
+  &&!['execution_transport','max_turns','transport_generation','continuation_cause','agent_nonce'].some(k=>Object.hasOwn(q,k))
+  &&i?.mode==='formal'&&uuid.test(q.run_id||'')&&uuid.test(q.task_id||'')&&uuid.test(q.binding_id||'')&&i.run_id===q.run_id&&i.task_id===q.task_id
+  &&b?.run_binding_id===q.binding_id&&i.run_binding&&typeof i.run_binding==='object'&&contractDigest(i.run_binding)===contractDigest(b)&&p.local_snapshot_sha256===q.runtime_snapshot_sha256;
+}
+function workspaceBytes(path){
+ const a=lstatSync(path);if(!a.isFile()||a.isSymbolicLink()||![0,process.getuid()].includes(a.uid)||a.mode&0o022||a.size>1024*1024||realpathSync(dirname(path))!==dirname(path))throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ const raw=readFileSync(path),z=lstatSync(path);
+ if(['dev','ino','size','mtimeMs','ctimeMs'].some(k=>a[k]!==z[k])||raw.length!==a.size)throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');return raw;
+}
+function compatibleWorkspace(q,deployed,workspace){
+ if(!publicWorkspaceScope(q))throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ for(const dir of [deployed,workspace])if(realpathSync(dir)!==dir||lstatSync(dir).isSymbolicLink()||existsSync(join(dir,'.deploying')))throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ const skill='skills/workflow-commander/SKILL.md';
+ if(workspaceSha(readFileSync(join(root,'commander','AGENTS.md')))!==workspaceHashes.agents||workspaceSha(readFileSync(join(root,'commander',skill)))!==workspaceHashes.expected)throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ for(const dir of [deployed,workspace])if(workspaceSha(workspaceBytes(join(dir,'AGENTS.md')))!==workspaceHashes.agents||workspaceSha(workspaceBytes(join(dir,skill)))!==workspaceHashes.actual)throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ const manifestPath=join(deployed,'runtime-manifest.json'),raw=workspaceBytes(manifestPath),manifest=JSON.parse(raw);
+ const names=['wf-launch.sh','wf-status.sh','wf-agent-run.sh','wf-agent-lib.py','wf-agent-handoff.py','wf-v2.py','wf-v2-io.py','wf-v2-phone.py','wf-v2-shell.py','wf-report.py','workflow-contracts.json','AGENTS.md'];
+ for(const e of readdirSync(join(deployed,'skills'),{withFileTypes:true}))if(e.isDirectory()&&existsSync(join(deployed,'skills',e.name,'SKILL.md')))names.push('skills/'+e.name+'/SKILL.md');
+ for(const e of readdirSync(join(deployed,'contracts'),{withFileTypes:true}))if(e.isFile()&&e.name.endsWith('.json'))names.push('contracts/'+e.name);
+ const files=Object.fromEntries(names.map(name=>[name,workspaceSha(workspaceBytes(join(deployed,name)))]));
+ if(names.length!==20||manifest.protocol!=='commander-v2'||contractDigest(files)!==workspaceHashes.runtime||contractDigest(manifest.files)!==workspaceHashes.runtime||manifest.runtime_snapshot_sha256!==workspaceHashes.runtime||!workspaceBytes(manifestPath).equals(raw))throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ // Documentary compatibility only: parent live/current authorization remains
+ // beforeLaunch/parent IPC; this is never a child liveMap or deployment proof.
+ return Object.freeze({protocol:'commander-workspace-byte-compatibility/v1',read_only:true,actual_version:'2.1',expected_version:'2.2',not_deployed_version:'2.2',actual_skill_sha256:workspaceHashes.actual,expected_skill_sha256:workspaceHashes.expected,agents_sha256:workspaceHashes.agents,runtime_snapshot_sha256:workspaceHashes.runtime,manifest_sha256:workspaceSha(raw)});
+}
+export function verifyCommanderWorkspace({home=homedir(),request}={}){
  const deployed=join(home,'.openclaw','commander'),workspace=join(home,'openclaw-root','workspaces-root','clawd-work-commander');
  if(existsSync(join(deployed,'.deploying')))throw Error('RPC_SKILL_COMMANDER_DEPLOYING');
- for(const file of ['AGENTS.md','skills/workflow-commander/SKILL.md']){
-  const expected=readFileSync(join(root,'commander',file));
-  for(const directory of [deployed,workspace])if(!readFileSync(join(directory,file)).equals(expected))throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');
+ let same=true;for(const file of ['AGENTS.md','skills/workflow-commander/SKILL.md']){
+  const expected=readFileSync(join(root,'commander',file));for(const directory of [deployed,workspace])if(!readFileSync(join(directory,file)).equals(expected))same=false;
  }
- return true;
+ if(same)return true;
+ try{return compatibleWorkspace(request,deployed,workspace);}catch{throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');}
 }
 export function skillAuthority(q,{home=homedir(),verifyWorkspace=verifyCommanderWorkspace}={}){
- validate(q);verifyWorkspace({home});const dir=directory(q,home);
+ validate(q);verifyWorkspace({home,request:q});const dir=directory(q,home);
  if(Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json'))||existsSync(join(dir,'generation-revoked.json')))return false;
  try{official(q,dir);return true;}catch{return false;}
 }
@@ -263,7 +293,7 @@ export async function relayActivityTool(dir,op,body={}, {home=homedir(),authoriz
 }
 // Commander只可请求停止这个已绑定child；owner/native终止仍由原执行链独立读回。
 export async function stopSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace}={}){
- validate(q);verifyWorkspace({home});
+ validate(q);verifyWorkspace({home,request:q});
  const dir=directory(q,home),stored=privateJson(join(dir,'activity-request.json'));
  if(digest(stored)!==digest(q))throw Error('RPC_SKILL_STOP_SCOPE_MISMATCH');
  const binding=official(q,dir),marker=join(dir,'commander-stop-requested.json');
@@ -276,20 +306,23 @@ export async function stopSkillAgent(q,{home=homedir(),execute=execInput,verifyW
  return {status:'unknown',execution_stopped:false,child_execution_stopped:child,child_run_id:binding.child_run_id,reason:'commander_stop_owner_readback_required'};
 }
 export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace,beforeLaunch}={}){
- validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
+ validate(q);
+ if(publicWorkspaceScope(q)&&(!beforeLaunch||typeof beforeLaunch!=='function'||await beforeLaunch()!==true))throw Error('RPC_SKILL_LAUNCH_UNAUTHORIZED');
+ let workspace=verifyWorkspace({home,request:q});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
  const previous=q.transport_generation===1?previousGeneration(q,home):null;
  if(previous)await verifyPreviousOwner(previous,q,execute);
  const ownerTurn=await reserveWorkflowCommanderTurn(q,{home});
  try{
  await ownerTurn.check();
  if(beforeLaunch!==undefined){if(typeof beforeLaunch!=='function'||await beforeLaunch()!==true)throw Error('RPC_SKILL_LAUNCH_UNAUTHORIZED');}
- if(beforeLaunch!==undefined)verifyWorkspace({home});
+ if(beforeLaunch!==undefined){const current=verifyWorkspace({home,request:q});if(workspace?.protocol&&contractDigest(current)!==contractDigest(workspace))throw Error('RPC_SKILL_COMMANDER_WORKSPACE_DRIFT');workspace=current;}
  if(previous)writeFileSync(join(previous,'generation-revoked.json'),JSON.stringify({next_generation:1,at:Date.now()}),{flag:'wx',mode:0o600});
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
  const parent=workflowCommanderSession(q);
  const request={run_id:q.run_id,task_id:q.task_id??null,parent_session_key:parent,nonce:q.nonce,agent_id:'skill-factory',expires_at:q.deadline_ms/1000,...(q.worker_deadline_ms===undefined?{}:{worker_expires_at:q.worker_deadline_ms/1000})};
  // An ambiguous CLI launch is not replayed. The same run is only inspected/stopped.
  if(existsSync(join(dir,'launch-reserved.json')))return {status:'unknown',execution_stopped:false,reason:'existing_launch_requires_readback'};
+ if(workspace?.protocol)writeFileSync(join(dir,'commander-workspace-compatibility.json'),JSON.stringify({...workspace,run_id:q.run_id,task_id:q.task_id,source_commit:q.source_commit}),{flag:'wx',mode:0o600});
  writeFileSync(join(dir,'launch-reserved.json'),JSON.stringify({at:new Date().toISOString(),source_commit:q.source_commit}),{flag:'wx',mode:0o600});
  writeFileSync(join(dir,'agent-request.json'),JSON.stringify(request),{flag:'wx',mode:0o600});
  writeFileSync(join(dir,'activity-request.json'),JSON.stringify(q),{flag:'wx',mode:0o600});
