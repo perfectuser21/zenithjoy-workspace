@@ -92,12 +92,15 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
   if(raw.code!==0||raw.signal)fail();const body=JSON.parse(raw.stdout);
   durable(join(directory,`owner-closure-read-${String(++reads).padStart(3,'0')}.json`),{method,params,start_ms:start,end_ms:Date.now(),raw});current();return {body,start};
  };
+ const describe=async()=>{
+  const {body:description,start}=await read('sessions.describe',{key:parent,agentId:'work-commander'}),row=description.session;
+  if(row?.key!==parent||typeof row.sessionId!=='string'||!row.sessionId||sessionId&&row.sessionId!==sessionId
+   ||row.hasActiveRun!==false||!Array.isArray(row.activeRunIds)||row.activeRunIds.length||!Number.isFinite(row.snapshotAt)
+   ||row.snapshotAt<start-1000||row.snapshotAt>Date.now()+1000)fail();sessionId=row.sessionId;
+ };
  try{
   for(let round=0;round<2;round++){
-   const {body:description,start}=await read('sessions.describe',{key:parent,agentId:'work-commander'}),row=description.session;
-   if(row?.key!==parent||typeof row.sessionId!=='string'||!row.sessionId||sessionId&&row.sessionId!==sessionId
-    ||row.hasActiveRun!==false||!Array.isArray(row.activeRunIds)||row.activeRunIds.length||!Number.isFinite(row.snapshotAt)
-    ||row.snapshotAt<start-1000||row.snapshotAt>Date.now()+1000)fail();sessionId=row.sessionId;
+   await describe();
    const {body:history}=await read('chat.history',{sessionKey:parent,limit:1}),queue=history.pendingInputs;
    if(history.sessionKey!==parent||history.sessionId!==sessionId||queue?.total!==0||queue.queuedCount!==0||!Array.isArray(queue.items)||queue.items.length)fail();
    const {body:core}=await read('tools.invoke',{name:'subagents',sessionKey:parent,args:{action:'list'}}),d=core.output?.details;
@@ -107,6 +110,7 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
    const matches=d.recent.filter(r=>r.runId===child.child_run_id&&r.sessionKey===child.child_session_key);
    if(matches.length!==1||matches[0].execution?.state!=='finished'||matches[0].pendingDescendants!==0||matches[0].deliveryStatus!=='delivered')fail();
   }
+  await describe(); // an emptied completion queue may have become a new parent run
   current();verified=true;
  }catch{/* An unfinished delivery or an uncertain census retains the original reservation. */}
  const proof=Object.freeze({...result,protocol:'official-skill-owner-closure/v1',owner_run_execution_stopped:true,
