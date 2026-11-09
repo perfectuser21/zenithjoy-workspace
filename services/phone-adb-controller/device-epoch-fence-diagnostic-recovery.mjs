@@ -5,6 +5,7 @@ import {bytes,readPrivatePolicy,canonical,digest} from './device-epoch-fence-ref
 import {reviewSource} from './device-epoch-fence-review.mjs';
 import {readStoppedResumeHistory} from './device-epoch-fence-stop-continuation.mjs';
 import {resumeApprovalScope} from './device-epoch-fence-resume-authority.mjs';
+import {RESUME_ACTIONS} from './device-epoch-fence-resume-sequence.mjs';
 import {parseDeviceInventory,parseHostAction} from './device-epoch-fence-transport.mjs';
 const need=(v,c)=>{if(!v)throw Object.assign(Error('RESUME_DIAGNOSTIC_HISTORY_'+c),{code:'RESUME_DIAGNOSTIC_HISTORY_'+c});};
 const same=(a,b)=>canonical(a)===canonical(b),hash=x=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x),time=x=>Date.parse(x);
@@ -17,7 +18,7 @@ export function readDiagnosticRecoveryHistory({planPath,executionDirectory,runti
  const files={},raw=p=>{const b=readPrivatePolicy(p);files[p]=digest(b);return b;},json=p=>JSON.parse(raw(p));
  privateDir(dirname(planPath));privateDir(executionDirectory);need(dirname(terminalPath)===dirname(executionDirectory),'TERMINAL_PATH');
  const failed=json(planPath),{plan_sha256:failedSha,...body}=failed;
- need(failed.protocol==='device-epoch-fence-resume-plan/v1'&&hash(failedSha)&&digest(body)===failedSha&&failed.mode==='observed_stop_continuation'&&failed.original_execution_stopped===false&&same(failed.prior,prior)&&failed.execution_directory===executionDirectory&&same(failed.approval_scope,resumeApprovalScope(failed)),'FAILED_PLAN');
+ need(failed.protocol==='device-epoch-fence-resume-plan/v1'&&hash(failedSha)&&digest(body)===failedSha&&failed.mode==='observed_stop_continuation'&&same(failed.actions,RESUME_ACTIONS.observed_stop_continuation)&&failed.original_execution_stopped===false&&same(failed.prior,prior)&&failed.execution_directory===executionDirectory&&same(failed.approval_scope,resumeApprovalScope(failed)),'FAILED_PLAN');
  need(failed.source_authority?.commit===DIAGNOSTIC_FAILED_SOURCE&&same(readSource({runtimeRoot}),failed.source_authority)&&same(failed.scope.review_source,failed.source_authority)&&failed.resume_service_source?.source_commit===DIAGNOSTIC_FAILED_SOURCE&&failed.resume_service_source.runtime_root===runtimeRoot,'FAILED_SOURCE');
  need(task?.id===failed.task_id&&task.status==='in_progress'&&same(failed.claim,{claimed_by:task.claimed_by,claimed_at:task.claimed_at}),'TASK');
  const old=failed.stop_continuation,h=readStopped({planPath:old.failed_plan_path,executionDirectory:old.failed_execution_directory,runtimeRoot:old.failed_runtime_root,opsDirectory:old.ops_directory,task,prior,readSource});need(same(old,h),'OLDER_HISTORY');
