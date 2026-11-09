@@ -39,7 +39,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
  const frozen=definitions.readFrozen(dir);
  const authority=await load('public-domain-authority.mjs');
  const unregister=authority.registerPublicDomainAuthority({runDirectory:dir,identity,deadline_ms,cleanup_deadline_ms,...(executionMode==='agent'?{snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:frozen.public_domain.runtime_snapshot_sha256}}:{}),business_scope:{run:env.WFR_TAG,run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,attempt:env.WFR_ATTEMPT}});
- let handlers,closed=false,active=false,unsafe=false,last;
+ let primitiveRuntime,handlers,closed=false,active=false,unsafe=false,last;
  const records=[],checks=new Map(),outcomes=new Map(),activities=new Map(frozen.activities.map(a=>[a.reference.slot_key,{...a.version.payload.contract,key:a.reference.slot_key}]));
  const proofScope=key=>({run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,activity:key});
  const collection=await load('collection-phone-scope.mjs'),discovery=await load('discovery-phone-scope.mjs');
@@ -59,13 +59,23 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
   let preflightRuntime;
   if(executionMode==='agent'){
    await (await load('native-task-lease.mjs')).issuePublicNativeTaskLease({runDir:dir,frozen,env});
-   if(cfg.workflow_key!=='douyin_comment_scoring')preflightRuntime=(await load('preflight-phone-scope.mjs')).createPreflightRuntime({root:runtime,env,frozen,binding,taskId:identity.task_id});
-   handlers=workflow.createWorkflowHandlers({root:runtime,env,rpc,frozen,binding,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id,preflightRuntime});
-   if(handlers.prepareNativeScoring)await handlers.prepareNativeScoring();
-   if(handlers.prepareNativePhone)await handlers.prepareNativePhone();
+   if(frozen.primary_host==='official-child-v1'){
+    handlers=workflow.createHandlers({root:runtime,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id,execute:(...args)=>primitiveRuntime.execute(...args)});
+    primitiveRuntime=(await load('official-child-primitives.mjs')).createOfficialChildPrimitives({root:runtime,env,frozen,binding,taskId:identity.task_id,state:handlers.state});
+    const originalTools=handlers.createAgentTools,originalState=handlers.agentNativeState;
+    handlers.createAgentTools=async(activity,scope)=>{await primitiveRuntime.begin(scope);const tools=await originalTools(activity,scope);return {...tools,settle:async proof=>{const result=await tools.settle(proof);if(activity.key!=='cleanup')await primitiveRuntime.finish(activity.key);return result;},...(activity.key==='cleanup'?{release:async proof=>{const result=await tools.release(proof);await primitiveRuntime.finish(activity.key);return result;}}:{})};};
+    handlers.agentSupportsNativeScope=activity=>primitiveRuntime.supports(activity);
+    handlers.agentNativeState=()=>({...originalState(),execution_unknown:originalState().execution_unknown||primitiveRuntime.snapshot().execution_unknown});
+   }else{
+    if(cfg.workflow_key!=='douyin_comment_scoring')preflightRuntime=(await load('preflight-phone-scope.mjs')).createPreflightRuntime({root:runtime,env,frozen,binding,taskId:identity.task_id});
+    handlers=workflow.createWorkflowHandlers({root:runtime,env,rpc,frozen,binding,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id,preflightRuntime});
+    if(handlers.prepareNativeScoring)await handlers.prepareNativeScoring();
+    if(handlers.prepareNativePhone)await handlers.prepareNativePhone();
+   }
   }else handlers=workflow.createHandlers({root:runtime,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id});
   const {verifyWorkflowActivity,invokeNativeActivity}=workflow;
-  const executeAgent=executionMode==='agent'?workflow.createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities:[...activities.values()],taskId:identity.task_id}).executeAgent:null;
+  const executionRpc=frozen.primary_host==='official-child-v1'?(await load('official-child-host.mjs')).createPublicOfficialChildRpc({runDir:dir,frozen,baseRpc:rpc}):rpc;
+  const executeAgent=executionMode==='agent'?workflow.createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc:executionRpc,activities:[...activities.values()],taskId:identity.task_id}).executeAgent:null;
   const setActivity=a=>{
    if(closed||!activities.has(a.key))fail('ACTIVITY');
    const cleanup=a.runtime?.phase==='finalize'||a.key==='cleanup',end=cleanup?cleanup_deadline_ms:deadline_ms;
@@ -124,9 +134,10 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
    },
    async close(){
     if(closed)return {execution_stopped:!unsafe&&!active&&!handlers.state.executionUnknown};closed=true;
-    const stopped=!active&&!unsafe&&!handlers.state.executionUnknown;
+    const primitiveStop=primitiveRuntime?await primitiveRuntime.close():{execution_stopped:true};
+    const stopped=!active&&!unsafe&&!handlers.state.executionUnknown&&primitiveStop.execution_stopped===true;
     if(!stopped)await handlers.quarantineResources();
-    const result={protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,workflow_key:cfg.workflow_key,profile:env.P,source_commit:frozen.deployment.source_commit,profile_sha256:identity.profile_sha256,...(frozen.sampling_input?{sampling_input:frozen.sampling_input,sampling_admission_v1:checks.get('collection')?.sampling_admission_v1,qualification_identity_v1:checks.get('qualification')?.qualification_identity_v1}:{}),execution_stopped:stopped,status:stopped&&[...activities.keys()].every(k=>checks.get(k)?.verified===true)?'validated':'failed',results:[...outcomes].map(([activity,e])=>({activity,status:e.status,verification:checks.get(activity)||{verified:false}}))};
+    const result={protocol:'workflow-domain/v1',execution_mode:executionMode,...(frozen.primary_host?{primary_host:frozen.primary_host}:{}),run_id:identity.run_id,task_id:identity.task_id,workflow_key:cfg.workflow_key,profile:env.P,source_commit:frozen.deployment.source_commit,profile_sha256:identity.profile_sha256,...(frozen.sampling_input?{sampling_input:frozen.sampling_input,sampling_admission_v1:checks.get('collection')?.sampling_admission_v1,qualification_identity_v1:checks.get('qualification')?.qualification_identity_v1}:{}),execution_stopped:stopped,status:stopped&&[...activities.keys()].every(k=>checks.get(k)?.verified===true)?'validated':'failed',results:[...outcomes].map(([activity,e])=>({activity,status:e.status,verification:checks.get(activity)||{verified:false}}))};
     evidenceFile('result','workflow',result);unregister();return {execution_stopped:stopped};
    },
   };
