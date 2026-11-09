@@ -1,8 +1,10 @@
-# Test boundary: real core and kernel; only HOME and logical loopback ports map.
+# Test boundary: real core/kernel; HOME, logical hostname and loopback ports map.
 import os,sys,pathlib,types,json,signal,subprocess,fcntl,socket,pwd
 _fixture_main=__name__=='__main__'
 _fixture_root=pathlib.Path(__file__).resolve().parent
 _cfg=json.loads((_fixture_root/'native-fixture.json').read_text())
+# Never change UID/PID/kernel/argv; only this isolated realm machine name maps.
+socket.gethostname=lambda:_cfg['logical_hostname']
 _native_getpwuid=pwd.getpwuid
 pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=_cfg['home'],pw_name=_native_getpwuid(uid).pw_name)
 _native_socket=socket.socket

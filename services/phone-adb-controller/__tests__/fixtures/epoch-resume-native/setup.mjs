@@ -1,4 +1,4 @@
-import fs from 'node:fs';import {join,dirname} from 'node:path';import {fileURLToPath,pathToFileURL} from 'node:url';import {spawn,execFileSync} from 'node:child_process';import {createServer as netServer} from 'node:net';import {createServer} from 'node:http';
+import fs from 'node:fs';import {hostname} from 'node:os';import {join,dirname} from 'node:path';import {fileURLToPath,pathToFileURL} from 'node:url';import {spawn,execFileSync} from 'node:child_process';import {createServer as netServer} from 'node:net';import {createServer} from 'node:http';
 import {native103TestPython} from '../../helpers/native-103-test-python.mjs';
 import {createAuthReferenceFixture} from '../epoch-auth-reference-fixture.mjs';
 import {digest,canonical,FENCE_ACTIONS,approvalScopeFor} from '../../../device-epoch-fence-reference.mjs';
@@ -17,7 +17,7 @@ export async function setup(scenario){
  const fields={owner:'fixture_original_unknown\n',pid:'999999\n',acquired_at:'1\n',standalone_review_required:'fixture_original_unknown\n'};for(const [n,v]of Object.entries(fields))save(join(quarantine,n),Buffer.from(v));
  save(join(lockRoot,'.migration-complete.json'),{schema_version:1,state:'complete',legacy_root:legacy});save(join(lockRoot,serial+'.guard'),Buffer.alloc(0));fs.linkSync(join(lockRoot,serial+'.guard'),join(legacy,serial+'.guard'));
  activeCleanup=async()=>{for(const ch of children)if(ch.exitCode===null)try{ch.kill('SIGTERM');}catch{}await sleep(200);if(server){server.closeAllConnections();await new Promise(r=>server.close(()=>r()));}for(const fn of after)fn();};
- const cfg={home,ports,priorRoot,source:null,priorSource:{commit:priorCommit,files:{'fixture/prior-source':digest('controlled offline v1 snapshot')}},brain:null,review:null,family:null};save(join(runtime,'native-fixture.json'),cfg);
+ const cfg={home,ports,priorRoot,logical_hostname:'offline-not-authorized',observed_host:hostname(),source:null,priorSource:{commit:priorCommit,files:{'fixture/prior-source':digest('controlled offline v1 snapshot')}},brain:null,review:null,family:null};save(join(runtime,'native-fixture.json'),cfg);
  for(const name of ['service','process']){const actual=name==='service'?'adb-host-service':'adb-private-supervisor';fs.renameSync(join(runtime,actual+'.py'),join(runtime,actual+'-core.py'));fs.copyFileSync(join(fixtures,'python-'+name+'.py'),join(runtime,actual+'.py'));}
  fs.renameSync(join(runtime,'device-epoch-fence-review.mjs'),join(runtime,'device-epoch-fence-review-core.mjs'));fs.renameSync(join(runtime,'device-epoch-fence-controller.mjs'),join(runtime,'device-epoch-fence-controller-core.mjs'));fs.copyFileSync(join(fixtures,'boundary.mjs'),join(runtime,'fixture-boundary.mjs'));
  save(join(runtime,'device-epoch-fence-controller.mjs'),Buffer.from("export * from './device-epoch-fence-controller-core.mjs';export {verifyLegacyControllerSource} from './fixture-boundary.mjs';\n"));
