@@ -117,7 +117,7 @@ def main():
         return
     mode, root, serial = sys.argv[1:4]
     root = Path(root)
-    need(mode in ('inspect', 'serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
+    need(mode in ('inspect', 'serve', 'resume-serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
     before = snapshot(root, serial)
     # 两根是同一硬链：只open/flock一次，避免重复锁同inode自锁。
     fd = os.open(before['guards'][0]['path'], os.O_RDWR | os.O_NOFOLLOW)
@@ -130,24 +130,65 @@ def main():
             need(len(sys.argv) == 4, 'ARGUMENTS')
             emit(before)
             return
-        need(len(sys.argv) == 6 and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
+        resume = mode == 'resume-serve'
+        need(len(sys.argv) == (8 if resume else 6) and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
              and re.fullmatch(r'[a-f0-9]{64}', sys.argv[5]), 'ARGUMENTS')
         task, plan = sys.argv[4:6]
-        prefix = root / ('.device-epoch-fence-' + task + '-' + plan)
-        need(not any(os.path.lexists(str(prefix) + suffix) for suffix in ('.pending.json', '.completed.json', '.superseded')), 'PREVIOUS_UNKNOWN')
+        previous = None
+        if resume:
+            prior_plan, prior_sha = sys.argv[6:8]
+            need(re.fullmatch(r'[a-f0-9]{64}', prior_plan) and re.fullmatch(r'[a-f0-9]{64}', prior_sha)
+                 and prior_plan != plan, 'RESUME_ARGUMENTS')
+            original = root / ('.device-epoch-fence-' + task + '-' + prior_plan)
+            prior_raw = raw_file(Path(str(original) + '.pending.json'))
+            previous = json.loads(prior_raw)
+            need(hashlib.sha256(prior_raw).hexdigest() == prior_sha
+                 and previous == {'protocol': 'device-epoch-fence-file-transaction/v1', 'task_id': task,
+                                  'plan_sha256': prior_plan, 'snapshot': before,
+                                  'original_execution_stopped': False, 'phase': 'prepared'}, 'RESUME_ORIGINAL')
+            need(not any(os.path.lexists(str(original) + suffix) for suffix in ('.completed.json', '.superseded', '.resume-owner.json')), 'PREVIOUS_UNKNOWN')
+            prefix = root / ('.device-epoch-fence-resume-' + task + '-' + prior_plan + '-' + plan)
+        else:
+            prefix = root / ('.device-epoch-fence-' + task + '-' + plan)
+        need(not any(os.path.lexists(str(prefix) + suffix) for suffix in ('.pending.json', '.completed.json', '.superseded', '.unknown.json')), 'PREVIOUS_UNKNOWN')
         emit({'event': 'locked', 'snapshot': before})
         prepare = message()
         need(prepare == {'action': 'prepare', 'expected': before} and snapshot(root, serial) == before, 'PREPARE_CAS')
-        write_once(Path(str(prefix) + '.pending.json'), {'protocol': 'device-epoch-fence-file-transaction/v1', 'task_id': task,
-                   'plan_sha256': plan, 'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared'})
+        if resume:
+            # 同一原unknown只准一个新授权事务；换plan也不能绕过ACK未知。
+            write_once(Path(str(original) + '.resume-owner.json'), {'protocol': 'device-epoch-fence-resume-owner/v1',
+                       'resume_plan_sha256': plan, 'prior_pending_sha256': prior_sha, 'original_execution_stopped': False})
+        pending = {'protocol': 'device-epoch-fence-file-transaction/v1', 'task_id': task,
+                   'plan_sha256': plan, 'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared'}
+        if resume:
+            pending.update({'prior_plan_sha256': prior_plan, 'prior_pending_sha256': prior_sha})
+        write_once(Path(str(prefix) + '.pending.json'), pending)
+        def unchanged():
+            need(snapshot(root, serial) == before, 'RESUME_SNAPSHOT_DRIFT' if resume else 'SNAPSHOT_DRIFT')
+            if resume:
+                need(hashlib.sha256(raw_file(Path(str(original) + '.pending.json'))).hexdigest() == prior_sha,
+                     'RESUME_ORIGINAL_DRIFT')
+                owner = json.loads(raw_file(Path(str(original) + '.resume-owner.json')))
+                need(owner == {'protocol': 'device-epoch-fence-resume-owner/v1', 'resume_plan_sha256': plan,
+                               'prior_pending_sha256': prior_sha, 'original_execution_stopped': False}, 'RESUME_OWNER_DRIFT')
+            return True
+        unchanged()
         emit({'event': 'prepared'})
         commit = message()
         while commit == {'action': 'check'}:
-            need(snapshot(root, serial) == before, 'CHECK_CAS')
+            need(unchanged(), 'CHECK_CAS')
             emit({'event': 'checked'})
             commit = message()
+        if isinstance(commit, dict) and commit.get('action') == 'abort_unknown':
+            need(set(commit) == {'action', 'reason'} and re.fullmatch(r'[A-Z][A-Z0-9_]{0,99}', commit.get('reason', ''))
+                 and unchanged(), 'ABORT_CAS')
+            result = {'event': 'unknown', 'reason': commit['reason'], 'original_execution_stopped': False,
+                      'retry_allowed': False, 'plan_sha256': plan}
+            write_once(Path(str(prefix) + '.unknown.json'), result)
+            emit(result)
+            return
         need(set(commit) == {'action', 'proof_sha256'} and commit['action'] == 'commit'
-             and re.fullmatch(r'[a-f0-9]{64}', commit['proof_sha256']) and snapshot(root, serial) == before, 'COMMIT_CAS')
+             and re.fullmatch(r'[a-f0-9]{64}', commit['proof_sha256']) and unchanged(), 'COMMIT_CAS')
         # Node已完成真正的fence/中央强CAS及fresh读回。这里只执行一次原目录rename，不写原始字段。
         archive = Path(str(prefix) + '.superseded')
         need(not os.path.lexists(archive), 'ARCHIVE_EXISTS')

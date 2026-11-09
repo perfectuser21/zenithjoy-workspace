@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {spawn} from 'node:child_process';import {fileURLToPath} from 'node:url';
+const runner=fileURLToPath(new URL('./fixtures/epoch-resume-native/runner.mjs',import.meta.url));
+async function run(scenario){const child=spawn(process.execPath,[runner,scenario],{env:process.env,stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);const result=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill('SIGTERM');reject(Error('NATIVE_RESUME_TEST_DEADLINE\n'+stderr));},420000);child.on('error',reject);child.on('close',(code,signal)=>{clearTimeout(timer);resolve({code,signal});});});assert.equal(result.code,0,stderr);const summary=JSON.parse(stdout.trim().split('\n').at(-1));assert.equal(summary.actual_main,true);assert.equal(summary.field_actions,0);return summary;}
+test('真实authprepare→plan→apply、双guard、held出生、单TERM/reserved屏障、host/SDK/CAS/record/archive正例',{timeout:450000},async()=>{assert.equal((await run('positive')).status,'fenced');});
+test('真实connect ACK未知不得重放或签free/record',{timeout:450000},async()=>{assert.equal((await run('connect-ack-lost')).status,'expected_unknown');});
+test('中央CAS真实已释放但ACK未知，回读free也不得重放/归档',{timeout:450000},async()=>{assert.equal((await run('release-ack-lost')).status,'expected_unknown');});
+test('改Task批准后伪造expected supervisor仍被真实内核/lock身份拒绝，signal零次',{timeout:450000},async()=>{assert.equal((await run('forged-expected')).status,'expected_unknown');});
+test('隔离realm错误hostname真实main拒绝，reserved/新daemon/中央release均零',{timeout:450000},async()=>{assert.equal((await run('wrong-host')).status,'expected_unknown');});

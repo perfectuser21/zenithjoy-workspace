@@ -560,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -794,7 +794,14 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "1cac2f246bddacd20f8e102154b45169e7ade4acc25522a9ce77866e09c3056e"
+      "code_digest": "2bc0f393aeed17c6588bbcf1d63bc33da7cee7acd63ebfea98b0aeffe6e6983e",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "1cac2f246bddacd20f8e102154b45169e7ade4acc25522a9ce77866e09c3056e",
+        "current_code_digest": "2bc0f393aeed17c6588bbcf1d63bc33da7cee7acd63ebfea98b0aeffe6e6983e",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.2.1",
@@ -1404,7 +1411,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -1621,7 +1628,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "287d227bc992aadd8914e005e83a74772dfb362af3864d7182f9d3910af54494"
+      "code_digest": "ec7ad7d9d060c5d89632c0188efb672544c0982c7c51b94514f3268f6ae92547",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "287d227bc992aadd8914e005e83a74772dfb362af3864d7182f9d3910af54494",
+        "current_code_digest": "ec7ad7d9d060c5d89632c0188efb672544c0982c7c51b94514f3268f6ae92547",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.2.1",
@@ -2175,7 +2189,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -2395,7 +2409,14 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "37f5cab35f1be394534941a82277df856acb0cbf9b6844e9caa74ecbed62c584"
+      "code_digest": "3186d843aca2997ddaea359debeaacfa10e78370310ca613bb9ad7d2f88baa52",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "37f5cab35f1be394534941a82277df856acb0cbf9b6844e9caa74ecbed62c584",
+        "current_code_digest": "3186d843aca2997ddaea359debeaacfa10e78370310ca613bb9ad7d2f88baa52",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.4.2",
@@ -2977,7 +2998,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -3253,7 +3274,14 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "84fb3e94b106690ebe177a21139cd5304028d1c2250fa7b71c032e9223055457"
+      "code_digest": "41ee2f23d282388676939c029c88909faa965afe1943845e05db9b21c950cdaf",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "84fb3e94b106690ebe177a21139cd5304028d1c2250fa7b71c032e9223055457",
+        "current_code_digest": "41ee2f23d282388676939c029c88909faa965afe1943845e05db9b21c950cdaf",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.7.2",
@@ -3807,7 +3835,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -4049,7 +4077,14 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "7fc361807f1676ba77a3961edc72a74a83f1f607fc334d5c8874c2424b5c844f"
+      "code_digest": "e0cbbdd67fa6bfe324b180e54ea21d1bfa2b0f021d2960d99013b3c59336bd10",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "7fc361807f1676ba77a3961edc72a74a83f1f607fc334d5c8874c2424b5c844f",
+        "current_code_digest": "e0cbbdd67fa6bfe324b180e54ea21d1bfa2b0f021d2960d99013b3c59336bd10",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.2.1",
@@ -4638,7 +4673,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -4854,7 +4889,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "39ad4c08206ec09653f88a3b4df50840f5e653e38a99f4e66e275d8040060260"
+      "code_digest": "10e6a6c2bf6b257edaf13340c1689328e50765ddde546ca1babb579c3ce19a82",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "39ad4c08206ec09653f88a3b4df50840f5e653e38a99f4e66e275d8040060260",
+        "current_code_digest": "10e6a6c2bf6b257edaf13340c1689328e50765ddde546ca1babb579c3ce19a82",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.7.2",
@@ -5415,7 +5457,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -5642,7 +5684,14 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "721fc5238bf4b651571473e42f4b9abef453093622a2e1707ac82ddb4baac39b"
+      "code_digest": "4a331ffbc140c83b12993eed5d02a6b97f6440b6527676e1da44e0e543eca963",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "721fc5238bf4b651571473e42f4b9abef453093622a2e1707ac82ddb4baac39b",
+        "current_code_digest": "4a331ffbc140c83b12993eed5d02a6b97f6440b6527676e1da44e0e543eca963",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.8.2",
@@ -6210,7 +6259,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -6472,7 +6521,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a58313d714a4e2c99774d4e0943c23b8385b831c3377cbfc056922f360f84aef"
+      "code_digest": "43fd65c4a8cbe36c964f18c4e4ef8e25b3b6712e63f3acec47361d07293d7863",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "a58313d714a4e2c99774d4e0943c23b8385b831c3377cbfc056922f360f84aef",
+        "current_code_digest": "43fd65c4a8cbe36c964f18c4e4ef8e25b3b6712e63f3acec47361d07293d7863",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.1",
@@ -6980,7 +7036,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -7232,13 +7288,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "23461a4b8d983fc8c5dca8f1da185a6d00fe79a834666c8b60d9afb78921d93a",
+      "code_digest": "378b62bbd40c881ceea2efca806d725ef15872b973ab7faa3ad1561caaee12bf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持104原公司、发送账号、政策与锁准入；新增公共入口拒104且旧Method无新host声明。",
-        "reviewed_by": "/root/cloud_preflight_review (104窄兼容独审；不计真实执行验证)",
-        "previous_code_digest": "99ac33698ff2e0c7515fd2474e3d9951a3fe770bdc4f50638cd504491108c128",
-        "current_code_digest": "23461a4b8d983fc8c5dca8f1da185a6d00fe79a834666c8b60d9afb78921d93a"
+        "previous_code_digest": "23461a4b8d983fc8c5dca8f1da185a6d00fe79a834666c8b60d9afb78921d93a",
+        "current_code_digest": "378b62bbd40c881ceea2efca806d725ef15872b973ab7faa3ad1561caaee12bf",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7747,7 +7803,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -7974,13 +8030,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bb7c8a3d00d221a74f449553eaa3e3ef051e435161a5acfa87cbd5bc6d9a3594",
+      "code_digest": "2629b25dff61d6c63f984430cd36facad70f261cc33b54ba41b029ef683091df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持104原精确目标、批准话术、发送次数及未知禁止重发；新增首发入口不授104发送权限。",
-        "reviewed_by": "/root/cloud_preflight_review (104窄兼容独审；不计真实执行验证)",
-        "previous_code_digest": "e3c9979a0fc83dc3d889c7be966d1e81542b11b5ee4b44e1093846cc04e7f2ad",
-        "current_code_digest": "bb7c8a3d00d221a74f449553eaa3e3ef051e435161a5acfa87cbd5bc6d9a3594"
+        "previous_code_digest": "bb7c8a3d00d221a74f449553eaa3e3ef051e435161a5acfa87cbd5bc6d9a3594",
+        "current_code_digest": "2629b25dff61d6c63f984430cd36facad70f261cc33b54ba41b029ef683091df",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8489,7 +8545,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -8709,13 +8765,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7d4f535b3cef2c9e2bd1d38f279287aa73e348498e26b6c6329571b5fc4e8f60",
+      "code_digest": "61d7eb2c36463f76872519010253ad46e464efa3b76859eaa7e0676e46468f0f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持104原订单写回与独立读回；新宿主声明仅101至103，未改104业务合同或方法。",
-        "reviewed_by": "/root/cloud_preflight_review (104窄兼容独审；不计真实执行验证)",
-        "previous_code_digest": "dded68c35a0d6bac7d63524ebed286021e5475cf75fa776aa6b0b02130b8459b",
-        "current_code_digest": "7d4f535b3cef2c9e2bd1d38f279287aa73e348498e26b6c6329571b5fc4e8f60"
+        "previous_code_digest": "7d4f535b3cef2c9e2bd1d38f279287aa73e348498e26b6c6329571b5fc4e8f60",
+        "current_code_digest": "61d7eb2c36463f76872519010253ad46e464efa3b76859eaa7e0676e46468f0f",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9224,7 +9280,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "eadf228baae0e25903272c8c08537eaa259dcb07d3c79bbf14a94a427d163fa5"
+          "sha256": "d0fcc4e7d987a3bd3c1c6579d9643b32fdd1c1ec2509f5bdbe6a1d876127d684"
         },
         {
           "kind": "code",
@@ -9454,13 +9510,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ba9b3b3d8a9aa349688584c16cde9669773c7f6caa048693627d3596569c7e69",
+      "code_digest": "49f250dab769dedfcbeea562eeb4cc7b5af3741ec1cef064e7ffdb6e2cffe68c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持104未决发送及精确owner归位；新录音hook只在新officialintent存在时启用，旧路径不变。",
-        "reviewed_by": "/root/cloud_preflight_review (104窄兼容独审；不计真实执行验证)",
-        "previous_code_digest": "f311c1a911824d159ba47cd48100f3b6f95fe299a7d26acccf33457b61affb76",
-        "current_code_digest": "ba9b3b3d8a9aa349688584c16cde9669773c7f6caa048693627d3596569c7e69"
+        "previous_code_digest": "ba9b3b3d8a9aa349688584c16cde9669773c7f6caa048693627d3596569c7e69",
+        "current_code_digest": "49f250dab769dedfcbeea562eeb4cc7b5af3741ec1cef064e7ffdb6e2cffe68c",
+        "reason": "Task2724仅通用设备Epoch认证失败早停及原unknown恢复；业务Skill正文/公司资格评分政策/104发送合同与默认业务执行入口不变。此为作者评估，整体主入口与独立审查验收另记，不提高execution_verified。",
+        "reviewed_by": "codex-epoch-auth-resume"
       }
     }
   },

@@ -11303,3 +11303,83 @@ tests:
     status: active
     product: AI员工
     note: "真实deploy三角色数组独立拷包与原入口Node导入；无手机或模型IO"
+
+  - id: epoch-auth-adb-private-auth
+    path: services/phone-adb-controller/__tests__/adb-private-auth.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-adb-private-supervisor
+    path: services/phone-adb-controller/__tests__/adb-private-supervisor.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-runtime
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-runtime.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-history
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-history.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-auth-reference
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-auth-reference.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-startup
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-startup.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-sequence
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-sequence.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-authority
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-authority.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-auth-command
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-auth-command.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-native
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-native.integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "required Darwin真实主入口及ACK未知/伪造身份回归；不触现场服务"

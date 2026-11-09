@@ -1,0 +1,26 @@
+{
+  "headers": {
+    "date": "fixture",
+    "content-type": "application/json;charset=utf-8",
+    "content-length": "fixture",
+    "connection": "fixture",
+    "keep-alive": "fixture",
+    "access-control-allow-origin": "fixture",
+    "access-control-expose-headers": "fixture",
+    "x-acs-request-id": "attach-request",
+    "x-acs-trace-id": "fixture",
+    "etag": "fixture"
+  },
+  "statusCode": 200,
+  "body": {
+    "Data": {
+      "AttachedInstanceIds": [
+        "acp-fixture"
+      ],
+      "FailCount": 0,
+      "KeyPairId": "kp-fixture-new",
+      "TotalCount": 1
+    },
+    "RequestId": "attach-request"
+  }
+}

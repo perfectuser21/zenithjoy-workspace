@@ -1,0 +1,32 @@
+{
+  "headers": {
+    "date": "fixture",
+    "content-type": "application/json;charset=utf-8",
+    "content-length": "fixture",
+    "connection": "fixture",
+    "keep-alive": "fixture",
+    "access-control-allow-origin": "fixture",
+    "access-control-expose-headers": "fixture",
+    "x-acs-request-id": "mapping-read",
+    "x-acs-trace-id": "fixture",
+    "etag": "fixture"
+  },
+  "statusCode": 200,
+  "body": {
+    "Data": [
+      {
+        "ExternalIp": "192.0.2.31",
+        "ExternalPort": "10001",
+        "GmtCreated": "fixture",
+        "GmtModified": "fixture",
+        "InstanceId": "acp-fixture",
+        "InternalIp": "fixture",
+        "InternalPort": "fixture",
+        "IpProtocol": "tcp"
+      }
+    ],
+    "MaxResults": 20,
+    "RequestId": "mapping-read",
+    "TotalCount": 1
+  }
+}

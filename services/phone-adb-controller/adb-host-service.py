@@ -11,6 +11,7 @@ import plistlib
 import pwd
 import re
 import signal
+import select
 import socket
 import stat
 import subprocess
@@ -100,6 +101,7 @@ def foreground_command(policy):
 
 def check_client(policy, environment, runner=subprocess.run):
     if policy.get('schema_version') == 2:
+        environment = instance_environment(environment)
         route.instance_module().verify_binary(policy)
     binary = policy['adb_realpath'] if policy.get('schema_version') == 2 else policy['adb_bin']
     result = runner([binary, 'version'], env=environment,
@@ -177,17 +179,30 @@ def run_service(policy, config, maintenance_receipt=None):
         def authorize():
             if multi:
                 require(load_policy(config) == policy, 'INSTANCE_CONFIG_CHANGED')
-                route.instance_module().authorize_start(policy, config, maintenance_receipt)
-        authorize()
+                return route.instance_module().authorize_start(policy, config, maintenance_receipt)
+        first_authority = json.loads(json.dumps(authorize()))
         ensure_absent(policy)
         check_client(policy, environment)
         # 再核一次，避免version检查期间新服务出现；不向既有server发任何停止命令。
         ensure_absent(policy)
-        authorize()
-        child = subprocess.Popen(foreground_command(policy), env=environment, close_fds=True)
+        final_authority = authorize()
+        resume = multi and any(isinstance(a, dict) and a.get('protocol') == 'device-epoch-fence-startup-verification/v2' for a in (first_authority, final_authority))
+        daemon_environment = environment
+        if resume:
+            require(first_authority == final_authority, 'RESUME_AUTHORITY_CHANGED')
+            daemon_environment = route.instance_module().authenticated_environment(policy, config, final_authority, environment)
+        child = subprocess.Popen(foreground_command(policy), env=daemon_environment, close_fds=True)
         old_handlers = {}
+        forwarded = []
         def forward(signum, _frame):
-            stop_child(child, signum)
+            if resume:
+                # The main wait owns reap. Nested wait in this handler would
+                # deadlock on Popen's non-reentrant waitpid lock.
+                if child.poll() is None:
+                    child.send_signal(signum)
+                    forwarded.append((child.pid, signum))
+            else:
+                stop_child(child, signum)
         try:
             os.ftruncate(lock_fd, 0)
             os.write(lock_fd, (json.dumps({'supervisor_pid': os.getpid(), 'child_pid': child.pid}) + '\n').encode())
@@ -195,7 +210,7 @@ def run_service(policy, config, maintenance_receipt=None):
             for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
                 old_handlers[sig] = signal.signal(sig, forward)
             result = child.wait()
-            require(result == 0, 'CHILD_EXIT_FAILED')
+            require(result == 0 or resume and forwarded and forwarded[-1] == (child.pid, -result), 'CHILD_EXIT_FAILED')
         finally:
             try:
                 if child.poll() is None:
@@ -205,6 +220,42 @@ def run_service(policy, config, maintenance_receipt=None):
                     signal.signal(sig, handler)
         # 保留PID记录供只读核验，不把文件删除当成已停止证据。
         require(child.poll() is not None, 'STOP_UNCONFIRMED')
+        if resume:
+            # Exact own endpoint only. No adb command, connect or global stop.
+            ensure_absent(policy)
+
+
+def reserved_start(policy, config, receipt, timeout=30):
+    # A PID reservation is timing only, never startup authority. After this
+    # barrier run_service still performs both fresh fixed Node verifications.
+    require(policy.get('schema_version') == 2 and isinstance(receipt, str)
+            and Path(receipt).is_absolute() and 0 < timeout <= 30, 'RESUME_BARRIER')
+    instance = route.instance_module()
+    instance.read_instance_policy(config, policy)
+    instance.source_manifest(extra=('adb-private-supervisor.py', 'adb-process-observation.py'))
+    path = HERE / 'adb-private-supervisor.py'
+    helper = types.ModuleType('adb_private_supervisor')
+    helper.__file__ = str(path)
+    exec(compile(instance.read_file(path), str(path), 'exec'), helper.__dict__)
+    identity = helper.kernel_identity(os.getpid())
+    require(identity is not None and identity['uid'] == os.geteuid(), 'RESUME_BARRIER')
+    print(json.dumps({'event': 'resume-startup-reserved', 'pid': os.getpid(),
+                      'uid': identity['uid'], 'kernel_start': identity['start']}), flush=True)
+    deadline = time.monotonic() + timeout
+    raw = b''
+    while b'\n' not in raw:
+        remaining = deadline - time.monotonic()
+        require(remaining > 0 and select.select([sys.stdin.fileno()], [], [], remaining)[0], 'RESUME_BARRIER')
+        chunk = os.read(sys.stdin.fileno(), 4097-len(raw))
+        require(chunk and len(raw)+len(chunk) <= 4096, 'RESUME_BARRIER')
+        raw += chunk
+    message = json.loads(raw)
+    require(isinstance(message, dict) and set(message) == {'action', 'receipt_sha256'}
+            and message['action'] == 'authorize_reserved_start'
+            and re.fullmatch('[a-f0-9]{64}', message.get('receipt_sha256', '')), 'RESUME_BARRIER')
+    original = instance.read_file(Path(receipt), private=True)
+    require(hashlib.sha256(original).hexdigest() == message['receipt_sha256']
+            and json.loads(original).get('protocol') == 'device-epoch-fence-resume-startup/v1', 'RESUME_BARRIER')
 
 
 def launchd_definition(python, service, home, username):
@@ -280,12 +331,16 @@ def main():
     parser.add_argument('command', choices=['run', 'status'])
     parser.add_argument('--config', required=True)
     parser.add_argument('--maintenance-receipt')
+    parser.add_argument('--resume-reserved-start', action='store_true')
     args = parser.parse_args()
     policy = load_policy(args.config)
     validate_host(policy)
+    require(not args.resume_reserved_start or args.command == 'run', 'RESUME_BARRIER')
     if args.command == 'status':
         print(json.dumps(status(policy)))
     else:
+        if args.resume_reserved_start:
+            reserved_start(policy, args.config, args.maintenance_receipt)
         run_service(policy, args.config, args.maintenance_receipt)
 
 
