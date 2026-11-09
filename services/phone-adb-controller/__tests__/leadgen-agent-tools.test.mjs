@@ -311,3 +311,43 @@ for(const kind of ['business','phone'])test(kind+'先入槽时同tick心跳保�
   assert.deepEqual(result,{deferred:true});assert.equal(effects,1);assert.equal(refreshes,0);
  },{primitives:{heartbeat:async()=>{refreshes++;return {};},queue:async()=>{effects++;entered.resolve();await finish.promise;return {};},phone:async()=>{effects++;entered.resolve();await finish.promise;return {};}}});
 });
+
+for(const boundary of ['resources','input'])test('心跳结束后'+boundary+'异步校验跨worker截止不得发起业务',async t=>{
+ const now=Date.now(),heartbeatEntered=deferred(),heartbeatFinish=deferred(),validationEntered=deferred(),validationFinish=deferred();let validating=false,writes=0;
+ t.mock.timers.enable({apis:['Date'],now});
+ const validate=async()=>{if(validating){validationEntered.resolve();await validationFinish.promise;}return true;};
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await heartbeatEntered.promise;
+  const business=tools.business('discover',{video}).then(()=>null,error=>error);
+  validating=true;heartbeatFinish.resolve({renewed:true});await heartbeat;await validationEntered.promise;
+  t.mock.timers.setTime(now+1100);validationFinish.resolve();
+  const error=await business;assert.equal(error?.message,'AGENT_TOOL_DEADLINE');assert.equal(writes,0);
+  const original=(await tools.inspect()).scope;assert.equal(original.worker_deadline_ms,now+1000);assert.equal(original.deadline_ms,now+10000);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{heartbeatEntered.resolve();return heartbeatFinish.promise;},assertResources:boundary==='resources'?validate:async()=>true,validateInput:async(_op,input)=>{if(boundary==='input')await validate();return input;},queue:async()=>{writes++;return {inserted:true};}}});
+});
+
+test('未知写入worker截止后仍只开放原目标SELECT读回，outer截止后拒绝',async t=>{
+ const now=Date.now(),operations=[];
+ t.mock.timers.enable({apis:['Date'],now});
+ await using(async tools=>{
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);
+  t.mock.timers.setTime(now+1100);
+  await assert.rejects(()=>tools.business('discover_readback',{video:{...video,videoId:'2234567890123456'}}),/UNKNOWN/);
+  const readback=await tools.business('discover_readback',{video});assert.equal(readback.metrics_verified,true);
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);
+  assert.deepEqual(operations,['discover','discover_readback']);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'discover',readback_operations:['discover_readback']}]);
+  t.mock.timers.setTime(now+10000);
+  await assert.rejects(()=>tools.business('discover_readback',{video}),/DEADLINE/);
+  assert.deepEqual(operations,['discover','discover_readback']);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{queue:async op=>{operations.push(op);if(op==='discover')throw Error('lost write acknowledgement');return {metrics_verified:true};}}});
+});
+
+for(const boundary of ['resources','input'])test(boundary+'异步校验自身失败仍传播原错误而非吞掉后放行',async t=>{
+ const now=Date.now();let writes=0;
+ t.mock.timers.enable({apis:['Date'],now});
+ const failure=Error('NATIVE_ADMISSION_REJECTED'),reject=async()=>{await nextTurn();t.mock.timers.setTime(now+1100);throw failure;};
+ await using(async tools=>{
+  await assert.rejects(()=>tools.business('discover',{video}),error=>error===failure);assert.equal(writes,0);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{assertResources:boundary==='resources'?reject:async()=>true,validateInput:boundary==='input'?reject:async(_op,input)=>input,queue:async()=>{writes++;return {};}}});
+});
