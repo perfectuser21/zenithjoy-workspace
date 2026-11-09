@@ -11239,3 +11239,11 @@ tests:
     status: active
     product: AI员工
     note: "公共Skill首发live authority与中央TaskRun闭合离线合同，不冒实机通过"
+
+  - id: leadgen-official-child-host
+    path: services/phone-adb-controller/__tests__/official-child-host.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "公共同进程Skill宿主来源/撤销/双停保守行为；离线模型CLI夹具，不冒真机成功"
