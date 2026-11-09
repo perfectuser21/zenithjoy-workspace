@@ -139,10 +139,53 @@ def verifier_context(policy, config):
             'policy_sha256': sha(read_file(Path(config), private=True))}
 
 
+VERIFIER_ERROR_CODES = frozenset({
+    'EPOCH_ADMISSION_DRIFT',
+    'EPOCH_ADMISSION_SCOPE',
+    'EPOCH_AGENT_INPUT',
+    'EPOCH_ARCHIVE',
+    'EPOCH_BUSINESS_BINDING',
+    'EPOCH_BUSINESS_CENTRAL',
+    'EPOCH_BUSINESS_COMPANY',
+    'EPOCH_BUSINESS_DRIFT',
+    'EPOCH_BUSINESS_TASK',
+    'EPOCH_BUSINESS_TASK_RUN',
+    'EPOCH_CENTRAL_INVENTORY',
+    'EPOCH_CLI_NOT_APPLICABLE',
+    'EPOCH_CLI_USAGE',
+    'EPOCH_DAEMON_IDENTITY',
+    'EPOCH_DAEMON_LISTENER',
+    'EPOCH_DAEMON_SCOPE',
+    'EPOCH_DAEMON_SOURCE',
+    'EPOCH_ENV_BINDING',
+    'EPOCH_EVIDENCE_ROOT',
+    'EPOCH_FROZEN_DRIFT',
+    'EPOCH_FROZEN_REFERENCE',
+    'EPOCH_HOST_INVENTORY',
+    'EPOCH_LIVE_ROUTES',
+    'EPOCH_LOCAL_HANDOFF',
+    'EPOCH_POLICY_PATH',
+    'EPOCH_RECORD_DIGEST',
+    'EPOCH_REFERENCE_ID',
+    'EPOCH_RUNTIME_SNAPSHOT',
+    'EPOCH_SOURCE_POLICY',
+})
+
+
 def verifier_answer(context, arguments, runner):
-    result = runner([context['node']['path'], context['module'], *arguments], env=context['env'],
-                    capture_output=True, text=True, timeout=15)
-    need(result.returncode == 0 and len(result.stdout.encode()) <= 8192, 'VERIFIER_AUTHORITY')
+    try:
+        result = runner([context['node']['path'], context['module'], *arguments], env=context['env'],
+                        capture_output=True, text=False, timeout=15)
+    except subprocess.TimeoutExpired:
+        raise ValueError('ADB_INSTANCE_VERIFIER_TIMEOUT') from None
+    if result.returncode != 0:
+        # The fixed Node boundary emits a single code line. Never disclose raw
+        # subprocess diagnostics, commands, JSON, or caller-provided strings.
+        stderr = result.stderr.decode('ascii', errors='replace') if isinstance(result.stderr, bytes) else result.stderr
+        code = stderr[:-1] if stderr.endswith('\n') else stderr
+        need(code in VERIFIER_ERROR_CODES, 'VERIFIER_AUTHORITY')
+        raise ValueError('ADB_INSTANCE_VERIFIER_' + code)
+    need(len(result.stdout.encode() if isinstance(result.stdout, str) else result.stdout) <= 8192, 'VERIFIER_AUTHORITY')
     answer = json.loads(result.stdout)
     need(isinstance(answer, dict) and answer.get('authorized') is True, 'VERIFIER_AUTHORITY')
     return answer

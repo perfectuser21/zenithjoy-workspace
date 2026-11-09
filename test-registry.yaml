@@ -11133,6 +11133,15 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；公共profile固定ADB instance policy路径与原始字节哈希，未知或更换来源拒绝"
 
+  - id: phone-adb-managed-safe-diagnostics
+    path: services/phone-adb-controller/__tests__/adb-managed-diagnostics.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实CLI和固定Node错误码脱敏、15秒超时专码；无现场设备动作"
+
   - id: phone-adb-host-instances
     path: services/phone-adb-controller/__tests__/adb-host-instances.test.mjs
     type: integration

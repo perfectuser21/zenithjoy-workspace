@@ -10,6 +10,7 @@ import {verifyPublicDomainTask} from './public-domain-pg.mjs';
 import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {createOfficialCliClosure,describeOfficialCliInvocation,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from './official-cli-closure.mjs';
 import {createOfficialRecordingProducer} from './official-recording-producer.mjs';
+import {skillLaunchDidNotStart} from './activity-skill-executor.mjs';
 const instances=new WeakSet(),returned=new WeakMap();
 const key=({command,args,receipt,root,frozen})=>canonical({command,args,receipt,root,snapshot_sha256:frozen.snapshot_sha256});
 export const isOfficialChildPrimitives=v=>instances.has(v);
@@ -69,6 +70,21 @@ export function createOfficialChildPrimitives({root,env,frozen,binding,taskId,st
   if(entry.cli)stopped=(await entry.cli.close()).execution_stopped===true&&stopped;
   entry.done=true;current=null;if(!stopped||entry.unknown){unknown=true;state.executionUnknown=true;throw fail();}return {execution_stopped:true};
  }
+ function wrapTools(activity,scope,tools){
+  stable();const entry=activities.get(activity.key);
+  if(!entry||current!==entry||canonical(entry.scope)!==canonical(scope))throw fail();
+  return {...tools,settle:async proof=>{const result=await tools.settle(proof);if(activity.key!=='cleanup')await finish(activity.key);return result;},
+   ...(activity.key==='cleanup'?{release:async proof=>{const result=await tools.release(proof);await finish(activity.key);return result;}}:{}),
+   closeNativeScope:async proof=>{
+    stable();if(entry.pending||entry.unknown||current&&current!==entry)throw fail();
+    if(entry.done){const state=entry.cli?.snapshot();if(state&&(!state.sealed||state.pending||state.unknown))throw fail();return {execution_stopped:true};}
+    // This closes physical producers only. A failed resource intent and its
+    // unknown business outcome remain durable and cannot be replayed.
+    if(!skillLaunchDidNotStart(proof,entry.scope))throw fail();
+    if(typeof tools.closeNativeScope==='function'&&(await tools.closeNativeScope(proof))?.execution_stopped!==true)throw fail();
+    return finish(activity.key);
+   }};
+ }
  const snapshot=()=>({execution_unknown:unknown||[...activities.values()].some(e=>e.unknown||e.recording?.snapshot().unknown),pending:[...activities.values()].reduce((n,e)=>n+e.pending,0),active:Boolean(current)});
- const runtime={begin,execute,finish,snapshot,async quarantine(){const proofs=[];for(const entry of [...activities.values()].reverse())if(entry.cli)try{proofs.push(await entry.cli.quarantine());}catch{proofs.push({verified:false,physical_actions:0});}return {verified:scoring||proofs.some(p=>p.verified===true),physical_actions:0,...(scoring?{not_applicable:true}:{}),proofs};},supports:activity=>{stable();return !current&&slots.includes(activity.key)&&(scoring||spec?.policy?.schema_version===2)&&!activities.has(activity.key);},async close(){try{const a=publicDomainAuthority(env.WFR_RUN_DIR);if(!a||a.binding.id!==binding.id||canonical(readFrozen(env.WFR_RUN_DIR))!==canonical(frozen))unknown=true;for(const entry of activities.values()){if(entry.recording){const proof=await entry.recording.close();if(!entry.recording.verifyStopped(proof))unknown=true;}if(entry.cli&&(await entry.cli.close()).execution_stopped!==true)unknown=true;}}catch{unknown=true;}const s=snapshot();closed=true;return {execution_stopped:!s.execution_unknown&&!s.pending&&!s.active};}};instances.add(runtime);return Object.freeze(runtime);
+ const runtime={begin,execute,finish,wrapTools,snapshot,async quarantine(){const proofs=[];for(const entry of [...activities.values()].reverse())if(entry.cli)try{proofs.push(await entry.cli.quarantine());}catch{proofs.push({verified:false,physical_actions:0});}return {verified:scoring||proofs.some(p=>p.verified===true),physical_actions:0,...(scoring?{not_applicable:true}:{}),proofs};},supports:activity=>{stable();return !current&&slots.includes(activity.key)&&(scoring||spec?.policy?.schema_version===2)&&!activities.has(activity.key);},async close(){try{const a=publicDomainAuthority(env.WFR_RUN_DIR);if(!a||a.binding.id!==binding.id||canonical(readFrozen(env.WFR_RUN_DIR))!==canonical(frozen))unknown=true;for(const entry of activities.values()){if(entry.recording){const proof=await entry.recording.close();if(!entry.recording.verifyStopped(proof))unknown=true;}if(entry.cli&&(await entry.cli.close()).execution_stopped!==true)unknown=true;}}catch{unknown=true;}const s=snapshot();closed=true;return {execution_stopped:!s.execution_unknown&&!s.pending&&!s.active};}};instances.add(runtime);return Object.freeze(runtime);
 }

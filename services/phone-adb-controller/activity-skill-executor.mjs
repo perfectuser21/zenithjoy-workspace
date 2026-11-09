@@ -218,7 +218,12 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     let proof=transport?{execution_stopped:rawControlKnown&&rawModelScopeStopped(rawProof,scope),raw_model_proof:rawProof}:{execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
     if(!dispatched&&(!transport||!rawControl||rawControlKnown)){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
     try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;if(rawState&&rawControlKnown)rawState.ready=true;}
-    catch{if(caughtError)caughtError.executionStopped=false;else throw Object.assign(Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED'),{executionStopped:false});}
+    catch{
+     if(caughtError)caughtError.executionStopped=false;
+     // Preserve an already-failed official-child unknown receipt, including its
+     // business readback evidence. This never certifies physical closure.
+     else if(transport||frozen.primary_host!=='official-child-v1'||!dispatched||stopped)throw Object.assign(Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED'),{executionStopped:false});
+    }
    }
   }
  };
