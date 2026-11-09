@@ -4,7 +4,7 @@ import {lstatSync,readdirSync,realpathSync,mkdirSync} from 'node:fs';import {ran
 import {readBrain,reviewSource} from './device-epoch-fence-review.mjs';
 import {bytes,recordBytes,readPrivatePolicy,validateEpochRecord,freezeFenceReference} from './device-epoch-fence-reference.mjs';
 export {freezeFenceReference};
-import {readFrozen,digest,canonical} from './runtime-definition.mjs';
+import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
 import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,sha=b=>createHash('sha256').update(b).digest('hex');
@@ -22,7 +22,9 @@ export function businessAuthorityProjection(value){
 }
 export function verifyEpochFacts(f){
  const {record:r,frozen,task,binding:b,links,taskRun,central:c}=f,spec=phone(frozen),p=frozen.public_domain;validateEpochRecord(r,spec);
- need(frozen.execution_mode==='code'&&p?.protocol==='workflow-domain/v1'&&uuid.test(p.task_id||'')&&uuid.test(p.run_id||'')&&same(r.resource.company,p.company),'EPOCH_BUSINESS_COMPANY');
+ const officialChild=frozen.execution_mode==='agent'&&frozen.primary_host==='official-child-v1'&&frozen.execution_transport===undefined&&frozen.max_turns===undefined;
+ if(officialChild){const input=validateAgentInput(frozen.agent_input);need(input.task_id===p?.task_id&&input.workflow_key===frozen.workflow_version?.payload?.key&&input.run_tag===frozen.run_identity?.tag&&input.profile===spec.profile&&input.serial===spec.serial,'EPOCH_AGENT_INPUT');}
+ need((frozen.execution_mode==='code'||officialChild)&&p?.protocol==='workflow-domain/v1'&&uuid.test(p.task_id||'')&&uuid.test(p.run_id||'')&&same(r.resource.company,p.company),'EPOCH_BUSINESS_COMPANY');
  need(b?.source_kind==='internal'&&b.id===p.run_binding.run_binding_id&&b.run_id===p.run_id&&b.workflow_id===p.run_binding.workflow_id&&b.workflow_definition_version_id===p.run_binding.workflow_definition_version_id&&b.attempt_key===p.run_binding.attempt_key&&b.release_id===frozen.release?.id&&b.observation_id===frozen.deployment.observation_id&&links?.task_id===p.task_id&&links.task_run_id===b.task_run_id,'EPOCH_BUSINESS_BINDING');
  need(taskRun?.id===b.task_run_id&&taskRun.run_id===p.run_id&&taskRun.task_id===p.task_id&&taskRun.status==='running'&&taskRun.ended_at===null,'EPOCH_BUSINESS_TASK_RUN');
  const runtimeFiles=Object.fromEntries(Object.entries(frozen.files).filter(([name])=>name.startsWith('runtime/')).map(([name,hash])=>[name.slice(8),hash]));need(b.payload?.runtime_snapshot_sha256===digest(runtimeFiles),'EPOCH_RUNTIME_SNAPSHOT');
