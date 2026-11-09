@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {preflightTestPython} from './helpers/preflight-test-python.mjs';
 import {spawnSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 import {createOfficialCliClosure} from '../official-cli-closure.mjs';
@@ -11,7 +12,7 @@ const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,''),hash=
 function rig(t,{owner='run'}={}){
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'cli-quarantine-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const lockRoot=join(directory,'.local/share/zenithjoy/phone-locks'),lock=join(lockRoot,'serial.lock');mkdirSync(lock,{recursive:true,mode:0o700});writeFileSync(join(lockRoot,'serial.guard'),'',{mode:0o600});writeFileSync(join(lock,'owner'),owner+'\n',{mode:0o600});
- const executables={zsh:{path:'/bin/zsh'},python:{path:realpathSync('/usr/bin/python3')},node:{path:realpathSync(process.execPath)}};for(const p of Object.values(executables))p.sha256=hash(readFileSync(p.path));
+ const executables={zsh:{path:'/bin/zsh'},python:{path:realpathSync(preflightTestPython)},node:{path:realpathSync(process.execPath)}};for(const p of Object.values(executables))p.sha256=hash(readFileSync(p.path));
  const files={};for(const name of readdirSync(root))if(lstatSync(join(root,name)).isFile())files['runtime/'+name]=hash(readFileSync(join(root,name)));
  const taskId='11111111-1111-4111-8111-111111111111',binding={run_id:'run__a1',id:'22222222-2222-4222-8222-222222222222'},env={HOME:directory,WFR_RUN_DIR:directory,P:'fixture',SERIAL:'serial',WFR_TAG:'run',WFR_ATTEMPT:'a1'},frozen={snapshot_sha256:'a'.repeat(64),deployment:{source_commit:'b'.repeat(40)},files,agent_input:{task_id:taskId,profile:'fixture',serial:'serial',run_tag:'run',workflow_key:'douyin_video_processing'},collection_phone_scope:{run_id:binding.run_id,profile:'fixture',serial:'serial',policy:{schema_version:2},executables}},scope={activity:'collection',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,snapshot_sha256:frozen.snapshot_sha256,source_commit:frozen.deployment.source_commit,profile:'fixture',serial:'serial',run:'run',workflow:'douyin_video_processing',worker_deadline_ms:Date.now()+20000,receipt_deadline_ms:Date.now()+25000,deadline_ms:Date.now()+30000};let revoked=false,admissions=0;
  const facade=createOfficialCliClosure({root,env,frozen,binding,taskId,scope,assertAdmission:async()=>{admissions++;if(revoked)throw Object.assign(Error('TASK_REVOKED'),{resourceUnknown:true});return {authorized:true};}});
