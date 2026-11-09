@@ -21,7 +21,7 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
  const end=request.receipt_deadline_ms,scopeHash=hash(request);
  if(!Number.isSafeInteger(end)||end>=request.deadline_ms||Date.now()>=end)fail();
  const current=()=>{
-  if(hash(JSON.parse(readFileSync(join(directory,'activity-request.json'),'utf8')))!==scopeHash
+  if(hash(request)!==scopeHash||hash(JSON.parse(readFileSync(join(directory,'activity-request.json'),'utf8')))!==scopeHash
    ||existsSync(join(directory,'handoff-closed.json'))||existsSync(join(directory,'generation-revoked.json')))fail();
  };
  current();if(await authorize()!==true)fail();current();
@@ -55,7 +55,7 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
    if(body?.runId!==intent.owner_run_id){conflict=true;break;}
    if(body.endedAt!==undefined){
     if(!['ok','error','timeout','aborted'].includes(body.status)||!Number.isFinite(body.endedAt)
-     ||body.endedAt<intent.started_at_ms-1000||body.endedAt>Date.now()+1000){conflict=true;break;}
+     ||body.endedAt<intent.started_at_ms-1000||body.endedAt>Date.now()+1000||body.endedAt>end){conflict=true;break;}
     terminal=body;break;
    }
    if(!['pending','timeout'].includes(body.status)){conflict=true;break;}
