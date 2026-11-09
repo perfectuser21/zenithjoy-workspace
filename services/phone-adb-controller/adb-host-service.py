@@ -194,8 +194,14 @@ def run_service(policy, config, maintenance_receipt=None):
         old_handlers = {}
         forwarded = []
         def forward(signum, _frame):
-            forwarded.append(signum)
-            stop_child(child, signum)
+            if resume:
+                # The main wait owns reap. Nested wait in this handler would
+                # deadlock on Popen's non-reentrant waitpid lock.
+                if child.poll() is None:
+                    child.send_signal(signum)
+                    forwarded.append((child.pid, signum))
+            else:
+                stop_child(child, signum)
         try:
             os.ftruncate(lock_fd, 0)
             os.write(lock_fd, (json.dumps({'supervisor_pid': os.getpid(), 'child_pid': child.pid}) + '\n').encode())
@@ -203,7 +209,7 @@ def run_service(policy, config, maintenance_receipt=None):
             for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
                 old_handlers[sig] = signal.signal(sig, forward)
             result = child.wait()
-            require(result == 0 or resume and forwarded and result == -forwarded[-1], 'CHILD_EXIT_FAILED')
+            require(result == 0 or resume and forwarded and forwarded[-1] == (child.pid, -result), 'CHILD_EXIT_FAILED')
         finally:
             try:
                 if child.poll() is None:
