@@ -90,6 +90,7 @@ function readStartupInstance({instanceId,registrySha256,policySha256}){
 }
 function loadStartupReceipt(path){const st=lstatSync(path);need((st.mode&0o777)===0o600,'STARTUP_RECEIPT_MODE');return JSON.parse(bytes(path));}
 export async function verifyStartupReceipt(options={}){
+ const loaded=(options.load??loadStartupReceipt)(options.receiptPath);if(loaded?.protocol==='device-epoch-fence-resume-startup/v1')return (await import('./device-epoch-fence-resume-startup.mjs')).verifyResumeStartupReceipt(options);
  const {receiptPath,instanceId,registrySha256,sourceCommit,policySha256}=options,load=options.load??loadStartupReceipt,inspect=options.inspect??inspectReview,source=options.source??reviewSource,instance=options.instance??readStartupInstance;
  need(typeof receiptPath==='string'&&resolve(receiptPath)===receiptPath&&/^[a-z][a-z0-9-]{2,63}$/.test(instanceId||'')&&/^[a-f0-9]{40}$/.test(sourceCommit||'')&&[registrySha256,policySha256].every(x=>/^[a-f0-9]{64}$/.test(x||'')),'STARTUP_ARGUMENTS');const r=load(receiptPath),now=Date.now();
  need(r.protocol==='device-epoch-fence-startup/v1'&&r.action==='start_private_server'&&r.instance_id===instanceId&&r.registry_sha256===registrySha256&&r.policy_sha256===policySha256&&uuid.test(r.task_id||'')&&Number.isFinite(Date.parse(r.issued_at))&&Date.parse(r.issued_at)<=now&&Date.parse(r.expires_at)>now&&Date.parse(r.expires_at)-Date.parse(r.issued_at)<=120000&&r.review?.original_execution_stopped===false,'STARTUP_RECEIPT');
@@ -116,7 +117,7 @@ export async function planStartupReceipt({taskId,stateFile,instanceId,directory,
 }
 export async function main(args=process.argv.slice(2)){
  let result;
- if(['fence-plan','fence-materialize','fence-apply'].includes(args[0])){result=await (await import('./device-epoch-fence-controller.mjs')).main(args);}
+ if(['fence-plan','fence-materialize','fence-apply','fence-resume-plan','fence-resume-apply','fence-resume-inspect','fence-resume-auth-prepare'].includes(args[0])){result=await (await import('./device-epoch-fence-controller.mjs')).main(args);}
  else if(args[0]==='verify-epoch'){result=await (await import('./device-epoch-fence-admission.mjs')).main(args);}
  else if(args[0]==='verify-startup'){
   need(args.length===11&&args[1]==='--receipt'&&args[3]==='--instance-id'&&args[5]==='--registry-sha256'&&args[7]==='--source'&&args[9]==='--policy-sha256','STARTUP_USAGE');result=await verifyStartupReceipt({receiptPath:args[2],instanceId:args[4],registrySha256:args[6],sourceCommit:args[8],policySha256:args[10]});

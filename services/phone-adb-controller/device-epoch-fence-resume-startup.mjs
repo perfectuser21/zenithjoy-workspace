@@ -25,7 +25,7 @@ async function dependencies(options){
  const source=options.source??reviewSource;
  need(typeof inspect==='function'&&typeof read==='function'&&typeof source==='function','DEPENDENCIES');return {inspect,read,source,time:clock(options.now)};
 }
-function currentSource(source){const value=source();need(value&&typeof value.then!=='function'&&commit(value.commit)&&Array.isArray(value.files)&&value.files.length>0,'SOURCE');return value;}
+function currentSource(source){const value=source();need(value&&typeof value.then!=='function'&&commit(value.commit)&&value.files&&typeof value.files==='object'&&!Array.isArray(value.files)&&Object.keys(value.files).length>0&&Object.entries(value.files).every(([path,sha])=>path.startsWith('services/phone-adb-controller/')&&hash(sha)),'SOURCE');return value;}
 function actualBirth(read,expected,plan,kind,phase){
  const value=read(expected.pid,{plan,kind,phase});need(value&&typeof value.then!=='function','SYNC_KERNEL');
  const projected=Object.fromEntries(identityKeys.map(key=>[key,value[key]]));birth(projected);need(same(projected,expected),'BIRTH_DRIFT');
