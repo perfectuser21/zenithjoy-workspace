@@ -69,12 +69,12 @@ def validate_auth(policy_path, instance_id, auth):
     need(isinstance(resource, dict) and set(resource) == {'serial', 'cloud_instance_id', 'region_id'}
          and all(isinstance(v, str) and v and '\x00' not in v for v in resource.values()))
     key = ref['key']
-    need(isinstance(key, dict) and set(key) == {'path', 'sha256', 'public_path', 'public_key_sha256', 'key_pair_id'}
+    need(isinstance(key, dict) and set(key) == {'path', 'sha256', 'public_path', 'public_file_sha256', 'public_key_sha256', 'key_pair_id'}
          and key['path'] == auth['key_path'] and key['sha256'] == auth['key_sha256']
-         and key['public_key_sha256'] == auth['public_key_sha256']
+         and key['public_key_sha256'] == auth['public_key_sha256'] and digest(key['public_file_sha256'])
          and isinstance(key['key_pair_id'], str) and key['key_pair_id'])
     need(sha(private(key['path'], root)) == key['sha256']
-         and sha(private(key['public_path'], root)) == key['public_key_sha256'])
+         and sha(private(key['public_path'], root)) == key['public_file_sha256'])
     credential = ref['credential']
     need(isinstance(credential, dict) and set(credential) == {'provider', 'item_id', 'version', 'compromised', 'valid_from', 'expires_at'}
          and credential['provider'] == '1password' and credential['compromised'] is False
