@@ -100,6 +100,7 @@ def foreground_command(policy):
 
 def check_client(policy, environment, runner=subprocess.run):
     if policy.get('schema_version') == 2:
+        environment = instance_environment(environment)
         route.instance_module().verify_binary(policy)
     binary = policy['adb_realpath'] if policy.get('schema_version') == 2 else policy['adb_bin']
     result = runner([binary, 'version'], env=environment,
@@ -177,16 +178,23 @@ def run_service(policy, config, maintenance_receipt=None):
         def authorize():
             if multi:
                 require(load_policy(config) == policy, 'INSTANCE_CONFIG_CHANGED')
-                route.instance_module().authorize_start(policy, config, maintenance_receipt)
-        authorize()
+                return route.instance_module().authorize_start(policy, config, maintenance_receipt)
+        first_authority = json.loads(json.dumps(authorize()))
         ensure_absent(policy)
         check_client(policy, environment)
         # 再核一次，避免version检查期间新服务出现；不向既有server发任何停止命令。
         ensure_absent(policy)
-        authorize()
-        child = subprocess.Popen(foreground_command(policy), env=environment, close_fds=True)
+        final_authority = authorize()
+        resume = multi and any(isinstance(a, dict) and a.get('protocol') == 'device-epoch-fence-startup-verification/v2' for a in (first_authority, final_authority))
+        daemon_environment = environment
+        if resume:
+            require(first_authority == final_authority, 'RESUME_AUTHORITY_CHANGED')
+            daemon_environment = route.instance_module().authenticated_environment(policy, config, final_authority, environment)
+        child = subprocess.Popen(foreground_command(policy), env=daemon_environment, close_fds=True)
         old_handlers = {}
+        forwarded = []
         def forward(signum, _frame):
+            forwarded.append(signum)
             stop_child(child, signum)
         try:
             os.ftruncate(lock_fd, 0)
@@ -195,7 +203,7 @@ def run_service(policy, config, maintenance_receipt=None):
             for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
                 old_handlers[sig] = signal.signal(sig, forward)
             result = child.wait()
-            require(result == 0, 'CHILD_EXIT_FAILED')
+            require(result == 0 or resume and forwarded and result == -forwarded[-1], 'CHILD_EXIT_FAILED')
         finally:
             try:
                 if child.poll() is None:
@@ -205,6 +213,9 @@ def run_service(policy, config, maintenance_receipt=None):
                     signal.signal(sig, handler)
         # 保留PID记录供只读核验，不把文件删除当成已停止证据。
         require(child.poll() is not None, 'STOP_UNCONFIRMED')
+        if resume:
+            # Exact own endpoint only. No adb command, connect or global stop.
+            ensure_absent(policy)
 
 
 def launchd_definition(python, service, home, username):

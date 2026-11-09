@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import types
 
 HERE = Path(__file__).resolve().parent
 REGISTRY = 'config/adb-host-instances.json'
@@ -158,8 +159,40 @@ def authorize_start(policy, config, receipt, runner=subprocess.run):
                 'action': 'start_private_server', 'instance_id': c['row']['instance_id'], 'endpoint': policy['endpoint'],
                 'source_commit': c['manifest']['source_commit'], 'registry_sha256': c['registry_sha256'],
                 'policy_sha256': c['policy_sha256']}
-    need(answer == expected, 'STARTUP_AUTHORITY')
-    return expected
+    original = json.loads(read_file(Path(receipt), private=True))
+    if answer.get('protocol') == 'device-epoch-fence-startup-verification/v1':
+        need(answer == expected and original.get('protocol') != 'device-epoch-fence-resume-startup/v1', 'STARTUP_AUTHORITY')
+        return expected
+    extra = {'resume_plan_sha256', 'prior_pending_sha256', 'auth_ref_sha256', 'auth'}
+    need(set(answer) == set(expected) | extra
+         and answer['protocol'] == 'device-epoch-fence-startup-verification/v2'
+         and all(answer[k] == v for k, v in expected.items() if k != 'protocol')
+         and all(re.fullmatch('[a-f0-9]{64}', answer.get(k, '')) for k in extra - {'auth'}), 'STARTUP_AUTHORITY')
+    need(original.get('protocol') == 'device-epoch-fence-resume-startup/v1'
+         and all(original.get(k) == answer[k] for k in extra - {'auth'})
+         and isinstance(answer['auth'], dict) and answer['auth'].get('ref_path') == original.get('auth_ref_path')
+         and answer['auth'].get('ref_sha256') == answer['auth_ref_sha256'], 'STARTUP_AUTHORITY')
+    authenticated_environment(policy, config, answer, {})
+    return answer
+
+
+def authenticated_environment(policy, config, answer, environment):
+    # No external key/root argument. The fixed registry policy path derives the
+    # private auth root; Node remains the sole Task/provenance/math authority.
+    need(answer.get('protocol') == 'device-epoch-fence-startup-verification/v2'
+         and answer.get('authorized') is True and answer.get('instance_id') == policy.get('instance_id')
+         and answer.get('endpoint') == policy.get('endpoint'), 'PRIVATE_AUTH_AUTHORITY')
+    read_instance_policy(config, policy)
+    source_manifest(extra=('adb-private-auth.py',))
+    path = HERE / 'adb-private-auth.py'
+    module = types.ModuleType('adb_private_auth')
+    module.__file__ = str(path)
+    exec(compile(read_file(path), str(path), 'exec'), module.__dict__)
+    verified = module.validate_auth(config, policy['instance_id'], answer.get('auth'))
+    need(verified['ref_sha256'] == answer.get('auth_ref_sha256'), 'PRIVATE_AUTH_AUTHORITY')
+    result = adb_environment(environment)
+    result['ADB_VENDOR_KEYS'] = verified['key_path']
+    return result
 
 
 def authorize_epoch(policy, serial, run_dir, runner=subprocess.run):
