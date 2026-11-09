@@ -328,6 +328,7 @@ jobs:
             # These real PG/kernel suites run in the required Darwin job below.
             [[ "$path" =~ /native-103-(transaction|public-executor|producers)\.test\.mjs$ ]] && continue
             [[ "$path" =~ /native-phone-(adb-read|clip-state|command-source|foreground|integration|link-macros|link-resolver|local-producer|preflight-adapter|public-executor|queue|queue-idle-error|screenshot-wire|search-macros|source-issuer|ui|vision)\.test\.mjs$|/runner-phone-commander\.test\.mjs$ ]] && continue
+            [[ "$path" =~ /official-(child-capture\.integration|cli-closure|cli-quarantine|recording-producer)\.test\.mjs$ ]] && continue
             phone_tests+=("$path")
           done
           node --test --test-shard=${{ matrix.shard }}/3 scripts/openclaw/**/*.test.js "${phone_tests[@]}" .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js scripts/ci/__tests__/native-103-ci-contract.test.mjs
@@ -415,6 +416,11 @@ jobs:
           NODE
       - name: Run both private loopback native regression files on Darwin
         run: node --test --test-concurrency=1 services/phone-adb-controller/__tests__/public-code-preflight.test.mjs services/phone-adb-controller/__tests__/phone-epoch-producer.test.mjs
+
+      - name: Run official child native lifecycle without platform skips
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          node --test --test-concurrency=1 services/phone-adb-controller/__tests__/official-cli-closure.test.mjs services/phone-adb-controller/__tests__/official-cli-quarantine.test.mjs services/phone-adb-controller/__tests__/official-recording-producer.test.mjs services/phone-adb-controller/__tests__/official-child-capture.integration.test.mjs
 
   # 本机内核nofork守卫不能由Linux上的platform skip代替。
   collection-phone-darwin-test:

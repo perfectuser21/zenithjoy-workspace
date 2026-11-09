@@ -30,6 +30,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   ||!Number.isSafeInteger(cleanupDeadlineMs)||deadlineMs>cleanupDeadlineMs||cleanupDeadlineMs>fixed.deadline_ms
   ||typeof credential!=='function'||typeof httpRequest!=='function')throw failure('OFFICIAL_CONTROL_SCOPE');
  for(const path of [runtimeRoot,home,journalDirectory])if(typeof path!=='string'||!path.startsWith('/'))throw failure('OFFICIAL_CONTROL_SCOPE');
+ const publicRunDirectory=dirname(runtimeRoot);
  if(realpathSync(runtimeRoot)!==realpathSync(dirname(fileURLToPath(import.meta.url))))throw failure('OFFICIAL_CONTROL_SOURCE');
  const stat=lstatSync(journalDirectory);
  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077)||realpathSync(journalDirectory)!==resolve(journalDirectory))throw failure('OFFICIAL_CONTROL_JOURNAL');
@@ -73,7 +74,8 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  }
  function readCentral(path,e,job){
   guard(e);
-  if(typeof path!=='string'||path.split('/').some(part=>part==='.'||part==='..')||path.includes('%')||!/^\/api\/brain\/(?:runs\/[^/?#]+\/definition|tasks\/[a-f0-9-]{36}|workflows\/[^/?#]+\/versions\/[^/?#]+|activities\/[^/?#]+\/versions\/[^/?#]+)$/.test(path))throw failure('OFFICIAL_CONTROL_SCOPE');
+  if(typeof path!=='string'||path.split('/').some(part=>part==='.'||part==='..')||path.includes('%')||!/^\/api\/brain\/(?:runs\/[^/?#]+\/(?:definition|reconciliation)|tasks\/[a-f0-9-]{36}|workflows\/[^/?#]+\/versions\/[^/?#]+|activities\/[^/?#]+\/versions\/[^/?#]+)$/.test(path))throw failure('OFFICIAL_CONTROL_SCOPE');
+  if(path.endsWith('/reconciliation')&&(!fixed.public_domain||path!=='/api/brain/runs/'+fixed.run_id+'/reconciliation'))throw failure('OFFICIAL_CONTROL_SCOPE');
   const token=credential();if(typeof token!=='string'||!token||/[\r\n]/.test(token))throw failure('OFFICIAL_CONTROL_CREDENTIAL');
   guard(e);record({event:'read_intent',path,epoch:e});
   return new Promise((resolveRead,rejectRead)=>{
@@ -172,7 +174,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   if(Object.keys(body).sort().join(',')!=='kind,operation,request'||canonical(body.request)!==canonical(fixed))throw failure('OFFICIAL_CONTROL_SCOPE');
   verify();const e=epoch,job={cancelRead:null};jobs.add(job);let interrupt;const interrupted=new Promise((_,reject)=>{interrupt=reject;});job.cancel=code=>{interrupt(failure(code));stopOwnedResources(()=>job.cancelRead?.());};
   job.done=(async()=>{const timer=setTimeout(()=>job.cancel('OFFICIAL_CONTROL_DEADLINE'),Math.max(1,deadlineMs-Date.now()));
-   try{await verifySkillRequest(fixed,{get:path=>readCentral(path,e,job)});guard(e);verify();const bound=skillExecutionIdentity(fixed,{home});guard(e);
+   try{await verifySkillRequest(fixed,{publicRunDirectory,get:path=>readCentral(path,e,job)});guard(e);verify();const bound=skillExecutionIdentity(fixed,{home});guard(e);
     const started=Date.now(),result=await gatewayRead('sessions.list',{agentId:'skill-factory',search:bound.child_session_key,limit:5,archived:'all',includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false},e,job);guard(e);
     if(!Number.isFinite(result?.ts)||result.ts<started-1000||result.ts>Date.now()+1000||!Array.isArray(result.sessions))throw failure('OFFICIAL_CONTROL_GATEWAY_RESPONSE');
     const rows=result.sessions.filter(row=>row?.key===bound.child_session_key);if(rows.length>1)throw failure('OFFICIAL_CONTROL_GATEWAY_RESPONSE');
@@ -226,7 +228,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  function readAuthorizedTaskClaim(q){return authorizeParent(q,true);}
  async function authorizeParent(q,projectClaim){
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
-  return ownedJob(async(job,e)=>{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
+  return ownedJob(async(job,e)=>{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{publicRunDirectory,get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
    if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
    const claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});record({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))});return claim;
   });
@@ -338,7 +340,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   job.done=(async()=>{
    const timer=setTimeout(()=>{job.cancel('OFFICIAL_CONTROL_DEADLINE');},Math.max(1,deadlineMs-Date.now()));
    try{
-    await verifySkillRequest(fixed,{get:path=>readCentral(path,e,job)});guard(e);verify();
+    await verifySkillRequest(fixed,{publicRunDirectory,get:path=>readCentral(path,e,job)});guard(e);verify();
     const authorized=skillAuthority(fixed,{home});guard(e);
     record({event:'authority_returned',epoch:e,authorized,request_sha256:hash(canonical(fixed))});
     return {ok:true,authorized};

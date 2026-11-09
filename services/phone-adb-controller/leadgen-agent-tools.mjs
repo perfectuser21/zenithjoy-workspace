@@ -1,3 +1,4 @@
+import {publicDomainActivityScopeMatches} from './public-domain-authority.mjs';
 import {readPublicDomainUpstream} from './public-domain-upstream.mjs';
 // Server-owned Activity primitives: the Agent supplies work, never authority.
 import {createHash,randomUUID} from 'node:crypto';
@@ -82,10 +83,11 @@ export function aggregateAgentCollectionCommit({previousInserted,receipt,videoId
 
 export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const scope=structuredClone(provided);
+  let publicScope=false;try{publicScope=publicDomainActivityScopeMatches(runDir,scope,readFrozen(runDir),scope.activity);}catch{}
   if(!object(scope)||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(scope.workflow)||!slots[scope.activity]
     ||!uuid.test(scope.task_id||'')||!uuid.test(scope.binding_id||'')||!/^[a-f0-9]{40}$/.test(scope.source_commit||'')
     ||!/^[a-f0-9]{64}$/.test(scope.snapshot_sha256||'')||!/^[-A-Za-z0-9_]{1,120}$/.test(scope.run||'')
-    ||!scope.run_id?.startsWith(scope.workflow+'-'+scope.run+'__')||!/^[-A-Za-z0-9_.]{1,80}$/.test(scope.profile||'')
+    ||!publicScope&&!scope.run_id?.startsWith(scope.workflow+'-'+scope.run+'__')||!/^[-A-Za-z0-9_.]{1,80}$/.test(scope.profile||'')
     ||!(/^[-A-Za-z0-9_.]{1,80}$/.test(scope.serial||'')||isCanonicalTcpDeviceSerial(scope.serial))||!/^[-A-Za-z0-9_]{1,80}$/.test(scope.line||'')
     ||!Number.isSafeInteger(scope.deadline_ms)||!Number.isSafeInteger(scope.limit)||scope.limit<1||scope.limit>50
     ||scope.source_run!==null&&!/^[-A-Za-z0-9_]{1,120}$/.test(scope.source_run||'')

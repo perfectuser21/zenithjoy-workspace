@@ -22,20 +22,20 @@ function checkedVersion(v,source){
  need(UUID.test(v?.id||'')&&v.source_commit===source&&v.source_repo==='perfectuser21/zenithjoy-workspace'
   &&typeof v.source_path==='string'&&v.payload_sha256===versionDigest(v),'VERSION');
 }
-function metadataFor(w,ref,av,entry,entryHash){
+function metadataFor(w,ref,av,entry,entryHash,skill){
  const c=av.payload.contract,base=`activity-definition:${av.id}`,version=c.version;
  need(typeof version==='string'&&version&&c.promise!==undefined&&c.preconditions!==undefined&&c.inputs!==undefined
   &&c.outputs!==undefined&&c.postconditions!==undefined&&c.failure!==undefined,'QUESTIONS');
  const declarations={A1:{promise:c.promise},A2:{inputs:c.inputs,preconditions:c.preconditions},A3:{outputs:c.outputs},
   A4:{postconditions:c.postconditions},A5:{budget:c.budget},A6:{failure:c.failure,idempotency:c.idempotency??null},
   B1:{implementation_bindings:av.payload.implementation_bindings??c.implementation_bindings??[],steps:av.payload.steps??[]}};
- return {activity_id:ref.activity_id,executor_kind:'code',identity:{identity_protocol:2,workflow_id:w.payload.workflow_id,
+ return {activity_id:ref.activity_id,executor_kind:skill?'agent':'code',...(skill?{skill}:{}),identity:{identity_protocol:2,workflow_id:w.payload.workflow_id,
   reference_id:ref.reference_id,workflow_definition_version_id:w.id,activity_definition_version_id:av.id},
-  implementation:{kind:'code',entry,sha256:entryHash,source_activity_definition_version_id:av.id},
+  implementation:{kind:skill?'agent':'code',entry,sha256:entryHash,source_activity_definition_version_id:av.id},
   questions:Object.fromEntries(Object.entries(declarations).map(([key,declared])=>[key,{ref:base+'#'+key,version,declared:clone(declared)}]))};
 }
 /** Inputs are original readbacks. All identities/versions/budgets derive from them. */
-export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={}}={}){
+export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost}={}){
  need(isAbsolute(sourceRoot||'')&&realpathSync(sourceRoot)===sourceRoot,'SOURCE_ROOT');
  need(/^[a-z][a-z0-9-]{0,63}$/.test(profileId||''),'PROFILE_ID');
  const f=clone(frozen),r=f?.release,d=f?.deployment,w=f?.workflow_version;
@@ -50,18 +50,27 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  checkedVersion(w,d.source_commit);need(r.payload.workflows.some(v=>same(v,w)),'WORKFLOW_RELEASE');
  need(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(w.payload.key),'WORKFLOW');
  const refs=w.payload.activities;need(Array.isArray(refs)&&refs.length&&refs.length===f.activities?.length,'ACTIVITIES');
- need(resources?.machine==='us-mac-m4'&&r.target==='mmv'&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
+ const target=({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[resources?.machine];
+ need(target&&r.target===target&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
  if(w.payload.key==='douyin_comment_scoring')need(resources.profile==='mmv-scoring'&&resources.serial==='none','SCORING_RESOURCE');
- else need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
+ else if(target==='mmv')need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
  need(UUID.test(company?.company_id||'')&&UUID.test(company?.tenant_id||'')&&Number.isSafeInteger(company.version)&&company.version>0&&company.policy_id,'COMPANY');
  const files={};
  for(const row of d.files||[]){need(!Object.hasOwn(files,row.deployed_path),'DUPLICATE_FILE');file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
  for(const [path,hash] of Object.entries(f.files||{}))if(path.startsWith('runtime/')){const name=path.slice(8);file(sourceRoot,name,hash);need(!files[name]||files[name]===hash,'FROZEN_FILE');files[name]=hash;}
  need(Object.keys(files).length&&files['leadgen-public-domain.mjs']&&files['public-domain-authority.mjs']&&files['public-domain-pg.mjs'],'DOMAIN_SOURCE');
+ if(target==='xian-m4'&&w.payload.key!=='douyin_comment_scoring'){
+  const scope=f[w.payload.key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
+  const path='config/collection-phone-hosts.json';need(files[path],'PHONE_REGISTRY');
+  const rows=JSON.parse(file(sourceRoot,path,files[path])).hosts?.filter(h=>h.target===target&&h.profile===resources.profile&&h.serial===resources.serial&&h.expected_account===resources.account&&h.workflow_keys?.includes(w.payload.key));
+  need(rows?.length===1&&scope&&['target','profile','serial','expected_account'].every(k=>scope[k]===rows[0][k])&&same(scope.policy,rows[0].policy)&&scope.policy.schema_version===1&&scope.policy.transport==='usb'&&scope.policy.endpoint==='tcp:127.0.0.1:5037','PHONE_RESOURCE');
+ }
  const manifest=JSON.parse(file(sourceRoot,'deployment-manifest.json',files['deployment-manifest.json']));need(same(manifest,d),'DEPLOYMENT_FILE');
  const pg=preflightPgDeployment({runtimeRoot:sourceRoot,sourceCommit:d.source_commit});
  need(same(pg,d.dependencies?.preflight_pg),'PG_DEPLOYMENT');
  for(const row of pg.files){file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
+ need(primaryHost===undefined||primaryHost==='official-child-v1','PRIMARY_HOST');
+ const executionMode=primaryHost?'agent':f.execution_mode??'code';need(['code','agent'].includes(executionMode),'EXECUTION_MODE');
  const entry='leadgen-public-domain.mjs',metadata={},preconditions={},validators={},activities=[],expected_path=[];
  const runtime_snapshot_sha256=digest(files);
  for(const ref of refs){
@@ -77,7 +86,19 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
   const runtime={...c.runtime,protocol:'json-stdio-v1',phase:c.runtime.phase==='finalize'?'finalize':'source',entry};
   delete runtime.per_item;
   activities.push({...c,key:ref.slot_key,runtime});
-  const m=metadataFor(w,ref,av,entry,files[entry]);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
+  let skill;
+  if(executionMode==='agent'){
+   const bindings=(av.payload.implementation_bindings||[]).filter(b=>b.kind==='skill');
+   const verified=(original.implementations||[]).filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local');
+   need(bindings.length===1&&verified.length===1,'SKILL_BINDING');const b=bindings[0],v=verified[0],prefix='services/phone-adb-controller/';
+   need(b.status==='verified'&&b.repo===av.source_repo&&b.revision===d.source_commit&&b.path?.startsWith(prefix+'skills/')&&b.path===v.path&&b.version===v.version&&b.name===v.name,'SKILL_BINDING');
+   const name=b.path.slice(prefix.length),expected=b.content_sha256||b.digest?.replace(/^sha256:/,'');
+   need(v.execution_path==='runtime/'+name&&v.actual_content_sha256===expected&&files[name]===expected,'SKILL_SOURCE');
+   const text=file(sourceRoot,name,expected).toString('utf8');
+   if(primaryHost)need(/(?:^|\n)  primary_hosts: *\[official-child-v1\] *(?:\n|$)/.test(text)||/(?:^|\n)  primary_hosts: *\n    - official-child-v1 *(?:\n|$)/.test(text),'SKILL_PRIMARY_HOST');
+   need(text.includes('  primary_execution: agent-v1')&&text.includes('  version: '+b.version),'SKILL_PRIMARY');skill={entry:name,version:b.version};
+  }
+  const m=metadataFor(w,ref,av,entry,files[entry],skill);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
   preconditions[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A2.ref}};
   validators[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A4.ref}};
   expected_path.push({reference_id:ref.reference_id,activity_id:ref.activity_id,activity_definition_version_id:av.id});
@@ -96,16 +117,22 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  validators.workflow={entry,timeout_s:30,acceptance:{ref:`workflow-definition:${w.id}#acceptance`}};
  // cleanup is also an Activity key: retain its original AV A4 acceptance
  // for both per-Activity validation and the aggregate cleanup scope.
- const template={...f,public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
+ const template={...f,...(primaryHost?{execution_mode:'agent',primary_host:primaryHost}:{}),public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
+ if(primaryHost){for(const key of ['agent_input','native_claim','native_task_lease','execution_transport','max_turns'])delete template[key];}
  const domainEnv=clone(env);delete domainEnv.ZJ_ADB_HOST_CONFIG;
  if(w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
  if(w.payload.key!=='douyin_comment_scoring'){
   const scope=template.discovery_phone_scope||template.collection_phone_scope;
-  if(scope){const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;}}
+  if(scope){
+   domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;
+   if(target==='mmv')domainEnv.LEADGEN_MMV_DEVICE_RUNTIME='1';else delete domainEnv.LEADGEN_MMV_DEVICE_RUNTIME;
+   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});
+   if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;}
+  }
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
+   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};

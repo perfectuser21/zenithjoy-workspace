@@ -3068,13 +3068,21 @@ PYRUNTIME
 
 # 仅终止本eid启动原件中同一UID、出生时间、完整argv的进程；PID文件本身不是执行权。
 record_owned_signal() {
-  "$PYTHON_BIN" - "$EVIDENCE_ROOT/$1.capture-startup.json" "$2" "$3" <<'PYOWNEDSIGNAL'
+  "$PYTHON_BIN" - "$EVIDENCE_ROOT/$1.capture-startup.json" "$2" "$3" "$PHONE_CONTROLLER_DIR/official-recording-observer.py" <<'PYOWNEDSIGNAL'
 import os,sys,json,stat,subprocess,shlex,signal
-path,pid,sig=sys.argv[1:];pid=int(pid)
+path,pid,sig,observer=sys.argv[1:];pid=int(pid)
 fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
 with os.fdopen(fd) as f:
  assert stat.S_ISREG(os.fstat(f.fileno()).st_mode);p=json.load(f)
 assert p['status']=='ready' and p['pid']==pid and p['expected_argv']
+if os.environ.get('ZJ_OFFICIAL_RECORDING_INTENT'):
+ import runpy,hashlib
+ rows=runpy.run_path(observer)['inspect'](os.environ['ZJ_OFFICIAL_RECORDING_INTENT'])['processes']
+ matches=[r for r in rows if r['pid']==pid]
+ expected_hash=hashlib.sha256(json.dumps(p['expected_argv'],ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+ assert len(matches)==1 and matches[0]['argv_sha256']==expected_hash
+ if matches[0]['state'] in ['absent','terminal']:sys.exit(0)
+ assert matches[0]['state']=='alive'
 original=p['observations'][-1]['ps'].split(None,8);assert len(original)==9
 assert original[0]==str(os.getuid())
 r=subprocess.run(['/bin/ps','-ww','-p',str(pid),'-o','uid=,ppid=,lstart=,stat=,command='],capture_output=True,text=True,timeout=1)
@@ -3210,16 +3218,20 @@ PYSDKCREATE
   # --no-window：无头 Mac 上禁止起 Metal 渲染窗口。实测教训：带窗口连录数轮后整机离网
   # （m4 于 20260831 录制中失联 1 小时+），无头图形渲染是 Mac mini 经典死法。
   # Popen等待exec确认，再返PID；录制独立session且不继承guard FD，命令返回后可重新取guard。
-  pid="$(ADB="$CAPTURE_ADB" "$PYTHON_BIN" - "$pidf" "$EVIDENCE_ROOT/$eid.rec.log" "$SCRCPY" "${capture_args[@]}" <<'PYLAUNCHREC'
+  pid="$(ADB="$CAPTURE_ADB" "$PYTHON_BIN" - "$pidf" "$EVIDENCE_ROOT/$eid.rec.log" "$PHONE_CONTROLLER_DIR/official-recording-observer.py" "$SCRCPY" "${capture_args[@]}" <<'PYLAUNCHREC'
 import os,sys,subprocess,signal
-pidfile,log,*argv=sys.argv[1:];child=None
+pidfile,log,observer,*argv=sys.argv[1:];child=None
 pfd=os.open(pidfile,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
 try:
  lfd=os.open(log,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
  try:
   env=os.environ.copy()
   for key in ['DOUYIN_LOCK_GUARD_FD','DOUYIN_LOCK_GUARDED']:env.pop(key,None)
-  child=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=lfd,stderr=subprocess.STDOUT,env=env,start_new_session=True,close_fds=True)
+  if os.environ.get('ZJ_OFFICIAL_RECORDING_INTENT'):
+   import runpy
+   launcher=runpy.run_path(observer)['owned_popen']
+  else:launcher=subprocess.Popen
+  child=launcher(argv,stdin=subprocess.DEVNULL,stdout=lfd,stderr=subprocess.STDOUT,env=env,start_new_session=True,close_fds=True)
  finally:os.close(lfd)
  os.write(pfd,(str(child.pid)+'\n').encode());os.fsync(pfd)
  print(child.pid)
@@ -3456,7 +3468,7 @@ PYSTOPRUNTIME
   local mean_db restored_fields
   restored_fields="$(print -r -- "$restored" | "$PYTHON_BIN" -c 'import sys; print(" ".join("native_audio_restored_"+x[len("native_audio_"):] for x in sys.stdin.read().split() if x.startswith("native_audio_")))')"
   local decoded_fields="" requested
-  if [[ "$capture_mode" == output_pcm_sdk31 ]]; then
+  if [[ "$capture_mode" == output_pcm_sdk31 || -n "${ZJ_OFFICIAL_RECORDING_INTENT:-}" ]]; then
     requested="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.capture-startup.json" <<'PYREQUESTED'
 import json,sys
 p=json.load(open(sys.argv[1]));assert p['status']=='ready'

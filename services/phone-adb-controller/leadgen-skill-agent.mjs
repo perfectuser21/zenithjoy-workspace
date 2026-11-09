@@ -5,6 +5,7 @@ import {join,dirname,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {publicSkillAuthority,verifyPublicSkillCurrent} from './skill-public-authority.mjs';
 import {execInput,executionDidNotStart} from './leadgen-client.mjs';
 import {digest as contractDigest,validateDiscoveryInput} from './runtime-definition.mjs';
 import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './activity-commander.mjs';
@@ -114,20 +115,22 @@ function verifyMethod(q){
  if(method!==q.method.text||sha(method)!==q.method.sha256||support!==q.method.support?.text||sha(support)!==q.method.support?.sha256)throw Error('RPC_SKILL_METHOD_BYTES_MISMATCH');
  return true;
 }
-export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLocalMethod=verifyMethod}={}){
+export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLocalMethod=verifyMethod,publicRunDirectory}={}){
  const {binding}=await get('/api/brain/runs/'+encodeURIComponent(q.run_id)+'/definition');
  const value=k=>binding?.[k]??binding?.payload?.[k];
- if(q.mode==='execute')for(const key of ['id','run_id','actor','workflow_id','workflow_definition_version_id','release_id','observation_id','runtime_snapshot_sha256','external_origin','task_id']){
+ const publicPrimary=q.public_domain!==undefined;
+ if(publicPrimary)publicSkillAuthority(q,publicRunDirectory,binding);
+ if(q.mode==='execute')for(const key of ['id','run_id','actor','workflow_id','workflow_definition_version_id','release_id','observation_id','runtime_snapshot_sha256','external_origin','task_id','source_kind','task_run_id','attempt_key']){
   if(Object.hasOwn(binding||{},key)&&Object.hasOwn(binding?.payload||{},key)&&JSON.stringify(binding[key])!==JSON.stringify(binding.payload[key]))throw Error('RPC_SKILL_PRIMARY_BINDING_CONFLICT');
  }
- if(!binding||binding.id!==q.binding_id||binding.run_id!==q.run_id||value('external_origin')!=='zenithjoy:'+q.broker_host)throw Error('RPC_SKILL_RUN_BINDING_MISMATCH');
- if(q.mode==='execute'&&value('actor')!=='runtime:phone-adb-controller:agent-v1')throw Error('RPC_SKILL_PRIMARY_BINDING_REQUIRED');
+ if(!binding||binding.id!==q.binding_id||binding.run_id!==q.run_id||!publicPrimary&&value('external_origin')!=='zenithjoy:'+q.broker_host)throw Error('RPC_SKILL_RUN_BINDING_MISMATCH');
+ if(q.mode==='execute'&&!publicPrimary&&value('actor')!=='runtime:phone-adb-controller:agent-v1')throw Error('RPC_SKILL_PRIMARY_BINDING_REQUIRED');
  if(q.mode==='execute'&&q.transport_generation!==undefined)throw Error('RPC_SKILL_PRIMARY_GENERATION_UNSUPPORTED');
- for(const [key,field] of [['workflow_definition_version_id','workflow_definition_version_id'],['release_id','release_id'],['observation_id','observation_id'],['runtime_snapshot_sha256','runtime_snapshot_sha256']])if(value(key)!==q[field])throw Error('RPC_SKILL_SOURCE_BINDING_MISMATCH');
+ for(const [key,field] of [['workflow_definition_version_id','workflow_definition_version_id'],['release_id','release_id'],['observation_id','observation_id'],['runtime_snapshot_sha256','runtime_snapshot_sha256']])if(value(key)!==(publicPrimary&&key==='runtime_snapshot_sha256'?q.public_domain.runtime_snapshot_sha256:q[field]))throw Error('RPC_SKILL_SOURCE_BINDING_MISMATCH');
  const {version:wf}=await get('/api/brain/workflows/'+value('workflow_id')+'/versions/'+q.workflow_definition_version_id);
  if(wf.source_commit!==q.source_commit)throw Error('RPC_SKILL_SOURCE_REVISION_MISMATCH');
  if(q.mode==='execute'&&!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(wf.payload.key))throw Error('RPC_SKILL_PRIMARY_WORKFLOW_UNSUPPORTED');
- if(q.mode==='execute'){
+ if(q.mode==='execute'&&!publicPrimary){
   const invalid=()=>{throw Error('RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID');};
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(q.task_id||'')||q.workflow_key!==wf.payload.key
     ||!/^[-A-Za-z0-9_]{1,120}$/.test(q.run_tag||'')||typeof q.profile!=='string'||!q.profile||typeof q.line!=='string'||!q.line
@@ -186,6 +189,7 @@ export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLo
   const declarations=[...metadata.matchAll(/^  primary_execution: *(\S+) *$/gm)];
   if((front?.match(/^metadata:$/gm)||[]).length!==1||declarations.length!==1||declarations[0][1]!=='agent-v1')throw Error('RPC_SKILL_PRIMARY_METHOD_UNSUPPORTED');
  }
+ if(publicPrimary)await verifyPublicSkillCurrent(q,publicRunDirectory,binding,get);
  return true;
 }
 export function verifyCommanderWorkspace({home=homedir()}={}){
@@ -239,7 +243,11 @@ export async function relayActivityTool(dir,op,body={}, {home=homedir(),authoriz
  const operations=q.mode==='execute'?['inspect','phone','business']:q.mode==='readback_only'?['inspect','phone']:['inspect','phone','resume'];
  if(resolve(dir)!==directory(q,home)||!operations.includes(op)||Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json'))||existsSync(join(dir,'generation-revoked.json')))throw Error('RPC_SKILL_TOOL_SCOPE_INVALID');
  if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');
- const allowed=authorize?await authorize(q):await verifySkillRequest(q)&&skillAuthority(q,{home});
+ // This exact host is only a thin transport to the original parent IPC broker;
+ // business authorization remains mandatory in that broker on every operation.
+ const publicChild=q.primary_host==='official-child-v1'&&q.mode==='execute'&&q.public_domain&&q.execution_transport===undefined&&q.max_turns===undefined;
+ if(publicChild&&(q.broker_tool_path!==join(root,'activity-skill-tool.mjs')||q.broker_request_path!==join(dirname(root),'skill-primary',q.activity_key,'broker-request.json')))throw Error('RPC_SKILL_TOOL_SCOPE_INVALID');
+ const allowed=authorize?await authorize(q):publicChild?skillAuthority(q,{home}):await verifySkillRequest(q)&&skillAuthority(q,{home});
  if(allowed!==true||Date.now()>=q.deadline_ms)throw Error('RPC_SKILL_TOOL_UNAUTHORIZED');
  if(requireSurface||surface!==undefined)pinGatewaySurface(q,dir,surface);
  const args=[q.broker_tool_path,q.broker_request_path,op,...(op==='inspect'&&Object.keys(body).length?['--event']:[])];
@@ -267,13 +275,15 @@ export async function stopSkillAgent(q,{home=homedir(),execute=execInput,verifyW
  try{const terminal=privateJson(join(dir,'child-stop-readback.json'));child=terminal.runId===binding.child_run_id&&Number.isFinite(terminal.endedAt)&&['ok','error','aborted','timeout'].includes(terminal.status);}catch{/* 未验证停止。 */}
  return {status:'unknown',execution_stopped:false,child_execution_stopped:child,child_run_id:binding.child_run_id,reason:'commander_stop_owner_readback_required'};
 }
-export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace}={}){
+export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace,beforeLaunch}={}){
  validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
  const previous=q.transport_generation===1?previousGeneration(q,home):null;
  if(previous)await verifyPreviousOwner(previous,q,execute);
  const ownerTurn=await reserveWorkflowCommanderTurn(q,{home});
  try{
  await ownerTurn.check();
+ if(beforeLaunch!==undefined){if(typeof beforeLaunch!=='function'||await beforeLaunch()!==true)throw Error('RPC_SKILL_LAUNCH_UNAUTHORIZED');}
+ if(beforeLaunch!==undefined)verifyWorkspace({home});
  if(previous)writeFileSync(join(previous,'generation-revoked.json'),JSON.stringify({next_generation:1,at:Date.now()}),{flag:'wx',mode:0o600});
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
  const parent=workflowCommanderSession(q);
@@ -326,7 +336,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const identity={tool:{name:'subagents',parameters:{action:'list'}},caller:{callerIsSubagent:true,callerSessionKey:{file:join(dir,'agent-binding.json'),field:'child_session_key',comparison:'exact'}},binding_checks:['run_id','task_id','parent_session_key','nonce'],on_missing_or_mismatch:'blocked',forbidden_identity_sources:['session_status','list.active','model_self_report','connector_alias']};
   const child={protocol:'leadgen-primary-child/v1',scope:{...scope,parent_session_key:parent},identity_contract:identity,
    method:{name:method.name,version:method.version,binding_sha256:method.sha256,...parts('child-method',method.text)},
-   support:parts('child-support',method.support?.text||''),contract_path:join(dir,'activity-contract.json'),
+   support:parts('child-support',method.support?.text||''),...(method.host_support?{host_support:{sha256:method.host_support.sha256,...parts('child-host-support',method.host_support.text)}}:{}),contract_path:join(dir,'activity-contract.json'),
    contract:parts('child-contract',JSON.stringify(method.contract??null)),tool_command_files:commandFiles,
    inspect_contract:{pending_write_readbacks:'unconfirmed_write_operations',defaults:{commander_guidance:[],commander_abort:false}},
    rules:['仅执行当前单Activity；不运行完整Code handler、resume、其他Workflow或104。','先用本session官方subagents(action=list)按identity_contract核对自己；不以模型自报身份。','按方法和合同读取新鲜证据，仅使用inspect实际暴露的phone/business能力；预检结果由server聚合，不找虚构ledger写入口。','锁及资源由代码持有，不领/放锁、不变公司、账号、来源、额度、截止、代码、策略或暂停。','每次只读一份列出的分页原件，完整顺序读取，不将多份大文件合并成一次易截断输出；完整原请求/合同仍可只读核对。','只选本session真实schema对应的tool_command_files；原command/双键env及host guard不改，inspect事件仅替换LEADGEN_ACTIVITY_TOOL_JSON，phone填command/args，business填operation/input。','先inspect；指导缺省[]、abort缺省false。收到commander_abort立即结束；Commander不批外部动作、不判状态。','未知副作用只精确读回同操作，不重发、不换operation ID、不重派；确认0评论不入队。','只交工具原件引用；独立verify裁判，文字自报不是成果；缺能力明确blocked，不用裸SQL/队列/自造脚本。'],
@@ -338,7 +348,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
    `先使用精确官方内置session_status核自己session key=${parent}，缺即blocked，不tool_search猜别名。`,
    `用MMV gateway_exec执行node ${join(root,'leadgen-skill-agent.mjs')} claim ${dir}领取唯一spawn权；已有预留只读原receipt、不再spawn。`,
    `官方sessions_spawn一次：agentId=skill-factory, mode=run, context=isolated, cleanup=keep, completionTarget=parent；不设置model/fallback/taskName。runTimeoutSeconds不超过agent-request.worker_expires_at剩余（worker截止；expires_at仅供原handoff终态读回，不是Worker执行额度），不足即blocked，不续预算。`,
-   `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}并按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
+   `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}并按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/host_support（若有）/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
    `源身份仍为${q.source_commit}，run=${q.run_id}，nonce=${q.nonce}；所有原件私有只读，不能改写。`,
    `核spawn receipt resolvedProvider精确openai、resolvedModel只允许openai/gpt-6.1-sol或gpt-6.1-sol；错模型精确取消，不重派。全文原样保存${join(dir,'spawn-receipt.json')}。`,
    `组合原agent-request+官方childSessionKey/runId经stdin调用python3 ${helper} bind ${dir}；然后python3 ${helper} await ${dir}读官方agent.wait，禁止history摘要/CLI child代替。`,

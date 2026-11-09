@@ -140,12 +140,12 @@ export async function recordActivityBookkeeping(r,{root,env,executionMode,contro
 }
 
 export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal,nativeScoring,nativePhone}){
-  if(executionMode==='agent'&&validateFrozenControlAcceptance(frozen)){
+  if(executionMode==='agent'&&frozen.primary_host!=='official-child-v1'&&validateFrozenControlAcceptance(frozen)){
     return {result:{gate:{verdict:'fail',reason:'CONTROL_ACCEPTANCE_IS_NOT_103_OUTPUT'},steps:[],probes:[{name:'actual_103_business_result',pass:false,reason:'control acceptance has no scoring/PG capability'}]}};
   }
-  if(executionMode==='agent'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'){if(!isNativeScoringWorkflow(nativeScoring))throw Error('NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED');return nativeScoring.readbackChecks(activity.key,{deadlineMs:deadline_ms,signal});}
-  if(executionMode==='agent'&&activity.key==='collect_videos'&&isNativePhoneRuntime(nativePhone))return nativePhone.readbackChecks(activity.key,{metrics,deadlineMs:deadline_ms,signal});
-  if(executionMode==='agent'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
+  if(executionMode==='agent'&&frozen.primary_host!=='official-child-v1'&&env.WF_BRAIN_WORKFLOW==='douyin_comment_scoring'){if(!isNativeScoringWorkflow(nativeScoring))throw Error('NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED');return nativeScoring.readbackChecks(activity.key,{deadlineMs:deadline_ms,signal});}
+  if(executionMode==='agent'&&frozen.primary_host!=='official-child-v1'&&activity.key==='collect_videos'&&isNativePhoneRuntime(nativePhone))return nativePhone.readbackChecks(activity.key,{metrics,deadlineMs:deadline_ms,signal});
+  if(executionMode==='agent'&&frozen.primary_host!=='official-child-v1'&&['preflight','cleanup'].includes(activity.key)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
     if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
     return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
   }

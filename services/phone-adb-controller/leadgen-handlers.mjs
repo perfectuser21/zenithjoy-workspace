@@ -1,3 +1,4 @@
+import {officialChildOperationReturned} from './official-child-primitives.mjs';
 import {canonicalRunId,readPublicDomainBinding} from './public-domain-authority.mjs';
 import {isNativePhoneRuntime} from './native-phone-runtime.mjs';
 import {isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
@@ -63,6 +64,8 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
 
 export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata,preflightRuntime,scoringRuntime,phoneRuntime}) {
   const trustedScoring=isNativeScoringWorkflow(scoringRuntime),trustedPhone=isNativePhoneRuntime(phoneRuntime);
+  const officialChildHost=Boolean(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))&&readFrozen(env.WFR_RUN_DIR).primary_host==='official-child-v1');
+  const provedOfficialReturn=(result,command,args,opts)=>officialChildHost&&officialChildOperationReturned(result,{command,args,receipt:opts.receipt,root,frozen:readFrozen(env.WFR_RUN_DIR)});
   const trustedPreflight=isPreflightRuntime(preflightRuntime);if(trustedPreflight)preflightMetadata=preflightRuntime.metadata;
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
@@ -110,7 +113,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...discoveryScope?.env,...collectionScope?.env,...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
       collectionScope?.assertEvidence();
       recordDiagnostic(result.stderr||'');
-      if(opts.receipt)state.nativeStopUnproven=true;
+      if(opts.receipt&&!provedOfficialReturn(result,command,args,opts))state.nativeStopUnproven=true;
       if(unknownFile&&existsSync(unknownFile)||/\bNATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN\b/.test(result.stderr||'')){const error=Error('NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN');error.executionStopped=false;throw error;}
       if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
       if(!opts.discoveryLockRelease)discoveryScope?.assert();
@@ -128,6 +131,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       // A known failed readback stays failed. Its live producer must still seal;
       // only that lifecycle proof, never this exit code, can permit cleanup.
       if(collectionScope?.purpose==='readback'&&r.code===1)throw error;
+      if(provedOfficialReturn(r,command,args,opts)){error.executionStopped=true;throw error;}
       throw nativeFailure(error,command,args,opts);
     }
     return r.stdout;
@@ -343,12 +347,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});
         const facts=preflightScope.snapshot();locked=facts.owned===true;agent.facts={...facts.facts,prepared:true,central_lock_task_id:taskId,central_lock_run_id:state.run_id};
       }else{
+      if(officialChildHost){const held=await phone('lock-acquire',run);if(!/^lock=(acquired|held)/m.test(held))throw Error('设备锁未确认');locked=true;}
       const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
       if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');env.ADB_SERVER_SOCKET=`tcp:127.0.0.1:${route}`;env.DOUYIN_ADB_PORT=route;
       delete env.ANDROID_ADB_SERVER_PORT;delete env.ANDROID_ADB_SERVER_ADDRESS;
       if((await checked(adbClient,['-s',serial,'get-state'])).trim()!=='device')throw Error('设备未在线');
       if(!(await phone('preflight')).split('\n').includes(`serial=${serial}`))throw Error('profile注册设备与本次serial不一致');
-      const held=await phone('lock-acquire',run);if(!/^lock=(acquired|held)/m.test(held))throw Error('设备锁未确认');locked=true;
+      if(!officialChildHost){const held=await phone('lock-acquire',run);if(!/^lock=(acquired|held)/m.test(held))throw Error('设备锁未确认');locked=true;}
       if((await checked(adbClient,['-s',serial,'shell','dumpsys','telephony.registry'])).match(/mCallState=(\d+)/)?.[1]!=='0')throw Error('通话状态未知或设备通话中');
       agent.facts={prepared:true,device_verified:true,lock_acquired:true,call_state_idle:true,central_lock_task_id:taskId,central_lock_run_id:state.run_id};
       }
@@ -719,7 +724,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       }
       if(activity.key==='collection'){
         const {recordCollectionResult}=await import('./leadgen-agent-artifacts.mjs');
-        let result=recordCollectionResult({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:{run,run_id:state.run_id,source_commit:sourceCommit,line,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN,profile,serial,company_binding:state.recipientCompanyBinding},samplingInput:sampleInput,qualifiedVideoIds:qualified.map(v=>v.video_id),videos:[...agent.collections.values()]});
+        let result=recordCollectionResult({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:{run,run_id:state.run_id,...(officialChildHost?{task_id:taskId,binding_id:scope.binding_id,snapshot_sha256:scope.snapshot_sha256}:{}),source_commit:sourceCommit,line,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN,profile,serial,company_binding:state.recipientCompanyBinding},samplingInput:sampleInput,qualifiedVideoIds:qualified.map(v=>v.video_id),videos:[...agent.collections.values()]});
         if(collectionScope){result=await collectionScope.finish(result);state.collectionReturnedEvidence=result;await collectionScope.close();collectionScope=null;}
         return result;
       }
@@ -744,7 +749,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         const nativeOptions=trustedPreflight?preflightRuntime.desktopVerificationOptions():undefined;
         if(!agent.facts.close_stdout||!agent.facts.desktop_stdout||!agent.facts.cleanup_png||!agent.facts.cleanup_xml)throw Error('AGENT_PRIMARY_CLEANUP_NATIVE_MISSING');
         if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'){
-          const expected={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial};
+          const expected={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial,...(readPublicDomainBinding(env.WFR_RUN_DIR)?{task_id:taskId}:{})};
           const proof=captureCleanupReadback({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:expected,close_stdout:agent.facts.close_stdout,desktop_stdout:agent.facts.desktop_stdout,pngFile:agent.facts.cleanup_png,xmlFile:agent.facts.cleanup_xml,evidenceId:`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`,nativeOptions});
           if(!verifyCleanupReadback({runDir:env.WFR_RUN_DIR,scope:expected,digest:proof.digest,nativeOptions}))throw Error('CLEANUP_NATIVE_READBACK_INVALID');agent.facts.cleanup_proof=proof;
         }else{
@@ -762,7 +767,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const release=async()=>{
       if(activity.key!=='cleanup'||state.executionUnknown||!agent.facts.cleanup_proof&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!(trustedPreflight&&preflightScope.snapshot().resource_only_cleanup))throw Error('AGENT_PRIMARY_CLEANUP_UNVERIFIED');
       for(const v of leased){const r=await queue('release_video',{video_id:v.video_id});if(r.released!==true)throw Error('AGENT_PRIMARY_VIDEO_RELEASE_UNVERIFIED');}
-      let localRelease={lock_released:1,no_lock:true};if(trustedPreflight)localRelease=await preflightRuntime.release();else{const raw=await phone('lock-release',run);if(!raw.startsWith('lock=released'))throw Error('AGENT_PRIMARY_LOCK_RELEASE_UNVERIFIED');}locked=false;
+      let localRelease={lock_released:1,no_lock:true};if(trustedPreflight)localRelease=await preflightRuntime.release();else{const raw=await phone(officialChildHost?'lock-release-exact':'lock-release',run);if(!raw.startsWith('lock=released'))throw Error('AGENT_PRIMARY_LOCK_RELEASE_UNVERIFIED');}locked=false;
       const centralNotAcquired=trustedPreflight&&preflightRuntime.zeroLocalStart(scope)&&!getCentral().held&&!getCentral().attempted;const centralReleased=centralNotAcquired?false:await getCentral().release();if(!centralReleased&&!centralNotAcquired)throw Error('AGENT_PRIMARY_CENTRAL_RELEASE_UNVERIFIED');
       appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:centralNotAcquired?'not_acquired_no_release':'released',task_id:taskId,run_id:state.run_id,device_name:serial,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
       await discoveryScope?.close();discoveryScope=null;await collectionScope?.close();collectionScope=null;agent.facts.released=true;

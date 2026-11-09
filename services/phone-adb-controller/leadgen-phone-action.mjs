@@ -36,6 +36,6 @@ export function createPhoneAction({env,state,profile,run,isLocked,isClosed,getSc
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     const receipt=nativeReceipt();
     return control(['--profile',profile,...ownerArgs,command,...args],
-      {...(command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{}),receipt,discoveryLockRelease:command==='lock-release'});
+      {...(command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{}),receipt,discoveryLockRelease:['lock-release','lock-release-exact'].includes(command)});
   };
 }

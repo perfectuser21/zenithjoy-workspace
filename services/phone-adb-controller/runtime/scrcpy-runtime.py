@@ -15,6 +15,14 @@ import sys
 import time
 import uuid
 
+def capture_popen(argv, **kwargs):
+    if not os.environ.get('ZJ_OFFICIAL_RECORDING_INTENT'):
+        return subprocess.Popen(argv, **kwargs)
+    import runpy
+    owner = runpy.run_path(str(Path(__file__).resolve().parent.parent / 'official-recording-observer.py'))
+    return owner['owned_popen'](argv, **kwargs)
+
+
 POLICY = json.loads(Path(__file__).with_name('runtime-policy.json').read_text())
 
 
@@ -129,7 +137,7 @@ def require_existing_server(port, timeout=1):
 def require_adb_client(adb_bin, timeout=2):
     # "adb version"只读本地程序，不连接server。拒绝协议不匹配的客户端，
     # 否则ADB自身可能在普通shell调用前kill/restart共享server。
-    child = subprocess.Popen([str(adb_bin), 'version'], stdin=subprocess.DEVNULL,
+    child = capture_popen([str(adb_bin), 'version'], stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              start_new_session=True)
     try:
@@ -182,7 +190,7 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
         # AOSP treats numeric127.0.0.1 as a remote socket: connection failure
         # returns an error rather than auto-launching a local shared server.
         env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + str(adb_port))
-        child = subprocess.Popen([str(adb_bin), '-H', '127.0.0.1', '-P', str(adb_port), '-s', serial,
+        child = capture_popen([str(adb_bin), '-H', '127.0.0.1', '-P', str(adb_port), '-s', serial,
                                   'shell', '-T', script], stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  env=env, start_new_session=True)
@@ -367,7 +375,7 @@ def verify_prestaged_server(config, verified):
     script = (f'[ ! -L {target} ] && [ -f {target} ] && '
               f'toybox sha256sum {target} && toybox wc -c < {target}')
     env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + str(config['adb_port']))
-    child = subprocess.Popen([str(config['adb_bin']), '-H', '127.0.0.1', '-P',
+    child = capture_popen([str(config['adb_bin']), '-H', '127.0.0.1', '-P',
                               str(config['adb_port']), '-s', config['serial'],
                               'shell', '-T', script], stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -415,6 +423,9 @@ def shim_config():
 def adb_shim(argv):
     """只替代ADB进程；从不包裹或启动scrcpy，保留真实录制PID。"""
     try:
+        if os.environ.get('ZJ_OFFICIAL_RECORDING_INTENT'):
+            import runpy
+            runpy.run_path(str(Path(__file__).resolve().parent.parent / 'official-recording-observer.py'))['register_current'](os.environ['ZJ_OFFICIAL_RECORDING_INTENT'])
         config = shim_config()
         policy = runtime_policy(config['runtime_kind'])
         verified = verify_runtime(config['runtime_root'], config['client_sha256'], config['runtime_kind'])

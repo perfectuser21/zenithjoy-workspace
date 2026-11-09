@@ -13,3 +13,11 @@ test('heartbeat/progress/span变化不改变authority；claim/真实run/owner变
  const {businessAuthorityProjection}=await load(),f=fixture(),later=structuredClone(f);later.task.updated_at='later';later.task.result.common_runner.progress={done:2};later.taskRun.updated_at='later';later.taskRun.context={span_count:5};later.central.expires_at=new Date(Date.now()+120000).toISOString();later.central.lease_version='89';assert.deepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));later.links.task_id=id('d');assert.notDeepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
 });
 test('schema2 policy每次保600，不因字节hash相同接受权限漂移',async()=>{const {readPrivatePolicy}=await import('../device-epoch-fence-reference.mjs'),fs=await import('node:fs'),path=await import('node:path'),os=await import('node:os'),d=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'epoch-policy-')),p=path.join(d,'policy.json');try{fs.writeFileSync(p,'{}',{mode:0o600});assert.equal(readPrivatePolicy(p).toString(),'{}');fs.chmodSync(p,0o644);assert.throws(()=>readPrivatePolicy(p),/EPOCH_POLICY_MODE/);}finally{fs.rmSync(d,{recursive:true,force:true});}});
+
+test('official child retains every fresh epoch fact while declaring its exact agent host',async()=>{
+ const {verifyEpochFacts}=await load(),{agentInput}=await import('../runtime-definition.mjs'),f=fixture();
+ f.frozen.execution_mode='agent';f.frozen.primary_host='official-child-v1';f.frozen.workflow_version={payload:{key:'douyin_video_discovery'}};
+ f.frozen.agent_input=agentInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_BRAIN_TASK_ID:f.task.id,WFR_TAG:'new-run',P:'cloud-phone-test',SERIAL:f.record.resource.serial,LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'90'});
+ assert.equal(verifyEpochFacts(f).authorized,true);
+ for(const change of [v=>v.frozen.primary_host='other',v=>v.frozen.execution_transport='raw-model-v1',v=>v.frozen.agent_input.task_id=id('a'),v=>v.central.locked_by=id('a'),v=>v.oldInventory.push({serial:v.record.resource.serial,state:'device'}),v=>v.activeOwner='other\n']){const bad=structuredClone(f);change(bad);assert.throws(()=>verifyEpochFacts(bad));}
+});

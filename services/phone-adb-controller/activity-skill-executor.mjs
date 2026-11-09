@@ -1,4 +1,5 @@
 // Primary Skill execution owns an independent capability; Code recovery remains separate.
+import {publicDomainAuthority} from './public-domain-authority.mjs';
 import {existsSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
@@ -60,7 +61,9 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    limit:fixed.limit,comment_limit:fixed.comment_limit,discovery_filters:structuredClone(fixed.discovery_filters),collection_budget_s:fixed.collection_budget_s,
    run_start_ts:fixed.run_start_ts,run_max_seconds:fixed.run_max_seconds,deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,
    ...(transport?{...transport,agent_nonce:rawNonce}:{}),...(frozen.control_scope?{control_scope:structuredClone(frozen.control_scope),control_claim:structuredClone(frozen.control_claim)}:{})};
-  const request={protocol:'leadgen-activity-v1',mode:'execute',run_id:binding.run_id,task_id:taskId,binding_id:binding.id,
+  const publicAuthority=frozen.public_domain?publicDomainAuthority(runDir):null;
+  if(frozen.public_domain&&(!publicAuthority||publicAuthority.identity.run_id!==binding.run_id||publicAuthority.binding.id!==binding.id))throw noLaunch('AGENT_PRIMARY_PUBLIC_AUTHORITY');
+  const request={protocol:'leadgen-activity-v1',mode:'execute',...(frozen.primary_host?{primary_host:frozen.primary_host}:{}),...(publicAuthority?{public_domain:{identity:structuredClone(publicAuthority.identity),run_binding:structuredClone(publicAuthority.identity.run_binding),runtime_snapshot_sha256:frozen.public_domain.runtime_snapshot_sha256,local_snapshot_sha256:frozen.snapshot_sha256}}:{}),run_id:binding.run_id,task_id:taskId,binding_id:binding.id,
    workflow_key:scope.workflow,run_tag:scope.run,profile:scope.profile,serial:scope.serial,line:scope.line,
    source_run:fixed.source_run,limit:fixed.limit,comment_limit:fixed.comment_limit,run_max_seconds:fixed.run_max_seconds,
    discovery_filters:structuredClone(fixed.discovery_filters),discovery_input:structuredClone(frozen.discovery_input||null),
@@ -121,6 +124,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     isReadOnlyBusinessOperation:(operation,input)=>tools.canReadback?.(operation,input)===true,
     getActivityResult:tools.getResult,onEvent:async event=>{if(event.type==='progress')lastProgress=Date.now();return onEvent(event);},onAbort:stop,
     authorize:async(_incoming,delivery)=>!heartbeatError&&(transport?await rawControl.authorizeBrokerDelivery(request,delivery)===true:(await rpc({kind:'activity_skill_authority',request},{timeoutMs:Math.max(1,Math.min(10000,deadline-Date.now()))})).authorized===true),
+    ...(frozen.primary_host==='official-child-v1'?{authorizeAfter:async()=>!heartbeatError&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:Math.max(1,Math.min(10000,deadline-Date.now()))})).authorized===true}:{}),
     ...(transport?{authorizeParentContext:async q=>!heartbeatError&&await rawControl.authorizeParentContext(q)===true}:{})});
    signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
    if(typeof tools.heartbeat==='function'){

@@ -41,7 +41,7 @@ function verifyBinding(binding,record){
 }
 export function readBinding(dir,attempt,frozen=readFrozen(dir)){
  const internal=readPublicDomainBinding(dir);
- if(internal){if(frozen.public_domain?.run_id!==internal.run_id||frozen.public_domain?.task_id!==internal.task_id||frozen.public_domain?.run_binding?.run_binding_id!==internal.id||frozen.execution_mode!=='code')throw Error('PUBLIC_DOMAIN_BINDING_MISMATCH');return internal;}
+ if(internal){if(frozen.public_domain?.run_id!==internal.run_id||frozen.public_domain?.task_id!==internal.task_id||frozen.public_domain?.run_binding?.run_binding_id!==internal.id||!['code','agent'].includes(frozen.execution_mode))throw Error('PUBLIC_DOMAIN_BINDING_MISMATCH');return internal;}
  if(frozen.public_domain)throw Error('PUBLIC_DOMAIN_AUTHORITY_NOT_LIVE');
  const record=JSON.parse(readFileSync(join(dir,'run-bindings',`${attempt}.request.json`),'utf8'));
  if(record.runtime_snapshot_sha256!==frozen.snapshot_sha256)throw Error('运行绑定冻结字节摘要不匹配');
