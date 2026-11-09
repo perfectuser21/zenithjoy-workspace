@@ -32,7 +32,14 @@ function validate(w) {
   assert.deepEqual(actual.filter(arg=>arg.startsWith('--')),['--test','--test-shard=1/3']);
   const baseline=captureNodeArgs('node --test --test-shard=1/3 '+globs.join(' '));
   const darwinOnly=/\/native-103-(transaction|public-executor|producers)\.test\.mjs$/;
-  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
+  const officialNative=['official-child-capture.integration.test.mjs','official-cli-closure.test.mjs','official-cli-quarantine.test.mjs','official-recording-producer.test.mjs'];
+  const nativeJob=w.jobs['public-code-phone-darwin-test'];
+  assert.equal(nativeJob['runs-on'],'macos-latest');
+  assert.ok(w.jobs['l3-passed'].needs.includes('public-code-phone-darwin-test'));
+  const nativeStep=nativeJob.steps.find(step=>step.name==='Run official child native lifecycle without platform skips');
+  assert.equal(nativeStep.if,undefined);assert.equal(nativeStep['continue-on-error'],undefined);
+  for(const name of officialNative)assert.ok(nativeStep.run.includes('services/phone-adb-controller/__tests__/'+name),name+' must have actual required Darwin coverage');
+  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)&&!officialNative.includes(arg.split('/').at(-1))).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');
