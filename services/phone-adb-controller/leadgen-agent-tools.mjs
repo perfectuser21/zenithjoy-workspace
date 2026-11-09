@@ -151,6 +151,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     if(!readback&&typeof primitives.validateInput!=='function')throw Error('AGENT_TOOL_NATIVE_ADMISSION_UNAVAILABLE');
     const trusted=readback||await primitives.validateInput(op,structuredClone(input),scope);
     if(!object(trusted))throw Error('AGENT_TOOL_NATIVE_ADMISSION_INVALID');
+    if(Date.now()>=deadline)throw Error('AGENT_TOOL_DEADLINE');
     const request={...trusted,line:scope.line,run:scope.run,source_run:scope.source_run||undefined,limit:op==='score'?1:scope.limit};
     if(op==='score')request.budget_max=scope.limit;
     if(op==='company_config')Object.assign(request,{step:scope.workflow==='douyin_video_discovery'?'101':scope.workflow==='douyin_video_processing'?'102':'103',...(scope.serial!=='none'?{device_binding:{profile:scope.profile,device_serial:scope.serial}}:{})});
