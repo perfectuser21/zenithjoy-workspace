@@ -19,14 +19,14 @@ def need(value, code):
         raise ValueError('EPOCH_LOCK_' + code)
 
 
-def raw_file(path):
+def raw_file(path, limit=65536):
     need(path.resolve(strict=True) == path and not path.is_symlink(), 'PATH')
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         s = os.fstat(fd)
         need(stat.S_ISREG(s.st_mode) and s.st_uid == os.geteuid() and s.st_nlink == 1
-             and not s.st_mode & 0o022 and s.st_size <= 65536, 'FILE')
-        raw = os.read(fd, 65537)
+             and not s.st_mode & 0o022 and s.st_size <= limit, 'FILE')
+        raw = os.read(fd, limit + 1)
         e = os.fstat(fd)
         need(len(raw) == s.st_size and (s.st_dev, s.st_ino, s.st_mtime_ns, s.st_ctime_ns)
              == (e.st_dev, e.st_ino, e.st_mtime_ns, e.st_ctime_ns), 'FILE_DRIFT')
@@ -117,7 +117,7 @@ def main():
         return
     mode, root, serial = sys.argv[1:4]
     root = Path(root)
-    need(mode in ('inspect', 'serve', 'resume-serve', 'continuation-serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
+    need(mode in ('inspect', 'serve', 'resume-serve', 'continuation-serve', 'diagnostic-serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
     before = snapshot(root, serial)
     # 两根是同一硬链：只open/flock一次，避免重复锁同inode自锁。
     fd = os.open(before['guards'][0]['path'], os.O_RDWR | os.O_NOFOLLOW)
@@ -130,9 +130,10 @@ def main():
             need(len(sys.argv) == 4, 'ARGUMENTS')
             emit(before)
             return
+        diagnostic = mode == 'diagnostic-serve'
         continuation = mode == 'continuation-serve'
-        resume = mode in ('resume-serve', 'continuation-serve')
-        need(len(sys.argv) == (12 if continuation else 8 if resume else 6) and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
+        resume = mode in ('resume-serve', 'continuation-serve', 'diagnostic-serve')
+        need(len(sys.argv) == (14 if diagnostic else 12 if continuation else 8 if resume else 6) and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
              and re.fullmatch(r'[a-f0-9]{64}', sys.argv[5]), 'ARGUMENTS')
         task, plan = sys.argv[4:6]
         previous = None
@@ -148,8 +149,31 @@ def main():
                                   'plan_sha256': prior_plan, 'snapshot': before,
                                   'original_execution_stopped': False, 'phase': 'prepared'}, 'RESUME_ORIGINAL')
             need(not any(os.path.lexists(str(original) + suffix) for suffix in
-                         ('.completed.json', '.superseded', '.continuation-owner.json')), 'PREVIOUS_UNKNOWN')
-            if continuation:
+                         ('.completed.json', '.superseded', '.diagnostic-recovery-owner.json')), 'PREVIOUS_UNKNOWN')
+            if not diagnostic:
+                need(not os.path.lexists(str(original)+'.continuation-owner.json'), 'PREVIOUS_UNKNOWN')
+            if diagnostic:
+                failed, owner_sha, failed_sha, unknown_sha, history_path, history_sha = sys.argv[8:14]
+                need(all(re.fullmatch(r'[a-f0-9]{64}', v) for v in (failed, owner_sha, failed_sha, unknown_sha, history_sha)) and failed not in (plan, prior_plan), 'DIAGNOSTIC_ARGUMENTS')
+                def diagnostic_unchanged():
+                    raw = raw_file(Path(history_path), 4*1024*1024)
+                    need(hashlib.sha256(raw).hexdigest() == history_sha, 'DIAGNOSTIC_HISTORY_DRIFT')
+                    h = json.loads(raw)
+                    need(h['protocol'] == 'device-epoch-fence-diagnostic-recovery-history/v1' and h['failed_resume_plan_sha256'] == failed and h['owner_path'] == str(original)+'.continuation-owner.json', 'DIAGNOSTIC_HISTORY')
+                    expected = [(h['owner_path'], owner_sha), (h['pending_path'], failed_sha), (h['unknown_path'], unknown_sha)]
+                    need(Path(h['pending_path']).parent == root and re.fullmatch(r'\.device-epoch-fence-continuation-'+task+r'-[a-f0-9]{64}-'+failed+r'\.pending\.json', Path(h['pending_path']).name) and h['unknown_path'] == h['pending_path'][:-len('.pending.json')]+'.unknown.json', 'DIAGNOSTIC_PATH')
+                    for path, value in expected:
+                        need(h['files'].get(path) == value, 'DIAGNOSTIC_HISTORY')
+                    for path, value in h['files'].items():
+                        need(re.fullmatch(r'[a-f0-9]{64}', value) and hashlib.sha256(raw_file(Path(path), 8*1024*1024)).hexdigest() == value, 'DIAGNOSTIC_HISTORY_DRIFT')
+                    owner = json.loads(raw_file(Path(h['owner_path'])))
+                    need(owner.get('protocol') == 'device-epoch-fence-continuation-owner/v1' and owner.get('continuation_plan_sha256') == failed and owner.get('prior_pending_sha256') == prior_sha and owner.get('original_execution_stopped') is False, 'DIAGNOSTIC_OWNER')
+                    pending, unknown = [json.loads(raw_file(Path(h[k]))) for k in ('pending_path', 'unknown_path')]
+                    need(pending.get('plan_sha256') == failed and pending.get('snapshot') == before and pending.get('phase') == 'prepared' and unknown == {'event':'unknown','reason':'DIAGNOSTIC_RECEIPT','plan_sha256':failed,'retry_allowed':False,'original_execution_stopped':False}, 'DIAGNOSTIC_LATCH')
+                diagnostic_unchanged()
+                recovery_owner = {'protocol':'device-epoch-fence-diagnostic-recovery-owner/v1','recovery_plan_sha256':plan,'failed_continuation_plan_sha256':failed,'history_sha256':history_sha,'prior_pending_sha256':prior_sha,'original_execution_stopped':False}
+                prefix = root / ('.device-epoch-fence-diagnostic-recovery-'+task+'-'+failed+'-'+plan)
+            elif continuation:
                 failed, owner_sha, failed_sha, unknown_sha = sys.argv[8:12]
                 need(all(re.fullmatch(r'[a-f0-9]{64}', v) for v in (failed, owner_sha, failed_sha, unknown_sha))
                      and failed not in (plan, prior_plan), 'CONTINUATION_ARGUMENTS')
@@ -184,7 +208,10 @@ def main():
         emit({'event': 'locked', 'snapshot': before})
         prepare = message()
         need(prepare == {'action': 'prepare', 'expected': before} and snapshot(root, serial) == before, 'PREPARE_CAS')
-        if continuation:
+        if diagnostic:
+            diagnostic_unchanged()
+            write_once(Path(str(original)+'.diagnostic-recovery-owner.json'), recovery_owner)
+        elif continuation:
             prior_unchanged()
             write_once(Path(str(original)+'.continuation-owner.json'), continuation_owner)
         elif resume:
@@ -195,6 +222,8 @@ def main():
                    'plan_sha256': plan, 'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared'}
         if resume:
             pending.update({'prior_plan_sha256': prior_plan, 'prior_pending_sha256': prior_sha})
+        if diagnostic:
+            pending.update({'failed_continuation_plan_sha256':failed,'diagnostic_history_sha256':history_sha})
         if continuation:
             pending.update({'failed_resume_plan_sha256': failed, 'failed_resume_owner_sha256': owner_sha,
                             'failed_resume_pending_sha256': failed_sha, 'failed_resume_unknown_sha256': unknown_sha})
@@ -204,7 +233,10 @@ def main():
             if resume:
                 need(hashlib.sha256(raw_file(Path(str(original) + '.pending.json'))).hexdigest() == prior_sha,
                      'RESUME_ORIGINAL_DRIFT')
-                if continuation:
+                if diagnostic:
+                    diagnostic_unchanged()
+                    need(json.loads(raw_file(Path(str(original)+'.diagnostic-recovery-owner.json'))) == recovery_owner, 'DIAGNOSTIC_OWNER_DRIFT')
+                elif continuation:
                     prior_unchanged()
                     need(json.loads(raw_file(Path(str(original)+'.continuation-owner.json'))) == continuation_owner, 'CONTINUATION_OWNER_DRIFT')
                 else:

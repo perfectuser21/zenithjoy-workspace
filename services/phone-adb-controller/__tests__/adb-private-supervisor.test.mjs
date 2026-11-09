@@ -63,3 +63,17 @@ test('真实held隔离Python argv：仅已核48b语法接纳exact -I -B -S，其
    if owned.poll() is None:owned.terminate()
    owned.wait(timeout=3)
 `));
+
+test('新source仅可终态核已审d7c私有service，旧manifest/servicehash不可自报',()=>py(fixture+`with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as old:
+ r,home,path,receipt,service,g,document=fixture(d)
+ service.write_bytes((ROOT/'adb-host-service.py').read_bytes());manifest=json.loads((r/'deployment-manifest.json').read_text())
+ for row in manifest['files']:
+  if row['deployed_path']=='adb-host-service.py':row['content_sha256']=hashlib.sha256(service.read_bytes()).hexdigest()
+ (r/'deployment-manifest.json').write_text(json.dumps(manifest));oldroot=pathlib.Path(old).resolve();shutil.copytree(r,oldroot,dirs_exist_ok=True)
+ prior=json.loads((oldroot/'deployment-manifest.json').read_text());prior['source_commit']='d7c9e6b25bd6434699653f381abbcf3e44c83a66';(oldroot/'deployment-manifest.json').write_text(json.dumps(prior))
+ historical={**document,'action':'terminal','supervisor_source':{'runtime_root':str(oldroot),'source_commit':prior['source_commit'],'service_sha256':hashlib.sha256(service.read_bytes()).hexdigest()}}
+ assert g.context(historical)[3]==oldroot
+ for action in ['inspect','kernel']:rejected(lambda:g.context({**historical,'action':action}))
+ rejected(lambda:g.context({**historical,'supervisor_source':{**historical['supervisor_source'],'service_sha256':'0'*64}}))
+ prior['source_commit']='a'*40;(oldroot/'deployment-manifest.json').write_text(json.dumps(prior));rejected(lambda:g.context({**historical,'supervisor_source':{**historical['supervisor_source'],'source_commit':'a'*40}}))
+`));

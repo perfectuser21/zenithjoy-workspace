@@ -9,13 +9,23 @@ exec(compile((_fixture_root/'adb-private-supervisor-core.py').read_bytes(),str(_
 # listener and lock observations still use the unmodified production functions.
 _native_context=context
 def context(document):
+ global OLD_SOURCE,OLD_SERVICE_SHA
  source=document.get('supervisor_source',{})
+ if _cfg.get('diagnosticRoot') and source.get('source_commit')==_cfg['diagnosticSource']['commit']:
+  assert source.get('runtime_root')==_cfg['diagnosticRoot'] and source.get('service_sha256')==_cfg['diagnosticServiceSha']
+ if document.get('action')=='terminal' and _cfg.get('diagnosticRoot') and source.get('runtime_root')==_cfg['diagnosticRoot']:
+  assert source['source_commit']==_cfg['diagnosticSource']['commit']=='d7c9e6b25bd6434699653f381abbcf3e44c83a66'
+  assert source['service_sha256']==_cfg['diagnosticServiceSha']
+  before=(OLD_SOURCE,OLD_SERVICE_SHA)
+  try:
+   globals()['OLD_SOURCE'],globals()['OLD_SERVICE_SHA']=source['source_commit'],source['service_sha256']
+   return _native_context(document)
+  finally:globals()['OLD_SOURCE'],globals()['OLD_SERVICE_SHA']=before
  if _cfg.get('failedRoot') and source.get('source_commit')==_cfg['failedSource']['commit']:
   assert source.get('runtime_root')==_cfg['failedRoot'] and source.get('service_sha256')==_cfg['failedServiceSha']
  if document.get('action')=='terminal' and _cfg.get('failedRoot') and source.get('runtime_root')==_cfg['failedRoot']:
   assert source['source_commit']==_cfg['failedSource']['commit']=='4ba9a0849f281f07f42186d7f465f1c144286dab'
   assert source['service_sha256']==_cfg['failedServiceSha']
-  global OLD_SOURCE,OLD_SERVICE_SHA
   before=(OLD_SOURCE,OLD_SERVICE_SHA)
   try:
    OLD_SOURCE,OLD_SERVICE_SHA=source['source_commit'],source['service_sha256']

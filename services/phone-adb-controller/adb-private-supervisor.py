@@ -153,6 +153,8 @@ def context(document):
     need(prior_manifest['source_commit'] == old['source_commit'] and actual == old['service_sha256'])
     if old['source_commit'] == OLD_SOURCE:
         need(actual == OLD_SERVICE_SHA)
+    elif old['source_commit'] == 'd7c9e6b25bd6434699653f381abbcf3e44c83a66' and old['source_commit'] != manifest['source_commit']:
+        need(document['action'] == 'terminal' and actual == '933443a98589dfbfb2c63d2919bae8d4402f9030dfa9dc0816389baa73d41f64')
     else:
         need(old['source_commit'] == manifest['source_commit'] and actual == sha(instance.read_file(HERE / 'adb-host-service.py')))
     home = Path(pwd.getpwuid(os.geteuid()).pw_dir)
