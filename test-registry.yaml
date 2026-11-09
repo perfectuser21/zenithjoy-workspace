@@ -11383,3 +11383,35 @@ tests:
     status: active
     product: AI员工
     note: "required Darwin真实主入口及ACK未知/伪造身份回归；不触现场服务"
+
+  - id: epoch-device-epoch-fence-stop-continuation-history
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-stop-continuation-history.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "固定失败历史、Ops原件和独立批准，不触真实历史"
+
+  - id: epoch-device-epoch-fence-continuation-lock
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-continuation-lock.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "一次性continuation文件事务，旧unknown与owner不可改"
+
+  - id: epoch-device-epoch-fence-stop-continuation-native
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-stop-continuation-native.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "required Darwin真实wait重入与本人进程终态，不触现场服务"
+
+  - id: epoch-device-epoch-fence-continuation-native
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-continuation-native.integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "独立required Darwin job真实continuation全main与startup/connect ACK未知，旧预算不变"

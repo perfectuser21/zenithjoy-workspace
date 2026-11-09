@@ -9,7 +9,7 @@ import { parse } from 'yaml';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profiles = [
-  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
+  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
   { name: 'runtime', file: 'ci-l4-runtime.yml', gate: 'l4-passed', routes: ['dashboard', 'api', 'agent', 'ci', 'staff_hub'], always: [] },
   { name: 'integration', file: 'ci-l4-integration.yml', gate: 'integration-gate', routes: ['api'], always: [] },
 ];
@@ -269,3 +269,5 @@ test('Windows handler reusable call runs contracts while candidate files require
 });
 
 test('epoch native Darwin required gate拒绝missing/skipped/failure/cancelled，成功才可准入',async()=>{const {checkGate,gates}=await import('../../../../scripts/ci/required-gate.mjs');const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}])),'epoch-resume-darwin-test':{result:'success'}};assert.doesNotThrow(()=>checkGate('code',needs));for(const state of [undefined,'skipped','failure','cancelled']){const bad=structuredClone(needs);if(state===undefined)delete bad['epoch-resume-darwin-test'];else bad['epoch-resume-darwin-test'].result=state;assert.throws(()=>checkGate('code',bad),/epoch-resume-darwin-test/);}});
+
+test('stop-only continuation独立Darwin必须成功，missing/skipped/failure/cancelled均拒绝',async()=>{const {checkGate,gates}=await import('../../../../scripts/ci/required-gate.mjs');assert.ok(gates.code.always.includes('epoch-continuation-darwin-test'));const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}]))};assert.doesNotThrow(()=>checkGate('code',needs));for(const state of [undefined,'skipped','failure','cancelled']){const bad=structuredClone(needs);if(state===undefined)delete bad['epoch-continuation-darwin-test'];else bad['epoch-continuation-darwin-test'].result=state;assert.throws(()=>checkGate('code',bad),/epoch-continuation-darwin-test/);}});

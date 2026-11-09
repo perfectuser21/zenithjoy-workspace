@@ -1,5 +1,5 @@
 # Test boundary: real core/kernel; HOME, logical hostname and loopback ports map.
-import os,sys,pathlib,types,json,signal,subprocess,fcntl,socket,pwd
+import os,sys,pathlib,types,json,signal,subprocess,fcntl,socket,pwd,threading,time
 _fixture_main=__name__=='__main__'
 _fixture_root=pathlib.Path(__file__).resolve().parent
 _cfg=json.loads((_fixture_root/'native-fixture.json').read_text())
@@ -31,5 +31,11 @@ if _fixture_main:
    child=subprocess.Popen(foreground_command(p));os.ftruncate(fd,0);os.write(fd,(json.dumps({'supervisor_pid':os.getpid(),'child_pid':child.pid})+'\n').encode());os.fsync(fd)
    def forward(sig,frame):
     if child.poll() is None:child.send_signal(sig)
+    if _cfg.get('continuation_old_handler'):child.wait(timeout=10)
+   if _cfg.get('continuation_old_handler'):
+    def ready():
+     while not child._waitpid_lock.locked():time.sleep(.001)
+     (_fixture_root/'initial-wait-held').write_text(str(os.getpid()))
+    threading.Thread(target=ready,daemon=True).start()
    signal.signal(signal.SIGTERM,forward);signal.signal(signal.SIGINT,forward);child.wait()
  else:main()

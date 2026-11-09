@@ -117,7 +117,7 @@ def main():
         return
     mode, root, serial = sys.argv[1:4]
     root = Path(root)
-    need(mode in ('inspect', 'serve', 'resume-serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
+    need(mode in ('inspect', 'serve', 'resume-serve', 'continuation-serve') and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}', serial), 'ARGUMENTS')
     before = snapshot(root, serial)
     # 两根是同一硬链：只open/flock一次，避免重复锁同inode自锁。
     fd = os.open(before['guards'][0]['path'], os.O_RDWR | os.O_NOFOLLOW)
@@ -130,8 +130,9 @@ def main():
             need(len(sys.argv) == 4, 'ARGUMENTS')
             emit(before)
             return
-        resume = mode == 'resume-serve'
-        need(len(sys.argv) == (8 if resume else 6) and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
+        continuation = mode == 'continuation-serve'
+        resume = mode in ('resume-serve', 'continuation-serve')
+        need(len(sys.argv) == (12 if continuation else 8 if resume else 6) and re.fullmatch(r'[a-f0-9-]{36}', sys.argv[4])
              and re.fullmatch(r'[a-f0-9]{64}', sys.argv[5]), 'ARGUMENTS')
         task, plan = sys.argv[4:6]
         previous = None
@@ -146,15 +147,47 @@ def main():
                  and previous == {'protocol': 'device-epoch-fence-file-transaction/v1', 'task_id': task,
                                   'plan_sha256': prior_plan, 'snapshot': before,
                                   'original_execution_stopped': False, 'phase': 'prepared'}, 'RESUME_ORIGINAL')
-            need(not any(os.path.lexists(str(original) + suffix) for suffix in ('.completed.json', '.superseded', '.resume-owner.json')), 'PREVIOUS_UNKNOWN')
-            prefix = root / ('.device-epoch-fence-resume-' + task + '-' + prior_plan + '-' + plan)
+            need(not any(os.path.lexists(str(original) + suffix) for suffix in
+                         ('.completed.json', '.superseded', '.continuation-owner.json')), 'PREVIOUS_UNKNOWN')
+            if continuation:
+                failed, owner_sha, failed_sha, unknown_sha = sys.argv[8:12]
+                need(all(re.fullmatch(r'[a-f0-9]{64}', v) for v in (failed, owner_sha, failed_sha, unknown_sha))
+                     and failed not in (plan, prior_plan), 'CONTINUATION_ARGUMENTS')
+                old_prefix = root / ('.device-epoch-fence-resume-' + task + '-' + prior_plan + '-' + failed)
+                need(not any(os.path.lexists(str(old_prefix) + suffix) for suffix in ('.completed.json', '.superseded')), 'PREVIOUS_UNKNOWN')
+                expected_owner = {'protocol': 'device-epoch-fence-resume-owner/v1', 'resume_plan_sha256': failed,
+                                  'prior_pending_sha256': prior_sha, 'original_execution_stopped': False}
+                def prior_unchanged():
+                    for path, expected_sha in [(Path(str(original)+'.resume-owner.json'), owner_sha),
+                                               (Path(str(old_prefix)+'.pending.json'), failed_sha),
+                                               (Path(str(old_prefix)+'.unknown.json'), unknown_sha)]:
+                        need(hashlib.sha256(raw_file(path)).hexdigest() == expected_sha, 'CONTINUATION_HISTORY_DRIFT')
+                    need(json.loads(raw_file(Path(str(original)+'.resume-owner.json'))) == expected_owner, 'CONTINUATION_OWNER')
+                    need(json.loads(raw_file(Path(str(old_prefix)+'.pending.json'))) == {
+                        'protocol': 'device-epoch-fence-file-transaction/v1', 'task_id': task, 'plan_sha256': failed,
+                        'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared',
+                        'prior_plan_sha256': prior_plan, 'prior_pending_sha256': prior_sha}, 'CONTINUATION_PENDING')
+                    need(json.loads(raw_file(Path(str(old_prefix)+'.unknown.json'))) == {
+                        'event': 'unknown', 'reason': 'RESUME_PRIVATE_TERMINAL_UNKNOWN', 'plan_sha256': failed,
+                        'retry_allowed': False, 'original_execution_stopped': False}, 'CONTINUATION_UNKNOWN')
+                prior_unchanged()
+                continuation_owner = {'protocol': 'device-epoch-fence-continuation-owner/v1', 'continuation_plan_sha256': plan,
+                                      'failed_resume_plan_sha256': failed, 'failed_resume_owner_sha256': owner_sha,
+                                      'prior_pending_sha256': prior_sha, 'original_execution_stopped': False}
+                prefix = root / ('.device-epoch-fence-continuation-' + task + '-' + failed + '-' + plan)
+            else:
+                need(not os.path.lexists(str(original)+'.resume-owner.json'), 'PREVIOUS_UNKNOWN')
+                prefix = root / ('.device-epoch-fence-resume-' + task + '-' + prior_plan + '-' + plan)
         else:
             prefix = root / ('.device-epoch-fence-' + task + '-' + plan)
         need(not any(os.path.lexists(str(prefix) + suffix) for suffix in ('.pending.json', '.completed.json', '.superseded', '.unknown.json')), 'PREVIOUS_UNKNOWN')
         emit({'event': 'locked', 'snapshot': before})
         prepare = message()
         need(prepare == {'action': 'prepare', 'expected': before} and snapshot(root, serial) == before, 'PREPARE_CAS')
-        if resume:
+        if continuation:
+            prior_unchanged()
+            write_once(Path(str(original)+'.continuation-owner.json'), continuation_owner)
+        elif resume:
             # 同一原unknown只准一个新授权事务；换plan也不能绕过ACK未知。
             write_once(Path(str(original) + '.resume-owner.json'), {'protocol': 'device-epoch-fence-resume-owner/v1',
                        'resume_plan_sha256': plan, 'prior_pending_sha256': prior_sha, 'original_execution_stopped': False})
@@ -162,15 +195,22 @@ def main():
                    'plan_sha256': plan, 'snapshot': before, 'original_execution_stopped': False, 'phase': 'prepared'}
         if resume:
             pending.update({'prior_plan_sha256': prior_plan, 'prior_pending_sha256': prior_sha})
+        if continuation:
+            pending.update({'failed_resume_plan_sha256': failed, 'failed_resume_owner_sha256': owner_sha,
+                            'failed_resume_pending_sha256': failed_sha, 'failed_resume_unknown_sha256': unknown_sha})
         write_once(Path(str(prefix) + '.pending.json'), pending)
         def unchanged():
             need(snapshot(root, serial) == before, 'RESUME_SNAPSHOT_DRIFT' if resume else 'SNAPSHOT_DRIFT')
             if resume:
                 need(hashlib.sha256(raw_file(Path(str(original) + '.pending.json'))).hexdigest() == prior_sha,
                      'RESUME_ORIGINAL_DRIFT')
-                owner = json.loads(raw_file(Path(str(original) + '.resume-owner.json')))
-                need(owner == {'protocol': 'device-epoch-fence-resume-owner/v1', 'resume_plan_sha256': plan,
-                               'prior_pending_sha256': prior_sha, 'original_execution_stopped': False}, 'RESUME_OWNER_DRIFT')
+                if continuation:
+                    prior_unchanged()
+                    need(json.loads(raw_file(Path(str(original)+'.continuation-owner.json'))) == continuation_owner, 'CONTINUATION_OWNER_DRIFT')
+                else:
+                    owner = json.loads(raw_file(Path(str(original) + '.resume-owner.json')))
+                    need(owner == {'protocol': 'device-epoch-fence-resume-owner/v1', 'resume_plan_sha256': plan,
+                                   'prior_pending_sha256': prior_sha, 'original_execution_stopped': False}, 'RESUME_OWNER_DRIFT')
             return True
         unchanged()
         emit({'event': 'prepared'})
