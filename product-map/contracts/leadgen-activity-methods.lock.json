@@ -553,7 +553,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -794,13 +794,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "f5fb5aab71af07f6ab3d332fb275a78b39f51a4a7aaf72660684c4e98d26b421",
+      "code_digest": "73cf5dbcd814a52c29cb93fe5c8e3db05ec10dd1485c06ed966abfec263126cf",
       "code_compatibility": {
-        "previous_code_digest": "98751fd0e961896d61ca8f1c5447be786daff9a0bd7bd88a08c43f88259fba29",
-        "current_code_digest": "f5fb5aab71af07f6ab3d332fb275a78b39f51a4a7aaf72660684c4e98d26b421",
+        "previous_code_digest": "f5fb5aab71af07f6ab3d332fb275a78b39f51a4a7aaf72660684c4e98d26b421",
+        "current_code_digest": "73cf5dbcd814a52c29cb93fe5c8e3db05ec10dd1485c06ed966abfec263126cf",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1404,7 +1404,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -1628,13 +1628,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ff17de92891da840b42544d781c5b8f190ac7eb5fbcdae665ea7b48e782279a6",
+      "code_digest": "5d097a935400a7f1b3a180058203c167bfc9fd384efcd5a18dbb243ee20f55b5",
       "code_compatibility": {
-        "previous_code_digest": "e63f7dda40ce86c1081bf028e2cf7c3c2748970284b363068b8674d260724927",
-        "current_code_digest": "ff17de92891da840b42544d781c5b8f190ac7eb5fbcdae665ea7b48e782279a6",
+        "previous_code_digest": "ff17de92891da840b42544d781c5b8f190ac7eb5fbcdae665ea7b48e782279a6",
+        "current_code_digest": "5d097a935400a7f1b3a180058203c167bfc9fd384efcd5a18dbb243ee20f55b5",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2182,7 +2182,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -2409,13 +2409,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "1bd9233a1e3a298dfcff2218cb9ea93752ffc0bedce54cb5f61ff4aa4dfb57bd",
+      "code_digest": "baa582b43aca1a6786813c013d0f9be2c7260c1adbff3a749fd7495fa4bc3a69",
       "code_compatibility": {
-        "previous_code_digest": "54691c4ef9dc1a604da0d41819f730e7f6bb0e098ba8b359ebeda14dbb926ffd",
-        "current_code_digest": "1bd9233a1e3a298dfcff2218cb9ea93752ffc0bedce54cb5f61ff4aa4dfb57bd",
+        "previous_code_digest": "1bd9233a1e3a298dfcff2218cb9ea93752ffc0bedce54cb5f61ff4aa4dfb57bd",
+        "current_code_digest": "baa582b43aca1a6786813c013d0f9be2c7260c1adbff3a749fd7495fa4bc3a69",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2991,7 +2991,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -3274,13 +3274,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "7b1de0e2c739418b8149935b3b8b64b19ac8d180c5303cf79485bdee51b2a2c3",
+      "code_digest": "5624f06806d735af7152380914e4456662e8c1b52f6af415c2d33dbc88daf4b9",
       "code_compatibility": {
-        "previous_code_digest": "37d0d522e3422c3dd4fc06ee5395ed4268f90e29420ceaef107b1279ddb31dc6",
-        "current_code_digest": "7b1de0e2c739418b8149935b3b8b64b19ac8d180c5303cf79485bdee51b2a2c3",
+        "previous_code_digest": "7b1de0e2c739418b8149935b3b8b64b19ac8d180c5303cf79485bdee51b2a2c3",
+        "current_code_digest": "5624f06806d735af7152380914e4456662e8c1b52f6af415c2d33dbc88daf4b9",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_video_processing.collection": {
@@ -3828,7 +3828,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -4077,13 +4077,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "f66c87d4c2f92fa161bbc37a6a435bc352e48b816a555f4ee533abd618a95ea1",
+      "code_digest": "13efa92c34b058c87d7e11d4002cf68ebd249ab402e8f67088647cf5dfdccaff",
       "code_compatibility": {
-        "previous_code_digest": "013da77216499d126cbf2a8b62650086908affc8a20f518f22b445081067f367",
-        "current_code_digest": "f66c87d4c2f92fa161bbc37a6a435bc352e48b816a555f4ee533abd618a95ea1",
+        "previous_code_digest": "f66c87d4c2f92fa161bbc37a6a435bc352e48b816a555f4ee533abd618a95ea1",
+        "current_code_digest": "13efa92c34b058c87d7e11d4002cf68ebd249ab402e8f67088647cf5dfdccaff",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4666,7 +4666,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -4889,13 +4889,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3f81693d9385d7de10aed705401b046950dc5d0f676a73e27ce9c90630f129a8",
+      "code_digest": "e9b359e595cf345886d3cd44e1ff2ad739f7e184a6b6413428dc2596b4fec84e",
       "code_compatibility": {
-        "previous_code_digest": "33156168e93e3605ba7026f3c977460630c239405b58dba03d2b88423986d399",
-        "current_code_digest": "3f81693d9385d7de10aed705401b046950dc5d0f676a73e27ce9c90630f129a8",
+        "previous_code_digest": "3f81693d9385d7de10aed705401b046950dc5d0f676a73e27ce9c90630f129a8",
+        "current_code_digest": "e9b359e595cf345886d3cd44e1ff2ad739f7e184a6b6413428dc2596b4fec84e",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5450,7 +5450,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -5684,13 +5684,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "f847a0449ba808be7670fd3ee0d659de26caad17fa808f12941e4b90c759fcd7",
+      "code_digest": "c68eb3712c647fed14166a1e7932fde3b3d26c2cad607e89f4a247259a1755f5",
       "code_compatibility": {
-        "previous_code_digest": "7bbcbb1bcf2a0666033aefa512ce62de22d948c7bd9ddc26764637103bfdc889",
-        "current_code_digest": "f847a0449ba808be7670fd3ee0d659de26caad17fa808f12941e4b90c759fcd7",
+        "previous_code_digest": "f847a0449ba808be7670fd3ee0d659de26caad17fa808f12941e4b90c759fcd7",
+        "current_code_digest": "c68eb3712c647fed14166a1e7932fde3b3d26c2cad607e89f4a247259a1755f5",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6252,7 +6252,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -6521,13 +6521,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "b8ce8769e8bf02cfb69305073172cdfe9322ee569565dace4cc553d82b8b3b5b",
+      "code_digest": "11f447c587fd7b9231b764a8e016e52b0d9205b3f80ae52c89454b347942f6a0",
       "code_compatibility": {
-        "previous_code_digest": "d3fbe1d093b61b20f4eb813aab826bf5234f8531eae5d9fcd180a5f0f0b9beba",
-        "current_code_digest": "b8ce8769e8bf02cfb69305073172cdfe9322ee569565dace4cc553d82b8b3b5b",
+        "previous_code_digest": "b8ce8769e8bf02cfb69305073172cdfe9322ee569565dace4cc553d82b8b3b5b",
+        "current_code_digest": "11f447c587fd7b9231b764a8e016e52b0d9205b3f80ae52c89454b347942f6a0",
         "kind": "internal_compatible",
         "reviewed_by": "cloud8_recovery_design",
-        "reason": "共享executor维护错误路径保留既有未知回执及运行封域/诊断接线，业务合同、Method/Skill版本、输入输出与授权不变；不证明真实103业务验收"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7029,7 +7029,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -7288,13 +7288,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e6c4577651703942f6980e95dc54e7ddfa720f63a7e0f4ee7f48ffb260a853c6",
+      "code_digest": "fbd3a8039bff2b9b2c611718127889202e79b7e24352ea9ad90773ba4013b744",
       "code_compatibility": {
+        "previous_code_digest": "e6c4577651703942f6980e95dc54e7ddfa720f63a7e0f4ee7f48ffb260a853c6",
+        "current_code_digest": "fbd3a8039bff2b9b2c611718127889202e79b7e24352ea9ad90773ba4013b744",
         "kind": "internal_compatible",
-        "reason": "维护私有session生命周期、同wire完整授权去重复与固定d7c诊断终态恢复及必需RPC闭包；不改业务Skill合同、评分政策、输入输出或业务授权",
         "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "04683d66a176f6a9025252407d28e7b2f54822cb4608c19e6423ce94f5f3c559",
-        "current_code_digest": "e6c4577651703942f6980e95dc54e7ddfa720f63a7e0f4ee7f48ffb260a853c6"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7796,7 +7796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -8030,13 +8030,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "068e5cac825a93a4d857532f0d11c91fe6e9f2ae90887750add43c431156c622",
+      "code_digest": "99ba692361aedbc86624333dfecbeedd88c4f5095791ee177a1f53de4ed7cac4",
       "code_compatibility": {
+        "previous_code_digest": "068e5cac825a93a4d857532f0d11c91fe6e9f2ae90887750add43c431156c622",
+        "current_code_digest": "99ba692361aedbc86624333dfecbeedd88c4f5095791ee177a1f53de4ed7cac4",
         "kind": "internal_compatible",
-        "reason": "维护私有session生命周期、同wire完整授权去重复与固定d7c诊断终态恢复及必需RPC闭包；不改业务Skill合同、评分政策、输入输出或业务授权",
         "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "8f622055e43ec1dc38f248814064eed14fb5c67e091043c2822861acedf2929d",
-        "current_code_digest": "068e5cac825a93a4d857532f0d11c91fe6e9f2ae90887750add43c431156c622"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8538,7 +8538,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -8765,13 +8765,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "44ddbefea36dd17604dabe10ee087410ff9afebf8ab59efaf574d1fbb4a27e4b",
+      "code_digest": "e57b7fa19bf20ff10f88b1821c70e5e765ffa69669e925e06ac4f2f66eda3ec8",
       "code_compatibility": {
+        "previous_code_digest": "44ddbefea36dd17604dabe10ee087410ff9afebf8ab59efaf574d1fbb4a27e4b",
+        "current_code_digest": "e57b7fa19bf20ff10f88b1821c70e5e765ffa69669e925e06ac4f2f66eda3ec8",
         "kind": "internal_compatible",
-        "reason": "维护私有session生命周期、同wire完整授权去重复与固定d7c诊断终态恢复及必需RPC闭包；不改业务Skill合同、评分政策、输入输出或业务授权",
         "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "2ad15a94197066b561635bd6b4147eb617eea7b2a81c790a26e040d39fe3c38b",
-        "current_code_digest": "44ddbefea36dd17604dabe10ee087410ff9afebf8ab59efaf574d1fbb4a27e4b"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9273,7 +9273,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "8c6b14a59d04b6506e0c34e8f0b70299c9fd03ee02aef9378d2dab7226e719b3"
+          "sha256": "f9886278b6b39be83a28d47995bae57abe0466d378c937b90181668885288c82"
         },
         {
           "kind": "code",
@@ -9510,13 +9510,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f449fad29515f510834d1fd88930610f118f4750ce118939eb808da868194607",
+      "code_digest": "10af1d6030c908ce32bc455f8208229434d4b2334a30485f490d2b13ab0f499a",
       "code_compatibility": {
+        "previous_code_digest": "f449fad29515f510834d1fd88930610f118f4750ce118939eb808da868194607",
+        "current_code_digest": "10af1d6030c908ce32bc455f8208229434d4b2334a30485f490d2b13ab0f499a",
         "kind": "internal_compatible",
-        "reason": "维护私有session生命周期、同wire完整授权去重复与固定d7c诊断终态恢复及必需RPC闭包；不改业务Skill合同、评分政策、输入输出或业务授权",
         "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "8111d3aef449944e429d897f049a47023cabf5b73c27683bbcc02fe1a950b5cf",
-        "current_code_digest": "f449fad29515f510834d1fd88930610f118f4750ce118939eb808da868194607"
+        "reason": "固定已核Commander文档字节兼容及原public父授权前置；业务合同、方法版本、输入输出与执行授权不变；104仅共享依赖且拒兼容，不证明真实业务验收"
       }
     }
   },
