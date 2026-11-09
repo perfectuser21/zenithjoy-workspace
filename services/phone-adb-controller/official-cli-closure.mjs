@@ -4,7 +4,7 @@
 import {execInput,executionOuterReturned} from './leadgen-client.mjs';
 import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {readFileSync,lstatSync,realpathSync,mkdirSync,symlinkSync,existsSync,openSync,closeSync,fstatSync,constants} from 'node:fs';
-import {join,dirname,resolve} from 'node:path';
+import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -52,10 +52,12 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
  const activity=scope?.activity;if(!slots.includes(activity)||scope.task_id!==taskId||scope.run_id!==binding.run_id||scope.binding_id!==binding.id||scope.snapshot_sha256!==f.snapshot_sha256||scope.source_commit!==fixed.sourceCommit||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.run!==fixed.owner||scope.workflow!==input.workflow_key||!Number.isSafeInteger(scope.deadline_ms)||scope.receipt_deadline_ms>=scope.deadline_ms||!Number.isSafeInteger(scope.worker_deadline_ms)||!Number.isSafeInteger(scope.receipt_deadline_ms)||scope.worker_deadline_ms>=scope.receipt_deadline_ms||Date.now()>=scope.worker_deadline_ms)throw fail('SCOPE');
  const deadline=scope.worker_deadline_ms;
  const bin=join(base.WFR_RUN_DIR,'official-cli-bin'+(activity?'-'+activity:''));mkdirSync(bin,{mode:0o700});
- for(const [name,program]of Object.entries({python3:executables.python,node:executables.node,zsh:executables.zsh})){if(existsSync(join(bin,name)))throw fail('PREVIOUS_SCOPE');symlinkSync(program.path,join(bin,name));}
+ const links={python3:executables.python,node:executables.node,zsh:executables.zsh},binIdentity=lstatSync(bin);
+ for(const [name,program]of Object.entries(links)){if(existsSync(join(bin,name)))throw fail('PREVIOUS_SCOPE');symlinkSync(program.path,join(bin,name));}
  const verify=()=>{
-  const st=lstatSync(bin);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o700)throw fail('PINNED_RUNTIME');
-  for(const [name,digest]of Object.entries(REVIEWED)){const path=join(root,name),s=lstatSync(path);const expected=Array.isArray(digest)?digest:[digest],actual=sha(readFileSync(path));if(!s.isFile()||s.isSymbolicLink()||s.mode&0o022||!expected.includes(actual)||f.files['runtime/'+name]!==actual)throw fail('SOURCE');}
+  const st=lstatSync(bin);if(!st.isDirectory()||st.isSymbolicLink()||st.dev!==binIdentity.dev||st.ino!==binIdentity.ino||st.uid!==process.getuid()||(st.mode&0o777)!==0o700)throw fail('PINNED_RUNTIME');
+  for(const [name,program]of Object.entries(links)){const path=join(bin,name),s=lstatSync(path);if(!s.isSymbolicLink()||s.uid!==process.getuid()||realpathSync(path)!==program.path)throw fail('PINNED_RUNTIME');}
+  for(const [name,digest]of Object.entries(REVIEWED)){const path=join(root,name),s=lstatSync(path);const expected=Array.isArray(digest)?digest:[digest],actual=sha(readFileSync(path));if(!s.isFile()||s.isSymbolicLink()||![0,process.getuid()].includes(s.uid)||s.mode&0o022||!expected.includes(actual)||f.files['runtime/'+name]!==actual)throw fail('SOURCE');}
   for(const program of Object.values(executables)){const path=program.path,s=lstatSync(path);if(realpathSync(path)!==path||!s.isFile()||s.mode&0o022||sha(readFileSync(path))!==program.sha256)throw fail('PINNED_RUNTIME');}
  };
  const active=()=>{if(Date.now()>=deadline)throw fail('DEADLINE');if(sealed||unknown)throw fail('CLOSED',unknown);verify();};
