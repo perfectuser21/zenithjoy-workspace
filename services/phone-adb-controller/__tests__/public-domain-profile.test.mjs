@@ -218,3 +218,19 @@ test('103 public preparation consumes committed queue without a parent run',asyn
   identity.input={source_run:'partial102'};assert.throws(()=>preparePublicDomainSnapshot({...args,runDirectory:join(x.sourceRoot,'bad-run')}),/PUBLIC_DOMAIN_UPSTREAM/);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
+
+test('agent-first public metadata binds a verified business Skill and rejects an unverified or code-only method',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=await fixture();
+ try{
+  const path='skills/douyin-leadgen-activity-103-scoring/SKILL.md',text='---\nname: douyin-leadgen-activity-103-scoring\nmetadata:\n  version: 0.12.0\n  primary_execution: agent-v1\n  execution_transport: raw-model-v1\n---\n原评分政策';
+  mkdirSync(join(x.sourceRoot,path,'..'),{recursive:true});writeFileSync(join(x.sourceRoot,path),text,{mode:0o600});
+  const f=x.frozen,a=f.activities[0],b={kind:'skill',status:'verified',repo:'perfectuser21/zenithjoy-workspace',revision:sha,path:'services/phone-adb-controller/'+path,name:'douyin-leadgen-activity-103-scoring',version:'0.12.0',content_sha256:digest(text)};
+  a.version.payload.implementation_bindings=[b];sign(a.version);a.implementations=[{...b,execution_verification:'verified_local',actual_content_sha256:digest(text),execution_path:'runtime/'+path}];
+  f.execution_mode='agent';f.execution_transport='raw-model-v1';f.max_turns=12;f.deployment.files.push({deployed_path:path,content_sha256:digest(text)});reseal(x);
+  const p=buildPublicDomainProfile(x).profile;
+  assert.equal(p.metadata.scoring.executor_kind,'agent');assert.deepEqual(p.metadata.scoring.skill,{entry:path,version:'0.12.0'});
+  assert.equal(p.metadata.scoring.implementation.kind,'agent');assert.equal(p.domain_adapter.config.execution_mode,'agent');
+  const bad=structuredClone(x);bad.frozen.activities[0].implementations[0].execution_verification='unknown';delete bad.frozen.snapshot_sha256;bad.frozen.snapshot_sha256=digest(bad.frozen);
+  assert.throws(()=>buildPublicDomainProfile(bad),/SKILL/);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
