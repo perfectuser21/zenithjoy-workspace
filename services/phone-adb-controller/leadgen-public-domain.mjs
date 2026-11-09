@@ -63,7 +63,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     handlers=workflow.createHandlers({root:runtime,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id,execute:(...args)=>primitiveRuntime.execute(...args)});
     primitiveRuntime=(await load('official-child-primitives.mjs')).createOfficialChildPrimitives({root:runtime,env,frozen,binding,taskId:identity.task_id,state:handlers.state});
     const originalTools=handlers.createAgentTools,originalState=handlers.agentNativeState;
-    handlers.createAgentTools=async(activity,scope)=>{await primitiveRuntime.begin(scope);const tools=await originalTools(activity,scope);return {...tools,settle:async proof=>{const result=await tools.settle(proof);if(activity.key!=='cleanup')await primitiveRuntime.finish(activity.key);return result;},...(activity.key==='cleanup'?{release:async proof=>{const result=await tools.release(proof);await primitiveRuntime.finish(activity.key);return result;}}:{})};};
+    handlers.createAgentTools=async(activity,scope)=>{await primitiveRuntime.begin(scope);const tools=await originalTools(activity,scope);return primitiveRuntime.wrapTools(activity,scope,tools);};
     handlers.agentSupportsNativeScope=activity=>primitiveRuntime.supports(activity);
     handlers.agentNativeState=()=>({...originalState(),execution_unknown:originalState().execution_unknown||primitiveRuntime.snapshot().execution_unknown});
    }else{
