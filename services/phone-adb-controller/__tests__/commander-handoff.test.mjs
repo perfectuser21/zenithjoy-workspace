@@ -17,6 +17,29 @@ function setup(){
  const receipt={...identity,child_session_key:'agent:skill-factory:subagent:1234',child_run_id:'1234abcd-0000-4000-8000-000000000002'};
  return {dir,request,identity,receipt};
 }
+function primarySpawnFixture(){
+ const f=setup(),source='a'.repeat(40),now=Date.now();
+ f.request={...f.request,worker_expires_at:now/1000+45};
+ writeFileSync(join(f.dir,'agent-request.json'),JSON.stringify(f.request));
+ writeFileSync(join(f.dir,'activity-request.json'),JSON.stringify({protocol:'leadgen-activity-v1',mode:'execute',primary_host:'official-child-v1',run_id:f.request.run_id,task_id:f.request.task_id,nonce:f.request.nonce,source_commit:source,deadline_ms:f.request.expires_at*1000,worker_deadline_ms:f.request.worker_expires_at*1000}));
+ writeFileSync(join(f.dir,'spawn-claimed.json'),JSON.stringify({...f.request,source_commit:source,claimed_at:new Date(now).toISOString()}));
+ f.raw={status:'accepted',childSessionKey:f.receipt.child_session_key,runId:f.receipt.child_run_id,resolvedProvider:'openai',resolvedModel:'openai/gpt-6.1-sol'};
+ return f;
+}
+test('official primary binds the original string or object ToolReceipt once without model-side field guesses',()=>{
+ for(const asString of [true,false]){
+  const f=primarySpawnFixture(),raw=asString?JSON.stringify(f.raw):f.raw;
+  const result=call(f.dir,'bind',{raw_spawn_receipt:raw});
+  assert.equal(result.status,0,result.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'agent-binding.json'))),f.receipt);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.json'))),f.raw);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.raw.json'))),raw);
+  const original=readFileSync(join(f.dir,'spawn-receipt.raw.json'));
+  assert.equal(call(f.dir,'bind',{raw_spawn_receipt:raw}).status,0);
+  assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),original);
+  assert.equal(existsSync(join(f.dir,'child-abort.json')),false);
+ }
+});
 test('正式交接：绑定父子run后接收原始完成结果，重复同回执幂等',()=>{
  const {dir,receipt}=setup();
  assert.equal(call(dir,'bind',receipt).status,0);
