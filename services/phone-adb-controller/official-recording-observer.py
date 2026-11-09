@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """固定录音producer私有日志；只读检查不发信号，不启动ADB或录音。"""
 import hashlib
-import importlib.util
+import ctypes
+import struct
+import types
 import json
 import os
 from pathlib import Path
@@ -29,10 +31,31 @@ def private(path):
     finally:
         os.close(fd)
 
+def source_module(path):
+    path = Path(path)
+    module = types.ModuleType('official_fixed_observer')
+    module.__file__ = str(path)
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+class SourceLoader:
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def exec_module(self, module):
+        module.__file__ = str(self.path)
+        exec(compile(self.path.read_bytes(), str(self.path), 'exec'), module.__dict__)
+
+def source_spec(name, path):
+    need(Path(path).resolve() == HERE / 'adb-process-observation.py')
+    return types.SimpleNamespace(loader=SourceLoader(path))
+
 def identity_module():
-    spec = importlib.util.spec_from_file_location('fixed_recording_identity', HERE / 'qualification-maintenance-processes.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Explicit source compilation bypasses both timestamp and hash pyc caches.
+    module = source_module(HERE / 'qualification-maintenance-processes.py')
+    module.importlib = types.SimpleNamespace(util=types.SimpleNamespace(
+        spec_from_file_location=source_spec,
+        module_from_spec=lambda spec: types.ModuleType('official_fixed_kernel')))
     return module
 
 def persist(path, value, exclusive=False):
@@ -90,10 +113,14 @@ def owned_popen(argv, **kwargs):
         return subprocess.Popen(argv, **kwargs)
     # A durable unresolved reservation is made BEFORE Popen. An interrupted
     # launch therefore cannot disappear merely because its PID was not saved.
+    need(kwargs.get('start_new_session') is True)
     receipt, sha = reserve(path)
     child = subprocess.Popen(argv, **kwargs)
     try:
-        bind(receipt, sha, child.pid, argv)
+        if identity_module().kernel(child.pid) is None and child.poll() is not None:
+            persist(receipt, {'protocol':'official-recording-process/v1','intent_sha256':sha,'status':'owned_wait','pid':child.pid,'pgid':child.pid,'uid':os.getuid(),'owned_wait_code':child.returncode})
+        else:
+            bind(receipt, sha, child.pid, argv)
     except BaseException:
         # Never authorize further work; unresolved reservation remains sticky.
         try:
@@ -104,19 +131,45 @@ def owned_popen(argv, **kwargs):
         raise
     return child
 
+def group_members(pgid, module):
+    if sys.platform == 'darwin':
+        lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+        buf = ctypes.create_string_buffer(65536)
+        count = lib.proc_listpgrppids(pgid, buf, len(buf))
+        need(0 <= count < len(buf)//4)
+        ids = [x[0] for x in struct.iter_unpack('=I', buf.raw[:count*4]) if x[0] > 1]
+    else:
+        ids = [int(x) for x in os.listdir('/proc') if x.isdigit()]
+    result = []
+    for pid in ids:
+        row = module.kernel(pid)
+        if row and row['pgid'] == pgid and not row['terminal']:
+            result.append(row)
+    return result
+
 def inspect(path):
     _, sha = intent(path)
     module = identity_module()
     rows = []
     for file in sorted(Path(path).parent.glob(Path(path).name+'.producer.*.json')):
         row = json.loads(private(file))
-        need(row.get('protocol') == 'official-recording-process/v1' and row.get('intent_sha256') == sha and row.get('status') == 'bound')
+        need(row.get('protocol') == 'official-recording-process/v1' and row.get('intent_sha256') == sha and row.get('status') in ('bound','owned_wait'))
+        if row['status'] == 'owned_wait':
+            need(type(row.get('pid')) is int and row['pid'] > 1 and row.get('uid') == os.getuid() and type(row.get('owned_wait_code')) is int)
+            rows.append({**row,'state':'terminal','receipt':file.name,'receipt_sha256':hashlib.sha256(private(file)).hexdigest()})
+            continue
         need(type(row.get('pid')) is int and row['pid'] > 1 and isinstance(row.get('start_identity'), str) and row.get('uid') == os.getuid())
         current = module.kernel(row['pid'])
         # Reuse is not silently accepted: this adapter never signals a PID.
         state = 'absent' if current is None else 'reused' if current['start_identity'] != row['start_identity'] else 'terminal' if current['terminal'] else 'alive'
-        rows.append({**row,'state':state,'receipt_sha256':hashlib.sha256(private(file)).hexdigest()})
-    return {'protocol':'official-recording-observation/v1','intent_sha256':sha,'processes':rows}
+        rows.append({**row,'state':state,'receipt':file.name,'receipt_sha256':hashlib.sha256(private(file)).hexdigest()})
+    covered = {(r['pid'], r.get('start_identity')) for r in rows}
+    unregistered = []
+    for pgid in {r['pgid'] for r in rows if 'pgid' in r}:
+        for member in group_members(pgid, module):
+            if (member['pid'], member['start_identity']) not in covered:
+                unregistered.append({'pid':member['pid'],'pgid':pgid})
+    return {'protocol':'official-recording-observation/v1','intent_sha256':sha,'processes':rows,'unregistered_group_members':unregistered}
 
 if __name__ == '__main__':
     try:

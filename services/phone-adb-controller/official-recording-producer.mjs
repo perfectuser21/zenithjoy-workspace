@@ -21,8 +21,8 @@ export function createOfficialRecordingProducer({scope,sourceRoot,evidenceRoot,f
  need(fixed.activity==='qualification'&&isAbsolute(fixed.runDir)&&/^[a-f0-9]{40}$/.test(fixed.sourceCommit)&&/^[a-f0-9]{64}$/.test(fixed.snapshotSha256));
  for(const k of ['deadlineMs','workerDeadlineMs','receiptDeadlineMs'])need(Number.isFinite(fixed[k]));
  const check=()=>{need(digest(bytes(python.path,false,64*1024*1024))===python.sha256);for(const p of required)need(/^[a-f0-9]{64}$/.test(files?.[p]||'')&&digest(bytes(join(sourceRoot,p)))===files[p]);};check();
- const entries=new Map(),tickets=new WeakMap(),proofs=new WeakSet();let unknown=false;
- const observe=e=>{check();need(digest(bytes(e.intentPath,true))===e.intentHash);const r=spawnSync(python.path,['-I',join(sourceRoot,'official-recording-observer.py'),'inspect',e.intentPath],{env:{PATH:'/usr/bin:/bin',LANG:'C',LC_ALL:'C'},encoding:'utf8',timeout:Math.max(1,Math.min(3000,fixed.receiptDeadlineMs-Date.now())),maxBuffer:1024*1024});need(r.status===0&&!r.error&&!r.signal);const v=JSON.parse(r.stdout);need(v.protocol==='official-recording-observation/v1'&&v.intent_sha256===e.intentHash&&Array.isArray(v.processes)&&!v.unknown);return v.processes;};
+ const entries=new Map(),tickets=new WeakMap(),proofs=new WeakSet();let unknown=false,sealed=false;
+ const observe=e=>{check();need(digest(bytes(e.intentPath,true))===e.intentHash);const r=spawnSync(python.path,['-I',join(sourceRoot,'official-recording-observer.py'),'inspect',e.intentPath],{env:{PATH:'/usr/bin:/bin',LANG:'C',LC_ALL:'C'},encoding:'utf8',timeout:Math.max(1,Math.min(3000,fixed.receiptDeadlineMs-Date.now())),maxBuffer:1024*1024});need(r.status===0&&!r.error&&!r.signal);const v=JSON.parse(r.stdout);need(v.protocol==='official-recording-observation/v1'&&v.intent_sha256===e.intentHash&&Array.isArray(v.processes)&&Array.isArray(v.unregistered_group_members)&&v.unregistered_group_members.length===0&&!v.unknown);return v.processes;};
  const artifacts=e=>{
   const json=s=>JSON.parse(bytes(join(evidenceRoot,e.evidenceId+s),true));
   const sdk=String(bytes(join(evidenceRoot,e.evidenceId+'.capture-sdk.txt'),true)).trim();need(sdk==='31'||/^\d{2}$/.test(sdk)&&Number(sdk)>=33);
@@ -38,7 +38,7 @@ export function createOfficialRecordingProducer({scope,sourceRoot,evidenceRoot,f
   return {startup,media};
  };
  function before({operationId,command,evidenceId,videoId,argv}){
-  check();need(!unknown&&Date.now()<fixed.receiptDeadlineMs&&id.test(operationId||'')&&id.test(evidenceId||'')&&/^\d+$/.test(videoId||'')&&Array.isArray(argv));
+  check();need(!unknown&&!sealed&&Date.now()<fixed.receiptDeadlineMs&&id.test(operationId||'')&&id.test(evidenceId||'')&&/^\d+$/.test(videoId||'')&&Array.isArray(argv));
   need(['record-start','record-status','record-stop','record-extract-audio'].includes(command));
   let e=entries.get(evidenceId);
   if(command==='record-start'){
@@ -52,7 +52,7 @@ export function createOfficialRecordingProducer({scope,sourceRoot,evidenceRoot,f
  }
  async function after(ticket,{executionStopped}){
   const t=tickets.get(ticket);need(t);tickets.delete(ticket);t.e.pending--;
-  try{need(executionStopped===true);const rows=observe(t.e);need(rows.length>0);for(const row of rows){const key=row.pid+':'+row.start_identity;const old=t.e.seen.get(key);need(!old||old===row.receipt_sha256);t.e.seen.set(key,row.receipt_sha256);}
+  try{need(executionStopped===true);const rows=observe(t.e);need(rows.length>0);for(const row of rows){const key=row.receipt;const old=t.e.seen.get(key);need(!old||old===row.receipt_sha256);t.e.seen.set(key,row.receipt_sha256);}
    const {startup,media}=artifacts(t.e);need(rows.some(r=>r.pid===startup.pid&&r.argv_sha256===digest(JSON.stringify(startup.expected_argv))));
    if(t.command==='record-start'){need(rows.find(r=>r.pid===startup.pid).state==='alive');t.e.status='active';}
    if(t.command==='record-stop'){
@@ -65,6 +65,7 @@ export function createOfficialRecordingProducer({scope,sourceRoot,evidenceRoot,f
   }catch(error){unknown=true;t.e.status='unknown';throw fail();}
  }
  function snapshot(){return {protocol:'official-recording-producer/v1',domain:'registered_local_capture_producers',os_full_stop:false,execution_stopped:!unknown&&[...entries.values()].every(e=>e.status==='stopped'&&e.pending===0),unknown,recordings:[...entries.values()].map(e=>({evidence_id:e.evidenceId,video_id:e.videoId,status:e.status,pending:e.pending,registered_processes:e.seen.size}))};}
- async function close(){try{for(const e of entries.values()){const rows=observe(e);need(e.status==='stopped'&&e.pending===0&&rows.length>0&&rows.every(r=>['absent','terminal'].includes(r.state))&&rows.length===e.seen.size);for(const row of rows)need(e.seen.get(row.pid+':'+row.start_identity)===row.receipt_sha256);const {media}=artifacts(e);need(digest(bytes(media,false,256*1024*1024))===e.mediaHash);}}catch{unknown=true;}const proof=Object.freeze(snapshot());proofs.add(proof);return proof;}
- return Object.freeze({before,after,snapshot,close,verifyStopped:p=>proofs.has(p)&&p.execution_stopped===true&&!unknown});
+ function validateClosed(){for(const e of entries.values()){const rows=observe(e);need(e.status==='stopped'&&e.pending===0&&rows.length>0&&rows.every(r=>['absent','terminal'].includes(r.state))&&rows.length===e.seen.size);for(const row of rows)need(e.seen.get(row.receipt)===row.receipt_sha256);const {media}=artifacts(e);need(digest(bytes(media,false,256*1024*1024))===e.mediaHash);}}
+ async function close(){sealed=true;try{validateClosed();}catch{unknown=true;}const proof=Object.freeze(snapshot());proofs.add(proof);return proof;}
+ return Object.freeze({before,after,snapshot,close,verifyStopped:p=>{if(!sealed||!proofs.has(p)||p.execution_stopped!==true||unknown)return false;try{validateClosed();return snapshot().execution_stopped;}catch{unknown=true;return false;}}});
 }
