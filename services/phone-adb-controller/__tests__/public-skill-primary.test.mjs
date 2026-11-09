@@ -66,3 +66,9 @@ test('real public factory routes an unsupported first Skill through executeAgent
  const result=await domain.executeActivity(c,{run_tag:identity.run_id,attempt:1});
  assert.equal(result.adapter_result.reason,'AGENT_PRIMARY_NATIVE_DOMAIN_UNSUPPORTED');assert.equal(result.adapter_result.not_started,true);assert.equal(result.adapter_result.execution_stopped,true);assert.equal(result.status,'needs_review');assert.equal(existsSync(join(run,'skill-handoff')),false);assert.equal((await domain.close()).execution_stopped,true);
 });
+
+test('new public raw host rejects a fenced schema2 scope before snapshot writes, leases or phone actions',t=>{
+ const f=fixture(t),run=join(f.root,'never-created');
+ const profile={domain_adapter:{config:{primary_host:'raw-model-v1',snapshot:{deployment:{source_commit:'c'.repeat(40)},release:{id:id()},workflow_version:{id:id()},activities:[],discovery_phone_scope:{policy:{schema_version:2}}},step_spec:'steps.json'}}};
+ assert.throws(()=>preparePublicDomainSnapshot({identity:f.identity,profile,runDirectory:run,deadline_ms:f.deadline,cleanup_deadline_ms:f.cleanup}),/PUBLIC_DOMAIN_RAW_EPOCH_UNSUPPORTED/);assert.equal(existsSync(run),false);
+});
