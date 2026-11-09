@@ -8,9 +8,19 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
+import {gunzipSync} from 'node:zlib';
+import {spawnSync} from 'node:child_process';
 import {digest} from '../runtime-definition.mjs';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-async function using(fn){
+const legacyFixture=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/commander-global-v21.json.gz',import.meta.url))));
+function legacyWorkspace(home){
+ const base=join(home,'.openclaw/commander'),workspace=join(home,'openclaw-root/workspaces-root/clawd-work-commander');
+ for(const [name,body]of Object.entries(legacyFixture.files)){const file=join(base,name);mkdirSync(join(file,'..'),{recursive:true});writeFileSync(file,Buffer.from(body,'base64'));}
+ writeFileSync(join(base,'runtime-manifest.json'),Buffer.from(legacyFixture.runtime_manifest,'base64'));
+ for(const name of ['AGENTS.md','skills/workflow-commander/SKILL.md']){const file=join(workspace,name);mkdirSync(join(file,'..'),{recursive:true});writeFileSync(file,Buffer.from(legacyFixture.files[name],'base64'));}
+ return {base,workspace};
+}
+async function using(fn,{legacy=false}={}){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'official-child-host-'))),runtime=join(dir,'runtime'),home=join(dir,'home');mkdirSync(home,{mode:0o700});
  cpSync(fileURLToPath(new URL('../',import.meta.url)),runtime,{recursive:true,filter:path=>!path.split('/').some(p=>['__tests__','node_modules','__pycache__'].includes(p))});
  if(process.env.TEST_DROP_SKILL_LAUNCH_GUARD==='1'){const file=join(runtime,'leadgen-skill-agent.mjs');writeFileSync(file,readFileSync(file,'utf8').replace(" if(beforeLaunch!==undefined){if(typeof beforeLaunch!=='function'||await beforeLaunch()!==true)throw Error('RPC_SKILL_LAUNCH_UNAUTHORIZED');}\n",''));}
@@ -34,8 +44,9 @@ async function using(fn){
  const unregister=authority.registerPublicDomainAuthority({runDirectory:dir,identity,business_scope:{run:input.run_tag,run_id:id(1),task_id:id(2),source_commit:source,profile:input.profile,serial:'none',attempt:'a1'},snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:runtimeHash},deadline_ms:Date.now()+60000,cleanup_deadline_ms:Date.now()+120000});
  let calls=0;const baseRpc=async body=>{calls++;return {ok:true,delegated:body.kind};};
  let forbiddenCalls=0;const attempted=[];const blockedPath=join(dir,'empty-path');mkdirSync(blockedPath);const previousPath=process.env.PATH;process.env.PATH=blockedPath;
- const options={runDir:dir,frozen,baseRpc,get,agentOptions:{home,verifyWorkspace:()=>true,execute:async(command,args,opts)=>{forbiddenCalls++;attempted.push({at:new Date().toISOString(),command,args,timeoutMs:opts?.timeoutMs,blocked:true});throw Error('TEST_MODEL_IO_FORBIDDEN');}}};
- try{await fn({q,task,host,options,dir,unregister,get,calls:()=>calls,reads:()=>reads,forbiddenCalls:()=>forbiddenCalls,setHook:fn=>hook=fn});}finally{const audit=join(realpathSync(tmpdir()),'official-child-host-audit');mkdirSync(audit,{recursive:true,mode:0o700});writeFileSync(join(audit,dir.split('/').at(-1)+'.json'),JSON.stringify({fixture:dir,request:q,attempted,recorded_at:new Date().toISOString()}),{mode:0o600});if(previousPath===undefined)delete process.env.PATH;else process.env.PATH=previousPath;unregister();rmSync(dir,{recursive:true,force:true});}
+ if(legacy)legacyWorkspace(home);
+ const options={runDir:dir,frozen,baseRpc,get,agentOptions:{home,...(legacy?{}:{verifyWorkspace:()=>true}),execute:async(command,args,opts)=>{forbiddenCalls++;attempted.push({at:new Date().toISOString(),command,args,timeoutMs:opts?.timeoutMs,blocked:true});throw Error('TEST_MODEL_IO_FORBIDDEN');}}};
+ try{await fn({q,task,binding,runtime,home,agent:await import(pathToFileURL(join(runtime,'leadgen-skill-agent.mjs')).href),host,options,dir,unregister,get,calls:()=>calls,reads:()=>reads,forbiddenCalls:()=>forbiddenCalls,setHook:fn=>hook=fn});}finally{const audit=join(realpathSync(tmpdir()),'official-child-host-audit');mkdirSync(audit,{recursive:true,mode:0o700});writeFileSync(join(audit,dir.split('/').at(-1)+'.json'),JSON.stringify({fixture:dir,request:q,attempted,recorded_at:new Date().toISOString()}),{mode:0o600});if(previousPath===undefined)delete process.env.PATH;else process.env.PATH=previousPath;unregister();rmSync(dir,{recursive:true,force:true});}
 }
 test('受控host仅拦Skill，其他业务保持原RPC，authority不伪child已存在',async()=>using(async x=>{const rpc=x.host.createPublicOfficialChildRpc(x.options);assert.deepEqual(await rpc({kind:'queue'}),{ok:true,delegated:'queue'});assert.equal(x.calls(),1);assert.deepEqual(await rpc({kind:'activity_skill_authority',request:x.q}),{ok:true,authorized:false});assert.equal(x.reads(),5);}));
 test('raw快照、旧Method或错误受控路径在中央与模型IO前拒绝',async()=>using(async x=>{for(const frozen of [{...x.options.frozen,execution_transport:'raw-model-v1',max_turns:2},{...x.options.frozen,primary_host:undefined}])assert.throws(()=>x.host.createPublicOfficialChildRpc({...x.options,frozen}));const rpc=x.host.createPublicOfficialChildRpc(x.options);for(const change of [{method:{...x.q.method,text:x.q.method.text.replace(/^  primary_hosts:.*\n(?:    - .*\n)*/m,'')}},{method:{...x.q.method,host_support:{...x.q.method.host_support,text:'other'}}},{broker_request_path:'/tmp/other'},{max_turns:2}])await assert.rejects(()=>rpc({kind:'activity_skill',request:{...x.q,...change}}));assert.equal(x.reads(),0);}));
@@ -63,3 +74,28 @@ test('父授权await期间加载workspace变化，真实CLI前同步重核拒绝
 });
 
 test('fixture默认禁止真实模型IO且PATH隔离，拒绝原始argv先保全再清理',async()=>using(async x=>{const rpc=x.host.createPublicOfficialChildRpc(x.options),result=await rpc({kind:'activity_skill',request:x.q});assert.equal(x.forbiddenCalls(),1);assert.equal(result.result.execution_stopped,false);assert.match(process.env.PATH,/empty-path$/);}));
+
+test('真实2.1字节包仅public official-child经实际父授权后到达一次Gateway fixture',()=>using(async x=>{
+ let effects=0;const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async()=>{effects++;throw Error('FIXTURE_GATEWAY_REFUSED');}}});
+ const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(effects,1);assert.equal(result.result.execution_stopped,false);assert.ok(x.reads()>=10,'both fresh parent checks remain');
+ const dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q)),receipt=JSON.parse(readFileSync(join(dir,'commander-workspace-compatibility.json')));
+ assert.equal(receipt.actual_version,'2.1');assert.equal(receipt.expected_version,'2.2');assert.equal(receipt.not_deployed_version,'2.2');assert.equal(receipt.read_only,true);
+ assert.equal(readFileSync(join(x.home,'.openclaw/commander/runtime-manifest.json')).equals(Buffer.from(legacyFixture.runtime_manifest,'base64')),true);
+},{legacy:true}));
+test('兼容前必须真public live授权，拒绝不预留owner、不建Skill目录、不调Gateway',()=>using(async x=>{
+ x.task.status='cancelled';const rpc=x.host.createPublicOfficialChildRpc(x.options);await assert.rejects(()=>rpc({kind:'activity_skill',request:x.q}));assert.equal(x.forbiddenCalls(),0);assert.equal(existsSync(join(x.home,'.openclaw/leadgen-activity-runs')),false);
+},{legacy:true}));
+test('缺少可信beforeLaunch不因public旗标获得固定兼容',()=>using(async x=>{
+ let effects=0;await assert.rejects(()=>x.agent.runSkillAgent(x.q,{home:x.home,execute:async()=>{effects++;return {code:0,stdout:'',stderr:''};}}),/LAUNCH_UNAUTHORIZED/);assert.equal(effects,0);assert.equal(existsSync(join(x.home,'.openclaw/leadgen-activity-runs')),false);
+},{legacy:true}));
+for(const drift of ['task','bytes'])test('两次fresh授权之间'+drift+'漂移仍在Gateway前拒绝',()=>using(async x=>{
+ let passes=0;x.setHook(path=>{if(path.endsWith('/definition')&&++passes===2){if(drift==='task')x.task.status='cancelled';else writeFileSync(join(x.home,'openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander/SKILL.md'),'drift');}});
+ const rpc=x.host.createPublicOfficialChildRpc(x.options);await assert.rejects(()=>rpc({kind:'activity_skill',request:x.q}));assert.equal(x.forbiddenCalls(),0);assert.equal(existsSync(join(x.home,'.openclaw/leadgen-activity-runs')),false);
+},{legacy:true}));
+test('固定兼容拒绝raw104接手非public显式undefined未知字节单边差AGENTS及自签manifest',()=>using(async x=>{
+ const verify=x.agent.verifyCommanderWorkspace,base=join(x.home,'.openclaw/commander'),workspace=join(x.home,'openclaw-root/workspaces-root/clawd-work-commander');
+ for(const change of [{mode:'repair'},{workflow_key:'douyin_lead_outreach'},{public_domain:undefined},{primary_host:undefined},{execution_transport:'raw-model-v1'},{execution_transport:undefined},{max_turns:undefined},{transport_generation:0},{continuation_cause:'verification_failed'}])assert.throws(()=>verify({home:x.home,request:{...x.q,...change}}),/RPC_SKILL_COMMANDER_WORKSPACE_DRIFT/);
+ const cases=[()=>writeFileSync(join(workspace,'skills/workflow-commander/SKILL.md'),'unknown'),()=>writeFileSync(join(base,'skills/workflow-commander/SKILL.md'),readFileSync(join(x.runtime,'commander/skills/workflow-commander/SKILL.md'))),()=>writeFileSync(join(workspace,'AGENTS.md'),'unknown'),()=>writeFileSync(join(base,'runtime-manifest.json'),'{}'),()=>{const file=join(base,'wf-v2.py');writeFileSync(file,readFileSync(file)+'\n# changed');const m=JSON.parse(readFileSync(join(base,'runtime-manifest.json')));m.files['wf-v2.py']=createHash('sha256').update(readFileSync(file)).digest('hex');m.runtime_snapshot_sha256=digest(m.files);writeFileSync(join(base,'runtime-manifest.json'),JSON.stringify(m));}];
+ for(const mutate of cases){legacyWorkspace(x.home);mutate();assert.throws(()=>verify({home:x.home,request:x.q}),/RPC_SKILL_COMMANDER_WORKSPACE_DRIFT/);}
+ legacyWorkspace(x.home);writeFileSync(join(base,'.deploying'),'active');assert.throws(()=>verify({home:x.home,request:x.q}),/RPC_SKILL_COMMANDER_DEPLOYING/);assert.equal(x.forbiddenCalls(),0);
+},{legacy:true}));
