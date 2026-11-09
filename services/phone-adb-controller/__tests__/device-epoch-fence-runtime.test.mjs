@@ -15,6 +15,6 @@ test('内核argv0只可为已核launcher或body，其余固定参数绝不变化
 });
 
 test('launcher未变而kernelbody变更也在helper执行前拒绝',async()=>{
- const {mkdtempSync,writeFileSync,readFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {digest}=await import('../device-epoch-fence-reference.mjs');const {assertResumeInterpreterPins}=await import('../device-epoch-fence-resume-process.mjs');const dir=mkdtempSync(join(tmpdir(),'epoch-pin-drift-'));
+ const {mkdtempSync,writeFileSync,readFileSync,rmSync,realpathSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {digest}=await import('../device-epoch-fence-reference.mjs');const {assertResumeInterpreterPins}=await import('../device-epoch-fence-resume-process.mjs');const dir=realpathSync(mkdtempSync(join(tmpdir(),'epoch-pin-drift-')));
  try{const path=join(dir,'launcher'),runtime_path=join(dir,'body');writeFileSync(path,'trusted-launcher',{mode:0o600});writeFileSync(runtime_path,'trusted-body',{mode:0o600});const p={path,sha256:digest(readFileSync(path)),runtime_path,runtime_sha256:digest(readFileSync(runtime_path))};assert.equal(assertResumeInterpreterPins(p),true);writeFileSync(runtime_path,'drift-body');assert.throws(()=>assertResumeInterpreterPins(p),/PROCESS_INTERPRETER/);}finally{rmSync(dir,{recursive:true,force:true});}
 });
