@@ -32,7 +32,9 @@ elif method=='agent.wait':
  else:print(json.dumps({'runId':'wrong' if v=='wrong-terminal' else params['runId'],'status':'error','startedAt':intent['started_at_ms'],'endedAt':intent['receipt_deadline_ms']+1 if v=='outside-budget' else int(time.time()*1000)}))
 elif method in ['sessions.describe','chat.history','tools.invoke']:
  p=d/'closure-count';n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n))
- if method=='sessions.describe':print(json.dumps({'session':{'key':intent['parent_session_key'],'sessionId':'changed' if v=='session-changed' and n>=4 else 'fixture-session','hasActiveRun':v=='second-active' and n>=4,'activeRunIds':['late-parent'] if v=='second-active' and n>=4 else [],'snapshotAt':int(time.time()*1000)}}))
+ if method=='sessions.describe':
+  active=(v=='second-active' and n>=4) or (v=='tail-active' and n>=7)
+  print(json.dumps({'session':{'key':intent['parent_session_key'],'sessionId':'changed' if v=='session-changed' and n>=4 else 'fixture-session','hasActiveRun':active,'activeRunIds':['late-parent'] if active else [],'snapshotAt':int(time.time()*1000)}}))
  elif method=='chat.history':print(json.dumps({'sessionKey':intent['parent_session_key'],'sessionId':'fixture-session','pendingInputs':{'total':1 if v=='queue-pending' else 0,'items':[{'id':'late-callback'}] if v=='queue-pending' else [],'queuedCount':1 if v=='queue-pending' else 0}}))
  else:
   child=json.loads((d/'agent-binding.json').read_text())
@@ -74,7 +76,7 @@ test('official terminal archives only its real branded owner reservation without
   assert.equal(files.filter(name=>name.endsWith('.official_terminal.json')).length,1);
  }finally{await turn.close();}
 });
-for(const variant of ['delivery-pending','queue-pending','second-active','session-changed'])test('finished owner and child cannot clear the original reservation while '+variant,async t=>{
+for(const variant of ['delivery-pending','queue-pending','second-active','session-changed','tail-active'])test('finished owner and child cannot clear the original reservation while '+variant,async t=>{
  assert.equal(typeof api.closeOfficialSkillOwner,'function');const f=fixture(t,variant),turn=await reserveWorkflowCommanderTurn(f.request,{home:f.directory});
  try{
   const run=await api.runOfficialSkillOwner(f);assert.equal(api.officialOwnerRunTerminated(run,f.request),true);
