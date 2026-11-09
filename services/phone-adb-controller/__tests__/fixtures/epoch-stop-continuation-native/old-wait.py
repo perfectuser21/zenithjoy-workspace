@@ -66,10 +66,10 @@ signal.signal(signal.SIGTERM,stop);threading.Thread(target=watch,daemon=True).st
     helper.pwd.getpwuid = lambda uid: types.SimpleNamespace(pw_dir=str(home))
     document = {'action': 'inspect', 'instance_id': policy['instance_id'], 'endpoint': policy['endpoint'], 'source_commit': 'f'*40, 'policy_path': str(path), 'policy_sha256': digest(path.read_bytes()), 'supervisor_source': {'runtime_root': str(root), 'source_commit': 'f'*40, 'service_sha256': digest(service.read_bytes())}}
     owned = subprocess.Popen([str(Path(sys.executable).resolve()), str(service), 'run', '--config', str(path), '--maintenance-receipt', str(receipt)], env={**os.environ, 'HOME': str(home)}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    actual = None
     try:
         assert select.select([owned.stdout], [], [], 5)[0]
         assert owned.stdout.readline().strip() == 'WAITING'
-        actual = None
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             try:
@@ -77,6 +77,8 @@ signal.signal(signal.SIGTERM,stop);threading.Thread(target=watch,daemon=True).st
             except (ValueError, OSError):
                 time.sleep(.02)
         assert actual is not None
+        if '--fail-before-term' in sys.argv:
+            raise AssertionError('INJECTED_BEFORE_TERM')
         # Exactly one old stop. No retry, no helper-invented terminal facts.
         owned.send_signal(signal.SIGTERM)
         assert select.select([owned.stdout], [], [], 2)[0]
@@ -93,11 +95,43 @@ signal.signal(signal.SIGTERM,stop);threading.Thread(target=watch,daemon=True).st
         else:
             raise AssertionError('live parent must not prove terminal')
         assert all(helper.lock_state(p)[0]['held'] for p in locks.iterdir())
+        unknown = '--keep-parent-live' in sys.argv
         # Independent fixture Ops reaps this exact held parent once.
-        owned.kill(); owned.wait(timeout=3)
-        proof = helper.run({**document, 'action': 'terminal', 'expected': actual})
-        assert proof['selected_identities_absent'] and proof['listener_absent'] and proof['instance_locks_released']
-        print(json.dumps({'private_terminal_unknown': rejected, 'old_stop_signals': 1, 'ops_parent_reclaims': 1, 'proof': proof, 'field_actions': 0}))
+        if not unknown:
+            owned.kill(); owned.wait(timeout=3)
+            proof = helper.run({**document, 'action': 'terminal', 'expected': actual})
+            assert proof['selected_identities_absent'] and proof['listener_absent'] and proof['instance_locks_released']
+        else:
+            proof = None
+        print(json.dumps({'private_terminal_unknown': rejected, 'old_stop_signals': 1, 'ops_parent_reclaims': 0 if unknown else 1, 'proof': proof, 'field_actions': 0,
+                          'root': str(root), 'home': str(home), 'document': document, 'expected': actual}), flush=True)
+        # The Node test may perform fresh independent helper calls before cleanup.
+        assert sys.stdin.readline().strip() == 'close'
     finally:
+        # A pre-TERM assertion may fail. Never leave its independently spawned
+        # listener behind, and never select a process by name or by port scan.
+        record_path = locks / 'adb-host.instance-mmv-cloud-epoch2.lock'
+        child_identity = actual['child'] if actual else None
+        if child_identity is None and record_path.exists():
+            record = json.loads(record_path.read_bytes())
+            assert record['supervisor_pid'] == owned.pid
+            kernel = helper.kernel_identity(record['child_pid'])
+            if kernel is not None and kernel['status'] != 5:
+                child_identity = helper.process_identity(record['child_pid'])
+        if child_identity is not None:
+            kernel = helper.kernel_identity(child_identity['pid'])
+            if kernel is not None and kernel['status'] != 5:
+                fresh = helper.process_identity(child_identity['pid'], child_identity)
+                assert fresh['ppid'] == owned.pid and fresh['uid'] == os.geteuid()
+                assert fresh['executable'] == str(binary) and fresh['executable_sha256'] == policy['adb_sha256']
+                assert helper.shlex.split(fresh['_argv']) == [str(binary), '-L', 'tcp:' + str(port), 'server', 'nodaemon']
+                os.kill(fresh['pid'], signal.SIGTERM)
+                end = time.monotonic() + 3
+                while time.monotonic() < end and not helper.identity_terminal(child_identity):
+                    time.sleep(.02)
+                assert helper.identity_terminal(child_identity)
         if owned.poll() is None:
             owned.kill(); owned.wait(timeout=3)
+        assert not helper.listeners(port)
+        assert child_identity is None or helper.identity_terminal(child_identity)
+        print('NATIVE_CLEANUP ' + json.dumps({'listener_absent': True, 'child_terminal': child_identity is None or helper.identity_terminal(child_identity)}), file=sys.stderr, flush=True)
