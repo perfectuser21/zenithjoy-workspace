@@ -8,6 +8,7 @@ import YAML from 'yaml';
 import {runCodeGate} from './helpers/run-code-gate.mjs';
 import {openclawStep,captureNodeArgs} from './helpers/openclaw-selection.mjs';
 import {isPhoneDarwinTest} from '../../../../scripts/ci/native-phone-ci-selection.mjs';
+import {checkGate} from '../../../../scripts/ci/required-gate.mjs';
 
 const workflow = YAML.parse(readFileSync(new URL('../../ci-l3-code.yml', import.meta.url), 'utf8'));
 const globs = [
@@ -18,6 +19,8 @@ const globs = [
   'scripts/ci/__tests__/native-103-ci-contract.test.mjs',
 ];
 const original = 'node --test ' + globs.join(' ');
+const epochKey='epoch-resume-darwin-test';
+const epochNative=['adb-private-auth.test.mjs','adb-private-supervisor.test.mjs','device-epoch-fence-resume-native.integration.test.mjs'];
 function command(w = workflow) {
   return openclawStep(w).run;
 }
@@ -32,7 +35,7 @@ function validate(w) {
   assert.deepEqual(actual.filter(arg=>arg.startsWith('--')),['--test','--test-shard=1/3']);
   const baseline=captureNodeArgs('node --test --test-shard=1/3 '+globs.join(' '));
   const darwinOnly=/\/native-103-(transaction|public-executor|producers)\.test\.mjs$/;
-  const officialNative=['official-child-capture.integration.test.mjs','official-cli-closure.test.mjs','official-cli-quarantine.test.mjs','official-recording-producer.test.mjs','adb-private-auth.test.mjs','adb-private-supervisor.test.mjs','device-epoch-fence-resume-native.integration.test.mjs'];
+  const officialNative=['official-child-capture.integration.test.mjs','official-cli-closure.test.mjs','official-cli-quarantine.test.mjs','official-recording-producer.test.mjs'];
   const nativeJob=w.jobs['public-code-phone-darwin-test'];
   assert.equal(nativeJob['runs-on'],'macos-latest');
   assert.equal(nativeJob['timeout-minutes'],10);
@@ -41,7 +44,17 @@ function validate(w) {
   const nativeStep=nativeJob.steps.find(step=>step.name==='Run official child native lifecycle without platform skips');
   assert.equal(nativeStep.if,undefined);assert.equal(nativeStep['continue-on-error'],undefined);
   for(const name of officialNative)assert.ok(nativeStep.run.includes('services/phone-adb-controller/__tests__/'+name),name+' must have actual required Darwin coverage');
-  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)&&!officialNative.includes(arg.split('/').at(-1))).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
+  for(const name of epochNative)assert.ok(!nativeStep.run.includes(name),'new epoch suites must not consume the original Darwin budget');
+  const epochJob=w.jobs[epochKey];assert.ok(epochJob,'epoch native coverage needs its own required job');
+  assert.equal(epochJob.name,'Epoch Resume Darwin Test');assert.equal(epochJob['runs-on'],'macos-latest');assert.equal(epochJob['timeout-minutes'],10);
+  assert.equal(epochJob.if,undefined);assert.equal(epochJob['continue-on-error'],undefined);
+  assert.ok(w.jobs['l3-passed'].needs.includes(epochKey));
+  const epochStep=epochJob.steps.at(-1);assert.equal(epochStep.if,undefined);assert.equal(epochStep['continue-on-error'],undefined);
+  const setupEnd=nativeJob.steps.findIndex(step=>step.name==='Run both private loopback native regression files on Darwin');
+  assert.deepEqual(epochJob.steps.slice(0,-1),nativeJob.steps.slice(0,setupEnd),'same checkout/skills/Node/npm/physical-Python preparation');
+  assert.doesNotMatch(epochStep.run,/ffmpeg/);
+  assert.deepEqual(captureNodeArgs(epochStep.run),['--test','--test-concurrency=1',...epochNative.map(name=>'services/phone-adb-controller/__tests__/'+name)]);
+  assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)&&![...officialNative,...epochNative].includes(arg.split('/').at(-1))).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');
@@ -93,12 +106,20 @@ test('OpenClaw keeps original four selectors in three independent ten-minute nat
   validate(workflow);
 });
 test('resume/auth suites leave the actual Linux selector and remain required on Darwin',t=>{
-  const f=fixture(t),names=['adb-private-auth.test.mjs','adb-private-supervisor.test.mjs','device-epoch-fence-resume-native.integration.test.mjs'];
+  const f=fixture(t),names=epochNative;
   for(const name of names)writeFileSync(join(f.root,'services/phone-adb-controller/__tests__',name),'// Path inventory for selector-only capture; no native test body.\n');
   const actual=captureNodeArgs(command(),{cwd:f.root});
   for(const name of names)assert.ok(!actual.some(arg=>arg.endsWith('/'+name)),name+' must run in the required Darwin job instead of Linux');
-  for(const name of names){const w=structuredClone(workflow),step=w.jobs['public-code-phone-darwin-test'].steps.find(s=>s.name==='Run official child native lifecycle without platform skips');step.run=step.run.replace('services/phone-adb-controller/__tests__/'+name,'');assert.throws(()=>validate(w),name+' may not be omitted');}
-  for(const change of [j=>{j['timeout-minutes']=11;},j=>{j.if='false';},j=>{j['continue-on-error']=true;}]){const w=structuredClone(workflow);change(w.jobs['public-code-phone-darwin-test']);assert.throws(()=>validate(w));}
+  for(const name of names){const w=structuredClone(workflow),step=w.jobs[epochKey].steps.at(-1);step.run=step.run.replace('services/phone-adb-controller/__tests__/'+name,'');assert.throws(()=>validate(w),name+' may not be omitted');}
+  for(const key of ['public-code-phone-darwin-test',epochKey])for(const change of [j=>{j['timeout-minutes']=11;},j=>{j.if='false';},j=>{j['continue-on-error']=true;}]){const w=structuredClone(workflow);change(w.jobs[key]);assert.throws(()=>validate(w));}
+  const detached=structuredClone(workflow);detached.jobs['l3-passed'].needs=detached.jobs['l3-passed'].needs.filter(key=>key!==epochKey);assert.throws(()=>validate(detached));
+});
+test('the real aggregate rejects missing, skipped, failed and cancelled epoch Darwin coverage',()=>{
+  const needs=Object.fromEntries(workflow.jobs['l3-passed'].needs.map(job=>[job,{result:workflow.jobs[job]?.if?'skipped':'success'}]));
+  needs.changes={result:'success',outputs:Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key=>[key,'false']))};
+  needs[epochKey]={result:'success'};assert.doesNotThrow(()=>checkGate('code',needs));
+  for(const status of ['skipped','failure','cancelled'])assert.throws(()=>checkGate('code',{...needs,[epochKey]:{result:status}}),/epoch-resume-darwin-test/);
+  delete needs[epochKey];assert.throws(()=>checkGate('code',needs),/epoch-resume-darwin-test=missing/);
 });
 test('actual matrix commands execute the original file union exactly once across all three shards', t => {
   const f = fixture(t), all = run(f, original, 'all');
