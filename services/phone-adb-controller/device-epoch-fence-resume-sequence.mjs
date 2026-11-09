@@ -20,7 +20,7 @@ export async function runResumeSequence({plan,io}){
   if(plan.mode==='adopt_authenticated')await io.adoptPrivateAuthenticated(privateCap);
   await admit();const observed=await io.observeNoninterference();need(observed?.kind==='old-route-fenced-observed-noninterference/v1'&&observed.original_execution_stopped===false&&observed.android_internal==='not_attested','OBSERVATION');
   await oldAbsent();await admit();const released=await io.releaseCentralOnce();need(released.status==='released'&&released.receipt,'CENTRAL_RELEASE_UNKNOWN');await io.assertAfterRelease(released.receipt);
-  await guard.assertAlive();const record=await io.createRecord(observed,released.receipt);await guard.assertAlive();await io.assertAfterRelease(released.receipt);await guard.assertAlive();const archive=await guard.commit(record.sha256),final=await io.verifyFinal(released.receipt,archive,record);
+  await guard.assertAlive();const record=await io.createRecord(observed,released.receipt);await guard.assertAlive();await io.assertAfterRelease(released.receipt);await guard.assertAlive();io.checkOperationTime?.();const archive=await guard.commit(record.sha256),final=await io.verifyFinal(released.receipt,archive,record);
   need(final?.old_route_absent===true&&final.central_free===true&&final.archive_verified===true,'FINAL_READBACK');
   return {protocol:'device-epoch-fence-resume-result/v1',status:'fenced',record,archive,prior_checkpoint_sha256:plan.prior.checkpoint_sha256,original_execution_stopped:false,android_internal:'not_attested',authority_basis:observed.kind};
  });
