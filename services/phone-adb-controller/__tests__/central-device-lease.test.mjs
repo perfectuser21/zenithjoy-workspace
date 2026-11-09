@@ -6,8 +6,43 @@ import {mkdtempSync,writeFileSync,appendFileSync,rmSync,readFileSync,statSync} f
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {centralDeviceLockEvidence} from '../runtime-receipts.mjs';
+import {createServer} from 'node:http';
 
 const TASK='7037d210-2af1-4af9-8635-f93a805e58b6';
+test('真实held GET断连只重读GET，owner变化拒绝且不重发acquire POST',async t=>{
+ let owner=TASK,reset=false;const requests=[];
+ const lock=()=>({device_name:'SERIAL',locked_by:owner,expires_at:new Date(Date.now()+3600000).toISOString()});
+ const server=createServer((req,res)=>{
+  requests.push(req.method+' '+req.url);
+  if(reset&&req.method==='GET'){reset=false;req.socket.destroy();return;}
+  res.setHeader('content-type','application/json');
+  res.end(JSON.stringify(req.method==='POST'?{acquired:true,lock:lock()}:{success:true,locks:[lock()]}));
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+ const lease=createCentralDeviceLease({brainUrl:'http://127.0.0.1:'+server.address().port,token:'fixture',deviceName:'SERIAL',taskId:TASK,runId:'run__a1'});
+ await lease.acquire();reset=true;assert.equal((await lease.verifyHeld()).locked_by,TASK);
+ owner='other-task';reset=true;await assert.rejects(()=>lease.verifyHeld(),/OWNER_MISMATCH/);
+ assert.equal(requests.filter(r=>r.startsWith('POST ')).length,1);
+ assert.equal(requests.filter(r=>r.startsWith('GET ')).length,5);
+});
+
+test('真实acquire POST断连仍只提交一次，不自动读回或重发',async t=>{
+ const methods=[];const server=createServer(req=>{methods.push(req.method);req.socket.destroy();});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+ const lease=createCentralDeviceLease({brainUrl:'http://127.0.0.1:'+server.address().port,token:'fixture',deviceName:'SERIAL',taskId:TASK,runId:'run__a1'});
+ await assert.rejects(()=>lease.acquire(),/CENTRAL_LOCK_UNKNOWN/);assert.deepEqual(methods,['POST']);assert.equal(lease.attempted,true);assert.equal(lease.held,false);
+});
+
+test('同一Task GET两次断连共用原8秒窗口，超时不发第二次',async t=>{
+ const origin=Date.now();t.mock.timers.enable({apis:['Date'],now:origin});
+ const socket=()=>new TypeError('fetch failed',{cause:Object.assign(Error('fixture socket'),{code:'UND_ERR_SOCKET'})});
+ const signals=[];
+ const lease=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher:async(_url,options)=>{signals.push(options.signal);t.mock.timers.setTime(origin+signals.length*3000);throw socket();}});
+ await assert.rejects(()=>lease.verifyTask({}),/UNKNOWN/);assert.equal(signals.length,2);assert.equal(signals[0],signals[1]);
+ let expiredCalls=0;t.mock.timers.setTime(origin);
+ const expired=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher:async()=>{expiredCalls++;t.mock.timers.setTime(origin+8000);throw socket();}});
+ await assert.rejects(()=>expired.verifyTask({}),/UNKNOWN/);assert.equal(expiredCalls,1);
+});
 test('中央Task读取与租约POST失败保留有限阶段码和原cause，每次只发一次请求',async()=>{
  for(const [operation,want] of [['verifyTask','CENTRAL_TASK_GET_TRANSPORT'],['acquire','CENTRAL_ACQUIRE_POST_TRANSPORT']]){
   let calls=0;const wire=Object.assign(Error('private bearer must never be journaled'),{code:'ECONNRESET'});
