@@ -6,7 +6,7 @@ import {readResumeCheckpoint} from './device-epoch-fence-resume-history.mjs';
 import {validateAuthReference} from './device-epoch-fence-auth-reference.mjs';
 import {RESUME_ACTIONS} from './device-epoch-fence-resume-sequence.mjs';
 import {readDeclaredFenceInstance,fencePythonFor,verifyLegacyControllerSource} from './device-epoch-fence-controller.mjs';
-import {readResumeProcessIdentity} from './device-epoch-fence-resume-process.mjs';
+import {readResumeProcessIdentity,pinResumeInterpreter} from './device-epoch-fence-resume-process.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {readBoundAdbDaemon} from './device-epoch-fence-admission.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),need=(v,c)=>{if(!v)throw Object.assign(Error('RESUME_'+c),{code:'RESUME_'+c});},same=(a,b)=>canonical(a)===canonical(b);
@@ -25,7 +25,7 @@ export async function inspectResumeAuthority({planPath,phase='apply',guardIdenti
  const row=(deps.instance??readDeclaredFenceInstance)(plan.new_instance.instance_id);need(plan.new_instance.endpoint===row.policy.endpoint&&row.policy_path===plan.new_instance.policy_path&&row.registry_sha256===plan.new_instance.registry_sha256&&same(row.policy,plan.new_instance.policy)&&digest(readPrivatePolicy(row.policy_path))===plan.new_instance.policy_sha256,'INSTANCE_DRIFT');
  need(same(verifyLegacyControllerSource(plan.state_file),plan.family),'ORIGINAL_SOURCE_DRIFT');
  const auth=(deps.auth??validateAuthReference)({refPath:plan.auth.ref_path,task,instance:plan.new_instance});need(same(auth.auth,plan.auth),'AUTH_REF_DRIFT');
- need(plan.execution_context.runtime_root===here&&plan.execution_context.home===userInfo().homedir&&plan.execution_context.lock_root===dirname(plan.prior.prior_pending_path)&&plan.execution_context.python.path===(deps.python??fencePythonFor)(review)&&digest(bytes(plan.execution_context.python.path))===plan.execution_context.python.sha256,'EXECUTION_CONTEXT');
+ need(plan.execution_context.runtime_root===here&&plan.execution_context.home===userInfo().homedir&&plan.execution_context.lock_root===dirname(plan.prior.prior_pending_path)&&plan.execution_context.python.path===(deps.python??fencePythonFor)(review)&&same(pinResumeInterpreter(plan.execution_context.python.path),plan.execution_context.python),'EXECUTION_CONTEXT');
  const inventory=deps.readOldInventory??(async()=>{const scope={endpoint:plan.scope.endpoint,serial:plan.scope.serial},out=await hostOperation({operation:'inventory',scope,directory:mkdtempSync(join(plan.execution_directory,'authority-old-')),readAuthority:async()=>{const t=await read('/api/brain/tasks/'+plan.task_id);validateResumeApproval(t.task??t,plan);readBoundAdbDaemon(plan.scope.old_daemon);return {scope,authorized_action:'inventory',lease_until:plan.central.expires_at};}});need(out.wire_complete,'OLD_INVENTORY_UNKNOWN');return parseDeviceInventory(out.response);});need(!(await inventory()).some(r=>r.serial===plan.scope.serial),'OLD_REAPPEARED');
  let stopProof;
  if(phase==='startup'){
