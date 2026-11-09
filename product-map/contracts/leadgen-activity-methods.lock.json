@@ -1194,14 +1194,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "906118735b878380f103ed1cd96911d9c926b3129d444ba4d19b16f751db6426"
+          "sha256": "bf5ed7ebe89a396c8054c8960ce977919e61acff38629aa84aa91fe07e2b0953"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "037359a00938f9a16c3b17b784d565f56d6b9482d8d4a677d5ca2dac6b4687fe"
+          "sha256": "4b047f37c2de20991dc1231af6c6e51d8255c206d1c623f12c4ec73306ad2029"
         },
         {
           "kind": "code",
@@ -1621,7 +1621,7 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "dd0ad5b1a9786894ef359bedbf439fa2946c300e245979f84a7c02c131e9df05"
+      "code_digest": "287d227bc992aadd8914e005e83a74772dfb362af3864d7182f9d3910af54494"
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.2.1",
@@ -4442,14 +4442,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "906118735b878380f103ed1cd96911d9c926b3129d444ba4d19b16f751db6426"
+          "sha256": "bf5ed7ebe89a396c8054c8960ce977919e61acff38629aa84aa91fe07e2b0953"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "037359a00938f9a16c3b17b784d565f56d6b9482d8d4a677d5ca2dac6b4687fe"
+          "sha256": "4b047f37c2de20991dc1231af6c6e51d8255c206d1c623f12c4ec73306ad2029"
         },
         {
           "kind": "code",
@@ -4854,7 +4854,7 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ec3dd7790189a25c0a5741537e2e8f5c4e02045e070cc644f8c7179dfcefaa26"
+      "code_digest": "39ad4c08206ec09653f88a3b4df50840f5e653e38a99f4e66e275d8040060260"
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.7.2",
