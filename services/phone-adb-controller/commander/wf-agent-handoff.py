@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime
 
 spec = importlib.util.spec_from_file_location('wf_agent_lib', Path(__file__).with_name('wf-agent-lib.py'))
 lib = importlib.util.module_from_spec(spec)
@@ -91,8 +92,16 @@ def primary_scope(directory):
     activity = load(directory / 'activity-request.json')
     claim = load(directory / 'spawn-claimed.json')
     ensure_open(directory, request)
+    try:
+        claimed = datetime.fromisoformat(claim['claimed_at'].replace('Z', '+00:00'))
+        if claimed.utcoffset() is None or claimed.timestamp() > time.time() + 1:
+            raise ValueError()
+    except (KeyError, TypeError, AttributeError, ValueError):
+        raise ValueError('official spawn claim timestamp invalid') from None
     if (activity.get('protocol') != 'leadgen-activity-v1' or activity.get('mode') != 'execute'
             or activity.get('primary_host') != 'official-child-v1'
+            or any(k in activity for k in ('execution_transport', 'max_turns', 'transport_generation', 'continuation_cause'))
+            or (directory / 'generation-revoked.json').exists()
             or any(activity.get(k) != request.get(k) for k in ('run_id', 'task_id', 'nonce'))
             or any(claim.get(k) != request.get(k) for k in IDENTITY + ('expires_at', 'worker_expires_at'))
             or not re.fullmatch('[a-f0-9]{40}', activity.get('source_commit', ''))
