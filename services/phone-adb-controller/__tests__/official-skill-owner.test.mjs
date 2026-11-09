@@ -4,11 +4,12 @@ import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs'
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {execInput} from '../leadgen-client.mjs';
+import {reserveWorkflowCommanderTurn,workflowCommanderSession,ownerPending} from '../commander-owner-state.mjs';
 const api=await import('../official-skill-owner.mjs').catch(e=>{if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;return {};});
 function fixture(t,variant='ok'){
  const directory=mkdtempSync(join(tmpdir(),'official-owner-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const request={protocol:'leadgen-activity-v1',mode:'execute',primary_host:'official-child-v1',run_id:'fixture__a1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',nonce:'a'.repeat(48),source_commit:'b'.repeat(40),deadline_ms:Date.now()+10000,receipt_deadline_ms:Date.now()+8000};
- const parent='agent:work-commander:workflow-fixture',cli=join(directory,'gateway-fixture');
+ const parent=workflowCommanderSession(request),cli=join(directory,'gateway-fixture');
  writeFileSync(join(directory,'activity-request.json'),JSON.stringify(request),{mode:0o600});
  writeFileSync(cli,`#!/usr/bin/python3
 import sys,json,time,pathlib
@@ -49,4 +50,17 @@ for(const variant of ['wrong-ack','wrong-terminal','pending'])test('official own
  if(variant==='pending'){f.request.receipt_deadline_ms=Date.now()+150;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));}
  const result=await api.runOfficialSkillOwner(f);assert.equal(api.officialOwnerTerminated(result,f.request),false);assert.equal(result.execution_stopped,false);
  const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(calls.filter(c=>c.method==='agent').length,1);assert.ok(calls.filter(c=>c.method==='agent.wait').length>=1);
+});
+test('official terminal archives only its real branded owner reservation without minting a CLI-returned record',async t=>{
+ const f=fixture(t,'acklost'),turn=await reserveWorkflowCommanderTurn(f.request,{home:f.directory});
+ try{
+  assert.equal(typeof turn.observedTerminal,'function');const result=await api.runOfficialSkillOwner(f);
+  await assert.rejects(()=>turn.observedTerminal({...result}));
+  await turn.observedTerminal(result);
+  const file=ownerPending(f.request,f.directory).file;
+  assert.equal(existsSync(file),false);
+  const {readdirSync}=await import('node:fs');const files=readdirSync(join(f.directory,'.openclaw/leadgen-owner-turns'));
+  assert.equal(files.some(name=>name.endsWith('.returned.json')),false);
+  assert.equal(files.filter(name=>name.endsWith('.official_terminal.json')).length,1);
+ }finally{await turn.close();}
 });
