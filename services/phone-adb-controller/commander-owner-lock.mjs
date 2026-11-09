@@ -38,7 +38,7 @@ def commit(q):
   raw=q['raw'].encode(); record=json.loads(raw)
   if len(raw)>16384 or record.get('protocol')!='commander-owner-turn-v1' or record.get('status')!='reserved' or record.get('session')!='agent:work-commander:'+os.path.basename(pending)[:-13]: raise RuntimeError('reservation invalid')
   write_new(pending,raw); data,identity=view(); return {'identity':identity,'sha256':digest(data)}
- if op not in ('returned','not_started','reconciled_inactive'): raise RuntimeError('unknown operation')
+ if op not in ('returned','not_started','reconciled_inactive','official_terminal'): raise RuntimeError('unknown operation')
  raw,identity=view(); expected=q['expected']; record=json.loads(raw)
  if identity!=expected['identity'] or digest(raw)!=expected['sha256'] or record.get('status')!='reserved' or record.get('protocol')!='commander-owner-turn-v1': raise RuntimeError('pending CAS changed')
  nonce=record.get('transport_nonce','')

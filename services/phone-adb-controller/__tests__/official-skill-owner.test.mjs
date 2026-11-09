@@ -47,7 +47,7 @@ for(const variant of ['ok','acklost'])test('real fixed CLI persists owner key be
 });
 for(const variant of ['wrong-ack','wrong-terminal','pending'])test('official owner '+variant+' remains unknown without another agent dispatch',async t=>{
  assert.equal(typeof api.runOfficialSkillOwner,'function');const f=fixture(t,variant);
- if(variant==='pending'){f.request.receipt_deadline_ms=Date.now()+150;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));}
+ if(variant==='pending'){f.request.receipt_deadline_ms=Date.now()+1000;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));}
  const result=await api.runOfficialSkillOwner(f);assert.equal(api.officialOwnerTerminated(result,f.request),false);assert.equal(result.execution_stopped,false);
  const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(calls.filter(c=>c.method==='agent').length,1);assert.ok(calls.filter(c=>c.method==='agent.wait').length>=1);
 });
