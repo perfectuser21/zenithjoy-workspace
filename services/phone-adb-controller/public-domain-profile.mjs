@@ -50,14 +50,21 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  checkedVersion(w,d.source_commit);need(r.payload.workflows.some(v=>same(v,w)),'WORKFLOW_RELEASE');
  need(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(w.payload.key),'WORKFLOW');
  const refs=w.payload.activities;need(Array.isArray(refs)&&refs.length&&refs.length===f.activities?.length,'ACTIVITIES');
- need(resources?.machine==='us-mac-m4'&&r.target==='mmv'&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
+ const target=({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[resources?.machine];
+ need(target&&r.target===target&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
  if(w.payload.key==='douyin_comment_scoring')need(resources.profile==='mmv-scoring'&&resources.serial==='none','SCORING_RESOURCE');
- else need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
+ else if(target==='mmv')need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
  need(UUID.test(company?.company_id||'')&&UUID.test(company?.tenant_id||'')&&Number.isSafeInteger(company.version)&&company.version>0&&company.policy_id,'COMPANY');
  const files={};
  for(const row of d.files||[]){need(!Object.hasOwn(files,row.deployed_path),'DUPLICATE_FILE');file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
  for(const [path,hash] of Object.entries(f.files||{}))if(path.startsWith('runtime/')){const name=path.slice(8);file(sourceRoot,name,hash);need(!files[name]||files[name]===hash,'FROZEN_FILE');files[name]=hash;}
  need(Object.keys(files).length&&files['leadgen-public-domain.mjs']&&files['public-domain-authority.mjs']&&files['public-domain-pg.mjs'],'DOMAIN_SOURCE');
+ if(target==='xian-m4'&&w.payload.key!=='douyin_comment_scoring'){
+  const scope=f[w.payload.key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
+  const path='config/collection-phone-hosts.json';need(files[path],'PHONE_REGISTRY');
+  const rows=JSON.parse(file(sourceRoot,path,files[path])).hosts?.filter(h=>h.target===target&&h.profile===resources.profile&&h.serial===resources.serial&&h.expected_account===resources.account&&h.workflow_keys?.includes(w.payload.key));
+  need(rows?.length===1&&scope&&['target','profile','serial','expected_account'].every(k=>scope[k]===rows[0][k])&&same(scope.policy,rows[0].policy)&&scope.policy.schema_version===1&&scope.policy.transport==='usb'&&scope.policy.endpoint==='tcp:127.0.0.1:5037','PHONE_RESOURCE');
+ }
  const manifest=JSON.parse(file(sourceRoot,'deployment-manifest.json',files['deployment-manifest.json']));need(same(manifest,d),'DEPLOYMENT_FILE');
  const pg=preflightPgDeployment({runtimeRoot:sourceRoot,sourceCommit:d.source_commit});
  need(same(pg,d.dependencies?.preflight_pg),'PG_DEPLOYMENT');
@@ -101,7 +108,12 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  if(w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
  if(w.payload.key!=='douyin_comment_scoring'){
   const scope=template.discovery_phone_scope||template.collection_phone_scope;
-  if(scope){const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;}}
+  if(scope){
+   domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;
+   if(target==='mmv')domainEnv.LEADGEN_MMV_DEVICE_RUNTIME='1';else delete domainEnv.LEADGEN_MMV_DEVICE_RUNTIME;
+   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});
+   if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;}
+  }
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},

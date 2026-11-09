@@ -200,6 +200,10 @@ for(const [phone,serial,account] of [['xiaolongxia','ANGYVB4311010223','90915521
   writeFileSync(x.env.DOUYIN_PHONE_REGISTRY,'profile\tserial\tmodel\twidth\theight\tenabled\n'+phone+'\t'+serial+'\tFixture\t720\t1280\ttrue\n');reseal(x);
   const {profile}=buildPublicDomainProfile(x),cfg=profile.domain_adapter.config;
   assert.equal(cfg.resources.machine,'xian-mac-m4');assert.equal(cfg.env.DOUYIN_ADB_PORT,'5037');assert.equal(cfg.env.ADB_SERVER_SOCKET,row.policy.endpoint);assert.equal(cfg.env.LEADGEN_MMV_DEVICE_RUNTIME,undefined);
+  const {preparePublicDomainSnapshot}=await import('../public-domain-snapshot.mjs'),f=x.frozen;
+  const identity={run_id:uuid(920),task_id:uuid(921),machine_id:'xian-mac-m4',profile_sha256:digest(profile),input:{},run_binding:{workflow_id:f.workflow_version.payload.workflow_id,workflow_definition_version_id:f.workflow_version.id,activities:Object.fromEntries(f.activities.map(a=>[a.reference.slot_key,{reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id}]))}};
+  Object.assign(cfg.env,{P:phone,SERIAL:serial});identity.profile_sha256=digest(profile);
+  const prepared=preparePublicDomainSnapshot({identity,profile,runDirectory:join(x.sourceRoot,'usb-run'),deadline_ms:Date.now()+70000,cleanup_deadline_ms:Date.now()+90000});assert.equal(prepared.env.WFR_HOSTKEY,'xian-m4');assert.equal(prepared.env.DOUYIN_ADB_PORT,'5037');assert.equal(prepared.snapshot.discovery_phone_scope.expected_account,account);
   for(const change of [y=>y.resources.account='borrowed',y=>y.frozen.discovery_phone_scope.policy.endpoint='tcp:127.0.0.1:5041',y=>y.resources.machine='us-mac-m4']){const y=structuredClone(x);change(y);reseal(y);assert.throws(()=>buildPublicDomainProfile(y),/PUBLIC_DOMAIN_PROFILE_/);}
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
