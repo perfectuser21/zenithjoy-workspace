@@ -9,7 +9,7 @@ import {reserveWorkflowCommanderTurn} from './commander-owner-state.mjs';
 
 const fail=()=>Object.assign(Error('COMMANDER_OWNER_BOUNDED_UNVERIFIED'),{executionStopped:false});
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
-const files=['commander-bounded-owner.mjs','commander-owner-lock.mjs','commander-owner-state.mjs','activity-commander.mjs'];
+const files=['commander-bounded-owner.mjs','commander-owner-lock.mjs','commander-owner-state.mjs','activity-commander.mjs','official-skill-owner.mjs'];
 const profile='(version 1)(allow default)(deny process-fork)';
 
 export function createBoundedCommanderOwner({runtimeRoot,source,python,deadlineMs,cleanupDeadlineMs=deadlineMs}={}){
