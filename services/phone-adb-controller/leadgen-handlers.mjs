@@ -724,7 +724,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       }
       if(activity.key==='collection'){
         const {recordCollectionResult}=await import('./leadgen-agent-artifacts.mjs');
-        let result=recordCollectionResult({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:{run,run_id:state.run_id,source_commit:sourceCommit,line,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN,profile,serial,company_binding:state.recipientCompanyBinding},samplingInput:sampleInput,qualifiedVideoIds:qualified.map(v=>v.video_id),videos:[...agent.collections.values()]});
+        let result=recordCollectionResult({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:{run,run_id:state.run_id,...(officialChildHost?{task_id:taskId,binding_id:scope.binding_id,snapshot_sha256:scope.snapshot_sha256}:{}),source_commit:sourceCommit,line,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN,profile,serial,company_binding:state.recipientCompanyBinding},samplingInput:sampleInput,qualifiedVideoIds:qualified.map(v=>v.video_id),videos:[...agent.collections.values()]});
         if(collectionScope){result=await collectionScope.finish(result);state.collectionReturnedEvidence=result;await collectionScope.close();collectionScope=null;}
         return result;
       }

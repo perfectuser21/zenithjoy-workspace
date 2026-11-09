@@ -30,7 +30,7 @@ export function createOfficialChildPrimitives({root,env,frozen,binding,taskId,st
   if(phase!=='prepare'&&!scoring){
    const response=await fetch(new URL('/api/brain/device-locks',env.BRAIN_URL),{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},redirect:'error',signal:AbortSignal.timeout(8000)});
    if(!response.ok)throw fail();const rows=await response.json(),locks=rows.locks?.filter(r=>r.device_name===env.SERIAL);
-   if(rows.success!==true||locks?.length!==1||locks[0].locked_by!==taskId||Date.parse(locks[0].expires_at)<=Date.now()+1000)throw fail();stable();
+   if(rows.success!==true||locks?.length!==1||locks[0].locked_by!==taskId||!Number.isFinite(Date.parse(locks[0].expires_at))||Date.parse(locks[0].expires_at)<=Date.now()+1000)throw fail();stable();
   }
   if(!resourceOnly){const proof=await createPhoneEpochGuard({root,env,frozen,state})();stable();if(proof?.authorized!==true)throw fail();return proof;}
   return {authorized:true};

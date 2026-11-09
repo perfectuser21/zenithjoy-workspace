@@ -1,3 +1,4 @@
+import {publicDomainActivityScopeMatches} from './public-domain-authority.mjs';
 // Adapts trusted primitive receipts into the original independently checked artifacts.
 // This module performs no phone operation, model call or database write.
 import {createHash} from 'node:crypto';
@@ -9,7 +10,7 @@ import {spawnSync} from 'node:child_process';
 import history from './queued-comment-history.js';
 import recipient from './queued-recipient-evidence.js';
 import {verifyNoComments} from './no-comments-evidence.mjs';
-import {commentSamplingInput} from './runtime-definition.mjs';
+import {commentSamplingInput,readFrozen} from './runtime-definition.mjs';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const video=/^\d{16,24}$/,tag=/^[A-Za-z0-9_-]{1,120}$/,sha=/^[a-f0-9]{64}$/;
@@ -143,7 +144,8 @@ const tsv=value=>String(value??'').replace(/[\t\r\n]/g,' ');
 
 export function recordCollectionResult({runDir,scope,samplingInput,qualifiedVideoIds,videos,evidenceRoot}){
  scopeIdentity(scope);
- if(!/^[a-f0-9]{40}$/.test(scope.source_commit||'')||typeof scope.run_id!=='string'||!scope.run_id.startsWith('douyin_video_processing-'+scope.run+'__')||!tag.test(scope.source_run||'')||!scope.line||!scope.line_key||!Array.isArray(qualifiedVideoIds)||!Array.isArray(videos)||qualifiedVideoIds.length>1000||new Set(qualifiedVideoIds).size!==qualifiedVideoIds.length||qualifiedVideoIds.some(id=>!video.test(id))||new Set(videos.map(v=>v.video_id)).size!==videos.length||videos.some(v=>!qualifiedVideoIds.includes(v.video_id)))fail('AGENT_COLLECTION_SCOPE_INVALID');
+ let publicScope=false;try{publicScope=publicDomainActivityScopeMatches(runDir,scope,readFrozen(runDir),'collection');}catch{}
+ if(!/^[a-f0-9]{40}$/.test(scope.source_commit||'')||typeof scope.run_id!=='string'||!publicScope&&!scope.run_id.startsWith('douyin_video_processing-'+scope.run+'__')||!tag.test(scope.source_run||'')||!scope.line||!scope.line_key||!Array.isArray(qualifiedVideoIds)||!Array.isArray(videos)||qualifiedVideoIds.length>1000||new Set(qualifiedVideoIds).size!==qualifiedVideoIds.length||qualifiedVideoIds.some(id=>!video.test(id))||new Set(videos.map(v=>v.video_id)).size!==videos.length||videos.some(v=>!qualifiedVideoIds.includes(v.video_id)))fail('AGENT_COLLECTION_SCOPE_INVALID');
  if(samplingInput){
   const q=samplingInput,parsed=commentSamplingInput({WF_BRAIN_WORKFLOW:'douyin_video_processing',WFR_TAG:scope.run,P:scope.profile,SERIAL:scope.serial,LEADGEN_LINE:scope.line,LEADGEN_SOURCE_RUN:scope.source_run,LEADGEN_COMMENT_LIMIT:String(q.comment_limit),...(Object.hasOwn(q,'collection_budget_s')?{QUEUED_VIDEO_COLLECTION_SECONDS:String(q.collection_budget_s)}:{})});
   if(!same(q,parsed))fail('AGENT_COLLECTION_SAMPLING_SCOPE_INVALID');

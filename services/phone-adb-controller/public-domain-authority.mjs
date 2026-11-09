@@ -36,3 +36,20 @@ export function publicDomainTaskProjectionMatches(task,a){
   &&c.run_binding.attempt_key===b.attempt_key&&Object.keys(c.run_binding.activities||{}).length===Object.keys(b.activities).length&&Object.entries(b.activities).every(([key,v])=>['reference_id','activity_id','activity_definition_version_id'].every(k=>c.run_binding.activities?.[key]?.[k]===v[k]));
 }
 export function publicDomainTaskMatches(task,runDirectory){return publicDomainTaskProjectionMatches(task,publicDomainAuthority(runDirectory));}
+
+// Process-owned public Activity admission. A UUID string alone grants nothing.
+export function publicDomainActivityScopeMatches(runDirectory,scope,frozen,activity){
+ try{
+  const a=publicDomainAuthority(runDirectory),b=a?.binding,input=frozen?.agent_input,p=frozen?.public_domain;
+  if(!a||!input||!p||frozen.execution_mode!=='agent'||a.snapshot_authority?.local_snapshot_sha256!==frozen.snapshot_sha256)return false;
+  if(!['run_id','task_id','machine_id','profile_sha256'].every(k=>p[k]===a.identity[k])||p.run_binding?.run_binding_id!==b.id||frozen.workflow_version?.id!==b.workflow_definition_version_id)return false;
+  const fixed={run:input.run_tag,run_id:b.run_id,task_id:b.task_id,binding_id:b.id,snapshot_sha256:frozen.snapshot_sha256,source_commit:frozen.deployment.source_commit,profile:input.profile,serial:input.serial,line:input.line,source_run:input.source_run};
+  if(Object.entries(fixed).some(([k,v])=>scope?.[k]!==v)||input.task_id!==b.task_id||input.workflow_key!==frozen.workflow_version.payload.key)return false;
+  if(scope.workflow!==undefined&&scope.workflow!==input.workflow_key||scope.activity!==undefined&&scope.activity!==activity)return false;
+  for(const k of ['limit','comment_limit'])if(scope[k]!==undefined&&scope[k]!==input[k])return false;
+  const ref=b.activities[activity],av=frozen.activities.find(v=>v.reference?.slot_key===activity);
+  if(!ref||av?.reference.reference_id!==ref.reference_id||av?.reference.activity_id!==ref.activity_id||av?.version?.id!==ref.activity_definition_version_id)return false;
+  const end=av.version.payload?.contract?.runtime?.phase==='finalize'?a.cleanup_deadline_ms:a.deadline_ms;
+  return Date.now()<end&&(scope.deadline_ms===undefined||Number.isSafeInteger(scope.deadline_ms)&&scope.deadline_ms<=end);
+ }catch{return false;}
+}

@@ -39,7 +39,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
  const frozen=definitions.readFrozen(dir);
  const authority=await load('public-domain-authority.mjs');
  const unregister=authority.registerPublicDomainAuthority({runDirectory:dir,identity,deadline_ms,cleanup_deadline_ms,...(executionMode==='agent'?{snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:frozen.public_domain.runtime_snapshot_sha256}}:{}),business_scope:{run:env.WFR_TAG,run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,attempt:env.WFR_ATTEMPT}});
- let primitiveRuntime,handlers,closed=false,active=false,unsafe=false,last;
+ let closePromise,primitiveRuntime,handlers,closed=false,active=false,unsafe=false,last;
  const records=[],checks=new Map(),outcomes=new Map(),activities=new Map(frozen.activities.map(a=>[a.reference.slot_key,{...a.version.payload.contract,key:a.reference.slot_key}]));
  const proofScope=key=>({run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,activity:key});
  const collection=await load('collection-phone-scope.mjs'),discovery=await load('discovery-phone-scope.mjs');
@@ -133,12 +133,13 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     return verdict(options.acceptance,passed?'pass':'fail',evidenceFile('aggregate',options.scope||'workflow',{run_id:identity.run_id,task_id:identity.task_id,scope:options.scope,checks:keys.map(key=>({key,verified:checks.get(key)?.verified===true})),execution_unknown:unsafe||Boolean(handlers.state.executionUnknown),verified:passed}));
    },
    async close(){
-    if(closed)return {execution_stopped:!unsafe&&!active&&!handlers.state.executionUnknown};closed=true;
+    if(closePromise)return closePromise;
+    closePromise=(async()=>{closed=true;
     const primitiveStop=primitiveRuntime?await primitiveRuntime.close():{execution_stopped:true};
     const stopped=!active&&!unsafe&&!handlers.state.executionUnknown&&primitiveStop.execution_stopped===true;
     if(!stopped)await handlers.quarantineResources();
     const result={protocol:'workflow-domain/v1',execution_mode:executionMode,...(frozen.primary_host?{primary_host:frozen.primary_host}:{}),run_id:identity.run_id,task_id:identity.task_id,workflow_key:cfg.workflow_key,profile:env.P,source_commit:frozen.deployment.source_commit,profile_sha256:identity.profile_sha256,...(frozen.sampling_input?{sampling_input:frozen.sampling_input,sampling_admission_v1:checks.get('collection')?.sampling_admission_v1,qualification_identity_v1:checks.get('qualification')?.qualification_identity_v1}:{}),execution_stopped:stopped,status:stopped&&[...activities.keys()].every(k=>checks.get(k)?.verified===true)?'validated':'failed',results:[...outcomes].map(([activity,e])=>({activity,status:e.status,verification:checks.get(activity)||{verified:false}}))};
-    evidenceFile('result','workflow',result);unregister();return {execution_stopped:stopped};
+    evidenceFile('result','workflow',result);unregister();return {execution_stopped:stopped};})();return closePromise;
    },
   };
  }catch(error){unregister();throw error;}
