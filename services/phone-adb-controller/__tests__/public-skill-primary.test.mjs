@@ -72,3 +72,10 @@ test('new public raw host rejects a fenced schema2 scope before snapshot writes,
  const profile={domain_adapter:{config:{primary_host:'raw-model-v1',snapshot:{deployment:{source_commit:'c'.repeat(40)},release:{id:id()},workflow_version:{id:id()},activities:[],discovery_phone_scope:{policy:{schema_version:2}}},step_spec:'steps.json'}}};
  assert.throws(()=>preparePublicDomainSnapshot({identity:f.identity,profile,runDirectory:run,deadline_ms:f.deadline,cleanup_deadline_ms:f.cleanup}),/PUBLIC_DOMAIN_RAW_EPOCH_UNSUPPORTED/);assert.equal(existsSync(run),false);
 });
+
+test('official child independently reads original business facts without borrowing a raw native judge domain',async()=>{
+ const {readbackActivityChecks}=await import('../leadgen-workflow.mjs');let readback;
+ const args={executionMode:'agent',activity:{key:'scoring'},frozen:{primary_host:'official-child-v1'},env:{WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WFR_TAG:'original103',LEADGEN_LINE:'yuesheng'},metrics:{scored:5},rpc:async q=>{readback=q;return {result:{probes:[{pass:true}]}};}};
+ const result=await readbackActivityChecks(args);assert.equal(readback.kind,'verify');assert.equal(readback.stage,'scoring');assert.equal(result.result.probes[0].pass,true);
+ await assert.rejects(readbackActivityChecks({...args,frozen:{execution_transport:'raw-model-v1'}}),/NATIVE_103_JUDGE_DOMAIN_UNSUPPORTED/);
+});
