@@ -11295,3 +11295,11 @@ tests:
     status: active
     product: AI员工
     note: "Code-only原owner/inode能力仅写本地保护标记，不签原native停止"
+
+  - id: leadgen-deployment-skill-package-closure
+    path: services/phone-adb-controller/__tests__/deployment-skill-package-closure.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实deploy三角色数组独立拷包与原入口Node导入；无手机或模型IO"
