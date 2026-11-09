@@ -22,16 +22,16 @@ function checkedVersion(v,source){
  need(UUID.test(v?.id||'')&&v.source_commit===source&&v.source_repo==='perfectuser21/zenithjoy-workspace'
   &&typeof v.source_path==='string'&&v.payload_sha256===versionDigest(v),'VERSION');
 }
-function metadataFor(w,ref,av,entry,entryHash){
+function metadataFor(w,ref,av,entry,entryHash,skill){
  const c=av.payload.contract,base=`activity-definition:${av.id}`,version=c.version;
  need(typeof version==='string'&&version&&c.promise!==undefined&&c.preconditions!==undefined&&c.inputs!==undefined
   &&c.outputs!==undefined&&c.postconditions!==undefined&&c.failure!==undefined,'QUESTIONS');
  const declarations={A1:{promise:c.promise},A2:{inputs:c.inputs,preconditions:c.preconditions},A3:{outputs:c.outputs},
   A4:{postconditions:c.postconditions},A5:{budget:c.budget},A6:{failure:c.failure,idempotency:c.idempotency??null},
   B1:{implementation_bindings:av.payload.implementation_bindings??c.implementation_bindings??[],steps:av.payload.steps??[]}};
- return {activity_id:ref.activity_id,executor_kind:'code',identity:{identity_protocol:2,workflow_id:w.payload.workflow_id,
+ return {activity_id:ref.activity_id,executor_kind:skill?'agent':'code',...(skill?{skill}:{}),identity:{identity_protocol:2,workflow_id:w.payload.workflow_id,
   reference_id:ref.reference_id,workflow_definition_version_id:w.id,activity_definition_version_id:av.id},
-  implementation:{kind:'code',entry,sha256:entryHash,source_activity_definition_version_id:av.id},
+  implementation:{kind:skill?'agent':'code',entry,sha256:entryHash,source_activity_definition_version_id:av.id},
   questions:Object.fromEntries(Object.entries(declarations).map(([key,declared])=>[key,{ref:base+'#'+key,version,declared:clone(declared)}]))};
 }
 /** Inputs are original readbacks. All identities/versions/budgets derive from them. */
@@ -69,6 +69,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  const pg=preflightPgDeployment({runtimeRoot:sourceRoot,sourceCommit:d.source_commit});
  need(same(pg,d.dependencies?.preflight_pg),'PG_DEPLOYMENT');
  for(const row of pg.files){file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
+ const executionMode=f.execution_mode??'code';need(['code','agent'].includes(executionMode),'EXECUTION_MODE');
  const entry='leadgen-public-domain.mjs',metadata={},preconditions={},validators={},activities=[],expected_path=[];
  const runtime_snapshot_sha256=digest(files);
  for(const ref of refs){
@@ -84,7 +85,18 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
   const runtime={...c.runtime,protocol:'json-stdio-v1',phase:c.runtime.phase==='finalize'?'finalize':'source',entry};
   delete runtime.per_item;
   activities.push({...c,key:ref.slot_key,runtime});
-  const m=metadataFor(w,ref,av,entry,files[entry]);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
+  let skill;
+  if(executionMode==='agent'){
+   const bindings=(av.payload.implementation_bindings||[]).filter(b=>b.kind==='skill');
+   const verified=(original.implementations||[]).filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local');
+   need(bindings.length===1&&verified.length===1,'SKILL_BINDING');const b=bindings[0],v=verified[0],prefix='services/phone-adb-controller/';
+   need(b.status==='verified'&&b.repo===av.source_repo&&b.revision===d.source_commit&&b.path?.startsWith(prefix+'skills/')&&b.path===v.path&&b.version===v.version&&b.name===v.name,'SKILL_BINDING');
+   const name=b.path.slice(prefix.length),expected=b.content_sha256||b.digest?.replace(/^sha256:/,'');
+   need(v.execution_path==='runtime/'+name&&v.actual_content_sha256===expected&&files[name]===expected,'SKILL_SOURCE');
+   const text=file(sourceRoot,name,expected).toString('utf8');
+   need(text.includes('  primary_execution: agent-v1')&&text.includes('  version: '+b.version),'SKILL_PRIMARY');skill={entry:name,version:b.version};
+  }
+  const m=metadataFor(w,ref,av,entry,files[entry],skill);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
   preconditions[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A2.ref}};
   validators[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A4.ref}};
   expected_path.push({reference_id:ref.reference_id,activity_id:ref.activity_id,activity_definition_version_id:av.id});
@@ -117,7 +129,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
+   config:{workflow_key:w.payload.key,execution_mode:executionMode,resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};

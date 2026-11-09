@@ -4,7 +4,8 @@ import http from 'node:http';import https from 'node:https';
 import{mkdirSync,openSync,writeFileSync,fsyncSync,closeSync,lstatSync,realpathSync}from'node:fs';
 import{resolve,dirname,join}from'node:path';import{userInfo}from'node:os';
 import{readBinding}from'./runtime-binding.mjs';
-const issued=new WeakMap();
+import{publicDomainAuthority,publicDomainTaskProjectionMatches}from'./public-domain-authority.mjs';
+const issued=new WeakMap(),publicLeases=new Map();
 const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const fail=code=>Error(`NATIVE_TASK_LEASE_${code}`);
@@ -44,7 +45,22 @@ export async function issueNativeTaskLease({directory,origin,credential,binding,
  }catch{try{durable(directory,'unknown.json',{protocol:'native-task-lease/v1',lease_unknown:true});}catch{}throw fail('UNKNOWN');}
 }
 export function consumeNativeTaskLease(proof,binding){const found=issued.get(proof);if(!found)throw fail('UNBRANDED');if(found.binding!==canonical(bindingOf(binding)))throw fail('BINDING');return structuredClone(found.value);}
+// A public lease is held only in this parent process and bound to the live
+// registered CommonRunner authority. Serialized run JSON is never a lease.
+export async function issuePublicNativeTaskLease({runDir,frozen,env}){
+ const a=publicDomainAuthority(runDir),input=frozen.agent_input,claim=frozen.native_claim;
+ if(!a||a.identity.run_id!==frozen.public_domain?.run_id||a.identity.task_id!==input?.task_id||frozen.execution_mode!=='agent')throw fail('PUBLIC_AUTHORITY');
+ const binding={task_id:input.task_id,source_commit:frozen.deployment.source_commit,run_tag:input.run_tag,claim,snapshot_sha256:frozen.snapshot_sha256,scope_sha256:sha(canonical(input)),worker_deadline_ms:a.cleanup_deadline_ms,receipt_deadline_ms:a.cleanup_deadline_ms};
+ const proof=await issueNativeTaskLease({directory:join(runDir,'public-native-task-lease'),origin:env.BRAIN_URL,credential:()=>env.BRAIN_INTERNAL_TOKEN,binding,readClaim:task=>{if(!publicDomainTaskProjectionMatches(task,a))throw fail('PUBLIC_TASK');return {claimed_by:task.claimed_by,claimed_at:task.claimed_at};}});
+ const value=consumeNativeTaskLease(proof,binding);publicLeases.set(frozen.snapshot_sha256,{runDir,authority:canonical(a),frozen:canonical(frozen),value});return structuredClone(value);
+}
+function publicNativeLease(frozen){
+ const r=publicLeases.get(frozen.snapshot_sha256),a=r&&publicDomainAuthority(r.runDir);
+ if(!a||canonical(a)!==r.authority||canonical(frozen)!==r.frozen||a.identity.run_id!==frozen.public_domain?.run_id||a.identity.task_id!==frozen.agent_input?.task_id||r.value.effective_deadline_ms<=Date.now()||canonical(r.value.binding.claim)!==canonical(frozen.native_claim))throw fail('PUBLIC_AUTHORITY');
+ return structuredClone(r.value);
+}
 export function assertFrozenNativeTaskLease(frozen){
+ if(frozen?.public_domain)return publicNativeLease(frozen);
  const input=frozen?.agent_input,v=frozen?.native_task_lease,b=v?.binding;
  const scoring=input?.workflow_key==='douyin_comment_scoring'&&input.profile==='mmv-scoring'&&input.serial==='none';
  const phone=['douyin_video_discovery','douyin_video_processing'].includes(input?.workflow_key)&&input.execution_transport==='raw-model-v1'&&frozen.execution_transport==='raw-model-v1'&&input.serial!=='none'&&frozen.preflight_pg&&frozen.preflight_control_scope&&frozen.preflight_profile?.profile===input.profile&&frozen.preflight_profile?.serial===input.serial&&!frozen.scoring_pg&&!frozen.scoring_control_scope;
@@ -62,6 +78,12 @@ export function assertNativeTaskAssociation({frozen,binding,taskId,runDir,scope,
  const lease=assertFrozenNativeTaskLease(frozen),input=frozen.agent_input;
  const reject=()=>{throw fail('RUN_ASSOCIATION');};
  if(taskId!==input.task_id||lease.binding.task_id!==taskId||!binding?.id||typeof binding.run_id!=='string')reject();
+ if(frozen.public_domain){
+  const actual=readBinding(runDir,'a1',frozen),p=frozen.public_domain;
+  if(canonical(actual)!==canonical(binding)||binding.source_kind!=='internal'||binding.task_id!==taskId||p.run_id!==binding.run_id||p.task_id!==taskId||p.run_binding.run_binding_id!==binding.id||p.run_binding.workflow_id!==frozen.workflow_version.payload.workflow_id||p.run_binding.workflow_definition_version_id!==frozen.workflow_version.id)reject();
+  for(const[key,wanted]of Object.entries({task_id:taskId,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:input.profile,serial:input.serial}))if(scope?.[key]!==wanted)reject();
+  return {kind:'verified_public_native_task_association',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,runtime_snapshot_sha256:frozen.snapshot_sha256};
+ }
  const match=binding.run_id.match(/__(a[1-9][0-9]*)$/);
  if(!match||binding.run_id!==`${input.workflow_key}-${input.run_tag}__${match[1]}`)reject();
  const actual=readBinding(runDir,match[1],frozen);

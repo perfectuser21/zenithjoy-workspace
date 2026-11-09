@@ -45,8 +45,9 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  }
  if(cfg.workflow_key==='douyin_comment_scoring'){if(env.P!=='mmv-scoring'||env.SERIAL!=='none')fail('RESOURCE_ROUTE');}
  else {const endpoint=(template.discovery_phone_scope||template.collection_phone_scope).policy.endpoint;if((logicalHost(fixed.machine)==='mmv'?env.LEADGEN_MMV_DEVICE_RUNTIME!=='1':env.LEADGEN_MMV_DEVICE_RUNTIME!==undefined)||env.DOUYIN_ADB_PORT!==endpoint.split(':').at(-1)||env.ADB_SERVER_SOCKET!==endpoint)fail('RESOURCE_ROUTE');}
+ const executionMode=cfg.execution_mode??'code';if(!['code','agent'].includes(executionMode)||executionMode!==(template.execution_mode??'code'))fail('EXECUTION_MODE');
  const planned=profile.contract?.activities||[];
- if(planned.length!==template.activities.length||planned.some(a=>!identity.run_binding.activities[a.key]||profile.metadata?.[a.key]?.executor_kind!=='code'))fail('CODE_ACTIVITIES_REQUIRED');
+ if(planned.length!==template.activities.length||planned.some(a=>!identity.run_binding.activities[a.key]||profile.metadata?.[a.key]?.executor_kind!==(executionMode==='agent'?'agent':'code')))fail('EXECUTION_ACTIVITIES_REQUIRED');
  const runtime=join(dir,'runtime');mkdirSync(dir,{recursive:true,mode:0o700});mkdirSync(runtime,{mode:0o700});
  const files={};
  for(const [name,expected]of Object.entries(profile.files||{})){
@@ -55,13 +56,14 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   const bytes=readFileSync(source);if(hash(bytes)!==expected)fail('FILE_DIGEST');const dest=join(runtime,name);mkdirSync(dirname(dest),{recursive:true,mode:0o700});privateWrite(dest,bytes);if(s.mode&0o111)chmodSync(dest,0o700);files['runtime/'+name]=expected;
  }
  if(!profile.files[cfg.step_spec])fail('STEP_SPEC');const steps=readFileSync(join(runtime,cfg.step_spec));privateWrite(join(dir,'step-dod.json'),steps);files['step-dod.json']=hash(steps);
- Object.assign(env,{HOME:process.env.HOME,WF_HOME:runtime,WF_DEPLOYMENT_ROOT:runtime,WFR_RUN_DIR:dir,WFR_HOSTKEY:logicalHost(fixed.machine),WFR_RUN_ID:identity.run_id,WFR_ATTEMPT:'a1',WF_BRAIN_TASK_ID:identity.task_id,WF_BRAIN_WORKFLOW:cfg.workflow_key,LEADGEN_EXECUTION_MODE:'code',LEADGEN_LOCAL_RPC:'1',DOUYIN_PHONE_ADB:join(runtime,'douyin-phone-adb'),WF_RUN_START_TS:String(Math.floor((deadline_ms-profile.domain_adapter.budget.max_duration_s*1000)/1000)),WF_RUN_MAX_SECONDS:String(Math.ceil((cleanup_deadline_ms-Math.floor((deadline_ms-profile.domain_adapter.budget.max_duration_s*1000)/1000)*1000)/1000))});
+ Object.assign(env,{HOME:process.env.HOME,WF_HOME:runtime,WF_DEPLOYMENT_ROOT:runtime,WFR_RUN_DIR:dir,WFR_HOSTKEY:logicalHost(fixed.machine),WFR_RUN_ID:identity.run_id,WFR_ATTEMPT:'a1',WF_BRAIN_TASK_ID:identity.task_id,WF_BRAIN_WORKFLOW:cfg.workflow_key,LEADGEN_EXECUTION_MODE:executionMode,LEADGEN_LOCAL_RPC:'1',DOUYIN_PHONE_ADB:join(runtime,'douyin-phone-adb'),WF_RUN_START_TS:String(Math.floor((deadline_ms-profile.domain_adapter.budget.max_duration_s*1000)/1000)),WF_RUN_MAX_SECONDS:String(Math.ceil((cleanup_deadline_ms-Math.floor((deadline_ms-profile.domain_adapter.budget.max_duration_s*1000)/1000)*1000)/1000))});
  if(Array.isArray(input.sources)){
   if(!input.sources.length||input.sources.some(s=>typeof s!=='string'||!s.trim()||/[\r\n\0]/.test(s)))fail('SOURCES');const bytes=Buffer.from(input.sources.join('\n')+'\n');privateWrite(join(dir,'sources.txt'),bytes);files['sources.txt']=hash(bytes);env.LEADGEN_SOURCES_FILE=join(dir,'sources.txt');
  }
- delete template.snapshot_sha256;delete template.agent_input;delete template.execution_transport;delete template.native_task_lease;
+ delete template.snapshot_sha256;delete template.agent_input;delete template.native_task_lease;delete template.native_claim;
+ if(executionMode==='agent'){if(template.execution_transport!=='raw-model-v1'||!Number.isInteger(template.max_turns)||template.max_turns<1||template.max_turns>64)fail('AGENT_TRANSPORT');env.LEADGEN_EXECUTION_TRANSPORT=template.execution_transport;env.LEADGEN_MAX_TURNS=String(template.max_turns);}else{delete template.execution_transport;delete template.max_turns;}
  const binding=identity.run_binding;
- Object.assign(template,{execution_mode:'code',files,public_domain:{protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
+ Object.assign(template,{execution_mode:executionMode,files,public_domain:{protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
  for(const key of ['discovery_phone_scope','collection_phone_scope'])if(template[key])Object.assign(template[key],{task_id:identity.task_id,run_id:identity.run_id,attempt:'a1',source_commit:template.deployment.source_commit});
  privateWrite(join(dir,'activity.log'),'');privateWrite(join(dir,'comments.tsv'),'');mkdirSync(join(dir,'native-operations'),{mode:0o700});
  return {env,runtime,dir,snapshot:template,privateWrite};

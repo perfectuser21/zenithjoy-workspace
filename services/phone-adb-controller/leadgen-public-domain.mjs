@@ -19,13 +19,26 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
  const {env,runtime,dir,snapshot,privateWrite}=frozenRun;
  const load=name=>import(pathToFileURL(join(runtime,name)).href);
  const definitions=await load('runtime-definition.mjs');
+ const executionMode=cfg.execution_mode??'code';
+ if(executionMode==='agent'){
+  snapshot.agent_input=definitions.agentInput(env);
+  const pg=await load('public-domain-pg.mjs');
+  snapshot.native_claim=(await pg.readPublicDomainClaim({identity:{...identity,run_binding:identity.run_binding},env})).claim;
+  if(cfg.workflow_key==='douyin_comment_scoring'){
+   snapshot.scoring_pg=snapshot.public_pg;
+   snapshot.scoring_control_scope=(await load('native-scoring-control.mjs')).freezeScoringControlScope({root:runtime,env});
+  }else{
+   snapshot.preflight_pg=snapshot.public_pg;
+   snapshot.preflight_control_scope=(await load('preflight-control-scope.mjs')).freezePreflightControlScope({root:runtime,env,runtimeTransport:snapshot.runtime_transport});
+  }
+ }
  snapshot.discovery_input=definitions.discoveryInput(env)||undefined;
  snapshot.sampling_input=definitions.commentSamplingInput(env)||undefined;
  snapshot.snapshot_sha256=definitions.digest(snapshot);
  privateWrite(join(dir,'run-definition.json'),JSON.stringify(snapshot));
  const frozen=definitions.readFrozen(dir);
  const authority=await load('public-domain-authority.mjs');
- const unregister=authority.registerPublicDomainAuthority({runDirectory:dir,identity,deadline_ms,cleanup_deadline_ms,business_scope:{run:env.WFR_TAG,run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,attempt:env.WFR_ATTEMPT}});
+ const unregister=authority.registerPublicDomainAuthority({runDirectory:dir,identity,deadline_ms,cleanup_deadline_ms,...(executionMode==='agent'?{snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:frozen.public_domain.runtime_snapshot_sha256}}:{}),business_scope:{run:env.WFR_TAG,run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,attempt:env.WFR_ATTEMPT}});
  let handlers,closed=false,active=false,unsafe=false,last;
  const records=[],checks=new Map(),outcomes=new Map(),activities=new Map(frozen.activities.map(a=>[a.reference.slot_key,{...a.version.payload.contract,key:a.reference.slot_key}]));
  const proofScope=key=>({run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,activity:key});
@@ -42,8 +55,17 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
   // Before any phone/model/queue action, prove the frozen offline PG closure can load.
   const source=(await load('leadgen-client.mjs')).rpcSource(frozen);
   const probe=loadPublicDomainPg({runtimeRoot:runtime,input:{source},env});await probe.end();
-  handlers=(await load('leadgen-handlers.mjs')).createHandlers({root:runtime,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id});
-  const {verifyWorkflowActivity,invokeNativeActivity}=await load('leadgen-workflow.mjs');
+  const workflow=await load('leadgen-workflow.mjs'),binding=authority.readPublicDomainBinding(dir);
+  let preflightRuntime;
+  if(executionMode==='agent'){
+   await (await load('native-task-lease.mjs')).issuePublicNativeTaskLease({runDir:dir,frozen,env});
+   if(cfg.workflow_key!=='douyin_comment_scoring')preflightRuntime=(await load('preflight-phone-scope.mjs')).createPreflightRuntime({root:runtime,env,frozen,binding,taskId:identity.task_id});
+   handlers=workflow.createWorkflowHandlers({root:runtime,env,rpc,frozen,binding,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id,preflightRuntime});
+   if(handlers.prepareNativeScoring)await handlers.prepareNativeScoring();
+   if(handlers.prepareNativePhone)await handlers.prepareNativePhone();
+  }else handlers=workflow.createHandlers({root:runtime,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id});
+  const {verifyWorkflowActivity,invokeNativeActivity}=workflow;
+  const executeAgent=executionMode==='agent'?workflow.createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities:[...activities.values()],taskId:identity.task_id}).executeAgent:null;
   const setActivity=a=>{
    if(closed||!activities.has(a.key))fail('ACTIVITY');
    const cleanup=a.runtime?.phase==='finalize'||a.key==='cleanup',end=cleanup?cleanup_deadline_ms:deadline_ms;
@@ -60,8 +82,9 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     let evidence;
     try{
      if(unsafe||handlers.state.executionUnknown)fail('EXECUTION_UNKNOWN');
-     const raw=await invokeNativeActivity(()=>handlers[a.key]({guidance:input.commander_guidance||[],signal:options.signal,onEvent:options.onAgentEvent}),handlers.state);
-     evidence={status:statusOf(raw?.status),attempt:input.attempt,result:raw};
+     const args={guidance:input.commander_guidance||[],signal:options.signal,onEvent:options.onAgentEvent,context:{task_id:identity.task_id},deadline_ms:handlers.state.budgetDeadline};
+     if(executeAgent){const raw=await executeAgent(activities.get(a.key),args);evidence={...raw,status:statusOf(raw?.status),attempt:input.attempt};}
+     else {const raw=await invokeNativeActivity(()=>handlers[a.key](args),handlers.state);evidence={status:statusOf(raw?.status),attempt:input.attempt,result:raw};}
     }catch(error){
      evidence={status:'failed',attempt:input.attempt,error_code:/^[A-Z_]+$/.test(error.message||'')?error.message:'PUBLIC_DOMAIN_ACTIVITY_FAILED',...(error.activityResult?{result:error.activityResult}:{}),...(typeof error.executionStopped==='boolean'?{execution_stopped:error.executionStopped}:{}),...(error.externalEffect==='unknown'?{external_effect:'unknown'}:{})};
     }finally{active=false;}
@@ -82,7 +105,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     if(!e||result.execution_stopped===false||unsafe)return verdict(options.acceptance,'unknown',evidenceFile('verification',a.key,{verified:false,reason:'execution_unknown'}));
     const finite=e.status==='partial'&&(a.key==='collection'&&e.result?.sampling_receipts?.length||a.key==='collect_videos'&&discovery.discoveryFiniteStopEvidence(e,proofScope(a.key)));
     let checked={verified:false};
-    if(e.status==='completed'||e.status==='empty'||finite)checked=await verifyWorkflowActivity({root:runtime,runDir:dir,frozen,env,binding:authority.readPublicDomainBinding(dir),rpc,handlers,records,executionMode:'code'},activities.get(a.key),e,{deadline_ms:handlers.state.budgetDeadline,signal:options.signal});
+    if(e.status==='completed'||e.status==='empty'||finite)checked=await verifyWorkflowActivity({root:runtime,runDir:dir,frozen,env,binding:authority.readPublicDomainBinding(dir),rpc,handlers,preflightRuntime,records,executionMode},activities.get(a.key),e,{deadline_ms:handlers.state.budgetDeadline,signal:options.signal});
     if(cfg.workflow_key==='douyin_video_processing'&&frozen.sampling_input&&checked.verified===true){const facts=await load('runtime-receipts.mjs');const binding=authority.readPublicDomainBinding(dir);if(a.key==='qualification')checked.qualification_identity_v1=facts.qualificationIdentityEvidence({dir,frozen,binding});if(a.key==='collection')checked.sampling_admission_v1=facts.samplingAdmissionEvidence({dir,artifact:e,frozen,binding});}
     checks.set(a.key,checked);const proof=evidenceFile('verification',a.key,checked);await recordEvidence({event_type:'ACTIVITY_AGENT_EVENT',activity:a.key,event:{kind:'business_readback',evidence:proof}});
     return {...verdict(options.acceptance,checked.verified===true?'pass':'fail',proof),step_checks:publicDomainStepChecks({frozen,executionSlot:a.key,checked,evidence:proof}),...(checked.sampling_admission_v1?{sampling_admission_v1:checked.sampling_admission_v1}:{}),...(checked.qualification_identity_v1?{qualification_identity_v1:checked.qualification_identity_v1}:{})};

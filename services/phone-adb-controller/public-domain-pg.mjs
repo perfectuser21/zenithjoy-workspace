@@ -1,19 +1,22 @@
 import {readFileSync,existsSync,realpathSync} from 'node:fs';
 import {join,dirname} from 'node:path';
-import {readFrozen,canonical} from './runtime-definition.mjs';
+import {readFrozen,canonical,assertExecutionMode} from './runtime-definition.mjs';
 import {loadPreflightPg} from './preflight-pg-dependencies.mjs';
 import {validatePublicDomainIdentity,publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
 const fail=()=>{throw Error('PUBLIC_DOMAIN_PG_SCOPE');};
 export function publicDomainPgRequired(runtimeRoot){const file=join(dirname(runtimeRoot),'run-definition.json');return existsSync(file)&&Boolean(JSON.parse(readFileSync(file,'utf8')).public_domain);}
 export async function verifyPublicDomainTask({runtimeRoot,env=process.env}){
- const p=readFrozen(dirname(runtimeRoot)).public_domain,b=p?.run_binding;
+ const p=readFrozen(dirname(runtimeRoot)).public_domain;return readPublicDomainClaim({identity:p,env});
+}
+export async function readPublicDomainClaim({identity:p,env=process.env}){
+ const b=p?.run_binding;
  if(!p||!env.BRAIN_URL||!env.BRAIN_INTERNAL_TOKEN)fail();
  const url=new URL(`/api/brain/tasks/${encodeURIComponent(p.task_id)}`,env.BRAIN_URL);
  const response=await fetch(url,{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},signal:AbortSignal.timeout(10000),redirect:'error'});
  if(!response.ok)fail();const task=await response.json();
  const projection={identity:p,binding:{id:b.run_binding_id,run_id:p.run_id,task_id:p.task_id,workflow_id:b.workflow_id,workflow_definition_version_id:b.workflow_definition_version_id,attempt_key:b.attempt_key,activities:b.activities}};
  if(!publicDomainTaskProjectionMatches(task,projection))fail();
- return {run_id:p.run_id,task_id:p.task_id,binding_id:b.run_binding_id,claim_verified:true};
+ return {run_id:p.run_id,task_id:p.task_id,binding_id:b.run_binding_id,claim_verified:true,claim:{claimed_by:task.claimed_by,claimed_at:task.claimed_at}};
 }
 export async function verifyPublicDomainCompany({runtimeRoot,pool,env=process.env}){
  const p=readFrozen(dirname(runtimeRoot)).public_domain,c=p?.company;
@@ -28,10 +31,10 @@ export async function verifyPublicDomainCompany({runtimeRoot,pool,env=process.en
 export function loadPublicDomainPg({runtimeRoot,input,env=process.env}){
  if(['NODE_PATH','NODE_OPTIONS','NODE_PG_FORCE_NATIVE'].some(k=>env[k]))fail();
  const dir=env.WFR_RUN_DIR;
- if(!dir||realpathSync(dir)!==dir||realpathSync(runtimeRoot)!==join(dir,'runtime')||env.WF_HOME!==runtimeRoot||env.LEADGEN_EXECUTION_MODE!=='code')fail();
+ if(!dir||realpathSync(dir)!==dir||realpathSync(runtimeRoot)!==join(dir,'runtime')||env.WF_HOME!==runtimeRoot||!['code','agent'].includes(env.LEADGEN_EXECUTION_MODE))fail();
  const frozen=readFrozen(dir),p=frozen.public_domain,b=p?.run_binding;
  validatePublicDomainIdentity({...p,mode:'formal'});
- if(frozen.execution_mode!=='code'||p.task_id!==env.WF_BRAIN_TASK_ID||p.run_id!==env.WFR_RUN_ID||env.WFR_ATTEMPT!=='a1'
+ if(assertExecutionMode(frozen,env)!==env.LEADGEN_EXECUTION_MODE||p.task_id!==env.WF_BRAIN_TASK_ID||p.run_id!==env.WFR_RUN_ID||env.WFR_ATTEMPT!=='a1'
   ||!Number.isSafeInteger(p.cleanup_deadline_ms)||Date.now()>=p.cleanup_deadline_ms||frozen.run_identity?.run_id!==p.run_id
   ||input?.source?.commit!==frozen.deployment?.source_commit||b.workflow_definition_version_id!==frozen.workflow_version?.id
   ||b.workflow_id!==frozen.workflow_version?.payload?.workflow_id||!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(env.WF_BRAIN_WORKFLOW)
