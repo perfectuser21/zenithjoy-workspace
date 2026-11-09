@@ -42,3 +42,24 @@ test('真实本人supervisor→held child→loopback listener：独验双源/锁
  finally:
   if owned.poll() is None:owned.terminate();owned.wait(timeout=3)
 `));
+test('真实held隔离Python argv：仅已核48b语法接纳exact -I -B -S，其他前缀或新源拒绝',()=>py(fixture+`with tempfile.TemporaryDirectory() as d:
+ r,home,path,receipt,service,g,document=fixture(d)
+ for flags in [['-I','-B','-S'],['-B','-I','-S'],['-I','-S','-B'],['-I','-B','-S','-u'],['-I','-B'],['-I','-B','-S','-S']]:
+  owned=subprocess.Popen([str(pathlib.Path(sys.executable).resolve()),*flags,str(service),'run','--config',str(path),'--maintenance-receipt',str(receipt)],env={**os.environ,'HOME':str(home)},stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+  try:
+   # Observe the real interpreter argv, not a fixture's self-reported receipt.
+   row=g.process_identity(owned.pid);assert row is not None;argv=g.shlex.split(row['_argv']);assert argv[1:1+len(flags)]==flags;original_hash=row['argv_sha256']
+   # The grammar runs only after inspect's source context. The fixture does not
+   # impersonate the deployed 48b image: the unchanged outer hardpin rejects it.
+   rejected(lambda:g.context({**document,'supervisor_source':{**document['supervisor_source'],'source_commit':g.OLD_SOURCE}}))
+   if flags==['-I','-B','-S']:
+    assert g.supervisor_argv(row,service.parent,str(path),g.OLD_SOURCE)==pathlib.Path(receipt)
+    rejected(lambda:g.supervisor_argv(row,service.parent,str(path),'f'*40))
+    rejected(lambda:g.supervisor_argv({**row,'_argv':row['_argv']+' --resume-reserved-start'},service.parent,str(path),g.OLD_SOURCE))
+    rejected(lambda:g.supervisor_argv({**row,'_argv':row['_argv'].replace(' -I ',' -Z ',1)},service.parent,str(path),g.OLD_SOURCE))
+   else:rejected(lambda:g.supervisor_argv(row,service.parent,str(path),g.OLD_SOURCE))
+   assert row['argv_sha256']==original_hash and hashlib.sha256(row['_argv'].encode()).hexdigest()==original_hash
+  finally:
+   if owned.poll() is None:owned.terminate()
+   owned.wait(timeout=3)
+`));
