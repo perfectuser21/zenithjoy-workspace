@@ -45,7 +45,7 @@ test('public primary snapshot preserves raw transport and sets mode agent withou
 
 // Full product factory + createWorkflowExecution + primary executor are real.
 // Only unavailable native/model effects are replaced by a refusing native provider.
-test('real public factory routes an unsupported first Skill through executeAgent and never executes Code business',async t=>{
+for(const closeFailure of [false,true])test(closeFailure?'public factory never upgrades a failed primitive close on repeated close':'real public factory routes an unsupported first Skill through executeAgent and never executes Code business',async t=>{
  const f=fixture(t),source=join(f.root,'source'),run=join(f.root,'run');
  const controller=fileURLToPath(new URL('../',import.meta.url));
  cpSync(controller,source,{recursive:true,filter:p=>!p.includes('/__tests__')&&!p.includes('/node_modules')});
@@ -58,11 +58,17 @@ test('real public factory routes an unsupported first Skill through executeAgent
  const av=f.identity.run_binding.activities.scoring,c={key:'scoring',budget:{max_duration_s:30,heartbeat_s:5},runtime:{phase:'source'}};
  const snapshot={execution_mode:'agent',execution_transport:'raw-model-v1',max_turns:12,deployment:{source_commit:f.frozen.deployment.source_commit,target:'mmv'},release:{id:id(),target:'mmv'},public_pg:preflightPgLockIdentity(),workflow_version:{id:f.identity.run_binding.workflow_definition_version_id,payload:{workflow_id:f.identity.run_binding.workflow_id,key:'douyin_comment_scoring'}},activities:[{reference:{slot_key:'scoring',...av},version:{id:av.activity_definition_version_id,payload:{contract:c}}}]};
  const profile={cwd:source,files:Object.fromEntries(inventory(source).map(n=>[n,hash(readFileSync(join(source,n)))])),metadata:{scoring:{activity_id:av.activity_id,executor_kind:'agent',runtime_snapshot_sha256:'e'.repeat(64)}},contract:{activities:[c]},domain_adapter:{budget:{max_duration_s:30,cleanup_grace_s:10},config:{execution_mode:'agent',workflow_key:'douyin_comment_scoring',step_spec:'plans/douyin_comment_scoring.steps.json',snapshot,resources:{machine:'us-mac-m4',profile:'mmv-scoring',serial:'none',line:'yuesheng',account:'none'},company:{company_id:id(),tenant_id:id(),version:26,policy_id:'original'},env:{P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',WFR_TAG:'first103',LEADGEN_LIMIT:'5'}}}};
+ if(closeFailure){
+  writeFileSync(join(source,'official-child-primitives.mjs'),`export const officialChildOperationReturned=()=>false;export const createOfficialChildPrimitives=()=>({supports:()=>false,snapshot:()=>({}),close:async()=>({execution_stopped:false})});`);
+  profile.domain_adapter.config.primary_host='official-child-v1';delete snapshot.execution_transport;delete snapshot.max_turns;snapshot.primary_host='official-child-v1';
+  profile.files=Object.fromEntries(inventory(source).map(n=>[n,hash(readFileSync(join(source,n)))]));
+ }
  const identity={...f.identity,profile_sha256:hash(profile)};f.task.result.common_runner={...identity};
  const server=http.createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;const seconds=raw?JSON.parse(raw).lease_seconds:30;res.end(JSON.stringify(req.method==='GET'?f.task:{ok:true,lease_until:new Date(Date.now()+seconds*1000).toISOString(),lease_seconds:seconds,heartbeat_count:1}));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  const prior={BRAIN_URL:process.env.BRAIN_URL,BRAIN_INTERNAL_TOKEN:process.env.BRAIN_INTERNAL_TOKEN};process.env.BRAIN_URL='http://127.0.0.1:'+server.address().port;process.env.BRAIN_INTERNAL_TOKEN='unit-only';t.after(()=>{for(const[k,v]of Object.entries(prior))if(v===undefined)delete process.env[k];else process.env[k]=v;});
  const {createWorkflowDomain}=await import('../leadgen-public-domain.mjs');
  const now=Date.now(),domain=await createWorkflowDomain({identity,profile,runDirectory:run,deadline_ms:now+30000,cleanup_deadline_ms:now+40000});
+ if(closeFailure){assert.equal((await domain.close()).execution_stopped,false);assert.equal((await domain.close()).execution_stopped,false);return;}
  const result=await domain.executeActivity(c,{run_tag:identity.run_id,attempt:1});
  assert.equal(result.adapter_result.reason,'AGENT_PRIMARY_NATIVE_DOMAIN_UNSUPPORTED');assert.equal(result.adapter_result.not_started,true);assert.equal(result.adapter_result.execution_stopped,true);assert.equal(result.status,'needs_review');assert.equal(existsSync(join(run,'skill-handoff')),false);assert.equal((await domain.close()).execution_stopped,true);
 });
