@@ -560,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "9f9de9f0d2edc2b4d32447c1567e65bce05076cc37941be13703dfdd44116257",
+      "code_digest": "f26068ee96d86c692e38a38b9d91bcba8a3fb08e536dceb9fd628be492c39b24",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对采集候选输入、视频额度、原生指标准入与discover持久身份均未变；phone等待同一已在飞heartbeat后重新准入，business提前占槽只阻止交叉提交。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "ebd3002a8a75e74f89d9f8041c4d06b7e692ef467bcf2454ed3592841b777fb6",
-        "current_code_digest": "9f9de9f0d2edc2b4d32447c1567e65bce05076cc37941be13703dfdd44116257"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_video_discovery.collect_videos的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "9f9de9f0d2edc2b4d32447c1567e65bce05076cc37941be13703dfdd44116257",
+        "current_code_digest": "f26068ee96d86c692e38a38b9d91bcba8a3fb08e536dceb9fd628be492c39b24"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1418,7 +1418,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -1481,7 +1481,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -1642,13 +1642,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "af2274da5f34c4b17d5691ed5c34679a62dc701d36ac9c1e8746245283b1f921",
+      "code_digest": "f82084b7afcae3acc593ee6da2f882697643c321c31439e5667020fd75bfcca7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对wake/unlock/open-app/account-current顺序及完成记账、账号/资源准入未变；只消除成功心跳期间误报commit-unknown，最终phone仍受较早worker截止保护。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "7cd3fd5b135bbf86fdcc833c923832c40b0a0555dc0d7daef2f5e11f252ef432",
-        "current_code_digest": "af2274da5f34c4b17d5691ed5c34679a62dc701d36ac9c1e8746245283b1f921"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_video_processing.preflight的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "af2274da5f34c4b17d5691ed5c34679a62dc701d36ac9c1e8746245283b1f921",
+        "current_code_digest": "f82084b7afcae3acc593ee6da2f882697643c321c31439e5667020fd75bfcca7"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2203,7 +2203,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -2266,7 +2266,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -2430,13 +2430,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "dc813d217dd858a7d7715041d5021d4dae701743cf3d5aa01b49decc1d2b78bd",
+      "code_digest": "9d5679fb0a59e91de0ae8622ca611d821153b56ef71f2cd6da3a7deb948c4b0d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对101来源校验、claim/inspect操作schema及原写入身份未变；business仅将busy占槽移到异步guard前，原已确认重入返回旧回执和未知只读回合同保留。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "c3f4a1051328668248e6d3e6a80293336a86612b43b205b1f80a0ba78b2bbab2",
-        "current_code_digest": "dc813d217dd858a7d7715041d5021d4dae701743cf3d5aa01b49decc1d2b78bd"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_video_processing.dedup的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "dc813d217dd858a7d7715041d5021d4dae701743cf3d5aa01b49decc1d2b78bd",
+        "current_code_digest": "9d5679fb0a59e91de0ae8622ca611d821153b56ef71f2cd6da3a7deb948c4b0d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3019,7 +3019,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -3082,7 +3082,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -3302,13 +3302,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "968bbf5d9f4d6fd1fc4de108c116dabe80427be0109ad9dd1996f5da840ba572",
+      "code_digest": "9f3bb4dbd0f77c2e95a45a87bcb9f030dee50145f9efcd96fbe183f14e1d28d9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对原VID、qualification/native证据准入、录制工具及业务政策调用接口未变；没有新增采样、录音或重试，心跳协调不借用cleanup窗口发phone。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "34adfe224903350b67f6b61fbeacd2cbd476f292e81ce685e997f8ba4f6e1446",
-        "current_code_digest": "968bbf5d9f4d6fd1fc4de108c116dabe80427be0109ad9dd1996f5da840ba572"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_video_processing.qualification的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "968bbf5d9f4d6fd1fc4de108c116dabe80427be0109ad9dd1996f5da840ba572",
+        "current_code_digest": "9f3bb4dbd0f77c2e95a45a87bcb9f030dee50145f9efcd96fbe183f14e1d28d9"
       }
     },
     "douyin_video_processing.collection": {
@@ -3863,7 +3863,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -3926,7 +3926,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -4112,13 +4112,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "bcd664c1e18a035e0b1391605150e56be0c36e58c13c0c527b9689980b579b7f",
+      "code_digest": "72a7908156a75148d0ec2eb522f433692d0ca4bcf00d309c2d4fb631fbc24721",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对评论限额、原生recipient证据准入和collect/collect_partial持久身份未变；同槽串行防止phone与晚到business交叉，未知提交仍只允许原匹配readback。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "3b270658b923c13713669b6d64e819817658774420d5ea9f06324b5aa8b7d617",
-        "current_code_digest": "bcd664c1e18a035e0b1391605150e56be0c36e58c13c0c527b9689980b579b7f"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_video_processing.collection的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "bcd664c1e18a035e0b1391605150e56be0c36e58c13c0c527b9689980b579b7f",
+        "current_code_digest": "72a7908156a75148d0ec2eb522f433692d0ca4bcf00d309c2d4fb631fbc24721"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4708,7 +4708,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -4771,7 +4771,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -4931,13 +4931,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "33ae5b01b01c34b9d40a62e5efbc3493e251e1c33316b43d24d4f28dbc743e09",
+      "code_digest": "a3a0dc9ec5a805524d7ce9d871cac324b258e840ccb636385ed527a8e7861255",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对settle后仅cleanup可release、原停止证明和未决intent拒绝规则未变；通用guard/settle保留原scope收尾窗口，phone仅用较早worker截止，不授予新清场或解锁权限。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "26e2a7a39c0a3da845e8e1efa2ce8e9ad9eb35042766ed751a53d58bf1a3f83e",
-        "current_code_digest": "33ae5b01b01c34b9d40a62e5efbc3493e251e1c33316b43d24d4f28dbc743e09"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_video_processing.cleanup的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "33ae5b01b01c34b9d40a62e5efbc3493e251e1c33316b43d24d4f28dbc743e09",
+        "current_code_digest": "a3a0dc9ec5a805524d7ce9d871cac324b258e840ccb636385ed527a8e7861255"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5499,7 +5499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -5562,7 +5562,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -5733,13 +5733,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "9904ebb0df9404094e74103c0557bad855f4397f1fd9c235b2e5291416987688",
+      "code_digest": "feb1ccd0f09fb9b8dc31401de04f020d08f39f3add5cdb0ae8d9a27bc45fe9ea",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对serial=none仍禁止phone、单条score及scope额度/schema未变，评分政策与结果写入身份不变；共享工具仅串行原business准入和心跳，不新增评分或未知重写。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "fbe8dcb679feff4395a31dbef5a23f7e7b3cbe1ebab68bc1bc4ae75318d670cd",
-        "current_code_digest": "9904ebb0df9404094e74103c0557bad855f4397f1fd9c235b2e5291416987688"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_comment_scoring.scoring的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "9904ebb0df9404094e74103c0557bad855f4397f1fd9c235b2e5291416987688",
+        "current_code_digest": "feb1ccd0f09fb9b8dc31401de04f020d08f39f3add5cdb0ae8d9a27bc45fe9ea"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6308,7 +6308,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -6371,7 +6371,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -6577,13 +6577,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "368eb14eebcd5097baeb8093fc2fefd15ba86cc7d4e6c998bcf4bb782589f743",
+      "code_digest": "8d7e195bcca5674cb3c87f78e6b396c15c725c5048c58fb6e3682edd52e87432",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对mark_leads允许的业务操作、原生资格及配送操作schema未变，原持久写入/只读回身份保留；共享操作槽和heartbeat等待不增加触达、104发送或跨租户权限。Method正文及support闭包、Activity版本和contract digest均与f034基线一致；工具参数/返回接口及白名单未改，原绝对scope预算和worker截止不延长；只协调本实例同一heartbeat promise和同步操作槽，失败仍保未决intent/unknown，不重发write或refresh。",
-        "reviewed_by": "cloud9_failure_audit",
-        "previous_code_digest": "f34ba988170fbc8dfac74ff51b726f8c1f218cc1d5f39f329f32ad2ee0337d60",
-        "current_code_digest": "368eb14eebcd5097baeb8093fc2fefd15ba86cc7d4e6c998bcf4bb782589f743"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_comment_scoring.mark_leads的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "368eb14eebcd5097baeb8093fc2fefd15ba86cc7d4e6c998bcf4bb782589f743",
+        "current_code_digest": "8d7e195bcca5674cb3c87f78e6b396c15c725c5048c58fb6e3682edd52e87432"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7092,7 +7092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -7155,7 +7155,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -7351,13 +7351,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "4079d89350b8f515b5848df5979c5c1dba3d7070f6d5eaf51568c4a9864159f7",
+      "code_digest": "8562ce78b0746c92ed97e42067c85624527223b932337ecb1230ab099e23c7e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "fbd3a8039bff2b9b2c611718127889202e79b7e24352ea9ad90773ba4013b744",
-        "current_code_digest": "4079d89350b8f515b5848df5979c5c1dba3d7070f6d5eaf51568c4a9864159f7"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.preflight的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "4079d89350b8f515b5848df5979c5c1dba3d7070f6d5eaf51568c4a9864159f7",
+        "current_code_digest": "8562ce78b0746c92ed97e42067c85624527223b932337ecb1230ab099e23c7e0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7866,7 +7866,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -7929,7 +7929,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -8100,13 +8100,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "76e3f09f9b25e9241ed2f61d0d9de3e45fbf92337bd2a7400e73934e4ad2f4b1",
+      "code_digest": "0eac879024b06842362f0285bf874d7d28a86d06149961dee51dd8bde69bbd7e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "99ba692361aedbc86624333dfecbeedd88c4f5095791ee177a1f53de4ed7cac4",
-        "current_code_digest": "76e3f09f9b25e9241ed2f61d0d9de3e45fbf92337bd2a7400e73934e4ad2f4b1"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.send_dm的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "76e3f09f9b25e9241ed2f61d0d9de3e45fbf92337bd2a7400e73934e4ad2f4b1",
+        "current_code_digest": "0eac879024b06842362f0285bf874d7d28a86d06149961dee51dd8bde69bbd7e"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8615,7 +8615,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -8678,7 +8678,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -8842,13 +8842,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "66a6e391bb758891fbef00b13273404429dc60a0162ab7a8b2613d6760c0054c",
+      "code_digest": "0c6520eff194bb464c54bb105516f88bb8d5b089e8d6b016a7578e0db5a65e40",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "e57b7fa19bf20ff10f88b1821c70e5e765ffa69669e925e06ac4f2f66eda3ec8",
-        "current_code_digest": "66a6e391bb758891fbef00b13273404429dc60a0162ab7a8b2613d6760c0054c"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.write_back的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "66a6e391bb758891fbef00b13273404429dc60a0162ab7a8b2613d6760c0054c",
+        "current_code_digest": "0c6520eff194bb464c54bb105516f88bb8d5b089e8d6b016a7578e0db5a65e40"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9357,7 +9357,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44f58cef0df5745f26f80889ca6fc5d48b35465b67c3d10f0aa4551f4bb6559c"
+          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
         },
         {
           "kind": "code",
@@ -9420,7 +9420,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "644d0667690b850762879f942471913bb7ae3d41ef6a747313963d859982751e"
+          "sha256": "a85b890fe00174f3b66d46da2e63de387c46ed0a7797a044a59fa4475f7fcec8"
         },
         {
           "kind": "code",
@@ -9594,13 +9594,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c6667ae2a652d58dc1ab85102f10d04fa940e0c873bea84286385ba7b28eceb5",
+      "code_digest": "c380d80ca80ada906f250e1df6cee21e6d8537e1dfd6650753d8d28f6ff6b708",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定官方spawn回执解析、绑定提交与ownerRPC终态/通知排空及共享源码闭包；此10项Activity合同版本、方法正文、输入输出及业务授权均未改变。104仅共享依赖，不新增触达授权或声称实机验收。共享preflight/cleanup真实2.3.0方法与预算升级不包含在本code-only兼容签名中。",
-        "reviewed_by": "cloud8_recovery_design",
-        "previous_code_digest": "10af1d6030c908ce32bc455f8208229434d4b2334a30485f490d2b13ab0f499a",
-        "current_code_digest": "c6667ae2a652d58dc1ab85102f10d04fa940e0c873bea84286385ba7b28eceb5"
+        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；两项code binding仅把brain-authority-get纳入同一冻结部署闭包。已审helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.cleanup的内部实现兼容，不授权104或证明真机业务通过。",
+        "reviewed_by": "pstack_source_compatibility",
+        "previous_code_digest": "c6667ae2a652d58dc1ab85102f10d04fa940e0c873bea84286385ba7b28eceb5",
+        "current_code_digest": "c380d80ca80ada906f250e1df6cee21e6d8537e1dfd6650753d8d28f6ff6b708"
       }
     }
   },
