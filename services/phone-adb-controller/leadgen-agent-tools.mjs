@@ -131,9 +131,11 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const business=async(op,input={})=>{
     if(!slots[scope.activity].includes(op))throw Error('AGENT_TOOL_OPERATION_NOT_ALLOWED');
     if(!object(input)||Object.keys(input).some(key=>!schemas[op].includes(key)))throw Error('AGENT_TOOL_INPUT_SCOPE_INVALID');
+    while(heartbeatJob)await waitForHeartbeat();
     if(busy)throw Error('AGENT_TOOL_OPERATION_BUSY');
     const pending=unresolved();
     const readback=pending.length?pendingReadback(op,input):null;
+    const deadline=readback?scope.deadline_ms:executionDeadline;
     if(pending.length&&!readback)throw Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED');
     busy=true;
     try{
@@ -149,6 +151,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     if(!readback&&typeof primitives.validateInput!=='function')throw Error('AGENT_TOOL_NATIVE_ADMISSION_UNAVAILABLE');
     const trusted=readback||await primitives.validateInput(op,structuredClone(input),scope);
     if(!object(trusted))throw Error('AGENT_TOOL_NATIVE_ADMISSION_INVALID');
+    if(Date.now()>=deadline)throw Error('AGENT_TOOL_DEADLINE');
     const request={...trusted,line:scope.line,run:scope.run,source_run:scope.source_run||undefined,limit:op==='score'?1:scope.limit};
     if(op==='score')request.budget_max=scope.limit;
     if(op==='company_config')Object.assign(request,{step:scope.workflow==='douyin_video_discovery'?'101':scope.workflow==='douyin_video_processing'?'102':'103',...(scope.serial!=='none'?{device_binding:{profile:scope.profile,device_serial:scope.serial}}:{})});
@@ -168,6 +171,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
       if(op==='score'&&intents().filter(row=>row.value.operation==='score').length>=scope.limit)throw Error('AGENT_TOOL_SCORE_LIMIT');
       durable(intentFile,intent);
     }
+    if(Date.now()>=deadline)throw Error('AGENT_TOOL_DEADLINE');
     try{
       let value;
       if(op==='keywords')value=await primitives.keywords(scope);
@@ -194,7 +198,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
   const phone=async(command,...args)=>{
     if(scope.serial==='none'||!readPhone.has(command)&&!(phoneBySlot[scope.activity]||[]).includes(command))throw Error('AGENT_TOOL_PHONE_NOT_ALLOWED');
     if(args.some(arg=>typeof arg!=='string'||arg.length>1000||/[\0\r\n]/.test(arg)||arg.startsWith('--')))throw Error('AGENT_TOOL_PHONE_INPUT_INVALID');
-    await waitForHeartbeat();
+    while(heartbeatJob)await waitForHeartbeat();
     if(busy||unresolved().length)throw Error('AGENT_TOOL_PHONE_COMMIT_UNKNOWN_READBACK_REQUIRED');
     // Own the slot before asynchronous admission; another phone or heartbeat
     // must not pass its own guard while this request is being validated.

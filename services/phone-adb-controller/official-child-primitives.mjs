@@ -11,6 +11,7 @@ import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {createOfficialCliClosure,describeOfficialCliInvocation,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from './official-cli-closure.mjs';
 import {createOfficialRecordingProducer} from './official-recording-producer.mjs';
 import {skillLaunchDidNotStart} from './activity-skill-executor.mjs';
+import {fetchBrainAuthorityGet} from './brain-authority-get.mjs';
 const instances=new WeakSet(),returned=new WeakMap();
 const key=({command,args,receipt,root,frozen})=>canonical({command,args,receipt,root,snapshot_sha256:frozen.snapshot_sha256});
 export const isOfficialChildPrimitives=v=>instances.has(v);
@@ -29,7 +30,7 @@ export function createOfficialChildPrimitives({root,env,frozen,binding,taskId,st
   // prepare checks no physical effect. Central acquisition belongs to the
   // original preflight tools before their first local-lock/phone operation.
   if(phase!=='prepare'&&!scoring){
-   const response=await fetch(new URL('/api/brain/device-locks',env.BRAIN_URL),{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},redirect:'error',signal:AbortSignal.timeout(8000)});
+   const response=await fetchBrainAuthorityGet(new URL('/api/brain/device-locks',env.BRAIN_URL),{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},timeoutMs:8000});
    if(!response.ok)throw fail();const rows=await response.json(),locks=rows.locks?.filter(r=>r.device_name===env.SERIAL);
    if(rows.success!==true||locks?.length!==1||locks[0].locked_by!==taskId||!Number.isFinite(Date.parse(locks[0].expires_at))||Date.parse(locks[0].expires_at)<=Date.now()+1000)throw fail();stable();
   }

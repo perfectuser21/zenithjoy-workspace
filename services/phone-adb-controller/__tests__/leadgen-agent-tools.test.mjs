@@ -1,4 +1,6 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,readdirSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -234,4 +236,136 @@ test('等待心跳到原截止只结束waiter，原heartbeat保持一次且自�
   assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
   await assert.rejects(()=>tools.phone('open-app'),/DEADLINE/);assert.equal(actions,0);
  },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});
+
+test('已提交discover在飞心跳期间读回等待确认，只读一次且不重发写入',async()=>{
+ const entered=deferred(),finish=deferred();
+ await using(async(tools,calls)=>{
+  await tools.business('discover',{video});
+  const heartbeat=tools.heartbeat();await entered.promise;
+  let settled=false;const readback=tools.business('discover_readback',{video}).then(value=>{settled=true;return {value};},error=>{settled=true;return {error};});
+  await nextTurn();const before={settled,readbacks:calls.filter(c=>c.op==='discover_readback').length};
+  finish.resolve({renewed:true});await heartbeat;const outcome=await readback;
+  assert.deepEqual(before,{settled:false,readbacks:0});assert.equal(outcome.error,undefined);assert.equal(outcome.value.metrics_verified,true);
+  assert.deepEqual(calls.map(c=>c.op),['discover','discover_readback']);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+ },{primitives:{heartbeat:async()=>{entered.resolve();return finish.promise;}}});
+});
+
+for(const kind of ['business','phone'])test(kind+'等待链式心跳的当前确认后才执行一次',async()=>{
+ const entered=deferred(),first=deferred(),second=deferred();let refreshes=0,actions=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const following=heartbeat.then(()=>tools.heartbeat());
+  let settled=false;const operation=(kind==='business'?tools.business('discover_readback',{video}):tools.phone('ui-evidence')).then(value=>{settled=true;return {value};},error=>{settled=true;return {error};});
+  first.resolve({renewed:true});await nextTurn();const before={settled,refreshes,actions};
+  second.resolve({renewed:true});await following;const outcome=await operation;
+  assert.deepEqual(before,{settled:false,refreshes:2,actions:0});assert.equal(outcome.error,undefined);assert.equal(actions,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+ },{primitives:{heartbeat:async()=>{if(++refreshes===1){entered.resolve();return first.promise;}return second.promise;},queue:async()=>{actions++;return {metrics_verified:true};},phone:async()=>{actions++;return {native:true};}}});
+});
+
+test('真实两个business并发仍拒绝后者且只提交一个写入',async()=>{
+ const entered=deferred(),finish=deferred();let writes=0;
+ await using(async tools=>{
+  const first=tools.business('discover',{video});await entered.promise;
+  const second=tools.business('discover',{video:{...video,videoId:'2234567890123456'}}).then(()=>null,error=>error);
+  const error=await second;finish.resolve({inserted:true});await first;
+  assert.match(error?.message||'',/OPERATION_BUSY/);assert.equal(writes,1);
+ },{primitives:{queue:async()=>{writes++;entered.resolve();return finish.promise;}}});
+});
+
+for(const kind of ['business','phone'])test('心跳失败时等待的'+kind+'不得提交或消除未知',async()=>{
+ const entered=deferred(),finish=deferred();let writes=0,actions=0,unknown=0,refreshes=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat().catch(error=>error);await entered.promise;
+  const operation=(kind==='business'?tools.business('discover',{video}):tools.phone('ui-evidence')).then(()=>null,error=>error);
+  await nextTurn();finish.reject(Error('lost lease acknowledgement'));
+  assert.match((await heartbeat).message,/UNKNOWN/);assert.match((await operation).message,/UNKNOWN/);
+  assert.equal(writes,0);assert.equal(actions,0);assert.equal(refreshes,1);assert.equal(unknown,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);await assert.rejects(()=>tools.phone('ui-evidence'),/UNKNOWN/);
+  assert.equal(writes,0);assert.equal(actions,0);
+ },{primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},resourceUnknown:()=>unknown++,queue:async()=>{writes++;return {};},phone:async()=>{actions++;return {};}}});
+});
+
+for(const kind of ['business','phone'])test(kind+'等心跳只能使用原worker截止，不借用收尾窗口',async t=>{
+ const now=Date.now(),entered=deferred(),finish=deferred();let effects=0;
+ t.mock.timers.enable({apis:['Date','setTimeout'],now});
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const operation=(kind==='business'?tools.business('discover',{video}):tools.phone('ui-evidence')).then(()=>null,error=>error);
+  await nextTurn();t.mock.timers.tick(1001);const error=await operation;
+  const pending=(await tools.inspect()).pending_write_readbacks;
+  finish.resolve({renewed:true});await heartbeat;
+  assert.match(error?.message||'',/DEADLINE/);assert.equal(effects,0);
+  assert.deepEqual(pending,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  const original=(await tools.inspect()).scope;assert.equal(original.worker_deadline_ms,now+1000);assert.equal(original.deadline_ms,now+10000);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{entered.resolve();return finish.promise;},queue:async()=>{effects++;return {};},phone:async()=>{effects++;return {};}}});
+});
+
+for(const kind of ['business','phone'])test(kind+'先入槽时同tick心跳保持deferred，不交叉执行',async()=>{
+ const entered=deferred(),finish=deferred();let effects=0,refreshes=0;
+ await using(async tools=>{
+  const operation=kind==='business'?tools.business('discover',{video}):tools.phone('ui-evidence');
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const result=await heartbeat;finish.resolve();await operation;
+  assert.deepEqual(result,{deferred:true});assert.equal(effects,1);assert.equal(refreshes,0);
+ },{primitives:{heartbeat:async()=>{refreshes++;return {};},queue:async()=>{effects++;entered.resolve();await finish.promise;return {};},phone:async()=>{effects++;entered.resolve();await finish.promise;return {};}}});
+});
+
+for(const boundary of ['resources','input'])test('心跳结束后'+boundary+'异步校验跨worker截止不得发起业务',async t=>{
+ const now=Date.now(),heartbeatEntered=deferred(),heartbeatFinish=deferred(),validationEntered=deferred(),validationFinish=deferred();let validating=false,writes=0;
+ t.mock.timers.enable({apis:['Date'],now});
+ const validate=async()=>{if(validating){validationEntered.resolve();await validationFinish.promise;}return true;};
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await heartbeatEntered.promise;
+  const business=tools.business('discover',{video}).then(()=>null,error=>error);
+  validating=true;heartbeatFinish.resolve({renewed:true});await heartbeat;await validationEntered.promise;
+  t.mock.timers.setTime(now+1100);validationFinish.resolve();
+  const error=await business;assert.equal(error?.message,'AGENT_TOOL_DEADLINE');assert.equal(writes,0);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+  const original=(await tools.inspect()).scope;assert.equal(original.worker_deadline_ms,now+1000);assert.equal(original.deadline_ms,now+10000);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{heartbeatEntered.resolve();return heartbeatFinish.promise;},assertResources:boundary==='resources'?validate:async()=>true,validateInput:async(_op,input)=>{if(boundary==='input')await validate();return input;},queue:async()=>{writes++;return {inserted:true};}}});
+});
+
+test('未知写入worker截止后仍只开放原目标SELECT读回，outer截止后拒绝',async t=>{
+ const now=Date.now(),operations=[];
+ t.mock.timers.enable({apis:['Date'],now});
+ await using(async tools=>{
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);
+  t.mock.timers.setTime(now+1100);
+  await assert.rejects(()=>tools.business('discover_readback',{video:{...video,videoId:'2234567890123456'}}),/UNKNOWN/);
+  const readback=await tools.business('discover_readback',{video});assert.equal(readback.metrics_verified,true);
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);
+  assert.deepEqual(operations,['discover','discover_readback']);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'discover',readback_operations:['discover_readback']}]);
+  t.mock.timers.setTime(now+10000);
+  await assert.rejects(()=>tools.business('discover_readback',{video}),/DEADLINE/);
+  assert.deepEqual(operations,['discover','discover_readback']);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{queue:async op=>{operations.push(op);if(op==='discover')throw Error('lost write acknowledgement');return {metrics_verified:true};}}});
+});
+
+for(const boundary of ['resources','input'])test(boundary+'异步校验自身失败仍传播原错误而非吞掉后放行',async t=>{
+ const now=Date.now();let writes=0;
+ t.mock.timers.enable({apis:['Date'],now});
+ const failure=Error('NATIVE_ADMISSION_REJECTED'),reject=async()=>{await nextTurn();t.mock.timers.setTime(now+1100);throw failure;};
+ await using(async tools=>{
+  await assert.rejects(()=>tools.business('discover',{video}),error=>error===failure);assert.equal(writes,0);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{assertResources:boundary==='resources'?reject:async()=>true,validateInput:boundary==='input'?reject:async(_op,input)=>input,queue:async()=>{writes++;return {};}}});
+});
+
+
+test('intent真实落盘耗时跨worker截止不发队列，原未决记录保留',async t=>{
+ const now=Date.now(),realFsync=fs.fsyncSync;let armed=false,writes=0,expiredDuringSync=false;
+ t.mock.timers.enable({apis:['Date'],now});
+ t.mock.method(fs,'fsyncSync',fd=>{realFsync(fd);if(armed){armed=false;expiredDuringSync=true;t.mock.timers.setTime(now+1100);}});
+ syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+ await using(async(tools,_calls,runDir)=>{
+  await assert.rejects(()=>tools.business('discover',{video}),error=>error.message==='AGENT_TOOL_DEADLINE');
+  assert.equal(expiredDuringSync,true);assert.equal(writes,0);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'discover',readback_operations:['discover_readback']}]);
+  const names=readdirSync(join(runDir,'agent-tools','collect_videos'));assert.equal(names.filter(n=>n.endsWith('.intent.json')).length,1);assert.equal(names.some(n=>n.endsWith('.result.json')),false);
+  await assert.rejects(()=>tools.business('discover',{video}),/UNKNOWN/);assert.equal(writes,0);
+ },{scope:{worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{validateInput:async(_op,input)=>{armed=true;return input;},queue:async()=>{writes++;return {};}}});
 });
