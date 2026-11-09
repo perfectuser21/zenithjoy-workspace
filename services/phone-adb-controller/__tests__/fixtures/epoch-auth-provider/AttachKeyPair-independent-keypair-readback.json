@@ -1,0 +1,26 @@
+{
+  "headers": {
+    "date": "fixture",
+    "content-type": "application/json;charset=utf-8",
+    "content-length": "fixture",
+    "connection": "fixture",
+    "keep-alive": "fixture",
+    "access-control-allow-origin": "fixture",
+    "access-control-expose-headers": "fixture",
+    "x-acs-request-id": "key-read",
+    "x-acs-trace-id": "fixture",
+    "etag": "fixture"
+  },
+  "statusCode": 200,
+  "body": {
+    "Data": [
+      {
+        "GmtCreated": "fixture",
+        "KeyPairId": "kp-fixture-new",
+        "KeyPairName": "private-fixture"
+      }
+    ],
+    "RequestId": "key-read",
+    "TotalCount": 1
+  }
+}

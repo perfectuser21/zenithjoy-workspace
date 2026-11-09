@@ -1,0 +1,67 @@
+{
+  "headers": {
+    "date": "fixture",
+    "content-type": "application/json;charset=utf-8",
+    "content-length": "fixture",
+    "connection": "fixture",
+    "keep-alive": "fixture",
+    "access-control-allow-origin": "fixture",
+    "access-control-expose-headers": "fixture",
+    "x-acs-request-id": "target-read",
+    "x-acs-trace-id": "fixture",
+    "etag": "fixture"
+  },
+  "statusCode": 200,
+  "body": {
+    "InstanceModel": [
+      {
+        "AndroidInstanceGroupId": "fixture",
+        "AndroidInstanceGroupName": "fixture",
+        "AndroidInstanceId": "acp-fixture",
+        "AndroidInstanceName": "fixture",
+        "AndroidInstanceStatus": "RUNNING",
+        "AppInstanceGroupId": "fixture",
+        "AppInstanceId": "fixture",
+        "AppManagePolicy": {},
+        "AuthorizedUserId": "fixture",
+        "BizTags": [],
+        "ChargeType": "fixture",
+        "Cpu": 3,
+        "Disks": [
+          {
+            "DiskSize": 32,
+            "DiskType": "fixture"
+          }
+        ],
+        "DisplayConfig": {},
+        "DownBandwidthLimit": 5,
+        "GmtCreate": "fixture",
+        "GmtExpired": "fixture",
+        "GmtModified": "fixture",
+        "ImageId": "fixture",
+        "ImageVersion": "fixture",
+        "InstanceType": "fixture",
+        "InternetStatus": "fixture",
+        "KeyPairId": "kp-fixture-new",
+        "Memory": 6144,
+        "NetworkInterfaceIp": "fixture",
+        "NetworkType": "fixture",
+        "OfficeSiteId": "fixture",
+        "PersistentAppInstanceId": "fixture",
+        "PhoneDataInfo": {},
+        "PolicyGroupId": "fixture",
+        "PublicIpAddress": "192.0.2.31",
+        "RegionId": "cn-shanghai",
+        "RenderingType": "fixture",
+        "SessionStatus": "fixture",
+        "StreamMode": 2,
+        "SystemVersion": "fixture",
+        "Tags": [],
+        "UpBandwidthLimit": 5,
+        "ZoneId": "fixture"
+      }
+    ],
+    "RequestId": "target-read",
+    "TotalCount": 1
+  }
+}
