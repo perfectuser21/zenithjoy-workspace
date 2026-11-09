@@ -34,6 +34,10 @@ export function safeExecutionDiagnostic(value, env = process.env) {
 
 // This capability is process-local and bound to the exact executor invocation.
 // A serialized message/code or an error from a later filesystem read is no proof.
+const outerReturns=new WeakMap();
+const invocationIdentity=(command,args,receipt)=>JSON.stringify({command,args,receipt:receipt??null});
+// This proves only the exact parent's process and stdio close, never escaped descendants.
+export function executionOuterReturned(result,command,args,receipt){return Boolean(result&&typeof result==='object'&&outerReturns.get(result)===invocationIdentity(command,args,receipt));}
 const nativeNotStarted=new WeakMap();
 const trustedNotStartedProofs=new WeakSet();
 function markNotStarted(error,cause,command,args,child,spawned){
@@ -77,7 +81,7 @@ export function execFileReceipt(command,args,options){
 
 export function execInput(command, args, { input = '', timeoutMs = 180000, env = process.env, receipt } = {}) {
   return new Promise((resolveResult, reject) => {
-    let operation;
+    let operation;const invocation=invocationIdentity(command,args,receipt);let actualClose=false;
     try{if(receipt)operation=beginNativeOperation(receipt);}catch(error){reject(error);return;}
     // Mac/Linux上每次动作独占进程组，只停止本次动作及其子进程，不碰ADB服务或其他批次。
     const ownGroup = process.platform !== 'win32';
@@ -117,7 +121,7 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
         error.stdout = safeExecutionDiagnostic(stdout, env);
         error.stderr = safeExecutionDiagnostic(stderr, env);
         reject(error);
-      } else resolveResult(result);
+      } else {if(actualClose&&!stoppingError&&result)outerReturns.set(result,invocation);resolveResult(result);}
     }
     child.once('spawn',()=>{spawned=true;if(operation)ready=operation.started(child.pid).catch(()=>{operation.markUnknown();});});
     child.on('error', cause => finish(markNotStarted(Error('EXECUTION_START_FAILED'),cause,command,args,child,spawned)));
@@ -137,7 +141,7 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
       }
     });
     // 必须等close：旧动作还活着时不可返回失败并开始操作同一台手机的下一候选。
-    child.on('close', (code,signal) => finish(stoppingError, { code, stderr },signal));
+    child.on('close', (code,signal) => {actualClose=true;void finish(stoppingError, { code, stderr },signal);});
     child.stdin.on('error', () => {});
     child.stdin.end(input);
   });
