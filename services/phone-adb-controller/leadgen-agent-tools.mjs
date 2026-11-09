@@ -135,6 +135,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     if(busy)throw Error('AGENT_TOOL_OPERATION_BUSY');
     const pending=unresolved();
     const readback=pending.length?pendingReadback(op,input):null;
+    const deadline=readback?scope.deadline_ms:executionDeadline;
     if(pending.length&&!readback)throw Error('AGENT_TOOL_COMMIT_UNKNOWN_READBACK_REQUIRED');
     busy=true;
     try{
@@ -169,6 +170,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
       if(op==='score'&&intents().filter(row=>row.value.operation==='score').length>=scope.limit)throw Error('AGENT_TOOL_SCORE_LIMIT');
       durable(intentFile,intent);
     }
+    if(Date.now()>=deadline)throw Error('AGENT_TOOL_DEADLINE');
     try{
       let value;
       if(op==='keywords')value=await primitives.keywords(scope);
