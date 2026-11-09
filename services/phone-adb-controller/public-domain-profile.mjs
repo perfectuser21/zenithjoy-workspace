@@ -35,7 +35,7 @@ function metadataFor(w,ref,av,entry,entryHash,skill){
   questions:Object.fromEntries(Object.entries(declarations).map(([key,declared])=>[key,{ref:base+'#'+key,version,declared:clone(declared)}]))};
 }
 /** Inputs are original readbacks. All identities/versions/budgets derive from them. */
-export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={}}={}){
+export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost}={}){
  need(isAbsolute(sourceRoot||'')&&realpathSync(sourceRoot)===sourceRoot,'SOURCE_ROOT');
  need(/^[a-z][a-z0-9-]{0,63}$/.test(profileId||''),'PROFILE_ID');
  const f=clone(frozen),r=f?.release,d=f?.deployment,w=f?.workflow_version;
@@ -69,7 +69,8 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  const pg=preflightPgDeployment({runtimeRoot:sourceRoot,sourceCommit:d.source_commit});
  need(same(pg,d.dependencies?.preflight_pg),'PG_DEPLOYMENT');
  for(const row of pg.files){file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
- const executionMode=f.execution_mode??'code';need(['code','agent'].includes(executionMode),'EXECUTION_MODE');
+ need(primaryHost===undefined||primaryHost==='official-child-v1','PRIMARY_HOST');
+ const executionMode=primaryHost?'agent':f.execution_mode??'code';need(['code','agent'].includes(executionMode),'EXECUTION_MODE');
  const entry='leadgen-public-domain.mjs',metadata={},preconditions={},validators={},activities=[],expected_path=[];
  const runtime_snapshot_sha256=digest(files);
  for(const ref of refs){
@@ -94,6 +95,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
    const name=b.path.slice(prefix.length),expected=b.content_sha256||b.digest?.replace(/^sha256:/,'');
    need(v.execution_path==='runtime/'+name&&v.actual_content_sha256===expected&&files[name]===expected,'SKILL_SOURCE');
    const text=file(sourceRoot,name,expected).toString('utf8');
+   if(primaryHost)need(/(?:^|\n)  primary_hosts: *\[official-child-v1\] *(?:\n|$)/.test(text)||/(?:^|\n)  primary_hosts: *\n    - official-child-v1 *(?:\n|$)/.test(text),'SKILL_PRIMARY_HOST');
    need(text.includes('  primary_execution: agent-v1')&&text.includes('  version: '+b.version),'SKILL_PRIMARY');skill={entry:name,version:b.version};
   }
   const m=metadataFor(w,ref,av,entry,files[entry],skill);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
@@ -115,7 +117,8 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  validators.workflow={entry,timeout_s:30,acceptance:{ref:`workflow-definition:${w.id}#acceptance`}};
  // cleanup is also an Activity key: retain its original AV A4 acceptance
  // for both per-Activity validation and the aggregate cleanup scope.
- const template={...f,public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
+ const template={...f,...(primaryHost?{execution_mode:'agent',primary_host:primaryHost}:{}),public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
+ if(primaryHost){for(const key of ['agent_input','native_claim','native_task_lease','execution_transport','max_turns'])delete template[key];}
  const domainEnv=clone(env);delete domainEnv.ZJ_ADB_HOST_CONFIG;
  if(w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
  if(w.payload.key!=='douyin_comment_scoring'){
@@ -129,7 +132,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(executionMode==='agent'?{primary_host:f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1'}:{}),resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
+   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};

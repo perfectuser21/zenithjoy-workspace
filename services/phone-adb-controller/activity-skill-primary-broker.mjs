@@ -11,7 +11,7 @@ const detail=error=>{
   const code=String(error?.message||'');
   return /^(?:SKILL_PRIMARY_|AGENT_(?:TOOL|PRIMARY)_|RPC_|COMPANY_|DISCOVERY_|RECIPIENT_|RECORD_)[A-Z0-9_]+$/.test(code)?code:'SKILL_PRIMARY_OPERATION_FAILED';
 };
-export async function startPrimaryActivityBroker({directory,request,inspect,phone,business,getActivityResult=()=>null,isReadOnlyBusinessOperation=()=>false,authorize=async()=>false,authorizeParentContext=async()=>false,onEvent=async()=>({action:'none'}),onAbort=async()=>({execution_stopped:false}),observerTimeoutMs=20000}){
+export async function startPrimaryActivityBroker({directory,request,inspect,phone,business,getActivityResult=()=>null,isReadOnlyBusinessOperation=()=>false,authorize=async()=>false,authorizeAfter,authorizeParentContext=async()=>false,onEvent=async()=>({action:'none'}),onAbort=async()=>({execution_stopped:false}),observerTimeoutMs=20000}){
   if(request?.protocol!=='leadgen-activity-v1'||request.mode!=='execute'
     ||!/^\w[\w.-]{0,150}$/.test(request.run_id||'')||!uuid.test(request.task_id||'')||!uuid.test(request.binding_id||'')
     ||!/^\w{1,48}$/.test(request.activity_key||'')||!['preflight','source','collect_videos','dedup','qualification','collection','scoring','mark_leads','cleanup'].includes(request.activity_key)
@@ -87,6 +87,7 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
     try{
       const result=await (q.op==='phone'?phone(q.command,...q.args):business(q.operation,q.input));
       if(result?.execution_stopped===false||result?.external_effect==='unknown')markUnknown(q.op==='business'?'business_commit_unknown':'native_execution_unknown');
+      if(authorizeAfter){let allowed=false;try{allowed=await authorizeAfter(q,{op:q.op,body})===true;}catch{}if(!allowed){markUnknown(q.op==='business'?'business_commit_unknown':'native_execution_unknown');throw Object.assign(Error('SKILL_PRIMARY_POST_AUTHORITY_UNKNOWN'),{executionStopped:false,externalEffect:'unknown'});}}
       return result;
     }catch(error){if(error.executionStopped===false||error.externalEffect==='unknown')markUnknown(q.op==='business'?'business_commit_unknown':'native_execution_unknown');throw error;}
     finally{active--;}

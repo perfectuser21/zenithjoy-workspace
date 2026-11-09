@@ -124,6 +124,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
     isReadOnlyBusinessOperation:(operation,input)=>tools.canReadback?.(operation,input)===true,
     getActivityResult:tools.getResult,onEvent:async event=>{if(event.type==='progress')lastProgress=Date.now();return onEvent(event);},onAbort:stop,
     authorize:async(_incoming,delivery)=>!heartbeatError&&(transport?await rawControl.authorizeBrokerDelivery(request,delivery)===true:(await rpc({kind:'activity_skill_authority',request},{timeoutMs:Math.max(1,Math.min(10000,deadline-Date.now()))})).authorized===true),
+    ...(frozen.primary_host==='official-child-v1'?{authorizeAfter:async()=>!heartbeatError&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:Math.max(1,Math.min(10000,deadline-Date.now()))})).authorized===true}:{}),
     ...(transport?{authorizeParentContext:async q=>!heartbeatError&&await rawControl.authorizeParentContext(q)===true}:{})});
    signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
    if(typeof tools.heartbeat==='function'){
