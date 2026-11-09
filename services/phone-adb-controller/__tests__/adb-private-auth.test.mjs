@@ -109,7 +109,7 @@ test('真实主wait已持锁时本人SIGTERM正常v2退出，不能在handler内
 `));
 test('reserved barrier只发当前真实kernel事件，stdin精确SHA后仍须原双Node授权',()=>py(`import io
 with tempfile.TemporaryDirectory() as d:
- r,p,path,receipt,answer,ref=fixture(d);s=load(r,'adb-host-service');read,write=os.pipe();payload={'action':'authorize_reserved_start','receipt_sha256':hashlib.sha256(receipt.read_bytes()).hexdigest()};os.write(write,(json.dumps(payload)+'\\n').encode().replace(b'\\n',b'\n'));os.close(write);oldin,oldout=sys.stdin,sys.stdout;out=io.StringIO()
+ r,p,path,receipt,answer,ref=fixture(d);s=load(r,'adb-host-service');read,write=os.pipe();payload={'action':'authorize_reserved_start','receipt_sha256':hashlib.sha256(receipt.read_bytes()).hexdigest()};os.write(write,(json.dumps(payload)+chr(10)).encode());os.close(write);oldin,oldout=sys.stdin,sys.stdout;out=io.StringIO()
  try:
   sys.stdin=os.fdopen(read);sys.stdout=out;s.reserved_start(p,str(path),str(receipt),timeout=1)
  finally:sys.stdin.close();sys.stdin,sys.stdout=oldin,oldout
@@ -121,7 +121,7 @@ with tempfile.TemporaryDirectory() as d:
  def forbidden(*a,**kw):raise AssertionError('daemon must not spawn')
  s.subprocess.Popen=forbidden
  good=json.dumps({'action':'authorize_reserved_start','receipt_sha256':hashlib.sha256(receipt.read_bytes()).hexdigest()})
- for raw in [b'',(json.dumps({'action':'authorize_reserved_start','receipt_sha256':'0'*64})+'\n').encode(),(good+'\n'+good+'\n').encode(),(json.dumps({'action':'authorize_reserved_start','receipt_sha256':'0'*64,'extra':True})+'\n').encode()]:
+ for raw in [b'',(json.dumps({'action':'authorize_reserved_start','receipt_sha256':'0'*64})+chr(10)).encode(),(good+chr(10)+good+chr(10)).encode(),(json.dumps({'action':'authorize_reserved_start','receipt_sha256':'0'*64,'extra':True})+chr(10)).encode()]:
   read,write=os.pipe();os.write(write,raw);os.close(write)
   try:sys.stdin=os.fdopen(read);sys.stdout=io.StringIO();rejected(lambda:s.reserved_start(p,str(path),str(receipt),timeout=.05))
   finally:sys.stdin.close();sys.stdin,sys.stdout=oldin,oldout
