@@ -137,7 +137,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     closePromise=(async()=>{closed=true;
     const primitiveStop=primitiveRuntime?await primitiveRuntime.close():{execution_stopped:true};
     const stopped=!active&&!unsafe&&!handlers.state.executionUnknown&&primitiveStop.execution_stopped===true;
-    if(!stopped)await handlers.quarantineResources();
+    if(!stopped){if(primitiveRuntime)evidenceFile('protection','workflow',await primitiveRuntime.quarantine());await handlers.quarantineResources();}
     const result={protocol:'workflow-domain/v1',execution_mode:executionMode,...(frozen.primary_host?{primary_host:frozen.primary_host}:{}),run_id:identity.run_id,task_id:identity.task_id,workflow_key:cfg.workflow_key,profile:env.P,source_commit:frozen.deployment.source_commit,profile_sha256:identity.profile_sha256,...(frozen.sampling_input?{sampling_input:frozen.sampling_input,sampling_admission_v1:checks.get('collection')?.sampling_admission_v1,qualification_identity_v1:checks.get('qualification')?.qualification_identity_v1}:{}),execution_stopped:stopped,status:stopped&&[...activities.keys()].every(k=>checks.get(k)?.verified===true)?'validated':'failed',results:[...outcomes].map(([activity,e])=>({activity,status:e.status,verification:checks.get(activity)||{verified:false}}))};
     evidenceFile('result','workflow',result);unregister();return {execution_stopped:stopped};})();return closePromise;
    },

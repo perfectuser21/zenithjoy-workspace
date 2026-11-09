@@ -11287,3 +11287,11 @@ tests:
     status: active
     product: AI员工
     note: "本机真实capture与媒体经IPC/首发executor，模型和手机仅受控fixture"
+
+  - id: leadgen-official-cli-quarantine
+    path: services/phone-adb-controller/__tests__/official-cli-quarantine.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Code-only原owner/inode能力仅写本地保护标记，不签原native停止"
