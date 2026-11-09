@@ -16,6 +16,7 @@ import {mkdtempSync,writeFileSync,mkdirSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {digest} from '../runtime-definition.mjs';
+import {parse as parseYaml} from 'yaml';
 import {installPreflightPg,preflightPgDeployment} from '../preflight-pg-dependencies.mjs';
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const sha='a'.repeat(40);
@@ -93,6 +94,21 @@ function originalShape(x,flow){
  }
  reseal(x);return x;
 }
+for(const [flow,total,work]of [['douyin_video_discovery',2820,2700],['douyin_video_processing',10020,9900]])test('new frozen '+flow+' budgets change only the Activity slices inside the original workflow total',async()=>{
+ const load=key=>parseYaml(readFileSync(new URL('../../../product-map/contracts/'+key+'.yaml',import.meta.url),'utf8'));
+ const owner=load('douyin_video_processing'),declaration=load(flow),preflight=owner.activities.find(a=>a.key==='preflight'),cleanup=owner.activities.find(a=>a.key==='cleanup');
+ assert.equal(preflight.version,'2.3.0');assert.equal(preflight.budget.max_duration_s,600);assert.equal(cleanup.version,'2.3.0');assert.equal(cleanup.budget.max_duration_s,300);
+ assert.deepEqual(declaration.recovery,{total_timeout_sec:total,cleanup_timeout_sec:120});assert.equal(declaration.commander_skill.version,'0.9.0');
+ const x=originalShape(await fixture(),flow);
+ try{
+  for(const a of x.frozen.activities){const actual=declaration.activities.find(c=>c.key===a.reference.slot_key)||owner.activities.find(c=>c.key===a.reference.slot_key);a.version.payload.contract.budget=structuredClone(actual.budget);a.version.payload.contract.version=actual.version;sign(a.version);}
+  x.frozen.workflow_version.payload.contract.recovery=structuredClone(declaration.recovery);sign(x.frozen.workflow_version);x.frozen.release.payload.workflows=[x.frozen.workflow_version];x.frozen.release.payload.activities=x.frozen.activities.map(a=>a.version);reseal(x);
+  const before=digest(x.frozen),p=(await import(source.href)).buildPublicDomainProfile(x).profile;
+  assert.equal(digest(x.frozen),before);assert.deepEqual(p.domain_adapter.budget,{max_duration_s:work,cleanup_grace_s:120});assert.equal(p.domain_adapter.budget.max_duration_s+p.domain_adapter.budget.cleanup_grace_s,total);
+  assert.equal(p.contract.activities.find(a=>a.key==='preflight').budget.max_duration_s,600);assert.equal(p.contract.activities.find(a=>a.key==='cleanup').budget.max_duration_s,300);
+  assert.equal(p.contract.activities.find(a=>a.key===(flow==='douyin_video_discovery'?'collect_videos':'collection')).budget.max_duration_s,flow==='douyin_video_discovery'?2400:7200);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
 for(const flow of Object.keys(original125Shapes))test('real '+flow+' AV shapes compile through the public contract parser without inventing foreach bindings',async()=>{
  const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),flow);
  try{
@@ -109,6 +125,7 @@ for(const flow of Object.keys(original125Shapes))test('real '+flow+' AV shapes c
   }
   const b=p.domain_adapter.budget,total=original.reduce((n,a)=>n+a.version.payload.contract.budget.max_duration_s,0);
   assert.ok(b.max_duration_s+b.cleanup_grace_s<=total);
+  if(flow==='douyin_comment_scoring'){assert.deepEqual(b,{max_duration_s:3570,cleanup_grace_s:30});assert.equal(p.cleanup_required,false);assert.equal(p.contract.activities.some(a=>a.runtime.phase==='finalize'),false);}
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
 test('workflow total timeout includes reserved cleanup rather than adding cleanup to the total',async()=>{

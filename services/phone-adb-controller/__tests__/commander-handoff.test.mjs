@@ -1,10 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {mkdtempSync,writeFileSync,readFileSync,existsSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import * as skillAgent from '../leadgen-skill-agent.mjs';
 const HELPER=join(dirname(fileURLToPath(import.meta.url)),'../commander/wf-agent-handoff.py');
 const parent='agent:work-commander:test-parent';
 function call(dir,cmd,data,...args){return spawnSync('python3',[HELPER,cmd,dir,...args],{input:data==null?undefined:JSON.stringify(data),encoding:'utf8'});}
@@ -17,6 +18,80 @@ function setup(){
  const receipt={...identity,child_session_key:'agent:skill-factory:subagent:1234',child_run_id:'1234abcd-0000-4000-8000-000000000002'};
  return {dir,request,identity,receipt};
 }
+function primarySpawnFixture(){
+ const f=setup(),source='a'.repeat(40),now=Date.now();
+ f.request={...f.request,worker_expires_at:now/1000+45};
+ writeFileSync(join(f.dir,'agent-request.json'),JSON.stringify(f.request));
+ writeFileSync(join(f.dir,'activity-request.json'),JSON.stringify({protocol:'leadgen-activity-v1',mode:'execute',primary_host:'official-child-v1',run_id:f.request.run_id,task_id:f.request.task_id,nonce:f.request.nonce,source_commit:source,deadline_ms:f.request.expires_at*1000,worker_deadline_ms:f.request.worker_expires_at*1000}));
+ writeFileSync(join(f.dir,'spawn-claimed.json'),JSON.stringify({...f.request,source_commit:source,claimed_at:new Date(now).toISOString()}));
+ f.raw={status:'accepted',childSessionKey:f.receipt.child_session_key,runId:f.receipt.child_run_id,resolvedProvider:'openai',resolvedModel:'openai/gpt-6.1-sol'};
+ return f;
+}
+test('official primary binds the original string or object ToolReceipt once without model-side field guesses',()=>{
+ for(const asString of [true,false]){
+  const f=primarySpawnFixture(),raw=asString?JSON.stringify(f.raw):f.raw;
+  const result=call(f.dir,'bind',{raw_spawn_receipt:raw});
+  assert.equal(result.status,0,result.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'agent-binding.json'))),f.receipt);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.json'))),f.raw);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.raw.json'))),raw);
+  const original=readFileSync(join(f.dir,'spawn-receipt.raw.json'));
+  assert.equal(call(f.dir,'bind',{raw_spawn_receipt:raw}).status,0);
+  assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),original);
+  assert.equal(existsSync(join(f.dir,'child-abort.json')),false);
+ }
+});
+test('real Gateway bind command transfers the original ToolReceipt through env to the fixed helper stdin',()=>{
+ assert.equal(typeof skillAgent.spawnReceiptInvocation,'function');
+ for(const surface of ['gateway_exec','exec_gateway']){
+  const f=primarySpawnFixture(),raw=JSON.stringify({...f.raw,note:'literal $(touch FORBIDDEN) `false`\n中文'});
+  const spec=skillAgent.spawnReceiptInvocation(f.dir,surface,raw);
+  assert.equal(spec.parameters.stdin,undefined);assert.equal(spec.parameters.command.includes(raw),false);
+  assert.equal(spec.parameters.host,surface==='exec_gateway'?'gateway':undefined);
+  const host=join(f.dir,'hostname');writeFileSync(host,"#!/bin/sh\nprintf '%s\\n' r10-7\n",{mode:0o700});
+  const command=spec.parameters.command.replace(JSON.stringify('/bin/hostname'),JSON.stringify(host));assert.notEqual(command,spec.parameters.command);
+  const result=spawnSync('/bin/sh',['-c',command],{encoding:'utf8',env:{PATH:'/usr/bin:/bin',...spec.parameters.env}});
+  assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.raw.json'))),raw);
+  assert.deepEqual(JSON.parse(result.stdout),f.receipt);
+ }
+});
+test('official bind rejects malformed, guessed, wrong-model, foreign, expired and conflicting receipts',()=>{
+ for(const change of [()=>null,()=>[],()=>'{broken',r=>JSON.stringify(JSON.stringify(r)),r=>({...r,status:'error'}),r=>({...r,resolvedProvider:'other'}),r=>({...r,resolvedModel:'other'}),r=>({...r,runId:undefined}),r=>({...r,runId:'not-a-run'}),r=>({...r,childSessionKey:'agent:other:subagent:1234'})]){
+  const f=primarySpawnFixture();assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:change(f.raw)}).status,0);
+  assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+ for(const mutate of [f=>{f.request.nonce='foreign';writeFileSync(join(f.dir,'agent-request.json'),JSON.stringify(f.request));},f=>{const path=join(f.dir,'spawn-claimed.json'),claim=JSON.parse(readFileSync(path));writeFileSync(path,JSON.stringify({...claim,source_commit:'b'.repeat(40)}));},f=>writeFileSync(join(f.dir,'handoff-closed.json'),'{}'),f=>{const path=join(f.dir,'activity-request.json'),q=JSON.parse(readFileSync(path));writeFileSync(path,JSON.stringify({...q,worker_deadline_ms:1}));}]){
+  const f=primarySpawnFixture();mutate(f);assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+ const f=primarySpawnFixture();assert.notEqual(call(f.dir,'bind',f.receipt).status,0,'primary cannot bypass typed binding through legacy input');
+ assert.equal(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);
+ const binding=readFileSync(join(f.dir,'agent-binding.json')),raw=readFileSync(join(f.dir,'spawn-receipt.raw.json'));
+ assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:{...f.raw,runId:'1234abcd-0000-4000-8000-000000000099'}}).status,0);
+ assert.deepEqual(readFileSync(join(f.dir,'agent-binding.json')),binding);assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),raw);
+});
+test('typed primary bind cannot widen into raw transport, a revoked generation or an unclaimed spawn',()=>{
+ for(const field of ['execution_transport','max_turns','transport_generation']){
+  const f=primarySpawnFixture(),path=join(f.dir,'activity-request.json'),q=JSON.parse(readFileSync(path));writeFileSync(path,JSON.stringify({...q,[field]:null}));
+  assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+ for(const change of [f=>writeFileSync(join(f.dir,'generation-revoked.json'),'{}'),f=>{const p=join(f.dir,'spawn-claimed.json'),c=JSON.parse(readFileSync(p));delete c.claimed_at;writeFileSync(p,JSON.stringify(c));}]){
+  const f=primarySpawnFixture();change(f);assert.notEqual(call(f.dir,'bind',{raw_spawn_receipt:f.raw}).status,0);assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+ }
+});
+test('binding-ready waits read-only for the parent atomic commit and retains the original worker cutoff',async()=>{
+ const f=primarySpawnFixture();let out='',err='';const child=spawn('python3',[HELPER,'binding-ready',f.dir]);
+ const done=new Promise(resolve=>child.on('close',code=>resolve(code)));child.stdout.on('data',v=>out+=v);child.stderr.on('data',v=>err+=v);
+ try{
+  await new Promise(resolve=>setTimeout(resolve,75));assert.equal(out,'');assert.equal(existsSync(join(f.dir,'agent-binding.json')),false);
+  assert.equal(call(f.dir,'bind',{raw_spawn_receipt:JSON.stringify(f.raw)}).status,0);
+  assert.equal(await done,0,err);assert.deepEqual(JSON.parse(out),f.receipt);
+ }finally{if(child.exitCode===null)child.kill();}
+ const expired=primarySpawnFixture(),cutoff=Date.now()/1000+.15;
+ const request={...expired.request,worker_expires_at:cutoff};writeFileSync(join(expired.dir,'agent-request.json'),JSON.stringify(request));
+ const q=JSON.parse(readFileSync(join(expired.dir,'activity-request.json')));writeFileSync(join(expired.dir,'activity-request.json'),JSON.stringify({...q,worker_deadline_ms:cutoff*1000}));
+ const claim=JSON.parse(readFileSync(join(expired.dir,'spawn-claimed.json')));writeFileSync(join(expired.dir,'spawn-claimed.json'),JSON.stringify({...claim,worker_expires_at:cutoff}));
+ const started=Date.now(),result=call(expired.dir,'binding-ready');assert.notEqual(result.status,0);assert.equal(result.stdout,'');assert.ok(Date.now()-started<1500);assert.equal(existsSync(join(expired.dir,'agent-binding.json')),false);
+});
 test('正式交接：绑定父子run后接收原始完成结果，重复同回执幂等',()=>{
  const {dir,receipt}=setup();
  assert.equal(call(dir,'bind',receipt).status,0);

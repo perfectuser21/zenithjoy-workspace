@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.8.0
+  version: 0.9.0
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -22,6 +22,9 @@ on_status:
   partial: stop
   needs_review: pause
 always_run: [cleanup]
+recovery:
+  total_timeout_sec: 10020
+  cleanup_timeout_sec: 120
 trigger_inputs:
   - Video
   - Account
@@ -73,7 +76,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.2.1
+    version: 2.3.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -134,7 +137,7 @@ activities:
       location: phone
       via: leadgen-workflow.mjs → preflight独立活动 → 持久化队列读回
     budget:
-      max_duration_s: 300
+      max_duration_s: 600
       heartbeat_s: 60
     resources:
       locks:
@@ -407,7 +410,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-preflight
-        version: 0.6.0
+        version: 0.7.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -619,6 +622,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-skill-owner.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1265,6 +1272,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-skill-owner.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/commander-owner-state.mjs
         revision: contract
       - kind: code
@@ -1882,6 +1893,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-skill-owner.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -2674,6 +2689,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-skill-owner.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/commander-owner-state.mjs
         revision: contract
       - kind: code
@@ -2899,7 +2918,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 5
-    version: 2.2.1
+    version: 2.3.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -2945,7 +2964,7 @@ activities:
       location: phone
       via: leadgen-workflow.mjs → cleanup独立活动 → 持久化队列读回
     budget:
-      max_duration_s: 120
+      max_duration_s: 300
       heartbeat_s: 30
     resources:
       locks:
@@ -3203,7 +3222,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-cleanup
-        version: 0.6.0
+        version: 0.7.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -3414,6 +3433,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-skill-owner.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

@@ -13,6 +13,35 @@ import {spawnSync} from 'node:child_process';
 import {digest} from '../runtime-definition.mjs';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const legacyFixture=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/commander-global-v21.json.gz',import.meta.url))));
+for(const delivery of ['delivered','pending'])test('public production dispatch uses one durable owner RPC and preserves completion '+delivery,()=>using(async x=>{
+ x.q.worker_deadline_ms=x.q.deadline_ms-2000;x.q.receipt_deadline_ms=x.q.deadline_ms-1000;
+ let dispatches=0,waits=0;const dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q)),child=id(81),session='agent:skill-factory:subagent:owner-rpc-fixture';
+ const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async(command,args)=>{
+  if(command==='openclaw'){
+   assert.deepEqual(args.slice(0,2),['gateway','call'],'public path must not use the blocking agent CLI');const params=JSON.parse(args[args.indexOf('--params')+1]);
+   const intent=JSON.parse(readFileSync(join(dir,'owner-rpc-intent.json')));
+   if(args[2]==='sessions.describe')return {code:0,stdout:JSON.stringify({session:{key:intent.parent_session_key,sessionId:'owner-fixture',hasActiveRun:false,activeRunIds:[],snapshotAt:Date.now()}})};
+   if(args[2]==='chat.history')return {code:0,stdout:JSON.stringify({sessionKey:intent.parent_session_key,sessionId:'owner-fixture',pendingInputs:{total:0,queuedCount:0,items:[]}})};
+   if(args[2]==='tools.invoke')return {code:0,stdout:JSON.stringify({ok:true,toolName:'subagents',source:'core',output:{details:{status:'ok',action:'list',callerIsSubagent:false,callerSessionKey:intent.parent_session_key,requesterSessionKey:intent.parent_session_key,active:[],recent:[{runId:child,sessionKey:session,execution:{state:'finished'},pendingDescendants:0,deliveryStatus:delivery}]}}})};
+   if(args[2]==='agent'){
+    dispatches++;assert.equal(params.idempotencyKey,intent.owner_run_id);assert.equal(args.includes('--expect-final'),false);
+    const request=JSON.parse(readFileSync(join(dir,'agent-request.json')));
+    writeFileSync(join(dir,'spawn-claimed.json'),JSON.stringify({...request,source_commit:x.q.source_commit,claimed_at:new Date().toISOString()}));
+    const raw=JSON.stringify({status:'accepted',runId:child,childSessionKey:session,resolvedProvider:'openai',resolvedModel:'openai/gpt-6.1-sol'});
+    const bound=spawnSync('/usr/bin/python3',[join(x.runtime,'commander/wf-agent-handoff.py'),'bind',dir],{input:JSON.stringify({raw_spawn_receipt:raw}),encoding:'utf8'});assert.equal(bound.status,0,bound.stderr);
+    return {code:0,stdout:JSON.stringify({status:'accepted',runId:params.idempotencyKey,sessionKey:params.sessionKey,agentId:'work-commander',acceptedAt:Date.now()})};
+   }
+   assert.equal(args[2],'agent.wait');waits++;assert.equal(params.runId,intent.owner_run_id);
+   return {code:0,stdout:JSON.stringify({runId:params.runId,status:'error',startedAt:intent.started_at_ms,endedAt:Date.now()})};
+  }
+  assert.equal(command,'python3');assert.ok(args.includes('await'));
+  writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'error',endedAt:Date.now()}));return {code:0,stdout:''};
+ }}});
+ const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(dispatches,1);assert.equal(waits,1);
+ assert.equal(result.result.owner_execution_stopped,delivery==='delivered');assert.equal(result.result.child_execution_stopped,true);assert.equal(result.result.execution_stopped,delivery==='delivered');assert.equal(result.result.status,delivery==='delivered'?'error':'unknown');
+ assert.equal(existsSync(join(dir,'parent-cli-result.json')),false);assert.equal(existsSync(join(dir,'parent-owner-result.json')),true);
+ const closure=JSON.parse(readFileSync(join(dir,'parent-owner-closure.json')));assert.equal(closure.session_quiescent,delivery==='delivered');assert.equal(existsSync(join(dir,'agent-returned.json')),delivery==='delivered');
+}));
 function legacyWorkspace(home){
  const base=join(home,'.openclaw/commander'),workspace=join(home,'openclaw-root/workspaces-root/clawd-work-commander');
  for(const [name,body]of Object.entries(legacyFixture.files)){const file=join(base,name);mkdirSync(join(file,'..'),{recursive:true});writeFileSync(file,Buffer.from(body,'base64'));}
@@ -37,6 +66,7 @@ async function using(fn,{legacy=false}={}){
  const frozen={primary_host:'official-child-v1',execution_mode:'agent',agent_input:input,workflow_version:wf,files,deployment:{source_commit:source,target:'mmv',observation_id:id(13)},release:{id:id(12)},public_domain:{...identity,runtime_snapshot_sha256:runtimeHash,company:{tenant_id:id(10),company_id:id(11),version:1,policy_id:'original'}}};frozen.snapshot_sha256=digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
  const q={...input,primary_host:'official-child-v1',discovery_input:null,protocol:'leadgen-activity-v1',mode:'execute',run_id:id(1),binding_id:id(3),source_commit:source,workflow_definition_version_id:id(5),release_id:id(12),observation_id:id(13),runtime_snapshot_sha256:frozen.snapshot_sha256,activity_key:'scoring',broker_host:'mmv',broker_request_path:join(dir,'skill-primary/scoring/broker-request.json'),broker_tool_path:join(runtime,'activity-skill-tool.mjs'),nonce:'d'.repeat(48),deadline_ms:Date.now()+10000,public_domain:{identity,run_binding,runtime_snapshot_sha256:runtimeHash,local_snapshot_sha256:frozen.snapshot_sha256},method:{host_support:{sha256:digest(hostSupport),text:hostSupport},name:methodName,version:'1',reference_id:id(6),activity_version_id:id(8),text,sha256:sha(text),support:{text:readFileSync(join(runtime,'skills/leadgen-activity-execution.md'),'utf8')},contract:{activity_version_id:id(8),definition_key:'douyin_comment_scoring.scoring',payload:contract,sha256:digest(contract)}}};q.method.support.sha256=sha(q.method.support.text);
  const binding={id:id(3),run_id:id(1),workflow_id:id(4),workflow_definition_version_id:id(5),source_kind:'internal',task_run_id:id(9),actor:'common-runner',external_origin:null,release_id:id(12),observation_id:id(13),attempt_key:'task:1',payload:{runtime_snapshot_sha256:runtimeHash}};
+ q.worker_deadline_ms=q.deadline_ms-2000;q.receipt_deadline_ms=q.deadline_ms-1000;
  writeFileSync(join(runtime,'test-central-binding.json'),JSON.stringify({binding}));
  const av={contract_sha256:digest(contract),payload:{definition_key:q.method.contract.definition_key,contract,implementation_bindings:[{kind:'skill',status:'verified',repo:'perfectuser21/zenithjoy-workspace',revision:source,name:methodName,version:'1',content_sha256:q.method.sha256}]}};
  const task={id:id(2),status:'in_progress',claimed_by:'common-runner',result:{common_runner:{...identity}}};let reads=0,hook=()=>{};
@@ -51,7 +81,7 @@ async function using(fn,{legacy=false}={}){
 test('受控host仅拦Skill，其他业务保持原RPC，authority不伪child已存在',async()=>using(async x=>{const rpc=x.host.createPublicOfficialChildRpc(x.options);assert.deepEqual(await rpc({kind:'queue'}),{ok:true,delegated:'queue'});assert.equal(x.calls(),1);assert.deepEqual(await rpc({kind:'activity_skill_authority',request:x.q}),{ok:true,authorized:false});assert.equal(x.reads(),5);}));
 test('raw快照、旧Method或错误受控路径在中央与模型IO前拒绝',async()=>using(async x=>{for(const frozen of [{...x.options.frozen,execution_transport:'raw-model-v1',max_turns:2},{...x.options.frozen,primary_host:undefined}])assert.throws(()=>x.host.createPublicOfficialChildRpc({...x.options,frozen}));const rpc=x.host.createPublicOfficialChildRpc(x.options);for(const change of [{method:{...x.q.method,text:x.q.method.text.replace(/^  primary_hosts:.*\n(?:    - .*\n)*/m,'')}},{method:{...x.q.method,host_support:{...x.q.method.host_support,text:'other'}}},{broker_request_path:'/tmp/other'},{max_turns:2}])await assert.rejects(()=>rpc({kind:'activity_skill',request:{...x.q,...change}}));assert.equal(x.reads(),0);}));
 test('真实runSkillAgent owner await后撤销Task不得launch；未知CLI不伪成功',async()=>using(async x=>{let launches=0;const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async()=>{launches++;return {code:0,stdout:'plain parent prose',stderr:''};}}});x.task.status='cancelled';await assert.rejects(()=>rpc({kind:'activity_skill',request:x.q}));assert.equal(launches,0);}));
-test('真实Caller返回后Task撤销不得交付迟到成功，原件保留',async()=>using(async x=>{let launches=0;const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async(command,args)=>{launches++;const child=JSON.parse(readFileSync(join(args[args.indexOf('--message-file')+1],'..','child-task.json'),'utf8'));assert.equal(child.host_support.sha256,x.q.method.host_support.sha256);assert.equal(child.host_support.parts.map(path=>readFileSync(path,'utf8')).join(''),x.q.method.host_support.text);x.task.status='cancelled';return {code:0,stdout:'parent prose',stderr:''};}}});await assert.rejects(()=>rpc({kind:'activity_skill',request:x.q}),/AUTHORITY_REVOKED/);assert.equal(launches,1);assert.equal(existsSync(join(x.options.agentOptions.home,'.openclaw')),true);}));
+test('真实Caller返回后Task撤销不得交付迟到成功，原件保留',async()=>using(async x=>{let launches=0;const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async(command,args)=>{assert.equal(command,'openclaw');const params=JSON.parse(args[args.indexOf('--params')+1]),dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q));if(args[2]==='agent'){launches++;const child=JSON.parse(readFileSync(join(dir,'child-task.json'),'utf8'));assert.equal(child.host_support.sha256,x.q.method.host_support.sha256);assert.equal(child.host_support.parts.map(path=>readFileSync(path,'utf8')).join(''),x.q.method.host_support.text);x.task.status='cancelled';return {code:0,stdout:JSON.stringify({runId:params.idempotencyKey,sessionKey:params.sessionKey,agentId:'work-commander',status:'accepted',acceptedAt:Date.now()})};}assert.equal(args[2],'agent.wait');return {code:0,stdout:JSON.stringify({runId:params.runId,status:'error',endedAt:Date.now()})};}}});await assert.rejects(()=>rpc({kind:'activity_skill',request:x.q}),/AUTHORITY_REVOKED/);assert.equal(launches,1);assert.equal(existsSync(join(x.options.agentOptions.home,'.openclaw')),true);}));
 
 for(const legacy of [false,true])test('真实子Node薄客户端经父IPC授权，Task撤销后phone/business零新增 '+(legacy?'固定2.1兼容':'原strict'),async()=>using(async x=>{
  const runtime=join(x.dir,'runtime'),agent=await import(pathToFileURL(join(runtime,'leadgen-skill-agent.mjs')).href),{startPrimaryActivityBroker}=await import(pathToFileURL(join(runtime,'activity-skill-primary-broker.mjs')).href);
@@ -74,11 +104,11 @@ test('父授权await期间加载workspace变化，真实CLI前同步重核拒绝
  try{await assert.rejects(()=>runSkillAgent(q,{home,beforeLaunch:async()=>{await Promise.resolve();writeFileSync(join(home,'openclaw-root/workspaces-root/clawd-work-commander/AGENTS.md'),'changed during awaited authority');return true;},execute:async()=>{launches++;return {code:0,stdout:'plain prose',stderr:''};}}),/RPC_SKILL_COMMANDER_WORKSPACE_DRIFT/);assert.equal(launches,0);}finally{rmSync(home,{recursive:true,force:true});}
 });
 
-test('fixture默认禁止真实模型IO且PATH隔离，拒绝原始argv先保全再清理',async()=>using(async x=>{const rpc=x.host.createPublicOfficialChildRpc(x.options),result=await rpc({kind:'activity_skill',request:x.q});assert.equal(x.forbiddenCalls(),1);assert.equal(result.result.execution_stopped,false);assert.match(process.env.PATH,/empty-path$/);}));
+test('fixture默认禁止真实模型IO且PATH隔离，拒绝原始argv先保全再清理',async()=>using(async x=>{const rpc=x.host.createPublicOfficialChildRpc(x.options),result=await rpc({kind:'activity_skill',request:x.q});assert.equal(x.forbiddenCalls(),2,'one agent attempt plus exact-key read-only wait after lost ACK');assert.equal(result.result.execution_stopped,false);assert.match(process.env.PATH,/empty-path$/);}));
 
 test('真实2.1字节包仅public official-child经实际父授权后到达一次Gateway fixture',()=>using(async x=>{
  let effects=0;const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async()=>{effects++;throw Error('FIXTURE_GATEWAY_REFUSED');}}});
- const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(effects,1);assert.equal(result.result.execution_stopped,false);assert.ok(x.reads()>=10,'both fresh parent checks remain');
+ const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(effects,2,'one agent attempt plus exact-key read-only wait');assert.equal(result.result.execution_stopped,false);assert.ok(x.reads()>=10,'both fresh parent checks remain');
  const dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q)),receipt=JSON.parse(readFileSync(join(dir,'commander-workspace-compatibility.json')));
  assert.equal(receipt.actual_version,'2.1');assert.equal(receipt.expected_version,'2.2');assert.equal(receipt.not_deployed_version,'2.2');assert.equal(receipt.read_only,true);
  assert.equal(readFileSync(join(x.home,'.openclaw/commander/runtime-manifest.json')).equals(Buffer.from(legacyFixture.runtime_manifest,'base64')),true);

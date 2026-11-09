@@ -12,9 +12,12 @@ import os
 from pathlib import Path
 import re
 import secrets
+import stat
 import subprocess
 import sys
+import tempfile
 import time
+from datetime import datetime
 
 spec = importlib.util.spec_from_file_location('wf_agent_lib', Path(__file__).with_name('wf-agent-lib.py'))
 lib = importlib.util.module_from_spec(spec)
@@ -64,6 +67,11 @@ def init(directory, parent, timeout):
 
 
 def bind(directory, incoming):
+    if isinstance(incoming, dict) and 'raw_spawn_receipt' in incoming:
+        return bind_spawn_receipt(directory, incoming)
+    activity_path = directory / 'activity-request.json'
+    if activity_path.exists() and load(activity_path).get('primary_host') == 'official-child-v1' and load(activity_path).get('mode') == 'execute':
+        raise ValueError('official primary requires the original spawn receipt')
     request = request_at(directory)
     validate_identity(request, incoming)
     ensure_open(directory, request)
@@ -77,6 +85,105 @@ def bind(directory, incoming):
         raise ValueError('run already bound to another child')
     write(path, receipt)
     print(json.dumps(receipt))
+
+
+def primary_scope(directory):
+    request = request_at(directory)
+    activity = load(directory / 'activity-request.json')
+    claim = load(directory / 'spawn-claimed.json')
+    ensure_open(directory, request)
+    try:
+        claimed = datetime.fromisoformat(claim['claimed_at'].replace('Z', '+00:00'))
+        if claimed.utcoffset() is None or claimed.timestamp() > time.time() + 1:
+            raise ValueError()
+    except (KeyError, TypeError, AttributeError, ValueError):
+        raise ValueError('official spawn claim timestamp invalid') from None
+    if (activity.get('protocol') != 'leadgen-activity-v1' or activity.get('mode') != 'execute'
+            or activity.get('primary_host') != 'official-child-v1'
+            or any(k in activity for k in ('execution_transport', 'max_turns', 'transport_generation', 'continuation_cause'))
+            or (directory / 'generation-revoked.json').exists()
+            or any(activity.get(k) != request.get(k) for k in ('run_id', 'task_id', 'nonce'))
+            or any(claim.get(k) != request.get(k) for k in IDENTITY + ('expires_at', 'worker_expires_at'))
+            or not re.fullmatch('[a-f0-9]{40}', activity.get('source_commit', ''))
+            or claim.get('source_commit') != activity['source_commit']
+            or activity.get('deadline_ms') != request['expires_at'] * 1000
+            or activity.get('worker_deadline_ms') != request.get('worker_expires_at', 0) * 1000
+            or not isinstance(request.get('worker_expires_at'), (int, float))
+            or not math.isfinite(request['worker_expires_at'])
+            or time.time() >= request['worker_expires_at']):
+        raise ValueError('official spawn scope mismatch or worker expired')
+    return request
+
+
+def exclusive_json(path, value):
+    """Durable, non-replacing artifact; the binding is the final commit marker."""
+    data = (json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode()
+    fd, temporary = tempfile.mkstemp(prefix='.spawn-commit-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'wb') as out:
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+        try:
+            os.link(temporary, path)  # atomic publication, never replace a prior artifact
+        except FileExistsError:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077 or info.st_nlink != 1 or load(path) != value):
+                raise ValueError('official spawn artifact conflict')
+    finally:
+        os.unlink(temporary)
+    parent = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+
+
+def bind_spawn_receipt(directory, incoming):
+    request = primary_scope(directory)
+    if set(incoming) != {'raw_spawn_receipt'}:
+        raise ValueError('only the original spawn receipt is accepted')
+    raw = incoming['raw_spawn_receipt']
+    if len(json.dumps(raw)) > 1000000:
+        raise ValueError('spawn receipt too large')
+    exclusive_json(directory / 'spawn-receipt.raw.json', raw)
+    receipt = json.loads(raw) if isinstance(raw, str) else raw
+    if (not isinstance(receipt, dict) or receipt.get('status') != 'accepted'
+            or receipt.get('resolvedProvider') != 'openai'
+            or receipt.get('resolvedModel') not in ('gpt-6.1-sol', 'openai/gpt-6.1-sol')
+            or not isinstance(receipt.get('childSessionKey'), str)
+            or not re.fullmatch('agent:skill-factory:subagent:[A-Za-z0-9_.:-]+', receipt['childSessionKey'])
+            or not isinstance(receipt.get('runId'), str)
+            or not re.fullmatch('[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', receipt['runId'])):
+        raise ValueError('official spawn receipt identity or model invalid')
+    binding = {k: request[k] for k in IDENTITY}
+    binding.update(child_session_key=receipt['childSessionKey'], child_run_id=receipt['runId'])
+    exclusive_json(directory / 'spawn-receipt.json', receipt)
+    primary_scope(directory)  # no commit after a closed/revoked local scope or worker cutoff
+    exclusive_json(directory / 'agent-binding.json', binding)
+    print(json.dumps(binding))
+
+
+def binding_ready(directory):
+    """Read-only rendezvous, never a business authorization or a fresh budget."""
+    while True:
+        request = primary_scope(directory)
+        path = directory / 'agent-binding.json'
+        if path.exists():
+            binding = load(path)
+            validate_identity(request, binding)
+            receipt = load(directory / 'spawn-receipt.json')
+            raw = load(directory / 'spawn-receipt.raw.json')
+            if ((json.loads(raw) if isinstance(raw, str) else raw) != receipt
+                    or receipt.get('runId') != binding.get('child_run_id')
+                    or receipt.get('childSessionKey') != binding.get('child_session_key')
+                    or receipt.get('resolvedProvider') != 'openai'
+                    or receipt.get('resolvedModel') not in ('gpt-6.1-sol', 'openai/gpt-6.1-sol')):
+                raise ValueError('official binding receipt mismatch')
+            print(json.dumps(binding))
+            return 0
+        time.sleep(min(0.05, max(0, request['worker_expires_at'] - time.time())))
 
 
 def complete(directory, incoming):
@@ -299,6 +406,8 @@ def main():
     directory = Path(root)
     if command == 'await':
         return await_result(directory)
+    if command == 'binding-ready':
+        return binding_ready(directory)
     with open(directory / '.handoff.lock', 'a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)
         if command == 'init':

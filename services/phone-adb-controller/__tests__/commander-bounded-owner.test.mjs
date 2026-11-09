@@ -17,7 +17,7 @@ async function using(fn,{duration=4000}={}){
  const home=realpathSync(mkdtempSync(join(tmpdir(),'commander-owner-')));
  const declared=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.find(host=>host.target==='mmv').executables.python;
  const path=realpathSync(process.env.DOUYIN_PYTHON_BIN||declared.path),python={path,sha256:sha(readFileSync(path))};
- const source={commit:scope.source_commit,files:['commander-bounded-owner.mjs','commander-owner-lock.mjs','commander-owner-state.mjs','activity-commander.mjs'].map(path=>({path,sha256:sha(readFileSync(join(root,path)))}))};
+ const source={commit:scope.source_commit,files:['commander-bounded-owner.mjs','commander-owner-lock.mjs','commander-owner-state.mjs','activity-commander.mjs','official-skill-owner.mjs'].map(path=>({path,sha256:sha(readFileSync(join(root,path)))}))};
  const deadlineMs=Date.now()+duration,cleanupDeadlineMs=deadlineMs+1000;
  const owner=module.createBoundedCommanderOwner({runtimeRoot:root,source,python,deadlineMs,cleanupDeadlineMs});
  try{await fn({home,source,python,owner,deadlineMs,cleanupDeadlineMs});}finally{const final=await owner.close();if(final.pending===0)rmSync(home,{recursive:true,force:true});}
@@ -93,4 +93,7 @@ test('unknown owner state prevents even another helper launch',{skip:process.pla
  await first.close();assert.equal(owner.snapshot().execution_unknown,true);const count=owner.snapshot().leaves.length;
  await assert.rejects(owner.reserveOwner(scope,{home}),/COMMANDER_OWNER/);
  assert.equal(owner.snapshot().leaves.length,count);
+}));
+test('bounded owner pins the new static official owner dependency before any helper',{skip:process.platform!=='darwin'},()=>using(async({source,python,deadlineMs,cleanupDeadlineMs})=>{
+ assert.throws(()=>module.createBoundedCommanderOwner({runtimeRoot:root,source:{...source,files:source.files.filter(f=>f.path!=='official-skill-owner.mjs')},python,deadlineMs,cleanupDeadlineMs}),/COMMANDER_OWNER/);
 }));

@@ -5,6 +5,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {executionDidNotStart} from './leadgen-client.mjs';
 import {acquireOwnerLock} from './commander-owner-lock.mjs';
 import {commanderModelReceipt} from './commander-model-receipt.mjs';
+import {officialOwnerTerminated} from './official-skill-owner.mjs';
 export function workflowCommanderSession(receipt) {
   if(!/^\w[\w.-]{0,150}$/.test(receipt?.run_id||'')||!/^[a-f0-9]{40}$/.test(receipt?.source_commit||''))throw Error('COMMANDER_WORKFLOW_IDENTITY_INVALID');
   if(typeof receipt.binding_id!=='string'||!receipt.binding_id||receipt.binding_id.length>160)throw Error('COMMANDER_BINDING_IDENTITY_INVALID');
@@ -45,6 +46,11 @@ export async function reserveWorkflowCommanderTurn(scope,{home=homedir(),acquire
     check:()=>release.command('check'),
     returned:raw=>archive('returned',{returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex'),
       ...(scope.workflow_key==='douyin_video_discovery'?{workflow_key:scope.workflow_key,activity:scope.activity,phase:scope.phase,raw_response:raw}:{})}),
+    observedTerminal:async proof=>{
+      if(!officialOwnerTerminated(proof,scope)||proof.parent_session_key!==session)throw unresolved();
+      return archive('official_terminal',{observed_at:new Date().toISOString(),owner_run_id:proof.owner_run_id,
+        owner_terminal:proof.terminal,official_result_sha256:createHash('sha256').update(JSON.stringify(proof)).digest('hex'),business_result:'not_evaluated'});
+    },
     notStarted:async(error,command,args)=>{
       if(!executionDidNotStart(error,command,args))throw unresolved();
       return archive('not_started',{failed_at:new Date().toISOString(),failure:'native_pre_spawn_error'});
