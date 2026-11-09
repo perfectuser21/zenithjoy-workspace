@@ -141,3 +141,13 @@ test('report的Observer在seal后才返回abort只留未应用记录，不再sto
   await b.report({type:'stall',elapsed_ms:2000});assert.equal(turns,1);
  },{onEvent:async()=>{turns++;entered();return await new Promise(resolve=>{release=resolve;});},onAbort:async()=>{stops++;return {execution_stopped:false};}});
 });
+
+test('official child post-operation authority revocation preserves the committed result and marks unknown without retry',async()=>{
+ let checks=0;
+ await using(async(b,count)=>{
+  const reply=await call(b,{op:'business',operation:'discover',input:{video_id:'1234567890123456'}});
+  assert.equal(reply.ok,false);assert.equal(count(),1);assert.equal(checks,1);
+  const proof=b.getResult();assert.equal(proof.execution_unknown,true);assert.deepEqual(proof.result.videos,['1234567890123456']);
+  assert.equal((await call(b,{op:'business',operation:'discover',input:{video_id:'1234567890123456'}})).ok,false);assert.equal(count(),1);
+ },{authorizeAfter:async()=>{checks++;return false;}});
+});
