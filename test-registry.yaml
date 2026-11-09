@@ -11247,3 +11247,43 @@ tests:
     status: active
     product: AI员工
     note: "公共同进程Skill宿主来源/撤销/双停保守行为；离线模型CLI夹具，不冒真机成功"
+
+  - id: leadgen-public-skill-primary
+    path: services/phone-adb-controller/__tests__/public-skill-primary.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "正式Skill首发profile/真实factory及独立读回，不冒实机业务通过"
+
+  - id: leadgen-public-agent-scope
+    path: services/phone-adb-controller/__tests__/public-agent-scope.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实原tools与collection产物的live公共UUID作用域"
+
+  - id: leadgen-official-cli-closure
+    path: services/phone-adb-controller/__tests__/official-cli-closure.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "固定同步CLI来源、真实outer-close与私有runtime品牌"
+
+  - id: leadgen-official-recording-producer
+    path: services/phone-adb-controller/__tests__/official-recording-producer.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实capture进程登记与独立媒体停止证据；只覆盖本登记域"
+
+  - id: leadgen-official-child-capture-chain
+    path: services/phone-adb-controller/__tests__/official-child-capture.integration.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "本机真实capture与媒体经IPC/首发executor，模型和手机仅受控fixture"
