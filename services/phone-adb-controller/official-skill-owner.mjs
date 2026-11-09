@@ -11,8 +11,9 @@ function durable(path,value){
  try{let offset=0;while(offset<bytes.length){const count=writeSync(fd,bytes,offset,bytes.length-offset);if(count<=0)fail();offset+=count;}fsyncSync(fd);}finally{closeSync(fd);}
  const parent=openSync(join(path,'..'),'r');try{fsyncSync(parent);}finally{closeSync(parent);}
 }
-export function officialOwnerRunTerminated(result,request){return stopped.get(result)?.scope_sha256===hash(request);}
-export function officialOwnerTerminated(result,request){return closed.get(result)?.scope_sha256===hash(request);}
+const branded=(map,result,request)=>map.get(result)?.scope_sha256===hash(request)&&map.get(result)?.result_sha256===hash(result);
+export function officialOwnerRunTerminated(result,request){return branded(stopped,result,request);}
+export function officialOwnerTerminated(result,request){return branded(closed,result,request);}
 export async function runOfficialSkillOwner({request,parent,directory,message,execute,authorize}){
  if(request?.protocol!=='leadgen-activity-v1'||request.mode!=='execute'||request.primary_host!=='official-child-v1'
   ||Object.hasOwn(request,'execution_transport')||Object.hasOwn(request,'transport_generation')
@@ -67,7 +68,7 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
   status:terminal?.status||'unknown',execution_stopped:!!terminal&&!conflict,ack_received:ack!==null,ack_conflict:conflict,
   scope_sha256:scopeHash,source_commit:request.source_commit,terminal});
  durable(join(directory,'parent-owner-result.json'),result);
- if(result.execution_stopped)stopped.set(result,{scope_sha256:scopeHash});
+ if(result.execution_stopped)stopped.set(result,{scope_sha256:scopeHash,result_sha256:hash(result)});
  return result;
 }
 // A finished RPC run does not rule out completion delivery starting another
@@ -110,5 +111,5 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
  }catch{/* An unfinished delivery or an uncertain census retains the original reservation. */}
  const proof=Object.freeze({...result,protocol:'official-skill-owner-closure/v1',owner_run_execution_stopped:true,
   execution_stopped:verified,session_quiescent:verified,session_id:sessionId??null,closure_read_count:reads});
- durable(join(directory,'parent-owner-closure.json'),proof);if(verified)closed.set(proof,{scope_sha256:scopeHash});return proof;
+ durable(join(directory,'parent-owner-closure.json'),proof);if(verified)closed.set(proof,{scope_sha256:scopeHash,result_sha256:hash(proof)});return proof;
 }
