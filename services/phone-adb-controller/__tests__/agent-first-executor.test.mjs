@@ -35,6 +35,41 @@ function phoneFixture(t,{discovery=false}={}){
  return f;
 }
 const receipt=(q,overrides={})=>({status:'ok',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:childId,terminal:{runId:childId,status:'ok',endedAt:Date.now()},source_commit:q.source_commit,...overrides});
+function officialFixture(f){
+ const path='runtime/skills/leadgen-official-child-host.md',text='当前official-child仅依原冻结scope和受控broker授权执行。';
+ writeFileSync(join(f.runDir,path),text);f.frozen.files[path]=sha(text);f.frozen.primary_host='official-child-v1';return f;
+}
+
+test('observed 101 dispatch trace charges prepare once and never turns post-spawn receipt work into a longer child window',async t=>{
+ const original=Date.now;let now=original();Date.now=()=>now;
+ try{
+  const f=officialFixture(phoneFixture(t,{discovery:true})),start=now,outer=start+300000;f.deadlineFor=()=>outer;let trace;
+  const execute=api.createActivitySkillExecutor({...f,createTools:async()=>{now+=4649;return {prepare:async()=>{now+=85700;},settle:async()=>{throw Error('unknown cannot settle');},inspect:async()=>({}),phone:async()=>{throw Error('no phone in budget trace');},business:async()=>{throw Error('no business in budget trace');},getResult:()=>null};},rpc:async q=>{
+   if(q.kind==='activity_skill_authority')return {authorized:true};
+   assert.equal(q.request.worker_deadline_ms,start+232000);assert.equal(q.request.receipt_deadline_ms,start+242000);assert.equal(q.request.deadline_ms,start+290000);
+   assert.equal(q.request.worker_deadline_ms-now,141651);
+   now+=65000;const spawnedAt=now,childSeconds=58,childDeadline=spawnedAt+childSeconds*1000;
+   assert.ok(childDeadline<=q.request.worker_deadline_ms);now+=44000;
+   assert.equal(childDeadline-now,14000,'44s happened after the 58s was already dispatched');
+   assert.equal(childDeadline-spawnedAt,58000);assert.equal(childDeadline-(spawnedAt+21457),36543);assert.equal(childDeadline-(spawnedAt+30262),27738);
+   trace={worker:q.request.worker_deadline_ms,childDeadline};return {result:{status:'unknown',execution_stopped:false}};
+  }});
+  const result=await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});
+  assert.equal(result.execution_stopped,false);assert.equal(trace.worker,start+232000);assert.ok(trace.childDeadline<outer);
+ }finally{Date.now=original;}
+});
+for(const discovery of [true,false])test('frozen '+(discovery?'101':'102')+' cleanup120 retains at most76 worker seconds before preparation',async t=>{
+ const original=Date.now;let now=original();Date.now=()=>now;
+ try{
+  const f=officialFixture(phoneFixture(t,{discovery})),start=now;f.deadlineFor=()=>start+120000;let worker;
+  const execute=api.createActivitySkillExecutor({...f,createTools:async()=>({prepare:async()=>{now+=20000;},settle:async()=>{throw Error('unknown cannot settle');},release:async()=>{throw Error('unknown cannot release');},inspect:async()=>({}),phone:async()=>{throw Error('no phone in budget trace');},business:async()=>{throw Error('no business in budget trace');},getResult:()=>null}),rpc:async q=>{
+   if(q.kind==='activity_skill_authority')return {authorized:true};
+   worker=q.request.worker_deadline_ms;assert.equal(worker,start+76000);assert.equal(worker-now,56000);assert.equal(q.request.receipt_deadline_ms,start+86000);assert.equal(q.request.deadline_ms,start+110000);
+   return {result:{status:'unknown',execution_stopped:false}};
+  }});
+  const result=await execute({key:'cleanup',budget:{max_duration_s:120}},{context:{task_id:taskId}});assert.equal(result.execution_stopped,false);assert.equal(worker,start+76000);
+ }finally{Date.now=original;}
+});
 
 test('Primary executor只接受server工具结果与官方双停；不把Agent成功文字作为业务产物',async t=>{
  assert.equal(typeof api.createActivitySkillExecutor,'function','缺少正式Primary执行器');

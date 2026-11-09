@@ -5,6 +5,7 @@ import {mkdtempSync,writeFileSync,readFileSync,existsSync,chmodSync} from 'node:
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import * as skillAgent from '../leadgen-skill-agent.mjs';
 const HELPER=join(dirname(fileURLToPath(import.meta.url)),'../commander/wf-agent-handoff.py');
 const parent='agent:work-commander:test-parent';
 function call(dir,cmd,data,...args){return spawnSync('python3',[HELPER,cmd,dir,...args],{input:data==null?undefined:JSON.stringify(data),encoding:'utf8'});}
@@ -38,6 +39,20 @@ test('official primary binds the original string or object ToolReceipt once with
   assert.equal(call(f.dir,'bind',{raw_spawn_receipt:raw}).status,0);
   assert.deepEqual(readFileSync(join(f.dir,'spawn-receipt.raw.json')),original);
   assert.equal(existsSync(join(f.dir,'child-abort.json')),false);
+ }
+});
+test('real Gateway bind command transfers the original ToolReceipt through env to the fixed helper stdin',()=>{
+ assert.equal(typeof skillAgent.spawnReceiptInvocation,'function');
+ for(const surface of ['gateway_exec','exec_gateway']){
+  const f=primarySpawnFixture(),raw=JSON.stringify({...f.raw,note:'literal $(touch FORBIDDEN) `false`\n中文'});
+  const spec=skillAgent.spawnReceiptInvocation(f.dir,surface,raw);
+  assert.equal(spec.parameters.stdin,undefined);assert.equal(spec.parameters.command.includes(raw),false);
+  assert.equal(spec.parameters.host,surface==='exec_gateway'?'gateway':undefined);
+  const host=join(f.dir,'hostname');writeFileSync(host,'#!/bin/sh\nprintf r10-7\\n\n',{mode:0o700});
+  const command=spec.parameters.command.replace(JSON.stringify('/bin/hostname'),JSON.stringify(host));assert.notEqual(command,spec.parameters.command);
+  const result=spawnSync('/bin/sh',['-c',command],{encoding:'utf8',env:{PATH:'/usr/bin:/bin',...spec.parameters.env}});
+  assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.raw.json'))),raw);
+  assert.deepEqual(JSON.parse(result.stdout),f.receipt);
  }
 });
 test('official bind rejects malformed, guessed, wrong-model, foreign, expired and conflicting receipts',()=>{
