@@ -45,7 +45,8 @@ test('public primary snapshot preserves raw transport and sets mode agent withou
 
 // Full product factory + createWorkflowExecution + primary executor are real.
 // Only unavailable native/model effects are replaced by a refusing native provider.
-for(const closeFailure of [false,true])test(closeFailure?'public factory never upgrades a failed primitive close on repeated close':'real public factory routes an unsupported first Skill through executeAgent and never executes Code business',async t=>{
+for(const variant of ['raw','close-failure','real-tools'])test(variant==='real-tools'?'public factory uses real 103 tools and preserves an uncertain scoring commit':variant==='close-failure'?'public factory never upgrades a failed primitive close on repeated close':'real public factory routes an unsupported first Skill through executeAgent and never executes Code business',async t=>{
+ const closeFailure=variant==='close-failure',realTools=variant==='real-tools';
  const f=fixture(t),source=join(f.root,'source'),run=join(f.root,'run');
  const controller=fileURLToPath(new URL('../',import.meta.url));
  cpSync(controller,source,{recursive:true,filter:p=>!p.includes('/__tests__')&&!p.includes('/node_modules')});
@@ -63,6 +64,15 @@ for(const closeFailure of [false,true])test(closeFailure?'public factory never u
   profile.domain_adapter.config.primary_host='official-child-v1';delete snapshot.execution_transport;delete snapshot.max_turns;snapshot.primary_host='official-child-v1';
   profile.files=Object.fromEntries(inventory(source).map(n=>[n,hash(readFileSync(join(source,n)))]));
  }
+ if(realTools){
+  const client=join(source,'leadgen-client.mjs');writeFileSync(client,readFileSync(client,'utf8').replace('export function createRpc(','function unusedFixtureRpc(')+`
+export function createRpc({environment:env}){return async q=>{const fs=await import('node:fs'),path=await import('node:path');fs.appendFileSync(path.join(env.WFR_RUN_DIR,'fixture-rpc.jsonl'),JSON.stringify(q)+'\\n');const company=JSON.parse(fs.readFileSync(path.join(env.WF_HOME,'fixture-company.json')));if(q.kind==='queue'&&q.request.op==='company_config')return {ok:true,result:company};if(q.kind==='queue'&&q.request.op==='score_scope')return {ok:true,result:{ids:['11111111-1111-4111-8111-111111111111'],sources:{'11111111-1111-4111-8111-111111111111':'fixture102'}}};if(q.kind==='queue'&&q.request.op==='score')throw Error('FIXTURE_SCORE_ACK_LOST');throw Error('FIXTURE_RPC_UNEXPECTED');};}
+`);
+  writeFileSync(join(source,'official-child-host.mjs'),`import {callActivityTool} from './activity-skill-tool.mjs';import {writeFileSync} from 'node:fs';import {join} from 'node:path';import {randomUUID} from 'node:crypto';export const createPublicOfficialChildRpc=({runDir})=>async q=>{if(q.kind==='activity_skill_authority')return {authorized:true};if(q.kind==='activity_skill_stop')return {result:{execution_stopped:false}};const r=q.request,context=(await callActivityTool(r.broker_request_path,'inspect')).result;writeFileSync(join(runDir,'fixture-real-tools.json'),JSON.stringify(context));await callActivityTool(r.broker_request_path,'business',{operation:'score_scope',input:{}});for(let i=0;i<2;i++)try{await callActivityTool(r.broker_request_path,'business',{operation:'score',input:{ids:['11111111-1111-4111-8111-111111111111']}});}catch{}const child=randomUUID();return {result:{status:'ok',source_commit:r.source_commit,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:child,terminal:{runId:child,status:'ok',endedAt:Date.now()}}};};`);
+  writeFileSync(join(source,'fixture-company.json'),JSON.stringify(profile.domain_adapter.config.company));
+  profile.domain_adapter.config.primary_host='official-child-v1';delete snapshot.execution_transport;delete snapshot.max_turns;snapshot.primary_host='official-child-v1';
+  profile.files=Object.fromEntries(inventory(source).map(n=>[n,hash(readFileSync(join(source,n)))]));
+ }
  const identity={...f.identity,profile_sha256:hash(profile)};f.task.result.common_runner={...identity};
  const server=http.createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;const seconds=raw?JSON.parse(raw).lease_seconds:30;res.end(JSON.stringify(req.method==='GET'?f.task:{ok:true,lease_until:new Date(Date.now()+seconds*1000).toISOString(),lease_seconds:seconds,heartbeat_count:1}));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  const prior={BRAIN_URL:process.env.BRAIN_URL,BRAIN_INTERNAL_TOKEN:process.env.BRAIN_INTERNAL_TOKEN};process.env.BRAIN_URL='http://127.0.0.1:'+server.address().port;process.env.BRAIN_INTERNAL_TOKEN='unit-only';t.after(()=>{for(const[k,v]of Object.entries(prior))if(v===undefined)delete process.env[k];else process.env[k]=v;});
@@ -70,6 +80,7 @@ for(const closeFailure of [false,true])test(closeFailure?'public factory never u
  const now=Date.now(),domain=await createWorkflowDomain({identity,profile,runDirectory:run,deadline_ms:now+30000,cleanup_deadline_ms:now+40000});
  if(closeFailure){assert.equal((await domain.close()).execution_stopped,false);assert.equal((await domain.close()).execution_stopped,false);return;}
  const result=await domain.executeActivity(c,{run_tag:identity.run_id,attempt:1});
+ if(realTools){assert.notEqual(result.adapter_result.error_code,'AGENT_TOOL_SCOPE_INVALID');const context=JSON.parse(readFileSync(join(run,'fixture-real-tools.json')));assert.deepEqual(context.phone_capabilities,[]);assert.equal(context.scope.run_id,identity.run_id);assert.equal(context.scope.source_run,null);const calls=readFileSync(join(run,'fixture-rpc.jsonl'),'utf8').trim().split('\n').map(v=>JSON.parse(v));assert.equal(calls.filter(q=>q.request?.op==='score').length,1);assert.equal(result.adapter_result.execution_stopped,false);assert.equal((await domain.close()).execution_stopped,false);return;}
  assert.equal(result.adapter_result.reason,'AGENT_PRIMARY_NATIVE_DOMAIN_UNSUPPORTED');assert.equal(result.adapter_result.not_started,true);assert.equal(result.adapter_result.execution_stopped,true);assert.equal(result.status,'needs_review');assert.equal(existsSync(join(run,'skill-handoff')),false);assert.equal((await domain.close()).execution_stopped,true);
 });
 
