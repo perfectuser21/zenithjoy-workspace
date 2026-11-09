@@ -2,3 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';import {cre
 test('正式旧/新共用runtime构造不发任何IO，默认实际home有效',()=>{let calls=0;const r=createFenceRuntime({plan:{},directory:'/nonexistent-fixture',oldRoute:{},getNewRoute:()=>({}),approval:async()=>{calls++;},withGuard:async()=>{calls++;},validateTaskApproval:()=>{calls++;}});assert.equal(typeof r.io.oldInventory,'function');assert.equal(typeof r.io.observeNoninterference,'function');assert.equal(typeof r.io.createRecord,'function');assert.equal(r.getCentral(),null);assert.equal(calls,0);});
 
 test('正式默认archive路径只计算不发IO，默认home不引用局部变量',()=>{const path=fenceArchivePath({task_id:'fixture',plan_sha256:'a'.repeat(64)});assert.ok(path.endsWith('/.device-epoch-fence-fixture-'+ 'a'.repeat(64)+'.superseded'));});
+
+test('受信Python启动器与实际运行体分别冻结，不把launcher路径当OS exe',async()=>{
+ const {realpathSync,readFileSync}=await import('node:fs');const {execFileSync}=await import('node:child_process');const {preflightTestPython}=await import('./helpers/preflight-test-python.mjs');const {digest}=await import('../device-epoch-fence-reference.mjs');const {pinResumeInterpreter}=await import('../device-epoch-fence-resume-process.mjs');
+ const path=realpathSync(preflightTestPython),actual=realpathSync(execFileSync(path,['-I','-B','-S','-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim());const pin=pinResumeInterpreter(path,{read:readFileSync});assert.deepEqual(pin,{path,sha256:digest(readFileSync(path)),runtime_path:actual,runtime_sha256:digest(readFileSync(actual))});
+});
