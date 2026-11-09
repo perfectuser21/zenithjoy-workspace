@@ -54,6 +54,7 @@ test('official child真实held GET断连在同预算重读后仅派发一次原C
  const result=await p.execute(join(f.runtime,'douyin-phone-adb'),['--profile',f.env.P,'runtime-contract']);
  assert.equal(result.code,2);assert.equal(f.heldRequests,3);assert.equal(f.state.executionUnknown,undefined);
  assert.equal(readdirSync(f.evidence).filter(n=>n==='failed-cli-started').length,1);
+ assert.equal((await p.finish('qualification')).execution_stopped,true);
  assert.equal((await p.close()).execution_stopped,true);
 });
 for(const [omitStop,badLease,revokeTask] of [[false,undefined],[true,undefined],[false,'missing'],[false,'not-a-date'],[false,'2000-01-01T00:00:00Z'],[false,undefined,true]])test(revokeTask?'capture remains unknown when Task is revoked after actual start':badLease?'invalid central lease '+badLease+' rejects before any capture CLI':'real owned-active capture crosses broker then '+(omitStop?'unfinished capture stays unknown':'record-stop and media close complete the primary executor'),async t=>{

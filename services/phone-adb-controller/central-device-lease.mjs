@@ -1,6 +1,7 @@
 import {publicDomainAuthority,publicDomainTaskMatches} from './public-domain-authority.mjs';
 import {openSync,closeSync,writeFileSync,readFileSync,fstatSync,constants} from 'node:fs';
 import {join} from 'node:path';
+import {fetchBrainAuthorityGet} from './brain-authority-get.mjs';
 const TASK_ID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 
 export function persistCentralTaskAssociation(dir,receipt){
@@ -44,7 +45,7 @@ export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,d
     const failure=(phase,cause)=>Object.assign(Error('CENTRAL_LOCK_UNKNOWN'),{code:stage+'_'+phase,...(cause?{cause}:{})});
     let response,data;
     try{
-      response=await fetcher(base+path,{method:body?'POST':'GET',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.timeout(8000)});
+      response=body?await fetcher(base+path,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(8000)}):await fetchBrainAuthorityGet(base+path,{headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},timeoutMs:8000,fetcher});
     }catch(error){throw failure('TRANSPORT',error);}
     if(!response.ok)throw failure('HTTP');
     try{data=await response.json();}catch(error){throw failure('BODY',error);}

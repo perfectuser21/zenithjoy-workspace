@@ -43,6 +43,21 @@ test('同一Task GET两次断连共用原8秒窗口，超时不发第二次',asy
  const expired=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher:async()=>{expiredCalls++;t.mock.timers.setTime(origin+8000);throw socket();}});
  await assert.rejects(()=>expired.verifyTask({}),/UNKNOWN/);assert.equal(expiredCalls,1);
 });
+test('第二次Task GET挂起只能消耗首次之后剩余窗口',async t=>{
+ const origin=Date.now();t.mock.timers.enable({apis:['Date','setTimeout'],now:origin});
+ const controller=new AbortController(),timeouts=[],signals=[];
+ t.mock.method(AbortSignal,'timeout',ms=>{timeouts.push(ms);setTimeout(()=>controller.abort(new DOMException('timed out','TimeoutError')),ms);return controller.signal;});
+ const lease=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher:async(_url,options)=>{
+  signals.push(options.signal);
+  if(signals.length===1){t.mock.timers.tick(3000);throw new TypeError('fetch failed',{cause:Object.assign(Error('socket'),{code:'UND_ERR_SOCKET'})});}
+  return new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}));
+ }});
+ const failure=assert.rejects(()=>lease.verifyTask({}),/UNKNOWN/);
+ await new Promise(resolve=>queueMicrotask(resolve));await new Promise(resolve=>queueMicrotask(resolve));
+ assert.equal(signals.length,2);assert.equal(signals[0],signals[1]);assert.deepEqual(timeouts,[8000]);
+ t.mock.timers.tick(4999);assert.equal(controller.signal.aborted,false);
+ t.mock.timers.tick(1);await failure;assert.equal(controller.signal.aborted,true);assert.equal(signals.length,2);
+});
 test('中央Task读取与租约POST失败保留有限阶段码和原cause，每次只发一次请求',async()=>{
  for(const [operation,want] of [['verifyTask','CENTRAL_TASK_GET_TRANSPORT'],['acquire','CENTRAL_ACQUIRE_POST_TRANSPORT']]){
   let calls=0;const wire=Object.assign(Error('private bearer must never be journaled'),{code:'ECONNRESET'});

@@ -3,6 +3,7 @@ import {join,dirname} from 'node:path';
 import {readFrozen,canonical,assertExecutionMode} from './runtime-definition.mjs';
 import {loadPreflightPg} from './preflight-pg-dependencies.mjs';
 import {validatePublicDomainIdentity,publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
+import {fetchBrainAuthorityGet} from './brain-authority-get.mjs';
 const fail=()=>{throw Error('PUBLIC_DOMAIN_PG_SCOPE');};
 export function publicDomainPgRequired(runtimeRoot){const file=join(dirname(runtimeRoot),'run-definition.json');return existsSync(file)&&Boolean(JSON.parse(readFileSync(file,'utf8')).public_domain);}
 export async function verifyPublicDomainTask({runtimeRoot,env=process.env}){
@@ -14,7 +15,7 @@ export async function readPublicDomainClaim({identity:p,env=process.env}){
  const url=new URL(`/api/brain/tasks/${encodeURIComponent(p.task_id)}`,env.BRAIN_URL);
  const readFailure=(phase,cause)=>Object.assign(Error('PUBLIC_DOMAIN_PG_SCOPE'),{code:'PUBLIC_DOMAIN_TASK_GET_'+phase,...(cause?{cause}:{})});
  let response,task;
- try{response=await fetch(url,{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},signal:AbortSignal.timeout(10000),redirect:'error'});}
+ try{response=await fetchBrainAuthorityGet(url,{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},timeoutMs:10000});}
  catch(error){throw readFailure('TRANSPORT',error);}
  if(!response.ok)throw readFailure('HTTP');
  try{task=await response.json();}catch(error){throw readFailure('BODY',error);}

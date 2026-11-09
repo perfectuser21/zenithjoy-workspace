@@ -5,6 +5,7 @@ import {join,dirname} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
+import {createServer} from 'node:http';
 import {installPreflightPg,preflightPgLockIdentity} from '../preflight-pg-dependencies.mjs';
 import {createWorkflowDomain} from '../leadgen-public-domain.mjs';
 import {hash} from '../public-domain-snapshot.mjs';
@@ -41,6 +42,11 @@ test('real Code factory loads full fixed PG closure offline and preserves same-r
   try{globalThis.fetch=async()=>({ok:true,json:async()=>registered});assert.equal((await pg.verifyPublicDomainTask({runtimeRoot:join(run,'runtime'),env:{...env,BRAIN_URL:'http://127.0.0.1:5221',BRAIN_INTERNAL_TOKEN:'unit-only'}})).claim_verified,true);
    globalThis.fetch=async()=>({ok:true,json:async()=>({...registered,claimed_by:'other-runner'})});await assert.rejects(pg.verifyPublicDomainTask({runtimeRoot:join(run,'runtime'),env:{...env,BRAIN_URL:'http://127.0.0.1:5221',BRAIN_INTERNAL_TOKEN:'unit-only'}}),/PUBLIC_DOMAIN_PG_SCOPE/);
   }finally{globalThis.fetch=realFetch;}
+  assert.equal(frozen.files['runtime/brain-authority-get.mjs'],hash(readFileSync(join(run,'runtime','brain-authority-get.mjs'))));
+  let reads=0;const server=createServer((req,res)=>{reads++;if(reads===1){req.socket.destroy();return;}res.end(JSON.stringify(registered));});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{assert.equal((await pg.verifyPublicDomainTask({runtimeRoot:join(run,'runtime'),env:{...env,BRAIN_URL:'http://127.0.0.1:'+server.address().port,BRAIN_INTERNAL_TOKEN:'unit-only'}})).claim_verified,true);assert.equal(reads,2);}
+  finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
   const before=await domain.validateWorkflow(profile,{},{scope:'workflow',acceptance:{ref:'original-103'}});assert.equal(before.verdict,'fail','no business execution must never pass');
   const a=profile.contract.activities[0];const failed=await domain.executeActivity(a,{run_tag:identity.run_id,attempt:1},{});
   assert.equal(failed.status,'failed','missing original deployment manifest must fail before any business RPC');
