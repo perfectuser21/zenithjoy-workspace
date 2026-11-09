@@ -11375,3 +11375,11 @@ tests:
     status: active
     product: AI员工
     note: "有界认证恢复与原件/内核/来源回归；非现场业务验收"
+
+  - id: epoch-auth-device-epoch-fence-resume-native
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-resume-native.integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "required Darwin真实主入口及ACK未知/伪造身份回归；不触现场服务"
