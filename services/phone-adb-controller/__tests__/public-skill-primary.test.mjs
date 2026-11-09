@@ -38,6 +38,9 @@ test('public primary snapshot preserves raw transport and sets mode agent withou
  profile.domain_adapter.config.snapshot.workflow_version.payload.key='douyin_comment_scoring';
  const identity={...f.identity,profile_sha256:hash(profile)},out=preparePublicDomainSnapshot({identity,profile,runDirectory:join(f.root,'run'),deadline_ms:f.deadline,cleanup_deadline_ms:f.cleanup});
  assert.equal(out.env.LEADGEN_EXECUTION_MODE,'agent');assert.equal(out.env.LEADGEN_EXECUTION_TRANSPORT,'raw-model-v1');assert.equal(out.snapshot.execution_mode,'agent');assert.equal(out.snapshot.agent_input,undefined);assert.equal(out.snapshot.native_task_lease,undefined);assert.equal(out.snapshot.public_domain.run_id,identity.run_id);assert.equal(out.snapshot.public_domain.runtime_snapshot_sha256,'e'.repeat(64));
+ const child=structuredClone(profile);child.domain_adapter.config.primary_host='official-child-v1';delete child.domain_adapter.config.snapshot.execution_transport;delete child.domain_adapter.config.snapshot.max_turns;
+ const childOut=preparePublicDomainSnapshot({identity:{...identity,profile_sha256:hash(child)},profile:child,runDirectory:join(f.root,'child-run'),deadline_ms:f.deadline,cleanup_deadline_ms:f.cleanup});
+ assert.equal(childOut.snapshot.primary_host,'official-child-v1');assert.equal(childOut.snapshot.execution_transport,undefined);assert.equal(childOut.env.LEADGEN_EXECUTION_TRANSPORT,undefined);
 });
 
 // Full product factory + createWorkflowExecution + primary executor are real.
