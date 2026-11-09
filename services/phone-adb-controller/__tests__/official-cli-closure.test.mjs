@@ -6,7 +6,7 @@ const outer=(...a)=>{assert.equal(typeof client.executionOuterReturned,'function
 test('only the actual execInput close brands its exact immutable invocation',async()=>{const args=['-c','printf closed'],result=await execInput('/bin/sh',args,{env:{PATH:'/usr/bin:/bin'}});assert.equal(outer(result,'/bin/sh',args),true);assert.equal(outer({...result},'/bin/sh',args),false);assert.equal(outer(result,'/bin/sh',['-c','printf different']),false);assert.equal(outer(result,'/usr/bin/true',args),false);args[1]='changed';assert.equal(outer(result,'/bin/sh',args),false);});
 test('execInput timeout and serialized exit zero cannot grant outer return authority',async()=>{const args=['-c','sleep 5'];let error;try{await execInput('/bin/sh',args,{timeoutMs:30,env:{PATH:'/usr/bin:/bin'}});}catch(e){error=e;}assert.ok(error);assert.equal(outer(error,'/bin/sh',args),false);assert.equal(outer({code:0,executionStopped:true},'/bin/sh',args),false);});
 import {describeOfficialCliInvocation,createOfficialCliClosure,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from '../official-cli-closure.mjs';
-import {readFileSync,readdirSync,lstatSync,mkdtempSync,realpathSync,rmSync,mkdirSync,writeFileSync} from 'node:fs';
+import {readFileSync,readdirSync,lstatSync,mkdtempSync,realpathSync,rmSync,mkdirSync,writeFileSync,unlinkSync,symlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -25,3 +25,5 @@ test('frozen source mismatch and preexisting unknown marker fail before CLI disp
 test('prepare checks source and fresh epoch before an official child can launch',async t=>{const r=rig(t);assert.equal(await r.facade.prepare(),true);assert.equal(r.admissions(),1);await r.facade.close();const q=rig(t,{sourceMismatch:true});await assert.rejects(q.facade.prepare(),/SOURCE/);assert.equal(q.admissions(),0);await q.facade.close();});
 
 test('local metadata uses explicit Task authority without requiring a physical epoch owner',async t=>{const r=rig(t);await r.facade.prepare();const command=join(root,'douyin-phone-adb'),args=['--profile','fixture','runtime-contract'];await r.facade.execute(command,args,{receipt:r.receipt});assert.deepEqual(r.phases.map(p=>[p.phase,p.resourceOnly]),[['prepare',true],['before',true],['after',true]]);await r.facade.close();assert.throws(()=>describe(command,['--profile','fixture','lock-release-exact','foreign']),/OWNER/);assert.equal(describe(command,['--profile','fixture','lock-acquire-new','run']).kind,'local-metadata');});
+
+test('private PATH entries cannot be replaced between prepare and a CLI operation',async t=>{const r=rig(t);assert.equal(await r.facade.prepare(),true);const node=join(r.receipt.runDir,'official-cli-bin-preflight','node');unlinkSync(node);symlinkSync('/usr/bin/true',node);await assert.rejects(r.facade.prepare(),/PINNED_RUNTIME/);await r.facade.close();});
