@@ -13,6 +13,30 @@ import {spawnSync} from 'node:child_process';
 import {digest} from '../runtime-definition.mjs';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const legacyFixture=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/commander-global-v21.json.gz',import.meta.url))));
+test('public production dispatch uses one durable owner RPC and archives terminal independently of CLI success',()=>using(async x=>{
+ let dispatches=0,waits=0;const dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q)),child=id(81),session='agent:skill-factory:subagent:owner-rpc-fixture';
+ const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async(command,args)=>{
+  if(command==='openclaw'){
+   assert.deepEqual(args.slice(0,2),['gateway','call'],'public path must not use the blocking agent CLI');const params=JSON.parse(args[args.indexOf('--params')+1]);
+   const intent=JSON.parse(readFileSync(join(dir,'owner-rpc-intent.json')));
+   if(args[2]==='agent'){
+    dispatches++;assert.equal(params.idempotencyKey,intent.owner_run_id);assert.equal(args.includes('--expect-final'),false);
+    const request=JSON.parse(readFileSync(join(dir,'agent-request.json')));
+    writeFileSync(join(dir,'spawn-claimed.json'),JSON.stringify({...request,source_commit:x.q.source_commit,claimed_at:new Date().toISOString()}));
+    const raw=JSON.stringify({status:'accepted',runId:child,childSessionKey:session,resolvedProvider:'openai',resolvedModel:'openai/gpt-6.1-sol'});
+    const bound=spawnSync('/usr/bin/python3',[join(x.runtime,'commander/wf-agent-handoff.py'),'bind',dir],{input:JSON.stringify({raw_spawn_receipt:raw}),encoding:'utf8'});assert.equal(bound.status,0,bound.stderr);
+    return {code:0,stdout:JSON.stringify({status:'accepted',runId:params.idempotencyKey,sessionKey:params.sessionKey,agentId:'work-commander',acceptedAt:Date.now()})};
+   }
+   assert.equal(args[2],'agent.wait');waits++;assert.equal(params.runId,intent.owner_run_id);
+   return {code:0,stdout:JSON.stringify({runId:params.runId,status:'error',startedAt:intent.started_at_ms,endedAt:Date.now()})};
+  }
+  assert.equal(command,'python3');assert.ok(args.includes('await'));
+  writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'error',endedAt:Date.now()}));return {code:0,stdout:''};
+ }}});
+ const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(dispatches,1);assert.equal(waits,1);
+ assert.equal(result.result.owner_execution_stopped,true);assert.equal(result.result.child_execution_stopped,true);assert.equal(result.result.execution_stopped,true);assert.equal(result.result.status,'error');
+ assert.equal(existsSync(join(dir,'parent-cli-result.json')),false);assert.equal(existsSync(join(dir,'parent-owner-result.json')),true);
+}));
 function legacyWorkspace(home){
  const base=join(home,'.openclaw/commander'),workspace=join(home,'openclaw-root/workspaces-root/clawd-work-commander');
  for(const [name,body]of Object.entries(legacyFixture.files)){const file=join(base,name);mkdirSync(join(file,'..'),{recursive:true});writeFileSync(file,Buffer.from(body,'base64'));}
