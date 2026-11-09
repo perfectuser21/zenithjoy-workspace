@@ -5,3 +5,4 @@ test('真实authprepare→plan→apply、双guard、held出生、单TERM/reserve
 test('真实connect ACK未知不得重放或签free/record',{timeout:450000},async()=>{assert.equal((await run('connect-ack-lost')).status,'expected_unknown');});
 test('中央CAS真实已释放但ACK未知，回读free也不得重放/归档',{timeout:450000},async()=>{assert.equal((await run('release-ack-lost')).status,'expected_unknown');});
 test('改Task批准后伪造expected supervisor仍被真实内核/lock身份拒绝，signal零次',{timeout:450000},async()=>{assert.equal((await run('forged-expected')).status,'expected_unknown');});
+test('隔离realm错误hostname真实main拒绝，reserved/新daemon/中央release均零',{timeout:450000},async()=>{assert.equal((await run('wrong-host')).status,'expected_unknown');});
