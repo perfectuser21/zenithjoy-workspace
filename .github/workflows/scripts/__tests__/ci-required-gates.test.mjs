@@ -267,3 +267,5 @@ test('Windows handler reusable call runs contracts while candidate files require
   assert.equal(selected('workflow_dispatch',{version:'1.2.3'}),true);
   assert.equal(workflow(runtime).jobs['agent-windows-contracts'].with,undefined);
 });
+
+test('epoch native Darwin required gate拒绝missing/skipped/failure/cancelled，成功才可准入',async()=>{const {checkGate,gates}=await import('../../../../scripts/ci/required-gate.mjs');const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}])),'epoch-resume-darwin-test':{result:'success'}};assert.doesNotThrow(()=>checkGate('code',needs));for(const state of [undefined,'skipped','failure','cancelled']){const bad=structuredClone(needs);if(state===undefined)delete bad['epoch-resume-darwin-test'];else bad['epoch-resume-darwin-test'].result=state;assert.throws(()=>checkGate('code',bad),/epoch-resume-darwin-test/);}});
