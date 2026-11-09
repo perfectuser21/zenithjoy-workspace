@@ -54,7 +54,9 @@ test('真实子Node薄客户端经父IPC授权，Task撤销后phone/business零�
 }));
 
 test('父授权await期间加载workspace变化，真实CLI前同步重核拒绝',async()=>{
- const {runSkillAgent}=await import('../leadgen-skill-agent.mjs');const home=mkdtempSync(join(tmpdir(),'skill-workspace-await-'));let valid=true,launches=0,checks=0;
+ const {runSkillAgent}=await import('../leadgen-skill-agent.mjs');const home=mkdtempSync(join(tmpdir(),'skill-workspace-await-'));let launches=0;
+ const root=fileURLToPath(new URL('../',import.meta.url));
+ for(const folder of ['.openclaw/commander','openclaw-root/workspaces-root/clawd-work-commander'])for(const name of ['AGENTS.md','skills/workflow-commander/SKILL.md']){const path=join(home,folder,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,readFileSync(join(root,'commander',name)));}
  const q={protocol:'leadgen-activity-v1',run_id:'workspace_await__a1',binding_id:'fixed-binding',activity_key:'scoring',nonce:'e'.repeat(48),deadline_ms:Date.now()+10000,source_commit:'a'.repeat(40),broker_host:'mmv',broker_request_path:'/private/tmp/fixture/broker-request.json',broker_tool_path:'/private/tmp/fixture/activity-skill-tool.mjs',mode:'repair',method:{name:'fixture',version:'1',text:'fixture'}};
- try{await assert.rejects(()=>runSkillAgent(q,{home,verifyWorkspace:()=>{checks++;if(!valid)throw Error('WORKSPACE_CHANGED_DURING_AUTH');return true;},beforeLaunch:async()=>{await Promise.resolve();valid=false;return true;},execute:async()=>{launches++;return {code:0,stdout:'plain prose',stderr:''};}}),/WORKSPACE_CHANGED_DURING_AUTH/);assert.equal(checks,2);assert.equal(launches,0);}finally{rmSync(home,{recursive:true,force:true});}
+ try{await assert.rejects(()=>runSkillAgent(q,{home,beforeLaunch:async()=>{await Promise.resolve();writeFileSync(join(home,'openclaw-root/workspaces-root/clawd-work-commander/AGENTS.md'),'changed during awaited authority');return true;},execute:async()=>{launches++;return {code:0,stdout:'plain prose',stderr:''};}}),/RPC_SKILL_COMMANDER_WORKSPACE_DRIFT/);assert.equal(launches,0);}finally{rmSync(home,{recursive:true,force:true});}
 });

@@ -283,6 +283,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  try{
  await ownerTurn.check();
  if(beforeLaunch!==undefined){if(typeof beforeLaunch!=='function'||await beforeLaunch()!==true)throw Error('RPC_SKILL_LAUNCH_UNAUTHORIZED');}
+ if(beforeLaunch!==undefined)verifyWorkspace({home});
  if(previous)writeFileSync(join(previous,'generation-revoked.json'),JSON.stringify({next_generation:1,at:Date.now()}),{flag:'wx',mode:0o600});
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
  const parent=workflowCommanderSession(q);
