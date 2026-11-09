@@ -1,6 +1,7 @@
 // 独立partial序列；普通apply不能进入，旧disconnect不存在于这个执行接口。
 const need=(v,c)=>{if(!v)throw Object.assign(Error('RESUME_'+c),{code:'RESUME_'+c});};
 export const RESUME_ACTIONS=Object.freeze({
+ diagnostic_terminal_recovery:Object.freeze(['observe_private_terminal_after_readonly_diagnostic','start_private_supervisor_once','connect_private_serial_once','observe_sdk31','release_maintenance_lease','publish_epoch_record','archive_old_quarantine']),
  adopt_authenticated:Object.freeze(['adopt_private_authenticated_transport','observe_sdk31','release_maintenance_lease','publish_epoch_record','archive_old_quarantine']),
  observed_stop_continuation:Object.freeze(['observe_private_terminal_after_independent_ops','start_private_supervisor_once','connect_private_serial_once','observe_sdk31','release_maintenance_lease','publish_epoch_record','archive_old_quarantine']),
  restart_private_auth:Object.freeze(['stop_private_supervisor_once','start_private_supervisor_once','connect_private_serial_once','observe_sdk31','release_maintenance_lease','publish_epoch_record','archive_old_quarantine'])
@@ -11,7 +12,7 @@ export async function runResumeSequence({plan,io}){
   const admit=async()=>{await guard.assertAlive();await io.assertApproved(plan);await guard.assertAlive();};
   const oldAbsent=async()=>{await admit();need(!(await io.oldInventory()).some(r=>r.serial===plan.scope.serial),'OLD_REAPPEARED');await guard.assertAlive();};
   await guard.prepare();await admit();await io.assertOriginalCheckpoint();await oldAbsent();
-  const continuation=plan.mode==='observed_stop_continuation',privateCap=continuation?await io.inspectObservedStopped():await io.inspectPrivateExact();await admit();
+  const continuation=['observed_stop_continuation','diagnostic_terminal_recovery'].includes(plan.mode),privateCap=continuation?await io.inspectObservedStopped():await io.inspectPrivateExact();await admit();
   if(plan.mode==='restart_private_auth'||continuation){
    await oldAbsent();if(continuation)await io.persistObservedStop(privateCap,guard);else{await io.stopPrivateOnce(privateCap,guard);await io.verifyPrivateTerminal(privateCap);}await oldAbsent();
    await admit();await io.startPrivateOnce(guard);await oldAbsent();need((await io.newInventory()).length===0,'PRIVATE_NOT_EMPTY');
