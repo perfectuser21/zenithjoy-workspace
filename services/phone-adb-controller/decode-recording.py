@@ -10,6 +10,10 @@ def main():
  fd=os.open(a.evidence_file,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
  try:
   if not stat.S_ISREG(os.lstat(a.media).st_mode):raise ValueError('media must be a regular file')
+  media_hash=hashlib.sha256()
+  with open(a.media,'rb') as media:
+   for chunk in iter(lambda:media.read(1024*1024),b''):media_hash.update(chunk)
+  evidence['media_sha256']=media_hash.hexdigest()
   cmd=[a.ffmpeg,'-hide_banner','-nostdin','-xerror','-v','info','-i',a.media,'-t','325','-map','0:a:0','-vn','-ac','1','-ar','16000','-af','volumedetect','-acodec','pcm_s16le','-f','s16le','pipe:1']
   r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
   evidence['decoder_exit_code']=r.returncode;evidence['stderr_tail']=r.stderr.decode(errors='replace')[-8000:]
