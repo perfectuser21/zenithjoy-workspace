@@ -48,7 +48,7 @@ test('real Gateway bind command transfers the original ToolReceipt through env t
   const spec=skillAgent.spawnReceiptInvocation(f.dir,surface,raw);
   assert.equal(spec.parameters.stdin,undefined);assert.equal(spec.parameters.command.includes(raw),false);
   assert.equal(spec.parameters.host,surface==='exec_gateway'?'gateway':undefined);
-  const host=join(f.dir,'hostname');writeFileSync(host,'#!/bin/sh\nprintf r10-7\\n\n',{mode:0o700});
+  const host=join(f.dir,'hostname');writeFileSync(host,"#!/bin/sh\nprintf '%s\\n' r10-7\n",{mode:0o700});
   const command=spec.parameters.command.replace(JSON.stringify('/bin/hostname'),JSON.stringify(host));assert.notEqual(command,spec.parameters.command);
   const result=spawnSync('/bin/sh',['-c',command],{encoding:'utf8',env:{PATH:'/usr/bin:/bin',...spec.parameters.env}});
   assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'spawn-receipt.raw.json'))),raw);

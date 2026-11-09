@@ -267,6 +267,15 @@ function pinGatewaySurface(q,dir,surface){
  const stat=lstatSync(path);
  if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o777)!==0o600||stat.uid!==process.getuid()||JSON.stringify(JSON.parse(readFileSync(path,'utf8')))!==JSON.stringify(record))throw Error('RPC_SKILL_SURFACE_CHANGED');
 }
+export function spawnReceiptInvocation(dir,surface,raw){
+ if(!/^\/[A-Za-z0-9_./-]+$/.test(dir)||dir.split('/').includes('..')||!['gateway_exec','exec_gateway'].includes(surface)||Buffer.byteLength(JSON.stringify(raw)??'')>1000000)throw Error('RPC_SKILL_SURFACE_INPUT_INVALID');
+ const script=['import os,subprocess,sys','host=subprocess.check_output(["/bin/hostname","-s"],text=True).strip()',
+  'if host not in ("aad17-2","r10-7"): raise SystemExit("RPC_SKILL_GATEWAY_HOST_MISMATCH")',
+  'raw=os.environ["LEADGEN_SPAWN_RECEIPT_JSON"]','if len(raw.encode())>1000100: raise SystemExit("RPC_SKILL_TOOL_INPUT_INVALID")',
+  `result=subprocess.run(${JSON.stringify(['/usr/bin/python3',join(root,'commander','wf-agent-handoff.py'),'bind',dir])},input=raw.encode())`,'sys.exit(result.returncode)'].join('\n');
+ const parameters={title:'原run官方spawn回执一次绑定',command:"/usr/bin/python3 -I -c '"+script.replaceAll("'","'\\''")+"'",env:{LEADGEN_SPAWN_RECEIPT_JSON:JSON.stringify({raw_spawn_receipt:raw})},timeoutSeconds:15,yieldMs:1000};
+ if(surface==='exec_gateway')parameters.host='gateway';return {tool:surface==='gateway_exec'?'gateway_exec':'exec',parameters};
+}
 // The managed SSH alias owns network routing; no model-supplied host or jump.
 export async function relayActivityTool(dir,op,body={}, {home=homedir(),authorize,execute=execInput,surface,requireSurface=false}={}){
  const q=JSON.parse(readFileSync(join(dir,'activity-request.json'),'utf8'));validate(q);
@@ -365,6 +374,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const commandFiles={};for(const [surface,commands] of Object.entries(toolCommands)){
    const path=join(dir,`child-tools-${surface}.json`);writeFileSync(path,JSON.stringify(commands),{flag:'wx',mode:0o600});commandFiles[surface]=path;
   }
+  const bindCommandsPath=join(dir,'parent-bind-commands.json');writeFileSync(bindCommandsPath,JSON.stringify(Object.fromEntries(['gateway_exec','exec_gateway'].map(surface=>[surface,spawnReceiptInvocation(dir,surface,'<原sessions_spawn返回值>')]))),{flag:'wx',mode:0o600});
   const {method,...scope}=q;
   const identity={tool:{name:'subagents',parameters:{action:'list'}},caller:{callerIsSubagent:true,callerSessionKey:{file:join(dir,'agent-binding.json'),field:'child_session_key',comparison:'exact'}},binding_checks:['run_id','task_id','parent_session_key','nonce'],on_missing_or_mismatch:'blocked',forbidden_identity_sources:['session_status','list.active','model_self_report','connector_alias']};
   const child={protocol:'leadgen-primary-child/v1',scope:{...scope,parent_session_key:parent},identity_contract:identity,
@@ -383,7 +393,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
    `官方sessions_spawn一次：agentId=skill-factory, mode=run, context=isolated, cleanup=keep, completionTarget=parent；不设置model/fallback/taskName。runTimeoutSeconds不超过agent-request.worker_expires_at剩余（worker截止；expires_at仅供原handoff终态读回，不是Worker执行额度），不足即blocked，不续预算。`,
    `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}；经MMV gateway_exec执行python3 ${helper} binding-ready ${dir}在原worker截止内只读等待父绑定提交，未绑定不得执行任何业务。随后按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/host_support（若有）/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
    `源身份仍为${q.source_commit}，run=${q.run_id}，nonce=${q.nonce}；所有原件私有只读，不能改写。`,
-   `将sessions_spawn返回值原样保存在rawSpawnReceipt变量，不读其属性、不猜string/object、不自行parse、组合身份或写spawn-receipt。使用结构化stdin将JSON.stringify({raw_spawn_receipt:rawSpawnReceipt})一次交给python3 ${helper} bind ${dir}；该固定代码统一解析、核官方provider/model/claim/source/身份并保留原件，最后提交绑定。失败不重派、不以缺失runId取消；保留未知。`,
+   `将sessions_spawn返回值原样保存在rawSpawnReceipt变量，不读其属性、不猜string/object、不自行parse、组合身份或写spawn-receipt。读取${bindCommandsPath}，只选当前真实schema对应的gateway_exec或exec_gateway规格，原command/host不改，仅将parameters.env.LEADGEN_SPAWN_RECEIPT_JSON设为JSON.stringify({raw_spawn_receipt:rawSpawnReceipt})并调用一次；Gateway没有stdin字段，固定桥从结构化env经stdin交python3 ${helper} bind ${dir}，统一解析、核官方provider/model/claim/source/身份并保留原件，最后提交绑定。失败不重派、不以缺失runId取消；保留未知。`,
    `仅bind成功后python3 ${helper} await ${dir}读官方agent.wait；禁止history摘要/CLI child代替。`,
    `owner返回截止=${q.receipt_deadline_ms??q.deadline_ms}；不要等到Activity总截止才返回。错误/子超时精确stop当前绑定child，缺任一停止证明确unknown；不PATCH原Task、不发外部渠道、不放锁。`,
   ].join('\n');
