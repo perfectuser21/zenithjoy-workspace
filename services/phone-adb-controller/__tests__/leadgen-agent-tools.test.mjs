@@ -143,3 +143,95 @@ test('失败open-app不推进bootstrap到账号读取，已准入资源不能掩
  const context=await tools.inspect();assert.equal(context.bootstrap.next_required_intent.command,'open-app');
  assert.deepEqual(context.bootstrap.native_phone_steps_completed,['wake','unlock']);assert.equal(context.account,null);
 },{scope:scope('preflight'),primitives:{inspect:async()=>({company:{company_id:'server-company',tenant_id:'server-tenant',device_binding:{profile:'fixture'}},account:null}),validatePhone:async()=>[],phone:async command=>{if(command==='open-app')throw Error('NATIVE_OPEN_FAILED');return '';}}}));
+
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+const nextTurn=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('同一在飞心跳确认成功后手机动作重新准入，只派发一次，不误报提交未知',async()=>{
+ const entered=deferred(),finish=deferred();let actions=0,guards=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  let settled=false;const phone=tools.phone('open-app').then(value=>{settled=true;return {value};},error=>{settled=true;return {error};});
+  await nextTurn();assert.equal(settled,false,'仍在飞的心跳不是提交未知，phone应等同一轮确认');assert.equal(actions,0);
+  const previous=guards;finish.resolve({renewed:true});await heartbeat;
+  const outcome=await phone;assert.equal(outcome.error,undefined);assert.equal(actions,1);assert.ok(guards>previous,'确认后仍须新鲜资源准入');
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+ },{scope:scope('preflight'),primitives:{assertResources:async()=>{guards++;return true;},heartbeat:async()=>{entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});
+
+test('等待失败心跳不得派手机、重发心跳或消除未决intent',async()=>{
+ const entered=deferred(),finish=deferred();let actions=0,refreshes=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat().catch(error=>error);await entered.promise;
+  const phone=tools.phone('open-app').then(()=>null,error=>error);await nextTurn();
+  finish.reject(Object.assign(Error('lease acknowledgement lost'),{code:'CENTRAL_LOCK_UNKNOWN'}));
+  assert.match((await heartbeat).message,/UNKNOWN/);assert.match((await phone).message,/UNKNOWN/);
+  assert.equal(actions,0);assert.equal(refreshes,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  await assert.rejects(()=>tools.phone('open-app'),/UNKNOWN/);assert.equal(actions,0);
+ },{scope:scope('preflight'),primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});
+
+test('心跳等待到原截止后成功也不得派手机或扩展原scope',async()=>{
+ const entered=deferred(),finish=deferred();let expired=false,actions=0;
+ const deadline=Date.now()+30000;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const phone=tools.phone('open-app').then(()=>null,error=>error);await nextTurn();
+  expired=true;finish.resolve({renewed:true});await heartbeat;
+  assert.match((await phone).message,/DEADLINE/);assert.equal(actions,0);
+  assert.equal((await tools.inspect()).scope.deadline_ms,deadline);
+ },{scope:{...scope('preflight'),deadline_ms:deadline},primitives:{assertResources:async()=>{if(expired)throw Error('AGENT_TOOL_DEADLINE');return true;},heartbeat:async()=>{entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});
+
+test('心跳后并发手机请求只有一个占槽，fresh guard期间新心跳不得插队',async()=>{
+ const entered=deferred(),finish=deferred(),phoneGuard=deferred(),guardRelease=deferred();let phase='heartbeat',guards=0,actions=0,refreshes=0;
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const a=tools.phone('open-app').then(()=>({ok:true}),error=>({error}));
+  const b=tools.phone('open-app').then(()=>({ok:true}),error=>({error}));
+  phase='phone';finish.resolve({renewed:true});await heartbeat;
+  const admitted=await Promise.race([phoneGuard.promise.then(()=>true),Promise.all([a,b]).then(()=>false)]);
+  assert.equal(admitted,true,'等待成功后应进入phone的新鲜准入，而非拒绝两个请求');
+  const during=await tools.heartbeat();assert.deepEqual(during,{deferred:true});assert.equal(refreshes,1);
+  guardRelease.resolve();const outcomes=await Promise.all([a,b]);
+  assert.equal(outcomes.filter(x=>x.ok).length,1);assert.equal(actions,1);
+ },{scope:scope('preflight'),primitives:{assertResources:async()=>{guards++;if(phase==='phone'&&guards===2){phoneGuard.resolve();await guardRelease.promise;}return true;},heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});
+
+test('business异步准入期间先占操作槽，手机不得与稍后提交的写入交叉',async()=>{
+ const entered=deferred(),release=deferred();let firstGuard=true,actions=0,writes=0;
+ await using(async tools=>{
+  const business=tools.business('discover',{video});await entered.promise;
+  const phone=tools.phone('open-search').then(()=>null,error=>error);
+  await nextTurn();const beforeRelease=actions;
+  release.resolve();await business;
+  const error=await phone;assert.equal(beforeRelease,0);assert.match(error?.message||'',/BUSY|UNKNOWN/);assert.equal(writes,1);
+  await tools.phone('open-search');assert.equal(actions,1);
+ },{primitives:{assertResources:async()=>{if(firstGuard){firstGuard=false;entered.resolve();await release.promise;}return true;},validatePhone:async()=>[],phone:async()=>{actions++;return '';},queue:async()=>{writes++;return {inserted:true};}}});
+});
+
+test('异步phone准入越过worker原截止时不得发指令，即使scope收尾窗尚未结束',async t=>{
+ const now=Date.now(),entered=deferred(),release=deferred();let actions=0;
+ t.mock.timers.enable({apis:['Date'],now});
+ await using(async tools=>{
+  const phone=tools.phone('open-app').then(()=>null,error=>error);await entered.promise;
+  t.mock.timers.setTime(now+2000);release.resolve();
+  const error=await phone;assert.match(error?.message||'',/DEADLINE/);assert.equal(actions,0);
+ },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{validatePhone:async()=>{entered.resolve();await release.promise;return [];},phone:async()=>{actions++;return '';}}});
+});
+
+test('等待心跳到原截止只结束waiter，原heartbeat保持一次且自行结算原intent',async t=>{
+ const now=Date.now(),entered=deferred(),finish=deferred();let refreshes=0,actions=0;
+ t.mock.timers.enable({apis:['Date','setTimeout'],now});
+ await using(async tools=>{
+  const heartbeat=tools.heartbeat();await entered.promise;
+  const phone=tools.phone('open-app').then(()=>null,error=>error);await nextTurn();
+  t.mock.timers.tick(1001);const error=await phone;assert.match(error?.message||'',/DEADLINE/);
+  assert.equal(actions,0);assert.equal(refreshes,1);assert.equal(tools.heartbeat(),heartbeat,'等待超时不得换job或重发');
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[{operation:'resource_heartbeat',readback_operations:[]}]);
+  finish.resolve({renewed:true});await heartbeat;assert.equal(refreshes,1);
+  assert.deepEqual((await tools.inspect()).pending_write_readbacks,[]);
+  await assert.rejects(()=>tools.phone('open-app'),/DEADLINE/);assert.equal(actions,0);
+ },{scope:{...scope('preflight'),worker_deadline_ms:now+1000,deadline_ms:now+10000},primitives:{heartbeat:async()=>{refreshes++;entered.resolve();return finish.promise;},validatePhone:async()=>[],phone:async()=>{actions++;return '';}}});
+});

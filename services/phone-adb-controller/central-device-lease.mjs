@@ -40,12 +40,15 @@ export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,d
   const ttlMinutes=Math.max(50,Math.ceil(Number(runSeconds)/60)+10);
   let held=false,attempted=false,lastVerified=0,expiresAt=0;
   async function request(path,body){
+    const stage=path.startsWith('/tasks/')?'CENTRAL_TASK_GET':path==='/device-locks'?'CENTRAL_LOCKS_GET':path==='/device-locks/acquire'?'CENTRAL_ACQUIRE_POST':'CENTRAL_RELEASE_POST';
+    const failure=(phase,cause)=>Object.assign(Error('CENTRAL_LOCK_UNKNOWN'),{code:stage+'_'+phase,...(cause?{cause}:{})});
     let response,data;
     try{
       response=await fetcher(base+path,{method:body?'POST':'GET',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.timeout(8000)});
-      data=await response.json();
-    }catch{throw Error('CENTRAL_LOCK_UNKNOWN');}
-    if(!response.ok||!data||typeof data!=='object')throw Error('CENTRAL_LOCK_UNKNOWN');
+    }catch(error){throw failure('TRANSPORT',error);}
+    if(!response.ok)throw failure('HTTP');
+    try{data=await response.json();}catch(error){throw failure('BODY',error);}
+    if(!data||typeof data!=='object')throw failure('BODY');
     return data;
   }
   async function readback(expected){

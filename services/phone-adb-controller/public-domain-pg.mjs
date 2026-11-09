@@ -12,8 +12,12 @@ export async function readPublicDomainClaim({identity:p,env=process.env}){
  const b=p?.run_binding;
  if(!p||!env.BRAIN_URL||!env.BRAIN_INTERNAL_TOKEN)fail();
  const url=new URL(`/api/brain/tasks/${encodeURIComponent(p.task_id)}`,env.BRAIN_URL);
- const response=await fetch(url,{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},signal:AbortSignal.timeout(10000),redirect:'error'});
- if(!response.ok)fail();const task=await response.json();
+ const readFailure=(phase,cause)=>Object.assign(Error('PUBLIC_DOMAIN_PG_SCOPE'),{code:'PUBLIC_DOMAIN_TASK_GET_'+phase,...(cause?{cause}:{})});
+ let response,task;
+ try{response=await fetch(url,{headers:{Authorization:'Bearer '+env.BRAIN_INTERNAL_TOKEN},signal:AbortSignal.timeout(10000),redirect:'error'});}
+ catch(error){throw readFailure('TRANSPORT',error);}
+ if(!response.ok)throw readFailure('HTTP');
+ try{task=await response.json();}catch(error){throw readFailure('BODY',error);}
  const projection={identity:p,binding:{id:b.run_binding_id,run_id:p.run_id,task_id:p.task_id,workflow_id:b.workflow_id,workflow_definition_version_id:b.workflow_definition_version_id,attempt_key:b.attempt_key,activities:b.activities}};
  if(!publicDomainTaskProjectionMatches(task,projection))fail();
  return {run_id:p.run_id,task_id:p.task_id,binding_id:b.run_binding_id,claim_verified:true,claim:{claimed_by:task.claimed_by,claimed_at:task.claimed_at}};

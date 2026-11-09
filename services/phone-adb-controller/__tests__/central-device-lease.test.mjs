@@ -8,6 +8,15 @@ import {join} from 'node:path';
 import {centralDeviceLockEvidence} from '../runtime-receipts.mjs';
 
 const TASK='7037d210-2af1-4af9-8635-f93a805e58b6';
+test('中央Task读取与租约POST失败保留有限阶段码和原cause，每次只发一次请求',async()=>{
+ for(const [operation,want] of [['verifyTask','CENTRAL_TASK_GET_TRANSPORT'],['acquire','CENTRAL_ACQUIRE_POST_TRANSPORT']]){
+  let calls=0;const wire=Object.assign(Error('private bearer must never be journaled'),{code:'ECONNRESET'});
+  const lease=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture-token',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher:async()=>{calls++;throw wire;}});
+  await assert.rejects(()=>lease[operation]({}),error=>error.message==='CENTRAL_LOCK_UNKNOWN'&&error.code===want&&error.cause===wire);
+  assert.equal(calls,1);
+ }
+});
+
 function fixture({busy=false,offline=false,projectId='68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6',expectedProjectId}={}){
   const calls=[];let owner=busy?'another-task':null,expires=null;
   const fetcher=async(url,options={})=>{
