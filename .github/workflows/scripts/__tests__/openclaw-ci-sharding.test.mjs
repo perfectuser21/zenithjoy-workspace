@@ -32,9 +32,11 @@ function validate(w) {
   assert.deepEqual(actual.filter(arg=>arg.startsWith('--')),['--test','--test-shard=1/3']);
   const baseline=captureNodeArgs('node --test --test-shard=1/3 '+globs.join(' '));
   const darwinOnly=/\/native-103-(transaction|public-executor|producers)\.test\.mjs$/;
-  const officialNative=['official-child-capture.integration.test.mjs','official-cli-closure.test.mjs','official-cli-quarantine.test.mjs','official-recording-producer.test.mjs'];
+  const officialNative=['official-child-capture.integration.test.mjs','official-cli-closure.test.mjs','official-cli-quarantine.test.mjs','official-recording-producer.test.mjs','adb-private-auth.test.mjs','adb-private-supervisor.test.mjs','device-epoch-fence-resume-native.integration.test.mjs'];
   const nativeJob=w.jobs['public-code-phone-darwin-test'];
   assert.equal(nativeJob['runs-on'],'macos-latest');
+  assert.equal(nativeJob['timeout-minutes'],10);
+  assert.equal(nativeJob.if,undefined);assert.equal(nativeJob['continue-on-error'],undefined);
   assert.ok(w.jobs['l3-passed'].needs.includes('public-code-phone-darwin-test'));
   const nativeStep=nativeJob.steps.find(step=>step.name==='Run official child native lifecycle without platform skips');
   assert.equal(nativeStep.if,undefined);assert.equal(nativeStep['continue-on-error'],undefined);
@@ -89,6 +91,14 @@ function aggregate(result) { return runCodeGate(workflow,result); }
 
 test('OpenClaw keeps original four selectors in three independent ten-minute native shards', () => {
   validate(workflow);
+});
+test('resume/auth suites leave the actual Linux selector and remain required on Darwin',t=>{
+  const f=fixture(t),names=['adb-private-auth.test.mjs','adb-private-supervisor.test.mjs','device-epoch-fence-resume-native.integration.test.mjs'];
+  for(const name of names)writeFileSync(join(f.root,'services/phone-adb-controller/__tests__',name),'// Path inventory for selector-only capture; no native test body.\n');
+  const actual=captureNodeArgs(command(),{cwd:f.root});
+  for(const name of names)assert.ok(!actual.some(arg=>arg.endsWith('/'+name)),name+' must run in the required Darwin job instead of Linux');
+  for(const name of names){const w=structuredClone(workflow),step=w.jobs['public-code-phone-darwin-test'].steps.find(s=>s.name==='Run official child native lifecycle without platform skips');step.run=step.run.replace('services/phone-adb-controller/__tests__/'+name,'');assert.throws(()=>validate(w),name+' may not be omitted');}
+  for(const change of [j=>{j['timeout-minutes']=11;},j=>{j.if='false';},j=>{j['continue-on-error']=true;}]){const w=structuredClone(workflow);change(w.jobs['public-code-phone-darwin-test']);assert.throws(()=>validate(w));}
 });
 test('actual matrix commands execute the original file union exactly once across all three shards', t => {
   const f = fixture(t), all = run(f, original, 'all');
