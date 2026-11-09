@@ -180,10 +180,15 @@ def authenticated_environment(policy, config, answer, environment):
     # No external key/root argument. The fixed registry policy path derives the
     # private auth root; Node remains the sole Task/provenance/math authority.
     need(answer.get('protocol') == 'device-epoch-fence-startup-verification/v2'
-         and answer.get('authorized') is True and answer.get('instance_id') == policy.get('instance_id')
+         and answer.get('authorized') is True and answer.get('action') == 'start_private_server'
+         and answer.get('instance_id') == policy.get('instance_id')
          and answer.get('endpoint') == policy.get('endpoint'), 'PRIVATE_AUTH_AUTHORITY')
     read_instance_policy(config, policy)
-    source_manifest(extra=('adb-private-auth.py',))
+    manifest = source_manifest(extra=('adb-private-auth.py',))
+    _, registry_sha = registry()
+    need(answer.get('source_commit') == manifest['source_commit']
+         and answer.get('registry_sha256') == registry_sha
+         and answer.get('policy_sha256') == sha(read_file(Path(config), private=True)), 'PRIVATE_AUTH_AUTHORITY')
     path = HERE / 'adb-private-auth.py'
     module = types.ModuleType('adb_private_auth')
     module.__file__ = str(path)
