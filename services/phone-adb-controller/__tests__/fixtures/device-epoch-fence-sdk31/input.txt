@@ -1,0 +1,73 @@
+      KeyDowns: 0 keys currently down
+      Last Raw Button State: 0x00000000
+      Last Raw Touch: pointerCount=0
+      Last Cooked Button State: 0x00000000
+      Last Cooked Touch: pointerCount=0
+      KeyDowns: 0 keys currently down
+      KeyDowns: 0 keys currently down
+      KeyDowns: 0 keys currently down
+      KeyDowns: 0 keys currently down
+      KeyDowns: 0 keys currently down
+      ButtonState: 0x00000000
+      Down: false
+      Last Raw Button State: 0x00000000
+      Last Raw Touch: pointerCount=0
+      Last Cooked Button State: 0x00000000
+      Last Cooked Touch: pointerCount=0
+Input Dispatcher State:
+  DispatchEnabled: true
+  DispatchFrozen: false
+  Pointer Capture Requested: false
+  Current Window with Pointer Capture: None
+  TouchStates: <no displays touched>
+  PendingEvent: <none>
+  InboundQueue: <empty>
+  Connections:
+    266: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    476: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    488: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    426: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    350: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    322: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=true, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    160: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    410: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    303: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    146: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=true, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    386: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    357: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    325: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    329: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+    332: channelName='<redacted>', windowName='<redacted>', status=NORMAL, monitor=false, responsive=true
+      OutboundQueue: <empty>
+      WaitQueue: <empty>
+  AppSwitch: not pending
+  Configuration:
+      mNumSkippedSlowEvents = 0

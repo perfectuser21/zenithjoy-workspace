@@ -87,7 +87,10 @@ function originalShape(x,flow){
  w.payload.activities=f.activities.map(a=>a.reference);sign(w);f.release.payload.workflows=[w];f.release.payload.activities=f.activities.map(a=>a.version);
  const step='plans/'+flow+'.steps.json';writeFileSync(join(x.sourceRoot,step),'{}',{mode:0o600});
  if(!f.deployment.files.some(row=>row.deployed_path===step))f.deployment.files.push({deployed_path:step,content_sha256:digest('{}')});
- if(flow!=='douyin_comment_scoring')x.resources={machine:'us-mac-m4',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',account:'77980009922'};
+ if(flow!=='douyin_comment_scoring'){
+  x.resources={machine:'us-mac-m4',profile:'cloud-phone-test',serial:'47.100.213.173:10001',line:'yuesheng',account:'77980009922'};
+  const registry=join(x.sourceRoot,'profiles.tsv');writeFileSync(registry,'profile\tserial\tmodel\twidth\theight\tenabled\ncloud-phone-test\t47.100.213.173:10001\tFixture\t720\t1280\ttrue\n',{mode:0o600});x.env.DOUYIN_PHONE_REGISTRY=registry;
+ }
  reseal(x);return x;
 }
 for(const flow of Object.keys(original125Shapes))test('real '+flow+' AV shapes compile through the public contract parser without inventing foreach bindings',async()=>{
@@ -131,4 +134,56 @@ test('workflow cleanup scope shares the original cleanup Activity A4 acceptance 
   const p=buildPublicDomainProfile(x).profile;
   assert.equal(p.validators.cleanup.acceptance.ref,p.metadata.cleanup.questions.A4.ref,'validateActivity and validateWorkflow use this same cleanup key');
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+for(const flow of ['douyin_video_discovery','douyin_video_processing'])test(flow+' public profile freezes real registry bytes/model/dimensions for shared Code preflight',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),x=originalShape(await fixture(),flow);
+ try{
+  const p=buildPublicDomainProfile(x).profile,fixed=p.domain_adapter.config.snapshot.preflight_profile;
+  assert.deepEqual(fixed,{schema_version:1,path:x.env.DOUYIN_PHONE_REGISTRY,sha256:digest(readFileSync(x.env.DOUYIN_PHONE_REGISTRY)),profile:x.resources.profile,serial:x.resources.serial,model:'Fixture',width:720,height:1280,enabled:true});
+  writeFileSync(x.env.DOUYIN_PHONE_REGISTRY,'profile\tserial\tmodel\twidth\theight\tenabled\ncloud-phone-test\tOTHER\tFixture\t720\t1280\ttrue\n');
+  assert.throws(()=>buildPublicDomainProfile(x),/PREFLIGHT_PROFILE_INVALID/);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+for(const flow of ['douyin_video_discovery','douyin_video_processing'])test(flow+' derives whole-run ADB environment from frozen declared instance instead of stale assembly env',async()=>{
+ const {buildPublicDomainProfile}=await import(source.href),{freezePublicPreflightRoute}=await import('../public-preflight-route.mjs'),x=originalShape(await fixture(),flow);
+ try{
+  const policy={schema_version:2,instance_id:'mmv-cloud-epoch2',host_id:'mmv',transport:'tcp',endpoint:'tcp:127.0.0.1:5042',forbidden_ports:[],adb_bin:'/fixed/adb',adb_realpath:'/fixed/adb',adb_sha256:'a'.repeat(64)},privatePath=join(x.sourceRoot,'epoch2.json');
+  writeFileSync(privatePath,JSON.stringify(policy),{mode:0o600});mkdirSync(join(x.sourceRoot,'config'),{recursive:true});const relative='config/adb-host-instances.json';
+  const raw=JSON.stringify({schema_version:1,instances:[{instance_id:policy.instance_id,kind:'managed',policy_path:privatePath,policy,coexists_with:['legacy']}]});writeFileSync(join(x.sourceRoot,relative),raw);
+  x.frozen.deployment.files.push({path:'services/phone-adb-controller/'+relative,deployed_path:relative,content_sha256:digest(raw)});
+  const scope={target:'mmv',profile:x.resources.profile,serial:x.resources.serial,expected_account:x.resources.account,policy};scope.policy_binding=freezePublicPreflightRoute({root:x.sourceRoot,files:{[relative]:digest(raw)},scope});
+  x.frozen[flow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope']=scope;Object.assign(x.env,{DOUYIN_ADB_PORT:'5041',ADB_SERVER_SOCKET:'tcp:127.0.0.1:5041',ZJ_ADB_HOST_CONFIG:'/request-must-not-select-policy'});reseal(x);
+  const p=buildPublicDomainProfile(x).profile,cfg=p.domain_adapter.config;
+  assert.equal(cfg.env.DOUYIN_ADB_PORT,'5042');assert.equal(cfg.env.ADB_SERVER_SOCKET,policy.endpoint);assert.equal(cfg.env.ZJ_ADB_HOST_CONFIG,undefined);
+  assert.deepEqual(cfg.snapshot.public_preflight_route,scope.policy_binding);assert.deepEqual(cfg.snapshot[flow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'].policy,policy);assert.equal(x.env.DOUYIN_ADB_PORT,'5041','builder does not mutate caller assembly input');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+// Only source packaging is exercised: synthetic definition IDs issue no grant,
+// epoch record, ACK or device operation. Every E dependency is real fixed Git bytes.
+test('official builder and public snapshot preserve the real epoch closure in per-run runtime',async()=>{
+ const {reviewSource}=await import('../device-epoch-fence-review.mjs');
+ const {preparePublicDomainSnapshot}=await import('../public-domain-snapshot.mjs');
+ const {pathToFileURL}=await import('node:url');
+ const actual=reviewSource(),input=await fixture();
+ try{
+  rmSync(join(input.sourceRoot,'_dependencies'),{recursive:true,force:true});
+  await installPreflightPg({runtimeRoot:input.sourceRoot,sourceCommit:actual.commit});
+  const names=new Set([...input.frozen.deployment.files.map(r=>r.deployed_path),...Object.keys(actual.files).map(p=>p.slice('services/phone-adb-controller/'.length))]);
+  for(const name of names){const path=new URL('../'+name,import.meta.url);if(!existsSync(path))continue;mkdirSync(join(input.sourceRoot,name,'..'),{recursive:true});writeFileSync(join(input.sourceRoot,name),readFileSync(path),{mode:0o600});}
+  const f=input.frozen;for(const v of [f.workflow_version,...f.activities.map(a=>a.version)]){v.source_commit=actual.commit;v.payload_sha256=digest({source:{repo:v.source_repo,path:v.source_path,commit:actual.commit},payload:v.payload});}
+  f.release.environment='staging:'+actual.commit;f.release.payload.components[0].revision=actual.commit;
+  Object.assign(f.deployment,{source_repo:'perfectuser21/zenithjoy-workspace',source_commit:actual.commit,environment:f.release.environment,files:[...names].map(name=>({path:'services/phone-adb-controller/'+name,deployed_path:name,content_sha256:digest(readFileSync(join(input.sourceRoot,name)))})),dependencies:{preflight_pg:preflightPgDeployment({runtimeRoot:input.sourceRoot,sourceCommit:actual.commit})}});
+  input.observation.payload.environment=f.release.environment;input.observation.payload.components=f.release.payload.components;reseal(input);
+  const {profile}= (await import('../public-domain-profile.mjs')).buildPublicDomainProfile(input);
+  const identity={run_id:uuid(900),task_id:uuid(901),machine_id:'us-mac-m4',profile_sha256:digest(profile),input:{upstream:{run_id:uuid(902),task_id:uuid(903),run_directory:'/fixture/upstream',profile_sha256:'b'.repeat(64)}},run_binding:{workflow_id:f.workflow_version.payload.workflow_id,workflow_definition_version_id:f.workflow_version.id,activities:Object.fromEntries(f.activities.map(a=>[a.reference.slot_key,{reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id}]))}};
+  const prepared=preparePublicDomainSnapshot({identity,profile,runDirectory:join(input.sourceRoot,'isolated-run'),deadline_ms:Date.now()+70000,cleanup_deadline_ms:Date.now()+90000});
+  const loaded=await import(pathToFileURL(join(prepared.runtime,'device-epoch-fence-review.mjs')));
+  const proof=loaded.reviewSource({runtimeRoot:prepared.runtime,repositoryRoot:'/no-git'});
+  assert.equal(proof.commit,actual.commit);assert.deepEqual(proof.files,actual.files);
+  const mf=JSON.parse(readFileSync(join(prepared.runtime,'deployment-manifest.json')));
+  for(const [name,hash] of Object.entries(actual.files)){const row=mf.files.find(r=>r.path===name);assert.ok(row,name);assert.equal(row.content_sha256,hash);assert.equal(digest(readFileSync(join(prepared.runtime,row.deployed_path))),hash);}
+ }finally{rmSync(input.sourceRoot,{recursive:true,force:true});}
 });

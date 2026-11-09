@@ -9,8 +9,17 @@ import stat
 import subprocess
 import sys
 import time
+import types
 
 PORTS = (5037, 5041, 5042)
+
+
+def instance_module():
+    path = Path(__file__).resolve().with_name('adb-host-instance-policy.py')
+    module = types.ModuleType('adb_host_instance_policy')
+    module.__file__ = str(path)
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
 
 
 def read_host_policy(path=None):
@@ -33,7 +42,7 @@ def read_host_policy(path=None):
             policy = json.load(source)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError('ADB_HOST_CONFIG_UNREADABLE') from error
-    if not isinstance(policy, dict) or type(policy.get('schema_version')) is not int or policy['schema_version'] != 1:
+    if not isinstance(policy, dict) or type(policy.get('schema_version')) is not int or policy['schema_version'] not in (1, 2):
         raise ValueError('ADB_HOST_CONFIG_SCHEMA')
     if policy.get('host_id') not in ('xian-m4', 'mmv') or policy.get('transport') not in ('usb', 'tcp'):
         raise ValueError('ADB_HOST_CONFIG_IDENTITY')
@@ -51,6 +60,8 @@ def read_host_policy(path=None):
         raise ValueError('ADB_HOST_CONFIG_FORBIDDEN_PORTS')
     if 'adb_bin' in policy and (not isinstance(policy['adb_bin'], str) or not os.path.isabs(policy['adb_bin']) or '\x00' in policy['adb_bin']):
         raise ValueError('ADB_HOST_CONFIG_BINARY')
+    if policy['schema_version'] == 2:
+        instance_module().read_instance_policy(path, policy)
     return {**policy, 'port': primary}
 
 
@@ -206,11 +217,12 @@ def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2
     return matches[0][0]
 
 
-def verified_client_version(binary):
+def verified_client_version(binary, *, environment=None):
     """Bound local version startup jitter to three reads; never invoke server lifecycle."""
     for attempt in range(3):
         try:
-            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2)
+            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2,
+                                    **({'env': environment} if environment is not None else {}))
         except subprocess.TimeoutExpired:
             if attempt < 2:
                 continue

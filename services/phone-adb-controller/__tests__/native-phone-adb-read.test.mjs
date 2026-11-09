@@ -61,6 +61,11 @@ test('bounded source authority completes real multi-frame ROM ingress within the
  const reader=module.createNativePhoneAdbRead({runtimeRoot:root,source:f.source,directory:f.directory,scope:f.scope,readAuthority:async()=>{calls++;await new Promise(r=>setTimeout(r,25));return f.authority();}});
  try{const cap=await reader.read(f.file);assert.deepEqual(reader.readReceipt(cap,{scope:f.scope}).bytes,Buffer.concat(Array(32).fill(f.payload)));assert.ok(calls<=3,'sync frame count must not amplify central contract RTT');assert.equal((await reader.close()).channel_stopped,true);}finally{await reader.close();}
 });
+test('fenced source ingress explicitly rechecks each frame instead of reusing the legacy ROM admission cache',async t=>{
+ const f=await fixture(t,{file:'/system/bin/app_process64',frames:8});f.scope.worker_deadline_ms=Date.now()+3000;f.scope.cleanup_deadline_ms=Date.now()+3400;let calls=0;
+ const reader=module.createNativePhoneAdbRead({runtimeRoot:root,source:f.source,directory:f.directory,scope:f.scope,freshFrameAdmission:true,readAuthority:async()=>{calls++;return f.authority();}});
+ try{const cap=await reader.read(f.file);assert.deepEqual(reader.readReceipt(cap,{scope:f.scope}).bytes,Buffer.concat(Array(8).fill(f.payload)));assert.ok(calls>=16,'schema2 fenced frames cannot reuse the 1s legacy ROM admission');assert.equal((await reader.close()).channel_stopped,true);}finally{await reader.close();}
+});
 test('fresh post-EOF authority retains callback failure category without serializing arbitrary error text',async t=>{
  const f=await fixture(t);const reader=module.createNativePhoneAdbRead({runtimeRoot:root,source:f.source,directory:f.directory,scope:f.scope,readAuthority:async()=>{if(f.requests.some(r=>r.id==='QUIT'))throw Object.assign(Error('do-not-log-secret'),{code:'OFFICIAL_CONTROL_DEADLINE'});return f.authority();}});
  try{await assert.rejects(reader.read(f.file),/NATIVE_PHONE_READ_AUTHORITY/);assert.equal(reader.snapshot().unknown,true);assert.equal(reader.snapshot().channel_stopped,false);const journal=readFileSync(join(f.directory,'read-0.unknown.json'),'utf8');assert.match(journal,/OFFICIAL_CONTROL_DEADLINE/);assert.doesNotMatch(journal,/do-not-log-secret/);}finally{await reader.close();}

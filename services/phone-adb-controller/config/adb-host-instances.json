@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "startup_verifier": {
+    "module": "device-epoch-fence-review.mjs",
+    "node": {
+      "path": "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "sha256": "f023ca4cc73074018b8085e846c8f46fc175f923d6349708e9af2e3cef76af59"
+    }
+  },
+  "instances": [
+    {
+      "instance_id": "mmv-cloud-epoch2",
+      "kind": "managed",
+      "policy_path": "/Users/administrator/.config/zenithjoy/adb-instances/mmv-cloud-epoch2.json",
+      "policy": {
+        "schema_version": 2,
+        "host_id": "mmv",
+        "transport": "tcp",
+        "endpoint": "tcp:127.0.0.1:5042",
+        "forbidden_ports": [],
+        "adb_bin": "/opt/homebrew/bin/adb",
+        "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/37.0.0/platform-tools/adb",
+        "adb_sha256": "9fdf861259dc807937b13afdd5f053c7fda9f3b7726933fe0e0f45130ecb8dc7",
+        "instance_id": "mmv-cloud-epoch2"
+      },
+      "coexists_with": [
+        "mmv-cloud-legacy-5041"
+      ]
+    },
+    {
+      "instance_id": "mmv-cloud-legacy-5041",
+      "kind": "external_existing",
+      "policy_path": "/Users/administrator/.config/zenithjoy/adb-service.json",
+      "policy": {
+        "schema_version": 1,
+        "host_id": "mmv",
+        "transport": "tcp",
+        "endpoint": "tcp:127.0.0.1:5041",
+        "forbidden_ports": [],
+        "adb_bin": "/opt/homebrew/bin/adb",
+        "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/37.0.0/platform-tools/adb",
+        "adb_sha256": "9fdf861259dc807937b13afdd5f053c7fda9f3b7726933fe0e0f45130ecb8dc7"
+      },
+      "coexists_with": [
+        "mmv-cloud-epoch2"
+      ]
+    }
+  ]
+}

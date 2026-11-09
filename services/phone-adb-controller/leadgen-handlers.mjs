@@ -72,7 +72,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const hostPolicy=join(env.HOME,'.config/zenithjoy/adb-service.json');
   const managedAdb=Object.hasOwn(env,'ZJ_ADB_HOST_CONFIG')||existsSync(hostPolicy)||(()=>{try{return lstatSync(hostPolicy).isSymbolicLink();}catch{return false;}})();
   const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
-  let locked=false,leased=[],qualified=[],historyScoped=0,preflightScope;
+  let locked=false,leased=[],qualified=[],historyScoped=0,preflightScope,publicCodePreflight;
   const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:canonicalRunId(env),outreach_scope:outreachScope};
   const needsCentralLock=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
   let central=centralLease||null;
@@ -139,7 +139,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const queue=async(op,fields={})=>{if(trustedScoring)return scoringRuntime.queue(op,fields);if(trustedPhone&&['discover','discover_readback','inspect_videos'].includes(op))return phoneRuntime.queue(op,fields);if(op==='discover')discoveryScope?.assert();if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');const admissionOp=op==='admit_102g_comments'||op==='admit_102g_readback';const exactRecoveryOp=op==='recover_false_exclusion_102l'||op==='recover_false_exclusion_102l_readback';const rpcBudget=op==='discover'?225000:admissionOp?150000:60000;return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,...(admissionOp||exactRecoveryOp?{}:{limit:Number(env.LEADGEN_LIMIT||2)}),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video',
       'admit_102g_comments','admit_102g_readback'].includes(op)?{timeoutMs:Math.max(1,Math.min(rpcBudget,state.budgetDeadline?state.budgetDeadline-Date.now():rpcBudget))}:{})).result;};
-  const preflight=async()=>{
+  const preflight=async(options={})=>{
+    if(publicCodePreflight)throw Error('PUBLIC_CODE_PREFLIGHT_ALREADY_STARTED');
     if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND!=='1'){
       const flag=join(env.HOME,`bin-harvest/state/dm-paused-${profile}.flag`);
       if(existsSync(flag))return {status:'paused',reason:'私信暂停标记生效',sent:0};
@@ -176,6 +177,17 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       await lease.acquire();
       appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'acquired',task_id:taskId,run_id:state.run_id,
         device_name:serial,source_commit:sourceCommit,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
+    }
+    if(readPublicDomainBinding(env.WFR_RUN_DIR)&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
+      const {createPublicCodePreflight}=await import('./public-code-preflight.mjs');
+      publicCodePreflight=createPublicCodePreflight({root,env,state,lease:getCentral(),onLocked:value=>{locked=value;}});
+      const result=await publicCodePreflight.preflight(options);
+      if(companyStep==='102'){
+        state.recipientCompanyBinding={...state.company_config.device_binding,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN||null};
+        const file=join(env.WFR_RUN_DIR,run+'-company-binding.json'),bytes=JSON.stringify(state.recipientCompanyBinding);
+        writeFileSync(file,bytes,{mode:0o600,flag:'wx'});state.recipientCompanyBindingFile=file;state.recipientCompanyBindingSha=createHash('sha256').update(bytes).digest('hex');
+      }
+      return result;
     }
     const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
     if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');
@@ -267,7 +279,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const quarantineResources=async()=>{
     const proof={verified:false,device:{verified:serial==='none',applicable:serial!=='none'},videos:[],claim_receipt_unknown:state.qualificationClaimUnknown===true};
     if(serial!=='none')try{
-      if(trustedPreflight)proof.device={applicable:true,...await preflightRuntime.quarantine()};else{
+      if(publicCodePreflight)proof.device={applicable:true,...await publicCodePreflight.quarantine()};else if(trustedPreflight)proof.device={applicable:true,...await preflightRuntime.quarantine()};else{
       const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
       const r=await execute(ctl,['--profile',profile,'lock-quarantine',run],{timeoutMs:20000,env:{...env}});
       proof.device={applicable:true,verified:r.code===0&&r.stdout.trim()===`lock=quarantined owner=${run} review_required=true`,receipt:safeExecutionDiagnostic(r.stdout,env)};}
@@ -779,7 +791,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     if(trustedScoring){tools.bindOfficialAuthority=entry=>scoringRuntime.bindOfficialAuthority(entry);const readResult=tools.getResult;tools.getResult=()=>({...readResult(),external_effect:scoringRuntime.nativeState().external_effect});}
     agent.tools.set(activity.key,tools);return tools;
   };
-  return {state,preflight,createAgentTools,agentSupportsNativeScope:activity=>trustedPhone?phoneRuntime.supports(activity):trustedScoring?scoringRuntime.supports(activity):trustedPreflight&&preflightRuntime.supports(activity)===true,agentNativeState:()=>({... (trustedPhone?phoneRuntime.nativeState():trustedScoring?scoringRuntime.nativeState():{}),native_stop_unproven:state.nativeStopUnproven===true||(trustedPhone&&phoneRuntime.nativeState().native_stop_unproven===true)||(trustedScoring&&scoringRuntime.nativeState().native_stop_unproven===true),execution_unknown:state.executionUnknown===true||(trustedPhone&&phoneRuntime.nativeState().execution_unknown===true)||(trustedScoring&&scoringRuntime.nativeState().execution_unknown===true)||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),quarantineResources,beginCollectionReadback:async evidence=>{
+  return {state,preflight,publicCodePreflightVerification:()=>publicCodePreflight?.desktopVerificationOptions(),createAgentTools,agentSupportsNativeScope:activity=>trustedPhone?phoneRuntime.supports(activity):trustedScoring?scoringRuntime.supports(activity):trustedPreflight&&preflightRuntime.supports(activity)===true,agentNativeState:()=>({... (trustedPhone?phoneRuntime.nativeState():trustedScoring?scoringRuntime.nativeState():{}),native_stop_unproven:state.nativeStopUnproven===true||(trustedPhone&&phoneRuntime.nativeState().native_stop_unproven===true)||(trustedScoring&&scoringRuntime.nativeState().native_stop_unproven===true),execution_unknown:state.executionUnknown===true||(trustedPhone&&phoneRuntime.nativeState().execution_unknown===true)||(trustedScoring&&scoringRuntime.nativeState().execution_unknown===true)||(trustedPreflight&&preflightRuntime.nativeState().execution_unknown===true)}),quarantineResources,beginCollectionReadback:async evidence=>{
       collectionScope=await startCollectionReturnedScope({evidence,context:returnedContext(),purpose:'readback'});
       return async()=>{try{await collectionScope.close();}finally{collectionScope=null;}};
     },handoffPhone:async(command,...args)=>{
@@ -971,12 +983,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-bridge-readback.json`),JSON.stringify(bridgeReadback),{mode:0o600});
       return {...r,bridge,mark_leads_readback_failures:readback.failures,bridge_readback_failures:bridgeReadback.failures+(bridge.verified===false?1:0),...(bridge.verified===false||!bridgeReadback.verified?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
-    cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
-      if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
-      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
+    cleanup:async(options={})=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
+      if(!publicCodePreflight&&state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
+      if(!publicCodePreflight&&state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
       try{
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}
+      if(publicCodePreflight){const result=await publicCodePreflight.cleanup(options);return {...result,failures:[...(result.failures||[]),...failures],...(failures.length?{status:'partial'}:{})};}
       if(!locked&&failures.length===0&&!central?.attempted)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
       if(locked){try{const refreshed=await phone('lock-refresh',run);if(!refreshed.startsWith('lock=refreshed'))throw Error('锁所有权不可确认');
         const close_stdout=await phone('close-app');closed=true;const desktop_stdout=await phone('return-safe-desktop');

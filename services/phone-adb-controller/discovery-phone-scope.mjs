@@ -1,3 +1,4 @@
+import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {canonicalRunId} from './public-domain-authority.mjs';
 // 101的手机请求归还能力仅用于原cleanup；不表示OS全后代停止，不授予采集恢复。
 import {readFileSync,writeFileSync,lstatSync,realpathSync,readdirSync,mkdirSync,symlinkSync} from 'node:fs';
@@ -18,10 +19,10 @@ export const discoveryTapBudgetMs=discoveryCommandBudgetMs('tap-evidence')+3000+
 export const discoveryCaptureBudgetMs=4*discoveryCommandBudgetMs('lock-refresh')+discoveryCommandBudgetMs('search-video-cards')+discoveryCommandBudgetMs('search-kw-matches')+discoveryTapBudgetMs-discoveryCommandBudgetMs('lock-refresh');
 const digest=result=>{const {cleanup_phone_scope,execution_stopped,...body}=result||{};return hash(JSON.stringify(body));};
 const required=['leadgen-discovery-action.mjs','leadgen-phone-action.mjs','leadgen-handlers.mjs','qualification-identity-snapshot.mjs','central-device-lease.mjs','leadgen-workflow.mjs','leadgen-discovery.mjs','activity-commander.mjs','discovery-phone-scope.mjs','collection-leaf-producer.mjs','adb-managed-client.py','adb-existing-route.py','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','search-video-tab.py','discovery-cleanup-readback.mjs','discovery-metrics.js'];
-export function defaultDiscoveryPhoneScope({root,env}){
+export function defaultDiscoveryPhoneScope({root,env,instanceId,epochId}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_discovery')return undefined;
- try{return readFrozen(env.WFR_RUN_DIR).discovery_phone_scope;}catch(error){if(error.code!=='ENOENT')throw error;}
- return defaultCollectionPhoneScope({root,env:{...env,WF_BRAIN_WORKFLOW:'douyin_video_processing'},workflowKey:'douyin_video_discovery'});
+ try{const scope=readFrozen(env.WFR_RUN_DIR).discovery_phone_scope;if((instanceId!==undefined&&scope?.policy?.instance_id!==instanceId)||(epochId!==undefined&&scope?.policy_binding?.epoch_fence?.epoch_id!==epochId))throw Error('DISCOVERY_FROZEN_INSTANCE_MISMATCH');return scope;}catch(error){if(error.code!=='ENOENT')throw error;}
+ return defaultCollectionPhoneScope({root,env:{...env,WF_BRAIN_WORKFLOW:'douyin_video_processing'},workflowKey:'douyin_video_discovery',instanceId,epochId});
 }
 function pinned(tool){
  if(!isAbsolute(tool?.path||'')||!/^[a-f0-9]{64}$/.test(tool?.sha256||''))fail('TOOL_PIN_REQUIRED');
@@ -129,10 +130,10 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  const scopeRoot=join(env.WFR_RUN_DIR,'discovery-phone-scopes');mkdirSync(scopeRoot,{recursive:true,mode:0o700});
  const directory=join(scopeRoot,purpose==='collect'?'collect':randomUUID());mkdirSync(directory,{mode:0o700});
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(spec.policy),{flag:'wx',mode:0o600});const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});for(const [n,p] of [['python3',python],['node',node],['zsh',zsh]])symlinkSync(p,join(bin,n));
- const deadline=purpose==='collect'?identity.work_deadline_ms:globalDeadline,producer=await startCollectionLeafProducer({directory,policy:spec.policy,serial:env.SERIAL,deadlineMs:deadline,env});
+ const deadline=purpose==='collect'?identity.work_deadline_ms:globalDeadline,producer=await startCollectionLeafProducer({directory,policy:spec.policy,serial:env.SERIAL,deadlineMs:deadline,env,assertAdmission:createPhoneEpochGuard({root,env,frozen,state})});
  let sealing;const seal=()=>sealing??=producer.seal();const timer=setTimeout(()=>{seal().catch(()=>{});},Math.max(1,deadline-Date.now()));
  const r={identity:{...identity,epoch:epochs.get(state)},epoch:epochs.get(state),state,env,originalEnv:{...env},root,spec,frozen,layout:paths,ownerFile,ownerIdentity:owner,consumed:false};
- const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_TMP_ROOT:paths.phoneRoot,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
+ const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:spec.policy.schema_version===2?spec.policy_binding.policy_path:policyFile,DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_TMP_ROOT:paths.phoneRoot,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
  // A nonzero ADB business probe may still have a verified nofork child close.
  // 101 cleanup needs every native request returned, never a success exit code.
  const returned=s=>s.requests_returned||s.empty_requests_returned;

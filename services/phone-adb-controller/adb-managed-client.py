@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """固定宿主策略的ADB客户端；不拥有任何server生命周期权限。"""
-import importlib.util
+import types
 import base64
 import json
 import socket
@@ -24,9 +24,10 @@ def policy_path():
 
 
 def route_module():
-    spec = importlib.util.spec_from_file_location('managed_adb_route', Path(__file__).with_name('adb-existing-route.py'))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    path = Path(__file__).resolve().with_name('adb-existing-route.py')
+    module = types.ModuleType('managed_adb_route')
+    module.__file__ = str(path)
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
     return module
 
 
@@ -90,7 +91,7 @@ def parent_leaf(argv):
         raise ValueError('ADB_MANAGED_COLLECTION_PARENT_UNAVAILABLE') from error
 
 
-def client_version(binary, *, recheck=None):
+def client_version(binary, *, recheck=None, environment=None):
     if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
         code, stdout, _ = parent_leaf(['version'])
         text = stdout.decode('utf8')
@@ -98,7 +99,7 @@ def client_version(binary, *, recheck=None):
             raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH')
         return text
     try:
-        output, retried = route_module().verified_client_version(binary)
+        output, retried = route_module().verified_client_version(binary, **({'environment': environment} if environment is not None else {}))
     except ValueError as error:
         if str(error) == 'ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH':
             raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH') from error
@@ -120,14 +121,18 @@ def main(argv):
     if not isinstance(binary, str) or not os.path.isabs(binary) or not os.path.isfile(binary) or not os.access(binary, os.X_OK):
         raise ValueError('ADB_MANAGED_BINARY_INVALID')
     serial, command = parse_args(argv, policy['port'])
+    if policy.get('schema_version') == 2:
+        route.instance_module().verify_binary(policy)
+        binary = policy['adb_realpath']
     for name, expected in [('ADB_SERVER_SOCKET', policy['endpoint']),
                            ('ANDROID_ADB_SERVER_PORT', str(policy['port'])),
                            ('ANDROID_ADB_SERVER_ADDRESS', '127.0.0.1'),
                            ('DOUYIN_ADB_PORT', str(policy['port']))]:
         if name in os.environ and os.environ[name] != expected:
             raise ValueError('ADB_MANAGED_ENV_ENDPOINT_MISMATCH')
+    version_options = {'environment': route.instance_module().adb_environment(os.environ)} if policy.get('schema_version') == 2 else {}
     if command == ['version']:
-        print(client_version(binary), end='')
+        print(client_version(binary, **version_options), end='')
         return 0
     # 检查整个host（包括forbidden端口），不能devices时跳过附加server守卫。
     if command[0] == 'devices':
@@ -136,22 +141,37 @@ def main(argv):
         for device in host['devices']:
             print(device['serial'] + '\t' + device['state'])
         return 0
-    if scoped:
-        actual = route.select_existing_unique_route(serial, policy['endpoint'])
-        if actual != policy['port']:
-            raise ValueError('ADB_MANAGED_ENDPOINT_MISMATCH')
-        # 如宿主已有全局策略，仍须另过原严格检查，不能被本run策略削弱。
-        if route.read_host_policy() is not None:
+    def verify_target():
+        if policy.get('schema_version') == 2:
+            route.instance_module().verify_binary(policy)
+        if scoped and policy.get('schema_version') == 2:
+            # schema2已由固定源码registry授权；仅看该instance，不扫描或借用默认/其它epoch。
+            measured = route.inspect_managed_host(policy)
+            target = [r for r in measured['devices'] if r['serial'] == serial]
+            if target != [{'serial': serial, 'state': 'device'}]:
+                raise ValueError('ADB_MANAGED_INSTANCE_TARGET_UNAVAILABLE')
+        elif scoped:
+            actual = route.select_existing_unique_route(serial, policy['endpoint'])
+            if actual != policy['port']:
+                raise ValueError('ADB_MANAGED_ENDPOINT_MISMATCH')
+            # 如宿主已有全局策略，仍须另过原严格检查，不能被本run策略削弱。
+            if route.read_host_policy() is not None:
+                route.select_route(serial, policy['endpoint'])
+        else:
             route.select_route(serial, policy['endpoint'])
-    else:
-        route.select_route(serial, policy['endpoint'])
-    client_version(binary, recheck=lambda: route.select_route(serial, policy['endpoint']))
-    env = dict(os.environ, ADB_SERVER_SOCKET=policy['endpoint'])
+    verify_target()
+    client_version(binary, recheck=verify_target, **version_options)
+    ambient = route.instance_module().adb_environment(os.environ) if policy.get('schema_version') == 2 else os.environ
+    env = dict(ambient, ADB_SERVER_SOCKET=policy['endpoint'])
     for name in ('ANDROID_ADB_SERVER_PORT', 'ANDROID_ADB_SERVER_ADDRESS', 'ANDROID_SERIAL',
                  'ADB_VENDOR_KEYS', 'ADB_LIBUSB', 'ADB_LOCAL_TRANSPORT_MAX_PORT'):
         env.pop(name, None)
     # numeric -H is deliberately not localhost: a missing server must not be spawned.
     actual = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial, *command]
+    if policy.get('schema_version') == 2:
+        route.instance_module().verify_binary(policy)
+        route.instance_module().authorize_epoch(policy, serial, os.environ.get('WFR_RUN_DIR'))
+        route.instance_module().verify_binary(policy)
     if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
         code, stdout, stderr = parent_leaf(actual)
         sys.stdout.buffer.write(stdout)

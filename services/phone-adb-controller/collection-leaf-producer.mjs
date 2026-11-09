@@ -26,7 +26,9 @@ async function run(command,args,env,timeoutMs,onStart=()=>{},beforeSpawn=()=>{})
   p.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(force);if(startError){reject(startError);return;}resolve({code,signal,tainted,stdout:Buffer.concat(chunks[0]),stderr:Buffer.concat(chunks[1])});});
  });
 }
-export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env}){
+export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env,assertAdmission}){
+ const fenced=policy?.schema_version===2;
+ if(fenced&&typeof assertAdmission!=='function')throw Error('COLLECTION_FENCED_ADMISSION_REQUIRED');
  const launchActive=()=>{if(admissionDeadlineMs!==undefined&&(!Number.isSafeInteger(admissionDeadlineMs)||admissionDeadlineMs>deadlineMs||Date.now()>=admissionDeadlineMs))throw Error('COLLECTION_LEAF_ADMISSION_DEADLINE');};
  launchActive();
  const binary=pinnedClient(policy);
@@ -34,7 +36,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  if(!/^[A-Za-z0-9_.:-]{1,200}$/.test(serial||'')||!Number.isSafeInteger(deadlineMs)||deadlineMs<=Date.now())throw Error('COLLECTION_LEAF_SCOPE_INVALID');
  const endpoint=policy.endpoint?.match(/^tcp:127\.0\.0\.1:([0-9]{1,5})$/);
  if(!endpoint||Number(endpoint[1])<1||Number(endpoint[1])>65535)throw Error('COLLECTION_LEAF_ROUTE_INVALID');
- const clean={...env};for(const key of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(key))delete clean[key];
+ const clean=fenced?Object.fromEntries(Object.entries(env).filter(([key])=>['HOME','PATH','LANG','TMPDIR','TZ'].includes(key)||/^LC_[A-Z_]+$/.test(key))):{...env};for(const key of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(key))delete clean[key];
  // 每个producer实证内核拒绝fork；仅检查sandbox-exec文件存在不足以签发。
  const positive=await run(sandbox,['-p',profile,'/usr/bin/true'],clean,2000,()=>{},launchActive);
  const negative=await run(sandbox,['-p',profile,'/bin/sh','-c','/usr/bin/true & wait'],clean,2000,()=>{},launchActive);
@@ -42,21 +44,25 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  mkdirSync(directory,{recursive:true,mode:0o700});
  const socket=join(tmpdir(),'cl-'+randomBytes(12).toString('hex')+'.sock'),nonce=randomBytes(24).toString('hex');
  const ledger=join(directory,'collection-leaves-'+randomBytes(8).toString('hex')+'.jsonl');
- const leaves=[],clients=new Set(),finishedClients=new WeakSet();let active=0,sealed=false,tainted=false,returnUnknown=false,draining;
+ const leaves=[],clients=new Set(),finishedClients=new WeakSet();let active=0,sealed=false,tainted=false,returnUnknown=false,draining,epochFenceLost=false;
  const append=entry=>appendFileSync(ledger,JSON.stringify(entry)+'\n',{mode:0o600});
  const dispatch=async request=>{
   if(returnUnknown)throw Error('COLLECTION_LEAF_RETURN_UNKNOWN');
+  if(epochFenceLost)throw Object.assign(Error('EPOCH_ADMISSION_LOST'),{epochFenceLost:true});
   if(sealed||Date.now()>=deadlineMs||active)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
   if(!request||Object.keys(request).sort().join(',')!=='argv,nonce'||request.nonce!==nonce||!Array.isArray(request.argv)||request.argv.some(x=>typeof x!=='string'||x.length>12000||x.includes('\0')))throw Error('COLLECTION_LEAF_REQUEST_INVALID');
   const argv=request.argv,version=argv.length===1&&argv[0]==='version';
   if(!version&&(argv.length<7||JSON.stringify(argv.slice(0,6))!==JSON.stringify(['-H','127.0.0.1','-P',endpoint[1],'-s',serial])||!['get-state','shell','exec-out','pull'].includes(argv[6])))throw Error('COLLECTION_LEAF_COMMAND_REFUSED');
   if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
   active++;
-  const entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(argv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};
-  leaves.push(entry);
+  let entry;
   try{
+   if(fenced)await assertAdmission();
+   if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
+   if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
+   entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(argv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};leaves.push(entry);
    append({...entry,phase:'intent'});
-   const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},launchActive);
+   const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},()=>{launchActive();if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');});
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
    // This is a lifecycle proof from our nofork child close, not business success.
    const dumpCrashReturned=result.code===137&&result.signal===null&&!result.tainted&&result.stderr.length===0
@@ -74,14 +80,15 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    }
    append({...entry,phase:'exit'});
    if(result.code!==0||result.signal||result.tainted)tainted=true;
+   if(fenced)await assertAdmission();
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
-  }catch(error){tainted=true;returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}throw error;}finally{active--;}
+  }catch(error){tainted=true;if(error.epochFenceLost){epochFenceLost=true;try{append({...entry,phase:'epoch_fence_lost',new_leaf_returned:entry?.request_returned===true});}catch{}}else{returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}}throw error;}finally{active--;}
  };
  const server=createServer({allowHalfOpen:true},client=>{
   clients.add(client);client.once('close',()=>{clients.delete(client);if(!finishedClients.has(client)){tainted=true;returnUnknown=true;}});client.on('error',()=>{});let bytes='';
   client.setTimeout(Math.max(1,deadlineMs-Date.now()),()=>{tainted=true;returnUnknown=true;client.destroy();});
   client.on('data',b=>{bytes+=b;if(bytes.length>32000){tainted=true;returnUnknown=true;client.destroy();}});
-  client.on('end',async()=>{try{const response=await dispatch(JSON.parse(bytes));finishedClients.add(client);client.end(JSON.stringify(response)+'\n');}catch(error){tainted=true;returnUnknown=true;finishedClients.add(client);client.end(JSON.stringify({ok:false,error:String(error.message)})+'\n');}});
+  client.on('end',async()=>{try{const response=await dispatch(JSON.parse(bytes));finishedClients.add(client);client.end(JSON.stringify(response)+'\n');}catch(error){tainted=true;if(error.epochFenceLost)epochFenceLost=true;else returnUnknown=true;finishedClients.add(client);client.end(JSON.stringify({ok:false,error:String(error.message)})+'\n');}});
  });
  await new Promise((yes,no)=>{server.once('error',no);server.listen(socket,yes);});chmodSync(socket,0o600);
  const drain=()=>draining??=(async()=>{
@@ -93,7 +100,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   if(active){tainted=true;returnUnknown=true;throw Error('COLLECTION_LEAF_DRAIN_UNVERIFIED');}
  })();
  const returned=()=>sealed&&!returnUnknown&&active===0&&leaves.every(x=>x.started_at&&x.ended_at&&x.request_returned===true);
- const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,requests_returned:returned()&&leaves.length>0,empty_requests_returned:returned()&&leaves.length===0,leaves:structuredClone(leaves),ledger});
+ const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,requests_returned:returned()&&leaves.length>0,empty_requests_returned:returned()&&leaves.length===0,...(fenced?{epoch_fence_lost:epochFenceLost}:{}),leaves:structuredClone(leaves),ledger});
  return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},isReturnUnknown:()=>returnUnknown,
   seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }
