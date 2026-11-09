@@ -295,3 +295,5 @@ services/phone-adb-controller/commander/.admission.lock
 
 # 固定中心Skill生成正文
 /services/phone-adb-controller/skills/runner-commander/
+
+/services/phone-adb-controller/skills/leadgen-official-child-host.md

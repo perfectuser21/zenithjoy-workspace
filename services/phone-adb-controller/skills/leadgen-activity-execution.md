@@ -21,14 +21,6 @@ Activity是可验收的业务工作；Skill是执行方法，Code是该方法的
 - Code内部优化若不改变方法或业务合同，可保持Skill版本；须用明确的兼容评估绑定前后代码集合哈希、理由和reviewer。不能仅刷新哈希就宣称兼容，更不能让兼容声明掩盖Skill正文变化。
 - 同版本Skill文件不可悄改；正在运行的任务保留原冻结组合，新版本供新运行使用。配套通过、代码通过、Skill实机通过、自动接手通过是不同证据，不互相冒用。
 
-## 正式 Skill 首发宿主
-
-本文件中 Code 失败、原失败证据、接手和 `resume` 约束只适用于失败后恢复；它们不是正常 `mode=execute` 的前置条件。正常首发必须仍由本次固定 Activity 方法、完整运行来源、任务、资源和绝对截止共同准入；不得制造 Code 失败来进入 Skill。
-
-`primary_host=official-child-v1` 使用原官方 child 方式，`execution_mode=agent` 且 `execution_transport` 与 `max_turns` 缺省。仅方法明确声明 `metadata.primary_hosts` 包含该宿主并加载本次冻结的 `skills/leadgen-official-child-host.md` 时，允许中央内部 `actor=common-runner` / `source_kind=internal` 绑定。父宿主必须核本进程仍有效的公共 authority、canonical run UUID、原 Task、run binding、真实 task_run_id 关联、本地运行与中央定义两种摘要，以及同源 Workflow/Activity/Method 固定版本；不能靠 child 请求自报 actor、目录或来源取得权限。旧外部绑定和 raw 通道保留各自原准入合同。
-
-宿主只派本次 Activity 的一次官方 child，复用受控 `inspect`、`phone`、`business` 工具；不启动第二个 Workflow 循环，不执行整个 Code handler，不把模型输出当持久结果。正常终态必须同时核官方 child terminal、owner 返回、所有本宿主登记的原生操作及后台 producer 封闭、业务提交读回，并由原独立验收判定。任何执行或副作用未知均保留隔离，不重发同一操作、不扩大预算、不凭外层 shell 返回宣称录音 producer 已停。原设备、账号、租户、epoch 以及 104 的禁止外发边界保持。
-
 ## leadgen-activity-v1工具约束
 
 只有原run失败边界可创建request，方法来自冻结Activity binding与实际字节；MMV起跑前重读中央run/definition/Activity及同源Skill。child先验自己的官方绑定；inspect仅读原状态，phone只可读证/受控归位，resume至多一次且只运行原slot成熟handler。原失败和接手证据分开记录，原verify通过才写成功。send_dm始终readback_only，不重发、不凭自述补发送事实。未知child或仍在飞的原动作保持锁、阻止后续业务与cleanup。
