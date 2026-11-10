@@ -804,7 +804,7 @@
       "code_digest": "f1bc39316d65e243310d9e87435052f89ef2ead309cff711b99cbe092c51fd40",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "4a2e5454be4c8daf2ac441b9d4e8fe7ecea966dc0634667a01afbc57bc66e262",
         "current_code_digest": "f1bc39316d65e243310d9e87435052f89ef2ead309cff711b99cbe092c51fd40"
@@ -1645,7 +1645,7 @@
       "code_digest": "d1ed377a1094cb0d9c32240e958bbdf3d836ed248babafe47ed4c32d1e87fcfe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "07bbf52031263bac63d0bd6df193a4162fb4a630346408c695e3f7a200e40bb3",
         "current_code_digest": "d1ed377a1094cb0d9c32240e958bbdf3d836ed248babafe47ed4c32d1e87fcfe"
@@ -2433,7 +2433,7 @@
       "code_digest": "8837b014d495b2a5911312d5fc7bf8ff65052dca9c2c844b2febd40943466da5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "a5d3418495c82a7e51990111ba75a17ed11c478012e0cac2b638547d4103c28a",
         "current_code_digest": "8837b014d495b2a5911312d5fc7bf8ff65052dca9c2c844b2febd40943466da5"
@@ -3305,7 +3305,7 @@
       "code_digest": "3b742ab1a7927b300706ca957a0308b1f08662e5811657d52dba1e4677ea9247",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "651c66207e4c83e30f6e06183f4088473077b7744849f9883aad49cfef6b9f3f",
         "current_code_digest": "3b742ab1a7927b300706ca957a0308b1f08662e5811657d52dba1e4677ea9247"
@@ -4115,7 +4115,7 @@
       "code_digest": "52fb75209840eb9adbb8702a35dbac09900bd2581306dbaf8905665fdf23938d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "1332137f26e62f7f262fc5f3a9ac68c914e0f659f5c4727f4d2748fa0876a26d",
         "current_code_digest": "52fb75209840eb9adbb8702a35dbac09900bd2581306dbaf8905665fdf23938d"
@@ -4934,7 +4934,7 @@
       "code_digest": "9c1bd0106349c56b8a6d1851fed9cfeed5b4504a61aedbe6d655d62065b6b106",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "8d07b525c6088d0ea53658e5a315b5452523e073c4d25a5144bbe58a6477f758",
         "current_code_digest": "9c1bd0106349c56b8a6d1851fed9cfeed5b4504a61aedbe6d655d62065b6b106"
@@ -5736,7 +5736,7 @@
       "code_digest": "ed6ab73e595d63f375890d1fd130800759c5a139aa111e20bc9831b62098ec9a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "5cc3bc7eafb25e0bdfbd236f0e2b2a9a5d633350abbd34660e41186aff380c7a",
         "current_code_digest": "ed6ab73e595d63f375890d1fd130800759c5a139aa111e20bc9831b62098ec9a"
@@ -6580,7 +6580,7 @@
       "code_digest": "4d0e9bdcbe210051731af36b54a53f2babebee43993142a5fd1ae463c6c217d2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "9102d0b1c7c59dc64785b15ed0be3b05d9e45ad22a36a7f2141c35edf4286532",
         "current_code_digest": "4d0e9bdcbe210051731af36b54a53f2babebee43993142a5fd1ae463c6c217d2"
@@ -7354,7 +7354,7 @@
       "code_digest": "721cdac7f4e03574bdd7ace7c62253b4b176f0ddc3f8dac0c9969906c54ac7c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "738e68061c2e947ec0c947c459b46a80ceaf0b17d1e7c4c0dc30e4d5db6b2045",
         "current_code_digest": "721cdac7f4e03574bdd7ace7c62253b4b176f0ddc3f8dac0c9969906c54ac7c6"
@@ -8103,7 +8103,7 @@
       "code_digest": "cc6cd097eb03e6acb1db8c9cf9511211db949b68fc774f9b558b302b84fd263d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "81a86b45a097e3f529ca0972c6b901667fe1bc6d83a7a4f8ad33301535c31a8b",
         "current_code_digest": "cc6cd097eb03e6acb1db8c9cf9511211db949b68fc774f9b558b302b84fd263d"
@@ -8845,7 +8845,7 @@
       "code_digest": "4942e5313730cf38dc57dc8dc834cce6f7c5fcb13333e8cbf41469afabae4de0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "59d32360ddc2e6be3483ade0e74316542252ba6b7c766f8416bd6020560e37f8",
         "current_code_digest": "4942e5313730cf38dc57dc8dc834cce6f7c5fcb13333e8cbf41469afabae4de0"
@@ -9597,7 +9597,7 @@
       "code_digest": "4bb973e908593d70370d51258fcc07489a45d53fb80790caecf0fa36295252a4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
+        "reason": "仅恢复原预算内同owner只读等待、保存有限拒绝诊断并同步已审源码指纹；Skill正文、业务合同、授权条件和原unknown保护不变。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "234104f4f729943f35be27139fabd2788cf58e13539bc0ced9ff09fbc6847c52",
         "current_code_digest": "4bb973e908593d70370d51258fcc07489a45d53fb80790caecf0fa36295252a4"
