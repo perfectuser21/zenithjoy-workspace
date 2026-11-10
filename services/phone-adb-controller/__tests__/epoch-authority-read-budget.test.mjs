@@ -54,6 +54,7 @@ for(const [name,response] of [
  ['超限body',()=>new Response('x'.repeat(8*1024*1024+1),{headers:{'Content-Type':'application/json'}})],
  ['body阶段socket',()=>({status:200,headers:new Headers({'Content-Type':'application/json'}),text:async()=>{throw socket();}})],
  ['外来TimeoutError',()=>{throw new DOMException('foreign timer','TimeoutError');}],
+ ['调用方取消',()=>{throw new DOMException('caller cancelled','AbortError');}],
  ])test(name+'不得通过后续200重读变成功',async t=>{
  fixture(t);let calls=0;globalThis.fetch=async()=>{calls++;return calls===1?response():json({incorrect:true});};
  await assert.rejects(()=>readBrain(path,{deadlineMs:Date.now()+30000,maxAttempts:2}));assert.equal(calls,1);
@@ -69,4 +70,10 @@ test('默认verify-epoch读取仍只有一次GET和原10秒计时器',async t=>{
  AbortSignal.timeout=ms=>{timeouts.push(ms);return new AbortController().signal;};
  globalThis.fetch=async()=>{calls++;throw socket();};
  await assert.rejects(()=>readBrain(path));assert.equal(calls,1);assert.deepEqual(timeouts,[10000]);
+});
+
+test('原截止后的迟到200不能变成授权成功',async t=>{
+ fixture(t);let now=100000,calls=0;Date.now=()=>now;
+ globalThis.fetch=async()=>{calls++;now=110000;return json({incorrect:true});};
+ await assert.rejects(()=>readBrain(path,{deadlineMs:110000,maxAttempts:2}),e=>e.epoch_diagnostic.failure==='timeout');assert.equal(calls,1);
 });
