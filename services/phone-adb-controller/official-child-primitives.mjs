@@ -8,14 +8,15 @@ import {canonical,readFrozen} from './runtime-definition.mjs';
 import {publicDomainAuthority} from './public-domain-authority.mjs';
 import {verifyPublicDomainTask} from './public-domain-pg.mjs';
 import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
-import {createOfficialCliClosure,describeOfficialCliInvocation,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from './official-cli-closure.mjs';
+import {createOfficialCliClosure,isOfficialCliInvocationNotStarted,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from './official-cli-closure.mjs';
 import {createOfficialRecordingProducer} from './official-recording-producer.mjs';
 import {skillLaunchDidNotStart} from './activity-skill-executor.mjs';
 import {fetchBrainAuthorityGet} from './brain-authority-get.mjs';
-const instances=new WeakSet(),returned=new WeakMap();
+const instances=new WeakSet(),returned=new WeakMap(),notStarted=new WeakMap();
 const key=({command,args,receipt,root,frozen})=>canonical({command,args,receipt,root,snapshot_sha256:frozen.snapshot_sha256});
 export const isOfficialChildPrimitives=v=>instances.has(v);
 export const officialChildOperationReturned=(result,context)=>returned.get(result)===key(context);
+export const officialChildInvocationNotStarted=(error,context)=>notStarted.get(error)===key(context);
 const fail=()=>Object.assign(Error('OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED'),{executionStopped:false,externalEffect:'unknown'});
 export function createOfficialChildPrimitives({root,env,frozen,binding,taskId,state}){
  if(!['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'].includes(frozen.agent_input?.workflow_key)||realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||frozen.primary_host!=='official-child-v1'||frozen.execution_mode!=='agent'||frozen.execution_transport!==undefined||taskId!==frozen.agent_input.task_id)throw fail();
@@ -47,7 +48,14 @@ export function createOfficialChildPrimitives({root,env,frozen,binding,taskId,st
  async function execute(command,args,options={}){
   const entry=current;if(!entry||entry.done||!entry.cli)throw fail();stable();
   const originalReceipt=options.receipt,receipt=originalReceipt||{runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:binding.run_id,taskId,profile:env.P,serial:env.SERIAL,sourceCommit:frozen.deployment.source_commit,owner:env.WFR_TAG,activity:entry.scope.activity};
-  const plan=describeOfficialCliInvocation({root,command,args,executables:spec.executables,profile:env.P,owner:env.WFR_TAG,serial:env.SERIAL});
+  let plan;
+  try{plan=entry.cli.plan(command,args,{receipt});}
+  catch(error){
+   if(!unknown&&!entry.unknown&&!state.executionUnknown&&isOfficialCliInvocationNotStarted(error,{command,args,receipt,root,frozen})){
+    notStarted.set(error,key({command,args,receipt:originalReceipt,root,frozen}));throw error;
+   }
+   unknown=true;entry.unknown=true;state.executionUnknown=true;throw Object.assign(error,{executionStopped:false,externalEffect:'unknown'});
+  }
   let ticket;entry.pending++;
   try{
    if(plan.kind==='recording-outer-only'){

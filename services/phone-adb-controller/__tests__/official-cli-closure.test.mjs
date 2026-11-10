@@ -5,7 +5,7 @@ import * as client from '../leadgen-client.mjs';
 const outer=(...a)=>{assert.equal(typeof client.executionOuterReturned,'function','CLI closure needs a live outer-close capability');return client.executionOuterReturned(...a);};
 test('only the actual execInput close brands its exact immutable invocation',async()=>{const args=['-c','printf closed'],result=await execInput('/bin/sh',args,{env:{PATH:'/usr/bin:/bin'}});assert.equal(outer(result,'/bin/sh',args),true);assert.equal(outer({...result},'/bin/sh',args),false);assert.equal(outer(result,'/bin/sh',['-c','printf different']),false);assert.equal(outer(result,'/usr/bin/true',args),false);args[1]='changed';assert.equal(outer(result,'/bin/sh',args),false);});
 test('execInput timeout and serialized exit zero cannot grant outer return authority',async()=>{const args=['-c','sleep 5'];let error;try{await execInput('/bin/sh',args,{timeoutMs:30,env:{PATH:'/usr/bin:/bin'}});}catch(e){error=e;}assert.ok(error);assert.equal(outer(error,'/bin/sh',args),false);assert.equal(outer({code:0,executionStopped:true},'/bin/sh',args),false);});
-import {describeOfficialCliInvocation,createOfficialCliClosure,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from '../official-cli-closure.mjs';
+import {describeOfficialCliInvocation,createOfficialCliClosure,isOfficialCliOperationStopped,isOfficialCliOuterReturned,isOfficialCliInvocationNotStarted} from '../official-cli-closure.mjs';
 import {readFileSync,readdirSync,lstatSync,mkdtempSync,realpathSync,rmSync,mkdirSync,writeFileSync,unlinkSync,symlinkSync,cpSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -35,6 +35,15 @@ test('Skill公布的只读能力经真实phone参数适配可被官方CLI执行�
  const before=invocations.length;await assert.rejects(()=>tools.phone('outward-ledger','foreign-run'),/PHONE_INPUT_INVALID/);assert.equal(invocations.length,before);
 });
 test('CLI plan admits fixed argv and refuses arbitrary shell, sends and background entry points',()=>{assert.equal(describe('zsh',['-f',join(root,'douyin-phone-adb'),'--profile','fixture','foreground']).kind,'synchronous-cli');assert.equal(describe(join(root,'douyin-phone-adb'),['--profile','fixture','record-start','run-record','25','7712345678901234567']).kind,'recording-outer-only');for(const [command,args]of [['zsh',['-fc','echo fake']],['python3',['-c','pass']],[join(root,'douyin-phone-adb'),['--profile','fixture','private-message-send']],[join(root,'douyin-phone-adb'),['--profile','fixture','with-lock']],[join(root,'douyin-phone-adb'),['--profile','fixture','tap-evidence','--outward','send']]])assert.throws(()=>describe(command,args),/OFFICIAL_CLI/);});
+test('只读命令不能携带额外参数或改读另一owner账本',()=>{
+ const ctl=join(root,'douyin-phone-adb'),prefix=['--profile','fixture'];
+ for(const command of ['status','window']){
+  assert.throws(()=>describe(ctl,[...prefix,command,'extra']),/OFFICIAL_CLI_INVOCATION/);
+  assert.throws(()=>describe(ctl,[...prefix,'--lock-owner','run',command]),/OFFICIAL_CLI_INVOCATION/);
+ }
+ for(const tail of [[],['foreign-owner'],['11111111-1111-4111-8111-111111111111'],['run','extra']])assert.throws(()=>describe(ctl,[...prefix,'outward-ledger',...tail]),/OFFICIAL_CLI_OWNER/);
+ assert.throws(()=>describe(ctl,[...prefix,'--lock-owner','run','outward-ledger','run']),/OFFICIAL_CLI_OWNER/);
+});
 function rig(t,{epochFails=false,sourceMismatch=false,runtimeRoot=root,createFacade=createOfficialCliClosure}={}){const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-cli-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));const files={};for(const name of readdirSync(runtimeRoot)){const path=join(runtimeRoot,name);if(lstatSync(path).isFile())files['runtime/'+name]=digest(readFileSync(path));}if(sourceMismatch)files['runtime/douyin-phone-adb']='0'.repeat(64);const taskId='11111111-1111-4111-8111-111111111111',binding={run_id:'run__a1',id:'22222222-2222-4222-8222-222222222222'},env={HOME:directory,WFR_RUN_DIR:directory,P:'fixture',SERIAL:'serial',WFR_TAG:'run',WFR_ATTEMPT:'a1'},frozen={snapshot_sha256:'a'.repeat(64),deployment:{source_commit:'b'.repeat(40)},files,agent_input:{task_id:taskId,profile:'fixture',serial:'serial',run_tag:'run',workflow_key:'douyin_video_processing'},collection_phone_scope:{run_id:binding.run_id,profile:'fixture',serial:'serial',policy:{schema_version:2},executables}};let admissions=0;const phases=[];const facade=createFacade({root:runtimeRoot,env,frozen,binding,taskId,scope:{activity:'preflight',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,snapshot_sha256:frozen.snapshot_sha256,source_commit:frozen.deployment.source_commit,profile:'fixture',serial:'serial',run:'run',workflow:'douyin_video_processing',worker_deadline_ms:Date.now()+20000,receipt_deadline_ms:Date.now()+25000,deadline_ms:Date.now()+30000},assertAdmission:async request=>{phases.push(request);admissions++;if(epochFails)throw Object.assign(Error('EPOCH_LOST'),{resourceUnknown:true});return {authorized:true};}});const receipt={runDir:directory,operationId:'op1',runId:binding.run_id,taskId,profile:'fixture',serial:'serial',sourceCommit:frozen.deployment.source_commit,owner:'run',activity:'preflight'};return {facade,frozen,receipt,phases,admissions:()=>admissions};}
 test('伪造的未启动字段、克隆异常和错操作身份不能取得原生停止权限',async t=>{
  const r=rig(t),command=join(root,'douyin-phone-adb'),args=['--profile','fixture','private-message-send'];
@@ -62,3 +71,24 @@ test('private PATH entries cannot be replaced between prepare and a CLI operatio
 
 // The reviewed v2 policy remains a fixed dependency; a new frozen hash alone is no authority.
 test('正式新auth policy仅已独审字节通过，任意追加即使重冻hash也在spawn前拒绝',async t=>{const clone=realpathSync(mkdtempSync(join(tmpdir(),'cli-policy-review-')));t.after(()=>rmSync(clone,{recursive:true,force:true}));cpSync(root,clone,{recursive:true,filter:p=>!p.split('/').some(n=>['__tests__','node_modules','_dependencies'].includes(n))});symlinkSync(realpathSync(join(root,'../../node_modules')),join(clone,'node_modules'));const createFacade=(await import(pathToFileURL(join(clone,'official-cli-closure.mjs')).href)).createOfficialCliClosure;const approved=rig(t,{runtimeRoot:clone,createFacade});assert.equal(await approved.facade.prepare(),true);await approved.facade.close();const policy=join(clone,'adb-host-instance-policy.py');writeFileSync(policy,readFileSync(policy,'utf8')+'\n# unreviewed source change\n');const changed=rig(t,{runtimeRoot:clone,createFacade});await assert.rejects(changed.facade.execute(join(clone,'douyin-phone-adb'),['--profile','fixture','runtime-contract'],{receipt:changed.receipt}),/OFFICIAL_CLI_SOURCE/);assert.equal(changed.admissions(),0);await changed.facade.close();});
+
+test('只有callee自身规划拒绝具有精确调用品牌，外部plan和其他前置失败不能取得品牌',async t=>{
+ const r=rig(t),command=join(root,'douyin-phone-adb'),args=['--profile','fixture','lock-acquire','foreign-owner'];
+ let error;try{r.facade.plan(command,args,{receipt:r.receipt});}catch(e){error=e;}
+ const context={command,args,receipt:r.receipt,root,frozen:r.frozen};
+ assert.equal(isOfficialCliInvocationNotStarted(error,context),true);
+ assert.equal(error.externalEffect,'none');assert.equal(r.admissions(),0);
+ for(const changed of [{command:'zsh'},{args:[...args,'extra']},{receipt:{...r.receipt,operationId:'foreign'}},{root:root+'-foreign'},{frozen:{...r.frozen,snapshot_sha256:'c'.repeat(64)}}])assert.equal(isOfficialCliInvocationNotStarted(error,{...context,...changed}),false);
+ assert.equal(isOfficialCliInvocationNotStarted(Object.assign(Error(error.message),error),context),false);
+ await assert.rejects(r.facade.execute(command,args,{receipt:r.receipt,plan:{kind:'local-metadata',binary:'/usr/bin/true',args:[]}}),e=>isOfficialCliInvocationNotStarted(e,context));
+ let invalidReceipt;try{r.facade.plan(command,args,{receipt:{...r.receipt,operationId:'bad/receipt'}});}catch(e){invalidReceipt=e;}
+ assert.equal(isOfficialCliInvocationNotStarted(invalidReceipt,context),false);
+ await r.facade.close();
+ const q=rig(t,{sourceMismatch:true}),qcontext={...context,receipt:q.receipt,frozen:q.frozen};
+ let sourceError;try{q.facade.plan(command,args,{receipt:q.receipt});}catch(e){sourceError=e;}
+ assert.match(sourceError.message,/SOURCE/);assert.equal(isOfficialCliInvocationNotStarted(sourceError,qcontext),false);await q.facade.close();
+ const sticky=rig(t),stickyContext={...context,receipt:sticky.receipt,frozen:sticky.frozen};
+ mkdirSync(join(sticky.receipt.runDir,'native-operations'),{mode:0o700});writeFileSync(join(sticky.receipt.runDir,'native-operations','op1.unknown'),'sticky',{mode:0o600});
+ let stickyError;try{sticky.facade.plan(command,args,{receipt:sticky.receipt});}catch(e){stickyError=e;}
+ assert.match(stickyError.message,/PREVIOUS_UNKNOWN/);assert.equal(isOfficialCliInvocationNotStarted(stickyError,stickyContext),false);assert.equal((await sticky.facade.close()).unknown,true);
+});
