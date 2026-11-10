@@ -209,7 +209,7 @@ export function createLeadgenAgentTools({scope:provided,runDir,primitives}){
     if(readPhone.has(command)&&args.length)throw Error('AGENT_TOOL_PHONE_INPUT_INVALID');
     const readEid=primitives.evidenceId?.(command,{...scope,evidence_id:eid})||(scope.activity==='cleanup'?`${scope.run}-${scope.run_id.split('__').at(-1)}-cleanup-desktop`:eid);
     if(!/^[A-Za-z0-9_-]+$/.test(readEid)||!readEid.startsWith(scope.run+'-'))throw Error('AGENT_TOOL_EVIDENCE_ID_INVALID');
-    const trusted=readPhone.has(command)?(['ui-evidence','snapshot-evidence'].includes(command)?[readEid]:[]):await primitives.validatePhone(command,args,{...scope,evidence_id:eid});
+    const trusted=readPhone.has(command)?(['ui-evidence','snapshot-evidence'].includes(command)?[readEid]:command==='outward-ledger'?[scope.run]:[]):await primitives.validatePhone(command,args,{...scope,evidence_id:eid});
     if(!Array.isArray(trusted))throw Error('AGENT_TOOL_PHONE_ADMISSION_INVALID');
     if(Date.now()>=executionDeadline)throw Error('AGENT_TOOL_DEADLINE');
     const value=await primitives.phone(command,...trusted);if(scope.activity==='preflight'&&preflightSteps.includes(command))completedPreflightPhone.add(command);return value;

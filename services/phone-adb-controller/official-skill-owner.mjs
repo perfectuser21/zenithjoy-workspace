@@ -95,23 +95,43 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
  const describe=async()=>{
   const {body:description,start}=await read('sessions.describe',{key:parent,agentId:'work-commander'}),row=description.session;
   if(row?.key!==parent||typeof row.sessionId!=='string'||!row.sessionId||sessionId&&row.sessionId!==sessionId
-   ||row.hasActiveRun!==false||!Array.isArray(row.activeRunIds)||row.activeRunIds.length||!Number.isFinite(row.snapshotAt)
+   ||typeof row.hasActiveRun!=='boolean'||!Number.isFinite(row.snapshotAt)
    ||row.snapshotAt<start-1000||row.snapshotAt>Date.now()+1000)fail();sessionId=row.sessionId;
+  if(row.hasActiveRun){
+   if(row.activeRunIds!==undefined&&(!Array.isArray(row.activeRunIds)||!row.activeRunIds.length||row.activeRunIds.some(id=>typeof id!=='string'||!id)))fail();
+   return 'pending';
+  }
+  if(!Array.isArray(row.activeRunIds)||row.activeRunIds.length)fail();return 'ready';
+ };
+ const census=async()=>{
+  if(await describe()==='pending')return 'pending';
+  const {body:history}=await read('chat.history',{sessionKey:parent,limit:1}),queue=history.pendingInputs;
+  if(history.sessionKey!==parent||history.sessionId!==sessionId||!queue||!Number.isSafeInteger(queue.total)||queue.total<0
+   ||!Number.isSafeInteger(queue.queuedCount)||queue.queuedCount<0||!Array.isArray(queue.items)||queue.total<queue.items.length
+   ||queue.items.some(item=>!item||typeof item!=='object'||typeof item.id!=='string'||!item.id))fail();
+  if(queue.total||queue.queuedCount||queue.items.length)return 'pending';
+  const {body:core}=await read('tools.invoke',{name:'subagents',sessionKey:parent,args:{action:'list'}}),d=core.output?.details;
+  if(core.ok!==true||core.toolName!=='subagents'||core.source!=='core'||d?.status!=='ok'||d.action!=='list'
+   ||d.callerIsSubagent!==false||d.callerSessionKey!==parent||d.requesterSessionKey!==parent
+   ||!Array.isArray(d.active)||!Array.isArray(d.recent)
+   ||d.active.some(row=>!row||typeof row.runId!=='string'||!row.runId||typeof row.sessionKey!=='string'||!row.sessionKey
+    ||!['queued','running','waiting','finished'].includes(row.execution?.state)))fail();
+  const matches=d.recent.filter(r=>r.runId===child.child_run_id&&r.sessionKey===child.child_session_key);
+  if(matches.length!==1||matches[0].execution?.state!=='finished'||!Number.isSafeInteger(matches[0].pendingDescendants)||matches[0].pendingDescendants<0
+   ||!['pending','in_progress','delivered'].includes(matches[0].deliveryStatus))fail();
+  if(d.active.length||matches[0].pendingDescendants||matches[0].deliveryStatus!=='delivered')return 'pending';
+  return 'ready';
  };
  try{
-  for(let round=0;round<2;round++){
-   await describe();
-   const {body:history}=await read('chat.history',{sessionKey:parent,limit:1}),queue=history.pendingInputs;
-   if(history.sessionKey!==parent||history.sessionId!==sessionId||queue?.total!==0||queue.queuedCount!==0||!Array.isArray(queue.items)||queue.items.length)fail();
-   const {body:core}=await read('tools.invoke',{name:'subagents',sessionKey:parent,args:{action:'list'}}),d=core.output?.details;
-   if(core.ok!==true||core.toolName!=='subagents'||core.source!=='core'||d?.status!=='ok'||d.action!=='list'
-    ||d.callerIsSubagent!==false||d.callerSessionKey!==parent||d.requesterSessionKey!==parent
-    ||!Array.isArray(d.active)||d.active.length||!Array.isArray(d.recent))fail();
-   const matches=d.recent.filter(r=>r.runId===child.child_run_id&&r.sessionKey===child.child_session_key);
-   if(matches.length!==1||matches[0].execution?.state!=='finished'||matches[0].pendingDescendants!==0||matches[0].deliveryStatus!=='delivered')fail();
+  let rounds=0;
+  while(Date.now()<end){
+   if(await census()==='ready'){
+    if(++rounds<2)continue;
+    if(await describe()==='ready'){current();verified=true;break;}
+   }
+   rounds=0;
+   await new Promise(resolve=>setTimeout(resolve,Math.max(0,Math.min(100,end-Date.now()))));
   }
-  await describe(); // an emptied completion queue may have become a new parent run
-  current();verified=true;
  }catch{/* An unfinished delivery or an uncertain census retains the original reservation. */}
  const proof=Object.freeze({...result,protocol:'official-skill-owner-closure/v1',owner_run_execution_stopped:true,
   execution_stopped:verified,session_quiescent:verified,session_id:sessionId??null,closure_read_count:reads});

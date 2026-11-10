@@ -1,4 +1,4 @@
-import {officialChildOperationReturned} from './official-child-primitives.mjs';
+import {officialChildOperationReturned,officialChildInvocationNotStarted} from './official-child-primitives.mjs';
 import {canonicalRunId,readPublicDomainBinding} from './public-domain-authority.mjs';
 import {isNativePhoneRuntime} from './native-phone-runtime.mjs';
 import {isNativeScoringWorkflow} from './native-scoring-workflow.mjs';
@@ -96,6 +96,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
     chmodSync(file,0o600);
   };
+  const provedOfficialNotStarted=(error,command,args,opts)=>officialChildHost&&officialChildInvocationNotStarted(error,{command,args,receipt:opts.receipt,root,frozen:readFrozen(env.WFR_RUN_DIR)});
   const nativeFailure=(error,command,args,opts)=>applyNativeFailure(error,command,args,opts,state);
   const bounded=async(command,args,opts={})=>{
     invalidateCollectionPhoneProof(state);
@@ -120,6 +121,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return result;
     } catch(error) {
       if(dispatchBudgetRejected)throw error; // 尚未调用execute；不伪造停止证明，也不污染原unknown。
+      if(!state.executionUnknown&&!state.nativeStopUnproven&&provedOfficialNotStarted(error,command,args,opts)){
+        recordDiagnostic(error.stderr||'');throw Object.assign(error,{executionStopped:true,externalEffect:'none'});
+      }
       nativeFailure(error,command,args,opts);
       recordDiagnostic(error.stderr||'');throw error;
     }
