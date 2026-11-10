@@ -16,7 +16,7 @@ import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const fail=reason=>Error('PUBLIC_CODE_PREFLIGHT_'+reason);
 export async function startPublicCodePreflightIO({root,env,frozen,state,lease,purpose,workerDeadlineMs,receiptDeadlineMs,signal,prepareLocal,assertLocal}){
- const epochGuard=createPhoneEpochGuard({root,env,frozen,state});
+ const epochGuard=createPhoneEpochGuard({root,env,frozen,state,deadlineMs:workerDeadlineMs});
  const formal=publicDomainAuthority(env.WFR_RUN_DIR),spec=frozen.discovery_phone_scope||frozen.collection_phone_scope,profile=frozen.preflight_profile;
  if(!formal||!spec||!profile||!['preflight','cleanup'].includes(purpose)||!publicDomainScopeMatches(env.WFR_RUN_DIR,{run:env.WFR_TAG,run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,profile:env.P,serial:env.SERIAL})
   ||frozen.execution_mode!=='code'||!['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||typeof prepareLocal!=='function'||typeof assertLocal!=='function'||!Number.isSafeInteger(workerDeadlineMs)||workerDeadlineMs>=receiptDeadlineMs||workerDeadlineMs>Date.now()+300000)throw fail('SCOPE');
