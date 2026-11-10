@@ -29,7 +29,7 @@ async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,re
  writeFileSync(join(runtime,'douyin-phone-adb'),'#!/bin/zsh\nexec "$DOUYIN_PYTHON_BIN" "${0:A:h}/fixture-capture-cli.py" "$@"\n',{mode:0o700});
  if(failedCli)writeFileSync(join(runtime,'douyin-phone-adb'),'#!/bin/zsh\nprintf started > "$FIXTURE_EVIDENCE/failed-cli-started"\nexit 2\n',{mode:0o700});
  const closure=join(runtime,'official-cli-closure.mjs');writeFileSync(closure,readFileSync(closure,'utf8').replace(/ "douyin-phone-adb":.*\n/,' "douyin-phone-adb": "'+hash(readFileSync(join(runtime,'douyin-phone-adb')))+'",\n'));
- const primitive=join(runtime,'official-child-primitives.mjs'),primitiveSource=readFileSync(primitive,'utf8'),epochAdmission='const proof=await createPhoneEpochGuard({root,env,frozen,state})();';
+ const primitive=join(runtime,'official-child-primitives.mjs'),primitiveSource=readFileSync(primitive,'utf8'),epochAdmission='const proof=await createPhoneEpochGuard({root,env,frozen,state,deadlineMs:current.scope.worker_deadline_ms})();';
  assert.equal(primitiveSource.split(epochAdmission).length-1,1,'capture fixture epoch admission target must occur once');
  writeFileSync(primitive,primitiveSource.replace(epochAdmission,'const proof=await Promise.resolve({authorized:true});'));
  const python=realpathSync(spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).stdout.trim()),program=path=>({path:realpathSync(path),sha256:hash(readFileSync(realpathSync(path)))});
