@@ -560,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "2120c16d1de17e3c42d64e72eeb9ffd4fd878cce44d1ada59c80d3bc7b66b574",
+      "code_digest": "98b0664ffd7f7e70c35da4d957ae755068eedf3583a58f66624d1b76ac833085",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "dab95a335a230d6bf029c9da1c17c7942ad827e01bf735e902ab5458973923e6",
-        "current_code_digest": "2120c16d1de17e3c42d64e72eeb9ffd4fd878cce44d1ada59c80d3bc7b66b574"
+        "current_code_digest": "98b0664ffd7f7e70c35da4d957ae755068eedf3583a58f66624d1b76ac833085"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1418,7 +1418,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -1642,13 +1642,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7ba507f76e896736640b9798d5d59452a410fa3b383e7db2550f8896b0dad993",
+      "code_digest": "8cde875f6186b8859fdaafdcb6e494f8c74bd60572134ebd7f6c96109ef6a7f2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "4f75c9e15db0bae0a3c594e093b9c5b4b19401ceec312a0704f7bd378be63d5d",
-        "current_code_digest": "7ba507f76e896736640b9798d5d59452a410fa3b383e7db2550f8896b0dad993"
+        "current_code_digest": "8cde875f6186b8859fdaafdcb6e494f8c74bd60572134ebd7f6c96109ef6a7f2"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2203,7 +2203,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -2430,13 +2430,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "331a6775c306620da3fb71f0a0d0f908283f5d03fe624fd611ee5e181b028f12",
+      "code_digest": "b70c6e2242b186fa895c33d6cbe785533d4c7664b195672fa959ef3c6b8a2a7f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "c6b1cae1286c0086ffebc5975c6a9077dfdabeee85c9014db7014aedd94c2032",
-        "current_code_digest": "331a6775c306620da3fb71f0a0d0f908283f5d03fe624fd611ee5e181b028f12"
+        "current_code_digest": "b70c6e2242b186fa895c33d6cbe785533d4c7664b195672fa959ef3c6b8a2a7f"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3019,7 +3019,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -3302,13 +3302,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "7b132834ab242dc953747daccc89b522840590adc1d8809f1140507db783fccc",
+      "code_digest": "530134d5a32e07a04ad02d36ac14c413153ac7697167c1fb31e255a47842ad8e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "945ac3d4ff715402096eaa8147c43518238db3a2f0cac11f7a212938fd192cc4",
-        "current_code_digest": "7b132834ab242dc953747daccc89b522840590adc1d8809f1140507db783fccc"
+        "current_code_digest": "530134d5a32e07a04ad02d36ac14c413153ac7697167c1fb31e255a47842ad8e"
       }
     },
     "douyin_video_processing.collection": {
@@ -3863,7 +3863,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -4112,13 +4112,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "1a47fa74fbdb40b0515c3b9a87effd456c0c688640b734809f0f03845b639e19",
+      "code_digest": "4a8659927433eebc58d52169eea4ae206c16394232cc8d4cf12c3df097b1d8fd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "dde6713966e7c421c359644c5b4a42edb1bce7935940d0bd5e02729ebef6bfaf",
-        "current_code_digest": "1a47fa74fbdb40b0515c3b9a87effd456c0c688640b734809f0f03845b639e19"
+        "current_code_digest": "4a8659927433eebc58d52169eea4ae206c16394232cc8d4cf12c3df097b1d8fd"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4708,7 +4708,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -4931,13 +4931,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0a112c041d7ea5be914c41a083cf634be38e2205e26fadb70f33a94388448549",
+      "code_digest": "41883845b8a2b87285ca139bf9094e3153591832df82b5d32c6766478fb8e299",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "ba411e7f9be1a33589fd6d0d0f07923e04eae1998e2df35df96db75a91edc840",
-        "current_code_digest": "0a112c041d7ea5be914c41a083cf634be38e2205e26fadb70f33a94388448549"
+        "current_code_digest": "41883845b8a2b87285ca139bf9094e3153591832df82b5d32c6766478fb8e299"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5499,7 +5499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -5733,13 +5733,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "443f78d93b8cf60ff03f140ac9e2a5a72bacdfe0d21f74d871d17c1eb69f712e",
+      "code_digest": "1f69a75a4d182efc3a55b32958981e189b6372583ea294544df091b2d6fb7108",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "12ad538c227654ac4d4d685b70300b66feb930e303b0c1b761734b69196110ee",
-        "current_code_digest": "443f78d93b8cf60ff03f140ac9e2a5a72bacdfe0d21f74d871d17c1eb69f712e"
+        "current_code_digest": "1f69a75a4d182efc3a55b32958981e189b6372583ea294544df091b2d6fb7108"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6308,7 +6308,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -6577,13 +6577,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "98f0d8992d9306f6462093254dfd7757ada1310a0934c7ecc9422dd1ae460b50",
+      "code_digest": "b6cccc37cff07703c1d9277ea052a15a45aed8e4cb48383aa205172ef1e6bbce",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "固定Git独立复核确认Activity、合同、Method、Skill及Workflow身份不变；本次仅将设备准入的有限阶段、接口类别和失败类型保留至既有failure回执。原单次GET、10秒截止、并发首错、准入判据、粘性unknown及禁止重放保持；不持久化原异常正文或凭据。三部署清单及冻结闭包纳入诊断模块，受控回环断连和安全边界测试通过；此条不证明服务器停顿已修或真机业务成功。",
-        "reviewed_by": "pstack_epoch_source_compatibility",
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
         "previous_code_digest": "b12e6a2eb8e501fa33e54575464599ade85fc1253ff464a5a0ee2a87f0542251",
-        "current_code_digest": "98f0d8992d9306f6462093254dfd7757ada1310a0934c7ecc9422dd1ae460b50"
+        "current_code_digest": "b6cccc37cff07703c1d9277ea052a15a45aed8e4cb48383aa205172ef1e6bbce"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7092,7 +7092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -7351,13 +7351,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8562ce78b0746c92ed97e42067c85624527223b932337ecb1230ab099e23c7e0",
+      "code_digest": "64a9f0ea518ea04db3e8266c41f5688dd044fb59a9c1a8687d9155604a55f617",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；变化包括冻结部署闭包纳入brain-authority-get，以及101至103工具内business/phone等待当前在飞心跳；已审原共享policy及waitForHeartbeat、busy、guard、unresolved、journal、lifecycle边界，此等待沿用原worker截止，心跳失败保留未知，真正并发business仍拒绝。最终补强在异步资源/输入校验后intent之前及intent持久化后dispatch之前，按原executionDeadline拒绝晚业务；只有原唯一unknown intent精确匹配的pendingReadback纯SELECT沿用原outer截止，仍不清除unknown、不重发写、不新增业务attempt或Agent turn；104只涉及部署闭包，未添加工具能力。已审GET helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.preflight的内部实现兼容，不授权104或证明真机业务通过。",
-        "reviewed_by": "pstack_source_compatibility",
-        "previous_code_digest": "4079d89350b8f515b5848df5979c5c1dba3d7070f6d5eaf51568c4a9864159f7",
-        "current_code_digest": "8562ce78b0746c92ed97e42067c85624527223b932337ecb1230ab099e23c7e0"
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
+        "previous_code_digest": "8562ce78b0746c92ed97e42067c85624527223b932337ecb1230ab099e23c7e0",
+        "current_code_digest": "64a9f0ea518ea04db3e8266c41f5688dd044fb59a9c1a8687d9155604a55f617"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7866,7 +7866,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -8100,13 +8100,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0eac879024b06842362f0285bf874d7d28a86d06149961dee51dd8bde69bbd7e",
+      "code_digest": "49019961b1f87434b8897250c8409d8f785f03e499e1c488285aa5aa05b228b5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；变化包括冻结部署闭包纳入brain-authority-get，以及101至103工具内business/phone等待当前在飞心跳；已审原共享policy及waitForHeartbeat、busy、guard、unresolved、journal、lifecycle边界，此等待沿用原worker截止，心跳失败保留未知，真正并发business仍拒绝。最终补强在异步资源/输入校验后intent之前及intent持久化后dispatch之前，按原executionDeadline拒绝晚业务；只有原唯一unknown intent精确匹配的pendingReadback纯SELECT沿用原outer截止，仍不清除unknown、不重发写、不新增业务attempt或Agent turn；104只涉及部署闭包，未添加工具能力。已审GET helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.send_dm的内部实现兼容，不授权104或证明真机业务通过。",
-        "reviewed_by": "pstack_source_compatibility",
-        "previous_code_digest": "76e3f09f9b25e9241ed2f61d0d9de3e45fbf92337bd2a7400e73934e4ad2f4b1",
-        "current_code_digest": "0eac879024b06842362f0285bf874d7d28a86d06149961dee51dd8bde69bbd7e"
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
+        "previous_code_digest": "0eac879024b06842362f0285bf874d7d28a86d06149961dee51dd8bde69bbd7e",
+        "current_code_digest": "49019961b1f87434b8897250c8409d8f785f03e499e1c488285aa5aa05b228b5"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8615,7 +8615,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -8842,13 +8842,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0c6520eff194bb464c54bb105516f88bb8d5b089e8d6b016a7578e0db5a65e40",
+      "code_digest": "a590961dab22d0a0397e29f02a878f36f3b8cac8f8220b2f49ede64ab54b5a75",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；变化包括冻结部署闭包纳入brain-authority-get，以及101至103工具内business/phone等待当前在飞心跳；已审原共享policy及waitForHeartbeat、busy、guard、unresolved、journal、lifecycle边界，此等待沿用原worker截止，心跳失败保留未知，真正并发business仍拒绝。最终补强在异步资源/输入校验后intent之前及intent持久化后dispatch之前，按原executionDeadline拒绝晚业务；只有原唯一unknown intent精确匹配的pendingReadback纯SELECT沿用原outer截止，仍不清除unknown、不重发写、不新增业务attempt或Agent turn；104只涉及部署闭包，未添加工具能力。已审GET helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.write_back的内部实现兼容，不授权104或证明真机业务通过。",
-        "reviewed_by": "pstack_source_compatibility",
-        "previous_code_digest": "66a6e391bb758891fbef00b13273404429dc60a0162ab7a8b2613d6760c0054c",
-        "current_code_digest": "0c6520eff194bb464c54bb105516f88bb8d5b089e8d6b016a7578e0db5a65e40"
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
+        "previous_code_digest": "0c6520eff194bb464c54bb105516f88bb8d5b089e8d6b016a7578e0db5a65e40",
+        "current_code_digest": "a590961dab22d0a0397e29f02a878f36f3b8cac8f8220b2f49ede64ab54b5a75"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9357,7 +9357,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "323bdceda887242f0def2076d87725772bcd04882c109d1a88054289f9a8bef7"
+          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
         },
         {
           "kind": "code",
@@ -9594,13 +9594,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c380d80ca80ada906f250e1df6cee21e6d8537e1dfd6650753d8d28f6ff6b708",
+      "code_digest": "b11295859dc43c189ba642e261abf6bd631419908ecc8bc300daf25852226b63",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立离线读取固定Git对象证明本Activity版本、合同、Method正文及支持文件不变；变化包括冻结部署闭包纳入brain-authority-get，以及101至103工具内business/phone等待当前在飞心跳；已审原共享policy及waitForHeartbeat、busy、guard、unresolved、journal、lifecycle边界，此等待沿用原worker截止，心跳失败保留未知，真正并发business仍拒绝。最终补强在异步资源/输入校验后intent之前及intent持久化后dispatch之前，按原executionDeadline拒绝晚业务；只有原唯一unknown intent精确匹配的pendingReadback纯SELECT沿用原outer截止，仍不清除unknown、不重发写、不新增业务attempt或Agent turn；104只涉及部署闭包，未添加工具能力。已审GET helper及central-device-lease/public-domain-pg/official-child-primitives三调用点：仅Response前自有TypeError.cause.code=UND_ERR_SOCKET的GET可在原8/10秒总signal内再读一次，POST不重发；HTTP、BODY、Task/source/claim/owner/expiry校验和unknown隔离均保留。本条仅确认douyin_lead_outreach.cleanup的内部实现兼容，不授权104或证明真机业务通过。",
-        "reviewed_by": "pstack_source_compatibility",
-        "previous_code_digest": "c6667ae2a652d58dc1ab85102f10d04fa940e0c873bea84286385ba7b28eceb5",
-        "current_code_digest": "c380d80ca80ada906f250e1df6cee21e6d8537e1dfd6650753d8d28f6ff6b708"
+        "reason": "固定Git独立复核确认Activity、Method、合同、Skill及Workflow身份不变；有限准入诊断仅附既有失败回执，原10秒单GET、并发首错、准入判据和unknown不变。实际RPC_FILES补入已部署的诊断依赖，真实Commander RPC未知与打包冻结消费者原断言通过；命令执行逻辑、业务资格及评分不变。104仅来源打包闭包受影响，没有新增触达授权。此兼容结论不证明服务器停顿、真机业务或死亡恢复已通过。",
+        "reviewed_by": "pstack_epoch_768_compat_shipping",
+        "previous_code_digest": "c380d80ca80ada906f250e1df6cee21e6d8537e1dfd6650753d8d28f6ff6b708",
+        "current_code_digest": "b11295859dc43c189ba642e261abf6bd631419908ecc8bc300daf25852226b63"
       }
     }
   },
