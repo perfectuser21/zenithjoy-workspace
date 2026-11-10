@@ -756,7 +756,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "4a2e5454be4c8daf2ac441b9d4e8fe7ecea966dc0634667a01afbc57bc66e262",
+      "code_digest": "f1bc39316d65e243310d9e87435052f89ef2ead309cff711b99cbe092c51fd40",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "b3402d4a111e178c595fc86605bd78ff9c01a3593f6c5028bcbe696b3bcd7963",
-        "current_code_digest": "4a2e5454be4c8daf2ac441b9d4e8fe7ecea966dc0634667a01afbc57bc66e262"
+        "previous_code_digest": "4a2e5454be4c8daf2ac441b9d4e8fe7ecea966dc0634667a01afbc57bc66e262",
+        "current_code_digest": "f1bc39316d65e243310d9e87435052f89ef2ead309cff711b99cbe092c51fd40"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1618,7 +1618,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -1642,13 +1642,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "07bbf52031263bac63d0bd6df193a4162fb4a630346408c695e3f7a200e40bb3",
+      "code_digest": "d1ed377a1094cb0d9c32240e958bbdf3d836ed248babafe47ed4c32d1e87fcfe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "f5c1223a11e5be19fe9650a4d7066b2456ea43e33a3240c4a6ac772088a0564f",
-        "current_code_digest": "07bbf52031263bac63d0bd6df193a4162fb4a630346408c695e3f7a200e40bb3"
+        "previous_code_digest": "07bbf52031263bac63d0bd6df193a4162fb4a630346408c695e3f7a200e40bb3",
+        "current_code_digest": "d1ed377a1094cb0d9c32240e958bbdf3d836ed248babafe47ed4c32d1e87fcfe"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2378,7 +2378,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -2430,13 +2430,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "a5d3418495c82a7e51990111ba75a17ed11c478012e0cac2b638547d4103c28a",
+      "code_digest": "8837b014d495b2a5911312d5fc7bf8ff65052dca9c2c844b2febd40943466da5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "29d35c88a4035750cd17ce244c6df5767fb783472d62671910789ab001f45dcb",
-        "current_code_digest": "a5d3418495c82a7e51990111ba75a17ed11c478012e0cac2b638547d4103c28a"
+        "previous_code_digest": "a5d3418495c82a7e51990111ba75a17ed11c478012e0cac2b638547d4103c28a",
+        "current_code_digest": "8837b014d495b2a5911312d5fc7bf8ff65052dca9c2c844b2febd40943466da5"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3208,7 +3208,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -3302,13 +3302,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "651c66207e4c83e30f6e06183f4088473077b7744849f9883aad49cfef6b9f3f",
+      "code_digest": "3b742ab1a7927b300706ca957a0308b1f08662e5811657d52dba1e4677ea9247",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "2b8cb8c8d9306b291a8a23f77c7446e5c0005aa16d873f03284fe971cc1a344c",
-        "current_code_digest": "651c66207e4c83e30f6e06183f4088473077b7744849f9883aad49cfef6b9f3f"
+        "previous_code_digest": "651c66207e4c83e30f6e06183f4088473077b7744849f9883aad49cfef6b9f3f",
+        "current_code_digest": "3b742ab1a7927b300706ca957a0308b1f08662e5811657d52dba1e4677ea9247"
       }
     },
     "douyin_video_processing.collection": {
@@ -4067,7 +4067,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -4112,13 +4112,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "1332137f26e62f7f262fc5f3a9ac68c914e0f659f5c4727f4d2748fa0876a26d",
+      "code_digest": "52fb75209840eb9adbb8702a35dbac09900bd2581306dbaf8905665fdf23938d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "7661b38645fc586302ddd4331f4bfdc9916f46cf26d63d34b76106d4561ad152",
-        "current_code_digest": "1332137f26e62f7f262fc5f3a9ac68c914e0f659f5c4727f4d2748fa0876a26d"
+        "previous_code_digest": "1332137f26e62f7f262fc5f3a9ac68c914e0f659f5c4727f4d2748fa0876a26d",
+        "current_code_digest": "52fb75209840eb9adbb8702a35dbac09900bd2581306dbaf8905665fdf23938d"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4907,7 +4907,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -4931,13 +4931,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8d07b525c6088d0ea53658e5a315b5452523e073c4d25a5144bbe58a6477f758",
+      "code_digest": "9c1bd0106349c56b8a6d1851fed9cfeed5b4504a61aedbe6d655d62065b6b106",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "9b0741d1218e0bf94c935ae0e986e983cefdc6f97f089fec0133dd9d45329234",
-        "current_code_digest": "8d07b525c6088d0ea53658e5a315b5452523e073c4d25a5144bbe58a6477f758"
+        "previous_code_digest": "8d07b525c6088d0ea53658e5a315b5452523e073c4d25a5144bbe58a6477f758",
+        "current_code_digest": "9c1bd0106349c56b8a6d1851fed9cfeed5b4504a61aedbe6d655d62065b6b106"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5646,7 +5646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -5733,13 +5733,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "5cc3bc7eafb25e0bdfbd236f0e2b2a9a5d633350abbd34660e41186aff380c7a",
+      "code_digest": "ed6ab73e595d63f375890d1fd130800759c5a139aa111e20bc9831b62098ec9a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "f081544d7ba39dc93531cea9895adeb1e2aa9f9a3d119e424d1b0b802268efe8",
-        "current_code_digest": "5cc3bc7eafb25e0bdfbd236f0e2b2a9a5d633350abbd34660e41186aff380c7a"
+        "previous_code_digest": "5cc3bc7eafb25e0bdfbd236f0e2b2a9a5d633350abbd34660e41186aff380c7a",
+        "current_code_digest": "ed6ab73e595d63f375890d1fd130800759c5a139aa111e20bc9831b62098ec9a"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6455,7 +6455,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -6577,13 +6577,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "9102d0b1c7c59dc64785b15ed0be3b05d9e45ad22a36a7f2141c35edf4286532",
+      "code_digest": "4d0e9bdcbe210051731af36b54a53f2babebee43993142a5fd1ae463c6c217d2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "da302c383a2b6628ca3dc5dc1df3dc8d9977b77c43618dea60a05fb927c738a8",
-        "current_code_digest": "9102d0b1c7c59dc64785b15ed0be3b05d9e45ad22a36a7f2141c35edf4286532"
+        "previous_code_digest": "9102d0b1c7c59dc64785b15ed0be3b05d9e45ad22a36a7f2141c35edf4286532",
+        "current_code_digest": "4d0e9bdcbe210051731af36b54a53f2babebee43993142a5fd1ae463c6c217d2"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7313,7 +7313,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -7351,13 +7351,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "738e68061c2e947ec0c947c459b46a80ceaf0b17d1e7c4c0dc30e4d5db6b2045",
+      "code_digest": "721cdac7f4e03574bdd7ace7c62253b4b176f0ddc3f8dac0c9969906c54ac7c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "ab4e9d9a4a2f79b98370ed722897dfd753d476eb0947ab2d6700337a82a09007",
-        "current_code_digest": "738e68061c2e947ec0c947c459b46a80ceaf0b17d1e7c4c0dc30e4d5db6b2045"
+        "previous_code_digest": "738e68061c2e947ec0c947c459b46a80ceaf0b17d1e7c4c0dc30e4d5db6b2045",
+        "current_code_digest": "721cdac7f4e03574bdd7ace7c62253b4b176f0ddc3f8dac0c9969906c54ac7c6"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8076,7 +8076,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -8100,13 +8100,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "81a86b45a097e3f529ca0972c6b901667fe1bc6d83a7a4f8ad33301535c31a8b",
+      "code_digest": "cc6cd097eb03e6acb1db8c9cf9511211db949b68fc774f9b558b302b84fd263d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "274230c13f4b9ae48f05f45aa496ec1b69e8952c3d8b4b56a9ece006dbb7a75b",
-        "current_code_digest": "81a86b45a097e3f529ca0972c6b901667fe1bc6d83a7a4f8ad33301535c31a8b"
+        "previous_code_digest": "81a86b45a097e3f529ca0972c6b901667fe1bc6d83a7a4f8ad33301535c31a8b",
+        "current_code_digest": "cc6cd097eb03e6acb1db8c9cf9511211db949b68fc774f9b558b302b84fd263d"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8818,7 +8818,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -8842,13 +8842,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "59d32360ddc2e6be3483ade0e74316542252ba6b7c766f8416bd6020560e37f8",
+      "code_digest": "4942e5313730cf38dc57dc8dc834cce6f7c5fcb13333e8cbf41469afabae4de0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "8f4941def9dd58c9e5333671e24c609098a78dc419370893568c98685d1feed4",
-        "current_code_digest": "59d32360ddc2e6be3483ade0e74316542252ba6b7c766f8416bd6020560e37f8"
+        "previous_code_digest": "59d32360ddc2e6be3483ade0e74316542252ba6b7c766f8416bd6020560e37f8",
+        "current_code_digest": "4942e5313730cf38dc57dc8dc834cce6f7c5fcb13333e8cbf41469afabae4de0"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9570,7 +9570,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-skill-owner.mjs",
           "revision": "contract",
-          "sha256": "8b0f3c14fb5c00b7ab65f55a58167839b5fd7558790d2a7bd7c9c909ca1db76d"
+          "sha256": "9c4f3fcd798976f096e1c8cee9fbdcbd1ec18a06ac553e0af99f670bace03976"
         },
         {
           "kind": "code",
@@ -9594,13 +9594,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "234104f4f729943f35be27139fabd2788cf58e13539bc0ced9ff09fbc6847c52",
+      "code_digest": "4bb973e908593d70370d51258fcc07489a45d53fb80790caecf0fa36295252a4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
+        "reason": "仅在原截止内恢复同一官方owner只读等待并保留有限授权失败诊断；不变Skill正文、业务合同、授权条件及原unknown收尾门禁。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "89af13b8e970789596bb2dbe7f9fab1fffc78530ac20219bb481b1208eb16f01",
-        "current_code_digest": "234104f4f729943f35be27139fabd2788cf58e13539bc0ced9ff09fbc6847c52"
+        "previous_code_digest": "234104f4f729943f35be27139fabd2788cf58e13539bc0ced9ff09fbc6847c52",
+        "current_code_digest": "4bb973e908593d70370d51258fcc07489a45d53fb80790caecf0fa36295252a4"
       }
     }
   },
