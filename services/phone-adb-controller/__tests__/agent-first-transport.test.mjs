@@ -153,3 +153,40 @@ test('Agent relay生成可无截断还原的冻结方法原件，parent不重复
  }});
  assert.equal(checked,true);
 });
+
+test('execute子任务交付binding-ready双模板和canonical exec/process固定路由',async t=>{
+ const home=mkdtempSync(join(tmpdir(),'primary-binding-ready-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const {q}=scope();Object.assign(q,{protocol:'leadgen-activity-v1',broker_tool_path:'/fixture/tool.mjs',broker_request_path:'/fixture/request.json',nonce:'e'.repeat(48),worker_deadline_ms:Date.now()+5000,receipt_deadline_ms:Date.now()+7500});
+ let delivered;
+ await runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
+  if(command==='openclaw'){
+   const path=args[args.indexOf('--message-file')+1],dir=path.replace(/\/parent-message\.txt$/,'');
+   delivered={dir,message:readFileSync(path,'utf8'),plan:JSON.parse(readFileSync(join(dir,'child-task.json'),'utf8')),request:JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'))};
+   return {code:0,stdout:'{}',stderr:''};
+  }
+  return {code:1,stdout:'',stderr:''};
+ }});
+ assert.ok(delivered);const {dir,message,plan,request}=delivered;
+ assert.equal(plan.scope.run_id,q.run_id);assert.equal(plan.scope.source_commit,q.source_commit);assert.equal(plan.scope.nonce,q.nonce);
+ assert.equal(request.worker_expires_at,q.worker_deadline_ms/1000);assert.equal(request.expires_at,q.deadline_ms/1000);
+ assert.deepEqual(plan.identity_contract.binding_checks,['run_id','task_id','parent_session_key','nonce']);
+ assert.deepEqual(Object.keys(plan.binding_ready_command_files??{}).sort(),['exec_gateway','gateway_exec'],'child必须拿到父绑定只读等待的两组完整调用模板');
+ for(const surface of ['gateway_exec','exec_gateway']){
+  const path=plan.binding_ready_command_files[surface],invocation=JSON.parse(readFileSync(path,'utf8'));
+  assert.ok(path.startsWith(dir+'/'));assert.equal(invocation.tool,surface==='gateway_exec'?'gateway_exec':'exec');
+  assert.equal(invocation.parameters.host,surface==='gateway_exec'?undefined:'gateway');
+  assert.ok(!['auto','sandbox','node'].includes(invocation.parameters.host));
+  assert.ok(Object.keys(invocation.parameters.env??{}).every(key=>key==='LEADGEN_GATEWAY_SURFACE'),'模板env不得开放run/source/nonce/host/PATH等身份注入');
+  if(invocation.parameters.env?.LEADGEN_GATEWAY_SURFACE!==undefined)assert.equal(invocation.parameters.env.LEADGEN_GATEWAY_SURFACE,surface);
+  const command=invocation.parameters.command;
+  assert.match(command,/\/bin\/hostname/);assert.match(command,/aad17-2/);assert.match(command,/r10-7/);assert.match(command,/RPC_SKILL_GATEWAY_HOST_MISMATCH/);
+  assert.ok(command.includes('wf-agent-handoff.py'));assert.ok(command.includes('binding-ready'));assert.ok(command.includes(dir));
+  assert.ok(invocation.parameters.timeoutSeconds>0&&invocation.parameters.timeoutSeconds<=5,'等待不得超出原worker剩余预算');
+  assert.equal(invocation.parameters.yieldMs,1000);
+  assert.ok(!('stdin' in invocation.parameters));
+ }
+ const childInstructions=message+'\n'+plan.rules.join('\n');
+ assert.match(childInstructions,/exec\(host=gateway\)/);assert.match(childInstructions,/gateway_process/);assert.match(childInstructions,/process/);
+ assert.match(childInstructions,/sessionId/);assert.match(childInstructions,/不切换|不切|不换/);
+ assert.match(childInstructions,/未绑定不得执行任何业务/);
+});
