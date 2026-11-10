@@ -115,7 +115,7 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  if(realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||env.DOUYIN_PHONE_ADB!==join(root,'douyin-phone-adb')||!sourceStable(root,frozen))fail('SOURCE_INVALID');
  if(Object.entries(env).some(([k,v])=>v&&(/^(DYLD_|LD_)/.test(k)||['PYTHONPATH','PYTHONHOME','PYTHONSTARTUP','PYTHONINSPECT','NODE_OPTIONS','NODE_PATH','DOUYIN_BYPASS_REPORT_BIN','OWN_ACCOUNTS_CONF'].includes(k))))fail('AMBIENT_OVERRIDE_REFUSED');
  for(const [k,v] of [['DOUYIN_CURL_BIN','/usr/bin/curl'],['DOUYIN_SIPS_BIN','/usr/bin/sips'],['DOUYIN_LOCATE_SCRIPT',join(root,'locate-element.py')]])if(env[k]&&env[k]!==v)fail('TOOL_OVERRIDE_REFUSED');
- const paths=layout(root,env,spec),lockRoot=env.DOUYIN_PHONE_LOCK_ROOT||join(paths.phoneRoot,'locks');
+ const paths=layout(root,env,spec),lockRoot=env.DOUYIN_PHONE_LOCK_ROOT||(env.DOUYIN_PHONE_LOCK_TEST_MODE==='1'?join(paths.phoneRoot,'locks'):join(env.HOME||'/','.local/share/zenithjoy/phone-locks'));
  const ownerFile=join(lockRoot,env.SERIAL+'.lock','owner'),owner=ownerIdentity(ownerFile,identity.owner);
  if(!quiet(paths.evidence)||readdirSync(join(env.WFR_RUN_DIR,'native-operations')).some(x=>x.endsWith('.unknown')))fail('EXISTING_UNKNOWN');
  if(purpose==='collect'){
