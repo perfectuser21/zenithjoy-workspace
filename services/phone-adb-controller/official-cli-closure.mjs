@@ -110,7 +110,7 @@ const REVIEWED=Object.freeze({
  "phone-lock-root.py": "3c0dc46c221e80ae220c1174709a9cc6c9d47dfa3702ed6726d52a626a20f48a",
  "adb-existing-route.py": "98ca76d799deb74cc1481346967f8ab1a14aa99dd28c7eea2d7865c591eb24d4",
  "adb-managed-client.py": "9cc3bad30042910b1c36c5f8ce17d5402209fa42e5b130a7a29f0e5bf2316910",
- "adb-host-instance-policy.py": ["dee7a72876b6193535fc5a4ddb3406e7b113c7ddc75e745bf91d450bac807d18", "3e561905c2865905377e5fefdee7245f031226f899e201c3d1baab3c2c447a57"],
+ "adb-host-instance-policy.py": ["dee7a72876b6193535fc5a4ddb3406e7b113c7ddc75e745bf91d450bac807d18", "5cd8e7ae7025c35ad76d674368fb53859c7db81679d8506777374bab3f556182"],
  "search-video-tab.py": "7a6a56ebe141dcdaa675735a196004df5e4728534f4f33801fce3b7250c89e04",
  "locate-element.py": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0",
  "clipboard-widget-cancel.py": "9a1fd636f1600acec3179c6d61955f6c290a6678ff54902a4407bcd36d350980",

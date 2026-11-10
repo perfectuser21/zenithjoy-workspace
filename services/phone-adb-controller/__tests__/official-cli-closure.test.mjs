@@ -14,6 +14,14 @@ import {createHash} from 'node:crypto';
 import {createLeadgenAgentTools} from '../leadgen-agent-tools.mjs';
 import {createPhoneAction} from '../leadgen-phone-action.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,''),digest=b=>createHash('sha256').update(b).digest('hex');
+test('官方CLI固定受审清单必须覆盖当前每份依赖的确切源码字节',()=>{
+ const source=readFileSync(join(root,'official-cli-closure.mjs'),'utf8'),literal=source.match(/const REVIEWED=Object\.freeze\((\{[\s\S]*\})\);\s*$/);
+ assert.ok(literal,'受审清单必须保持静态JSON字面量');
+ for(const [name,pins]of Object.entries(JSON.parse(literal[1]))){
+  const reviewed=Array.isArray(pins)?pins:[pins];assert.ok(reviewed.length&&reviewed.every(pin=>/^[a-f0-9]{64}$/.test(pin)),name);
+  const actual=digest(readFileSync(join(root,name)));assert.ok(reviewed.includes(actual),`${name} 当前源码 ${actual} 未经固定受审pin接纳`);
+ }
+});
 const executables={zsh:{path:'/bin/zsh'},python:{path:realpathSync('/usr/bin/python3')},node:{path:realpathSync(process.execPath)}};for(const spec of Object.values(executables))spec.sha256=digest(readFileSync(spec.path));
 const describe=(command,args)=>describeOfficialCliInvocation({root,command,args,executables,profile:'fixture',owner:'run',serial:'serial'});
 test('Skill公布的只读能力经真实phone参数适配可被官方CLI执行边界识别',async t=>{

@@ -8,6 +8,8 @@ import re
 import stat
 import subprocess
 import types
+import uuid
+from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 REGISTRY = 'config/adb-host-instances.json'
@@ -172,21 +174,112 @@ VERIFIER_ERROR_CODES = frozenset({
 })
 
 
+def preserve_verifier_diagnostic(context, arguments, branch, returncode, stdout=b'', stderr=b''):
+    descriptors = []
+    try:
+        if len(arguments) != 3 or arguments[:2] != ['verify-epoch', '--run-dir']:
+            return
+        run = Path(arguments[2])
+        need(run.is_absolute() and str(run.resolve()) == str(run)
+             and not any(p.is_symlink() for p in (run, *run.parents)), 'DIAGNOSTIC_PATH')
+
+        def private_directory(path, parent=None):
+            fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+            descriptors.append(fd)
+            info = os.fstat(fd)
+            need(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+                 and stat.S_IMODE(info.st_mode) == 0o700, 'DIAGNOSTIC_DIRECTORY')
+            return fd
+
+        directory = private_directory(run)
+        frozen = json.loads(read_file(run / 'run-definition.json', private=True))
+        snapshot = frozen.pop('snapshot_sha256')
+        canonical = json.dumps(frozen, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
+        public = frozen['public_domain']
+        source = frozen['deployment']['source_commit']
+        scope = frozen.get('discovery_phone_scope') or frozen.get('collection_phone_scope')
+        identity = r'[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}'
+        need(isinstance(snapshot, str) and re.fullmatch('[a-f0-9]{64}', snapshot) and sha(canonical) == snapshot
+             and public['protocol'] == 'workflow-domain/v1'
+             and re.fullmatch(identity, public['run_id']) and re.fullmatch(identity, public['task_id'])
+             and source == context['manifest']['source_commit'] and re.fullmatch('[a-f0-9]{40}', source)
+             and scope['source_commit'] == source, 'DIAGNOSTIC_BINDING')
+        stdout = stdout.encode() if isinstance(stdout, str) else stdout or b''
+        stderr = stderr.encode() if isinstance(stderr, str) else stderr or b''
+        code = stderr.decode('ascii', errors='replace')
+        code = code[:-1] if code.endswith('\n') else code
+        diagnostic_code = code if code in VERIFIER_ERROR_CODES or code == 'DEVICE_EPOCH_FENCE_UNKNOWN' else None
+        proof = {'protocol': 'epoch-verifier-diagnostic/v1', 'producer': 'python',
+                 'attempt_id': str(uuid.uuid4()), 'observed_at': datetime.now(timezone.utc).isoformat(),
+                 'pid': os.getpid(), 'run_id': public['run_id'], 'task_id': public['task_id'],
+                 'source_commit': source, 'snapshot_sha256': snapshot, 'fold_branch': branch,
+                 'returncode': returncode, 'stdout_bytes': len(stdout), 'stderr_bytes': len(stderr),
+                 'stdout_sha256': sha(stdout), 'stderr_sha256': sha(stderr), 'node_error_code': diagnostic_code}
+        raw = (json.dumps(proof, separators=(',', ':')) + '\n').encode()
+        need(len(raw) <= 4096, 'DIAGNOSTIC_LIMIT')
+        for name in ('epoch-fence-admission', 'diagnostics'):
+            try:
+                os.mkdir(name, mode=0o700, dir_fd=directory)
+                os.fsync(directory)
+            except FileExistsError:
+                pass
+            directory = private_directory(name, directory)
+        need(all(re.fullmatch(r'(?:[0-2][0-9]|3[01])\.json', name) for name in os.listdir(directory)), 'DIAGNOSTIC_QUOTA')
+        for slot in range(32):
+            try:
+                fd = os.open(f'{slot:02d}.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=directory)
+            except FileExistsError:
+                continue
+            descriptors.append(fd)
+            info = os.fstat(fd)
+            need(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid() and info.st_nlink == 1
+                 and stat.S_IMODE(info.st_mode) == 0o600, 'DIAGNOSTIC_FILE')
+            offset = 0
+            while offset < len(raw):
+                count = os.write(fd, raw[offset:])
+                need(count > 0, 'DIAGNOSTIC_WRITE')
+                offset += count
+            os.fsync(fd)
+            os.fsync(directory)
+            break
+    except Exception:
+        pass
+    finally:
+        for fd in reversed(descriptors):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
 def verifier_answer(context, arguments, runner):
     try:
         result = runner([context['node']['path'], context['module'], *arguments], env=context['env'],
                         capture_output=True, text=False, timeout=15)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as error:
+        preserve_verifier_diagnostic(context, arguments, 'timeout', None, error.stdout, error.stderr)
         raise ValueError('ADB_INSTANCE_VERIFIER_TIMEOUT') from None
     if result.returncode != 0:
         # The fixed Node boundary emits a single code line. Never disclose raw
         # subprocess diagnostics, commands, JSON, or caller-provided strings.
         stderr = result.stderr.decode('ascii', errors='replace') if isinstance(result.stderr, bytes) else result.stderr
         code = stderr[:-1] if stderr.endswith('\n') else stderr
+        preserve_verifier_diagnostic(context, arguments, 'nonzero_allowlisted' if code in VERIFIER_ERROR_CODES else 'nonzero_unrecognized',
+                                     result.returncode, result.stdout, result.stderr)
         need(code in VERIFIER_ERROR_CODES, 'VERIFIER_AUTHORITY')
         raise ValueError('ADB_INSTANCE_VERIFIER_' + code)
+    if len(result.stdout.encode() if isinstance(result.stdout, str) else result.stdout) > 8192:
+        preserve_verifier_diagnostic(context, arguments, 'stdout_limit', result.returncode, result.stdout, result.stderr)
     need(len(result.stdout.encode() if isinstance(result.stdout, str) else result.stdout) <= 8192, 'VERIFIER_AUTHORITY')
-    answer = json.loads(result.stdout)
+    try:
+        answer = json.loads(result.stdout)
+    except (ValueError, UnicodeError):
+        preserve_verifier_diagnostic(context, arguments, 'json_invalid', result.returncode, result.stdout, result.stderr)
+        raise
+    if not isinstance(answer, dict) or answer.get('authorized') is not True:
+        preserve_verifier_diagnostic(context, arguments, 'not_object' if not isinstance(answer, dict) else 'not_authorized',
+                                     result.returncode, result.stdout, result.stderr)
     need(isinstance(answer, dict) and answer.get('authorized') is True, 'VERIFIER_AUTHORITY')
     return answer
 

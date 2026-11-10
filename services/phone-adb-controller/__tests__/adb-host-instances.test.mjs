@@ -73,3 +73,106 @@ test('schema2每个真实phone dispatch前消费唯一epoch准入；失败不得
 test('固定Node epoch答复12字段严核同serial/source/instance，保留原stoppedfalse不伪Android证明',()=>py(`import subprocess\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();os.environ['BRAIN_INTERNAL_TOKEN']='FIXTURE_PRIVATE_TOKEN'\n expected={'protocol':'device-epoch-fence-admission/v1','authorized':True,'epoch_id':'fixture-epoch-2','task_id':'11111111-1111-4111-8111-111111111111','run_id':'fixture-run','source_commit':'a'*40,'instance_id':p['instance_id'],'endpoint':p['endpoint'],'serial':'fixture-serial','old_route_absent':True,'original_execution_stopped':False,'android_internal':'not_attested'}\n def runner(value):\n  def run(args,**kw):\n   assert args[2:]==['verify-epoch','--run-dir',str(r)] and kw['env']['BRAIN_INTERNAL_TOKEN']=='FIXTURE_PRIVATE_TOKEN';return subprocess.CompletedProcess(args,0,json.dumps(value),'')\n  return run\n assert i.authorize_epoch(p,'fixture-serial',str(r),runner(expected))==expected\n for change in [{'serial':'foreign'},{'source_commit':'b'*40},{'instance_id':'foreign'},{'endpoint':'tcp:127.0.0.1:5041'},{'old_route_absent':False},{'old_route_absent':1},{'original_execution_stopped':True},{'original_execution_stopped':0},{'authorized':1},{'android_internal':'attested'},{'extra':'not_allowed'}]:\n  rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner({**expected,**change})),'AUTHORITY')\n rejected(lambda:i.authorize_epoch(p,'fixture-serial','relative',runner(expected)),'EPOCH_RUN_DIR')\n`));
 
 test('epoch慢核验返回后重新pin；schema2普通client的version与exec均无业务凭据',()=>py(`from types import SimpleNamespace\nimport subprocess\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));m=load(r,'adb-managed-client');i=s.route.instance_module();events=[]\n for key in ['BRAIN_INTERNAL_TOKEN','CECELIA_INTERNAL_TOKEN','DATABASE_URL','DB_URL','OPENAI_API_KEY','OPENROUTER_API_KEY']:os.environ[key]='FIXTURE_PRIVATE_'+key\n os.environ['ZJ_ADB_HOST_CONFIG']=str(path);os.environ['WFR_RUN_DIR']=str(r)\n for key in ['WFR_COLLECTION_LEAF_SOCKET','ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(key,None)\n secret_keys=['BRAIN_INTERNAL_TOKEN','CECELIA_INTERNAL_TOKEN','DATABASE_URL','DB_URL','OPENAI_API_KEY','OPENROUTER_API_KEY']\n def version(args,**kw):\n  assert not any(k in kw['env'] for k in secret_keys);return subprocess.CompletedProcess(args,0,'Android Debug Bridge version 1.0.41\\n','')\n s.route.subprocess.run=version\n guard=SimpleNamespace(verify_binary=i.verify_binary,adb_environment=i.adb_environment,authorize_epoch=lambda *a:events.append('fence'))\n m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *a:p,instance_module=lambda:guard,select_route=lambda *a:p['port'],verified_client_version=s.route.verified_client_version)\n assert m.main(['version'])==0 and events==[]\n def execute(binary,args,env):events.append('exec');assert binary==p['adb_realpath'] and not any(k in env for k in secret_keys)\n m.os.execve=execute;m.main(['-s','fixture-serial','shell','true']);assert events==['fence','exec']\n def changed(*a):events.append('fence');(r/'adb').write_text('changed during verifier')\n guard.authorize_epoch=changed;rejected(lambda:m.main(['-s','fixture-serial','shell','true']),'INSTANCE_BINARY');assert events==['fence','exec','fence']\n`));
+
+const diagnosticSetup=String.raw`
+TASK='11111111-1111-4111-8111-111111111111';RUN='22222222-2222-4222-8222-222222222222'
+def frozen_run(r):
+ body={'metadata':{'label':'云手机诊断'},'files':{},'deployment':{'source_commit':'a'*40,'target':'mmv'},'public_domain':{'protocol':'workflow-domain/v1','task_id':TASK,'run_id':RUN},'collection_phone_scope':{'source_commit':'a'*40}}
+ digest=lambda b:hashlib.sha256(json.dumps(b,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+ value={**body,'snapshot_sha256':digest(body)};p=r/'run-definition.json';p.write_text(json.dumps(value));p.chmod(0o600)
+ return value,digest
+
+def diagnostic_rows(r):
+ path=r/'epoch-fence-admission/diagnostics'
+ return sorted(path.glob('*.json')) if path.exists() else []
+
+def safe_diagnostic(path):
+ st=path.lstat();raw=path.read_bytes();assert stat.S_ISREG(st.st_mode) and not path.is_symlink() and st.st_uid==os.geteuid() and st.st_nlink==1 and stat.S_IMODE(st.st_mode)==0o600 and len(raw)<=4096
+ assert not any(text in raw for text in [b'RAW_PRIVATE_FAILURE',b'private.invalid',b'Authorization',b'"stack"',b'"message"',b'"raw"',b'"stdout"',b'"stderr"',b'"env"'])
+ proof=json.loads(raw);assert proof['task_id']==TASK and proof['run_id']==RUN and proof['source_commit']=='a'*40
+ assert proof['protocol']=='epoch-verifier-diagnostic/v1' and proof['producer']=='python' and type(proof['pid']) is int and proof['pid']>0
+ import uuid,datetime
+ assert str(uuid.UUID(proof['attempt_id'],version=4))==proof['attempt_id'];datetime.datetime.fromisoformat(proof['observed_at'].replace('Z','+00:00'))
+ assert proof['snapshot_sha256']==json.loads((path.parent.parent.parent/'run-definition.json').read_text())['snapshot_sha256']
+ assert set(proof)=={'protocol','producer','attempt_id','observed_at','pid','run_id','task_id','source_commit','snapshot_sha256','fold_branch','returncode','stdout_bytes','stderr_bytes','stdout_sha256','stderr_sha256','node_error_code'}
+ return proof
+`;
+
+for(const branch of ['timeout','nonzero_allowlisted','nonzero_unrecognized','nonzero_private','stdout_limit','json_invalid','not_object','not_authorized'])test('Python原epoch verifier保留有限fold原件且原拒绝不变 '+branch,()=>py(diagnosticSetup+String.raw`
+import subprocess
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();frozen_run(r);os.environ['BRAIN_INTERNAL_TOKEN']='RAW_PRIVATE_FAILURE_TOKEN'
+ branch=${JSON.stringify(branch)};private=branch=='nonzero_private';branch='nonzero_unrecognized' if private else branch;calls=[];stdout=b'';stderr=b'';returncode=None
+ if branch=='nonzero_allowlisted':returncode=2;stderr=b'EPOCH_BUSINESS_TASK\n'
+ if branch=='nonzero_unrecognized':returncode=2;stderr=b'Authorization: RAW_PRIVATE_FAILURE https://private.invalid\n' if private else b'DEVICE_EPOCH_FENCE_UNKNOWN\n'
+ if branch=='stdout_limit':returncode=0;stdout=b'RAW_PRIVATE_FAILURE'*1000
+ if branch=='json_invalid':returncode=0;stdout=b'RAW_PRIVATE_FAILURE https://private.invalid'
+ if branch=='not_object':returncode=0;stdout=b'[]'
+ if branch=='not_authorized':returncode=0;stdout=b'{"authorized":false,"token":"RAW_PRIVATE_FAILURE"}'
+ def runner(args,**kw):
+  calls.append(args);assert args[2:]==['verify-epoch','--run-dir',str(r)] and kw['timeout']==15
+  if branch=='timeout':raise subprocess.TimeoutExpired(args,15)
+  return subprocess.CompletedProcess(args,returncode,stdout,stderr)
+ expected='ADB_INSTANCE_VERIFIER_TIMEOUT' if branch=='timeout' else 'ADB_INSTANCE_VERIFIER_EPOCH_BUSINESS_TASK' if branch=='nonzero_allowlisted' else 'Expecting value' if branch=='json_invalid' else 'ADB_INSTANCE_VERIFIER_AUTHORITY'
+ rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner),expected)
+ assert len(calls)==1,'诊断不能重调Node或业务'
+ paths=diagnostic_rows(r);assert len(paths)==1,'Python折叠分支必须留有限本地原件'
+ proof=safe_diagnostic(paths[0]);assert proof['fold_branch']==branch and proof['returncode']==returncode
+ assert proof['node_error_code']==('EPOCH_BUSINESS_TASK' if branch=='nonzero_allowlisted' else 'DEVICE_EPOCH_FENCE_UNKNOWN' if branch=='nonzero_unrecognized' and not private else None)
+ assert proof['stdout_bytes']==len(stdout) and proof['stderr_bytes']==len(stderr)
+ assert proof['stdout_sha256']==hashlib.sha256(stdout).hexdigest() and proof['stderr_sha256']==hashlib.sha256(stderr).hexdigest()
+ assert 'DEVICE_EPOCH_FENCE_UNKNOWN' not in i.VERIFIER_ERROR_CODES,'诊断码绝不能获得授权allowlist资格'
+ for folder in [r/'epoch-fence-admission',r/'epoch-fence-admission/diagnostics']:
+  st=folder.lstat();assert stat.S_ISDIR(st.st_mode) and not folder.is_symlink() and st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o700
+`));
+
+test('Python有限诊断按原run封顶32且原件不可覆盖，写满仍保持原拒绝',()=>py(diagnosticSetup+String.raw`
+import subprocess
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();frozen_run(r);os.environ['BRAIN_INTERNAL_TOKEN']='RAW_PRIVATE_FAILURE_TOKEN';calls=[]
+ def runner(args,**kw):calls.append(args);return subprocess.CompletedProcess(args,2,b'',b'DEVICE_EPOCH_FENCE_UNKNOWN\n')
+ for n in range(32):rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner),'ADB_INSTANCE_VERIFIER_AUTHORITY')
+ paths=diagnostic_rows(r);assert len(paths)==32
+ before={str(path):(path.read_bytes(),path.stat().st_ino) for path in paths}
+ rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner),'ADB_INSTANCE_VERIFIER_AUTHORITY')
+ assert len(calls)==33 and len(diagnostic_rows(r))==32
+ for path in paths:assert before[str(path)]==(path.read_bytes(),path.stat().st_ino);safe_diagnostic(path)
+`));
+
+for(const variant of ['diagnostic-symlink','root-symlink','directory-mode','run-mode','frozen-mode','frozen-symlink','missing-source','wrong-source','invalid-task','frozen-digest'])test('Python折叠拒绝不能向不可信诊断目录写入 '+variant,()=>py(diagnosticSetup+String.raw`
+import subprocess
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();value,digest=frozen_run(r);os.environ['BRAIN_INTERNAL_TOKEN']='RAW_PRIVATE_FAILURE_TOKEN';variant=${JSON.stringify(variant)};outside=r/'outside';outside.mkdir(mode=0o700)
+ root=r/'epoch-fence-admission';sink=root/'diagnostics'
+ if variant=='diagnostic-symlink':root.mkdir(mode=0o700);sink.symlink_to(outside,target_is_directory=True)
+ if variant=='root-symlink':root.symlink_to(outside,target_is_directory=True)
+ if variant=='directory-mode':root.mkdir(mode=0o700);sink.mkdir(mode=0o755)
+ if variant=='run-mode':r.chmod(0o755)
+ if variant=='frozen-mode':(r/'run-definition.json').chmod(0o644)
+ if variant=='frozen-symlink':saved=outside/'frozen.json';(r/'run-definition.json').rename(saved);(r/'run-definition.json').symlink_to(saved)
+ if variant in ['missing-source','wrong-source','invalid-task','frozen-digest']:
+  value.pop('snapshot_sha256')
+  if variant=='missing-source':value.pop('deployment')
+  if variant=='wrong-source':value['deployment']['source_commit']='b'*40
+  if variant=='invalid-task':value['public_domain']['task_id']='RAW_PRIVATE_FAILURE'
+  value['snapshot_sha256']='0'*64 if variant=='frozen-digest' else digest(value)
+  (r/'run-definition.json').write_text(json.dumps(value))
+ calls=[]
+ def runner(args,**kw):calls.append(args);return subprocess.CompletedProcess(args,2,b'',b'DEVICE_EPOCH_FENCE_UNKNOWN\n')
+ rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner),'ADB_INSTANCE_VERIFIER_AUTHORITY')
+ assert len(calls)==1 and diagnostic_rows(r)==[],'诊断失败仍须保留原拒绝，不写不可信目录'
+ assert sorted(path.name for path in outside.iterdir())==(['frozen.json'] if variant=='frozen-symlink' else [])
+`));
+
+test('正常epoch授权和verify-startup均不创建失败诊断，不因日志增加Node调用',()=>py(diagnosticSetup+String.raw`
+import subprocess
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();frozen_run(r);os.environ['BRAIN_INTERNAL_TOKEN']='RAW_PRIVATE_FAILURE_TOKEN';calls=[]
+ expected={'protocol':'device-epoch-fence-admission/v1','authorized':True,'epoch_id':'fixture-epoch-2','task_id':TASK,'run_id':RUN,'source_commit':'a'*40,'instance_id':p['instance_id'],'endpoint':p['endpoint'],'serial':'fixture-serial','old_route_absent':True,'original_execution_stopped':False,'android_internal':'not_attested'}
+ def runner(args,**kw):calls.append(args);return subprocess.CompletedProcess(args,0,json.dumps(expected).encode(),b'')
+ assert i.authorize_epoch(p,'fixture-serial',str(r),runner)==expected and len(calls)==1 and diagnostic_rows(r)==[]
+ context=i.verifier_context(p,str(path))
+ def denied(args,**kw):calls.append(args);return subprocess.CompletedProcess(args,2,b'',b'DEVICE_EPOCH_FENCE_UNKNOWN\n')
+ rejected(lambda:i.verifier_answer(context,['verify-startup','--receipt',str(r/'unused')],denied),'ADB_INSTANCE_VERIFIER_AUTHORITY')
+ assert len(calls)==2 and diagnostic_rows(r)==[]
+`));

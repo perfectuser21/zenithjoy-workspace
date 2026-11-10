@@ -6,6 +6,17 @@ import {randomUUID,createHash} from 'node:crypto';
 const stopped=new WeakMap(),closed=new WeakMap();
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const fail=()=>{throw Error('RPC_SKILL_OWNER_SCOPE_INVALID');};
+const own=(value,key)=>value&&(typeof value==='object'||typeof value==='function')?Object.getOwnPropertyDescriptor(value,key)?.value:undefined;
+const physicalUnknown=(...values)=>values.some(value=>{
+ try{
+  if(!value||!['object','function'].includes(typeof value))return false;
+  for(const key of ['executionStopped','externalEffect']){
+   const field=Object.getOwnPropertyDescriptor(value,key);
+   if(field&&(!Object.hasOwn(field,'value')||key==='executionStopped'&&field.value===false||key==='externalEffect'&&field.value==='unknown'))return true;
+  }
+  return false;
+ }catch{return true;}
+});
 function durable(path,value){
  const fd=openSync(path,'wx',0o600),bytes=Buffer.from(JSON.stringify(value)+'\n');
  try{let offset=0;while(offset<bytes.length){const count=writeSync(fd,bytes,offset,bytes.length-offset);if(count<=0)fail();offset+=count;}fsyncSync(fd);}finally{closeSync(fd);}
@@ -22,7 +33,9 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
   ||typeof execute!=='function'||typeof authorize!=='function')fail();
  const end=request.receipt_deadline_ms,scopeHash=hash(request);
  if(!Number.isSafeInteger(end)||end>=request.deadline_ms||Date.now()>=end)fail();
+ let intentHash;
  const current=()=>{
+  if(intentHash&&hash(JSON.parse(readFileSync(join(directory,'owner-rpc-intent.json'),'utf8')))!==intentHash)fail();
   if(hash(request)!==scopeHash||hash(JSON.parse(readFileSync(join(directory,'activity-request.json'),'utf8')))!==scopeHash
    ||existsSync(join(directory,'handoff-closed.json'))||existsSync(join(directory,'generation-revoked.json')))fail();
  };
@@ -30,12 +43,13 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
  const intent={protocol:'official-skill-owner-intent/v1',owner_run_id:randomUUID(),parent_session_key:parent,
   run_id:request.run_id,task_id:request.task_id,binding_id:request.binding_id,source_commit:request.source_commit,
   nonce:request.nonce,scope_sha256:scopeHash,message_sha256:hash(message),started_at_ms:Date.now(),receipt_deadline_ms:end};
- durable(join(directory,'owner-rpc-intent.json'),intent); // successful fsync precedes the only send
+ durable(join(directory,'owner-rpc-intent.json'),intent);intentHash=hash(intent); // successful fsync precedes the only send
  const call=async(method,params,timeoutMs)=>{
   const args=['gateway','call',method,'--params',JSON.stringify(params),'--json','--timeout',String(Math.max(1,Math.floor(timeoutMs)))];
   const value=await execute('openclaw',args,{timeoutMs:Math.max(1,Math.floor(timeoutMs)),maxBuffer:1024*1024});
-  if(value?.code!==0||value.signal)throw Error('RPC_SKILL_OWNER_TRANSPORT_UNKNOWN');
-  return {raw:value,body:JSON.parse(value.stdout)};
+  if(value?.code!==0||value.signal||physicalUnknown(value))throw Object.assign(Error('RPC_SKILL_OWNER_TRANSPORT_UNKNOWN'),{ownerRaw:value});
+  try{return {raw:value,body:JSON.parse(value.stdout)};}
+  catch{throw Object.assign(Error('RPC_SKILL_OWNER_PROTOCOL_UNKNOWN'),{ownerRaw:value});}
  };
  let ack=null,conflict=false,terminal=null,reads=0;
  try{
@@ -45,28 +59,74 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
   ack=value.body;durable(join(directory,'owner-rpc-ack.json'),value);
   conflict=ack?.runId!==intent.owner_run_id||ack?.sessionKey!==parent||ack?.agentId!=='work-commander'
    ||ack?.status!=='accepted'||!Number.isFinite(ack.acceptedAt)||ack.acceptedAt<intent.started_at_ms-1000||ack.acceptedAt>Date.now()+1000;
- }catch{durable(join(directory,'owner-rpc-ack-unknown.json'),{protocol:'official-skill-owner-ack-unknown/v1',owner_run_id:intent.owner_run_id});}
- // agent.wait is read-only even after authorization is revoked. Broker business
- // admission remains independently fresh; this read never grants tool authority.
+ }catch(error){
+  const raw=own(error,'ownerRaw'),stdout=typeof own(raw,'stdout')==='string'?own(raw,'stdout'):'';
+  if(stdout){
+   try{
+    const body=JSON.parse(stdout);
+    conflict=body?.runId!==intent.owner_run_id||body?.sessionKey!==parent||body?.agentId!=='work-commander'
+     ||body?.status!=='accepted'||!Number.isFinite(body.acceptedAt)||body.acceptedAt<intent.started_at_ms-1000||body.acceptedAt>Date.now()+1000;
+   }catch{conflict=true;}
+  }
+  if(physicalUnknown(raw,error)||own(error,'message')==='EXECUTION_OUTPUT_LIMIT')conflict=true;
+  durable(join(directory,'owner-rpc-ack-unknown.json'),{protocol:'official-skill-owner-ack-unknown/v1',owner_run_id:intent.owner_run_id,
+   code:Number.isSafeInteger(raw?.code)?raw.code:null,stdout_bytes:Buffer.byteLength(stdout),stdout_sha256:createHash('sha256').update(stdout).digest('hex')});
+ }
+ let attempts=0,failures=0,recordedFailures=0;
+ const output=value=>typeof value==='string'?value:'';
+ const failureRecord=(raw,error,start)=>{
+  failures++;if(recordedFailures>=32)return;
+  const message=own(error,'message');
+  const errorCode=['EXECUTION_DEADLINE','EXECUTION_OUTPUT_LIMIT','EXECUTION_START_FAILED'].includes(message)?message:'UNCLASSIFIED';
+  const streams=Object.fromEntries(['stdout','stderr'].map(k=>{const text=output(own(raw,k)??own(error,k));return [k,{bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')}];}));
+  durable(join(directory,`owner-rpc-wait-failure-${String(++recordedFailures).padStart(3,'0')}.json`),{
+   protocol:'official-skill-owner-wait-failure/v1',owner_run_id:intent.owner_run_id,scope_sha256:scopeHash,attempt:attempts,
+   start_ms:start,end_ms:Date.now(),receipt_deadline_ms:end,code:Number.isSafeInteger(raw?.code)?raw.code:null,
+   signal:['SIGTERM','SIGKILL','SIGINT','SIGHUP'].includes(raw?.signal)?raw.signal:null,error_code:errorCode,
+   execution_stopped:physicalUnknown(raw,error)?false:null,...streams});
+ };
+ const validBody=body=>body&&typeof body==='object'&&!Array.isArray(body)&&body.runId===intent.owner_run_id
+  &&(body.endedAt===undefined?['pending','timeout'].includes(body.status)
+   :['ok','error','timeout','aborted'].includes(body.status)&&Number.isFinite(body.endedAt)
+    &&body.endedAt>=intent.started_at_ms-1000&&body.endedAt<=Date.now()+1000&&body.endedAt<=end);
  while(Date.now()<end){
   try{
-   current();const remaining=end-Date.now();if(remaining<=0)break;
-   const value=await call('agent.wait',{runId:intent.owner_run_id,timeoutMs:Math.max(0,Math.floor(Math.min(10000,remaining)))},Math.min(12000,remaining));
-   durable(join(directory,`owner-rpc-wait-${String(++reads).padStart(3,'0')}.json`),value);current();
-   const body=value.body;
-   if(body?.runId!==intent.owner_run_id){conflict=true;break;}
-   if(body.endedAt!==undefined){
-    if(!['ok','error','timeout','aborted'].includes(body.status)||!Number.isFinite(body.endedAt)
-     ||body.endedAt<intent.started_at_ms-1000||body.endedAt>Date.now()+1000||body.endedAt>end){conflict=true;break;}
-    terminal=body;break;
+   current();const remaining=end-Date.now();if(remaining<1)break;
+   const start=Date.now(),timeoutMs=Math.floor(Math.min(12000,end-start));if(timeoutMs<1)break;
+   const params={runId:intent.owner_run_id,timeoutMs:Math.max(0,Math.min(10000,timeoutMs-2000))};
+   const args=['gateway','call','agent.wait','--params',JSON.stringify(params),'--json','--timeout',String(timeoutMs)];
+   attempts++;let raw,error;
+   try{raw=await execute('openclaw',args,{timeoutMs,maxBuffer:1024*1024});}catch(e){error=e;}
+   const failed=error!==undefined||raw?.code!==0||Boolean(raw?.signal);
+   if(failed)failureRecord(raw,error,start);
+   try{current();}catch(e){if(!failed)failureRecord(raw,e,start);throw e;}
+   if(Date.now()>=end){if(!failed)failureRecord(raw,Error('RPC_SKILL_OWNER_OBSERVED_AFTER_DEADLINE'),start);break;}
+   if(physicalUnknown(raw,error)){if(!failed)failureRecord(raw,undefined,start);conflict=true;break;}
+   const stdout=output(own(raw,'stdout')??own(error,'stdout'));
+   const invalid=()=>{if(!failed)failureRecord(raw,Error('RPC_SKILL_OWNER_PROTOCOL_UNKNOWN'),start);conflict=true;};
+   if(Buffer.byteLength(stdout)>1024*1024){invalid();break;}
+   let body;
+   if(stdout){try{body=JSON.parse(stdout);}catch{invalid();break;}if(!validBody(body)){invalid();break;}}
+   if(failed){
+    if(error){
+     const message=own(error,'message');
+     if(message!=='EXECUTION_DEADLINE'){conflict=true;break;}
+    }else if(!Number.isSafeInteger(raw?.code)||raw.code===0&&!['SIGTERM','SIGKILL','SIGINT','SIGHUP'].includes(raw.signal)){conflict=true;break;}
+   }else{
+    if(!validBody(body)){invalid();break;}
+    durable(join(directory,`owner-rpc-wait-${String(++reads).padStart(3,'0')}.json`),{raw,body});current();
+    if(Date.now()>=end)break;
+    if(conflict)break;
+    if(body.endedAt!==undefined){terminal=body;break;}
    }
-   if(!['pending','timeout'].includes(body.status)){conflict=true;break;}
-  }catch{break;}
+  }catch{conflict=true;break;}
   await new Promise(resolve=>setTimeout(resolve,Math.max(0,Math.min(100,end-Date.now()))));
  }
+ if(failures)durable(join(directory,'owner-rpc-wait-summary.json'),{protocol:'official-skill-owner-wait-summary/v1',
+  owner_run_id:intent.owner_run_id,scope_sha256:scopeHash,attempts,failures,recorded_failures:recordedFailures,receipt_deadline_ms:end});
  const result=Object.freeze({protocol:'official-skill-owner-result/v1',owner_run_id:intent.owner_run_id,parent_session_key:parent,
   status:terminal?.status||'unknown',execution_stopped:!!terminal&&!conflict,ack_received:ack!==null,ack_conflict:conflict,
-  scope_sha256:scopeHash,source_commit:request.source_commit,terminal});
+  scope_sha256:scopeHash,source_commit:intent.source_commit,terminal});
  durable(join(directory,'parent-owner-result.json'),result);
  if(result.execution_stopped)stopped.set(result,{scope_sha256:scopeHash,result_sha256:hash(result)});
  return result;
