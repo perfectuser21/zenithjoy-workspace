@@ -38,7 +38,7 @@ async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,re
  const claim={claimed_by:'common-runner',claimed_at:'2026-11-09T00:00:00.000Z'},run_binding={run_binding_id:binding_id,workflow_id,workflow_definition_version_id:workflow_version,attempt_key:'task:1',activities:{qualification:{reference_id:ref,activity_id:activity,activity_definition_version_id:av}}};
  const files=Object.fromEntries(inventory(runtime).map(p=>['runtime/'+p,hash(readFileSync(join(runtime,p)))])),runtimeHash=defs.digest(Object.fromEntries(Object.entries(files).map(([p,v])=>[p.slice(8),v])));
  const identity={run_id,task_id,machine_id:'us-mac-m4',mode:'formal',profile_sha256:'b'.repeat(64),run_binding};
- const frozen={execution_mode:'agent',primary_host:'official-child-v1',agent_input:defs.agentInput(env),native_claim:claim,files,deployment:{source_commit:source,target:'mmv',observation_id:id()},release:{id:id()},workflow_version:{id:workflow_version,payload:{key:'douyin_video_processing',workflow_id}},public_domain:{...identity,protocol:'workflow-domain/v1',runtime_snapshot_sha256:runtimeHash},collection_phone_scope:{run_id,profile:env.P,serial:env.SERIAL,evidence_root:evidence,policy:{schema_version:2},executables:{python:program(python),node:program(process.execPath),zsh:program('/bin/zsh')}},activities:[{reference:{slot_key:'qualification',reference_id:ref,activity_id:activity},version:{id:av,payload:{definition_key:'douyin_video_processing.qualification',contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-102-qualification',path:'services/phone-adb-controller/'+path,version}]}}}]};frozen.snapshot_sha256=defs.digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
+ const frozen={execution_mode:'agent',primary_host:'official-child-v1',agent_input:defs.agentInput(env),sampling_input:defs.commentSamplingInput(env),native_claim:claim,files,deployment:{source_commit:source,target:'mmv',observation_id:id()},release:{id:id()},workflow_version:{id:workflow_version,payload:{key:'douyin_video_processing',workflow_id}},public_domain:{...identity,protocol:'workflow-domain/v1',runtime_snapshot_sha256:runtimeHash},collection_phone_scope:{run_id,profile:env.P,serial:env.SERIAL,evidence_root:evidence,policy:{schema_version:2},executables:{python:program(python),node:program(process.execPath),zsh:program('/bin/zsh')}},activities:[{reference:{slot_key:'qualification',reference_id:ref,activity_id:activity},version:{id:av,payload:{definition_key:'douyin_video_processing.qualification',contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-102-qualification',path:'services/phone-adb-controller/'+path,version}]}}}]};frozen.snapshot_sha256=defs.digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
  const task={id:task_id,status:'in_progress',...claim,result:{common_runner:{...identity}}};
  let heldRequests=0;
  const server=http.createServer(async(req,res)=>{for await(const c of req){};if(req.url.includes('device-locks')&&++heldRequests===1&&resetHeldRead){req.socket.destroy();return;}if(revokeAfterCli&&existsSync(join(evidence,'failed-cli-started')))task.status='cancelled';res.end(JSON.stringify(req.url.includes('device-locks')?{success:true,locks:[{device_name:env.SERIAL,locked_by:task_id,...(leaseExpiresAt==='missing'?{}:{expires_at:leaseExpiresAt??new Date(Date.now()+120000).toISOString()})}]}:task));});await new Promise(r=>server.listen(0,'127.0.0.1',r));env.BRAIN_URL='http://127.0.0.1:'+server.address().port;env.BRAIN_INTERNAL_TOKEN='unit-only';
@@ -46,6 +46,39 @@ async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,re
  t.after(async()=>{stop();await new Promise(r=>server.close(r));for(const p of readdirSync(evidence).filter(p=>p.endsWith('.record.pid')))try{process.kill(Number(readFileSync(join(evidence,p),'utf8')),'SIGKILL');}catch{}rmSync(dir,{recursive:true,force:true});});
  return {load,dir,runtime,evidence,frozen,env,binding,state,contract,task,get heldRequests(){return heldRequests;}};
 }
+test('官方未启动拒绝穿过真实handler后不污染原生域，原调用可正常封闭',async t=>{
+ const f=await fixture(t),{createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs'),{createHandlers}=await f.load('leadgen-handlers.mjs');
+ const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const scope={activity:'qualification',workflow:f.frozen.agent_input.workflow_key,run:f.env.WFR_TAG,source_commit:f.frozen.deployment.source_commit,profile:f.env.P,serial:f.env.SERIAL,task_id:f.binding.task_id,run_id:f.binding.run_id,binding_id:f.binding.id,snapshot_sha256:f.frozen.snapshot_sha256,deadline_ms:Date.now()+60000,worker_deadline_ms:Date.now()+50000,receipt_deadline_ms:Date.now()+55000};
+ await p.begin(scope);
+ const handlers=createHandlers({root:f.runtime,env:{...f.env,DOUYIN_PHONE_ADB:join(f.runtime,'douyin-phone-adb')},rpc:async()=>{throw Error('UNEXPECTED_RPC');},execute:p.execute,sourceCommit:f.frozen.deployment.source_commit,taskId:f.binding.task_id});handlers.state.currentActivity='qualification';
+ try{
+  await assert.rejects(()=>handlers.handoffPhone('lock-acquire','foreign-owner'),error=>{
+   assert.match(error.message,/OFFICIAL_CLI_OWNER/);assert.equal(error.executionStopped,true);assert.equal(error.externalEffect,'none');return true;
+  });
+  assert.notEqual(handlers.state.executionUnknown,true);assert.equal(handlers.agentNativeState().execution_unknown,false);assert.equal(f.state.executionUnknown,undefined);assert.equal(handlers.state.nativeStopProof,null);assert.equal(p.snapshot().pending,0);assert.equal(p.snapshot().execution_unknown,false);
+  assert.equal(existsSync(join(f.dir,'native-operations')),false,'拒绝发生在原命令和receipt派发前');
+  assert.equal((await p.finish('qualification')).execution_stopped,true);assert.equal((await p.close()).execution_stopped,true);
+ }finally{await p.close();}
+});
+for(const mode of ['forged','cloned','foreign-receipt'])test('未启动拒绝不能跨越真实handler调用身份: '+mode,async t=>{
+ const f=await fixture(t),{createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs'),{createHandlers}=await f.load('leadgen-handlers.mjs');
+ const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const scope={activity:'qualification',workflow:f.frozen.agent_input.workflow_key,run:f.env.WFR_TAG,source_commit:f.frozen.deployment.source_commit,profile:f.env.P,serial:f.env.SERIAL,task_id:f.binding.task_id,run_id:f.binding.run_id,binding_id:f.binding.id,snapshot_sha256:f.frozen.snapshot_sha256,deadline_ms:Date.now()+60000,worker_deadline_ms:Date.now()+50000,receipt_deadline_ms:Date.now()+55000};
+ await p.begin(scope);
+ const command=join(f.runtime,'douyin-phone-adb'),args=['--profile',f.env.P,'lock-acquire','foreign-owner'];
+ const receipt={runDir:f.dir,operationId:'different-original-call',runId:f.binding.run_id,taskId:f.binding.task_id,profile:f.env.P,serial:f.env.SERIAL,sourceCommit:f.frozen.deployment.source_commit,owner:f.env.WFR_TAG,activity:'qualification'};
+ let original;try{await p.execute(command,args,{receipt});}catch(error){original=error;}
+ assert.match(original?.message,/OFFICIAL_CLI_OWNER/);
+ const error=mode==='foreign-receipt'?original:mode==='cloned'?Object.assign(Error(original.message),JSON.parse(JSON.stringify(original))):Object.assign(Error('OFFICIAL_CLI_OWNER'),{executionStopped:true,notStarted:true,externalEffect:'none'});
+ let intercepted=0;
+ const handlers=createHandlers({root:f.runtime,env:{...f.env,DOUYIN_PHONE_ADB:command},rpc:async()=>{throw Error('UNEXPECTED_RPC');},execute:async(_command,_args,options)=>{intercepted++;assert.notEqual(options.receipt.operationId,receipt.operationId);throw error;},sourceCommit:f.frozen.deployment.source_commit,taskId:f.binding.task_id});handlers.state.currentActivity='qualification';
+ try{
+  await assert.rejects(()=>handlers.handoffPhone('lock-acquire','foreign-owner'),rejected=>{assert.equal(rejected.executionStopped,false);assert.equal(rejected.externalEffect,'unknown');return true;});
+  assert.equal(intercepted,1);assert.equal(handlers.state.executionUnknown,true);assert.equal(handlers.agentNativeState().execution_unknown,true);
+  assert.equal(existsSync(join(f.dir,'native-operations')),false);
+ }finally{await p.close();}
+});
 test('official child真实held GET断连在同预算重读后仅派发一次原CLI',async t=>{
  const f=await fixture(t,{failedCli:true,resetHeldRead:true}),{createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs');
  const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
