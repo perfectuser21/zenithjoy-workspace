@@ -160,7 +160,7 @@ for(const interruption of ['nonzero','throw'])test('原截止内owner只读wait'
   const raw=await execute(command,args,options);
   if(args[2]==='agent.wait'&&++waits===1){
    if(interruption==='nonzero')return {...raw,code:2,stdout:'',stderr:'fixture read transport interrupted'};
-   throw Object.assign(Error('fixture read transport interrupted'),{code:'EXECUTION_DEADLINE'});
+   throw Error('EXECUTION_DEADLINE');
   }
   return raw;
  };
