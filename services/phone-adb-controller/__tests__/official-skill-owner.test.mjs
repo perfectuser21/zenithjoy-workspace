@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {execInput} from '../leadgen-client.mjs';
@@ -151,4 +151,62 @@ test('mutating a nested official terminal cannot reuse its in-process stop capab
  const f=fixture(t),run=await api.runOfficialSkillOwner(f);assert.equal(api.officialOwnerRunTerminated(run,f.request),true);
  run.terminal.runId='foreign-run';assert.equal(api.officialOwnerRunTerminated(run,f.request),false);
  await assert.rejects(()=>api.closeOfficialSkillOwner({...f,result:run}));
+});
+
+for(const interruption of ['nonzero','throw'])test('原截止内owner只读wait'+interruption+'中断后仍读回同run终态并严格关闭',async t=>{
+ const f=fixture(t),execute=f.execute,original=structuredClone(f.request),requestBytes=readFileSync(join(f.directory,'activity-request.json'),'utf8');
+ const turn=await reserveWorkflowCommanderTurn(f.request,{home:f.directory});let waits=0;
+ f.execute=async(command,args,options)=>{
+  const raw=await execute(command,args,options);
+  if(args[2]==='agent.wait'&&++waits===1){
+   if(interruption==='nonzero')return {...raw,code:2,stdout:'',stderr:'fixture read transport interrupted'};
+   throw Object.assign(Error('fixture read transport interrupted'),{code:'EXECUTION_DEADLINE'});
+  }
+  return raw;
+ };
+ try{
+  const run=await api.runOfficialSkillOwner(f);
+  assert.equal(api.officialOwnerRunTerminated(run,f.request),true,'只读传输中断不能在原截止前丢弃下一次合法同run终态');
+  assert.equal(api.officialOwnerTerminated(run,f.request),false,'读到单run终态仍须独立关闭owner域');
+  assert.equal(api.officialOwnerRunTerminated({...run},f.request),false,'恢复读回仍不能用复制对象伪造品牌');
+  const result=await api.closeOfficialSkillOwner({...f,result:run});
+  assert.equal(result.execution_stopped,true);assert.equal(result.session_quiescent,true);assert.equal(api.officialOwnerTerminated(result,f.request),true);
+  const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse),intent=JSON.parse(readFileSync(join(f.directory,'owner-rpc-intent.json'),'utf8'));
+  assert.equal(calls.filter(call=>call.method==='agent').length,1,'恢复只读不能重新派发写agent');
+  assert.equal(calls.filter(call=>call.method==='agent.wait').length,2);
+  assert.ok(calls.filter(call=>call.method==='agent.wait').every(call=>call.params.runId===intent.owner_run_id));
+  assert.equal(calls[0].params.idempotencyKey,intent.owner_run_id);
+  assert.equal(intent.source_commit,original.source_commit);assert.equal(intent.nonce,original.nonce);assert.equal(intent.scope_sha256,run.scope_sha256);
+  const diagnostics=readdirSync(f.directory).filter(name=>name.endsWith('.json')).map(name=>({name,text:readFileSync(join(f.directory,name),'utf8')}));
+  const failure=diagnostics.find(({text})=>text.includes(intent.owner_run_id)&&(interruption==='nonzero'?/"code"\s*:\s*2(?:\s*[,}])/.test(text):text.includes('EXECUTION_DEADLINE')));
+  assert.ok(failure,'失败读回必须留下关联原owner的非零退出码或安全异常码，不锁侧车文件名');
+  assert.ok(Buffer.byteLength(failure.text)<=65536,'诊断原件必须有限，不能无限收录传输输出');
+  assert.deepEqual(calls.filter(call=>!['agent','agent.wait'].includes(call.method)).map(call=>call.method),['sessions.describe','chat.history','tools.invoke','sessions.describe','chat.history','tools.invoke','sessions.describe'],'恢复后原严格双轮及最终重读完整保留');
+  assert.deepEqual(f.request,original);assert.equal(readFileSync(join(f.directory,'activity-request.json'),'utf8'),requestBytes);assert.ok(Date.now()<original.receipt_deadline_ms);
+  await turn.observedTerminal(result);assert.equal(existsSync(ownerPending(f.request,f.directory).file),false);
+ }finally{await turn.close();}
+});
+
+for(const change of ['request-memory','request-file','generation-revoked','deadline'])test('只读wait中断后不得越过原scope守卫 '+change,async t=>{
+ const f=fixture(t),execute=f.execute;let waits=0;
+ if(change==='deadline'){f.request.receipt_deadline_ms=Date.now()+2000;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));}
+ const originalDeadline=f.request.receipt_deadline_ms;
+ f.execute=async(command,args,options)=>{
+  const raw=await execute(command,args,options);
+  if(args[2]==='agent.wait'){
+   waits++;
+   if(change==='request-memory')f.request.nonce='c'.repeat(48);
+   if(change==='request-file')writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify({...f.request,source_commit:'c'.repeat(40)}));
+   if(change==='generation-revoked')writeFileSync(join(f.directory,'generation-revoked.json'),'{}');
+   if(change==='deadline')await new Promise(resolve=>setTimeout(resolve,Math.max(1,originalDeadline-Date.now()+10)));
+   return {...raw,code:2,stdout:'',stderr:'fixture read transport interrupted'};
+  }
+  return raw;
+ };
+ const result=await api.runOfficialSkillOwner(f);
+ assert.equal(result.execution_stopped,false);assert.equal(api.officialOwnerRunTerminated(result,f.request),false);assert.equal(api.officialOwnerTerminated(result,f.request),false);
+ assert.equal(waits,1);assert.equal(f.request.receipt_deadline_ms,originalDeadline);
+ const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.deepEqual(calls.map(call=>call.method),['agent','agent.wait']);
+ await assert.rejects(()=>api.closeOfficialSkillOwner({...f,result}));
 });
