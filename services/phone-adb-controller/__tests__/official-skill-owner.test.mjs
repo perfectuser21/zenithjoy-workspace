@@ -210,3 +210,78 @@ for(const change of ['request-memory','request-file','generation-revoked','deadl
  assert.deepEqual(calls.map(call=>call.method),['agent','agent.wait']);
  await assert.rejects(()=>api.closeOfficialSkillOwner({...f,result}));
 });
+
+for(const change of ['intent-file','foreign-nonzero','invalid-json','output-limit','unknown-throw','late-observation','wait-file-conflict'])test('owner恢复不得清洗不可信原件 '+change,async t=>{
+ const f=fixture(t),execute=f.execute;let waits=0;
+ if(change==='late-observation'){f.request.receipt_deadline_ms=Date.now()+600;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));}
+ if(change==='wait-file-conflict')writeFileSync(join(f.directory,'owner-rpc-wait-001.json'),'{}');
+ const end=f.request.receipt_deadline_ms;
+ f.execute=async(command,args,options)=>{
+  const raw=await execute(command,args,options);
+  if(args[2]!=='agent.wait')return raw;
+  waits++;
+  if(waits!==1)return raw;
+  if(change==='intent-file'){
+   const path=join(f.directory,'owner-rpc-intent.json'),intent=JSON.parse(readFileSync(path,'utf8'));intent.source_commit='c'.repeat(40);writeFileSync(path,JSON.stringify(intent));return {...raw,code:2,stdout:''};
+  }
+  if(change==='foreign-nonzero')return {...raw,code:2,stdout:JSON.stringify({...JSON.parse(raw.stdout),runId:'foreign'})};
+  if(change==='invalid-json')return {...raw,stdout:'not-json'};
+  if(change==='output-limit')throw Error('EXECUTION_OUTPUT_LIMIT');
+  if(change==='unknown-throw')throw Error('private-token-untrusted-message');
+  if(change==='late-observation')await new Promise(resolve=>setTimeout(resolve,Math.max(1,end-Date.now()+10)));
+  return raw;
+ };
+ const run=await api.runOfficialSkillOwner(f);assert.equal(run.execution_stopped,false);assert.equal(api.officialOwnerRunTerminated(run,f.request),false);assert.equal(waits,1);assert.equal(f.request.receipt_deadline_ms,end);
+ const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(calls.filter(c=>c.method==='agent').length,1);
+ const failureTexts=readdirSync(f.directory).filter(n=>n.includes('failure')).map(n=>readFileSync(join(f.directory,n),'utf8')).join('\n');assert.ok(!failureTexts.includes('private-token-untrusted-message'));
+});
+
+test('wait传输恢复不能跳过仍pending的owner census',async t=>{
+ const f=fixture(t,'queue-pending'),execute=f.execute;f.request.receipt_deadline_ms=Date.now()+1000;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));let waits=0;
+ f.execute=async(command,args,options)=>{const raw=await execute(command,args,options);if(args[2]==='agent.wait'&&++waits===1)throw Error('EXECUTION_DEADLINE');return raw;};
+ const run=await api.runOfficialSkillOwner(f);assert.equal(api.officialOwnerRunTerminated(run,f.request),true);const result=await api.closeOfficialSkillOwner({...f,result:run});assert.equal(result.execution_stopped,false);assert.equal(api.officialOwnerTerminated(result,f.request),false);
+});
+
+for(const boundary of ['ack-foreign-nonzero','wait-physical-unknown','wait-raw-physical-unknown','wait-thrown-foreign'])test('有传输失败仍不得丢弃原身份或物理未知 '+boundary,async t=>{
+ const f=fixture(t),execute=f.execute;let waits=0;
+ f.execute=async(command,args,options)=>{
+  const raw=await execute(command,args,options);
+  if(args[2]==='agent'&&boundary==='ack-foreign-nonzero')return {...raw,code:2,stdout:JSON.stringify({...JSON.parse(raw.stdout),runId:'foreign'})};
+  if(args[2]==='agent.wait'&&++waits===1){
+   if(boundary==='wait-raw-physical-unknown')return {...raw,code:2,executionStopped:false,stdout:''};
+   if(boundary==='wait-physical-unknown')throw Object.assign(Error('EXECUTION_DEADLINE'),{executionStopped:false});
+   if(boundary==='wait-thrown-foreign')throw Object.assign(Error('EXECUTION_DEADLINE'),{stdout:JSON.stringify({...JSON.parse(raw.stdout),runId:'foreign'})});
+  }
+  return raw;
+ };
+ const run=await api.runOfficialSkillOwner(f);assert.equal(run.execution_stopped,false);assert.equal(api.officialOwnerRunTerminated(run,f.request),false);assert.ok(waits<=1);
+});
+
+test('连续只读传输失败诊断最多32份且不写自由输出，恢复仍只派发一次',async t=>{
+ const f=fixture(t),execute=f.execute;let waits=0;
+ f.execute=async(command,args,options)=>{
+  if(args[2]==='agent.wait'&&++waits<=35)return {code:2,stdout:'',stderr:'private-token-untrusted-message'};
+  return execute(command,args,options);
+ };
+ const run=await api.runOfficialSkillOwner(f);assert.equal(run.execution_stopped,true);assert.equal(JSON.parse(readFileSync(join(f.directory,'owner-rpc-wait-summary.json'),'utf8')).failures,35);
+ const files=readdirSync(f.directory).filter(n=>n.startsWith('owner-rpc-wait-failure-'));assert.equal(files.length,32);
+ for(const name of files){const text=readFileSync(join(f.directory,name),'utf8');assert.ok(Buffer.byteLength(text)<=65536);assert.ok(!text.includes('private-token-untrusted-message'));assert.equal(JSON.parse(text).owner_run_id,run.owner_run_id);}
+ const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(calls.filter(c=>c.method==='agent').length,1);
+});
+
+for(const boundary of ['wait-thrown-effect-unknown','ack-raw-effect-unknown','ack-raw-stopped-false'])test('独立审查物理未知投影不得被后续合法wait洗白 '+boundary,async t=>{
+ const f=fixture(t),execute=f.execute,original=structuredClone(f.request);let agents=0,waits=0;
+ f.execute=async(command,args,options)=>{
+  const raw=await execute(command,args,options);
+  if(args[2]==='agent'){
+   agents++;
+   if(boundary==='ack-raw-effect-unknown')return {...raw,code:2,stdout:'',externalEffect:'unknown'};
+   if(boundary==='ack-raw-stopped-false')return {...raw,code:2,stdout:'',executionStopped:false};
+  }
+  if(args[2]==='agent.wait'&&++waits===1&&boundary==='wait-thrown-effect-unknown')throw Object.assign(Error('EXECUTION_DEADLINE'),{externalEffect:'unknown'});
+  return raw;
+ };
+ const run=await api.runOfficialSkillOwner(f);
+ assert.equal(run.execution_stopped,false);assert.equal(api.officialOwnerRunTerminated(run,f.request),false);assert.equal(api.officialOwnerTerminated(run,f.request),false);
+ assert.equal(agents,1);assert.ok(waits<=1);assert.deepEqual(f.request,original);await assert.rejects(()=>api.closeOfficialSkillOwner({...f,result:run}));
+});
