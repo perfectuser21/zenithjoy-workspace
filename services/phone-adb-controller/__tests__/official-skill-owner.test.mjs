@@ -33,8 +33,11 @@ elif method=='agent.wait':
 elif method in ['sessions.describe','chat.history','tools.invoke']:
  p=d/'closure-count';n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n))
  if method=='sessions.describe':
-  active=(v=='second-active' and n>=4) or (v=='tail-active' and n>=7)
-  print(json.dumps({'session':{'key':intent['parent_session_key'],'sessionId':'changed' if v=='session-changed' and n>=4 else 'fixture-session','hasActiveRun':active,'activeRunIds':['late-parent'] if active else [],'snapshotAt':int(time.time()*1000)}}))
+  completion=v=='completion-active-first' and n==1
+  active=completion or (v=='second-active' and n>=4) or (v=='tail-active' and n>=7)
+  row={'key':intent['parent_session_key'],'sessionId':'changed' if v=='session-changed' and n>=4 else 'fixture-session','hasActiveRun':active,'status':'running' if active else 'done','snapshotAt':int(time.time()*1000)}
+  if not completion and v!='idle-census-missing':row['activeRunIds']=['late-parent'] if active else []
+  print(json.dumps({'session':row}))
  elif method=='chat.history':print(json.dumps({'sessionKey':intent['parent_session_key'],'sessionId':'fixture-session','pendingInputs':{'total':1 if v=='queue-pending' else 0,'items':[{'id':'late-callback'}] if v=='queue-pending' else [],'queuedCount':1 if v=='queue-pending' else 0}}))
  else:
   child=json.loads((d/'agent-binding.json').read_text())
@@ -75,6 +78,25 @@ test('official terminal archives only its real branded owner reservation without
   assert.equal(files.some(name=>name.endsWith('.returned.json')),false);
   assert.equal(files.filter(name=>name.endsWith('.official_terminal.json')).length,1);
  }finally{await turn.close();}
+});
+test('合法completion父回合结束后在原截止内取得完整owner关闭证明，不再派发Agent',async t=>{
+ const f=fixture(t,'completion-active-first'),deadline=f.request.receipt_deadline_ms,turn=await reserveWorkflowCommanderTurn(f.request,{home:f.directory});
+ try{
+  const run=await api.runOfficialSkillOwner(f);const result=await api.closeOfficialSkillOwner({...f,result:run});
+  assert.equal(result.execution_stopped,true);assert.equal(result.session_quiescent,true);assert.equal(api.officialOwnerTerminated(result,f.request),true);
+  assert.equal(f.request.receipt_deadline_ms,deadline);assert.ok(Date.now()<deadline);
+  const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(calls.filter(call=>call.method==='agent').length,1);assert.ok(calls.filter(call=>call.method==='sessions.describe').length>=4,'active之后仍须双轮核对和最终重读');
+  assert.ok(calls.filter(call=>call.method==='chat.history').length>=2);assert.ok(calls.filter(call=>call.method==='tools.invoke').length>=2);
+  await turn.observedTerminal(result);assert.equal(existsSync(ownerPending(f.request,f.directory).file),false);
+ }finally{await turn.close();}
+});
+test('空闲回执缺少原必需census字段仍保持unknown，不能默认成空数组',async t=>{
+ const f=fixture(t,'idle-census-missing'),run=await api.runOfficialSkillOwner(f);
+ const result=await api.closeOfficialSkillOwner({...f,result:run});
+ assert.equal(result.execution_stopped,false);assert.equal(api.officialOwnerTerminated(result,f.request),false);
+ const calls=readFileSync(join(f.directory,'calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(calls.filter(call=>call.method==='agent').length,1);assert.equal(calls.some(call=>call.method==='tools.invoke'),false,'缺少官方census即不能签发关闭证明');
 });
 for(const variant of ['delivery-pending','queue-pending','second-active','session-changed','tail-active'])test('finished owner and child cannot clear the original reservation while '+variant,async t=>{
  assert.equal(typeof api.closeOfficialSkillOwner,'function');const f=fixture(t,variant),turn=await reserveWorkflowCommanderTurn(f.request,{home:f.directory});

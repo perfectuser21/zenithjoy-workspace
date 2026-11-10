@@ -11,11 +11,43 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
+import {createLeadgenAgentTools} from '../leadgen-agent-tools.mjs';
+import {createPhoneAction} from '../leadgen-phone-action.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,''),digest=b=>createHash('sha256').update(b).digest('hex');
 const executables={zsh:{path:'/bin/zsh'},python:{path:realpathSync('/usr/bin/python3')},node:{path:realpathSync(process.execPath)}};for(const spec of Object.values(executables))spec.sha256=digest(readFileSync(spec.path));
 const describe=(command,args)=>describeOfficialCliInvocation({root,command,args,executables,profile:'fixture',owner:'run',serial:'serial'});
+test('Skill公布的只读能力经真实phone参数适配可被官方CLI执行边界识别',async t=>{
+ const runDir=mkdtempSync(join(tmpdir(),'published-phone-status-'));t.after(()=>rmSync(runDir,{recursive:true,force:true}));
+ const scope={workflow:'douyin_video_discovery',activity:'preflight',run:'agent_fixture',run_id:'douyin_video_discovery-agent_fixture__a1',task_id:'28f30d70-7248-434b-a1d4-29afed626017',binding_id:'00000000-0000-4000-8000-000000000001',source_commit:'a'.repeat(40),snapshot_sha256:'b'.repeat(64),profile:'fixture',serial:'serial',line:'yuesheng',source_run:null,limit:1,deadline_ms:Date.now()+10000};
+ const invocations=[];
+ const phone=createPhoneAction({env:{HOME:runDir,DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb')},state:{},profile:scope.profile,run:scope.run,isLocked:()=>true,isClosed:()=>false,getScope:()=>({zsh:executables.zsh.path}),nativeReceipt:()=>({operationId:'status-operation'}),checked:async(command,args)=>{
+  const plan=describeOfficialCliInvocation({root,command,args,executables,profile:scope.profile,owner:scope.run,serial:scope.serial});invocations.push(plan);
+  return plan.operation==='lock-refresh'?'lock=refreshed':'native-read-'+plan.operation;
+ }});
+ const tools=createLeadgenAgentTools({scope,runDir,primitives:{assertResources:async()=>true,inspect:async()=>({}),phone}});
+ const context=await tools.inspect(),commands=['status','foreground','window','ui-evidence','snapshot-evidence','outward-ledger'];
+ for(const command of commands){assert.ok(context.phone_capabilities.includes(command));assert.deepEqual(context.tool_contract.phone[command].args,[]);assert.equal(await tools.phone(command),'native-read-'+command);}
+ for(const command of ['status','window'])assert.deepEqual(invocations.find(plan=>plan.operation===command).args,['-f',join(root,'douyin-phone-adb'),'--profile',scope.profile,command]);
+ for(const command of ['ui-evidence','snapshot-evidence']){
+  const args=invocations.find(plan=>plan.operation===command).args;assert.deepEqual(args.slice(0,-1),['-f',join(root,'douyin-phone-adb'),'--profile',scope.profile,'--lock-owner',scope.run,command]);assert.ok(args.at(-1).startsWith(scope.run+'-'));
+ }
+ const ledger=invocations.find(plan=>plan.operation==='outward-ledger');assert.equal(ledger.args.at(-1),scope.run,'账本身份来自server锁owner，不能替换为运行UUID');
+ const before=invocations.length;await assert.rejects(()=>tools.phone('outward-ledger','foreign-run'),/PHONE_INPUT_INVALID/);assert.equal(invocations.length,before);
+});
 test('CLI plan admits fixed argv and refuses arbitrary shell, sends and background entry points',()=>{assert.equal(describe('zsh',['-f',join(root,'douyin-phone-adb'),'--profile','fixture','foreground']).kind,'synchronous-cli');assert.equal(describe(join(root,'douyin-phone-adb'),['--profile','fixture','record-start','run-record','25','7712345678901234567']).kind,'recording-outer-only');for(const [command,args]of [['zsh',['-fc','echo fake']],['python3',['-c','pass']],[join(root,'douyin-phone-adb'),['--profile','fixture','private-message-send']],[join(root,'douyin-phone-adb'),['--profile','fixture','with-lock']],[join(root,'douyin-phone-adb'),['--profile','fixture','tap-evidence','--outward','send']]])assert.throws(()=>describe(command,args),/OFFICIAL_CLI/);});
 function rig(t,{epochFails=false,sourceMismatch=false,runtimeRoot=root,createFacade=createOfficialCliClosure}={}){const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-cli-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));const files={};for(const name of readdirSync(runtimeRoot)){const path=join(runtimeRoot,name);if(lstatSync(path).isFile())files['runtime/'+name]=digest(readFileSync(path));}if(sourceMismatch)files['runtime/douyin-phone-adb']='0'.repeat(64);const taskId='11111111-1111-4111-8111-111111111111',binding={run_id:'run__a1',id:'22222222-2222-4222-8222-222222222222'},env={HOME:directory,WFR_RUN_DIR:directory,P:'fixture',SERIAL:'serial',WFR_TAG:'run',WFR_ATTEMPT:'a1'},frozen={snapshot_sha256:'a'.repeat(64),deployment:{source_commit:'b'.repeat(40)},files,agent_input:{task_id:taskId,profile:'fixture',serial:'serial',run_tag:'run',workflow_key:'douyin_video_processing'},collection_phone_scope:{run_id:binding.run_id,profile:'fixture',serial:'serial',policy:{schema_version:2},executables}};let admissions=0;const phases=[];const facade=createFacade({root:runtimeRoot,env,frozen,binding,taskId,scope:{activity:'preflight',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,snapshot_sha256:frozen.snapshot_sha256,source_commit:frozen.deployment.source_commit,profile:'fixture',serial:'serial',run:'run',workflow:'douyin_video_processing',worker_deadline_ms:Date.now()+20000,receipt_deadline_ms:Date.now()+25000,deadline_ms:Date.now()+30000},assertAdmission:async request=>{phases.push(request);admissions++;if(epochFails)throw Object.assign(Error('EPOCH_LOST'),{resourceUnknown:true});return {authorized:true};}});const receipt={runDir:directory,operationId:'op1',runId:binding.run_id,taskId,profile:'fixture',serial:'serial',sourceCommit:frozen.deployment.source_commit,owner:'run',activity:'preflight'};return {facade,frozen,receipt,phases,admissions:()=>admissions};}
+test('伪造的未启动字段、克隆异常和错操作身份不能取得原生停止权限',async t=>{
+ const r=rig(t),command=join(root,'douyin-phone-adb'),args=['--profile','fixture','private-message-send'];
+ let original;try{await r.facade.execute(command,args,{receipt:r.receipt});}catch(error){original=error;}
+ assert.ok(original);assert.equal(r.admissions(),0);
+ const forged=Object.assign(Error(original.message),{code:original.code,executionStopped:true,notStarted:true,resourceUnknown:false});
+ const cloned=Object.assign(Error(original.message),JSON.parse(JSON.stringify(original)));
+ for(const [error,invocation,receipt]of [[forged,args,r.receipt],[cloned,args,r.receipt],[original,[...args],{...r.receipt,operationId:'foreign-operation'}]]){
+  const state={};client.applyNativeFailure(error,command,invocation,{receipt},state);
+  assert.equal(error.executionStopped,false);assert.equal(state.executionUnknown,true);
+ }
+ await r.facade.close();
+});
 test('fixed original CLI failure closes normally without granting its clone authority',async t=>{const r=rig(t),command=join(root,'douyin-phone-adb'),args=['--profile','fixture','runtime-contract'];const result=await r.facade.execute(command,args,{receipt:r.receipt,timeoutMs:10000});assert.notEqual(result.code,0,'isolated fixture has no phone registry');assert.equal(result.executionStopped,false,'execInput public semantics remain conservative');const context={command,args,receipt:r.receipt,root,frozen:r.frozen};assert.equal(isOfficialCliOperationStopped(result,context),true);assert.equal(isOfficialCliOuterReturned(result,context),true);assert.equal(isOfficialCliOperationStopped({...result},context),false);assert.equal(isOfficialCliOperationStopped(result,{...context,receipt:{...r.receipt,activity:'collection'}}),false);assert.equal(r.admissions(),2);assert.equal((await r.facade.close()).execution_stopped,true);});
 test('epoch rejection happens before a fixed CLI spawn and keeps the domain unknown',async t=>{const r=rig(t);r.frozen.files['runtime/douyin-phone-adb']='0'.repeat(64);const context={command:join(root,'douyin-phone-adb'),args:['--profile','fixture','runtime-contract'],receipt:r.receipt};assert.equal(isOfficialCliOperationStopped({code:0},context),false);await r.facade.close();const second=rig(t,{epochFails:true});await assert.rejects(second.facade.execute(context.command,context.args,{receipt:second.receipt}),/EPOCH_LOST/);assert.equal(second.admissions(),1);assert.equal((await second.facade.close()).unknown,true);});
 
