@@ -1,3 +1,4 @@
+import {epochDiagnosticFields,ownDiagnosticValue} from './epoch-admission-diagnostic.mjs';
 import {publicDomainActivityScopeMatches} from './public-domain-authority.mjs';
 import {readPublicDomainUpstream} from './public-domain-upstream.mjs';
 // Server-owned Activity primitives: the Agent supplies work, never authority.
@@ -48,15 +49,12 @@ function privateRead(file){
 }
 function syncDirectory(directory){const fd=openSync(directory,'r');try{if(!lstatSync(directory).isDirectory()||lstatSync(directory).isSymbolicLink())throw Error('AGENT_TOOL_JOURNAL_INVALID');fsyncSync(fd);}finally{closeSync(fd);}}
 function durable(file,value){const fd=openSync(file,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}syncDirectory(dirname(file));}
-// Failure diagnostics never serialize exception messages, stacks or arbitrary
-// attached values. Only finite code identifiers from own data properties cross
-// into the durable journal; a failure file does not resolve its write intent.
 function failureCodes(error){
-  const own=(value,key)=>value&&(typeof value==='object'||typeof value==='function')?Object.getOwnPropertyDescriptor(value,key)?.value:undefined;
+  const own=ownDiagnosticValue;
   const code=value=>{const valueCode=own(value,'code');return typeof valueCode==='string'&&/^[A-Z][A-Z0-9_]{0,95}$/.test(valueCode)?valueCode:null;};
   const cause_codes=[],seen=new Set([error]);let cause=own(error,'cause');
   for(let depth=0;cause&&depth<4&&!seen.has(cause);depth++){seen.add(cause);const value=code(cause);if(value)cause_codes.push(value);cause=own(cause,'cause');}
-  return {error_code:code(error),cause_codes};
+  return {error_code:code(error),cause_codes,...epochDiagnosticFields(error)};
 }
 function identity(op,input){
   if(['discover','discover_readback'].includes(op))return 'discover:'+String(input.video?.videoId??input.video?.video_id);

@@ -9,6 +9,7 @@ import {digest} from '../runtime-definition.mjs';
 import {readBrain} from '../device-epoch-fence-review.mjs';
 import {createPhoneEpochGuard} from '../phone-epoch-admission.mjs';
 import {createLeadgenAgentTools} from '../leadgen-agent-tools.mjs';
+import {createServer} from 'node:http';
 
 const runtime=dirname(dirname(fileURLToPath(import.meta.url)));
 const task='11111111-1111-4111-8111-111111111111',run='22222222-2222-4222-8222-222222222222',epoch='33333333-3333-4333-8333-333333333333';
@@ -30,7 +31,7 @@ function fixture(t){
  const scope={workflow:'douyin_video_discovery',activity:'preflight',run:'fixture',run_id:'douyin_video_discovery-fixture__a1',task_id:task,binding_id:epoch,source_commit:'a'.repeat(40),snapshot_sha256:'b'.repeat(64),profile:'fixture',serial,line:'yuesheng',source_run:null,limit:1,comment_limit:1,deadline_ms:Date.now()+30000};
  let prepares=0,phones=0;
  const tools=createLeadgenAgentTools({scope,runDir,primitives:{assertResources:async()=>true,prepare:async()=>{prepares++;return guard();},phone:async()=>{phones++;throw Error('phone forbidden');},inspect:async()=>({})}});
- return {runDir,tools,state,guard,counts:()=>({prepares,phones})};
+ return {runDir,tools,state,guard,scope,counts:()=>({prepares,phones})};
 }
 function failure(runDir){const dir=join(runDir,'agent-tools/preflight'),file=fs.readdirSync(dir).find(n=>n.endsWith('.failure.json'));assert.ok(file);return {raw:fs.readFileSync(join(dir,file),'utf8'),value:JSON.parse(fs.readFileSync(join(dir,file),'utf8'))};}
 const diagnostic=(endpoint,failure,read_phase='request',http_status=null,transport_code=null)=>({protocol:'epoch-admission-diagnostic/v1',stage:'initial_business',endpoint,read_phase,failure,http_status,transport_code});
@@ -64,4 +65,47 @@ test('read failure evidence never executes exception getters or serializes arbit
 
 test('readBrain keeps successful values and rejects invalid paths before any request',async t=>{
  fixture(t);let requests=0;globalThis.fetch=async()=>{requests++;return new Response('{"accepted":true}',{headers:{'Content-Type':'application/json'}});};assert.deepEqual(await readBrain(endpointPath.task),{accepted:true});await assert.rejects(()=>readBrain('/api/brain/device-locks/release'),/BRAIN_READ_PATH/);assert.equal(requests,1);
+});
+
+
+test('body timeout retains the observed response and the original single deadline',async t=>{
+ const f=fixture(t),controllers=[];AbortSignal.timeout=ms=>{assert.equal(ms,10000);const c=new AbortController();controllers.push(c);return c.signal;};
+ globalThis.fetch=async(url,options)=>String(url).endsWith(endpointPath.definition)?{status:200,headers:new Headers({'Content-Type':'application/json'}),text:async()=>{const controller=controllers.find(c=>c.signal===options.signal);controller.abort(new DOMException('private body timeout','TimeoutError'));throw options.signal.reason;}}:new Response('{}',{headers:{'Content-Type':'application/json'}});
+ await assert.rejects(()=>f.tools.prepare(),/READBACK_REQUIRED/);assert.deepEqual(failure(f.runDir).value.epoch_diagnostic,diagnostic('definition','timeout','body',200));assert.equal(controllers.length,4);
+});
+
+test('oversize body remains rejected without exposing response content',async t=>{
+ const f=fixture(t);let requests=0;globalThis.fetch=async url=>{requests++;return new Response(String(url).endsWith(endpointPath.definition)?'x'.repeat(8*1024*1024+1):'{}',{headers:{'Content-Type':'application/json'}});};
+ await assert.rejects(()=>f.tools.prepare(),/READBACK_REQUIRED/);assert.deepEqual(failure(f.runDir).value.epoch_diagnostic,diagnostic('definition','body_limit','body',200));assert.equal(requests,4);
+});
+
+test('durable diagnostic projection rejects extra keys, inherited fields, accessors and proxy traps',async t=>{
+ for(const variant of ['extra','inherited','accessor','proxy','cycle','nonfinite']){
+  await t.test(variant,async inner=>{
+   const f=fixture(inner),safe=diagnostic('task','timeout'),secret='private-diagnostic-secret';let getters=0,value={...safe};
+   if(variant==='extra')value.secret=secret;
+   if(variant==='inherited')value=Object.create(safe);
+   if(variant==='accessor')Object.defineProperty(value,'endpoint',{get(){getters++;return secret;}});
+   if(variant==='proxy')value=new Proxy(value,{ownKeys(){throw Error(secret);}});
+   if(variant==='cycle')value.failure=value;
+   if(variant==='nonfinite')value.http_status=Infinity;
+   const error=Object.assign(Error(secret),{code:'EPOCH_ADMISSION_FAILED',epoch_diagnostic:value});error.cause=error;
+   const tools=createLeadgenAgentTools({scope:f.scope,runDir:f.runDir,primitives:{assertResources:async()=>true,prepare:async()=>{throw error;}}});
+   await assert.rejects(()=>tools.prepare(),/READBACK_REQUIRED/);const v=failure(f.runDir);assert.equal(Object.hasOwn(v.value,'epoch_diagnostic'),false);assert.equal(v.raw.includes(secret),false);assert.equal(getters,0);assert.deepEqual(v.value.cause_codes,[]);
+  });
+ }
+});
+
+test('missing frozen files are labeled as local admission failures rather than HTTP timeouts',async t=>{
+ const f=fixture(t),snapshot=JSON.parse(fs.readFileSync(join(f.runDir,'run-definition.json'),'utf8'));snapshot.files={'missing-fixture.mjs':'a'.repeat(64)};const {snapshot_sha256,...body}=snapshot;snapshot.snapshot_sha256=digest(body);fs.writeFileSync(join(f.runDir,'run-definition.json'),JSON.stringify(snapshot));let requests=0;globalThis.fetch=async()=>{requests++;throw Error('network forbidden');};
+ await assert.rejects(()=>f.tools.prepare(),/READBACK_REQUIRED/);assert.deepEqual(failure(f.runDir).value.epoch_diagnostic,{protocol:'epoch-admission-diagnostic/v1',stage:'frozen',endpoint:'none',read_phase:'none',failure:'native_or_fs',http_status:null,transport_code:'ENOENT'});assert.equal(requests,0);assert.deepEqual(f.counts(),{prepares:1,phones:0});
+});
+
+
+test('real loopback socket closure reaches the durable resource_prepare diagnostic once',async t=>{
+ const nativeFetch=globalThis.fetch,f=fixture(t),requests=[];
+ const server=createServer((request,response)=>{requests.push({path:request.url,method:request.method});if(request.url===endpointPath.task){request.socket.destroy();return;}response.writeHead(200,{'Content-Type':'application/json'});response.end('{}');});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+ const port=server.address().port;globalThis.fetch=(url,options)=>{const target=new URL(url);assert.equal(target.origin,'http://127.0.0.1:5221');target.port=String(port);return nativeFetch(target,options);};
+ await assert.rejects(()=>f.tools.prepare(),/READBACK_REQUIRED/);assert.deepEqual(failure(f.runDir).value.epoch_diagnostic,diagnostic('task','socket','request',null,'UND_ERR_SOCKET'));assert.equal(requests.filter(r=>r.path===endpointPath.task).length,1);assert.ok(requests.every(r=>r.method==='GET'));assert.deepEqual(f.counts(),{prepares:1,phones:0});
 });
