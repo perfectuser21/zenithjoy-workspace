@@ -6,6 +6,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {bytes,canonical,digest as sha,writeAll,FENCE_ACTIONS,approvalScopeFor} from './device-epoch-fence-reference.mjs';
 export {bytes};
 import {execFileSync} from 'node:child_process';
+import {brainReadFailure} from './epoch-admission-diagnostic.mjs';
 import {runDiagnostic,DIAGNOSTIC_COMMANDS,SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,PROCESS_DIAGNOSTIC_COMMANDS} from './device-epoch-fence-diagnostics.mjs';
 import {readFrozen,validateFrozenProjection} from './device-epoch-fence-public-snapshot.mjs';
 export {validateFrozenProjection};
@@ -36,7 +37,19 @@ export function validateReviewFacts(f,releaseReceipt){
  return {protocol:'device-epoch-fence-review/v1',scope:{maintenance_task_id:m.id,claim:{claimed_by:m.claimed_by,claimed_at:m.claimed_at},original_task_id:o.id,original_run_id:id.run_id,profile_sha256:id.profile_sha256,serial:p.serial,endpoint},central_readback:c,original_execution_stopped:false,remote_quiescence:'unknown',resource_authority:'not_attested'};
 }
 export async function readBrain(path){
- need(/^\/api\/brain\/(?:tasks\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/(?:definition|reconciliation)|device-locks)$/.test(path),'BRAIN_READ_PATH');const token=process.env.BRAIN_INTERNAL_TOKEN;need(typeof token==='string'&&token&&!/[\r\n]/.test(token),'EXPLICIT_CREDENTIAL_REQUIRED');const r=await fetch('http://127.0.0.1:5221'+path,{headers:{'X-Internal-Token':token},redirect:'error',signal:AbortSignal.timeout(10000)});need(r.status===200&&r.headers.get('content-type')?.startsWith('application/json'),'BRAIN_READ');const text=await r.text();need(Buffer.byteLength(text)<=8*1024*1024,'BRAIN_READ_LIMIT');return JSON.parse(text);
+ need(/^\/api\/brain\/(?:tasks\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/(?:definition|reconciliation)|device-locks)$/.test(path),'BRAIN_READ_PATH');
+ const token=process.env.BRAIN_INTERNAL_TOKEN;need(typeof token==='string'&&token&&!/[\r\n]/.test(token),'EXPLICIT_CREDENTIAL_REQUIRED');
+ const endpoint=path.endsWith('/device-locks')?'device_locks':path.includes('/tasks/')?'task':path.endsWith('/definition')?'definition':'reconciliation';
+ const signal=AbortSignal.timeout(10000);let read_phase='request',http_status=null,failure;
+ try{
+  const r=await fetch('http://127.0.0.1:5221'+path,{headers:{'X-Internal-Token':token},redirect:'error',signal});
+  read_phase='response';http_status=r.status;
+  if(r.status!==200){failure='http_status';need(false,'BRAIN_READ');}
+  if(!r.headers.get('content-type')?.startsWith('application/json')){failure='content_type';need(false,'BRAIN_READ');}
+  read_phase='body';const text=await r.text();
+  if(Buffer.byteLength(text)>8*1024*1024){failure='body_limit';need(false,'BRAIN_READ_LIMIT');}
+  read_phase='json';return JSON.parse(text);
+ }catch(error){throw brainReadFailure(error,{endpoint,read_phase,http_status,signal,failure:failure??(read_phase==='json'?'invalid_json':undefined)});}
 }
 export function reviewSource({runtimeRoot=here,repositoryRoot=resolve(here,'../..')}={}){
  need(resolve(runtimeRoot)===runtimeRoot&&realpathSync(runtimeRoot)===runtimeRoot,'REVIEW_SOURCE_ROOT');let manifest=null,git,commit;

@@ -2,6 +2,7 @@
 import {join,dirname,resolve} from 'node:path';import {userInfo} from 'node:os';import {fileURLToPath} from 'node:url';
 import {lstatSync,readdirSync,realpathSync,mkdirSync} from 'node:fs';import {randomUUID,createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';
 import {readBrain,reviewSource} from './device-epoch-fence-review.mjs';
+import {admissionFailure} from './epoch-admission-diagnostic.mjs';
 import {bytes,recordBytes,readPrivatePolicy,validateEpochRecord,freezeFenceReference} from './device-epoch-fence-reference.mjs';
 export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
@@ -37,17 +38,28 @@ export function verifyEpochFacts(f){
 }
 function archiveSnapshot(record){const path=record.original_quarantine.archive_path,s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&![...readdirSync(path)].some(n=>!['owner','pid','acquired_at','standalone_review_required'].includes(n)),'EPOCH_ARCHIVE');const fields=Object.fromEntries(Object.keys(record.original_quarantine.fields).map(n=>[n,bytes(join(path,n)).toString()]));return {dev:s.dev,ino:s.ino,fields};}
 export async function canAuthorizeNativeFrame({root,env,frozen}={}){
+ let stage='scope';
+ try{
  const spec=phone(frozen);if(spec?.policy?.schema_version===1)return {applicable:false};need(spec?.policy?.schema_version===2&&root===here&&realpathSync(root)===root&&typeof env?.WFR_RUN_DIR==='string'&&resolve(env.WFR_RUN_DIR)===env.WFR_RUN_DIR,'EPOCH_ADMISSION_SCOPE');
- const current=readFrozen(env.WFR_RUN_DIR);need(same(current,frozen),'EPOCH_FROZEN_DRIFT');const ref=spec.policy_binding?.epoch_fence;need(ref?.protocol==='device-epoch-fence-reference/v1'&&uuid.test(ref.epoch_id||'')&&ref.path===join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',spec.serial,ref.epoch_id+'.json'),'EPOCH_FROZEN_REFERENCE');const raw=recordBytes(ref.path);need(sha(raw)===ref.sha256,'EPOCH_RECORD_DIGEST');const record=validateEpochRecord(JSON.parse(raw),spec);need(record.epoch_id===ref.epoch_id,'EPOCH_REFERENCE_ID');
- const policyRaw=readPrivatePolicy(spec.policy_binding.policy_path);need(same(JSON.parse(policyRaw),spec.policy)&&spec.policy_binding.policy_path===record.new_route.policy_path,'EPOCH_POLICY_PATH');
- const p=frozen.public_domain;need(env.WF_BRAIN_TASK_ID===p.task_id&&env.WFR_RUN_ID===p.run_id&&env.SERIAL===spec.serial,'EPOCH_ENV_BINDING');
+ stage='frozen';const current=readFrozen(env.WFR_RUN_DIR);need(same(current,frozen),'EPOCH_FROZEN_DRIFT');stage='record';const ref=spec.policy_binding?.epoch_fence;need(ref?.protocol==='device-epoch-fence-reference/v1'&&uuid.test(ref.epoch_id||'')&&ref.path===join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',spec.serial,ref.epoch_id+'.json'),'EPOCH_FROZEN_REFERENCE');const raw=recordBytes(ref.path);need(sha(raw)===ref.sha256,'EPOCH_RECORD_DIGEST');const record=validateEpochRecord(JSON.parse(raw),spec);need(record.epoch_id===ref.epoch_id,'EPOCH_REFERENCE_ID');
+ stage='policy';const policyRaw=readPrivatePolicy(spec.policy_binding.policy_path);need(same(JSON.parse(policyRaw),spec.policy)&&spec.policy_binding.policy_path===record.new_route.policy_path,'EPOCH_POLICY_PATH');
+ stage='scope';const p=frozen.public_domain;need(env.WF_BRAIN_TASK_ID===p.task_id&&env.WFR_RUN_ID===p.run_id&&env.SERIAL===spec.serial,'EPOCH_ENV_BINDING');
  const readBusiness=async()=>{const [tv,definition,reconciliation,locks]=await Promise.all([readBrain('/api/brain/tasks/'+p.task_id),readBrain('/api/brain/runs/'+p.run_id+'/definition'),readBrain('/api/brain/runs/'+p.run_id+'/reconciliation'),readBrain('/api/brain/device-locks')]);const rows=locks.locks?.filter(r=>r.device_name===spec.serial);need(locks.success===true&&rows?.length===1,'EPOCH_CENTRAL_INVENTORY');return {task:tv.task??tv,binding:definition.binding,links:reconciliation.links,taskRun:reconciliation.task_run,central:rows[0]};};
- const initial=await readBusiness(),source=reviewSource(),oldDaemon=readBoundAdbDaemon(record.old_route),newDaemon=readBoundAdbDaemon(record.new_route),activeLock=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks',spec.serial+'.lock');
- const evidenceRoot=join(env.WFR_RUN_DIR,'epoch-fence-admission');try{mkdirSync(evidenceRoot,{mode:0o700});}catch(e){if(e.code!=='EEXIST')throw e;}const rs=lstatSync(evidenceRoot);need(rs.isDirectory()&&!rs.isSymbolicLink()&&realpathSync(evidenceRoot)===evidenceRoot&&(rs.mode&0o777)===0o700&&rs.uid===process.getuid(),'EPOCH_EVIDENCE_ROOT');const directory=join(evidenceRoot,randomUUID());mkdirSync(directory,{mode:0o700});
+ stage='initial_business';const initial=await readBusiness();
+ stage='source';const source=reviewSource();
+ stage='initial_old_daemon';const oldDaemon=readBoundAdbDaemon(record.old_route);
+ stage='initial_new_daemon';const newDaemon=readBoundAdbDaemon(record.new_route),activeLock=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks',spec.serial+'.lock');
+ stage='evidence_root';const evidenceRoot=join(env.WFR_RUN_DIR,'epoch-fence-admission');try{mkdirSync(evidenceRoot,{mode:0o700});}catch(e){if(e.code!=='EEXIST')throw e;}const rs=lstatSync(evidenceRoot);need(rs.isDirectory()&&!rs.isSymbolicLink()&&realpathSync(evidenceRoot)===evidenceRoot&&(rs.mode&0o777)===0o700&&rs.uid===process.getuid(),'EPOCH_EVIDENCE_ROOT');const directory=join(evidenceRoot,randomUUID());mkdirSync(directory,{mode:0o700});
  async function inventory(route,label){const out=join(directory,label);mkdirSync(out,{mode:0o700});const scope={endpoint:route.endpoint,serial:spec.serial};const result=await hostOperation({operation:'inventory',scope,directory:out,readAuthority:async()=>{readBoundAdbDaemon(route);return {scope,authorized_action:'inventory',lease_until:initial.central.expires_at};}});need(result.wire_complete,'EPOCH_HOST_INVENTORY');return parseDeviceInventory(result.response);}
- const newInventory=await inventory(record.new_route,'new'),oldInventory=await inventory(record.old_route,'old'),fresh=await readBusiness();need(same(businessAuthorityProjection(initial),businessAuthorityProjection(fresh)),'EPOCH_BUSINESS_DRIFT');
+ stage='new_inventory';const newInventory=await inventory(record.new_route,'new');
+ stage='old_inventory';const oldInventory=await inventory(record.old_route,'old');
+ stage='fresh_business';const fresh=await readBusiness();
+ stage='business_drift';need(same(businessAuthorityProjection(initial),businessAuthorityProjection(fresh)),'EPOCH_BUSINESS_DRIFT');
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
- readBoundAdbDaemon(record.old_route);readBoundAdbDaemon(record.new_route);need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
- return verifyEpochFacts({record,frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,policySha256:sha(policyRaw),source,archive:archiveSnapshot(record),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:readdirSync(activeLock).some(n=>['standalone_review_required','preflight_quarantined','preflight_proof_required','epoch_fence_lost'].includes(n))});
+ stage='final_old_daemon';readBoundAdbDaemon(record.old_route);
+ stage='final_new_daemon';readBoundAdbDaemon(record.new_route);
+ stage='final_record_policy';need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
+ stage='final_facts';return verifyEpochFacts({record,frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,policySha256:sha(policyRaw),source,archive:archiveSnapshot(record),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:readdirSync(activeLock).some(n=>['standalone_review_required','preflight_quarantined','preflight_proof_required','epoch_fence_lost'].includes(n))});
+ }catch(error){throw admissionFailure(error,stage);}
 }
 export async function main(args){need(args.length===3&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');const runDir=args[2],frozen=readFrozen(runDir),spec=phone(frozen),result=await canAuthorizeNativeFrame({root:here,frozen,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:frozen.public_domain?.task_id,WFR_RUN_ID:frozen.public_domain?.run_id,SERIAL:spec?.serial}});need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;}
