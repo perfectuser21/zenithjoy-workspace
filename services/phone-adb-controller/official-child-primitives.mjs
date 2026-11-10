@@ -10,7 +10,7 @@ import {verifyPublicDomainTask} from './public-domain-pg.mjs';
 import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {createOfficialCliClosure,isOfficialCliInvocationNotStarted,isOfficialCliOperationStopped,isOfficialCliOuterReturned} from './official-cli-closure.mjs';
 import {createOfficialRecordingProducer} from './official-recording-producer.mjs';
-import {skillLaunchDidNotStart} from './activity-skill-executor.mjs';
+import {skillLaunchDidNotStart,skillOfficialExecutionStopped} from './activity-skill-executor.mjs';
 import {fetchBrainAuthorityGet} from './brain-authority-get.mjs';
 const instances=new WeakSet(),returned=new WeakMap(),notStarted=new WeakMap();
 const key=({command,args,receipt,root,frozen})=>canonical({command,args,receipt,root,snapshot_sha256:frozen.snapshot_sha256});
@@ -82,14 +82,12 @@ export function createOfficialChildPrimitives({root,env,frozen,binding,taskId,st
  function wrapTools(activity,scope,tools){
   stable();const entry=activities.get(activity.key);
   if(!entry||current!==entry||canonical(entry.scope)!==canonical(scope))throw fail();
-  return {...tools,settle:async proof=>{const result=await tools.settle(proof);if(activity.key!=='cleanup')await finish(activity.key);return result;},
-   ...(activity.key==='cleanup'?{release:async proof=>{const result=await tools.release(proof);await finish(activity.key);return result;}}:{}),
-   closeNativeScope:async proof=>{
+  return {...tools,closeNativeScope:async proof=>{
     stable();if(entry.pending||entry.unknown||current&&current!==entry)throw fail();
     if(entry.done){const state=entry.cli?.snapshot();if(state&&(!state.sealed||state.pending||state.unknown))throw fail();return {execution_stopped:true};}
     // This closes physical producers only. A failed resource intent and its
     // unknown business outcome remain durable and cannot be replayed.
-    if(!skillLaunchDidNotStart(proof,entry.scope))throw fail();
+    if(!skillLaunchDidNotStart(proof,entry.scope)&&!skillOfficialExecutionStopped(proof,entry.scope))throw fail();
     if(typeof tools.closeNativeScope==='function'&&(await tools.closeNativeScope(proof))?.execution_stopped!==true)throw fail();
     return finish(activity.key);
    }};

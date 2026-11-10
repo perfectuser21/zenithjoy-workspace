@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -553,7 +553,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "b3402d4a111e178c595fc86605bd78ff9c01a3593f6c5028bcbe696b3bcd7963",
+      "code_digest": "4a2e5454be4c8daf2ac441b9d4e8fe7ecea966dc0634667a01afbc57bc66e262",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "98b0664ffd7f7e70c35da4d957ae755068eedf3583a58f66624d1b76ac833085",
-        "current_code_digest": "b3402d4a111e178c595fc86605bd78ff9c01a3593f6c5028bcbe696b3bcd7963"
+        "previous_code_digest": "b3402d4a111e178c595fc86605bd78ff9c01a3593f6c5028bcbe696b3bcd7963",
+        "current_code_digest": "4a2e5454be4c8daf2ac441b9d4e8fe7ecea966dc0634667a01afbc57bc66e262"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1355,7 +1355,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -1411,7 +1411,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -1642,13 +1642,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f5c1223a11e5be19fe9650a4d7066b2456ea43e33a3240c4a6ac772088a0564f",
+      "code_digest": "07bbf52031263bac63d0bd6df193a4162fb4a630346408c695e3f7a200e40bb3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "8cde875f6186b8859fdaafdcb6e494f8c74bd60572134ebd7f6c96109ef6a7f2",
-        "current_code_digest": "f5c1223a11e5be19fe9650a4d7066b2456ea43e33a3240c4a6ac772088a0564f"
+        "previous_code_digest": "f5c1223a11e5be19fe9650a4d7066b2456ea43e33a3240c4a6ac772088a0564f",
+        "current_code_digest": "07bbf52031263bac63d0bd6df193a4162fb4a630346408c695e3f7a200e40bb3"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2140,7 +2140,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -2196,7 +2196,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -2430,13 +2430,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "29d35c88a4035750cd17ce244c6df5767fb783472d62671910789ab001f45dcb",
+      "code_digest": "a5d3418495c82a7e51990111ba75a17ed11c478012e0cac2b638547d4103c28a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "b70c6e2242b186fa895c33d6cbe785533d4c7664b195672fa959ef3c6b8a2a7f",
-        "current_code_digest": "29d35c88a4035750cd17ce244c6df5767fb783472d62671910789ab001f45dcb"
+        "previous_code_digest": "29d35c88a4035750cd17ce244c6df5767fb783472d62671910789ab001f45dcb",
+        "current_code_digest": "a5d3418495c82a7e51990111ba75a17ed11c478012e0cac2b638547d4103c28a"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2956,7 +2956,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -3012,7 +3012,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -3302,13 +3302,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "2b8cb8c8d9306b291a8a23f77c7446e5c0005aa16d873f03284fe971cc1a344c",
+      "code_digest": "651c66207e4c83e30f6e06183f4088473077b7744849f9883aad49cfef6b9f3f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "530134d5a32e07a04ad02d36ac14c413153ac7697167c1fb31e255a47842ad8e",
-        "current_code_digest": "2b8cb8c8d9306b291a8a23f77c7446e5c0005aa16d873f03284fe971cc1a344c"
+        "previous_code_digest": "2b8cb8c8d9306b291a8a23f77c7446e5c0005aa16d873f03284fe971cc1a344c",
+        "current_code_digest": "651c66207e4c83e30f6e06183f4088473077b7744849f9883aad49cfef6b9f3f"
       }
     },
     "douyin_video_processing.collection": {
@@ -3800,7 +3800,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -3856,7 +3856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -4112,13 +4112,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "7661b38645fc586302ddd4331f4bfdc9916f46cf26d63d34b76106d4561ad152",
+      "code_digest": "1332137f26e62f7f262fc5f3a9ac68c914e0f659f5c4727f4d2748fa0876a26d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "4a8659927433eebc58d52169eea4ae206c16394232cc8d4cf12c3df097b1d8fd",
-        "current_code_digest": "7661b38645fc586302ddd4331f4bfdc9916f46cf26d63d34b76106d4561ad152"
+        "previous_code_digest": "7661b38645fc586302ddd4331f4bfdc9916f46cf26d63d34b76106d4561ad152",
+        "current_code_digest": "1332137f26e62f7f262fc5f3a9ac68c914e0f659f5c4727f4d2748fa0876a26d"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4645,7 +4645,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -4701,7 +4701,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -4931,13 +4931,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9b0741d1218e0bf94c935ae0e986e983cefdc6f97f089fec0133dd9d45329234",
+      "code_digest": "8d07b525c6088d0ea53658e5a315b5452523e073c4d25a5144bbe58a6477f758",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "41883845b8a2b87285ca139bf9094e3153591832df82b5d32c6766478fb8e299",
-        "current_code_digest": "9b0741d1218e0bf94c935ae0e986e983cefdc6f97f089fec0133dd9d45329234"
+        "previous_code_digest": "9b0741d1218e0bf94c935ae0e986e983cefdc6f97f089fec0133dd9d45329234",
+        "current_code_digest": "8d07b525c6088d0ea53658e5a315b5452523e073c4d25a5144bbe58a6477f758"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5436,7 +5436,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -5492,7 +5492,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -5733,13 +5733,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "f081544d7ba39dc93531cea9895adeb1e2aa9f9a3d119e424d1b0b802268efe8",
+      "code_digest": "5cc3bc7eafb25e0bdfbd236f0e2b2a9a5d633350abbd34660e41186aff380c7a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "1f69a75a4d182efc3a55b32958981e189b6372583ea294544df091b2d6fb7108",
-        "current_code_digest": "f081544d7ba39dc93531cea9895adeb1e2aa9f9a3d119e424d1b0b802268efe8"
+        "previous_code_digest": "f081544d7ba39dc93531cea9895adeb1e2aa9f9a3d119e424d1b0b802268efe8",
+        "current_code_digest": "5cc3bc7eafb25e0bdfbd236f0e2b2a9a5d633350abbd34660e41186aff380c7a"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6245,7 +6245,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "8e67a75652800a11870b4bfc75b7d2e70c56b8bf794180358df2f0b439151717"
+          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
         },
         {
           "kind": "code",
@@ -6301,7 +6301,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -6577,13 +6577,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "da302c383a2b6628ca3dc5dc1df3dc8d9977b77c43618dea60a05fb927c738a8",
+      "code_digest": "9102d0b1c7c59dc64785b15ed0be3b05d9e45ad22a36a7f2141c35edf4286532",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "b6cccc37cff07703c1d9277ea052a15a45aed8e4cb48383aa205172ef1e6bbce",
-        "current_code_digest": "da302c383a2b6628ca3dc5dc1df3dc8d9977b77c43618dea60a05fb927c738a8"
+        "previous_code_digest": "da302c383a2b6628ca3dc5dc1df3dc8d9977b77c43618dea60a05fb927c738a8",
+        "current_code_digest": "9102d0b1c7c59dc64785b15ed0be3b05d9e45ad22a36a7f2141c35edf4286532"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7085,7 +7085,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -7351,13 +7351,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ab4e9d9a4a2f79b98370ed722897dfd753d476eb0947ab2d6700337a82a09007",
+      "code_digest": "738e68061c2e947ec0c947c459b46a80ceaf0b17d1e7c4c0dc30e4d5db6b2045",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "64a9f0ea518ea04db3e8266c41f5688dd044fb59a9c1a8687d9155604a55f617",
-        "current_code_digest": "ab4e9d9a4a2f79b98370ed722897dfd753d476eb0947ab2d6700337a82a09007"
+        "previous_code_digest": "ab4e9d9a4a2f79b98370ed722897dfd753d476eb0947ab2d6700337a82a09007",
+        "current_code_digest": "738e68061c2e947ec0c947c459b46a80ceaf0b17d1e7c4c0dc30e4d5db6b2045"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7859,7 +7859,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -8100,13 +8100,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "274230c13f4b9ae48f05f45aa496ec1b69e8952c3d8b4b56a9ece006dbb7a75b",
+      "code_digest": "81a86b45a097e3f529ca0972c6b901667fe1bc6d83a7a4f8ad33301535c31a8b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "49019961b1f87434b8897250c8409d8f785f03e499e1c488285aa5aa05b228b5",
-        "current_code_digest": "274230c13f4b9ae48f05f45aa496ec1b69e8952c3d8b4b56a9ece006dbb7a75b"
+        "previous_code_digest": "274230c13f4b9ae48f05f45aa496ec1b69e8952c3d8b4b56a9ece006dbb7a75b",
+        "current_code_digest": "81a86b45a097e3f529ca0972c6b901667fe1bc6d83a7a4f8ad33301535c31a8b"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8608,7 +8608,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -8842,13 +8842,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8f4941def9dd58c9e5333671e24c609098a78dc419370893568c98685d1feed4",
+      "code_digest": "59d32360ddc2e6be3483ade0e74316542252ba6b7c766f8416bd6020560e37f8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "a590961dab22d0a0397e29f02a878f36f3b8cac8f8220b2f49ede64ab54b5a75",
-        "current_code_digest": "8f4941def9dd58c9e5333671e24c609098a78dc419370893568c98685d1feed4"
+        "previous_code_digest": "8f4941def9dd58c9e5333671e24c609098a78dc419370893568c98685d1feed4",
+        "current_code_digest": "59d32360ddc2e6be3483ade0e74316542252ba6b7c766f8416bd6020560e37f8"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9350,7 +9350,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "dd27d28b7dd3cc695d226fe1e415b3049b9d9166244c59d8a2dd92e0beeb2015"
+          "sha256": "c3552eb578c1e01d671cd413628703fad453274183ee8507dad411d39b58e838"
         },
         {
           "kind": "code",
@@ -9594,13 +9594,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "89af13b8e970789596bb2dbe7f9fab1fffc78530ac20219bb481b1208eb16f01",
+      "code_digest": "234104f4f729943f35be27139fabd2788cf58e13539bc0ced9ff09fbc6847c52",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有只读工具参数和原调用未启动证明，并在原截止内完成关闭核对；保留业务合同、Skill正文、身份权限、预算和原生未知保护。",
+        "reason": "仅修正官方停止后的物理收尾职责和原截止内受控工具接力模板；保持业务合同、Skill正文、身份权限及真实未知保护。",
         "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "b11295859dc43c189ba642e261abf6bd631419908ecc8bc300daf25852226b63",
-        "current_code_digest": "89af13b8e970789596bb2dbe7f9fab1fffc78530ac20219bb481b1208eb16f01"
+        "previous_code_digest": "89af13b8e970789596bb2dbe7f9fab1fffc78530ac20219bb481b1208eb16f01",
+        "current_code_digest": "234104f4f729943f35be27139fabd2788cf58e13539bc0ced9ff09fbc6847c52"
       }
     }
   },

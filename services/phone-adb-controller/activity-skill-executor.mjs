@@ -9,13 +9,14 @@ import {safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {startPrimaryActivityBroker} from './activity-skill-primary-broker.mjs';
 import {runActivitySkillParentLoop,rawModelScopeStopped} from './activity-skill-parent-loop.mjs';
 
-const notLaunched=new WeakMap(),rawRecoveryStates=new WeakMap(),failedRawChecks=new WeakMap();
+const notLaunched=new WeakMap(),officialStoppedScopes=new WeakMap(),rawRecoveryStates=new WeakMap(),failedRawChecks=new WeakMap();
 export function certifyRawCheckFailure(evidence,verification){
  const state=rawRecoveryStates.get(evidence?.raw_continuation);
  if(!state||!state.ready||state.used||evidence.execution_stopped!==true||verification?.verified!==false||Date.now()>=state.request.worker_deadline_ms)return null;
  const proof=Object.freeze({kind:'code-judge-failure/v1'});failedRawChecks.set(proof,{state,verification:structuredClone(verification)});return proof;
 }
 export const skillLaunchDidNotStart=(proof,scope)=>Boolean(proof&&scope&&notLaunched.get(proof)===canonical(scope));
+export const skillOfficialExecutionStopped=(proof,scope)=>Boolean(proof&&scope&&officialStoppedScopes.get(proof)?.scope===canonical(scope));
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const noLaunch=message=>Object.assign(Error(message),{executionStopped:true});
@@ -215,9 +216,15 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    if(broker)await broker.close();
    if(rawControl){try{rawControl.seal(request);await rawControl.close();rawControlKnown=rawControl.verifySealedExecution(rawControl.snapshot(),{request})===true;}catch{rawControlKnown=false;}}
    if(typeof tools.closeNativeScope==='function'){
-    let proof=transport?{execution_stopped:rawControlKnown&&rawModelScopeStopped(rawProof,scope),raw_model_proof:rawProof}:{execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
-    if(!dispatched&&(!transport||!rawControl||rawControlKnown)){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
-    try{const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;if(rawState&&rawControlKnown)rawState.ready=true;}
+    try{
+     let proof=transport?{execution_stopped:rawControlKnown&&rawModelScopeStopped(rawProof,scope),raw_model_proof:rawProof}:{execution_stopped:officialStopped(receipt)&&receipt?.source_commit===scope.source_commit,receipt};
+     if(!dispatched&&(!transport||!rawControl||rawControlKnown)){proof=Object.freeze({agent_not_launched:true});notLaunched.set(proof,canonical(scope));}
+     else if(!transport&&frozen.primary_host==='official-child-v1'&&broker&&officialStopped(receipt)&&receipt.source_commit===scope.source_commit
+      &&!nativeUnknown(broker.getResult())&&caughtError?.executionStopped!==false&&caughtError?.externalEffect!=='unknown'){
+      proof=Object.freeze({execution_stopped:true});officialStoppedScopes.set(proof,{scope:canonical(scope),nonce:request.nonce,child_run_id:receipt.child_run_id});
+     }
+     const closed=await tools.closeNativeScope(proof);if(closed?.execution_stopped!==true)throw Error('AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED');if(caughtError&&!dispatched)caughtError.executionStopped=true;if(rawState&&rawControlKnown)rawState.ready=true;
+    }
     catch{
      if(caughtError)caughtError.executionStopped=false;
      // Preserve an already-failed official-child unknown receipt, including its

@@ -18,7 +18,7 @@ else:
  startup=json.loads(pathlib.Path(str(p)+'.capture-startup.json').read_text());os.kill(startup['pid'],signal.SIGTERM);time.sleep(.15);seconds=5;media=str(p)+'.rec.wav';pcm=b''.join(struct.pack('<h',round(5000*math.sin(i*2*math.pi*440/16000))) for i in range(80000));header=b'RIFF'+struct.pack('<I',36+len(pcm))+b'WAVEfmt '+struct.pack('<IHHIIHH',16,1,1,16000,32000,2,16)+b'data'+struct.pack('<I',len(pcm));pathlib.Path(media).write_bytes(header+pcm);os.chmod(media,0o600)
  subprocess.run([sys.executable,str(root/'decode-recording.py'),'--media',media,'--ffmpeg',os.environ['FIXTURE_FFMPEG'],'--requested-seconds','5','--evidence-file',str(p)+'.decode.json'],check=True,stdout=subprocess.DEVNULL);print('record=stopped')
 `;
-async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,resetHeldRead=false}={}){
+async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,resetHeldRead=false,activityKey='qualification'}={}){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'official-capture-chain-'))),runtime=join(dir,'runtime'),evidence=join(dir,'evidence');mkdirSync(evidence,{mode:0o700});
  cpSync(controller,runtime,{recursive:true,filter:p=>!p.includes('/__tests__')&&!p.includes('/node_modules')});
  writeFileSync(join(runtime,'fixture-server'),'fixed server');
@@ -34,11 +34,11 @@ async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,re
  const workflow_id=id(),workflow_version=id(),ref=id(),av=id(),activity=id(),task_id=id(),run_id=id(),binding_id=id(),source='a'.repeat(40),tag='fixture102';
  const env={...process.env,LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_processing',WF_BRAIN_TASK_ID:task_id,WFR_RUN_ID:run_id,WFR_RUN_DIR:dir,WF_HOME:runtime,WFR_TAG:tag,P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',LEADGEN_LINE:'yuesheng',LEADGEN_SOURCE_RUN:'fixture101',LEADGEN_LIMIT:'1',LEADGEN_COMMENT_LIMIT:'5',QUEUED_VIDEO_COLLECTION_SECONDS:'60',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'90',FIXTURE_EVIDENCE:evidence,FIXTURE_FFMPEG:ffmpeg};
  const load=n=>import(pathToFileURL(join(runtime,n)).href),defs=await load('runtime-definition.mjs');
- const path='skills/douyin-leadgen-activity-102-qualification/SKILL.md',text=readFileSync(join(runtime,path),'utf8'),version=text.match(/^  version: (\S+)/m)[1],contract={key:'qualification',budget:{max_duration_s:90,heartbeat_s:10},runtime:{phase:'source'}};
- const claim={claimed_by:'common-runner',claimed_at:'2026-11-09T00:00:00.000Z'},run_binding={run_binding_id:binding_id,workflow_id,workflow_definition_version_id:workflow_version,attempt_key:'task:1',activities:{qualification:{reference_id:ref,activity_id:activity,activity_definition_version_id:av}}};
+ const path=`skills/douyin-leadgen-activity-102-${activityKey}/SKILL.md`,text=readFileSync(join(runtime,path),'utf8'),version=text.match(/^  version: (\S+)/m)[1],contract={key:activityKey,budget:{max_duration_s:90,heartbeat_s:10},runtime:{phase:'source'}};
+ const claim={claimed_by:'common-runner',claimed_at:'2026-11-09T00:00:00.000Z'},run_binding={run_binding_id:binding_id,workflow_id,workflow_definition_version_id:workflow_version,attempt_key:'task:1',activities:{[activityKey]:{reference_id:ref,activity_id:activity,activity_definition_version_id:av}}};
  const files=Object.fromEntries(inventory(runtime).map(p=>['runtime/'+p,hash(readFileSync(join(runtime,p)))])),runtimeHash=defs.digest(Object.fromEntries(Object.entries(files).map(([p,v])=>[p.slice(8),v])));
  const identity={run_id,task_id,machine_id:'us-mac-m4',mode:'formal',profile_sha256:'b'.repeat(64),run_binding};
- const frozen={execution_mode:'agent',primary_host:'official-child-v1',agent_input:defs.agentInput(env),sampling_input:defs.commentSamplingInput(env),native_claim:claim,files,deployment:{source_commit:source,target:'mmv',observation_id:id()},release:{id:id()},workflow_version:{id:workflow_version,payload:{key:'douyin_video_processing',workflow_id}},public_domain:{...identity,protocol:'workflow-domain/v1',runtime_snapshot_sha256:runtimeHash},collection_phone_scope:{run_id,profile:env.P,serial:env.SERIAL,evidence_root:evidence,policy:{schema_version:2},executables:{python:program(python),node:program(process.execPath),zsh:program('/bin/zsh')}},activities:[{reference:{slot_key:'qualification',reference_id:ref,activity_id:activity},version:{id:av,payload:{definition_key:'douyin_video_processing.qualification',contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-102-qualification',path:'services/phone-adb-controller/'+path,version}]}}}]};frozen.snapshot_sha256=defs.digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
+ const frozen={execution_mode:'agent',primary_host:'official-child-v1',agent_input:defs.agentInput(env),sampling_input:defs.commentSamplingInput(env),native_claim:claim,files,deployment:{source_commit:source,target:'mmv',observation_id:id()},release:{id:id()},workflow_version:{id:workflow_version,payload:{key:'douyin_video_processing',workflow_id}},public_domain:{...identity,protocol:'workflow-domain/v1',runtime_snapshot_sha256:runtimeHash},collection_phone_scope:{run_id,profile:env.P,serial:env.SERIAL,evidence_root:evidence,policy:{schema_version:2},executables:{python:program(python),node:program(process.execPath),zsh:program('/bin/zsh')}},activities:[{reference:{slot_key:activityKey,reference_id:ref,activity_id:activity},version:{id:av,payload:{definition_key:'douyin_video_processing.'+activityKey,contract,implementation_bindings:[{kind:'skill',name:'douyin-leadgen-activity-102-'+activityKey,path:'services/phone-adb-controller/'+path,version}]}}}]};frozen.snapshot_sha256=defs.digest(frozen);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
  const task={id:task_id,status:'in_progress',...claim,result:{common_runner:{...identity}}};
  let heldRequests=0;
  const server=http.createServer(async(req,res)=>{for await(const c of req){};if(req.url.includes('device-locks')&&++heldRequests===1&&resetHeldRead){req.socket.destroy();return;}if(revokeAfterCli&&existsSync(join(evidence,'failed-cli-started')))task.status='cancelled';res.end(JSON.stringify(req.url.includes('device-locks')?{success:true,locks:[{device_name:env.SERIAL,locked_by:task_id,...(leaseExpiresAt==='missing'?{}:{expires_at:leaseExpiresAt??new Date(Date.now()+120000).toISOString()})}]}:task));});await new Promise(r=>server.listen(0,'127.0.0.1',r));env.BRAIN_URL='http://127.0.0.1:'+server.address().port;env.BRAIN_INTERNAL_TOKEN='unit-only';
@@ -128,4 +128,76 @@ for(const mode of ['known-code2','no-cli','clone-proof','foreign-proof','after-a
  assert.equal(names.filter(n=>n.endsWith('.failure.json')).length,1);assert.equal(names.filter(n=>n.endsWith('.intent.json')).length,1);assert.equal(names.some(n=>n.endsWith('.result.json')),false);
  await assert.rejects(tools.prepare(),/COMMIT_UNKNOWN/);assert.equal(preparations,1);assert.deepEqual(Object.fromEntries(readdirSync(journal).map(n=>[n,readFileSync(join(journal,n),'utf8')])),before);
  await launched;assert.equal((await p.close()).execution_stopped,safe);if(typeof p.wrapTools==='function')assert.ok(closedProof);assert.equal(p.snapshot().active,!safe);
+});
+
+
+test('已停官方父子且零业务调用，preflight settle拒绝仍封闭原生域并保留业务错误',async t=>{
+ const f=await fixture(t,{activityKey:'preflight'});delete f.env.DATABASE_URL;
+ const {createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs');
+ const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const {createActivitySkillExecutor}=await f.load('activity-skill-executor.mjs');
+ const businessError=Error('COMPANY_ACCOUNT_IDENTITY_UNVERIFIED');let dispatches=0,businessCalls=0,phoneCalls=0;
+ const execute=createActivitySkillExecutor({runDir:f.dir,frozen:f.frozen,binding:f.binding,env:f.env,deadlineFor:()=>Date.now()+90000,supportsNativeScope:a=>p.supports(a),nativeState:()=>p.snapshot(),
+  createTools:async(a,scope)=>{await p.begin(scope);return p.wrapTools(a,scope,{prepare:async()=>{},inspect:async()=>({}),phone:async()=>{phoneCalls++;throw Error('UNEXPECTED_PHONE');},business:async()=>{businessCalls++;throw Error('UNEXPECTED_BUSINESS');},getResult:()=>null,settle:async()=>{throw businessError;}});},
+  rpc:async q=>{assert.equal(q.kind,'activity_skill');dispatches++;const child=id();return {result:{status:'ok',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,source_commit:q.request.source_commit,child_run_id:child,terminal:{runId:child,status:'ok',endedAt:Date.now()}}};}});
+ let error;try{await execute(f.contract,{context:{task_id:f.binding.task_id}});}catch(e){error=e;}
+ const native=p.snapshot(),closed=await p.close();
+ assert.equal(error,businessError);assert.equal(error.message,'COMPANY_ACCOUNT_IDENTITY_UNVERIFIED');
+ assert.equal(dispatches,1);assert.equal(phoneCalls,0);assert.equal(businessCalls,0);
+ assert.equal(error.executionStopped,true);assert.equal(native.active,false);assert.equal(native.pending,0);assert.equal(native.execution_unknown,false);assert.equal(closed.execution_stopped,true);
+});
+
+test('普通伪造停止字段不能封闭已打开preflight原生域',async t=>{
+ const f=await fixture(t,{activityKey:'preflight'}),{createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs');
+ const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const scope={activity:'preflight',workflow:f.frozen.agent_input.workflow_key,run:f.env.WFR_TAG,source_commit:f.frozen.deployment.source_commit,profile:f.env.P,serial:f.env.SERIAL,task_id:f.binding.task_id,run_id:f.binding.run_id,binding_id:f.binding.id,snapshot_sha256:f.frozen.snapshot_sha256,deadline_ms:Date.now()+60000,worker_deadline_ms:Date.now()+50000,receipt_deadline_ms:Date.now()+55000};
+ await p.begin(scope);const tools=p.wrapTools(f.contract,scope,{settle:async()=>{throw Error('BUSINESS_FAILED');}});
+ await assert.rejects(tools.closeNativeScope({execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,source_commit:scope.source_commit}),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+ assert.equal(p.snapshot().active,true);assert.equal((await p.close()).execution_stopped,false);
+});
+
+for(const mode of ['success','cleanup-success','cleanup-settle-reject','cleanup-release-reject','cleanup-release-unknown','clone-capability','foreign-scope','owner-unproven','child-unproven','source-mismatch','terminal-mismatch','broker-unknown'])test('官方已启动域的关闭能力与业务结果独立: '+mode,async t=>{
+ const cleanup=mode.startsWith('cleanup-'),f=await fixture(t,{activityKey:cleanup?'cleanup':'preflight'});
+ const {createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs');
+ const {createActivitySkillExecutor,skillOfficialExecutionStopped}=await f.load('activity-skill-executor.mjs');
+ const {callActivityTool}=await f.load('activity-skill-tool.mjs');
+ const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const businessError=Object.assign(Error('COMPANY_ACCOUNT_IDENTITY_UNVERIFIED'),mode==='cleanup-release-unknown'?{externalEffect:'unknown',executionStopped:false}:{});
+ let result=null,settles=0,releases=0,capabilitySeen=false;
+ const execute=createActivitySkillExecutor({runDir:f.dir,frozen:f.frozen,binding:f.binding,env:f.env,deadlineFor:()=>Date.now()+90000,supportsNativeScope:a=>p.supports(a),nativeState:()=>p.snapshot(),
+  createTools:async(a,scope)=>{
+   const nativeScope=mode==='foreign-scope'?{...scope,deadline_ms:scope.deadline_ms+1}:scope;
+   await p.begin(nativeScope);
+   const tools=p.wrapTools(a,nativeScope,{prepare:async()=>{},inspect:async()=>({}),phone:async()=>{throw Error('UNEXPECTED_PHONE');},business:async()=>({execution_stopped:false,external_effect:'unknown'}),getResult:()=>result,
+    settle:async()=>{settles++;assert.equal(p.snapshot().active,true);if(mode==='cleanup-settle-reject')throw businessError;result={status:'completed'};},
+    release:async()=>{releases++;assert.equal(p.snapshot().active,true);if(mode.startsWith('cleanup-release-'))throw businessError;}});
+   const close=tools.closeNativeScope;
+   return {...tools,closeNativeScope:async proof=>{
+    if(skillOfficialExecutionStopped(proof,scope)){
+     capabilitySeen=true;assert.equal(Object.isFrozen(proof),true);assert.equal(skillOfficialExecutionStopped({...proof},scope),false);
+     for(const field of ['run_id','task_id','source_commit','binding_id','activity','snapshot_sha256'])assert.equal(skillOfficialExecutionStopped(proof,{...scope,[field]:'foreign'}),false,field);
+     assert.equal(skillOfficialExecutionStopped(proof,nativeScope),mode!=='foreign-scope');
+    }
+    return close(mode==='clone-capability'?{...proof}:proof);
+   }};
+  },rpc:async q=>{
+   if(q.kind==='activity_skill_authority')return {authorized:true};assert.equal(q.kind,'activity_skill');
+   if(mode==='broker-unknown')await callActivityTool(q.request.broker_request_path,'business',{operation:'readback',input:{}});
+   const child=id(),receipt={status:'ok',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,source_commit:q.request.source_commit,child_run_id:child,terminal:{runId:child,status:'ok',endedAt:Date.now()}};
+   if(mode==='owner-unproven')receipt.owner_execution_stopped=false;
+   if(mode==='child-unproven')receipt.child_execution_stopped=false;
+   if(mode==='source-mismatch')receipt.source_commit='b'.repeat(40);
+   if(mode==='terminal-mismatch')receipt.terminal.runId=id();
+   return {result:receipt};
+  }});
+ let outcome,error;try{outcome=await execute(f.contract,{context:{task_id:f.binding.task_id}});}catch(e){error=e;}
+ const physicalKnown=['success','cleanup-success','cleanup-settle-reject','cleanup-release-reject'].includes(mode);
+ const identityUnknown=['owner-unproven','child-unproven','source-mismatch','terminal-mismatch','broker-unknown'].includes(mode);
+ assert.equal(capabilitySeen,physicalKnown||['clone-capability','foreign-scope'].includes(mode));
+ assert.equal(settles,identityUnknown?0:1);assert.equal(releases,mode==='cleanup-success'||mode.startsWith('cleanup-release-')?1:0);
+ if(mode==='success'||mode==='cleanup-success'){assert.equal(error,undefined);assert.equal(outcome.status,'completed');assert.equal(outcome.execution_stopped,true);}
+ else if(mode.startsWith('cleanup-')){assert.equal(error,businessError);assert.equal(error.executionStopped,physicalKnown);}
+ else if(identityUnknown){assert.equal(error,undefined);assert.equal(outcome.execution_stopped,false);}
+ else{assert.match(error.message,/AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED/);assert.equal(error.executionStopped,false);}
+ assert.equal(p.snapshot().active,!physicalKnown);assert.equal((await p.close()).execution_stopped,physicalKnown);
 });
