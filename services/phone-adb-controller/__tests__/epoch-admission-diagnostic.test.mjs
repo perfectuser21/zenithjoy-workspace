@@ -10,6 +10,7 @@ import {readBrain} from '../device-epoch-fence-review.mjs';
 import {createPhoneEpochGuard} from '../phone-epoch-admission.mjs';
 import {createLeadgenAgentTools} from '../leadgen-agent-tools.mjs';
 import {createServer} from 'node:http';
+import {spawnSync} from 'node:child_process';
 
 const runtime=dirname(dirname(fileURLToPath(import.meta.url)));
 const task='11111111-1111-4111-8111-111111111111',run='22222222-2222-4222-8222-222222222222',epoch='33333333-3333-4333-8333-333333333333';
@@ -108,4 +109,70 @@ test('real loopback socket closure reaches the durable resource_prepare diagnost
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
  const port=server.address().port;globalThis.fetch=(url,options)=>{const target=new URL(url);assert.equal(target.origin,'http://127.0.0.1:5221');target.port=String(port);return nativeFetch(target,options);};
  await assert.rejects(()=>f.tools.prepare(),/READBACK_REQUIRED/);assert.deepEqual(failure(f.runDir).value.epoch_diagnostic,diagnostic('task','socket','request',null,'UND_ERR_SOCKET'));assert.equal(requests.filter(r=>r.path===endpointPath.task).length,1);assert.ok(requests.every(r=>r.method==='GET'));assert.deepEqual(f.counts(),{prepares:1,phones:0});
+});
+
+
+function cliDiagnosticFixture(t){
+ const f=fixture(t),path=join(f.runDir,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(fs.readFileSync(path,'utf8'));
+ body.deployment={source_commit:'a'.repeat(40),target:'mmv'};body.public_domain.protocol='workflow-domain/v1';
+ fs.writeFileSync(path,JSON.stringify({...body,snapshot_sha256:digest(body)}),{mode:0o600});
+ const preload=`import os from 'node:os';import {syncBuiltinESMExports} from 'node:module';const user=os.userInfo;os.userInfo=()=>({...user(),homedir:${JSON.stringify(dirname(f.runDir))}});syncBuiltinESMExports();globalThis.fetch=async url=>{if(new URL(url).pathname===${JSON.stringify(endpointPath.task)})throw Object.assign(Error('RAW_PRIVATE_FAILURE_TOKEN https://private.invalid secret headers'),{cause:{code:'UND_ERR_SOCKET'}});return new Response('{}',{headers:{'Content-Type':'application/json'}});};`;
+ const execute=()=>spawnSync(process.execPath,['--import','data:text/javascript,'+encodeURIComponent(preload),join(runtime,'device-epoch-fence-review.mjs'),'verify-epoch','--run-dir',f.runDir],{encoding:'utf8',env:{...process.env,BRAIN_INTERNAL_TOKEN:'RAW_PRIVATE_FAILURE_TOKEN'},timeout:10000});
+ return {...f,execute,diagnostics:join(f.runDir,'epoch-fence-admission','diagnostics')};
+}
+function diagnosticFiles(f){return fs.existsSync(f.diagnostics)?fs.readdirSync(f.diagnostics).map(name=>join(f.diagnostics,name)):[];}
+function assertPrivateDiagnostic(path){
+ const info=fs.lstatSync(path),raw=fs.readFileSync(path,'utf8');
+ assert.equal(info.isFile(),true);assert.equal(info.isSymbolicLink(),false);assert.equal(info.uid,process.getuid());assert.equal(info.nlink,1);assert.equal(info.mode&0o777,0o600);assert.ok(Buffer.byteLength(raw)<=4096);
+ assert.equal(/RAW_PRIVATE|private.invalid|headers|stack|message|raw_stdout|raw_stderr/.test(raw),false);
+ const proof=JSON.parse(raw);
+ assert.equal(proof.protocol,'epoch-verifier-diagnostic/v1');assert.equal(proof.producer,'node');assert.ok(Number.isSafeInteger(proof.pid)&&proof.pid>0);
+ assert.match(proof.snapshot_sha256,/^[a-f0-9]{64}$/);assert.match(proof.attempt_id,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);assert.ok(Number.isFinite(Date.parse(proof.observed_at)));
+ assert.deepEqual(Object.keys(proof).sort(),['protocol','producer','attempt_id','observed_at','pid','run_id','task_id','source_commit','snapshot_sha256','finite_error_code','epoch_diagnostic'].sort());
+ return proof;
+}
+
+test('verify-epoch真实CLI拒绝仍单行原码并私有保留有限socket诊断',t=>{
+ const f=cliDiagnosticFixture(t),result=f.execute();
+ assert.equal(result.status,2);assert.equal(result.stdout,'');assert.equal(result.stderr,'DEVICE_EPOCH_FENCE_UNKNOWN\n');
+ const paths=diagnosticFiles(f);assert.equal(paths.length,1,'真实CLI失败必须留下有限诊断原件');const proof=assertPrivateDiagnostic(paths[0]);
+ assert.equal(proof.task_id,task);assert.equal(proof.run_id,run);assert.equal(proof.source_commit,'a'.repeat(40));
+ assert.equal(proof.snapshot_sha256,JSON.parse(fs.readFileSync(join(f.runDir,'run-definition.json'),'utf8')).snapshot_sha256);
+ assert.equal(proof.finite_error_code,null);assert.deepEqual(proof.epoch_diagnostic,diagnostic('task','socket','request',null,'UND_ERR_SOCKET'));
+ for(const path of [join(f.runDir,'epoch-fence-admission'),f.diagnostics]){const s=fs.lstatSync(path);assert.equal(s.mode&0o777,0o700);assert.equal(s.uid,process.getuid());assert.equal(s.isSymbolicLink(),false);}
+});
+
+test('verify-epoch失败诊断上限32且不覆盖已有0600原件',t=>{
+ const f=cliDiagnosticFixture(t);for(let i=0;i<32;i++){const result=f.execute();assert.equal(result.status,2);}
+ const paths=diagnosticFiles(f);assert.equal(paths.length,32);const before=paths.map(path=>({path,bytes:fs.readFileSync(path),inode:fs.statSync(path).ino}));
+ const result=f.execute();assert.equal(result.status,2);assert.equal(result.stderr,'DEVICE_EPOCH_FENCE_UNKNOWN\n');assert.equal(diagnosticFiles(f).length,32);
+ for(const saved of before){assert.deepEqual(fs.readFileSync(saved.path),saved.bytes);assert.equal(fs.statSync(saved.path).ino,saved.inode);assertPrivateDiagnostic(saved.path);}
+});
+
+for(const variant of ['diagnostic-symlink','root-symlink','directory-mode','run-mode','frozen-symlink','missing-source','wrong-source','invalid-task','frozen-digest','frozen-mode'])test('CLI诊断拒绝不可信落点且原拒绝不变 '+variant,t=>{
+ const f=cliDiagnosticFixture(t),outside=join(dirname(f.runDir),'outside');fs.mkdirSync(outside,{mode:0o700});
+ if(variant==='diagnostic-symlink'){fs.mkdirSync(join(f.runDir,'epoch-fence-admission'),{mode:0o700});fs.symlinkSync(outside,f.diagnostics);}
+ if(variant==='root-symlink')fs.symlinkSync(outside,join(f.runDir,'epoch-fence-admission'));
+ if(variant==='directory-mode'){fs.mkdirSync(join(f.runDir,'epoch-fence-admission'),{mode:0o700});fs.mkdirSync(f.diagnostics,{mode:0o755});}
+ if(['missing-source','wrong-source','invalid-task','frozen-digest'].includes(variant)){
+  const path=join(f.runDir,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(fs.readFileSync(path,'utf8'));
+  if(variant==='missing-source')delete body.deployment;
+  if(variant==='wrong-source')body.deployment.source_commit='b'.repeat(40);
+  if(variant==='invalid-task')body.public_domain.task_id='arbitrary-private-text';
+  fs.writeFileSync(path,JSON.stringify({...body,snapshot_sha256:variant==='frozen-digest'?'0'.repeat(64):digest(body)}));
+ }
+ if(variant==='run-mode')fs.chmodSync(f.runDir,0o755);
+ if(variant==='frozen-symlink'){const saved=join(outside,'frozen.json');fs.renameSync(join(f.runDir,'run-definition.json'),saved);fs.symlinkSync(saved,join(f.runDir,'run-definition.json'));}
+ if(variant==='frozen-mode')fs.chmodSync(join(f.runDir,'run-definition.json'),0o644);
+ const result=f.execute();assert.equal(result.status,2);assert.equal(result.stdout,'');assert.match(result.stderr,/^[A-Z][A-Z0-9_]+\n$/);
+ assert.deepEqual(fs.readdirSync(outside),variant==='frozen-symlink'?['frozen.json']:[],'绝不写入外部目录');assert.equal(diagnosticFiles(f).length,0,'诊断身份和落点不可信时不写');
+});
+
+
+test('verify-epoch真实CLI保留自有安全码及原coded_guard阶段而不扩大授权',t=>{
+ const f=cliDiagnosticFixture(t),path=join(f.runDir,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(fs.readFileSync(path,'utf8'));
+ body.discovery_phone_scope.policy_binding.epoch_fence.epoch_id='44444444-4444-4444-8444-444444444444';fs.writeFileSync(path,JSON.stringify({...body,snapshot_sha256:digest(body)}));
+ const result=f.execute();assert.equal(result.status,2);assert.equal(result.stdout,'');assert.equal(result.stderr,'EPOCH_FROZEN_REFERENCE\n');
+ const paths=diagnosticFiles(f);assert.equal(paths.length,1);const proof=assertPrivateDiagnostic(paths[0]);assert.equal(proof.finite_error_code,'EPOCH_FROZEN_REFERENCE');
+ assert.deepEqual(proof.epoch_diagnostic,{protocol:'epoch-admission-diagnostic/v1',stage:'record',endpoint:'none',read_phase:'none',failure:'coded_guard',http_status:null,transport_code:null});
 });
