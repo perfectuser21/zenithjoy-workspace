@@ -11497,3 +11497,12 @@ tests:
     status: active
     product: AI员工
     note: "实际guard到resource_prepare持久失败原件，有限错误定位与零重放；非真机业务验收"
+
+  - id: epoch-authority-read-budget
+    path: services/phone-adb-controller/__tests__/epoch-authority-read-budget.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；原Activity截止内同GET有限重读与拒绝边界；非真机业务验收"

@@ -41,7 +41,7 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
  const fixed={taskId,runId:binding.run_id,profile:input.profile,serial:input.serial,sourceCommit:f.deployment.source_commit,owner:input.run_tag,runDir:base.WFR_RUN_DIR};
  const slots=input.workflow_key==='douyin_video_discovery'?['preflight','collect_videos','cleanup']:input.workflow_key==='douyin_video_processing'?['preflight','dedup','qualification','collection','cleanup']:[];
  if(!slots.length||['profile','serial'].some(k=>spec[k]!==fixed[k])||input.profile!==base.P||input.serial!==base.SERIAL||input.run_tag!==base.WFR_TAG)throw fail('SCOPE');
- const state={},epoch=assertAdmission||createPhoneEpochGuard({root,env:base,frozen:f,state});if(typeof epoch!=='function')throw fail('EPOCH');
+ const state={},epoch=assertAdmission||createPhoneEpochGuard({root,env:base,frozen:f,state,deadlineMs:scope?.worker_deadline_ms});if(typeof epoch!=='function')throw fail('EPOCH');
  let sealed=false,unknown=false,ownedProtection;const pending=new Set();
  const protectionRoot=base.DOUYIN_PHONE_LOCK_ROOT||join(base.HOME,'.local/share/zenithjoy/phone-locks');
  const protectionIdentity=s=>{if(![s.dev,s.ino].every(Number.isSafeInteger)||s.uid!==process.getuid()||s.mode&0o022)throw fail('QUARANTINE_CAPTURE');return {dev:s.dev,ino:s.ino};};

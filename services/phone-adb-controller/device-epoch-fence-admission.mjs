@@ -69,14 +69,14 @@ export function verifyEpochFacts(f){
  return {protocol:'device-epoch-fence-admission/v1',authorized:true,epoch_id:r.epoch_id,task_id:p.task_id,run_id:p.run_id,source_commit:f.source.commit,instance_id:r.new_route.instance_id,endpoint:r.new_route.endpoint,serial:spec.serial,old_route_absent:true,original_execution_stopped:false,android_internal:'not_attested'};
 }
 function archiveSnapshot(record){const path=record.original_quarantine.archive_path,s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&![...readdirSync(path)].some(n=>!['owner','pid','acquired_at','standalone_review_required'].includes(n)),'EPOCH_ARCHIVE');const fields=Object.fromEntries(Object.keys(record.original_quarantine.fields).map(n=>[n,bytes(join(path,n)).toString()]));return {dev:s.dev,ino:s.ino,fields};}
-export async function canAuthorizeNativeFrame({root,env,frozen}={}){
+export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  let stage='scope';
  try{
  const spec=phone(frozen);if(spec?.policy?.schema_version===1)return {applicable:false};need(spec?.policy?.schema_version===2&&root===here&&realpathSync(root)===root&&typeof env?.WFR_RUN_DIR==='string'&&resolve(env.WFR_RUN_DIR)===env.WFR_RUN_DIR,'EPOCH_ADMISSION_SCOPE');
  stage='frozen';const current=readFrozen(env.WFR_RUN_DIR);need(same(current,frozen),'EPOCH_FROZEN_DRIFT');stage='record';const ref=spec.policy_binding?.epoch_fence;need(ref?.protocol==='device-epoch-fence-reference/v1'&&uuid.test(ref.epoch_id||'')&&ref.path===join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',spec.serial,ref.epoch_id+'.json'),'EPOCH_FROZEN_REFERENCE');const raw=recordBytes(ref.path);need(sha(raw)===ref.sha256,'EPOCH_RECORD_DIGEST');const record=validateEpochRecord(JSON.parse(raw),spec);need(record.epoch_id===ref.epoch_id,'EPOCH_REFERENCE_ID');
  stage='policy';const policyRaw=readPrivatePolicy(spec.policy_binding.policy_path);need(same(JSON.parse(policyRaw),spec.policy)&&spec.policy_binding.policy_path===record.new_route.policy_path,'EPOCH_POLICY_PATH');
  stage='scope';const p=frozen.public_domain;need(env.WF_BRAIN_TASK_ID===p.task_id&&env.WFR_RUN_ID===p.run_id&&env.SERIAL===spec.serial,'EPOCH_ENV_BINDING');
- const readBusiness=async()=>{const [tv,definition,reconciliation,locks]=await Promise.all([readBrain('/api/brain/tasks/'+p.task_id),readBrain('/api/brain/runs/'+p.run_id+'/definition'),readBrain('/api/brain/runs/'+p.run_id+'/reconciliation'),readBrain('/api/brain/device-locks')]);const rows=locks.locks?.filter(r=>r.device_name===spec.serial);need(locks.success===true&&rows?.length===1,'EPOCH_CENTRAL_INVENTORY');return {task:tv.task??tv,binding:definition.binding,links:reconciliation.links,taskRun:reconciliation.task_run,central:rows[0]};};
+ const readBusiness=async()=>{const [tv,definition,reconciliation,locks]=await Promise.all([readBrain('/api/brain/tasks/'+p.task_id,readBudget),readBrain('/api/brain/runs/'+p.run_id+'/definition',readBudget),readBrain('/api/brain/runs/'+p.run_id+'/reconciliation',readBudget),readBrain('/api/brain/device-locks',readBudget)]);const rows=locks.locks?.filter(r=>r.device_name===spec.serial);need(locks.success===true&&rows?.length===1,'EPOCH_CENTRAL_INVENTORY');return {task:tv.task??tv,binding:definition.binding,links:reconciliation.links,taskRun:reconciliation.task_run,central:rows[0]};};
  stage='initial_business';const initial=await readBusiness();
  stage='source';const source=reviewSource();
  stage='initial_old_daemon';const oldDaemon=readBoundAdbDaemon(record.old_route);
@@ -91,7 +91,8 @@ export async function canAuthorizeNativeFrame({root,env,frozen}={}){
  stage='final_old_daemon';readBoundAdbDaemon(record.old_route);
  stage='final_new_daemon';readBoundAdbDaemon(record.new_route);
  stage='final_record_policy';need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
- stage='final_facts';return verifyEpochFacts({record,frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,policySha256:sha(policyRaw),source,archive:archiveSnapshot(record),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:readdirSync(activeLock).some(n=>['standalone_review_required','preflight_quarantined','preflight_proof_required','epoch_fence_lost'].includes(n))});
+ stage='final_facts';const proof=verifyEpochFacts({record,frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,policySha256:sha(policyRaw),source,archive:archiveSnapshot(record),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:readdirSync(activeLock).some(n=>['standalone_review_required','preflight_quarantined','preflight_proof_required','epoch_fence_lost'].includes(n))});
+ if(readBudget!==undefined)need(Number.isSafeInteger(readBudget.deadlineMs)&&Date.now()<readBudget.deadlineMs,'EPOCH_ADMISSION_DEADLINE');return proof;
  }catch(error){throw admissionFailure(error,stage);}
 }
 export async function main(args){
