@@ -88,6 +88,7 @@ for(const mode of ['execute','repair','readback_only'])test(`真实relay仅在${
 test('Primary官方transport不能用父CLI普通成功文本冒双方停止证明',async t=>{
  const home=mkdtempSync(join(tmpdir(),'primary-owner-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
  const q={protocol:'leadgen-activity-v1',run_id:'primary-owner__a1',task_id:null,binding_id:'b1',activity_key:'collect_videos',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'a'.repeat(40),broker_host:'mmv',broker_request_path:'/Users/fixture/run/request.json',broker_tool_path:'/Users/fixture/run/tool.mjs',mode:'execute',method:{name:'fixture',version:'0.1.1',text:'isolated method'}};
+ const startedAt=Date.now(),originalDeadline=q.deadline_ms;
  let dir;
  const actual=await runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
   if(command==='openclaw'){
@@ -100,6 +101,12 @@ test('Primary官方transport不能用父CLI普通成功文本冒双方停止证�
  }});
  assert.equal(actual.execution_stopped,false);assert.equal(actual.owner_execution_stopped,false);assert.equal(actual.child_execution_stopped,true);
  const message=readFileSync(join(dir,'parent-message.txt'),'utf8');assert.match(message,/Agent-first/);assert.match(message,/business/);
+ const plan=JSON.parse(readFileSync(join(dir,'child-task.json'),'utf8')),request=JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'));
+ assert.equal(q.deadline_ms,originalDeadline);assert.equal(plan.scope.deadline_ms,originalDeadline);assert.equal(request.expires_at,originalDeadline/1000);assert.equal(request.worker_expires_at,undefined);
+ for(const path of Object.values(plan.binding_ready_command_files)){
+  const invocation=JSON.parse(readFileSync(path,'utf8'));
+  assert.ok(Number.isSafeInteger(invocation.parameters.timeoutSeconds));assert.ok(invocation.parameters.timeoutSeconds>0&&invocation.parameters.timeoutSeconds<=(originalDeadline-startedAt)/1000);
+ }
 });
 
 for(const kind of ['question','progress','error'])test(`真实relay→工具CLI→primary socket将inspect ${kind}交Commander并保下一轮指导`,async t=>{
@@ -189,4 +196,12 @@ test('execute子任务交付binding-ready双模板和canonical exec/process固�
  assert.match(childInstructions,/exec\(host=gateway\)/);assert.match(childInstructions,/gateway_process/);assert.match(childInstructions,/process/);
  assert.match(childInstructions,/sessionId/);assert.match(childInstructions,/不切换|不切|不换/);
  assert.match(childInstructions,/未绑定不得执行任何业务/);
+});
+
+test('binding-ready现代worker余量不足一秒时拒绝，不能回退到较晚总截止',async t=>{
+ const home=mkdtempSync(join(tmpdir(),'primary-binding-cutoff-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const {q}=scope();Object.assign(q,{protocol:'leadgen-activity-v1',broker_tool_path:'/fixture/tool.mjs',broker_request_path:'/fixture/request.json',nonce:'e'.repeat(48),worker_deadline_ms:Date.now()+500,receipt_deadline_ms:Date.now()+7500});
+ const deadline=q.deadline_ms,worker=q.worker_deadline_ms;let launched=0;
+ await assert.rejects(()=>runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async()=>{launched++;return {code:0,stdout:'{}',stderr:''};}}),/RPC_SKILL_SURFACE_INPUT_INVALID/);
+ assert.equal(launched,0);assert.equal(q.deadline_ms,deadline);assert.equal(q.worker_deadline_ms,worker);
 });

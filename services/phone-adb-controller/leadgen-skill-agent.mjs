@@ -245,22 +245,31 @@ export function skillExecutionIdentity(q,{home=homedir()}={}){
  return structuredClone(official(q,directory(q,home)));
 }
 // Both official surfaces target the same MMV; never infer a route from a name suffix.
+function gatewayInvocation(surface,title,body,env,timeoutSeconds){
+ const script=['import json,os,subprocess,sys',
+  'host=subprocess.check_output(["/bin/hostname","-s"],text=True).strip()',
+  'if host not in ("aad17-2","r10-7"): raise SystemExit("RPC_SKILL_GATEWAY_HOST_MISMATCH")',
+  ...body,'sys.exit(result.returncode)'].join('\n');
+ const parameters={title,command:"/usr/bin/python3 -I -c '"+script.replaceAll("'","'\\''")+"'",env,timeoutSeconds,yieldMs:1000};
+ if(surface==='exec_gateway')parameters.host='gateway';
+ return {tool:surface==='gateway_exec'?'gateway_exec':'exec',parameters};
+}
+function bindingReadyInvocation(dir,surface,workerDeadline){
+ if(!/^\/[A-Za-z0-9_./-]+$/.test(dir)||dir.split('/').includes('..')||!['gateway_exec','exec_gateway'].includes(surface)||!Number.isFinite(workerDeadline)||workerDeadline<=Date.now())throw Error('RPC_SKILL_SURFACE_INPUT_INVALID');
+ const timeoutSeconds=Math.min(2400,Math.floor((workerDeadline-Date.now())/1000));
+ if(timeoutSeconds<=0)throw Error('RPC_SKILL_SURFACE_INPUT_INVALID');
+ return gatewayInvocation(surface,'原run父绑定只读等待',[
+  `result=subprocess.run(${JSON.stringify(['/usr/bin/python3',join(root,'commander','wf-agent-handoff.py'),'binding-ready',dir])})`,
+ ],{LEADGEN_GATEWAY_SURFACE:surface},timeoutSeconds);
+}
 export function activityToolInvocation(dir,op,surface,body={},timeoutSeconds=30){
  if(!/^\/[A-Za-z0-9_./-]+$/.test(dir)||dir.split('/').includes('..')||!['inspect','phone','resume','business'].includes(op)||!['gateway_exec','exec_gateway'].includes(surface)||!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>16384||!Number.isSafeInteger(timeoutSeconds)||timeoutSeconds<1||timeoutSeconds>2400)throw Error('RPC_SKILL_SURFACE_INPUT_INVALID');
  const argv=[process.execPath,fileURLToPath(import.meta.url),'tool',dir,op];
- const script=[
-  'import json,os,subprocess,sys',
-  'host=subprocess.check_output(["/bin/hostname","-s"],text=True).strip()',
-  'if host not in ("aad17-2","r10-7"): raise SystemExit("RPC_SKILL_GATEWAY_HOST_MISMATCH")',
+ return gatewayInvocation(surface,'原run单Activity受控入口',[
   'raw=os.environ["LEADGEN_ACTIVITY_TOOL_JSON"]',
   'if len(raw.encode())>16384 or not isinstance(json.loads(raw),dict): raise SystemExit("RPC_SKILL_TOOL_INPUT_INVALID")',
   `result=subprocess.run(${JSON.stringify(argv)},input=raw.encode())`,
-  'sys.exit(result.returncode)',
- ].join('\n');
- const command="/usr/bin/python3 -I -c '"+script.replaceAll("'","'\\''")+"'";
- const parameters={title:'原run单Activity受控入口',command,env:{LEADGEN_ACTIVITY_TOOL_JSON:JSON.stringify(body),LEADGEN_GATEWAY_SURFACE:surface},timeoutSeconds,yieldMs:1000};
- if(surface==='exec_gateway')parameters.host='gateway';
- return {tool:surface==='gateway_exec'?'gateway_exec':'exec',parameters};
+ ],{LEADGEN_ACTIVITY_TOOL_JSON:JSON.stringify(body),LEADGEN_GATEWAY_SURFACE:surface},timeoutSeconds);
 }
 function pinGatewaySurface(q,dir,surface){
  if(!['gateway_exec','exec_gateway'].includes(surface))throw Error('RPC_SKILL_SURFACE_UNAVAILABLE');
@@ -272,12 +281,10 @@ function pinGatewaySurface(q,dir,surface){
 }
 export function spawnReceiptInvocation(dir,surface,raw){
  if(!/^\/[A-Za-z0-9_./-]+$/.test(dir)||dir.split('/').includes('..')||!['gateway_exec','exec_gateway'].includes(surface)||Buffer.byteLength(JSON.stringify(raw)??'')>1000000)throw Error('RPC_SKILL_SURFACE_INPUT_INVALID');
- const script=['import os,subprocess,sys','host=subprocess.check_output(["/bin/hostname","-s"],text=True).strip()',
-  'if host not in ("aad17-2","r10-7"): raise SystemExit("RPC_SKILL_GATEWAY_HOST_MISMATCH")',
+ return gatewayInvocation(surface,'原run官方spawn回执一次绑定',[
   'raw=os.environ["LEADGEN_SPAWN_RECEIPT_JSON"]','if len(raw.encode())>1000100: raise SystemExit("RPC_SKILL_TOOL_INPUT_INVALID")',
-  `result=subprocess.run(${JSON.stringify(['/usr/bin/python3',join(root,'commander','wf-agent-handoff.py'),'bind',dir])},input=raw.encode())`,'sys.exit(result.returncode)'].join('\n');
- const parameters={title:'原run官方spawn回执一次绑定',command:"/usr/bin/python3 -I -c '"+script.replaceAll("'","'\\''")+"'",env:{LEADGEN_SPAWN_RECEIPT_JSON:JSON.stringify({raw_spawn_receipt:raw})},timeoutSeconds:15,yieldMs:1000};
- if(surface==='exec_gateway')parameters.host='gateway';return {tool:surface==='gateway_exec'?'gateway_exec':'exec',parameters};
+  `result=subprocess.run(${JSON.stringify(['/usr/bin/python3',join(root,'commander','wf-agent-handoff.py'),'bind',dir])},input=raw.encode())`,
+ ],{LEADGEN_SPAWN_RECEIPT_JSON:JSON.stringify({raw_spawn_receipt:raw})},15);
 }
 // The managed SSH alias owns network routing; no model-supplied host or jump.
 export async function relayActivityTool(dir,op,body={}, {home=homedir(),authorize,execute=execInput,surface,requireSurface=false}={}){
@@ -366,6 +373,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  ].join('\n');
  let parentMessage=message;
  if(q.mode==='execute'){
+  const routeRule='模板文件不是工具库存。只按自己本session真实schema选择完整一组：gateway_exec/gateway_process，或显式支持host=gateway的exec(host=gateway)/process；两组完整时优先前者，仅canonical组完整也可用，缺配套即blocked。固定同一surface，process只使用该surface返回的原sessionId；超时或未知不换路由、不重发，不用auto/sandbox/node或近似工具。';
   const parts=(label,text)=>{
    const paths=[];let chunk='';
    const flush=()=>{if(!chunk)return;const path=join(dir,`${label}-${String(paths.length+1).padStart(3,'0')}.txt`);writeFileSync(path,chunk,{flag:'wx',mode:0o600});paths.push(path);chunk='';};
@@ -377,24 +385,28 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const commandFiles={};for(const [surface,commands] of Object.entries(toolCommands)){
    const path=join(dir,`child-tools-${surface}.json`);writeFileSync(path,JSON.stringify(commands),{flag:'wx',mode:0o600});commandFiles[surface]=path;
   }
+  const bindingReadyFiles={};for(const surface of Object.keys(toolCommands)){
+   const path=join(dir,`child-binding-ready-${surface}.json`);
+   writeFileSync(path,JSON.stringify(bindingReadyInvocation(dir,surface,q.worker_deadline_ms??q.deadline_ms)),{flag:'wx',mode:0o600});bindingReadyFiles[surface]=path;
+  }
   const bindCommandsPath=join(dir,'parent-bind-commands.json');writeFileSync(bindCommandsPath,JSON.stringify(Object.fromEntries(['gateway_exec','exec_gateway'].map(surface=>[surface,spawnReceiptInvocation(dir,surface,'<原sessions_spawn返回值>')]))),{flag:'wx',mode:0o600});
   const {method,...scope}=q;
   const identity={tool:{name:'subagents',parameters:{action:'list'}},caller:{callerIsSubagent:true,callerSessionKey:{file:join(dir,'agent-binding.json'),field:'child_session_key',comparison:'exact'}},binding_checks:['run_id','task_id','parent_session_key','nonce'],on_missing_or_mismatch:'blocked',forbidden_identity_sources:['session_status','list.active','model_self_report','connector_alias']};
   const child={protocol:'leadgen-primary-child/v1',scope:{...scope,parent_session_key:parent},identity_contract:identity,
    method:{name:method.name,version:method.version,binding_sha256:method.sha256,...parts('child-method',method.text)},
    support:parts('child-support',method.support?.text||''),...(method.host_support?{host_support:{sha256:method.host_support.sha256,...parts('child-host-support',method.host_support.text)}}:{}),contract_path:join(dir,'activity-contract.json'),
-   contract:parts('child-contract',JSON.stringify(method.contract??null)),tool_command_files:commandFiles,
+   contract:parts('child-contract',JSON.stringify(method.contract??null)),tool_command_files:commandFiles,binding_ready_command_files:bindingReadyFiles,
    inspect_contract:{pending_write_readbacks:'unconfirmed_write_operations',defaults:{commander_guidance:[],commander_abort:false}},
-   rules:['仅执行当前单Activity；不运行完整Code handler、resume、其他Workflow或104。','先用本session官方subagents(action=list)按identity_contract核对自己；不以模型自报身份。','按方法和合同读取新鲜证据，仅使用inspect实际暴露的phone/business能力；预检结果由server聚合，不找虚构ledger写入口。','锁及资源由代码持有，不领/放锁、不变公司、账号、来源、额度、截止、代码、策略或暂停。','每次只读一份列出的分页原件，完整顺序读取，不将多份大文件合并成一次易截断输出；完整原请求/合同仍可只读核对。','只选本session真实schema对应的tool_command_files；原command/双键env及host guard不改，inspect事件仅替换LEADGEN_ACTIVITY_TOOL_JSON，phone填command/args，business填operation/input。','先inspect；指导缺省[]、abort缺省false。收到commander_abort立即结束；Commander不批外部动作、不判状态。','未知副作用只精确读回同操作，不重发、不换operation ID、不重派；确认0评论不入队。','只交工具原件引用；独立verify裁判，文字自报不是成果；缺能力明确blocked，不用裸SQL/队列/自造脚本。'],
+   rules:['仅执行当前单Activity；不运行完整Code handler、resume、其他Workflow或104。',routeRule,'先读取所选surface的binding_ready_command_files原件，原command/env/host不改，只读等待父绑定；未绑定不得执行任何业务。随后用本session官方subagents(action=list)按identity_contract核对自己；不以模型自报身份。','按方法和合同读取新鲜证据，仅使用inspect实际暴露的phone/business能力；预检结果由server聚合，不找虚构ledger写入口。','锁及资源由代码持有，不领/放锁、不变公司、账号、来源、额度、截止、代码、策略或暂停。','每次只读一份列出的分页原件，完整顺序读取，不将多份大文件合并成一次易截断输出；完整原请求/合同仍可只读核对。','只选本session真实schema对应的tool_command_files；原command/双键env及host guard不改，inspect事件仅替换LEADGEN_ACTIVITY_TOOL_JSON，phone填command/args，business填operation/input。','先inspect；指导缺省[]、abort缺省false。收到commander_abort立即结束；Commander不批外部动作、不判状态。','未知副作用只精确读回同操作，不重发、不换operation ID、不重派；确认0评论不入队。','只交工具原件引用；独立verify裁判，文字自报不是成果；缺能力明确blocked，不用裸SQL/队列/自造脚本。'],
    guidance:q.commander_guidance||[]};
   const childPath=join(dir,'child-task.json');writeFileSync(childPath,JSON.stringify(child),{flag:'wx',mode:0o600});
   parentMessage=[
    '【leadgen-activity-v1：Agent-first派发；业务仅由child经inspect/phone/business执行】',
    `代码已核完整冻结来源、方法和合同。父会话只负责官方身份、一次派发、绑定与等待；不要重复读取activity-request的大方法/业务合同或代child执行业务。只读小agent-request ${join(dir,'agent-request.json')}。`,
    `先使用精确官方内置session_status核自己session key=${parent}，缺即blocked，不tool_search猜别名。`,
-   `用MMV gateway_exec执行node ${join(root,'leadgen-skill-agent.mjs')} claim ${dir}领取唯一spawn权；已有预留只读原receipt、不再spawn。`,
+   `${routeRule}用本session所选gateway路由执行node ${join(root,'leadgen-skill-agent.mjs')} claim ${dir}领取唯一spawn权；已有预留只读原receipt、不再spawn。`,
    `官方sessions_spawn一次：agentId=skill-factory, mode=run, context=isolated, cleanup=keep, completionTarget=parent；不设置model/fallback/taskName。runTimeoutSeconds不超过agent-request.worker_expires_at剩余（worker截止；expires_at仅供原handoff终态读回，不是Worker执行额度），不足即blocked，不续预算。`,
-   `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}；经MMV gateway_exec执行python3 ${helper} binding-ready ${dir}在原worker截止内只读等待父绑定提交，未绑定不得执行任何业务。随后按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/host_support（若有）/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
+   `child任务原样包含：只执行${q.activity_key}，先读取小${childPath}。${routeRule}读取binding_ready_command_files对应的完整调用原件，原command/env/host不改，在原worker截止内只读等待父绑定提交，未绑定不得执行任何业务。随后按identity_contract调用自己本session精确官方subagents(action=list)，核callerIsSubagent=true及callerSessionKey与agent-binding完全一致；核binding的run/task/parent/nonce和scope相同。按列出分页逐份读完整method/support/host_support（若有）/contract，按rules执行当前Skill。禁止child用父session_status或list.active代自己身份。`,
    `源身份仍为${q.source_commit}，run=${q.run_id}，nonce=${q.nonce}；所有原件私有只读，不能改写。`,
    `将sessions_spawn返回值原样保存在rawSpawnReceipt变量，不读其属性、不猜string/object、不自行parse、组合身份或写spawn-receipt。读取${bindCommandsPath}，只选当前真实schema对应的gateway_exec或exec_gateway规格，原command/host不改，仅将parameters.env.LEADGEN_SPAWN_RECEIPT_JSON设为JSON.stringify({raw_spawn_receipt:rawSpawnReceipt})并调用一次；Gateway没有stdin字段，固定桥从结构化env经stdin交python3 ${helper} bind ${dir}，统一解析、核官方provider/model/claim/source/身份并保留原件，最后提交绑定。失败不重派、不以缺失runId取消；保留未知。`,
    `仅bind成功后python3 ${helper} await ${dir}读官方agent.wait；禁止history摘要/CLI child代替。`,

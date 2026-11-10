@@ -155,3 +155,49 @@ test('普通伪造停止字段不能封闭已打开preflight原生域',async t=>
  await assert.rejects(tools.closeNativeScope({execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,source_commit:scope.source_commit}),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
  assert.equal(p.snapshot().active,true);assert.equal((await p.close()).execution_stopped,false);
 });
+
+for(const mode of ['success','cleanup-success','cleanup-settle-reject','cleanup-release-reject','cleanup-release-unknown','clone-capability','foreign-scope','owner-unproven','child-unproven','source-mismatch','terminal-mismatch','broker-unknown'])test('官方已启动域的关闭能力与业务结果独立: '+mode,async t=>{
+ const cleanup=mode.startsWith('cleanup-'),f=await fixture(t,{activityKey:cleanup?'cleanup':'preflight'});
+ const {createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs');
+ const {createActivitySkillExecutor,skillOfficialExecutionStopped}=await f.load('activity-skill-executor.mjs');
+ const {callActivityTool}=await f.load('activity-skill-tool.mjs');
+ const p=createOfficialChildPrimitives({root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state});
+ const businessError=Object.assign(Error('COMPANY_ACCOUNT_IDENTITY_UNVERIFIED'),mode==='cleanup-release-unknown'?{externalEffect:'unknown',executionStopped:false}:{});
+ let result=null,settles=0,releases=0,capabilitySeen=false;
+ const execute=createActivitySkillExecutor({runDir:f.dir,frozen:f.frozen,binding:f.binding,env:f.env,deadlineFor:()=>Date.now()+90000,supportsNativeScope:a=>p.supports(a),nativeState:()=>p.snapshot(),
+  createTools:async(a,scope)=>{
+   const nativeScope=mode==='foreign-scope'?{...scope,deadline_ms:scope.deadline_ms+1}:scope;
+   await p.begin(nativeScope);
+   const tools=p.wrapTools(a,nativeScope,{prepare:async()=>{},inspect:async()=>({}),phone:async()=>{throw Error('UNEXPECTED_PHONE');},business:async()=>({execution_stopped:false,external_effect:'unknown'}),getResult:()=>result,
+    settle:async()=>{settles++;assert.equal(p.snapshot().active,true);if(mode==='cleanup-settle-reject')throw businessError;result={status:'completed'};},
+    release:async()=>{releases++;assert.equal(p.snapshot().active,true);if(mode.startsWith('cleanup-release-'))throw businessError;}});
+   const close=tools.closeNativeScope;
+   return {...tools,closeNativeScope:async proof=>{
+    if(skillOfficialExecutionStopped(proof,scope)){
+     capabilitySeen=true;assert.equal(Object.isFrozen(proof),true);assert.equal(skillOfficialExecutionStopped({...proof},scope),false);
+     for(const field of ['run_id','task_id','source_commit','binding_id','activity','snapshot_sha256'])assert.equal(skillOfficialExecutionStopped(proof,{...scope,[field]:'foreign'}),false,field);
+     assert.equal(skillOfficialExecutionStopped(proof,nativeScope),mode!=='foreign-scope');
+    }
+    return close(mode==='clone-capability'?{...proof}:proof);
+   }};
+  },rpc:async q=>{
+   if(q.kind==='activity_skill_authority')return {authorized:true};assert.equal(q.kind,'activity_skill');
+   if(mode==='broker-unknown')await callActivityTool(q.request.broker_request_path,'business',{operation:'readback',input:{}});
+   const child=id(),receipt={status:'ok',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,source_commit:q.request.source_commit,child_run_id:child,terminal:{runId:child,status:'ok',endedAt:Date.now()}};
+   if(mode==='owner-unproven')receipt.owner_execution_stopped=false;
+   if(mode==='child-unproven')receipt.child_execution_stopped=false;
+   if(mode==='source-mismatch')receipt.source_commit='b'.repeat(40);
+   if(mode==='terminal-mismatch')receipt.terminal.runId=id();
+   return {result:receipt};
+  }});
+ let outcome,error;try{outcome=await execute(f.contract,{context:{task_id:f.binding.task_id}});}catch(e){error=e;}
+ const physicalKnown=['success','cleanup-success','cleanup-settle-reject','cleanup-release-reject'].includes(mode);
+ const identityUnknown=['owner-unproven','child-unproven','source-mismatch','terminal-mismatch','broker-unknown'].includes(mode);
+ assert.equal(capabilitySeen,physicalKnown||['clone-capability','foreign-scope'].includes(mode));
+ assert.equal(settles,identityUnknown?0:1);assert.equal(releases,mode==='cleanup-success'||mode.startsWith('cleanup-release-')?1:0);
+ if(mode==='success'||mode==='cleanup-success'){assert.equal(error,undefined);assert.equal(outcome.status,'completed');assert.equal(outcome.execution_stopped,true);}
+ else if(mode.startsWith('cleanup-')){assert.equal(error,businessError);assert.equal(error.executionStopped,physicalKnown);}
+ else if(identityUnknown){assert.equal(error,undefined);assert.equal(outcome.execution_stopped,false);}
+ else{assert.match(error.message,/AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED/);assert.equal(error.executionStopped,false);}
+ assert.equal(p.snapshot().active,!physicalKnown);assert.equal((await p.close()).execution_stopped,physicalKnown);
+});
