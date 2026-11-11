@@ -88,3 +88,13 @@ test('101 Drive admits the granted xian-m4 phone with its own reviewed ROM and P
  assert.equal(hash(row.review.path),row.review.sha256);assert.equal(hash(row.pillow.path),row.pillow.sha256);
  for(const command of ['wake','unlock','open-app','telecom','dump-file','screenshot-file','search','open-detail','close-app','home-resolve'])assert.ok(row.commands.includes(command),command+' is needed by the existing 101 sequence');
 });
+
+
+test('M4 Pillow uses a private content-addressed root and retains every reviewed source byte',()=>{
+ const row=policy.device_sources.find(row=>row.profile==='xiaolongxia'),pillow=JSON.parse(text(row.pillow.path));
+ const digest=createHash('sha256').update(JSON.stringify(pillow.files.map(({path,sha256})=>({path,sha256})))).digest('hex');
+ assert.equal(pillow.files.length,132);assert.equal(digest,'9a1c85a313b8e6ccecb01bc6d43f6a395f4ac0046aed61b8db0c4336fb119172');
+ assert.equal(pillow.root,'/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-dependencies/pillow-xian-m4-'+digest.slice(0,16)+'/PIL');
+ assert.equal(hash('native-phone-search-step.py'),'ed0d36c9198a098baf004984534cb835fb8bf7cc098adada8c0ed24502cd65b5','original complete-inventory predicate stays unchanged');
+ assert.equal(hash(row.pillow.path),row.pillow.sha256);
+});
