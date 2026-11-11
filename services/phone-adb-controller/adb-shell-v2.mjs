@@ -66,6 +66,7 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
  const snapshot=()=>Object.freeze({domain:'adb-shell-v2-wire-observation/v1',pending,open_sockets:channels.size,sealed,unknown,wire_complete:complete,remote_execution_stopped:'not_attested',command_source:'not_attested',android_services:'not_attested',resource_authority:'not_attested',authority_reader_execution:'not_attested',loaded_process_attestation:false,unknown_reasons:Object.freeze([...reasons])});
  const taint=code=>{unknown=true;complete=false;reasons.add(code);};
  const guard=()=>{if(Date.now()>=q.worker_deadline_ms)throw failure('ADB_SHELL_V2_DEADLINE');if(sealed||epoch!==q.epoch)throw failure('ADB_SHELL_V2_CLOSED');if(unknown)throw failure('ADB_SHELL_V2_UNKNOWN');};
+ const receiveCheck=()=>{guard();verifyJournal();verifySource();reviewed?.verify();guard();};
  const admit=async()=>{
   guard();verifyJournal();verifySource();reviewed?.verify();guard();let a;try{a=await readAuthority();}catch(error){throw Object.assign(failure('ADB_SHELL_V2_AUTHORITY'),{cause:error});}guard();verifyJournal();verifySource();reviewed?.verify();guard();
   if(!a||canonical(a.scope)!==canonical(q)||a.claimed_by!==q.claim.claimed_by||a.claimed_at!==q.claim.claimed_at||!Number.isFinite(Date.parse(a.lease_until))||Date.parse(a.lease_until)<=Date.now())throw failure('ADB_SHELL_V2_AUTHORITY');
@@ -84,9 +85,9 @@ function createObserver({source,runtimeRoot,directory,scope,readAuthority}={},re
   socket.on('error',error=>{c.error='ADB_SHELL_V2_SOCKET';event('error',{error_code:c.error,socket_error_code:/^[A-Z][A-Z0-9_]{0,63}$/.test(error.code||'')?error.code:null});notify();});
   socket.on('close',hadError=>{c.closed=true;if(hadError||!c.ended)c.error??='ADB_SHELL_V2_SOCKET';event('close',{had_error:hadError,peer_eof:c.ended,error_code:c.error,wire_bytes:c.total});channels.delete(c);close();notify();});
   const wait=()=>new Promise(r=>c.wake.add(r));
-  c.read=async size=>{await admit();while(c.buffer.length<size){guard();if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
-  c.chunk=async()=>{await admit();while(!c.buffer.length&&!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}guard();if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
-  c.finish=async()=>{while(!c.ended){guard();if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();}if(c.buffer.length)throw failure('ADB_SHELL_V2_TRAILING');await closePromise;guard();if(c.error)throw failure(c.error);};
+  c.read=async size=>{receiveCheck();while(c.buffer.length<size){if(c.error)throw failure(c.error);if(c.ended||c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();receiveCheck();}if(c.error)throw failure(c.error);const bytes=c.buffer.subarray(0,size);c.buffer=c.buffer.subarray(size);return bytes;};
+  c.chunk=async()=>{receiveCheck();while(!c.buffer.length&&!c.ended){if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();receiveCheck();}if(c.error)throw failure(c.error);const bytes=c.buffer;c.buffer=Buffer.alloc(0);return bytes.length?bytes:null;};
+  c.finish=async()=>{receiveCheck();while(!c.ended){if(c.error)throw failure(c.error);if(c.closed)throw failure('ADB_SHELL_V2_TRUNCATED');await wait();receiveCheck();}if(c.buffer.length)throw failure('ADB_SHELL_V2_TRAILING');await closePromise;receiveCheck();if(c.error)throw failure(c.error);};
   c.closePromise=closePromise;
   const connected=new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',()=>reject(failure('ADB_SHELL_V2_SOCKET')));socket.once('close',()=>reject(failure('ADB_SHELL_V2_SOCKET')));});
   // Own rejection synchronously: guard() or connect() can throw before await.
