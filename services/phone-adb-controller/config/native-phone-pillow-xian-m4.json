@@ -1,5 +1,5 @@
 {
-  "root": "/opt/homebrew/lib/python3.14/site-packages/PIL",
+  "root": "/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-dependencies/pillow-xian-m4-9a1c85a313b8e6cc/PIL",
   "files": [
     {
       "path": ".dylibs/libXau.6.dylib",

@@ -72,7 +72,7 @@ test('actual device policy binds the reviewed command entrypoints and local Pill
  for(const name of ['sh','input','cmd','am','uiautomator','app_process','toybox','monkey'])assert.match(programs.get('/system/bin/'+name)||'',/^[a-f0-9]{64}$/);
  for(const name of ['uiautomator.jar','monkey.jar','android.test.runner.jar'])assert.ok(programs.has('/system/framework/'+name));
  assert.equal(programs.has('/system/framework/input.jar'),false,'missing ROM file cannot become a verified source');
- const pillow=JSON.parse(text(row.pillow.path));assert.equal(pillow.root,'/opt/homebrew/lib/python3.14/site-packages/PIL');
+ const pillow=JSON.parse(text(row.pillow.path));assert.equal(pillow.root,row.profile==='xiaolongxia'?'/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-dependencies/pillow-xian-m4-9a1c85a313b8e6cc/PIL':'/opt/homebrew/lib/python3.14/site-packages/PIL');
  assert.equal(new Set(pillow.files.map(file=>file.path)).size,pillow.files.length);
  assert.ok(pillow.files.length>0);for(const file of pillow.files)assert.match(file.sha256,/^[a-f0-9]{64}$/);
  }

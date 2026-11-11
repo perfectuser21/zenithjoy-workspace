@@ -145,7 +145,7 @@
       },
       "pillow": {
         "path": "config/native-phone-pillow-xian-m4.json",
-        "sha256": "3094d6d993052e22bb5738fe46f3d3d4238ee6800aaeec02f38ffd116b146ad8"
+        "sha256": "d9fd4f6ec0cbcdbb03e57eecb6ce0a278070719eeca44af20b6ef4843a45ddca"
       },
       "program_files": [
         {
