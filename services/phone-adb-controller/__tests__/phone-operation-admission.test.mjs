@@ -58,3 +58,10 @@ test('丢失调用上下文及JSON不能取得USB准入品牌',t=>{const f=fixtu
 test('实际USB准入接入官方CLI，元数据子进程真实close才授予本次停止品牌',async t=>{const f=fixture(t),a=f.create(),facade=createOfficialCliClosure({...f.context,operationAdmission:a});await facade.prepare();const command=join(root,'douyin-phone-adb'),args=['--profile',f.context.env.P,'runtime-contract'],receipt={runDir:f.dir,operationId:'usb-meta',runId:f.context.binding.run_id,taskId:f.context.taskId,profile:f.context.env.P,serial:f.context.env.SERIAL,sourceCommit:f.context.frozen.deployment.source_commit,owner:f.context.env.WFR_TAG,activity:'preflight'};const r=await facade.execute(command,args,{receipt,timeoutMs:10000});const context={command,args,receipt,root,frozen:f.context.frozen};assert.equal(isOfficialCliOperationStopped(r,context),true);assert.equal(isOfficialCliOperationStopped({...r},context),false);assert.equal((await facade.close()).execution_stopped,true);assert.equal(f.live.closed,true);assert.equal(f.live.reads,0,'元数据不应探测手机SDK');});
 
 test('已合法释放central与业务unknown不抹掉实际USB producer关闭事实',async t=>{const f=fixture(t),a=f.create();await a.prepare();await a.assert({phase:'before',resourceOnly:false});f.live.central.locked_by=null;f.context.state.executionUnknown=true;assert.equal((await a.close()).execution_stopped,true);assert.equal(f.live.closed,true);assert.equal(f.context.state.executionUnknown,true);});
+
+for(const identity of ['daemon','owner'])test('最后authority等待期间USB身份漂移必须在放行前拒绝 '+identity,async t=>{
+ const f=fixture(t),original=f.context.assertAuthority;let armed=false,calls=0;
+ f.context.assertAuthority=async request=>{const proof=await original(request);if(armed&&++calls===2){if(identity==='daemon')f.live.birth='replaced-after-final-source';else writeFileSync(join(f.lockRoot,f.context.env.SERIAL+'.lock/owner'),'foreign-after-final-source');}return proof;};
+ const a=f.create();t.after(()=>a.close());await a.prepare();await a.assert({phase:'before',resourceOnly:false});armed=true;
+ await assert.rejects(()=>a.assert({phase:'before',resourceOnly:false}));assert.equal(calls,2);assert.equal(f.context.state.executionUnknown,true);
+});
