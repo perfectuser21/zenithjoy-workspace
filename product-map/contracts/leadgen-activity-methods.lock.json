@@ -49,7 +49,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -560,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -665,7 +665,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
+      "code_digest": "acd4934296b7b80ee23a63cf9b8bc569d9debc24fe5a86dc3263031ebca0a663",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "f1bc39316d65e243310d9e87435052f89ef2ead309cff711b99cbe092c51fd40",
-        "current_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
+        "current_code_digest": "acd4934296b7b80ee23a63cf9b8bc569d9debc24fe5a86dc3263031ebca0a663"
       }
     },
     "douyin_video_processing.preflight": {
@@ -865,7 +865,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -1418,7 +1418,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -1524,7 +1524,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -1555,7 +1555,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -1642,13 +1642,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
+      "code_digest": "dff60d2ec40eafda4394cf39d96bc6fecfde571869bf9efd621a88e339e913c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "d1ed377a1094cb0d9c32240e958bbdf3d836ed248babafe47ed4c32d1e87fcfe",
-        "current_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
+        "current_code_digest": "dff60d2ec40eafda4394cf39d96bc6fecfde571869bf9efd621a88e339e913c6"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1699,7 +1699,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -2203,7 +2203,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -2308,7 +2308,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -2430,13 +2430,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
+      "code_digest": "c407dbeb81d3d20b3c71a4021c80fe672233760898adb7182986a66914f6cec7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "8837b014d495b2a5911312d5fc7bf8ff65052dca9c2c844b2febd40943466da5",
-        "current_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
+        "current_code_digest": "c407dbeb81d3d20b3c71a4021c80fe672233760898adb7182986a66914f6cec7"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2487,7 +2487,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -3019,7 +3019,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -3124,7 +3124,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -3302,13 +3302,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
+      "code_digest": "964f8f0fe1a6447fa1b6aa5796039860a0d8b1c79b41ee7bf91a31e5795d823b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "3b742ab1a7927b300706ca957a0308b1f08662e5811657d52dba1e4677ea9247",
-        "current_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
+        "current_code_digest": "964f8f0fe1a6447fa1b6aa5796039860a0d8b1c79b41ee7bf91a31e5795d823b"
       }
     },
     "douyin_video_processing.collection": {
@@ -3359,7 +3359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -3863,7 +3863,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -3990,7 +3990,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -4112,13 +4112,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
+      "code_digest": "87a3b3bbac3045dac3c07a394f4e149448d02a9147f3082b6b76dcd10bd838c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "52fb75209840eb9adbb8702a35dbac09900bd2581306dbaf8905665fdf23938d",
-        "current_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
+        "current_code_digest": "87a3b3bbac3045dac3c07a394f4e149448d02a9147f3082b6b76dcd10bd838c3"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4169,7 +4169,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -4708,7 +4708,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -4814,7 +4814,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -4931,13 +4931,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
+      "code_digest": "92736d97986c16358f8a3d6457de25d4e6d2d709f4f40f67c802883c125030d1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "9c1bd0106349c56b8a6d1851fed9cfeed5b4504a61aedbe6d655d62065b6b106",
-        "current_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
+        "current_code_digest": "92736d97986c16358f8a3d6457de25d4e6d2d709f4f40f67c802883c125030d1"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -4988,7 +4988,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -5100,7 +5100,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -5499,7 +5499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -5733,13 +5733,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
+      "code_digest": "610f27ee75de672d79d88581974a33b52d429fb25957c16ef620fc1a34271981",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "ed6ab73e595d63f375890d1fd130800759c5a139aa111e20bc9831b62098ec9a",
-        "current_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
+        "current_code_digest": "610f27ee75de672d79d88581974a33b52d429fb25957c16ef620fc1a34271981"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5790,7 +5790,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -5902,7 +5902,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -6308,7 +6308,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -6577,13 +6577,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
+      "code_digest": "f855a48e6650743a2e075b12bbec366e7d0ef4da617d1b9d9e09992ed7c67fdf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "4d0e9bdcbe210051731af36b54a53f2babebee43993142a5fd1ae463c6c217d2",
-        "current_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
+        "current_code_digest": "f855a48e6650743a2e075b12bbec366e7d0ef4da617d1b9d9e09992ed7c67fdf"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6630,7 +6630,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -7092,7 +7092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -7205,7 +7205,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -7236,7 +7236,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -7351,13 +7351,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
+      "code_digest": "dd454e524bd836b655ef02ef0c18003efdea1df8a1c95645ec7f25aea8e5dd74",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "721cdac7f4e03574bdd7ace7c62253b4b176f0ddc3f8dac0c9969906c54ac7c6",
-        "current_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
+        "current_code_digest": "dd454e524bd836b655ef02ef0c18003efdea1df8a1c95645ec7f25aea8e5dd74"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7404,7 +7404,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -7866,7 +7866,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -7978,7 +7978,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -8100,13 +8100,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
+      "code_digest": "ab329fe044479faef99931200381ed5dbf144fcf0cb121b21c8d2079dc8f8bb5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "cc6cd097eb03e6acb1db8c9cf9511211db949b68fc774f9b558b302b84fd263d",
-        "current_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
+        "current_code_digest": "ab329fe044479faef99931200381ed5dbf144fcf0cb121b21c8d2079dc8f8bb5"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8153,7 +8153,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -8615,7 +8615,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -8727,7 +8727,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -8842,13 +8842,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
+      "code_digest": "fd2965a4a04548a3fafa6770aedfbc1456da4608d32890c7b8c78d63bd95b109",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "4942e5313730cf38dc57dc8dc834cce6f7c5fcb13333e8cbf41469afabae4de0",
-        "current_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
+        "current_code_digest": "fd2965a4a04548a3fafa6770aedfbc1456da4608d32890c7b8c78d63bd95b109"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8895,7 +8895,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/locate-element.py",
           "revision": "contract",
-          "sha256": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0"
+          "sha256": "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"
         },
         {
           "kind": "code",
@@ -9357,7 +9357,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "608a9061d0b1d83820caedef9f441a1e8efa4c1760ccb2ffeaf898f7762b57d3"
+          "sha256": "ac934b9ab1b70264c1d4dbd01d46465ae2cf815499fa433de95f1710277a6c27"
         },
         {
           "kind": "code",
@@ -9470,7 +9470,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"
+          "sha256": "0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7"
         },
         {
           "kind": "code",
@@ -9594,13 +9594,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
+      "code_digest": "05069eb5df481a04775785f6afbc5127b7f530f19ca64d647d338cc00db93f67",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在原Activity绝对截止内有界重读同一只读授权GET，不重发原生或业务动作、不清未知、不改Skill业务与政策合同",
-        "reviewed_by": "codex-pstack-commander",
-        "previous_code_digest": "4bb973e908593d70370d51258fcc07489a45d53fb80790caecf0fa36295252a4",
-        "current_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e"
+        "reason": "旧Skill正文、方法版本、Activity版本及合同摘要未变，公司业务政策与发现/资格/采集/评分/发送算法未变；locate未启用ZJ_EXTERNAL_LEDGER时保持原HTTP/timeout路径，新增持久外发账只在显式启用时生效；RPC仅补固定源码依赖清单，控制器只扩展既有精确owner/TTL/flock守卫覆盖的导航命令。限匹配完整发布闭包的内部兼容升级，不支持新client热混旧manifest；不作为新Skill实机或业务验收。",
+        "reviewed_by": "/root/direct_tool_audit",
+        "previous_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
+        "current_code_digest": "05069eb5df481a04775785f6afbc5127b7f530f19ca64d647d338cc00db93f67"
       }
     }
   },
