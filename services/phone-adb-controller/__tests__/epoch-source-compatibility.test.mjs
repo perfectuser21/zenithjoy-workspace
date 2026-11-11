@@ -32,3 +32,11 @@ test('ordinary completed Tasks, self-review and out-of-scope review cannot appro
   const f=fixture();change(f);assert.throws(()=>verifyEpochSourceCompatibility(f),/EPOCH_SOURCE_COMPATIBILITY/);
  }
 });
+
+test('Brain canonical coding review and explicitly requested dev mutation retain exact compatibility bindings',()=>{
+ const f=fixture();f.reviewTask.payload.work_kind='coding_review';f.developmentTask.task_type='harness_initiative';f.developmentTask.payload={requested_task_type:'dev',work_kind:'coding_mutation'};
+ assert.equal(verifyEpochSourceCompatibility(f),true);
+ for(const change of [x=>x.developmentTask.payload.requested_task_type='research',x=>delete x.developmentTask.payload.requested_task_type,x=>x.developmentTask.payload.work_kind='coding_review',x=>delete x.developmentTask.payload,x=>x.developmentTask.task_type='coding_workflow',x=>x.reviewTask.task_type='dev',x=>x.reviewTask.payload.work_kind='coding_mutation',x=>x.reviewTask.payload.reviewer='another',x=>x.reviewTask.payload.business_task_id=id('6'),x=>x.reviewTask.payload.candidate_source_commit='c'.repeat(40),x=>x.reviewTask.payload.original_record_sha256='0'.repeat(64),x=>x.reviewTask.payload.development_task_id=id('6'),x=>x.reviewTask.parent_task_id=id('6'),x=>x.reviewTask.status='in_progress',x=>x.reviewTask.result.actor='another',x=>x.reviewTask.result.audit_evidence.verdict='fail']){
+  const changed=structuredClone(f);change(changed);assert.throws(()=>verifyEpochSourceCompatibility(changed),/EPOCH_SOURCE_COMPATIBILITY/);
+ }
+});
