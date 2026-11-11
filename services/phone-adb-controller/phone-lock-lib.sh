@@ -3,6 +3,12 @@
 PHONE_LOCK_HELPER="${0:A:h}/phone-lock-helper.py"
 PHONE_CTL="${0:A:h}/douyin-phone-adb"
 
+lock_requires_review() {
+  # Presence, including a directory or dangling symlink, always fails closed.
+  [[ -e "$LOCK_DIR/standalone_review_required" || -L "$LOCK_DIR/standalone_review_required" ||
+     -e "$LOCK_DIR/standalone_quarantined" || -L "$LOCK_DIR/standalone_quarantined" ]]
+}
+
 lock_pid_live() {
   local pid
   [[ -r "$LOCK_DIR/pid" ]] || return 1
@@ -19,7 +25,7 @@ lock_acquire() {
   require_run_id "$1"
   /bin/mkdir -p "$LOCK_ROOT"
   if [[ -d "$LOCK_DIR" ]]; then
-    [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock requires verified cleanup; adoption and stale reclaim refused'
+    ! lock_requires_review || die 'standalone lock requires verified cleanup; adoption and stale reclaim refused'
     [[ "${2:-compatible}" != fresh ]] || die 'fresh acquisition refused: existing lock must not be adopted or reclaimed'
     [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
     if same_run_lock "$owner" "$run"; then
@@ -53,21 +59,18 @@ lock_acquire() {
   print -- "lock=acquired owner=$run"
 }
 lock_quarantine() {
-  local expected="$1" staged
+  local expected="$1"
   require_run_id "$expected"
   "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$expected" || die 'quarantine refused: exact owner mismatch'
-  staged="$(/usr/bin/mktemp "$LOCK_DIR/.review-required.XXXXXXXX")" || die 'quarantine staging failed'
-  if ! { print -r -- "$expected" > "$staged" && /bin/chmod 600 "$staged" && /bin/mv "$staged" "$LOCK_DIR/standalone_review_required"; }; then
-    /bin/rm -f "$staged"; die 'quarantine persistence failed'
-  fi
-  [[ "$(<"$LOCK_DIR/standalone_review_required")" == "$expected" ]] || die 'quarantine readback failed'
+  "$PYTHON_BIN" "$PHONE_LOCK_HELPER" persist-quarantine "$LOCK_DIR" "$expected" || die 'quarantine persistence or readback failed; partial protection retained'
   print -- "lock=quarantined owner=$expected review_required=true"
 }
 lock_release() {
   local run="$(normalize_run_id "$1")" owner
   require_run_id "$1"
+  if lock_requires_review && [[ ! -r "$LOCK_DIR/owner" ]]; then die 'quarantined lock owner is not readable'; fi
   [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
-  [[ ! -f "$LOCK_DIR/standalone_review_required" || "${2:-compatible}" == exact ]] || die 'standalone lock requires exact verified release'
+  if lock_requires_review && [[ "${2:-compatible}" != exact ]]; then die 'standalone lock requires exact verified release'; fi
   owner="$(<"$LOCK_DIR/owner")"
   if [[ "${2:-compatible}" == exact ]]; then
     "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$1" || die "refusing exact release: owner changed to $owner"
@@ -80,7 +83,7 @@ lock_release() {
 lock_cleanup() {
   # wrapper 同 run 前缀并非退出所有权凭证；以精确 owner+PID 复验。
   local expected="$1" expected_pid="$2"
-  [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock cannot use wrapper cleanup'
+  ! lock_requires_review || die 'standalone lock cannot use wrapper cleanup'
   [[ -r "$LOCK_DIR/owner" && -r "$LOCK_DIR/pid" ]] || return 0
   [[ "$(<"$LOCK_DIR/owner")" == "$expected" && "$(<"$LOCK_DIR/pid")" == "$expected_pid" ]] || {
     print -u2 -- 'lock cleanup skipped: ownership changed'; return 0
@@ -92,11 +95,12 @@ lock_cleanup() {
 }
 lock_reap() {
   local owner reason
-  [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
-  owner="$(<"$LOCK_DIR/owner")"
-  if [[ -f "$LOCK_DIR/standalone_review_required" ]]; then
+  if lock_requires_review; then
+    owner='unknown'; [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
     print -- "lock=preserved owner=$owner reason=standalone-review-required"; return 0
   fi
+  [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
+  owner="$(<"$LOCK_DIR/owner")"
   if ! lock_is_stale || lock_pid_live; then
     print -- "lock=preserved owner=$owner reason=fresh-or-live-pid"; return 0
   fi
@@ -157,19 +161,19 @@ phone_lock_command() {
     lock-status)
       [[ "$#" == 1 ]] || die 'usage: lock-status'
       if [[ -r "$LOCK_DIR/owner" ]]; then
-        if [[ -f "$LOCK_DIR/standalone_review_required" ]] && lock_is_stale; then
+        if lock_requires_review && lock_is_stale; then
           print -- "lock=stale owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=true reclaimable=false ttl=${LOCK_TTL_SECONDS}s reason=standalone-review-required"
         elif lock_is_stale && ! lock_pid_live; then
           print -- "lock=stale owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=true reclaimable=true ttl=${LOCK_TTL_SECONDS}s"
         else
           print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=false reclaimable=false ttl=${LOCK_TTL_SECONDS}s"
         fi
-      else print -- 'lock=free'; fi;;
+      elif lock_requires_review; then print -- 'lock=preserved owner=unknown reclaimable=false reason=standalone-review-required'; else print -- 'lock=free'; fi;;
     lock-refresh)
       [[ "$#" == 2 ]] || die 'usage: lock-refresh OWNER'
       require_run_id "$2"
       [[ -r "$LOCK_DIR/owner" ]] || die 'lock is not held; acquire it first'
-      if [[ -f "$LOCK_DIR/standalone_review_required" ]]; then
+      if lock_requires_review; then
         "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$2" || die 'refusing exact standalone owner renewal'
       else
         same_run_lock "$(<"$LOCK_DIR/owner")" "$2" || die 'refusing to refresh lock owned by another run'

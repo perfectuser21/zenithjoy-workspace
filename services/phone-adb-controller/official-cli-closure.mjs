@@ -103,18 +103,22 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
  return Object.freeze({plan,execute,snapshot,quarantine,prepare:async()=>{await admission({phase:'prepare',resourceOnly:true});rememberProtection();return true;},close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);if(operationAdmission&&(await operationAdmission.close()).execution_stopped!==true)unknown=true;return snapshot();}});
 }
 
+// 独立兼容复核 /root/direct_tool_audit，报告sha256 06bcb8180338968a233e7b663d0eb3039138b5ab25f4f0d17637f4f85da6d587；仅追加已核controller/locate摘要，原同步调用边界不变。
+// ADB失败码独立审核 /root/direct_tool_audit：58933f9d26a8463ec91fef76837657dfdaa4a61ff00cc02ff520f0269378f901；仅追加有限拒绝错误码版本。
+// 锁/独立宿主新字节复核 /root/direct_tool_audit：a4ecd935198c68d037b9de43159217acc906cf93b7c3cda27ae8ad60f2836340；只追加受审精确摘要。
 // Reviewed baseline: 1d46b5d72; eda2ea5cd controller adds recording-only observer hooks. Only the finite synchronous call graph above is admitted.
+// 路由兼容独立复核 /root/review_direct_skill：6abe05bf505bfb46acab1199e74ca6a97d5d9f9bff88c6d00281f726066b01d8；仅追加受审精确摘要。
 const REVIEWED=Object.freeze({
  "official-cli-quarantine.py": "f31a63a4f1e70248cf25482f4c6788fafd5c1d46d786d5e3e3eeb204e06fb36b",
- "douyin-phone-adb": ["b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6", "6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d"],
- "phone-lock-lib.sh": "ed2840ffbd5ded0aaa2b142a4b14405946610575536a55740c38247d5c440271",
- "phone-lock-helper.py": "36d705de51e84a04c24db80e9417912959f27fa6d61513f6165b9760d5b59bcd",
+ "douyin-phone-adb": ["b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6","6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d","0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7","b1aa3013537c1ebc0b8aafb73b32e82f8f00999c1713aad92b240f629da9140b"],
+ "phone-lock-lib.sh": ["ed2840ffbd5ded0aaa2b142a4b14405946610575536a55740c38247d5c440271","5205364871b13a65e47529796e4de56807bd729255336298a33a9a580cb38b88"],
+ "phone-lock-helper.py": ["36d705de51e84a04c24db80e9417912959f27fa6d61513f6165b9760d5b59bcd","c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"],
  "phone-lock-root.py": "3c0dc46c221e80ae220c1174709a9cc6c9d47dfa3702ed6726d52a626a20f48a",
- "adb-existing-route.py": "98ca76d799deb74cc1481346967f8ab1a14aa99dd28c7eea2d7865c591eb24d4",
+ "adb-existing-route.py": ["98ca76d799deb74cc1481346967f8ab1a14aa99dd28c7eea2d7865c591eb24d4","925a65843cdfd53e76d82ceffa5651d972a20f03b6876ff633699261c06fe6ae"],
  "adb-managed-client.py": "9cc3bad30042910b1c36c5f8ce17d5402209fa42e5b130a7a29f0e5bf2316910",
- "adb-host-instance-policy.py": ["dee7a72876b6193535fc5a4ddb3406e7b113c7ddc75e745bf91d450bac807d18", "5cd8e7ae7025c35ad76d674368fb53859c7db81679d8506777374bab3f556182"],
+ "adb-host-instance-policy.py": ["dee7a72876b6193535fc5a4ddb3406e7b113c7ddc75e745bf91d450bac807d18","5cd8e7ae7025c35ad76d674368fb53859c7db81679d8506777374bab3f556182","63fea420bc5f6b19e8cefc21de7e0972cfae93bf6e894eed3a8d2f2b451f7b0f"],
  "search-video-tab.py": "7a6a56ebe141dcdaa675735a196004df5e4728534f4f33801fce3b7250c89e04",
- "locate-element.py": "b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0",
+ "locate-element.py": ["b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0", "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"],
  "clipboard-widget-cancel.py": "9a1fd636f1600acec3179c6d61955f6c290a6678ff54902a4407bcd36d350980",
  "comment-count-evidence.py": "0c1d643574c39ee242ec551144513c18ee5921d42e22ad8e31f7041ddfc985e8",
  "queued-comment-history.js": "18ae229e033fb18245d45fc2ff15e866cd05434ac757b020bf61b2c15522b202",

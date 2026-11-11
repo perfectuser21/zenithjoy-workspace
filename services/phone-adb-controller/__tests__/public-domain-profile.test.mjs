@@ -253,3 +253,81 @@ test('agent-first public metadata binds a verified business Skill and rejects an
   assert.throws(()=>buildPublicDomainProfile(bad),/SKILL/);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
+
+function standaloneInput(x){
+ const entry='standalone-skill-runtime.mjs',text='export const startStandaloneSkillRuntime=()=>{throw Error("not executed in compiler");};';
+ writeFileSync(join(x.sourceRoot,entry),text,{mode:0o600});x.frozen.deployment.files.push({deployed_path:entry,content_sha256:digest(text)});reseal(x);delete x.commander;
+ x.standaloneSkill={name:'douyin-leadgen-direct',version:'0.1.0',source_commit:'b'.repeat(40),path:'skill/SKILL.md',sha256:digest('new standalone Skill')};return x;
+}
+test('independent Skill compiler fixes the Codex tool host without Commander or old Skill host declarations',async()=>{
+ const {buildStandaloneSkillProfile}=await import(source.href),x=standaloneInput(await fixture());
+ try{
+  const frozenDigest=digest(x.frozen),out=buildStandaloneSkillProfile(x),p=out.profile,cfg=p.domain_adapter.config;
+  assert.equal(digest(x.frozen),frozenDigest);assert.equal(out.profile_sha256,digest(p));assert.equal(out.route.profile_sha256,digest(p));
+  assert.equal(Object.hasOwn(p,'commander'),false);assert.equal(p.domain_adapter.protocol,'codex-skill-tools/v1');assert.equal(p.domain_adapter.entry,'standalone-skill-runtime.mjs');assert.equal(p.domain_adapter.export_name,'startStandaloneSkillRuntime');
+  assert.equal(cfg.primary_host,'codex-exec-v1');assert.equal(cfg.snapshot.primary_host,'codex-exec-v1');assert.equal(cfg.execution_mode,'agent');
+  assert.equal(cfg.snapshot.execution_transport,undefined);assert.equal(cfg.snapshot.max_turns,undefined);
+  assert.deepEqual(p.metadata.scoring.skill,{...x.standaloneSkill,entry:x.standaloneSkill.path});
+  assert.equal(p.metadata.scoring.implementation.entry,'standalone-skill-runtime.mjs');assert.equal(p.metadata.scoring.implementation.method_origin,'standalone-skill');
+  assert.deepEqual(p.metadata.scoring.input_evidence.implementation_bindings,x.frozen.activities[0].version.payload.implementation_bindings);
+  assert.deepEqual(cfg.snapshot.activities,x.frozen.activities);assert.equal(p.metadata.scoring.questions.A4.declared.postconditions[0],'原政策持久化读回');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+test('standalone and old profile entry points cannot impersonate one another or bypass source checks',async()=>{
+ const {buildStandaloneSkillProfile,buildPublicDomainProfile}=await import(source.href),x=standaloneInput(await fixture());
+ try{
+  for(const change of [v=>v.primaryHost='raw-model-v1',v=>v.primaryHost='official-child-v1',v=>v.standaloneSkill.source_commit='untracked',v=>v.standaloneSkill.sha256='bad',v=>v.standaloneSkill.path='../foreign/SKILL.md',v=>v.gate.actual_matches=false,v=>v.company.version=0]){
+   const invalid=structuredClone(x);change(invalid);assert.throws(()=>buildStandaloneSkillProfile(invalid),/PUBLIC_DOMAIN_PROFILE_/);
+  }
+  assert.throws(()=>buildPublicDomainProfile(x),/PUBLIC_DOMAIN_PROFILE_/);
+  const original=await fixture();try{assert.equal(buildPublicDomainProfile(original).profile.commander.kind,'openclaw');assert.throws(()=>buildPublicDomainProfile({...original,direct:true}),/PUBLIC_DOMAIN_PROFILE_/);}finally{rmSync(original.sourceRoot,{recursive:true,force:true});}
+  writeFileSync(join(x.sourceRoot,'standalone-skill-runtime.mjs'),'changed runtime source');assert.throws(()=>buildStandaloneSkillProfile(x),/PUBLIC_DOMAIN_PROFILE_FILE_DIGEST/);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+
+// 离线构造真实文件的不同source epoch；不注册Brain审核、不发ACK、不操作设备。
+async function standaloneEpochInput(){
+ const {userInfo}=await import('node:os'),{randomUUID}=await import('node:crypto'),{freezePublicPreflightRoute}=await import('../public-preflight-route.mjs'),{freezeFenceReference}=await import('../device-epoch-fence-reference.mjs');
+ const x=standaloneInput(originalShape(await fixture(),'douyin_video_discovery'));
+ const policy={schema_version:2,instance_id:'fixture-standalone-epoch',host_id:'mmv',transport:'tcp',endpoint:'tcp:127.0.0.1:5042',forbidden_ports:[],adb_bin:'/fixed/adb',adb_realpath:'/fixed/adb',adb_sha256:'a'.repeat(64)},policyPath=join(x.sourceRoot,'epoch-policy.json'),registryPath='config/adb-host-instances.json';
+ const rawPolicy=JSON.stringify(policy);writeFileSync(policyPath,rawPolicy,{mode:0o600});mkdirSync(join(x.sourceRoot,'config'),{recursive:true});
+ const registry=JSON.stringify({schema_version:1,instances:[{instance_id:policy.instance_id,kind:'managed',policy_path:policyPath,policy,coexists_with:[]}]});writeFileSync(join(x.sourceRoot,registryPath),registry,{mode:0o600});
+ x.frozen.deployment.files.push({path:'services/phone-adb-controller/'+registryPath,deployed_path:registryPath,content_sha256:digest(registry)});
+ const businessTask=uuid(901),epochId=randomUUID(),sourceBefore={commit:'c'.repeat(40),files:{'services/phone-adb-controller/review.mjs':'1'.repeat(64)}},sourceAfter={commit:sha,files:{'services/phone-adb-controller/review.mjs':'2'.repeat(64)}};
+ const scope={target:'mmv',profile:x.resources.profile,serial:x.resources.serial,expected_account:x.resources.account,source_commit:sha,task_id:businessTask,policy};
+ scope.policy_binding=freezePublicPreflightRoute({root:x.sourceRoot,files:{[registryPath]:digest(registry)},scope});
+ const record={protocol:'device-epoch-fence-record/v1',epoch_id:epochId,status:'fenced',authority_basis:'old-route-fenced-observed-noninterference/v1',original_execution_stopped:false,android_internal:'not_attested',resource:{serial:scope.serial,profile:scope.profile,expected_account:scope.expected_account,company:x.company},new_route:{instance_id:policy.instance_id,endpoint:policy.endpoint,policy_path:policyPath,policy_sha256:digest(rawPolicy)},runtime_source:sourceBefore};
+ const recordDirectory=join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',scope.serial),createdDirectory=!existsSync(recordDirectory),recordPath=join(recordDirectory,epochId+'.json');mkdirSync(recordDirectory,{recursive:true,mode:0o700});const recordRaw=JSON.stringify(record);writeFileSync(recordPath,recordRaw,{mode:0o600,flag:'wx'});
+ scope.policy_binding.epoch_fence=freezeFenceReference({scope:{...scope,source_commit:sourceBefore.commit},epochId});x.frozen.discovery_phone_scope=scope;
+ const receipt={protocol:'epoch-source-compatibility/v1',original_record_sha256:digest(recordRaw),original_runtime_source:sourceBefore,candidate_runtime_source:sourceAfter,candidate_manifest_sha256:'e'.repeat(64),release_id:x.frozen.release.id,observation_id:x.frozen.deployment.observation_id,serial:scope.serial,instance_id:policy.instance_id,policy_sha256:digest(rawPolicy),changes:[{path:'services/phone-adb-controller/review.mjs',before_sha256:'1'.repeat(64),after_sha256:'2'.repeat(64)}],evidence_refs:['fixture://independent-source-review'],actor:'fixture-independent-reviewer'};
+ x.frozen.epoch_source_compatibility={review_task_id:uuid(902),receipt,receipt_sha256:digest(receipt)};
+ Object.assign(x.env,{P:scope.profile,SERIAL:scope.serial,LEADGEN_SORT:'latest',LEADGEN_TIME_LAYER:'one_week',LEADGEN_LOCATION:'unlimited'});delete x.env.LEADGEN_SOURCE_RUN;reseal(x);
+ const runtimeFiles={...Object.fromEntries(x.frozen.deployment.files.map(row=>[row.deployed_path,row.content_sha256])),...Object.fromEntries(Object.entries(x.frozen.files).filter(([p])=>p.startsWith('runtime/')).map(([p,h])=>[p.slice(8),h])),...Object.fromEntries(x.frozen.deployment.dependencies.preflight_pg.files.map(row=>[row.deployed_path,row.content_sha256]))};receipt.candidate_manifest_sha256=digest(runtimeFiles);x.frozen.epoch_source_compatibility.receipt_sha256=digest(receipt);reseal(x);
+ const skillRoot=join(x.sourceRoot,'standalone-skill');mkdirSync(skillRoot,{mode:0o700});const skillPath=join(skillRoot,'SKILL.md'),skillBytes='new standalone Skill';writeFileSync(skillPath,skillBytes,{mode:0o600});
+ return {x,recordPath,recordRaw,skillPath,businessTask,cleanup:async()=>{const {unlinkSync,rmdirSync}=await import('node:fs');unlinkSync(recordPath);if(createdDirectory)rmdirSync(recordDirectory);rmSync(x.sourceRoot,{recursive:true,force:true});}};
+}
+test('standalone profile to snapshot preserves the candidate source and immutable original epoch through compatibility construction',async()=>{
+ const {buildStandaloneSkillProfile,buildPublicDomainProfile}=await import(source.href),{preparePublicDomainSnapshot}=await import('../public-domain-snapshot.mjs'),f=await standaloneEpochInput(),{x}=f;
+ try{
+  const {profile,profile_sha256}=buildStandaloneSkillProfile(x),scope=profile.domain_adapter.config.snapshot.discovery_phone_scope;
+  assert.equal(scope.source_commit,sha);assert.equal(scope.policy_binding.epoch_fence.sha256,digest(f.recordRaw));assert.equal(x.frozen.epoch_source_compatibility.receipt.candidate_manifest_sha256,digest(profile.files));
+  const identity={protocol:'codex-exec-v1',mode:'formal',task_id:f.businessTask,run_id:uuid(903),task_run_id:uuid(904),claimer:'fixture-direct-codex',claimed_at:new Date().toISOString(),machine_id:x.resources.machine,profile_sha256,approved_keywords:['AI办公'],skill:x.standaloneSkill,run_binding:{run_binding_id:uuid(905),workflow_id:x.frozen.workflow_version.payload.workflow_id,workflow_definition_version_id:x.frozen.workflow_version.id,attempt_key:'fixture:1',activities:Object.fromEntries(x.frozen.activities.map(a=>[a.reference.slot_key,{reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id}]))}};
+  const out=preparePublicDomainSnapshot({identity,profile,runDirectory:join(x.sourceRoot,'direct-epoch-run'),standaloneSkillPath:f.skillPath,deadline_ms:Date.now()+2700000,cleanup_deadline_ms:Date.now()+2820000});
+  assert.equal(out.snapshot.discovery_phone_scope.source_commit,sha);assert.deepEqual(out.snapshot.epoch_source_compatibility,x.frozen.epoch_source_compatibility);assert.equal(readFileSync(f.recordPath,'utf8'),f.recordRaw);
+  const old={...x,commander:{kind:'openclaw',skill:{entry:'skills/runner-commander/SKILL.md',version:'1.1.0'},timeout_s:30}};delete old.standaloneSkill;assert.throws(()=>buildPublicDomainProfile(old),/EPOCH_RECORD_SCOPE/);
+ }finally{await f.cleanup();}
+});
+test('standalone compatibility construction refuses missing or tampered proofs at profile and snapshot boundaries',async()=>{
+ const {buildStandaloneSkillProfile}=await import(source.href),{preparePublicDomainSnapshot}=await import('../public-domain-snapshot.mjs'),f=await standaloneEpochInput(),{x}=f;
+ try{
+  for(const change of [v=>delete v.frozen.epoch_source_compatibility,v=>v.frozen.epoch_source_compatibility.receipt_sha256='0'.repeat(64),v=>v.frozen.epoch_source_compatibility.receipt.original_runtime_source.commit='d'.repeat(40)]){
+   const bad=structuredClone(x);change(bad);reseal(bad);assert.throws(()=>buildStandaloneSkillProfile(bad),/EPOCH_RECORD_SCOPE|EPOCH_SOURCE_COMPATIBILITY/);
+  }
+  const {profile}=buildStandaloneSkillProfile(x),identity={protocol:'codex-exec-v1',task_id:f.businessTask,skill:x.standaloneSkill};
+  for(const change of [p=>delete p.domain_adapter.config.snapshot.epoch_source_compatibility,p=>p.domain_adapter.config.snapshot.epoch_source_compatibility.receipt_sha256='0'.repeat(64)]){
+   const bad=structuredClone(profile);change(bad);identity.profile_sha256=digest(bad);
+   identity.machine_id=x.resources.machine;identity.run_binding={workflow_id:x.frozen.workflow_version.payload.workflow_id,workflow_definition_version_id:x.frozen.workflow_version.id,activities:Object.fromEntries(x.frozen.activities.map(a=>[a.reference.slot_key,{reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id}]))};
+   assert.throws(()=>preparePublicDomainSnapshot({identity,profile:bad,runDirectory:join(x.sourceRoot,'never-written'),standaloneSkillPath:f.skillPath,deadline_ms:Date.now()+2700000,cleanup_deadline_ms:Date.now()+2820000}),/EPOCH_RECORD_SCOPE|EPOCH_SOURCE_COMPATIBILITY/);
+  }
+ }finally{await f.cleanup();}
+});

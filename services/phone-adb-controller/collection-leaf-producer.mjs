@@ -101,6 +101,6 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  })();
  const returned=()=>sealed&&!returnUnknown&&active===0&&leaves.every(x=>x.started_at&&x.ended_at&&x.request_returned===true);
  const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,requests_returned:returned()&&leaves.length>0,empty_requests_returned:returned()&&leaves.length===0,...(fenced?{epoch_fence_lost:epochFenceLost}:{}),leaves:structuredClone(leaves),ledger});
- return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},isReturnUnknown:()=>returnUnknown,
+ return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce,WFR_COLLECTION_LEAF_DEADLINE_MS:String(admissionDeadlineMs??deadlineMs)},isReturnUnknown:()=>returnUnknown,
   seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }
