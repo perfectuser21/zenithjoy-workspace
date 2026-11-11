@@ -33,7 +33,7 @@ export function createVideoProjectsRouter(deps:Dependencies) {
   project.updatedAt=new Date().toISOString();await mkdir(folder(req),{recursive:true,mode:0o700});
   const path=file(req,project.id),temp=`${path}.${randomUUID()}.tmp`;
   // Only durable IDs/configuration are authoritative; URLs and task snapshots are refreshed on reads.
-  const stored={...project,segments:project.segments.map(({job,videoUrl,...segment})=>segment)};
+  const stored={...project,segments:project.segments.map(segment=>{const value={...segment};delete value.job;delete value.videoUrl;return value;})};
   await writeFile(temp,JSON.stringify(stored),{mode:0o600});await rename(temp,path);
  }
  async function load(req:OwnerRequest,id:string):Promise<Project>{
@@ -49,7 +49,7 @@ export function createVideoProjectsRouter(deps:Dependencies) {
    const asset=await deps.asset(req,segment.assetId);
    return{...segment,videoUrl:asset.url,...(segment.jobId?{job:await deps.job(req,segment.jobId)}:{})};
   }));
-  const {runId,clientRequestId,...result}=project;
+  const result={...project};delete result.runId;delete result.clientRequestId;
   return{...result,source,segments,...(project.outputAssetId?{outputUrl:(await deps.asset(req,project.outputAssetId)).url}:{})};
  }
  const locks=new Map<string,Promise<unknown>>();
