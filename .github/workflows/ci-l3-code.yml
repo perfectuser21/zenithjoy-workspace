@@ -551,6 +551,7 @@ jobs:
               services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs
               services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs
               services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs
+              services/phone-adb-controller/__tests__/proxy-version-deadline.test.mjs
           - shard: 1
             suites: >-
               services/phone-adb-controller/__tests__/adb-host-terminal.test.mjs

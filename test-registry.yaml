@@ -11676,3 +11676,21 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition；独立宿主真实进程身份、nonce与源码证明；不作为手机业务通过"
+
+  - id: phone-proxy-version-deadline
+    path: services/phone-adb-controller/__tests__/proxy-version-deadline.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / collection-phone-darwin-test (0) / node --test --test-concurrency=1
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；真实managed proxy固定deadline及outer-return边界；普通local probe行为不变，非真机业务验收"
+
+  - id: phone-standalone-skill-pg
+    path: services/phone-adb-controller/__tests__/standalone-skill-pg.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；独立Skill固定PG依赖与公司/Task投影守卫；fixture数据库响应，非业务已验"
