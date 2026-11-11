@@ -3,7 +3,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {mkdir,mkdtemp,readFile,writeFile,rename,readdir,rm} from 'node:fs/promises';
 import {createWriteStream} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve,sep} from 'node:path';
 import {Readable,Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {assembleProjectVideo,splitProjectVideo,validateVideoBoundaries} from '../services/video-project-media';
@@ -22,7 +22,13 @@ const wrap=(fn:(req:OwnerRequest,res:Response)=>Promise<unknown>)=>(req:Request,
 export function createVideoProjectsRouter(deps:Dependencies) {
  const router=Router();
  const folder=(req:OwnerRequest)=>join(deps.directory,createHash('sha256').update(req.videoStaffId!).digest('hex'),'projects');
- const file=(req:OwnerRequest,id:string)=>{if(!uuid.test(id)) return fail(404,'项目不存在或无权访问');return join(folder(req),`${id}.json`);};
+ const file=(req:OwnerRequest,id:string)=>{
+  if(!uuid.test(id)) return fail(404,'项目不存在或无权访问');
+  const root=resolve(folder(req));
+  const path=resolve(root,`${id.replace(/[^a-zA-Z0-9-]/g,'')}.json`);
+  if(!path.startsWith(root+sep)) return fail(404,'项目不存在或无权访问');
+  return path;
+ };
  async function save(req:OwnerRequest,project:Project){
   project.updatedAt=new Date().toISOString();await mkdir(folder(req),{recursive:true,mode:0o700});
   const path=file(req,project.id),temp=`${path}.${randomUUID()}.tmp`;

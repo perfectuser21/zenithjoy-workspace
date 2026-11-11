@@ -50,6 +50,14 @@ agent_suite:
 
 tests:
 
+  - id: simple-video-workflow-api-client
+    path: apps/dashboard/src/api/__tests__/video-workflow.api.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 视频创作
+    note: 会话请求、取消超时、直传失败及素材大小限制。
+
   - id: simple-video-workflow-entry
     path: apps/dashboard/src/pages/__tests__/VideoWorkflowEntry.test.tsx
     type: unit

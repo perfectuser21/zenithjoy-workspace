@@ -71,3 +71,4 @@ wechat-moments-controller-smoke.sh
 wechat-rpa-real-agent-smoke.sh
 worker-activity-smoke.sh
 phone-account-patrol-smoke.sh
+simple-video-workflow-smoke.sh
