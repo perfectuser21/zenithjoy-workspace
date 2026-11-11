@@ -5,7 +5,7 @@ import {readFileSync,writeFileSync,appendFileSync,mkdirSync,realpathSync,lstatSy
 import {createRequire} from 'node:module';
 import {userInfo} from 'node:os';
 import {readFrozen} from './runtime-definition.mjs';
-import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches} from './standalone-skill-authority.mjs';
+import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches,standaloneHostProofPaths,createStandaloneHostProof} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
 import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
 import {createCentralDeviceLease} from './central-device-lease.mjs';
@@ -43,14 +43,21 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
 }
 
 // 每台执行机对真实run只允许一份宿主；换目录不能重置未知提交或资源账。
-export function claimStandaloneHost({runId,runDirectory,registry=join(userInfo().homedir,'.local/state/zenithjoy/standalone-skill-hosts')}){
- if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId)||resolve(registry)!==registry||resolve(runDirectory)!==runDirectory)fail('HOST_SCOPE');
+function present(path){try{lstatSync(path);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
+function syncDirectory(path,sync=fsyncSync){const fd=openSync(path,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{sync(fd);}finally{closeSync(fd);}}
+export function claimStandaloneHost({runId,runDirectory,frozen,registry}){
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId)||resolve(runDirectory)!==runDirectory)fail('HOST_SCOPE');
+ const declared=frozen?standaloneHostProofPaths(frozen):null;
+ registry??=declared?.directory??join(userInfo().homedir,'.local/state/zenithjoy/standalone-skill-hosts');
+ if(resolve(registry)!==registry||frozen&&frozen.standalone_skill.run_id!==runId)fail('HOST_SCOPE');
  mkdirSync(registry,{recursive:true,mode:0o700});const stat=lstatSync(registry);
  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o777)!==0o700||realpathSync(registry)!==registry)fail('HOST_SCOPE');
+ if(present(join(registry,runId+'.unknown.json')))fail('HOST_REVOKED');
+ // 无frozen的旧测试仅测O_EXCL围栏；其记录不符合host proof，真实admission永不接受。
+ const record=frozen?createStandaloneHostProof({frozen,runDirectory}):{protocol:'standalone-skill-host-fence-test/v0',run_id:runId,run_directory:runDirectory,pid:process.pid};
  const path=join(registry,runId+'.json');let fd;
  try{fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);}catch(error){if(error.code==='EEXIST')fail('HOST_ALREADY_STARTED');throw error;}
- try{writeFileSync(fd,JSON.stringify({run_id:runId,run_directory:runDirectory,pid:process.pid,started_at:new Date().toISOString()})+'\n');fsyncSync(fd);}finally{closeSync(fd);}
- const parent=openSync(registry,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(parent);}finally{closeSync(parent);}return path;
+ try{writeFileSync(fd,JSON.stringify(record)+'\n');fsyncSync(fd);}finally{closeSync(fd);}syncDirectory(registry);return path;
 }
 
 export async function verifyStandaloneBootstrap({frozen,scope,read=readBrain}){
@@ -71,38 +78,90 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   WF_RUN_START_TS:String(scope.run_start_ts),WF_RUN_MAX_SECONDS:String(scope.run_max_seconds),DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),ZJ_ADB_HOST_CONFIG:frozen.discovery_phone_scope.policy_binding.policy_path,ADB_SERVER_SOCKET:frozen.discovery_phone_scope.policy.endpoint,DOUYIN_ADB_PORT:String(frozen.discovery_phone_scope.policy.port??frozen.discovery_phone_scope.policy.endpoint.split(':').at(-1)),LEADGEN_MMV_DEVICE_RUNTIME:'1',ZJ_EXTERNAL_LEDGER:join(dir,'external-interactions.jsonl')};
  if(env.BRAIN_INTERNAL_TOKEN!==process.env.BRAIN_INTERNAL_TOKEN)fail('CREDENTIAL_CONTEXT');
  await (dependencies.bootstrap??verifyStandaloneBootstrap)({frozen,scope});
- claimStandaloneHost({runId:identity.run_id,runDirectory:dir,registry:dependencies.hostRegistry});
- const lease=(dependencies.leaseFactory??createCentralDeviceLease)({brainUrl:env.BRAIN_URL||'http://127.0.0.1:5221',token:env.BRAIN_INTERNAL_TOKEN,deviceName:scope.serial,taskId:identity.task_id,runId:identity.run_id,runSeconds:scope.run_max_seconds});
- // O_EXCL保留本目录已启动事实：进程崩溃也不靠重建工具实例丢掉未知提交/数量账。
- writeFileSync(join(dir,'standalone-host-started.json'),JSON.stringify({task_id:identity.task_id,run_id:identity.run_id,pid:process.pid,started_at:new Date().toISOString()}),{flag:'wx',mode:0o600});
- let leaf,ipc,local=false,unknown=false,closing;
+ if(present(join(dir,'standalone-host-started.json')))fail('HOST_ALREADY_STARTED');
+ const hostPath=claimStandaloneHost({runId:identity.run_id,runDirectory:dir,frozen,registry:dependencies.hostRegistry}),unknownPath=hostPath.replace(/\.json$/,'.unknown.json');
+ let lease,leaf,ipc,local=false,centralHeld=false,centralAttempted=false,unknown=false,revoked=false,revocationFailed=false,closing=false,closingPromise,cleanupActive=false;
  const execute=dependencies.execute??execInput;
- const controller=(op,args=[])=>execute(join(root,'douyin-phone-adb'),['--profile',scope.profile,op,...args],{env,timeoutMs:360000});
- const guard=async()=>{const actual=readFrozen(dir);if(actual.snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');return (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:actual,env});};
- const close=()=>closing??=(async()=>{
-  if(ipc)await ipc.close();
-  let desktop=null;
-  if(local&&!unknown){try{await guard();desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});}catch{unknown=true;}}
-  const leaves=leaf?await leaf.seal():null;
-  if(leaves&&!leaves.requests_returned&&!leaves.empty_requests_returned)unknown=true;
-  if(local&&!unknown){await controller('lock-release-exact',[scope.run_tag]);const status=await controller('lock-status');if(!/^lock=free\b/m.test(status.stdout))fail('RELEASE_READBACK');local=false;}
-  let quarantineVerified=false;
-  if(local&&unknown){const status=await controller('lock-quarantine',[scope.run_tag]);quarantineVerified=status.code===0&&status.stdout.trim()===`lock=quarantined owner=${scope.run_tag} review_required=true`;if(!quarantineVerified)fail('QUARANTINE_READBACK');}
-  if(!local)await lease.release();
-  const receipt={task_id:identity.task_id,run_id:identity.run_id,execution_mode:'codex-direct',native_return_unknown:unknown,quarantine_verified:quarantineVerified,local_released:!local,central_released:!local,desktop:desktop?.stdout??null,leaves};
-  writeFileSync(join(dir,'standalone-cleanup.json'),JSON.stringify(receipt),{flag:'wx',mode:0o600});return receipt;
- })();
+ // 只准专用测试注入故障；CLI不读取任何此类环境开关。默认失败立即终止专用宿主。
+ const revoke=reason=>{
+  unknown=true;
+  if(revocationFailed)fail('REVOCATION_FAILED');if(revoked)return;
+  const sync=dependencies.revocationFsync??fsyncSync;let fd;
+  try{
+   try{fd=openSync(unknownPath,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);}
+   catch(error){if(error.code!=='EEXIST')throw error;syncDirectory(dirname(unknownPath),sync);revoked=true;return;}
+   try{writeFileSync(fd,JSON.stringify({protocol:'standalone-skill-host-revocation/v1',task_id:identity.task_id,run_id:identity.run_id,task_run_id:identity.task_run_id,run_binding_id:identity.run_binding.run_binding_id,source_commit:frozen.deployment.source_commit,snapshot_sha256:frozen.snapshot_sha256,pid:process.pid,reason,observed_at:new Date().toISOString()})+'\n');sync(fd);}finally{closeSync(fd);fd=undefined;}
+   syncDirectory(dirname(unknownPath),sync);revoked=true;
+  }catch{
+   revocationFailed=true;
+   try{(dependencies.fatal??(code=>process.exit(code)))(70);}finally{fail('REVOCATION_FAILED');}
+  }
+ };
+ // 叶子状态不可读取本身就是原生结果未知，任何调用位置均先撤销全局能力。
+ const leafUnknown=()=>{try{return Boolean(leaf?.isReturnUnknown());}catch(error){revoke('LEAF_STATE_UNKNOWN');throw error;}};
+ const controller=async(op,args=[])=>{
+  const result=await execute(join(root,'douyin-phone-adb'),['--profile',scope.profile,op,...args],{env,timeoutMs:360000});
+  if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code});return result;
+ };
+ const guard=async({cleanup=false}={})=>{
+  if(unknown)fail('HOST_REVOKED');if(closing&&!cleanup)fail('CLOSING');
+  // 截止前置拒绝尚未调用provider，不因此撤销可用的收尾能力。
+  if(Date.now()>=(cleanup?identity.cleanup_deadline_ms:identity.deadline_ms))fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
+  try{
+   if(present(unknownPath)){revoke('EXISTING_REVOCATION');fail('HOST_REVOKED');}
+   if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}
+   const actual=readFrozen(dir);if(actual.snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');
+   return await (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:actual,env});
+  }catch(error){if(!unknown)revoke('ADMISSION_REJECTED');throw error;}
+ };
+ const close=()=>{
+  if(closingPromise)return closingPromise;closing=true;
+  return closingPromise=(async()=>{
+   if(revocationFailed)fail('REVOCATION_FAILED');let firstError=null,desktop=null,leaves=null;
+   const failed=(reason,error)=>{revoke(reason);firstError??=error;};
+   if(ipc)try{await ipc.close();}catch(error){failed('IPC_CLOSE_FAILED',error);}
+   if(leafUnknown())revoke('LEAF_UNKNOWN');
+   if(local&&!unknown){cleanupActive=true;try{await guard({cleanup:true});desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});}catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}}
+   if(leaf)try{leaves=await leaf.seal();if(!leaves.requests_returned&&!leaves.empty_requests_returned)revoke('LEAF_SEAL_UNKNOWN');}catch(error){failed('LEAF_SEAL_FAILED',error);}
+   if(local&&!unknown)try{
+    await controller('lock-release-exact',[scope.run_tag]);const status=await controller('lock-status'),states=status.stdout.split('\n').filter(s=>s.startsWith('lock='));if(states.length!==1||states[0]!=='lock=free')fail('RELEASE_READBACK');local=false;
+   }catch(error){failed('LOCAL_RELEASE_UNKNOWN',error);}
+   let quarantineVerified=false;
+   if(local&&unknown){
+    try{const status=await controller('lock-quarantine',[scope.run_tag]);quarantineVerified=status.stdout.trim()===`lock=quarantined owner=${scope.run_tag} review_required=true`;if(!quarantineVerified)fail('QUARANTINE_READBACK');}
+    catch{revoke('QUARANTINE_UNVERIFIED');fail('QUARANTINE_READBACK');}
+   }
+   if(!unknown&&centralHeld&&!local)try{await lease.release();centralHeld=false;}catch(error){failed('CENTRAL_RELEASE_UNKNOWN',error);}
+   const receipt={task_id:identity.task_id,run_id:identity.run_id,execution_mode:'codex-direct',native_return_unknown:unknown,quarantine_verified:quarantineVerified,local_released:!local,central_released:!centralHeld&&(!centralAttempted||!unknown),desktop:desktop?.stdout??null,leaves};
+   try{writeFileSync(join(dir,'standalone-cleanup.json'),JSON.stringify(receipt),{flag:'wx',mode:0o600});}catch(error){failed('CLEANUP_RECEIPT_UNKNOWN',error);}
+   if(firstError)throw firstError;return receipt;
+  })().catch(error=>{if(!unknown)revoke('CLOSE_UNKNOWN');throw error;});
+ };
  try{
-  await lease.acquire();
-  local=true;try{await controller('lock-acquire',[scope.run_tag]);}catch(error){unknown=true;throw error;}
+  lease=(dependencies.leaseFactory??createCentralDeviceLease)({brainUrl:env.BRAIN_URL||'http://127.0.0.1:5221',token:env.BRAIN_INTERNAL_TOKEN,deviceName:scope.serial,taskId:identity.task_id,runId:identity.run_id,runSeconds:scope.run_max_seconds});
+  writeFileSync(join(dir,'standalone-host-started.json'),JSON.stringify({task_id:identity.task_id,run_id:identity.run_id,pid:process.pid,started_at:new Date().toISOString()}),{flag:'wx',mode:0o600});
+  centralAttempted=true;await lease.acquire();centralHeld=true;
+  local=true;const acquired=await controller('lock-acquire-new',[scope.run_tag]),acquiredStates=acquired.stdout.split('\n').filter(s=>s.startsWith('lock='));
+  if(acquiredStates.length!==1||acquiredStates[0]!==`lock=acquired owner=${scope.run_tag}`)fail('ACQUIRE_READBACK');
   await guard();
-  try{leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({directory:join(dir,'standalone-leaves'),policy:frozen.discovery_phone_scope.policy,serial:scope.serial,deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.deadline_ms,env,assertAdmission:guard});}catch(error){unknown=true;throw error;}Object.assign(env,leaf.env);
-  const rpc=createRpc({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
-  const call=createStandaloneSkillTools({frozen,assertAuthority:guard,phone:createStandalonePhoneProvider({root,environment:env,frozen}),rpc});
+  leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({directory:join(dir,'standalone-leaves'),policy:frozen.discovery_phone_scope.policy,serial:scope.serial,deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,env,assertAdmission:()=>guard({cleanup:cleanupActive})});Object.assign(env,leaf.env);
+  const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
+  const call=createStandaloneSkillTools({frozen,assertAuthority:()=>guard(),phone:createStandalonePhoneProvider({root,environment:env,frozen,execute}),rpc});
   const ipcDirectory=join(dir,'standalone-ipc');mkdirSync(ipcDirectory,{mode:0o700});
-  ipc=await serveStandaloneSkillTools({directory:ipcDirectory,call:async(op,input)=>{try{return await call(op,input);}catch(error){appendFileSync(join(dir,'standalone-tool-errors.jsonl'),JSON.stringify({operation:op,code:/^[A-Z0-9_]+$/.test(error?.code??'')?error.code:'TOOL_FAILED',at:new Date().toISOString(),...(error?.controller_exit_code!==undefined?{controller_exit_code:error.controller_exit_code,diagnostic:error.diagnostic}:{})})+'\n',{mode:0o600});if(leaf.isReturnUnknown())unknown=true;throw error;}}});
+  ipc=await (dependencies.ipcFactory??serveStandaloneSkillTools)({directory:ipcDirectory,call:async(op,input)=>{
+   try{const result=await call(op,input);if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}return result;}
+   catch(error){
+    const code=error?.code??'',knownRefusal=['STANDALONE_NATIVE_CLOSING','STANDALONE_NATIVE_WORK_DEADLINE'].includes(code)||code.startsWith('STANDALONE_TOOL_');
+    // 队列commit未知由工具层冻结新写并只准原video读回；它不证明原生手机结果未知。
+    if(leafUnknown()||op==='phone'&&!knownRefusal)revoke('TOOL_RESULT_UNKNOWN');
+    try{appendFileSync(join(dir,'standalone-tool-errors.jsonl'),JSON.stringify({operation:op,code:/^[A-Z0-9_]+$/.test(code)?code:'TOOL_FAILED',at:new Date().toISOString(),...(error?.controller_exit_code!==undefined?{controller_exit_code:error.controller_exit_code,diagnostic:error.diagnostic}:{})})+'\n',{mode:0o600});}catch{revoke('TOOL_DIAGNOSTIC_UNKNOWN');}
+    throw error;
+   }
+  }});
   return {connectionPath:ipc.connectionPath,close};
- }catch(error){await close();throw error;}
+ }catch(error){
+  if(!unknown)revoke('STARTUP_UNKNOWN');await close();throw error;
+ }
 }
 
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){

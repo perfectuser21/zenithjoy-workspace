@@ -92,3 +92,25 @@ test('both collection Darwin shards retain every original kernel file and fail t
   assert.throws(()=>checkGate('code',needs),/collection-phone-darwin-test/);
  }
 });
+
+test('the public 101 file has a fresh required Darwin PG shard and the union retains all original 26 suites',()=>{
+ const doc=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const key='native-103-darwin-test',job=doc.jobs[key],groups=job.strategy?.matrix?.shard;
+ assert.deepEqual(groups,['remaining','public101']);assert.equal(job.strategy['fail-fast'],false);assert.equal(job['timeout-minutes'],20);assert.equal(job['runs-on'],'macos-latest');
+ const step=job.steps.find(s=>s.name==='Run native 103 public executor and real transaction failure paths');
+ assert.equal(step.env.NATIVE_103_DARWIN_SHARD,'${{ matrix.shard }}');assert.match(step.run,/native-103-ci-lifecycle\.test\.mjs/);
+ const cwd=fileURLToPath(new URL('../../../',import.meta.url)),list=group=>{
+  const r=spawnSync(process.execPath,['scripts/ci/native-103-darwin-tests.mjs','--list-suites',group],{cwd,encoding:'utf8',env:{...process.env,PREFLIGHT_TEST_PG_BIN:'/not-used-in-a-readonly-selection'}});
+  assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
+ };
+ const expected=['native-103-public-executor.test.mjs','native-103-transaction.test.mjs','native-103-producers.test.mjs','native-103-claim.test.mjs','native-103-control-scope.test.mjs','native-103-public.test.mjs','native-activity-authority.test.mjs','native-task-lease.test.mjs',...PHONE_DARWIN_SUITES];
+ const publicFiles=list('public101'),remaining=list('remaining'),union=[...remaining,...publicFiles];
+ assert.deepEqual(publicFiles,['native-phone-public-executor.test.mjs']);assert.equal(remaining.length,25);assert.equal(new Set(union).size,26);assert.deepEqual(union.toSorted(),expected.toSorted());assert.deepEqual(list('all').toSorted(),expected.toSorted());
+ const bad=spawnSync(process.execPath,['scripts/ci/native-103-darwin-tests.mjs','--list-suites','missing'],{cwd,encoding:'utf8'});assert.notEqual(bad.status,0);
+ const lifecycle=readFileSync(new URL('../native-103-darwin-tests.mjs',import.meta.url),'utf8');assert.match(lifecycle,/--test-concurrency=1/);assert.match(lifecycle,/selectedSuites\.map/);assert.match(lifecycle,/mkdtempSync/);assert.match(lifecycle,/CREATE DATABASE cecelia_scratch/);assert.match(lifecycle,/pg\.kill\('SIGTERM'\)/);
+ assert.ok(job.name.includes('${{ matrix.shard }}'));assert.ok(doc.jobs['l3-passed'].needs.includes(key));assert.ok(gates.code.always.includes(key));assert.ok(job.steps.some(s=>s.uses==='actions/upload-artifact@v4'&&s.with.name.includes('${{ matrix.shard }}')));
+ for(const result of ['failure','cancelled','skipped','missing']){
+  const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}])),[key]:{result}};
+  assert.throws(()=>checkGate('code',needs),/native-103-darwin-test/);
+ }
+});

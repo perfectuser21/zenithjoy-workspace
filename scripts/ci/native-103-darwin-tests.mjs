@@ -10,6 +10,22 @@ import {PHONE_DARWIN_SUITES} from './native-phone-ci-selection.mjs';
 const require=createRequire(import.meta.url),{Pool}=require('pg');
 const root=resolve(import.meta.dirname,'../..'),sha=b=>createHash('sha256').update(b).digest('hex');
 const suites=['native-103-public-executor.test.mjs','native-103-transaction.test.mjs','native-103-producers.test.mjs','native-103-claim.test.mjs','native-103-control-scope.test.mjs','native-103-public.test.mjs','native-activity-authority.test.mjs','native-task-lease.test.mjs'];
+// 选择只影响测试文件分组；每组仍建立自己的真实临时PG与原预算。
+const allSuites=[...suites,...PHONE_DARWIN_SUITES];
+function selectSuites(shard){
+ if(shard==='all')return allSuites;
+ if(shard==='public101')return ['native-phone-public-executor.test.mjs'];
+ if(shard==='remaining')return allSuites.filter(s=>s!=='native-phone-public-executor.test.mjs');
+ throw Error('NATIVE_103_CI_SHARD_INVALID');
+}
+// 只读清单用于核验CI集合，不启动PG、不伪称Darwin业务测试。
+if(process.argv[2]==='--list-suites'){
+ if(process.argv.length!==4)throw Error('NATIVE_103_CI_LIST_ARGS');
+ process.stdout.write(JSON.stringify(selectSuites(process.argv[3]))+'\n');process.exit(0);
+}
+if(process.argv.length!==2)throw Error('NATIVE_103_CI_ARGS');
+const shard=process.env.NATIVE_103_DARWIN_SHARD||'all',selectedSuites=selectSuites(shard);
+console.log(JSON.stringify({event:'native103-test-selection',shard,suites:selectedSuites}));
 const cancellation=new AbortController(),onTerm=()=>cancellation.abort(Error('CI_SIGTERM')),onInt=()=>cancellation.abort(Error('CI_SIGINT'));
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const freePort=()=>new Promise((resolve,reject)=>{const s=createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(error=>error?reject(error):resolve(port));});});
@@ -50,7 +66,7 @@ try{
  writeFileSync(fixture,JSON.stringify({task_id:'7d85f6ba-873b-40fc-993f-932d24d61e5a',host:'127.0.0.1',port,user:'postgres',database:'cecelia_scratch',data}),{mode:0o600,flag:'wx'});
  const env={...process.env,PREFLIGHT_TEST_PYTHON_BIN:python,ZJ_NATIVE_103_PG_FIXTURE:fixture};
  console.log(JSON.stringify({event:'native103-private-pg-ready',host:'127.0.0.1',port,database:'cecelia_scratch',owned_pid:pg.pid}));
- await run(process.execPath,['--test','--test-concurrency=1',...[...suites,...PHONE_DARWIN_SUITES].map(s=>'services/phone-adb-controller/__tests__/'+s)],{env});
+ await run(process.execPath,['--test','--test-concurrency=1',...selectedSuites.map(s=>'services/phone-adb-controller/__tests__/'+s)],{env});
  await run(python,['services/phone-adb-controller/__tests__/phone-lock-clean-bootstrap.test.py'],{env});
 }finally{
  let stopped=true;

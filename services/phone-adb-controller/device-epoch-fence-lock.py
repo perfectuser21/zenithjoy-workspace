@@ -79,10 +79,14 @@ def snapshot(root, serial):
     need(lock.resolve(strict=True) == lock and not lock.is_symlink() and stat.S_ISDIR(s.st_mode)
          and s.st_uid == os.geteuid() and stat.S_IMODE(s.st_mode) in (0o700, 0o755), 'QUARANTINE')
     names = ['owner', 'pid', 'acquired_at', 'standalone_review_required']
-    need(sorted(p.name for p in lock.iterdir()) == sorted(names), 'FIELDS')
+    actual_names = {p.name for p in lock.iterdir()}
+    need(set(names) <= actual_names <= set(names) | {'standalone_quarantined'}, 'FIELDS')
+    if 'standalone_quarantined' in actual_names:
+        names.append('standalone_quarantined')
     fields = {name: raw_file(lock / name).decode() for name in names}
     need(re.fullmatch(r'[-A-Za-z0-9_]{1,120}\n', fields['owner'])
          and fields['standalone_review_required'] == fields['owner']
+         and fields.get('standalone_quarantined', fields['owner']) == fields['owner']
          and re.fullmatch(r'[1-9][0-9]*\n', fields['pid'])
          and re.fullmatch(r'[0-9]+\n', fields['acquired_at']), 'OWNER')
     return {'root': {'dev': r.st_dev, 'ino': r.st_ino}, 'marker_sha256': hashlib.sha256(marker_raw).hexdigest(),

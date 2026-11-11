@@ -1,5 +1,10 @@
 // 独立 Codex 任务身份；不会注册旧 Runner 身份或授予手机资源。
 import {digest,canonical,validateAgentInput} from './runtime-definition.mjs';
+import {lstatSync,realpathSync,openSync,fstatSync,readFileSync,closeSync,constants} from 'node:fs';
+import {join,resolve,dirname} from 'node:path';
+import {userInfo} from 'node:os';
+import {performance} from 'node:perf_hooks';
+import {processIdentity} from './native-operation-receipt.mjs';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const hash=/^[a-f0-9]{64}$/,commit=/^[a-f0-9]{40}$/;
 const fields=['protocol','task_id','run_id','claimer','claimed_at','machine_id','profile_sha256','skill','scope_sha256','run_binding','task_run_id','company','approved_keywords'];
@@ -55,4 +60,57 @@ export function standaloneTaskProjectionMatches(task,identity,scope){
    &&task.payload?.execution_mode==='standalone-skill'&&canonical(taskScope)===canonical(scope)
    &&canonical(task.payload.skill)===canonical(p.skill)&&digest(scope)===p.scope_sha256&&canonical(c)===canonical(p);
  }catch{return false;}
+}
+
+function hostIdentityFields(frozen,runDirectory){
+ const p=validateStandaloneIdentity(frozen?.standalone_skill),{snapshot_sha256,...body}=frozen;
+ if(frozen.execution_mode!=='agent'||frozen.primary_host!=='codex-exec-v1'||frozen.public_domain!==undefined
+  ||!commit.test(frozen.deployment?.source_commit||'')||!hash.test(snapshot_sha256||'')||digest(body)!==snapshot_sha256
+  ||typeof runDirectory!=='string'||resolve(runDirectory)!==runDirectory||realpathSync(runDirectory)!==runDirectory)fail();
+ return {protocol:'standalone-skill-host-proof/v1',task_id:p.task_id,run_id:p.run_id,task_run_id:p.task_run_id,run_binding_id:p.run_binding.run_binding_id,source_commit:frozen.deployment.source_commit,snapshot_sha256,run_directory:runDirectory};
+}
+export function standaloneHostProofPaths(frozen,{home=userInfo().homedir}={}){
+ const p=validateStandaloneIdentity(frozen?.standalone_skill);
+ if(typeof home!=='string'||resolve(home)!==home||realpathSync(home)!==home)fail();
+ const directory=join(home,'.local/state/zenithjoy/standalone-skill-hosts');
+ return {directory,proof_path:join(directory,p.run_id+'.json'),unknown_path:join(directory,p.run_id+'.unknown.json')};
+}
+function validHostProcess(p){return p&&Number.isSafeInteger(p.pid)&&p.pid>0&&p.uid===process.getuid()&&Number.isSafeInteger(p.ppid)&&p.ppid>=0&&Number.isSafeInteger(p.pgid)&&p.pgid>0&&typeof p.start_identity==='string'&&p.start_identity.length>0;}
+export function createStandaloneHostProof(options){
+ try{
+  if(!options||Object.keys(options).sort().join(',')!=='frozen,runDirectory')fail();
+  const fields=hostIdentityFields(options.frozen,options.runDirectory),process_identity=processIdentity(process.pid,performance.now()+2000);
+  if(!validHostProcess(process_identity)||process_identity.pid!==process.pid)fail();
+  return {...fields,process_identity};
+ }catch{fail();}
+}
+export function readStandaloneHostProof({frozen,runDirectory,home=userInfo().homedir,inspectProcess=processIdentity}){
+ let fd;
+ try{
+  const fields=hostIdentityFields(frozen,runDirectory),paths=standaloneHostProofPaths(frozen,{home});
+  const noUnknown=()=>{try{lstatSync(paths.unknown_path);}catch(e){if(e.code==='ENOENT')return;throw e;}fail();};
+  const privateDirectory=()=>{
+   for(let p=paths.directory;;p=dirname(p)){if(lstatSync(p).isSymbolicLink())fail();if(dirname(p)===p)break;}
+   const d=lstatSync(paths.directory);if(!d.isDirectory()||d.uid!==process.getuid()||(d.mode&0o777)!==0o700||realpathSync(paths.directory)!==paths.directory)fail();return d;
+  };
+  const directory=privateDirectory();noUnknown();
+  fd=openSync(paths.proof_path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const info=fstatSync(fd);
+  if(!info.isFile()||info.uid!==process.getuid()||(info.mode&0o777)!==0o600||info.nlink!==1||info.size>65536)fail();
+  const raw=readFileSync(fd,'utf8'),record=JSON.parse(raw),{process_identity,...actual}=record;
+  if(canonical(actual)!==canonical(fields)||!validHostProcess(process_identity))fail();
+  const observed=inspectProcess(process_identity.pid,performance.now()+2000);
+  if(!validHostProcess(observed)||canonical(observed)!==canonical(process_identity))fail();
+  const current=fstatSync(fd),named=lstatSync(paths.proof_path),currentDirectory=privateDirectory();
+  if(realpathSync(paths.proof_path)!==paths.proof_path||named.dev!==info.dev||named.ino!==info.ino||named.nlink!==1||(named.mode&0o777)!==0o600
+   ||current.dev!==info.dev||current.ino!==info.ino||current.size!==info.size||current.mtimeMs!==info.mtimeMs||current.ctimeMs!==info.ctimeMs
+   ||currentDirectory.dev!==directory.dev||currentDirectory.ino!==directory.ino)fail();
+  noUnknown();return structuredClone(record);
+ }catch{fail();}finally{if(fd!==undefined)closeSync(fd);}
+}
+export function standaloneLocalLockQuarantined(frozen,names,marker){
+ if(!Array.isArray(names)||names.some(n=>['standalone_quarantined','preflight_quarantined','preflight_proof_required','epoch_fence_lost'].includes(n)))return true;
+ const standalone=frozen?.standalone_skill?.protocol==='codex-exec-v1'&&frozen.execution_mode==='agent'&&frozen.primary_host==='codex-exec-v1'&&frozen.public_domain===undefined;
+ if(!standalone)return names.includes('standalone_review_required');
+ return !names.includes('standalone_review_required')||typeof frozen.run_identity?.tag!=='string'||marker!==frozen.run_identity.tag+'\n';
 }

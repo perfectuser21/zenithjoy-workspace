@@ -342,7 +342,12 @@ jobs:
         run: node --test services/listing-workflow/__tests__/*.test.mjs
 
   native-103-darwin-test:
-    name: Native 103 Darwin PostgreSQL Test
+    name: Native 103 Darwin PostgreSQL Test (${{ matrix.shard }})
+    # public101保留原预算，在独立fresh PG owner实跑；不得以分片掩盖真实Worker deadline。
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [remaining, public101]
     runs-on: macos-latest
     timeout-minutes: 20
     permissions:
@@ -370,6 +375,8 @@ jobs:
           echo "PREFLIGHT_TEST_PIL_ROOT=$RUNNER_TEMP/native-phone-pillow/PIL" >> "$GITHUB_ENV"
           echo "PREFLIGHT_TEST_PHONE_ARTIFACTS=$RUNNER_TEMP/native-phone-fixture-artifacts" >> "$GITHUB_ENV"
       - name: Run native 103 public executor and real transaction failure paths
+        env:
+          NATIVE_103_DARWIN_SHARD: ${{ matrix.shard }}
         run: |
           node --test scripts/ci/__tests__/native-103-ci-lifecycle.test.mjs
           node scripts/ci/native-103-darwin-tests.mjs
@@ -377,7 +384,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: native-phone-fixture-failures
+          name: native-phone-fixture-failures-${{ matrix.shard }}
           path: ${{ runner.temp }}/native-phone-fixture-artifacts
           if-no-files-found: ignore
 
