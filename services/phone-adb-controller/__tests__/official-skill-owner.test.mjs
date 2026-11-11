@@ -285,3 +285,19 @@ for(const boundary of ['wait-thrown-effect-unknown','ack-raw-effect-unknown','ac
  assert.equal(run.execution_stopped,false);assert.equal(api.officialOwnerRunTerminated(run,f.request),false);assert.equal(api.officialOwnerTerminated(run,f.request),false);
  assert.equal(agents,1);assert.ok(waits<=1);assert.deepEqual(f.request,original);await assert.rejects(()=>api.closeOfficialSkillOwner({...f,result:run}));
 });
+
+test('同一原截止内单连接关闭完整七读，不能重新启动七次CLI耗尽预算',async t=>{
+ const f=fixture(t),execute=f.execute;
+ f.request.receipt_deadline_ms=Date.now()+2200;writeFileSync(join(f.directory,'activity-request.json'),JSON.stringify(f.request));
+ const run=await api.runOfficialSkillOwner(f),methods=[];let opened=0,connectionClosed=false;
+ const ownerReadConnectionFactory=async()=>{
+  opened++;
+  return {async read(method,params){methods.push(method);const raw=await execute('openclaw',['gateway','call',method,'--params',JSON.stringify(params)],{timeoutMs:1000});return {body:JSON.parse(raw.stdout),request_id:String(methods.length)};},async close(){connectionClosed=true;return {protocol:'official-owner-read-connection/v1',connection_count:1,reconnect_count:0,pending_request_count:0,request_closed:true,websocket_closed:true,socket_closed:true,shutdown_seen:false,restart_seen:false};}};
+ };
+ const slowCLI=async(...args)=>{await new Promise(r=>setTimeout(r,400));return execute(...args);};
+ const result=await api.closeOfficialSkillOwner({...f,result:run,execute:slowCLI,ownerReadConnectionFactory});
+ assert.equal(result.execution_stopped,true,'原截止不能被每读启动CLI开销耗尽');
+ assert.equal(opened,1);assert.equal(connectionClosed,true);
+ assert.deepEqual(methods,['sessions.describe','chat.history','tools.invoke','sessions.describe','chat.history','tools.invoke','sessions.describe']);
+ assert.equal(api.officialOwnerTerminated(result,f.request),true);
+});
