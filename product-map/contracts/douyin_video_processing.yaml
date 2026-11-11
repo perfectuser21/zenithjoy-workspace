@@ -303,6 +303,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-pillow-mmv.json
         revision: contract
       - kind: code
@@ -1042,6 +1046,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-pillow-mmv.json
         revision: contract
       - kind: code
@@ -1687,6 +1695,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -2538,6 +2550,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-pillow-mmv.json
         revision: contract
       - kind: code
@@ -3312,6 +3328,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

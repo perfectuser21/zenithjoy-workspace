@@ -10,19 +10,29 @@ const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArra
 const selectedEnv=e=>Object.fromEntries(['HOME','WFR_RUN_DIR','P','SERIAL','WFR_TAG','DOUYIN_PHONE_LOCK_ROOT','DOUYIN_PHONE_REGISTRY','ADB_SERVER_SOCKET','DOUYIN_ADB_PORT','ZJ_ADB_HOST_CONFIG'].map(k=>[k,e?.[k]]));
 const key=c=>canonical({root:c.root,frozen:c.frozen,scope:c.scope,binding:c.binding,taskId:c.taskId,env:selectedEnv(c.env)});
 const fail=code=>Object.assign(Error('PHONE_OPERATION_'+code),{code:'PHONE_OPERATION_'+code,resourceUnknown:true,externalEffect:'unknown'});
-export function phoneOperationKind(spec){
+function reviewedUsbSource({root,frozen,spec,workflow}){
+ const read=name=>{const path=join(root,name),expected=frozen.files['runtime/'+name],st=lstatSync(path);if(!expected||!st.isFile()||st.isSymbolicLink()||st.mode&0o022||realpathSync(path)!==path)throw fail('SOURCE');const bytes=readFileSync(path);if(sha(bytes)!==expected)throw fail('SOURCE');return bytes;};
+ const hosts=JSON.parse(read('config/collection-phone-hosts.json')).hosts.filter(h=>h.profile===spec.profile&&h.serial===spec.serial&&h.target===spec.target);
+ if(hosts.length!==1||canonical(hosts[0].policy)!==canonical(spec.policy)||hosts[0].expected_account!==spec.expected_account||!Array.isArray(hosts[0].workflow_keys)||!hosts[0].workflow_keys.includes(workflow))throw fail('USB_REGISTRY');
+ const rows=JSON.parse(read('config/native-phone-command-sources.json')).device_sources.filter(r=>r.profile===spec.profile&&r.serial===spec.serial);
+ if(rows.length!==1||rows[0].device_sdk!==spec.policy_binding.usb_local.device_sdk||!rows[0].review||typeof rows[0].review.path!=='string'||!rows[0].review.path.startsWith('config/native-phone-reviews/')||rows[0].review.path.split('/').some(p=>!p||p==='.'||p==='..')||frozen.files['runtime/'+rows[0].review.path]!==rows[0].review.sha256||sha(read(rows[0].review.path))!==rows[0].review.sha256)throw fail('USB_REVIEW');
+ return rows[0];
+}
+export function phoneOperationKind(spec,context){
  const p=spec?.policy,u=spec?.policy_binding?.usb_local;
  if(p?.schema_version===2)return 'cloud-epoch';
- return p?.schema_version===1&&spec.target==='xian-m4'&&spec.profile==='xiaolongxia'&&spec.serial==='ANGYVB4311010223'&&spec.expected_account==='90915521618'
+ const usb=p?.schema_version===1&&spec.target==='xian-m4'&&[spec.profile,spec.serial,spec.expected_account].every(v=>typeof v==='string'&&v.length>0&&v.length<=160&&!/[\r\n\0]/.test(v))
   &&p.host_id==='xian-m4'&&p.transport==='usb'&&p.endpoint==='tcp:127.0.0.1:5037'&&canonical(p.forbidden_ports)===canonical([5041,5042])
-  &&u?.protocol==='usb-local-lease/v1'&&u.device_sdk===35&&u.transport?.serial===spec.serial&&typeof u.transport.transport_id==='string'&&/^[1-9]\d*$/.test(u.transport.transport_id)
-  &&typeof u.transport.usb_path==='string'&&/^[-0-9.]+$/.test(u.transport.usb_path)&&u.daemon?.endpoint===p.endpoint?'usb-local':null;
+  &&u?.protocol==='usb-local-lease/v1'&&Number.isSafeInteger(u.device_sdk)&&u.device_sdk>0&&u.transport?.serial===spec.serial&&typeof u.transport.transport_id==='string'&&/^[1-9]\d*$/.test(u.transport.transport_id)
+  &&typeof u.transport.usb_path==='string'&&/^[-0-9.]+$/.test(u.transport.usb_path)&&u.daemon?.endpoint===p.endpoint;
+ if(!usb)return null;
+ try{reviewedUsbSource({...context,spec});return 'usb-local';}catch{return null;}
 }
 export function isPhoneOperationAdmission(value,context){try{return records.has(value)&&records.get(value)===key(context);}catch{return false;}}
 export function createPhoneOperationAdmission(context,dependencies={}){
  const {root,env,frozen,state={},scope,binding,taskId,assertAuthority}=context;
  const fixed=structuredClone(frozen),spec=fixed.discovery_phone_scope||fixed.collection_phone_scope,identity=key(context),input=fixed.agent_input;
- const kind=phoneOperationKind(spec);
+ const kind=phoneOperationKind(spec,{root,frozen:fixed,workflow:input?.workflow_key});
  if(!kind||typeof assertAuthority!=='function'||!scope||scope.task_id!==taskId||input?.task_id!==taskId||scope.run_id!==binding?.run_id||scope.binding_id!==binding?.id
   ||scope.source_commit!==fixed.deployment?.source_commit||scope.snapshot_sha256!==fixed.snapshot_sha256||scope.profile!==spec?.profile||scope.serial!==spec?.serial||scope.profile!==input.profile||scope.serial!==input.serial||env.P!==input.profile||env.SERIAL!==input.serial||scope.run!==input.run_tag||env.WFR_TAG!==input.run_tag||spec.run_id!==binding.run_id
   ||![scope.worker_deadline_ms,scope.receipt_deadline_ms,scope.deadline_ms].every(Number.isSafeInteger)||scope.worker_deadline_ms>=scope.receipt_deadline_ms||scope.receipt_deadline_ms>=scope.deadline_ms)throw fail('SCOPE');
@@ -43,11 +53,9 @@ export function createPhoneOperationAdmission(context,dependencies={}){
    if(!s.isFile()||s.isSymbolicLink()||realpathSync(path)!==path||s.mode&0o022||sha(readFileSync(path))!==expected)throw fail('SOURCE');
   }
   for(const name of ['phone-operation-admission.mjs','preflight-native-domain.mjs','collection-leaf-producer.mjs','config/collection-phone-hosts.json','config/native-phone-command-sources.json'])if(!fixed.files['runtime/'+name])throw fail('SOURCE');
-  const hosts=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.filter(h=>h.profile===spec.profile&&h.serial===spec.serial&&h.target===spec.target);
-  if(hosts.length!==1||canonical(hosts[0].policy)!==canonical(policy)||hosts[0].expected_account!==spec.expected_account)throw fail('USB_REGISTRY');
-  const rows=JSON.parse(readFileSync(join(root,'config/native-phone-command-sources.json'))).device_sources.filter(r=>r.profile===spec.profile&&r.serial===spec.serial);
-  if(rows.length!==1||rows[0].device_sdk!==35||fixed.files['runtime/'+rows[0].review.path]!==rows[0].review.sha256||sha(readFileSync(join(root,rows[0].review.path)))!==rows[0].review.sha256)throw fail('USB_REVIEW');
-  const profile=assertPreflightProfile({env,frozen:fixed});if(profile.width!==rows[0].width||profile.height!==rows[0].height)throw fail('USB_REVIEW');
+  const reviewed=reviewedUsbSource({root,frozen:fixed,spec,workflow:input.workflow_key});
+  if(scope.workflow!==input.workflow_key)throw fail('USB_REGISTRY');
+  const profile=assertPreflightProfile({env,frozen:fixed});if(profile.width!==reviewed.width||profile.height!==reviewed.height)throw fail('USB_REVIEW');
   const path=usb.daemon.policy_path,s=lstatSync(path);
   if(!s.isFile()||s.isSymbolicLink()||s.uid!==process.getuid()||(s.mode&0o777)!==0o600||s.nlink!==1||realpathSync(path)!==path)throw fail('USB_POLICY');
   const raw=readFileSync(path),actual=JSON.parse(raw);
@@ -103,7 +111,7 @@ export function createPhoneOperationAdmission(context,dependencies={}){
    if(kind==='cloud-epoch'){current();await authority(request);prepared=true;return request.resourceOnly?{authorized:true}:await epoch();}
    await prepare();current();
    const proof=await guard(request);
-   if(!request.resourceOnly&&!sdkVerified){const sdk=(await domain.adb('shell','getprop','ro.build.version.sdk')).trim();if(sdk!=='35')throw fail('USB_SDK');sdkVerified=true;await guard(request);}
+   if(!request.resourceOnly&&!sdkVerified){const sdk=(await domain.adb('shell','getprop','ro.build.version.sdk')).trim();if(sdk!==String(usb.device_sdk))throw fail('USB_SDK');sdkVerified=true;await guard(request);}
    return Object.freeze({authorized:true,kind,...(proof.central?{central:structuredClone(proof.central)}:{})});
   }catch(error){throw taint(error);}
  }

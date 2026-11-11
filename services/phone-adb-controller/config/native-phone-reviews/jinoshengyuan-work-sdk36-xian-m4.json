@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "host": "xian-m4",
+    "profile": "jinoshengyuan-work",
+    "serial": "ANGYVB4227006983",
+    "device_sdk": 36,
+    "width": 1200,
+    "height": 2664,
+    "package": "com.ss.android.ugc.aweme"
+  },
+  "source_method": "two independent bounded adb exec-out cat reads; exit0 and complete stdout; no UI actions",
+  "evidence": [
+    {
+      "path": "/Users/administrator/.codex-team1/artifacts/pstack-commander-repair-20261110/physical-phone-20261112/blue-sdk36-source-observation.json",
+      "sha256": "b29559c49ba0bdfed8cd4ae6b7bdd9b297fea7b1a13c0f423770b8e32333e418"
+    },
+    {
+      "path": "/Users/administrator/.codex-team1/artifacts/pstack-commander-repair-20261110/physical-phone-20261112/blue-sdk36-source-bytes/receipts.json",
+      "sha256": "e20890100d125dbbd3ef7a1417c5ae05dd415e2bbaad55335d007cea92f5729c"
+    },
+    {
+      "path": "/Users/administrator/.codex-team1/artifacts/pstack-commander-repair-20261110/physical-phone-20261112/readiness-resume/sdk36-source-rpa-audit.json",
+      "sha256": "5dd0361c3625ea7d25c43d5249be80d4d5000169f6a1a8c51c3f1b0613488067"
+    }
+  ],
+  "source_observations": {
+    "programs": 19,
+    "independent_reads": 38,
+    "all_reads_exit_zero": true,
+    "all_pairs_agree": true,
+    "independent_wrapper_texts": 7
+  },
+  "program_files": [
+    {
+      "path": "/system/bin/am",
+      "sha256": "24917ebf4ed753b96ceacac75762f6dc0d5c04dbe34d62020ceceaeae12c3f4d"
+    },
+    {
+      "path": "/system/bin/app_process",
+      "sha256": "93bf15c773776723022231eb1da227ace715a696ccd8c5693fbd2d928dc9cf24"
+    },
+    {
+      "path": "/system/bin/app_process32",
+      "sha256": "197fbf5503316462b57b04f3a485b3baef5ff208ec37ab9bc05dfa7159332d9e"
+    },
+    {
+      "path": "/system/bin/app_process64",
+      "sha256": "93bf15c773776723022231eb1da227ace715a696ccd8c5693fbd2d928dc9cf24"
+    },
+    {
+      "path": "/system/bin/cmd",
+      "sha256": "6804df68036232c82ad344cb6fcb9cf2675411acd2dd350f2b899a57170a73ad"
+    },
+    {
+      "path": "/system/bin/dumpsys",
+      "sha256": "6798ebccdce2e15ea55fe90664511849a692432c3b8a454f245d9b2522a014ee"
+    },
+    {
+      "path": "/system/bin/getprop",
+      "sha256": "4a05432867e0fc87f3ca2df3fddc9badd4040b6d09cb4b0f8a1ef8202d1ed573"
+    },
+    {
+      "path": "/system/bin/ime",
+      "sha256": "d0959c12d988f12b92b075a2222a0df1b66e1764f64ce75ef3d4bd9eacb282b7"
+    },
+    {
+      "path": "/system/bin/input",
+      "sha256": "108767c95965714fd7194257f37f6fe5d90f81ff9279e20a2326c1f7f63b737d"
+    },
+    {
+      "path": "/system/bin/monkey",
+      "sha256": "1cde380f3deaf3a8a075c96f8342a444ba96d12a6ea5773c882c31fe3a68b310"
+    },
+    {
+      "path": "/system/bin/screencap",
+      "sha256": "cb353377bdafc39774ab4473033989506da493c6197c497e7b905ff47b4e53b5"
+    },
+    {
+      "path": "/system/bin/settings",
+      "sha256": "5c447700471b694854e201453d8a588505e9a0913ca9583429dc6c9bfcef4dde"
+    },
+    {
+      "path": "/system/bin/sh",
+      "sha256": "4e925f869db65b809b381608b28f62c212f0a8473fb9db91681dda5112fd2d25"
+    },
+    {
+      "path": "/system/bin/toybox",
+      "sha256": "90b08e2509ebfd0d00eebc81fecd9407315675d3deba8eb74136094bd3d27a8b"
+    },
+    {
+      "path": "/system/bin/uiautomator",
+      "sha256": "588f4e89975e626c1ae185c350389e4fad005b2cb9525834a42dfa7dfd548545"
+    },
+    {
+      "path": "/system/bin/wm",
+      "sha256": "6aa95202ca1b2a691737daffc979bfd81dd497f2493cb37dc0972faf6af3fae2"
+    },
+    {
+      "path": "/system/framework/android.test.runner.jar",
+      "sha256": "b99c1ad8b79ab9aff340c207895b86b9f4e13849beaa311492c84b91a06e63c6"
+    },
+    {
+      "path": "/system/framework/monkey.jar",
+      "sha256": "3fbb3c8a30d899d29ff0c1c767d1a818798a90e92427698b6c4c6dd205b5d631"
+    },
+    {
+      "path": "/system/framework/uiautomator.jar",
+      "sha256": "a76f2710634810ea17a0f84f8195e8d2550aaffd5ef6d71e8ef7b663593d3f17"
+    }
+  ],
+  "command_set": "unchanged from xiaolongxia SDK35; no additional operations, paths or argument templates",
+  "trust_limits": [
+    "两轮来源收集真实方法为bounded adb exec-out cat，receipt含exit0/stderr/time/bytes/hash；它不是正式run内native sync RECV授权或远端停止证明。",
+    "Android wrapper对cmd/app_process/mkdir按可信系统PATH解析，与既有有限编译器假设一致；本次没有声称全操作系统或Android服务依赖闭包。",
+    "SDK与分辨率来源为root单独只读观测，本agent未碰手机；正式运行必须按本次选定serial再次核实际SDK并逐源RECV。",
+    "SDK31/35 review仅作为原合同对照，未将旧hash或旧运行结论充作SDK36证明。",
+    "新增review/config/manifest/host准入尚未实现，本报告允许作为源码审核输入，不构成部署或业务执行权。"
+  ],
+  "runtime_requirements": [
+    "Fresh SDK36 and same serial, Task/run, central lease and owned local lock; verify every source through runtime sync RECV before granting a command.",
+    "shell-v2 EXIT, EOF, model output and CLI exit do not prove all owned execution stopped; unresolved operations remain unknown.",
+    "102 still requires pinned scrcpy 3.3.4 SDK33+ client/server bytes, actual SDK, real audio stream and decoded audio plus original producer closure; source review is not audio acceptance."
+  ],
+  "business_verified": false
+}

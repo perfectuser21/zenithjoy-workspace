@@ -28,7 +28,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -91,7 +91,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -245,7 +245,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -637,7 +644,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -665,7 +672,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -700,7 +707,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -885,13 +892,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "231eb78e7ec8142f8e65153dd15c5466ce54831f19aa4562e5636049aa121786",
+      "code_digest": "f60b5339345999ffd63d341be7d5c246826a27d8ef8f343248a40bcfb94b73f9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "ad9644d414ecc66aaee76afb2bed46c05c6fe8b1f05e5acd35783f01232a7790",
-        "current_code_digest": "231eb78e7ec8142f8e65153dd15c5466ce54831f19aa4562e5636049aa121786"
+        "current_code_digest": "f60b5339345999ffd63d341be7d5c246826a27d8ef8f343248a40bcfb94b73f9"
       }
     },
     "douyin_video_processing.preflight": {
@@ -921,7 +928,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -984,7 +991,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -1145,7 +1152,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -1579,7 +1593,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -1607,7 +1621,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -1642,7 +1656,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -1810,13 +1824,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ee9f629a623a1ead936212cac26ca7941ada952c2bbd0eda96e374c27cd61abf",
+      "code_digest": "9422076825516ba418f824a7e1f302b5bb7b5728ac456bce7aa40b64a83033b0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "a0a2883739a2567c81f985e77038e21dade4183d3f7e38c6e36a4d897be02753",
-        "current_code_digest": "ee9f629a623a1ead936212cac26ca7941ada952c2bbd0eda96e374c27cd61abf"
+        "current_code_digest": "9422076825516ba418f824a7e1f302b5bb7b5728ac456bce7aa40b64a83033b0"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1846,7 +1860,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -1909,7 +1923,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -2063,7 +2077,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -2448,7 +2469,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -2476,7 +2497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -2511,7 +2532,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -2682,13 +2703,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "d00ff9167bbd9cd147a20d385381b83034cf94a1c733f4d6984bfa24e3991c79",
+      "code_digest": "1464efe2ab9127fbad527126ce9031c26f8d12338ecf8acd5105f8bc2f42c934",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "9ba12958ba4b7e30f76b90ecda6a867b6df64b0d2ef23790d44bd7fb1bb0900c",
-        "current_code_digest": "d00ff9167bbd9cd147a20d385381b83034cf94a1c733f4d6984bfa24e3991c79"
+        "current_code_digest": "1464efe2ab9127fbad527126ce9031c26f8d12338ecf8acd5105f8bc2f42c934"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2718,7 +2739,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -2781,7 +2802,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -2935,7 +2956,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -3348,7 +3376,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -3376,7 +3404,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -3411,7 +3439,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -3638,13 +3666,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "37d97d42de085c977e7a7386a333f558392429bbbb6c7a5ddd199ed27adef296",
+      "code_digest": "b14d24eb42b2e0fde50241ad53c84e3383d3ec620e959668794eaf4358a27b1c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "6a2172b6c569ae8d5886c52488ad98b9cb6bc2b7c41f0de4ea6634b412167c5c",
-        "current_code_digest": "37d97d42de085c977e7a7386a333f558392429bbbb6c7a5ddd199ed27adef296"
+        "current_code_digest": "b14d24eb42b2e0fde50241ad53c84e3383d3ec620e959668794eaf4358a27b1c"
       }
     },
     "douyin_video_processing.collection": {
@@ -3674,7 +3702,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -3737,7 +3765,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -3891,7 +3919,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -4276,7 +4311,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -4304,7 +4339,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -4339,7 +4374,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -4532,13 +4567,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "b40a3710c97a7f079343ff2f50e4d729f42401cf13a50604f4def3c9b995e311",
+      "code_digest": "8ef594b948be9b7accdb2f44df99d5b5571b6163cd8c20ba1844c887ac8f89fc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "f5146f9bebe27eddb7256055990e87c4372776153aceee4023185d77459f6ad7",
-        "current_code_digest": "b40a3710c97a7f079343ff2f50e4d729f42401cf13a50604f4def3c9b995e311"
+        "current_code_digest": "8ef594b948be9b7accdb2f44df99d5b5571b6163cd8c20ba1844c887ac8f89fc"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4568,7 +4603,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -4631,7 +4666,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -4785,7 +4820,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -5205,7 +5247,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -5233,7 +5275,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -5268,7 +5310,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -5435,13 +5477,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7e814edc25e744aae33b8eba00c87765eebbf764c04de94a390d7f91829177fd",
+      "code_digest": "63adf078e0bc71485561279ad7913a5965071a9e203dac50e22d8665db0b090c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "4a89a68b0476516efb1c9071e6ba0a2abeadf3dd687fd36289c28ecc7e54313f",
-        "current_code_digest": "7e814edc25e744aae33b8eba00c87765eebbf764c04de94a390d7f91829177fd"
+        "current_code_digest": "63adf078e0bc71485561279ad7913a5965071a9e203dac50e22d8665db0b090c"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5471,7 +5513,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -5534,7 +5576,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -5702,7 +5744,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -6080,7 +6129,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -6108,7 +6157,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -6143,7 +6192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -6321,13 +6370,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "69a4ac4329515b6f498c3b01fd2742d06cbd0ab6c0d787a8ef01d078500f1432",
+      "code_digest": "734a7f5404519b4880943c21c437fa2889c9bea5d7e4a37b638a9f1d9f622498",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "e6c37065d34d7bf595b3087ecc6f6d7bdaa3d8abcfebc9eed1c994316f75c6dd",
-        "current_code_digest": "69a4ac4329515b6f498c3b01fd2742d06cbd0ab6c0d787a8ef01d078500f1432"
+        "current_code_digest": "734a7f5404519b4880943c21c437fa2889c9bea5d7e4a37b638a9f1d9f622498"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6357,7 +6406,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -6420,7 +6469,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -6588,7 +6637,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -6973,7 +7029,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -7001,7 +7057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -7036,7 +7092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -7249,13 +7305,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "051264898f34faddbb44f12f49d778036a40bcbe212938239c6052ab95592cfc",
+      "code_digest": "1fcd64c6dcb08c9d8c98119bf77e8cd0edfc9043827e4fdedc654c7c11a3d4bb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "2300e126d0592a1fe8abefbba9642c2e4df6b8c00bb64bcb6b4b15055c452353",
-        "current_code_digest": "051264898f34faddbb44f12f49d778036a40bcbe212938239c6052ab95592cfc"
+        "current_code_digest": "1fcd64c6dcb08c9d8c98119bf77e8cd0edfc9043827e4fdedc654c7c11a3d4bb"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7281,7 +7337,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -7344,7 +7400,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -7498,7 +7554,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -7841,7 +7904,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -7869,7 +7932,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -7904,7 +7967,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -8107,13 +8170,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ad2a76abd257be72b3b20b04a5ad32ba864f75904fd26de19adbae62a79280c9",
+      "code_digest": "f02241c4b07398e82519acae2a0d5c80cba059e909483ebdd936f6ac69a4d2e5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "aec4700aedd7ef50c0cb6402f47c0daa018e6b247815fc2d4d1d4731707a2f16",
-        "current_code_digest": "ad2a76abd257be72b3b20b04a5ad32ba864f75904fd26de19adbae62a79280c9"
+        "current_code_digest": "f02241c4b07398e82519acae2a0d5c80cba059e909483ebdd936f6ac69a4d2e5"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8139,7 +8202,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -8202,7 +8265,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -8356,7 +8419,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -8699,7 +8769,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -8727,7 +8797,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -8762,7 +8832,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -8940,13 +9010,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9f22ee30e103653352e9c17ce97b8d1090d3ee0f641aceed96c4ee08595293d8",
+      "code_digest": "71aac274acdb101bec2224ec42466c7c0227f4dba9e73eb85b6e0dfcafd18dad",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "c89eb8720c6c5ff6fd3486c73938848d23a838d2b2592ca4279e609df07c4b8e",
-        "current_code_digest": "9f22ee30e103653352e9c17ce97b8d1090d3ee0f641aceed96c4ee08595293d8"
+        "current_code_digest": "71aac274acdb101bec2224ec42466c7c0227f4dba9e73eb85b6e0dfcafd18dad"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8972,7 +9042,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -9035,7 +9105,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -9189,7 +9259,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -9532,7 +9609,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -9560,7 +9637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -9595,7 +9672,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -9766,13 +9843,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a1edfe4b01a3064234d1a291ca75fd881a201f62a142b340db7ff9b69079b96e",
+      "code_digest": "dae2055b1d003802a2db71a9c7e3dfd4d0da5846669c9fdfcbde9d6280e5e30c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "17b8687c69de8a9a536a1e898d82610a8e347d2958b74da626745f1c83734466",
-        "current_code_digest": "a1edfe4b01a3064234d1a291ca75fd881a201f62a142b340db7ff9b69079b96e"
+        "current_code_digest": "dae2055b1d003802a2db71a9c7e3dfd4d0da5846669c9fdfcbde9d6280e5e30c"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9798,7 +9875,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-execution.mjs",
           "revision": "contract",
-          "sha256": "aa8cef060503d9e9d73b5c2653e11a28f08d09990e87ded041de969670835d6e"
+          "sha256": "10c74c926bd2a0129d6d4cd3f74bdc3579c347f1f46ead6e0770d32bbcd3580c"
         },
         {
           "kind": "code",
@@ -9861,7 +9938,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-operation-admission.mjs",
           "revision": "contract",
-          "sha256": "45295248615e72287df03f54eb5752bce46313bbee3520a90e3bd5ebfaef8342"
+          "sha256": "dba7f3a0b8a3c9ba4bac70fd3aea49baa9a6499a496ac525bfd8c726e7fd03b0"
         },
         {
           "kind": "code",
@@ -10015,7 +10092,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/native-phone-command-sources.json",
           "revision": "contract",
-          "sha256": "8c5079da271eca91351f7cd56365a70067a85d57a13cd890eaafb5e2655a303c"
+          "sha256": "9da34ab5618b345df4bc09c4c206f456a5ffbcbd1046eb7e2903d167983f976a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+          "revision": "contract",
+          "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
         },
         {
           "kind": "code",
@@ -10358,7 +10442,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a92cd7e0e0be9c5093efafef1cca2b67caf5736e967ef7c881eed560284b75c0"
+          "sha256": "9c7979c4b15da18a857720048c2a3045c8a10c64deeced53fd5dfcc53552ee73"
         },
         {
           "kind": "code",
@@ -10386,7 +10470,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e1e5aac680c5d62b284ccaf322254596378d1506a3a2254959cf88700d4d6be8"
+          "sha256": "b63215b574f713d191367a6939d6b519a5f653e0a4e3cb402547cfc883d97e18"
         },
         {
           "kind": "code",
@@ -10421,7 +10505,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "e1929bf88bb737abf0d1bb3a8f96d551157bbcdb79de66c48edd6245dc172ec1"
+          "sha256": "6e31648a215d8b412f59bd20b7896887b1a99b94ccffc90b549a1ffee244b001"
         },
         {
           "kind": "code",
@@ -10602,13 +10686,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "67d89e4c12a3e0e63773b150d5940acca1dd6c18f4520a6bbf855343a9c2b829",
+      "code_digest": "04b5bbaf14ebbd60617d360f90f89abebb119a8daf6195f1fa79640df70ed6fb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "合并main最新独立Skill及epoch兼容代码，保留本PR受控M4双端接入、单连接owner、只读socket接收及每claim持久化屏障；只变运行闭包与准入，不改变Activity合同、Skill正文、DoD、业务政策或原截止。完整真机验收尚未完成。",
-        "reviewed_by": "/root/m4_peer_finish",
+        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
+        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "1ecf533a325bdde260930244968401552f17e619e9f66f8a026960a87eddcf98",
-        "current_code_digest": "67d89e4c12a3e0e63773b150d5940acca1dd6c18f4520a6bbf855343a9c2b829"
+        "current_code_digest": "04b5bbaf14ebbd60617d360f90f89abebb119a8daf6195f1fa79640df70ed6fb"
       }
     }
   },

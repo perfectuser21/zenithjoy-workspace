@@ -1,13 +1,14 @@
 import {readFileSync,lstatSync,realpathSync} from 'node:fs';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {peerHash,peerCanonical} from './official-phone-peer-protocol.mjs';
 const need=(v,code)=>{if(!v)throw Error('OFFICIAL_PHONE_EXECUTION_'+code);};
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const same=(a,b)=>peerCanonical(a)===peerCanonical(b);
 export const phoneExecutionHash=value=>peerHash(value);
-export function validatePhoneExecution(value,{sourceCommit,workflow,resources}={}){
+export function validatePhoneExecution(value,{sourceCommit,workflow,resources,runtimeRoot=dirname(fileURLToPath(import.meta.url))}={}){
  const d=structuredClone(value),f=d?.snapshot,m=d?.deployment,r=d?.release;
- need(d?.protocol==='official-phone-execution/v1'&&d.host==='xian-m4'&&d.profile==='xiaolongxia'&&d.serial==='ANGYVB4311010223'&&d.account==='90915521618','IDENTITY');
+ need(d?.protocol==='official-phone-execution/v1'&&d.host==='xian-m4'&&[d.profile,d.serial,d.account].every(v=>typeof v==='string'&&v.length>0&&v.length<=160&&!/[\r\n\0]/.test(v)),'IDENTITY');
  need(/^[a-f0-9]{40}$/.test(sourceCommit||'')&&m?.source_commit===sourceCommit&&m.target==='xian-m4'&&m.environment===`staging:${sourceCommit}`,'SOURCE');
  need(d.runtime_root===`/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-candidates/${sourceCommit}/runtime`&&d.run_root==='/Users/jinnuoshengyuan/.local/share/zenithjoy/official-phone-runs','PATH');
  need(uuid.test(r?.id||'')&&uuid.test(m.observation_id||'')&&m.release_id===r.id&&r.target==='xian-m4'&&r.environment===m.environment&&r.manifest_sha256===peerHash({environment:r.environment,target:r.target,payload:r.payload}),'RELEASE');
@@ -19,11 +20,17 @@ export function validatePhoneExecution(value,{sourceCommit,workflow,resources}={
  if(workflow==='douyin_video_processing')for(const name of ['scp','ssh'])need(d.audio_transfer?.executables?.[name]?.path==='/usr/bin/'+name&&/^[a-f0-9]{64}$/.test(d.audio_transfer.executables[name].sha256),'AUDIO_TRANSFER');
  const scope=f.discovery_phone_scope||f.collection_phone_scope;
  need(scope?.target==='xian-m4'&&scope.profile===d.profile&&scope.serial===d.serial&&scope.expected_account===d.account&&scope.policy?.schema_version===1&&scope.policy.host_id==='xian-m4'&&scope.policy.transport==='usb'&&scope.policy.endpoint==='tcp:127.0.0.1:5037'&&same(scope.policy.forbidden_ports,[5041,5042]),'USB');
- need(scope.policy_binding?.usb_local?.protocol==='usb-local-lease/v1'&&scope.policy_binding.usb_local.device_sdk===35,'USB_BINDING');
+ need(scope.policy_binding?.usb_local?.protocol==='usb-local-lease/v1'&&Number.isSafeInteger(scope.policy_binding.usb_local.device_sdk)&&scope.policy_binding.usb_local.device_sdk>0,'USB_BINDING');
  need(f.preflight_profile?.profile===d.profile&&f.preflight_profile?.serial===d.serial&&f.preflight_profile.enabled===true,'PROFILE');
  const files=Object.fromEntries(Object.entries(f.files||{}).filter(([p])=>p.startsWith('runtime/')).map(([p,h])=>[p.slice(8),h]));
  need(Array.isArray(m.files)&&m.files.length>0&&m.files.every(row=>files[row.deployed_path]===row.content_sha256),'FILE_CLOSURE');
  need(files['official-phone-peer-host.mjs']&&files['official-phone-peer-runtime.mjs']&&files['phone-operation-admission.mjs']&&files['deployment-manifest.json']&&Object.keys(files).every(p=>p&&!p.startsWith('/')&&p.split('/').every(v=>v&&v!=='.'&&v!=='..')&&/^[a-f0-9]{64}$/.test(files[p])),'FILES');
+ const read=name=>{need(typeof name==='string'&&name.startsWith('config/')&&name.split('/').every(v=>v&&v!=='.'&&v!=='..')&&files[name],'REGISTRY_SOURCE');const path=join(runtimeRoot,name),s=lstatSync(path);need(s.isFile()&&!s.isSymbolicLink()&&!(s.mode&0o022)&&realpathSync(path)===path,'REGISTRY_SOURCE');const bytes=readFileSync(path);need(peerHash(bytes)===files[name],'REGISTRY_SOURCE');return bytes;};
+ const hosts=JSON.parse(read('config/collection-phone-hosts.json')).hosts.filter(h=>h.target===d.host&&h.profile===d.profile&&h.serial===d.serial);
+ need(hosts.length===1&&hosts[0].expected_account===d.account&&Array.isArray(hosts[0].workflow_keys)&&hosts[0].workflow_keys.includes(workflow)&&same(hosts[0].policy,scope.policy),'REGISTRY');
+ const rows=JSON.parse(read('config/native-phone-command-sources.json')).device_sources.filter(r=>r.profile===d.profile&&r.serial===d.serial);
+ need(rows.length===1&&rows[0].device_sdk===scope.policy_binding.usb_local.device_sdk&&rows[0].width===f.preflight_profile.width&&rows[0].height===f.preflight_profile.height&&rows[0].review&&typeof rows[0].review.path==='string'&&rows[0].review.path.startsWith('config/native-phone-reviews/')&&rows[0].review.sha256===files[rows[0].review.path],'REVIEW');
+ need(peerHash(read(rows[0].review.path))===rows[0].review.sha256,'REVIEW');
  return Object.freeze(d);
 }
 export function assertPhoneExecutionFiles(descriptor,root){

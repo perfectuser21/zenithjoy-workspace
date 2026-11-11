@@ -41,7 +41,7 @@
       "profile": "jinoshengyuan-work",
       "serial": "ANGYVB4227006983",
       "expected_account": "langzi63485",
-      "workflow_keys": ["douyin_video_discovery"],
+      "workflow_keys": ["douyin_video_discovery", "douyin_video_processing"],
       "evidence_root": "/private/tmp/openclaw-phone/evidence/jinoshengyuan-work",
       "evidence_alias": {
         "path": "/private/tmp/openclaw-phone",
