@@ -32,7 +32,7 @@ test('failed producer startup preserves local and central ownership because no r
   const input=agentInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_BRAIN_TASK_ID:task,WFR_TAG:'startup-test',P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'120'});
   const frozen={execution_mode:'agent',primary_host:'codex-exec-v1',agent_input:input,run_identity:{tag:input.run_tag},deployment:{source_commit:source},workflow_version:{payload:{key:input.workflow_key}},files:{'skill/SKILL.md':digest('skill')},discovery_phone_scope:{profile:input.profile,serial:input.serial,expected_account:'77980009922',policy:{endpoint:'tcp:127.0.0.1:5042'},policy_binding:{policy_path:'/fixed/policy'}},standalone_skill:{protocol:'codex-exec-v1',task_id:task,run_id:run,task_run_id:id(),claimer:'direct-codex',claimed_at:new Date().toISOString(),machine_id:'us-mac-m4',profile_sha256:'b'.repeat(64),scope_sha256:'c'.repeat(64),approved_keywords:['AI办公'],skill:{name:'example',version:'0.1',source_commit:source,path:'skill/SKILL.md',sha256:digest('skill')},run_binding:{run_binding_id:id(),workflow_id:id(),workflow_definition_version_id:id(),attempt_key:'a1',activities:{collect:ref}},company,deadline_ms:Date.now()+60000,cleanup_deadline_ms:Date.now()+120000}};
   frozen.standalone_skill.scope=standaloneScope(frozen);frozen.standalone_skill.scope_sha256=digest(frozen.standalone_skill.scope);frozen.snapshot_sha256=digest(frozen);fs.writeFileSync(path.join(dir,'run-definition.json'),JSON.stringify(frozen));
-  const effects=[];await assert.rejects(startStandaloneSkillRuntime({runDirectory:dir,environment:{BRAIN_INTERNAL_TOKEN:'unit-only'},dependencies:{bootstrap:async()=>true,leaseFactory:()=>({acquire:async()=>effects.push('central-acquire'),release:async()=>effects.push('central-release')}),execute:async(c,args)=>{effects.push(args[2]);return {code:0,stdout:'lock=acquired'};},guard:async()=>true,producerFactory:async()=>{throw Error('STARTUP_UNVERIFIED');}}}),/STARTUP_UNVERIFIED/);
+  const effects=[];await assert.rejects(startStandaloneSkillRuntime({runDirectory:dir,environment:{BRAIN_INTERNAL_TOKEN:'unit-only'},dependencies:{hostRegistry:path.join(dir,'host-registry'),bootstrap:async()=>true,leaseFactory:()=>({acquire:async()=>effects.push('central-acquire'),release:async()=>effects.push('central-release')}),execute:async(c,args)=>{effects.push(args[2]);return {code:0,stdout:'lock=acquired'};},guard:async()=>true,producerFactory:async()=>{throw Error('STARTUP_UNVERIFIED');}}}),/STARTUP_UNVERIFIED/);
   assert.deepEqual(effects,['central-acquire','lock-acquire']);
   const cleanup=JSON.parse(fs.readFileSync(path.join(dir,'standalone-cleanup.json'),'utf8'));assert.equal(cleanup.native_return_unknown,true);assert.equal(cleanup.local_released,false);assert.equal(cleanup.central_released,false);
  }finally{if(prior===undefined)delete process.env.BRAIN_INTERNAL_TOKEN;else process.env.BRAIN_INTERNAL_TOKEN=prior;fs.rmSync(dir,{recursive:true,force:true});}
@@ -44,5 +44,15 @@ test('serve refuses credentials or undeclared controls in an artifact configurat
   for(const config of [{OPENAI_API_KEY:'PRIVATE_SENTINEL'},{BRAIN_INTERNAL_TOKEN:'PRIVATE_SENTINEL'},{NODE_OPTIONS:'PRIVATE_SENTINEL'}]){
    fs.writeFileSync(path.join(d,'environment.json'),JSON.stringify(config),{mode:0o600});const r=spawnSync(process.execPath,[new URL('../standalone-skill-runtime.mjs',import.meta.url).pathname,'serve',d],{encoding:'utf8'});assert.notEqual(r.status,0);assert.match(r.stderr,/STANDALONE_NATIVE_ENVIRONMENT/);assert.doesNotMatch(r.stderr+r.stdout,/PRIVATE_SENTINEL/);
   }
+ }finally{fs.rmSync(d,{recursive:true,force:true});}
+});
+
+test('a canonical run can claim only one host across different run directories',async()=>{
+ const {claimStandaloneHost}=await import('../standalone-skill-runtime.mjs'),fs=await import('node:fs'),path=await import('node:path'),os=await import('node:os'),{randomUUID}=await import('node:crypto');
+ const d=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'direct-global-host-'));
+ try{
+  const runId=randomUUID(),registry=path.join(d,'registry');const first=claimStandaloneHost({runId,runDirectory:path.join(d,'first'),registry});const bytes=fs.readFileSync(first,'utf8');
+  assert.throws(()=>claimStandaloneHost({runId,runDirectory:path.join(d,'second'),registry}),/STANDALONE_NATIVE_HOST_ALREADY_STARTED/);
+  assert.equal(fs.readFileSync(first,'utf8'),bytes);
  }finally{fs.rmSync(d,{recursive:true,force:true});}
 });
