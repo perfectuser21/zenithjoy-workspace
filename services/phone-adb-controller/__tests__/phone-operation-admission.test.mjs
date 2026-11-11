@@ -1,20 +1,21 @@
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,realpathSync,readdirSync,lstatSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,chmodSync,copyFileSync,symlinkSync,existsSync} from 'node:fs';
+import {mkdtempSync,realpathSync,readdirSync,lstatSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,chmodSync,copyFileSync,symlinkSync,existsSync,cpSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {createPhoneOperationAdmission,isPhoneOperationAdmission} from '../phone-operation-admission.mjs';
 import {freezePreflightProfile} from '../preflight-control-scope.mjs';
 import {createOfficialCliClosure,isOfficialCliOperationStopped} from '../official-cli-closure.mjs';
 const root=dirname(dirname(fileURLToPath(import.meta.url))),sha=b=>createHash('sha256').update(b).digest('hex');
-function fixture(t,{programs={}}={}){
+function fixture(t,{programs={},runtimeRoot=root,admissionFactory=createPhoneOperationAdmission,profile='xiaolongxia',sdk=35}={}){
+ const root=runtimeRoot;
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'usb-operation-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
- const template=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.find(h=>h.profile==='xiaolongxia');
+ const template=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.find(h=>h.profile===profile);
  const env={HOME:dir,WFR_RUN_DIR:dir,P:template.profile,SERIAL:template.serial,WFR_TAG:'usb-test',DOUYIN_PHONE_REGISTRY:join(dir,'phones.tsv')};
- writeFileSync(env.DOUYIN_PHONE_REGISTRY,'#profile\tserial\tmodel\twidth\theight\tenabled\nxiaolongxia\tANGYVB4311010223\tMAA-AN00\t1200\t2664\ttrue\n',{mode:0o600});
+ writeFileSync(env.DOUYIN_PHONE_REGISTRY,'#profile\tserial\tmodel\twidth\theight\tenabled\n'+template.profile+'\t'+template.serial+'\tMAA-AN00\t1200\t2664\ttrue\n',{mode:0o600});
  const lockRoot=join(dir,'.local/share/zenithjoy/phone-locks');mkdirSync(lockRoot,{recursive:true,mode:0o700});mkdirSync(join(lockRoot,template.serial+'.lock'),{mode:0o700});
  writeFileSync(join(lockRoot,template.serial+'.lock/owner'),env.WFR_TAG,{mode:0o600});writeFileSync(join(lockRoot,template.serial+'.guard'),'',{mode:0o600});
  const policyFile=join(dir,'adb-service.json'),policy=template.policy;
@@ -24,13 +25,13 @@ function fixture(t,{programs={}}={}){
  for(const name of readdirSync(root)){const path=join(root,name);if(lstatSync(path).isFile())files['runtime/'+name]=sha(readFileSync(path));}
  const executables=Object.fromEntries(Object.entries({zsh:'/bin/zsh',node:process.execPath,python:'/usr/bin/python3',...programs}).map(([name,p])=>{let path=realpathSync(p);if(lstatSync(path).mode&0o022){const prefix=join(dir,'pinned-tools',name),target=join(prefix,'bin',name),library=join(dirname(dirname(path)),'lib');mkdirSync(dirname(target),{recursive:true,mode:0o700});writeFileSync(target,readFileSync(path),{flag:'wx',mode:0o700});if(existsSync(library))symlinkSync(realpathSync(library),join(prefix,'lib'));path=realpathSync(target);}return [name,{path,sha256:sha(readFileSync(path))}];}));
  const claim={claimed_by:'common-runner',claimed_at:'2026-11-11T08:00:00.000Z'};
- const frozen={snapshot_sha256:'a'.repeat(64),deployment:{source_commit:'b'.repeat(40)},files,native_claim:claim,agent_input:{task_id:taskId,profile:template.profile,serial:template.serial,run_tag:env.WFR_TAG,workflow_key:'douyin_video_discovery'},preflight_profile:freezePreflightProfile({env}),discovery_phone_scope:{...template,run_id:binding.run_id,executables,policy_binding:{usb_local:{protocol:'usb-local-lease/v1',device_sdk:35,transport:{serial:template.serial,transport_id:'11',usb_path:'0-1'},daemon:{pid:111,uid:process.getuid(),endpoint:policy.endpoint,start_identity:'birth',command:'fixed adb server',executable:policy.adb_realpath,executable_sha256:policy.adb_sha256,policy_path:policyFile,policy_sha256:sha(readFileSync(policyFile))}}}}};
+ const frozen={snapshot_sha256:'a'.repeat(64),deployment:{source_commit:'b'.repeat(40)},files,native_claim:claim,agent_input:{task_id:taskId,profile:template.profile,serial:template.serial,run_tag:env.WFR_TAG,workflow_key:'douyin_video_discovery'},preflight_profile:freezePreflightProfile({env}),discovery_phone_scope:{...template,run_id:binding.run_id,executables,policy_binding:{usb_local:{protocol:'usb-local-lease/v1',device_sdk:sdk,transport:{serial:template.serial,transport_id:'11',usb_path:'0-1'},daemon:{pid:111,uid:process.getuid(),endpoint:policy.endpoint,start_identity:'birth',command:'fixed adb server',executable:policy.adb_realpath,executable_sha256:policy.adb_sha256,policy_path:policyFile,policy_sha256:sha(readFileSync(policyFile))}}}}};
  const scope={activity:'preflight',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,snapshot_sha256:frozen.snapshot_sha256,source_commit:frozen.deployment.source_commit,profile:template.profile,serial:template.serial,run:env.WFR_TAG,workflow:'douyin_video_discovery',worker_deadline_ms:Date.now()+20000,receipt_deadline_ms:Date.now()+25000,deadline_ms:Date.now()+30000};
  const central={device_name:template.serial,locked_by:taskId,lease_version:'123',expires_at:new Date(Date.now()+30000).toISOString(),expired:false};
- const live={host:'xian-m4',birth:'birth',sdk:'35',transportId:'11',usb:'0-1',closed:false,pending:0,stop:true,claim:structuredClone(claim),central:structuredClone(central),starts:0,reads:0,inventoryReads:0};
+ const live={host:'xian-m4',birth:'birth',sdk:String(sdk),transportId:'11',usb:'0-1',closed:false,pending:0,stop:true,claim:structuredClone(claim),central:structuredClone(central),starts:0,reads:0,inventoryReads:0};
  const dependencies={domainClosure:()=>live.closed&&live.stop&&live.pending===0?Object.freeze({}):null,actualHost:()=>live.host,readDaemon:d=>{assert.equal(d.start_identity,live.birth,'daemon birth must remain exact');return structuredClone(d);},inventory:async()=>{live.inventoryReads++;return {wire_complete:true,socket_closed:true,peer_eof:true,pending:0,response:template.serial+' device usb:'+live.usb+' transport_id:'+live.transportId+'\n'};},startDomain:async()=>{live.starts++;return {environment:()=>({WFR_COLLECTION_LEAF_SOCKET:'/fixture.sock',WFR_COLLECTION_LEAF_NONCE:'fixture'}),adb:async()=>{live.reads++;return live.sdk;},close:async()=>{live.closed=true;return {execution_stopped:live.stop,pending:live.pending};},snapshot:()=>({execution_stopped:live.closed&&live.stop,pending:live.pending})};}};
  const context={root,env,frozen,state:{},scope,binding,taskId,assertAuthority:async()=>({authorized:true,claim:structuredClone(live.claim),central:structuredClone(live.central)})};
- return {context,dependencies,live,dir,lockRoot,create:()=>createPhoneOperationAdmission(context,dependencies)};
+ return {context,dependencies,live,dir,lockRoot,create:()=>admissionFactory(context,dependencies)};
 }
 test('USB真实边界的状态模型区分元数据准备、物理准入与真实关闭',async t=>{
  const f=fixture(t),a=f.create();assert.equal(isPhoneOperationAdmission(a,f.context),true);assert.equal(isPhoneOperationAdmission({...a},f.context),false);
@@ -71,4 +72,25 @@ test('可写宿主Node必须先冻结私有不可写副本再进入真实CLI固�
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'usb-writable-node-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));const source=join(directory,'bin/node');mkdirSync(dirname(source),{mode:0o700});copyFileSync(process.execPath,source);chmodSync(source,0o770);const library=join(dirname(dirname(realpathSync(process.execPath))),'lib');if(existsSync(library))symlinkSync(realpathSync(library),join(directory,'lib'));const original=spawnSync(source,['--version'],{env:{PATH:'/usr/bin:/bin'},encoding:'utf8',timeout:5000});assert.equal(original.status,0,original.stderr);
  const f=fixture(t,{programs:{node:source}}),a=f.create(),facade=createOfficialCliClosure({...f.context,operationAdmission:a});t.after(()=>facade.close());await facade.prepare();
  const pinned=f.context.frozen.discovery_phone_scope.executables.node;assert.notEqual(pinned.path,source);assert.equal(lstatSync(pinned.path).mode&0o022,0);assert.equal(lstatSync(source).mode&0o777,0o770);assert.equal(pinned.sha256,sha(readFileSync(source)));const version=spawnSync(pinned.path,['--version'],{env:{PATH:'/usr/bin:/bin'},encoding:'utf8',timeout:5000});assert.equal(version.status,0,version.stderr);assert.equal(version.stdout.trim(),process.version);assert.equal((await facade.close()).execution_stopped,true);
+});
+
+async function reviewedUsbFixture(t){
+ const directory=mkdtempSync(join(dirname(dirname(root)),'.usb-source-fixture-')),runtimeRoot=join(directory,'runtime');t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(p=>['__tests__','node_modules','__pycache__'].includes(p))});
+ const hostsPath=join(runtimeRoot,'config/collection-phone-hosts.json'),sourcePath=join(runtimeRoot,'config/native-phone-command-sources.json'),hosts=JSON.parse(readFileSync(hostsPath)),sources=JSON.parse(readFileSync(sourcePath));
+ const host=structuredClone(hosts.hosts.find(h=>h.profile==='xiaolongxia')),source=structuredClone(sources.device_sources.find(s=>s.profile==='xiaolongxia'));
+ Object.assign(host,{profile:'reviewed-second-phone',serial:'SYNTHETIC-USB-36',expected_account:'fixture-account',evidence_root:'/private/tmp/openclaw-phone/evidence/reviewed-second-phone',workflow_keys:['douyin_video_discovery']});
+ Object.assign(source,{profile:host.profile,serial:host.serial,device_sdk:36});hosts.hosts.push(host);sources.device_sources.push(source);
+ writeFileSync(hostsPath,JSON.stringify(hosts));writeFileSync(sourcePath,JSON.stringify(sources));
+ const api=await import(pathToFileURL(join(runtimeRoot,'phone-operation-admission.mjs')));
+ return fixture(t,{runtimeRoot,admissionFactory:api.createPhoneOperationAdmission,profile:host.profile,sdk:36});
+}
+test('第二台已审核USB手机按其SDK36完成实际准入与封闭',async t=>{
+ const f=await reviewedUsbFixture(t),a=f.create();await a.prepare();assert.equal((await a.assert({phase:'before',resourceOnly:false})).authorized,true);assert.equal(f.live.sdk,'36');assert.equal(f.live.reads,1);assert.equal((await a.close()).execution_stopped,true);
+});
+test('第二台USB实际SDK与冻结审核声明不同仍拒绝',async t=>{
+ const f=await reviewedUsbFixture(t),a=f.create();f.live.sdk='35';await a.prepare();await assert.rejects(()=>a.assert({phase:'before',resourceOnly:false}),/PHONE_OPERATION_USB_SDK/);assert.equal((await a.close()).execution_stopped,false);
+});
+test('第二台USB未批准workflow仍在启动producer前拒绝',async t=>{
+ const f=await reviewedUsbFixture(t);f.context.frozen.agent_input.workflow_key='douyin_video_processing';f.context.scope.workflow='douyin_video_processing';const a=f.create();await assert.rejects(()=>a.prepare(),/PHONE_OPERATION_USB_REGISTRY/);assert.equal(f.live.starts,0);
 });
