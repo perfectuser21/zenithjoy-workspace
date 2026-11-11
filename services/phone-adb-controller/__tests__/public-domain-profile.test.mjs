@@ -253,3 +253,34 @@ test('agent-first public metadata binds a verified business Skill and rejects an
   assert.throws(()=>buildPublicDomainProfile(bad),/SKILL/);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
+
+function standaloneInput(x){
+ const entry='standalone-skill-runtime.mjs',text='export const startStandaloneSkillRuntime=()=>{throw Error("not executed in compiler");};';
+ writeFileSync(join(x.sourceRoot,entry),text,{mode:0o600});x.frozen.deployment.files.push({deployed_path:entry,content_sha256:digest(text)});reseal(x);delete x.commander;
+ x.standaloneSkill={name:'douyin-leadgen-direct',version:'0.1.0',source_commit:'b'.repeat(40),path:'skill/SKILL.md',sha256:digest('new standalone Skill')};return x;
+}
+test('independent Skill compiler fixes the Codex tool host without Commander or old Skill host declarations',async()=>{
+ const {buildStandaloneSkillProfile}=await import(source.href),x=standaloneInput(await fixture());
+ try{
+  const frozenDigest=digest(x.frozen),out=buildStandaloneSkillProfile(x),p=out.profile,cfg=p.domain_adapter.config;
+  assert.equal(digest(x.frozen),frozenDigest);assert.equal(out.profile_sha256,digest(p));assert.equal(out.route.profile_sha256,digest(p));
+  assert.equal(Object.hasOwn(p,'commander'),false);assert.equal(p.domain_adapter.protocol,'codex-skill-tools/v1');assert.equal(p.domain_adapter.entry,'standalone-skill-runtime.mjs');assert.equal(p.domain_adapter.export_name,'startStandaloneSkillRuntime');
+  assert.equal(cfg.primary_host,'codex-exec-v1');assert.equal(cfg.snapshot.primary_host,'codex-exec-v1');assert.equal(cfg.execution_mode,'agent');
+  assert.equal(cfg.snapshot.execution_transport,undefined);assert.equal(cfg.snapshot.max_turns,undefined);
+  assert.deepEqual(p.metadata.scoring.skill,{...x.standaloneSkill,entry:x.standaloneSkill.path});
+  assert.equal(p.metadata.scoring.implementation.entry,'standalone-skill-runtime.mjs');assert.equal(p.metadata.scoring.implementation.method_origin,'standalone-skill');
+  assert.deepEqual(p.metadata.scoring.input_evidence.implementation_bindings,x.frozen.activities[0].version.payload.implementation_bindings);
+  assert.deepEqual(cfg.snapshot.activities,x.frozen.activities);assert.equal(p.metadata.scoring.questions.A4.declared.postconditions[0],'原政策持久化读回');
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});
+test('standalone and old profile entry points cannot impersonate one another or bypass source checks',async()=>{
+ const {buildStandaloneSkillProfile,buildPublicDomainProfile}=await import(source.href),x=standaloneInput(await fixture());
+ try{
+  for(const change of [v=>v.primaryHost='raw-model-v1',v=>v.primaryHost='official-child-v1',v=>v.standaloneSkill.source_commit='untracked',v=>v.standaloneSkill.sha256='bad',v=>v.standaloneSkill.path='../foreign/SKILL.md',v=>v.gate.actual_matches=false,v=>v.company.version=0]){
+   const invalid=structuredClone(x);change(invalid);assert.throws(()=>buildStandaloneSkillProfile(invalid),/PUBLIC_DOMAIN_PROFILE_/);
+  }
+  assert.throws(()=>buildPublicDomainProfile(x),/PUBLIC_DOMAIN_PROFILE_/);
+  const original=await fixture();try{assert.equal(buildPublicDomainProfile(original).profile.commander.kind,'openclaw');assert.throws(()=>buildPublicDomainProfile({...original,direct:true}),/PUBLIC_DOMAIN_PROFILE_/);}finally{rmSync(original.sourceRoot,{recursive:true,force:true});}
+  writeFileSync(join(x.sourceRoot,'standalone-skill-runtime.mjs'),'changed runtime source');assert.throws(()=>buildStandaloneSkillProfile(x),/PUBLIC_DOMAIN_PROFILE_FILE_DIGEST/);
+ }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
+});

@@ -4572,8 +4572,8 @@ fi
 # media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
 if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   case "$command" in
-    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio|native-audio-evidence|swipe) ;;
-    *) die 'required lock owner is supported only for standalone read commands';;
+    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio|native-audio-evidence|swipe|preflight|foreground|status|evidence-bundle|open-search|search-video-tab|search-time-layer|search-video-cards|open-video|back-to-results|on-search-results|detail-restored|back-evidence) ;;
+    *) die 'required lock owner is unsupported for this command';;
   esac
   source "${0:A:h}/phone-lock-lib.sh"
   require_run_id "$LOCK_OWNER"
