@@ -1,3 +1,4 @@
+import {peerHash,peerCanonical} from './official-phone-peer-protocol.mjs';
 import {readFileSync,realpathSync} from 'node:fs';
 import {join,dirname,basename} from 'node:path';
 import {readFrozen} from './runtime-definition.mjs';
@@ -17,6 +18,10 @@ export async function readPublicDomainUpstream({env,current}){
  const upstream=readFrozen(path),p=upstream.public_domain;
  if(!p||p.run_id!==ref.run_id||p.task_id!==ref.task_id||p.profile_sha256!==ref.profile_sha256||upstream.run_identity?.tag!==env.LEADGEN_SOURCE_RUN||upstream.run_identity?.capability!=='douyin_video_discovery')fail();
  const final=JSON.parse(readFileSync(join(path,'public-result-workflow.json'),'utf8'));
+ if(current.public_domain.delegated_phone){
+  const index=JSON.parse(readFileSync(join(path,'phone-run-index.json'),'utf8'));
+  if(index.protocol!=='official-phone-run-index/v1'||index.host!=='xian-m4'||index.run_id!==ref.run_id||index.task_id!==ref.task_id||index.snapshot_sha256!==upstream.snapshot_sha256||index.final_sha256!==peerHash(final)||index.source_commit!==current.deployment.source_commit||peerCanonical(index.company)!==peerCanonical(current.public_domain.company)||upstream.public_domain?.delegated_phone?.role!=='phone-peer')fail();
+ }
  if(final.run_id!==ref.run_id||final.task_id!==ref.task_id||final.status!=='validated'||final.execution_stopped!==true||final.profile_sha256!==ref.profile_sha256)fail();
  if(!env.BRAIN_URL||!env.BRAIN_INTERNAL_TOKEN)fail();
  const url=new URL(`/api/brain/common-runner/${ref.run_id}/inspect`,env.BRAIN_URL);

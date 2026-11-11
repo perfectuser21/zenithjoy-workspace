@@ -1,0 +1,61 @@
+import {mkdirSync,openSync,closeSync,writeFileSync,readFileSync,fsyncSync,chmodSync,lstatSync,realpathSync} from 'node:fs';
+import {join,dirname} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {peerHash,peerCanonical} from './official-phone-peer-protocol.mjs';
+import {verifyPhonePeerBootstrap} from './official-phone-peer-authority.mjs';
+const need=(v,code)=>{if(!v)throw Error('OFFICIAL_PHONE_PEER_RUNTIME_'+code);};
+const safeWrite=(path,bytes)=>{const fd=openSync(path,'wx',0o600);try{writeFileSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}};
+const allowedEnv=new Set(['P','SERIAL','WFR_TAG','LEADGEN_LINE','LEADGEN_LIMIT','LEADGEN_SOURCE_RUN','LEADGEN_COMMENT_LIMIT','LEADGEN_SORT','LEADGEN_TIME_LAYER','LEADGEN_LOCATION','LEADGEN_MAX_SCREENS','LEADGEN_DISCOVERY_MAX_ATTEMPTS','LEADGEN_DISCOVERY_MAX_SECONDS','LEADGEN_SOURCE_KIND','QUEUED_VIDEO_COLLECTION_SECONDS','QUEUED_VIDEO_RECORD_SECONDS','WF_RUN_START_TS','WF_RUN_MAX_SECONDS','LEADGEN_MMV_HOSTNAME','LEADGEN_MMV_HOSTKEY_ALIAS']);
+export async function createPhonePeerRuntime({bootstrap,root,environment=process.env}){
+ const admitted=await verifyPhonePeerBootstrap({bootstrap,root,env:environment});
+ const {descriptor:d,parent:{frozen:parent},identity,session}=bootstrap;
+ const runDir=join(d.run_root,identity.run_id);mkdirSync(d.run_root,{recursive:true,mode:0o700});need(realpathSync(d.run_root)===d.run_root,'DIRECTORY');mkdirSync(runDir,{mode:0o700});const runtime=join(runDir,'runtime');mkdirSync(runtime,{mode:0o700});
+ const f=structuredClone(d.snapshot),files={};
+ for(const [relative,hash]of Object.entries(f.files)){
+  if(!relative.startsWith('runtime/'))continue;const name=relative.slice(8),source=join(root,name),s=lstatSync(source),bytes=readFileSync(source);need(s.isFile()&&!s.isSymbolicLink()&&realpathSync(source)===source&&peerHash(bytes)===hash,'SOURCE');const path=join(runtime,name);mkdirSync(dirname(path),{recursive:true,mode:0o700});safeWrite(path,bytes);if(s.mode&0o111)chmodSync(path,0o700);files[relative]=hash;
+ }
+ const env={...environment};for(const key of Object.keys(env))if(key.startsWith('LEADGEN_')||['NODE_OPTIONS','NODE_PATH','PYTHONPATH','PYTHONHOME','BRAIN_TASK_ID','WFR_BRAIN_TASK_ID'].includes(key))delete env[key];
+ for(const [key,value]of Object.entries(bootstrap.environment||{})){need(allowedEnv.has(key)&&typeof value==='string'&&!/[\r\n\0]/.test(value),'ENVIRONMENT');env[key]=value;}
+ Object.assign(env,{P:d.profile,SERIAL:d.serial,WFR_HOSTKEY:'xian-m4',WFR_RUN_DIR:runDir,WFR_RUN_ID:identity.run_id,WFR_ATTEMPT:'a1',WF_HOME:runtime,WF_DEPLOYMENT_ROOT:runtime,WF_BRAIN_TASK_ID:identity.task_id,WF_BRAIN_WORKFLOW:parent.workflow_version.payload.key,LEADGEN_EXECUTION_MODE:'agent',LEADGEN_LOCAL_RPC:'0',DOUYIN_PHONE_ADB:join(runtime,'douyin-phone-adb'),DOUYIN_ADB_PORT:'5037',ADB_SERVER_SOCKET:'tcp:127.0.0.1:5037',DOUYIN_PHONE_REGISTRY:f.preflight_profile.path});
+ const stepName=`plans/${env.WF_BRAIN_WORKFLOW}.steps.json`,steps=readFileSync(join(runtime,stepName));safeWrite(join(runDir,'step-dod.json'),steps);files['step-dod.json']=peerHash(steps);
+ if(bootstrap.sources){need(Array.isArray(bootstrap.sources)&&bootstrap.sources.length&&bootstrap.sources.every(x=>typeof x==='string'&&x.trim()&&!/[\r\n\0]/.test(x)),'SOURCES');const bytes=Buffer.from(bootstrap.sources.join('\n')+'\n');safeWrite(join(runDir,'sources.txt'),bytes);files['sources.txt']=peerHash(bytes);env.LEADGEN_SOURCES_FILE=join(runDir,'sources.txt');}
+ for(const name of ['activity.log','comments.tsv'])safeWrite(join(runDir,name),'');mkdirSync(join(runDir,'native-operations'),{mode:0o700});
+ delete f.snapshot_sha256;Object.assign(f,{files,execution_mode:'agent',primary_host:'official-child-v1',agent_input:structuredClone(parent.agent_input),native_claim:structuredClone(parent.native_claim),public_domain:{...structuredClone(parent.public_domain),delegated_phone:{role:'phone-peer',parent_snapshot_sha256:parent.snapshot_sha256,descriptor_sha256:peerHash(d)}},phone_execution:structuredClone(d),run_identity:structuredClone(parent.run_identity),public_pg:d.snapshot.public_pg});
+ for(const key of ['discovery_phone_scope','collection_phone_scope'])if(f[key])Object.assign(f[key],{task_id:identity.task_id,run_id:identity.run_id,attempt:'a1',source_commit:session.source_commit});
+ const defs=await import(pathToFileURL(join(runtime,'runtime-definition.mjs')));need(defs.canonical(defs.agentInput(env))===defs.canonical(f.agent_input),'INPUT');
+ f.discovery_input=defs.discoveryInput(env)||undefined;need(peerCanonical(f.discovery_input)===peerCanonical(parent.discovery_input),'DISCOVERY_INPUT');f.sampling_input=defs.commentSamplingInput(env)||undefined;if(f.public_domain.upstream){const u=f.public_domain.upstream;need(/^[a-f0-9-]{36}$/.test(u.run_id)&&u.run_id!==identity.run_id,'UPSTREAM');u.run_directory=join(d.run_root,u.run_id);}
+ f.snapshot_sha256=defs.digest(f);safeWrite(join(runDir,'run-definition.json'),JSON.stringify(f));
+ const authority=await import(pathToFileURL(join(runtime,'public-domain-authority.mjs'))),localPermitAuthority=await import(pathToFileURL(join(runtime,'official-phone-peer-authority.mjs')));
+ const localAdmitted=await localPermitAuthority.verifyPhonePeerBootstrap({bootstrap,root,env:environment});const unregister=authority.registerDelegatedPhoneAuthority({permit:localAdmitted.permit,runDirectory:runDir,frozen:f});
+ const {issuePublicNativeTaskLease}=await import(pathToFileURL(join(runtime,'native-task-lease.mjs')));await issuePublicNativeTaskLease({runDir,frozen:f,env});
+ const {createRpc}=await import(pathToFileURL(join(runtime,'leadgen-client.mjs'))),rpc=createRpc({frozen:f,environment:env,runContext:{run:env.WFR_TAG,run_id:identity.run_id,profile:env.P,line:env.LEADGEN_LINE}});
+ const workflow=await import(pathToFileURL(join(runtime,'leadgen-workflow.mjs'))),localPrimitives=await import(pathToFileURL(join(runtime,'official-child-primitives.mjs')));
+ let primitives;const handlers=workflow.createHandlers({root:runtime,env,rpc,sourceCommit:session.source_commit,taskId:identity.task_id,execute:(...args)=>primitives.execute(...args)});
+ const binding=authority.readPublicDomainBinding(runDir);primitives=localPrimitives.createOfficialChildPrimitives({root:runtime,env,frozen:f,binding,taskId:identity.task_id,state:handlers.state,verifyOwnerStop:localPermitAuthority.delegatedPhoneOwnerStopped,assertAuthority:localAdmitted.assertAuthority});
+ let current=null,tools=null,scope=null,lastResult=null,closed=false;const checks=new Map(),results=new Map();
+ const state=()=>{const s=primitives.snapshot();return {...handlers.agentNativeState(),active:s.active,pending:s.pending,execution_unknown:handlers.state.executionUnknown===true||s.execution_unknown,result:tools?.getResult()??lastResult};};
+ const mapped=original=>({...structuredClone(original),snapshot_sha256:f.snapshot_sha256});
+ const ownerStop=input=>{need(input?.scope_sha256===peerHash(current)&&/^[a-f0-9]{64}$/.test(input.receipt_sha256||''),'OWNER_STOP');return localPermitAuthority.createDelegatedPhoneOwnerStop(localAdmitted.permit,scope);};
+ const execute=async(operation,input)=>{
+  need(!closed,'CLOSED');
+  if(operation==='begin'){
+   need(!current||!primitives.snapshot().active,'ACTIVE');const original=input.scope;need(original?.run_id===identity.run_id&&original.task_id===identity.task_id&&original.source_commit===session.source_commit&&original.snapshot_sha256===parent.snapshot_sha256&&original.binding_id===binding.id,'SCOPE');
+   const row=f.activities.find(a=>a.reference.slot_key===original.activity);need(row&&peerCanonical(input.activity)===peerCanonical({...row.version.payload.contract,key:row.reference.slot_key}),'ACTIVITY');
+   current=structuredClone(original);scope=mapped(original);handlers.state.currentActivity=scope.activity;handlers.state.budgetDeadline=scope.deadline_ms;
+   await primitives.begin(scope);tools=primitives.wrapTools(input.activity,scope,await handlers.createAgentTools(input.activity,scope));return {started:true,scope_sha256:peerHash(original)};
+  }
+  need(current&&tools,'ACTIVITY');
+  if(operation==='phone')return tools.phone(input.command,...input.args);
+  if(operation==='business')return tools.business(input.operation,input.input);
+  if(['prepare','inspect','heartbeat'].includes(operation))return tools[operation]();
+  if(operation==='settle'){const value=await tools.settle(ownerStop(input));lastResult=tools.getResult();return value;}
+  if(operation==='release'){const value=await tools.release(ownerStop(input));lastResult=tools.getResult();return value;}
+  if(operation==='seal_activity'){const value=await tools.closeNativeScope(ownerStop(input));lastResult=tools.getResult();return value;}
+  if(operation==='verify_activity'){
+   need(input.activity===scope.activity&&peerCanonical(input.evidence?.result)===peerCanonical(tools.getResult()),'VERIFY_INPUT');const row=f.activities.find(a=>a.reference.slot_key===scope.activity),activity={...row.version.payload.contract,key:scope.activity};
+   const checked=await workflow.verifyWorkflowActivity({root:runtime,runDir,frozen:f,env,binding,rpc,handlers,records:input.records,executionMode:'agent'},activity,{...input.evidence,result:tools.getResult()},{deadline_ms:scope.deadline_ms});checks.set(activity.key,checked);results.set(activity.key,{activity:activity.key,status:input.evidence.status,verification:checked});return checked;
+  }
+  throw Error('OFFICIAL_PHONE_PEER_OPERATION');
+ };
+ return {directory:runDir,session,permit:admitted.permit,assertAuthority:()=>localAdmitted.assertAuthority({phase:'prepare',resourceOnly:true}),execute,snapshot:state,async close(){const value=await primitives.close();closed=true;const verified=value.execution_stopped===true&&f.activities.every(a=>checks.get(a.reference.slot_key)?.verified===true)&&tools?.getResult()?.no_lock===true;const final={protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:session.source_commit,profile_sha256:identity.profile_sha256,status:verified?'validated':'failed',execution_stopped:value.execution_stopped===true,results:[...results.values()]};safeWrite(join(runDir,'public-result-workflow.json'),JSON.stringify(final));safeWrite(join(runDir,'phone-run-index.json'),JSON.stringify({protocol:'official-phone-run-index/v1',run_id:identity.run_id,task_id:identity.task_id,source_commit:session.source_commit,company:f.public_domain.company,descriptor_sha256:peerHash(d),snapshot_sha256:f.snapshot_sha256,final_sha256:peerHash(final),host:'xian-m4'}));if(value.execution_stopped!==true)await handlers.quarantineResources();unregister();return value;},async abort(){try{return await this.close();}catch{return {execution_stopped:false};}}};
+}

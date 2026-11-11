@@ -189,10 +189,12 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    const resourceFailure=heartbeatError?{resource_unverified:true,resource_unknown_reasons:['heartbeat_unverified']}:{};
    if(!stopped)return {status:'failed',execution_stopped:false,reason:'Skill、原生操作或业务提交结果未知',...uncertainty(actual,receipt,request),...resourceFailure,commander_status:actual.commander_status,skill_receipt:receipt};
    if(heartbeatError)return {status:'failed',execution_stopped:true,reason:'Skill执行期间资源续期未验证',...uncertainty(actual,receipt,request),...resourceFailure,commander_status:actual.commander_status,skill_receipt:receipt};
-   await tools.settle({execution_stopped:true,receipt});
+   const ownerStop=Object.freeze({execution_stopped:true,receipt});
+   if(frozen.primary_host==='official-child-v1')officialStoppedScopes.set(ownerStop,{scope:canonical(scope),nonce:request.nonce,child_run_id:receipt.child_run_id});
+   await tools.settle(ownerStop);
    actual=broker.getResult();
    if(nativeUnknown(actual)){stopped=false;return {status:'failed',execution_stopped:false,reason:'Skill封闭原生操作终止未知',...uncertainty(actual,receipt,request),skill_receipt:receipt};}
-   if(activity.key==='cleanup')await tools.release({execution_stopped:true,receipt});
+   if(activity.key==='cleanup')await tools.release(ownerStop);
    actual=broker.getResult();
    if(nativeUnknown(actual)){stopped=false;return {status:'failed',execution_stopped:false,reason:'Skill收尾原生操作终止未知',...uncertainty(actual,receipt,request),skill_receipt:receipt};}
    if(actual.commander_aborted)return {status:'failed',execution_stopped:true,reason:'Commander请求中止，等待复核',commander_status:actual.commander_status,skill_receipt:receipt};
