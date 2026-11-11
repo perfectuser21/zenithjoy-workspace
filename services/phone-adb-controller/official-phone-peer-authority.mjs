@@ -27,9 +27,9 @@ export async function verifyPhonePeerBootstrap({bootstrap,root,env,get}={}){
    const release=(await request('/api/brain/releases/'+wanted.release.id))?.release,gate=await request('/api/brain/releases/'+wanted.release.id+'/gate');
    if(release?.manifest_sha256!==wanted.release.manifest_sha256||release.target!==wanted.release.target||gate.deployed!==true||gate.actual_matches!==true||gate.current_observation_id!==wanted.deployment.observation_id||gate.verification?.ci_status!=='verified'||gate.verification?.status!=='verified')fail();
   }
-  if(phase!=='prepare'){
+  if(phase!=='prepare'&&!(phase==='close'&&resourceOnly===true)){
    const value=await request('/api/brain/device-locks'),rows=value.locks?.filter(r=>r.device_name===d.serial);
-   if(value.success!==true||rows?.length!==1||rows[0].locked_by!==identity.task_id||Date.parse(rows[0].expires_at)<=Date.now()+1000)fail();
+   if(value.success!==true||rows?.length!==1||rows[0].locked_by!==identity.task_id||!Number.isFinite(Date.parse(rows[0].expires_at))||Date.parse(rows[0].expires_at)<=Date.now()+1000)fail();
   }
   if(Date.now()>=record.deadline_ms)fail();assertPhoneExecutionFiles(d,root);return true;
  }

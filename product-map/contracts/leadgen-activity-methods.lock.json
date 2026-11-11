@@ -35,7 +35,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -63,7 +63,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -885,13 +885,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "77cda09dc487190d2511102960cfcf29e46120451c2499534b92c36f6c59da74",
+      "code_digest": "c079b582afac9145fcc8db6269e73dd0bb86df5918befa71d6ffa518b2167431",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
-        "current_code_digest": "77cda09dc487190d2511102960cfcf29e46120451c2499534b92c36f6c59da74"
+        "current_code_digest": "c079b582afac9145fcc8db6269e73dd0bb86df5918befa71d6ffa518b2167431"
       }
     },
     "douyin_video_processing.preflight": {
@@ -928,7 +928,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -956,7 +956,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -1369,14 +1369,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "413284f9ff12fd1d8d40968890cfd7f648f221a2bafe6e2d22bdf731178f64a2"
+          "sha256": "5a92e2c506d797eec5957206cb5e9cdfef6adea70497d513570b89ccffade62d"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "6e3d889cd978f0fc4f6ca07457623d66e4de1d654f9c2f618b9a44ac2dd9b32d"
+          "sha256": "b7a02631b5802c8e4d8edc31708f3e9be3d881f388189d8c425434a99e8a1171"
         },
         {
           "kind": "code",
@@ -1810,13 +1810,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cfe4ec72d962b8cab793b0e4aa5f0d49b1405c509dbdc248083a3fc582c12972",
+      "code_digest": "d7775b3775dab032133885972c37a64e2165110cc90bceac6bc72d6ea9bfefce",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
-        "current_code_digest": "cfe4ec72d962b8cab793b0e4aa5f0d49b1405c509dbdc248083a3fc582c12972"
+        "current_code_digest": "d7775b3775dab032133885972c37a64e2165110cc90bceac6bc72d6ea9bfefce"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1853,7 +1853,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -1881,7 +1881,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -2682,13 +2682,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "a6e0d8db1607f717a0fae960d850ab1d38f8853286c244f9f7a9f4ffc3135f23",
+      "code_digest": "385d5500744d1c374fbacaf853e22b6af71ae94c4775963db69e900569981f00",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
-        "current_code_digest": "a6e0d8db1607f717a0fae960d850ab1d38f8853286c244f9f7a9f4ffc3135f23"
+        "current_code_digest": "385d5500744d1c374fbacaf853e22b6af71ae94c4775963db69e900569981f00"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2725,7 +2725,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -2753,7 +2753,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -3638,13 +3638,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "6aa31978e1d1b6e713f87877bb2bdecce12c0bad35dd7a52d6c382b244370e37",
+      "code_digest": "9a7b791485ee27ba717c0425d2b8deece618e2d276e8983a0645c6b7d87f5e42",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
-        "current_code_digest": "6aa31978e1d1b6e713f87877bb2bdecce12c0bad35dd7a52d6c382b244370e37"
+        "current_code_digest": "9a7b791485ee27ba717c0425d2b8deece618e2d276e8983a0645c6b7d87f5e42"
       }
     },
     "douyin_video_processing.collection": {
@@ -3681,7 +3681,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -3709,7 +3709,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -4532,13 +4532,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "e86ed16fbea658b581b921bf30f3772a053d66c0643fc0fcedbc530639ecec4e",
+      "code_digest": "035eec3112fc3b60ed69080bd588ab9ed0b107452616d201de63f34df9d822ff",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
-        "current_code_digest": "e86ed16fbea658b581b921bf30f3772a053d66c0643fc0fcedbc530639ecec4e"
+        "current_code_digest": "035eec3112fc3b60ed69080bd588ab9ed0b107452616d201de63f34df9d822ff"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4575,7 +4575,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -4603,7 +4603,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -5009,14 +5009,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "413284f9ff12fd1d8d40968890cfd7f648f221a2bafe6e2d22bdf731178f64a2"
+          "sha256": "5a92e2c506d797eec5957206cb5e9cdfef6adea70497d513570b89ccffade62d"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "6e3d889cd978f0fc4f6ca07457623d66e4de1d654f9c2f618b9a44ac2dd9b32d"
+          "sha256": "b7a02631b5802c8e4d8edc31708f3e9be3d881f388189d8c425434a99e8a1171"
         },
         {
           "kind": "code",
@@ -5435,13 +5435,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c36054939d2dadc3ed9ff6f8afa4b0da3daf55c3acf05c7cefe40d2c8778c9fa",
+      "code_digest": "bcf59038c5d8f2f75129165092f15297b3bb5a796bee31ee87143d8652d0fc74",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
-        "current_code_digest": "c36054939d2dadc3ed9ff6f8afa4b0da3daf55c3acf05c7cefe40d2c8778c9fa"
+        "current_code_digest": "bcf59038c5d8f2f75129165092f15297b3bb5a796bee31ee87143d8652d0fc74"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5478,7 +5478,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -5506,7 +5506,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -6321,13 +6321,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "8fe7b0a61c3bae38f01a19a29292a2e8ab9a95ea0ce2dfcf9ac4095cdc1f3372",
+      "code_digest": "9592b55621ede2062ddb9096a985b8285bb208794d68cd5428bcd9b7d943b6b5",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
-        "current_code_digest": "8fe7b0a61c3bae38f01a19a29292a2e8ab9a95ea0ce2dfcf9ac4095cdc1f3372"
+        "current_code_digest": "9592b55621ede2062ddb9096a985b8285bb208794d68cd5428bcd9b7d943b6b5"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6364,7 +6364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -6392,7 +6392,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -7249,13 +7249,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e90611fe5418ca7cefb8fc551d9bdbaccf726925ec34405fc49d0a908e0a9f3c",
+      "code_digest": "d1e9757e86b92bc5b88bc8b9efb5e2778f8a7eac7e64434d84dbf6a20a21fbdd",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
-        "current_code_digest": "e90611fe5418ca7cefb8fc551d9bdbaccf726925ec34405fc49d0a908e0a9f3c"
+        "current_code_digest": "d1e9757e86b92bc5b88bc8b9efb5e2778f8a7eac7e64434d84dbf6a20a21fbdd"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7288,7 +7288,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -7316,7 +7316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -8107,13 +8107,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "0d03f3fbcf3ba6d4e0b85fb7e0c1f0ad52d8ac4af05677e1c02c21d7c2ddfeac",
+      "code_digest": "2d7604bbc7a8b26d38e550d6fc0b821b282028fd2b382dc6726609c9c299dd2d",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
-        "current_code_digest": "0d03f3fbcf3ba6d4e0b85fb7e0c1f0ad52d8ac4af05677e1c02c21d7c2ddfeac"
+        "current_code_digest": "2d7604bbc7a8b26d38e550d6fc0b821b282028fd2b382dc6726609c9c299dd2d"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8146,7 +8146,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -8174,7 +8174,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -8940,13 +8940,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "661155c3ae19ea0fd4330f193a946498b81016c8c961840cfd91f94f9f92ca86",
+      "code_digest": "becaa46a4ea6b823c8bd0f071d2a6cc80252f4c14220811dd66b97e9707431c8",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
-        "current_code_digest": "661155c3ae19ea0fd4330f193a946498b81016c8c961840cfd91f94f9f92ca86"
+        "current_code_digest": "becaa46a4ea6b823c8bd0f071d2a6cc80252f4c14220811dd66b97e9707431c8"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8979,7 +8979,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -9007,7 +9007,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -9766,13 +9766,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "37a3dd1eabf75ac89ae04d715ea9e3539d69622875d463f7dc7ec1584d2e90a0",
+      "code_digest": "0cdf74e11ba00ec301237b220cce804124fd84eff91023057be12bda3b7bb0d3",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
-        "current_code_digest": "37a3dd1eabf75ac89ae04d715ea9e3539d69622875d463f7dc7ec1584d2e90a0"
+        "current_code_digest": "0cdf74e11ba00ec301237b220cce804124fd84eff91023057be12bda3b7bb0d3"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9805,7 +9805,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
         },
         {
           "kind": "code",
@@ -9833,7 +9833,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
           "revision": "contract",
-          "sha256": "a7fa9b659f2975a76ecf889c5a2b7f05e0568a6f9403f3ff81de1857e22398a6"
+          "sha256": "874a7724bc2c05b093673185a0741471891fc4e2d257e230272c3e6d3fb70595"
         },
         {
           "kind": "code",
@@ -10602,13 +10602,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6e7f34ef21694b95870f7a69af754d9dc7fba2d1383ac490a4dc53be199d170b",
+      "code_digest": "8bec1262472b014ac93d589a896f1967e436d20ac10d0eff1005b05efa9b7870",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "新增显式M4有限手机边界并修复同来源任务及收束核验；原Skill正文、公司政策、默认本地云路径与业务验收合同保持。",
         "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
-        "current_code_digest": "6e7f34ef21694b95870f7a69af754d9dc7fba2d1383ac490a4dc53be199d170b"
+        "current_code_digest": "8bec1262472b014ac93d589a896f1967e436d20ac10d0eff1005b05efa9b7870"
       }
     }
   },
