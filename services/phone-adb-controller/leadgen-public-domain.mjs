@@ -10,6 +10,12 @@ export {validatePublicDomainIdentity,publicDomainRunId};
 const fail=s=>{throw Error('PUBLIC_DOMAIN_'+s);};
 const workflows=new Set(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring']);
 const statusOf=v=>v===undefined||v==='done'||v==='completed'?'completed':v==='skipped'?'completed':['partial','paused'].includes(v)?'partial':v==='empty'?'empty':v==='failed'?'failed':'needs_review';
+export function publicDomainFiniteEvidence({activity,evidence,phonePeer,discovery,scope}){
+ if(evidence?.status!=='partial')return false;
+ if(activity.key==='collection')return Boolean(evidence.result?.sampling_receipts?.length)&&(!phonePeer||phonePeer.isEvidence(evidence,activity.key));
+ if(activity.key!=='collect_videos')return false;
+ return phonePeer?phonePeer.isEvidence(evidence,activity.key)&&phonePeer.isFiniteEvidence(evidence,activity.key):Boolean(discovery.discoveryFiniteStopEvidence(evidence,scope));
+}
 export async function createWorkflowDomain({identity,profile,runDirectory,signal,recordEvidence=async()=>{},deadline_ms,cleanup_deadline_ms}){
  const cfg=profile?.domain_adapter?.config;
  if(!workflows.has(cfg?.workflow_key))fail('WORKFLOW');
@@ -115,7 +121,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     }
     const e=result?.adapter_result;
     if(!e||result.execution_stopped===false||unsafe)return verdict(options.acceptance,'unknown',evidenceFile('verification',a.key,{verified:false,reason:'execution_unknown'}));
-    const finite=e.status==='partial'&&(a.key==='collection'&&e.result?.sampling_receipts?.length||a.key==='collect_videos'&&discovery.discoveryFiniteStopEvidence(e,proofScope(a.key)));
+    const finite=publicDomainFiniteEvidence({activity:a,evidence:e,phonePeer,discovery,scope:proofScope(a.key)});
     let checked={verified:false};
     if(e.status==='completed'||e.status==='empty'||finite)checked=phonePeer?await phonePeer.verifyActivity(activities.get(a.key),e,records):await verifyWorkflowActivity({root:runtime,runDir:dir,frozen,env,binding:authority.readPublicDomainBinding(dir),rpc,handlers,preflightRuntime,records,executionMode},activities.get(a.key),e,{deadline_ms:handlers.state.budgetDeadline,signal:options.signal});
     if(!phonePeer&&cfg.workflow_key==='douyin_video_processing'&&frozen.sampling_input&&checked.verified===true){const facts=await load('runtime-receipts.mjs');const binding=authority.readPublicDomainBinding(dir);if(a.key==='qualification')checked.qualification_identity_v1=facts.qualificationIdentityEvidence({dir,frozen,binding});if(a.key==='collection')checked.sampling_admission_v1=facts.samplingAdmissionEvidence({dir,artifact:e,frozen,binding});}
