@@ -86,10 +86,22 @@ compose up -d --no-build --pull never "$SERVICE"
 docker inspect "$CONTAINER" --format '{{json .NetworkSettings.Networks}}' | python3 -c 'import json,sys; v=json.load(sys.stdin) or {}; assert set(v)=={"zenithjoy-canvas-staging-net"}, "Canvas is attached to an unexpected network"'
 docker inspect "$CONTAINER" --format '{{json .HostConfig.PortBindings}}' | python3 -c 'import json,sys; assert not json.load(sys.stdin), "Canvas has published host ports"'
 docker network inspect zenithjoy-canvas-staging-net --format '{{json .Containers}}' | python3 -c 'import json,sys; v=json.load(sys.stdin) or {}; names={c["Name"] for c in v.values()}; assert names == {"zenithjoy-api-staging","zenithjoy-creative-canvas-staging-1"}, "Unexpected private network membership"'
+probe_capabilities() {
+  if [[ -f "$SOURCE/scripts/deploy/canvas-capabilities.py" ]]; then
+    docker exec "$CONTAINER" python -c "$(cat "$SOURCE/scripts/deploy/canvas-capabilities.py")"
+  elif [[ "$ACTION" == rollback ]]; then
+    # An admitted historical release predating this probe retains its original
+    # capability contract. New deployments must carry the fixed-source probe.
+    docker exec "$CONTAINER" python -c "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8188/object_info',timeout=5)); assert all(n in d for n in ['ZenithJoyImage2','ZenithJoyLoadAsset','ZenithJoyChooseAsset','ZenithJoyWan']); assert urllib.request.urlopen('http://127.0.0.1:8188/extensions/zenithjoy/image2-select-wan.json',timeout=5).status == 200"
+  else
+    echo 'Candidate capability probe missing' >&2
+    return 1
+  fi
+}
 for ((i=0; i<36; i++)); do
   STATUS=$(docker inspect "$CONTAINER" --format '{{.State.Health.Status}}' 2>/dev/null || true)
   CURRENT_IMAGE=$(docker inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true)
-  if [[ "$STATUS" == healthy && "$CURRENT_IMAGE" == "$IMAGE_ID" ]] && docker exec "$CONTAINER" python -c "import json,sys,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8188/object_info',timeout=5)); nodes=['ZenithJoyImage2','ZenithJoyLoadAsset','ZenithJoyChooseAsset','ZenithJoyWan']; files=['image2-select-wan.json']; nodes+=['ZenithJoyUploadImage'] if sys.argv[1]=='deploy' else []; files+=['upload-image-wan.json'] if sys.argv[1]=='deploy' else []; assert all(n in d for n in nodes); assert all(urllib.request.urlopen('http://127.0.0.1:8188/extensions/zenithjoy/'+name,timeout=5).status == 200 for name in files)" "$ACTION"; then
+  if [[ "$STATUS" == healthy && "$CURRENT_IMAGE" == "$IMAGE_ID" ]] && probe_capabilities; then
     python3 - "$RELEASES/$SHA/receipt.json.tmp" "$SHA" "$IMAGE_ID" "$ENV_HASH" <<'PY'
 import json,sys
 with open(sys.argv[1], 'w') as f: json.dump({'sha':sys.argv[2], 'image_id':sys.argv[3], 'environment_hash':sys.argv[4], 'health':'healthy'}, f)

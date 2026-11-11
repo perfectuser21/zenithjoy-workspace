@@ -131,7 +131,14 @@ export function createVideoToolsRouter(options: Options = {}): Router {
       let staffId:string|undefined;
       for (const [id,value] of entries) if (timingSafeEqual(digest(instanceToken),digest(value as string)) && typeof instances[id]==='string') staffId=id;
       if (!staffId) return void res.status(401).json({error:'画布身份无效'});
-      const permitted=(req.method==='POST' && (req.path==='/image-jobs' || req.path==='/canvas-images' || (req.path==='/jobs' && req.body?.kind==='wan'))) || (req.method==='GET' && (/^\/image-jobs\/[a-f0-9-]+$/i.test(req.path) || /^\/canvas-images\/[a-f0-9-]+$/i.test(req.path) || /^\/jobs\/[a-f0-9-]+(?:\/download)?$/i.test(req.path)));
+      // A registered canvas may run its owner's native project nodes. No project
+      // enumeration, browser upload, configuration or destructive API is granted.
+      const projectIdPattern='[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
+      const projectRead=new RegExp(`^/projects/${projectIdPattern}(?:/download)?$`,'i');
+      const projectWrite=new RegExp(`^/projects/${projectIdPattern}(?:/segments/${projectIdPattern})?$`,'i');
+      const projectAction=new RegExp(`^/projects/${projectIdPattern}/(?:split|assemble)$`,'i');
+      const projectPermitted=(req.method==='POST'&&(req.path==='/projects'||projectAction.test(req.path))) || (req.method==='GET'&&projectRead.test(req.path)) || (req.method==='PATCH'&&projectWrite.test(req.path));
+      const permitted=projectPermitted || (req.method==='POST' && (req.path==='/image-jobs' || req.path==='/canvas-images' || (req.path==='/jobs' && req.body?.kind==='wan'))) || (req.method==='GET' && (/^\/image-jobs\/[a-f0-9-]+$/i.test(req.path) || /^\/canvas-images\/[a-f0-9-]+$/i.test(req.path) || /^\/jobs\/[a-f0-9-]+(?:\/download)?$/i.test(req.path)));
       if (!permitted) return void res.status(403).json({error:'画布操作无权访问'});
       req.videoStaffId=staffId;next();return;
     }

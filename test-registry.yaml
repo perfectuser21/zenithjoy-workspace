@@ -50,6 +50,34 @@ agent_suite:
 
 tests:
 
+  - id: comfy-project-instance
+    path: apps/api/src/routes/__tests__/video-tools-project-instance.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 视频创作
+
+  - id: comfy-native-video-nodes
+    path: infrastructure/comfyui/tests/test_native_video_workflow.py
+    type: unit
+    ci: L4
+    status: active
+    product: 视频创作
+
+  - id: comfy-native-video-extension
+    path: infrastructure/comfyui/tests/video-project-extension.test.mjs
+    type: unit
+    ci: L4
+    status: active
+    product: 视频创作
+
+  - id: canvas-capabilities-probe
+    path: scripts/deploy/__tests__/canvas-capabilities.test.mjs
+    type: integration
+    ci: L4
+    status: active
+    product: 视频创作
+
   - id: simple-video-workflow-lifecycle
     path: apps/api/src/routes/__tests__/video-projects-lifecycle.test.ts
     type: integration
@@ -62,9 +90,11 @@ tests:
     path: apps/dashboard/src/api/__tests__/video-workflow.api.test.ts
     type: unit
     ci: L4
-    status: active
+    status: deprecated
     product: 视频创作
     note: 会话请求、取消超时、直传失败及素材大小限制。
+
+    retirement: "用户明确要求保留ComfyUI原生图，移除独立分步应用；源可从5978426d6accd0c4e4747b46d94d58b14215de37:apps/dashboard/src/api/__tests__/video-workflow.api.test.ts恢复；由Comfy原生节点、扩展与默认入口回归接替。"
 
   - id: simple-video-workflow-entry
     path: apps/dashboard/src/pages/__tests__/VideoWorkflowEntry.test.tsx
@@ -78,9 +108,11 @@ tests:
     path: apps/dashboard/src/pages/__tests__/VideoWorkflowPage.test.tsx
     type: unit
     ci: L4
-    status: active
+    status: deprecated
     product: 视频创作
     note: 确认分镜、单段生成幂等重试、审核与合成门禁。
+
+    retirement: "用户明确要求保留ComfyUI原生图，移除独立分步应用；源可从5978426d6accd0c4e4747b46d94d58b14215de37:apps/dashboard/src/pages/__tests__/VideoWorkflowPage.test.tsx恢复；由Comfy原生节点、扩展与默认入口回归接替。"
 
   - id: simple-video-workflow-projects
     path: apps/api/src/routes/__tests__/video-projects.test.ts
@@ -102,9 +134,11 @@ tests:
     path: apps/dashboard/e2e/video-workflow.spec.ts
     type: e2e
     ci: unverified
-    status: pending-ci
+    status: deprecated
     product: 视频创作
     note: 浏览器业务步骤验证，模拟API；不作为真实模型效果证据。
+
+    retirement: "用户明确要求保留ComfyUI原生图，移除独立分步应用；源可从5978426d6accd0c4e4747b46d94d58b14215de37:apps/dashboard/e2e/video-workflow.spec.ts恢复；由Comfy原生节点、扩展与默认入口回归接替。"
 
   - id: simple-video-workflow-smoke
     path: .github/workflows/scripts/smoke/simple-video-workflow-smoke.sh
