@@ -6,7 +6,7 @@ import {join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
-import {createPhoneOperationAdmission,isPhoneOperationAdmission} from '../phone-operation-admission.mjs';
+import {createPhoneOperationAdmission,isPhoneOperationAdmission,phoneOperationKind} from '../phone-operation-admission.mjs';
 import {freezePreflightProfile} from '../preflight-control-scope.mjs';
 import {createOfficialCliClosure,isOfficialCliOperationStopped} from '../official-cli-closure.mjs';
 const root=dirname(dirname(fileURLToPath(import.meta.url))),sha=b=>createHash('sha256').update(b).digest('hex');
@@ -92,5 +92,14 @@ test('第二台USB实际SDK与冻结审核声明不同仍拒绝',async t=>{
  const f=await reviewedUsbFixture(t),a=f.create();f.live.sdk='35';await a.prepare();await assert.rejects(()=>a.assert({phase:'before',resourceOnly:false}),/PHONE_OPERATION_USB_SDK/);assert.equal((await a.close()).execution_stopped,false);
 });
 test('第二台USB未批准workflow仍在启动producer前拒绝',async t=>{
- const f=await reviewedUsbFixture(t);f.context.frozen.agent_input.workflow_key='douyin_video_processing';f.context.scope.workflow='douyin_video_processing';const a=f.create();await assert.rejects(()=>a.prepare(),/PHONE_OPERATION_USB_REGISTRY/);assert.equal(f.live.starts,0);
+ const f=await reviewedUsbFixture(t);f.context.frozen.agent_input.workflow_key='douyin_video_processing';f.context.scope.workflow='douyin_video_processing';assert.throws(()=>f.create(),/PHONE_OPERATION_SCOPE/);assert.equal(f.live.starts,0);
+});
+
+for(const [name,change]of [
+ ['unknown-device',f=>{f.context.frozen.discovery_phone_scope.profile='unknown';}],
+ ['unapproved-workflow',f=>{f.context.frozen.agent_input.workflow_key='douyin_video_processing';}],
+ ['missing-review',f=>{delete f.context.frozen.files['runtime/config/native-phone-reviews/xiaolongxia-sdk35-xian-m4.md'];}],
+ ['config-hash-drift',f=>{f.context.frozen.files['runtime/config/collection-phone-hosts.json']='0'.repeat(64);}]
+])test('USB支持谓词不把未审核形状当授权 '+name,async t=>{
+ const f=await reviewedUsbFixture(t);change(f);const {root,frozen}=f.context;assert.equal(phoneOperationKind(frozen.discovery_phone_scope,{root,frozen,workflow:frozen.agent_input.workflow_key}),null);assert.equal(f.live.starts,0);
 });
