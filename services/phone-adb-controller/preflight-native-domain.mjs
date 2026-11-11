@@ -24,6 +24,7 @@ export async function startPreflightNativeDomain({root,directory,sourceFiles,pyt
   });}catch(error){if(returnedErrors.has(error))commandFailures++;else failed=true;throw error;}finally{pending--;}
  };
  const domain={
+  environment:()=>({...adb.env}),
   desktop:async(launcher,xml)=>{if(sealed||Date.now()>=receiptDeadlineMs)throw Error('PREFLIGHT_NATIVE_CLOSED');pending++;try{return await local.desktop(launcher,xml);}catch(error){if(preflightLocalLeafReturned(error))commandFailures++;else failed=true;throw error;}finally{pending--;}},
   adb:async(...args)=>{const argv=args.length===1&&args[0]==='version'?args:['-H','127.0.0.1','-P',policy.endpoint.split(':').at(-1),'-s',serial,...args];return (await request(argv)).toString('utf8');},
   local:async(operation,input)=>{active();pending++;try{return await local.run(operation,input);}catch(error){if(preflightLocalLeafReturned(error))commandFailures++;else failed=true;throw error;}finally{pending--;}}
