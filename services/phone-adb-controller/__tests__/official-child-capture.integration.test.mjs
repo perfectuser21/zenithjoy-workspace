@@ -203,3 +203,17 @@ for(const mode of ['success','cleanup-success','cleanup-settle-reject','cleanup-
  else{assert.match(error.message,/AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED/);assert.equal(error.executionStopped,false);}
  assert.equal(p.snapshot().active,!physicalKnown);assert.equal((await p.close()).execution_stopped,physicalKnown);
 });
+
+test('代码专属getter只交出当前同scope准入实例，关闭后及克隆能力均拒绝',async t=>{
+ const f=await fixture(t,{activityKey:'preflight'}),{createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs'),{isPhoneOperationAdmission}=await f.load('phone-operation-admission.mjs');
+ const context={root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state},p=createOfficialChildPrimitives(context);
+ const scope={activity:'preflight',workflow:f.frozen.agent_input.workflow_key,run:f.env.WFR_TAG,source_commit:f.frozen.deployment.source_commit,profile:f.env.P,serial:f.env.SERIAL,task_id:f.binding.task_id,run_id:f.binding.run_id,binding_id:f.binding.id,snapshot_sha256:f.frozen.snapshot_sha256,deadline_ms:Date.now()+60000,worker_deadline_ms:Date.now()+50000,receipt_deadline_ms:Date.now()+55000};
+ assert.equal(typeof p.operationAdmission,'function');assert.throws(()=>p.operationAdmission(scope),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+ await p.begin(scope);
+ try{
+  const admission=p.operationAdmission(scope);assert.equal(p.operationAdmission(structuredClone(scope)),admission);assert.equal(isPhoneOperationAdmission(admission,{...context,scope}),true);assert.equal(isPhoneOperationAdmission({...admission},{...context,scope}),false);
+  assert.throws(()=>p.operationAdmission({...scope,activity:'collection'}),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);assert.throws(()=>p.operationAdmission({...scope,worker_deadline_ms:scope.worker_deadline_ms+1}),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);assert.throws(()=>p.operationAdmission(),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+  assert.equal((await p.finish('preflight')).execution_stopped,true);assert.throws(()=>p.operationAdmission(scope),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+ }finally{await p.close();}
+ assert.throws(()=>p.operationAdmission(scope),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+});
