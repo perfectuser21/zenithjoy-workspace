@@ -131,7 +131,13 @@ export function inspectRuntime(plan,requireApi=true,exec=execFileSync){
     const allowed=new Set([plan.api_service,...Object.values(plan.compose.services).filter(s=>s.networks.includes(name)).map(s=>s.container_name)]);
     need(Object.values(n.Containers||{}).every(c=>allowed.has(c.Name)),'unexpected container on employee network');
   }
-  return validateReadback(plan,{containers,api},requireApi);
+  const result=validateReadback(plan,{containers,api},requireApi);
+  const probe=readFileSync(new URL('./canvas-capabilities.py',import.meta.url),'utf8');
+  for(const service of Object.values(plan.compose.services)){
+    const reply=JSON.parse(exec('docker',['exec',service.container_name,'python','-c',probe],{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:30000,maxBuffer:65536}));
+    need(reply?.verified===true&&Array.isArray(reply.nodes)&&Array.isArray(reply.templates),'instance capability check did not return verified evidence');
+  }
+  return result;
 }
 export function mergeImage(root,sha,image,service){
   need(/^[a-f0-9]{40}$/.test(sha)&&/^sha256:[a-f0-9]{64}$/.test(image),'invalid fixed API image');

@@ -119,7 +119,6 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // Line 07 — AI 爆款视频翻拍
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
   'CreativeCanvasPage': () => import('../pages/CreativeCanvasPage'),
-  'VideoWorkflowPage': () => import('../pages/VideoWorkflowPage'),
   'AidgeWorkspacePage': () => import('../pages/AidgeWorkspacePage'),
   'WanPlaygroundPage': () => import('../pages/WanPlaygroundPage'),
   'VideoUpscalePage': () => import('../pages/VideoUpscalePage'),
@@ -261,7 +260,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },
-  { path: '/creative-canvas', component: 'VideoWorkflowPage', requireAuth: true, requireStaff: true },
+  { path: '/creative-canvas', component: 'CreativeCanvasPage', requireAuth: true, requireStaff: true },
   { path: '/creative-canvas/advanced', component: 'CreativeCanvasPage', requireAuth: true, requireStaff: true },
   { path: '/wan-playground', component: 'WanPlaygroundPage', requireAuth: true, requireStaff: true },
   { path: '/video-upscale', component: 'VideoUpscalePage', requireAuth: true, requireStaff: true },

@@ -7,6 +7,8 @@ from unittest.mock import patch
 path = os.path.join(os.path.dirname(__file__), '..', 'custom_nodes', 'zenithjoy', '__init__.py')
 spec = importlib.util.spec_from_file_location('zenithjoy_nodes', path)
 nodes = importlib.util.module_from_spec(spec)
+# Register the package so its native workflow submodule resolves during import.
+sys.modules[spec.name] = nodes
 import comfy.options
 comfy.options.enable_args_parsing()
 sys.argv.append('--cpu')

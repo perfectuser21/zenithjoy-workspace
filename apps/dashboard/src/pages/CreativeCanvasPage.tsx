@@ -24,7 +24,7 @@ export default function CreativeCanvasPage() {
   const [opening, setOpening] = useState(false);
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'slow'>('loading');
   const [workflowError, setWorkflowError] = useState('');
-  const openWorkflow = useCallback(async (kind: 'upload' | 'generate' | 'remake') => {
+  const openWorkflow = useCallback(async (kind: 'upload' | 'generate' | 'remake' | 'short-video') => {
     setWorkflowError(''); setOpening(true);
     try {
       const frame = frameRef.current;
@@ -32,8 +32,8 @@ export default function CreativeCanvasPage() {
       if (!frame || frame.getAttribute('src') !== '/api/creative-canvas/' || !child || child.location.origin !== window.location.origin) throw new Error('画布尚未准备好');
       const app = (child as Window & { app?: { loadGraphData?: (graph: unknown, clear: boolean, restoreView: boolean, name: string) => Promise<unknown> } }).app;
       if (typeof app?.loadGraphData !== 'function') throw new Error('画布尚未准备好');
-      const name = kind === 'remake' ? '视频复刻工作流' : kind === 'upload' ? '上传图片工作流' : '图片生成工作流';
-      const filename = kind === 'remake' ? 'video-remake-wan.json' : kind === 'upload' ? 'upload-image-wan.json' : 'image2-select-wan.json';
+      const name = kind === 'short-video' ? '短视频分镜工作流' : kind === 'remake' ? '视频复刻工作流' : kind === 'upload' ? '上传图片工作流' : '图片生成工作流';
+      const filename = kind === 'short-video' ? 'short-video-wan.json' : kind === 'remake' ? 'video-remake-wan.json' : kind === 'upload' ? 'upload-image-wan.json' : 'image2-select-wan.json';
       const response = await fetch(`/api/creative-canvas/extensions/zenithjoy/${filename}`, {credentials:'include'});
       if (!response.ok) throw new Error('模板暂时不可用');
       const graph: unknown = await response.json();
@@ -142,7 +142,7 @@ export default function CreativeCanvasPage() {
           <Link to="/aidge" className="text-violet-700 hover:underline dark:text-violet-300">Aidge 能力中心</Link>
         </div>
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">视频创作画布</h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">连接素材和创作步骤，预览结果后继续下一步。</p>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">在 ComfyUI 中拖拽节点和连线。打开预配工作流，上传原片后先看分镜，再逐段修改、审核和合成。</p>
       </div>
       {status === 'checking' && <p role="status" className="text-sm text-slate-500">正在连接画布…</p>}
       {status === 'unavailable' && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
@@ -154,6 +154,7 @@ export default function CreativeCanvasPage() {
         <div className={expanded ? 'absolute right-3 top-3 z-10 text-sm' : 'flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300'}>
           <button type="button" onClick={() => void toggleFullscreen()} className={expanded ? 'rounded-lg border border-slate-500 bg-slate-900/90 px-3 py-1.5 text-white shadow-lg hover:bg-slate-800' : 'rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 dark:text-violet-300'}>{expanded ? '退出全屏' : '全屏画布'}</button>
           {!expanded && <>
+          <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('short-video')} className="rounded-lg bg-violet-600 px-3 py-1.5 font-medium text-white hover:bg-violet-700 disabled:opacity-50">打开短视频分镜工作流</button>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('upload')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开上传图片工作流</button>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('generate')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开图片生成工作流</button>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('remake')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开视频复刻工作流</button>

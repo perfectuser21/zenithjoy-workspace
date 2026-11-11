@@ -1,0 +1,553 @@
+{
+  "id": "dcadbbd1-05a4-478d-b6c9-ddce79c0909a",
+  "revision": 0,
+  "last_node_id": 7,
+  "last_link_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "ZenithJoyVideoProject",
+      "title": "① 上传整片 · 自动分镜",
+      "pos": [
+        50,
+        160
+      ],
+      "size": [
+        480,
+        510
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "原片视频ID",
+          "type": "STRING",
+          "widget": {
+            "name": "原片视频ID"
+          },
+          "link": null
+        },
+        {
+          "name": "request_id",
+          "type": "STRING",
+          "widget": {
+            "name": "request_id"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "视频项目",
+          "type": "ZJ_VIDEO_PROJECT",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyVideoProject"
+      },
+      "widgets_values": [
+        "",
+        ""
+      ],
+      "widgets_values_named": {
+        "原片视频ID": "",
+        "request_id": ""
+      }
+    },
+    {
+      "id": 2,
+      "type": "ZenithJoyVideoSegment",
+      "title": "② 选择分镜 · 确认",
+      "pos": [
+        600,
+        160
+      ],
+      "size": [
+        430,
+        450
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "视频项目",
+          "type": "ZJ_VIDEO_PROJECT",
+          "link": 1
+        },
+        {
+          "name": "分镜序号",
+          "type": "INT",
+          "widget": {
+            "name": "分镜序号"
+          },
+          "link": null
+        },
+        {
+          "name": "确认分镜",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "确认分镜"
+          },
+          "link": null
+        },
+        {
+          "name": "已预览分镜ID",
+          "type": "STRING",
+          "widget": {
+            "name": "已预览分镜ID"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "选中分镜",
+          "type": "ZJ_VIDEO_SEGMENT",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyVideoSegment"
+      },
+      "widgets_values": [
+        1,
+        false,
+        ""
+      ],
+      "widgets_values_named": {
+        "分镜序号": 1,
+        "确认分镜": false,
+        "已预览分镜ID": ""
+      }
+    },
+    {
+      "id": 3,
+      "type": "ZenithJoySegmentRemake",
+      "title": "③ 换产品 / 背景 / 脸 · Wan",
+      "pos": [
+        1100,
+        160
+      ],
+      "size": [
+        510,
+        880
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "分镜",
+          "type": "ZJ_VIDEO_SEGMENT",
+          "link": 2
+        },
+        {
+          "name": "产品操作",
+          "type": "COMBO",
+          "widget": {
+            "name": "产品操作"
+          },
+          "link": null
+        },
+        {
+          "name": "产品图片ID",
+          "type": "STRING",
+          "widget": {
+            "name": "产品图片ID"
+          },
+          "link": null
+        },
+        {
+          "name": "产品说明",
+          "type": "STRING",
+          "widget": {
+            "name": "产品说明"
+          },
+          "link": null
+        },
+        {
+          "name": "目标颜色",
+          "type": "STRING",
+          "widget": {
+            "name": "目标颜色"
+          },
+          "link": null
+        },
+        {
+          "name": "更换背景",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "更换背景"
+          },
+          "link": null
+        },
+        {
+          "name": "背景说明",
+          "type": "STRING",
+          "widget": {
+            "name": "背景说明"
+          },
+          "link": null
+        },
+        {
+          "name": "背景图片ID",
+          "type": "STRING",
+          "widget": {
+            "name": "背景图片ID"
+          },
+          "link": null
+        },
+        {
+          "name": "更换人脸",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "更换人脸"
+          },
+          "link": null
+        },
+        {
+          "name": "原片人脸",
+          "type": "COMBO",
+          "widget": {
+            "name": "原片人脸"
+          },
+          "link": null
+        },
+        {
+          "name": "人脸图片ID",
+          "type": "STRING",
+          "widget": {
+            "name": "人脸图片ID"
+          },
+          "link": null
+        },
+        {
+          "name": "确认生成",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "确认生成"
+          },
+          "link": null
+        },
+        {
+          "name": "request_id",
+          "type": "STRING",
+          "widget": {
+            "name": "request_id"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "待审核分镜",
+          "type": "ZJ_EDITED_SEGMENT",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "生成视频",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoySegmentRemake"
+      },
+      "widgets_values": [
+        "保留产品",
+        "",
+        "",
+        "",
+        false,
+        "",
+        "",
+        false,
+        "尚未确认",
+        "",
+        false,
+        ""
+      ],
+      "widgets_values_named": {
+        "产品操作": "保留产品",
+        "产品图片ID": "",
+        "产品说明": "",
+        "目标颜色": "",
+        "更换背景": false,
+        "背景说明": "",
+        "背景图片ID": "",
+        "更换人脸": false,
+        "原片人脸": "尚未确认",
+        "人脸图片ID": "",
+        "确认生成": false,
+        "request_id": ""
+      }
+    },
+    {
+      "id": 4,
+      "type": "ZenithJoyApproveSegment",
+      "title": "④ 预览结果 · 人工审核",
+      "pos": [
+        1680,
+        160
+      ],
+      "size": [
+        440,
+        440
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "修改结果",
+          "type": "ZJ_EDITED_SEGMENT",
+          "link": 3
+        },
+        {
+          "name": "审核任务ID",
+          "type": "STRING",
+          "widget": {
+            "name": "审核任务ID"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "视频项目",
+          "type": "ZJ_VIDEO_PROJECT",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyApproveSegment"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "widgets_values_named": {
+        "审核任务ID": ""
+      }
+    },
+    {
+      "id": 5,
+      "type": "ZenithJoyAssembleVideo",
+      "title": "⑤ 全部分镜已审核 · 合成",
+      "pos": [
+        2200,
+        160
+      ],
+      "size": [
+        400,
+        350
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "视频项目",
+          "type": "ZJ_VIDEO_PROJECT",
+          "link": 4
+        },
+        {
+          "name": "确认合成",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "确认合成"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "完整视频",
+          "type": "VIDEO",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyAssembleVideo"
+      },
+      "widgets_values": [
+        false
+      ],
+      "widgets_values_named": {
+        "确认合成": false
+      }
+    },
+    {
+      "id": 6,
+      "type": "SaveVideo",
+      "pos": [
+        2680,
+        160
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
+          "link": 5
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "codec",
+          "name": "format.codec",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format.codec"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "format",
+          "name": "format",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "codec",
+          "name": "codec",
+          "shape": 7,
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "codec"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "video/ComfyUI",
+        "auto",
+        "auto",
+        "auto"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "video/ComfyUI",
+        "format": "auto",
+        "format.codec": "auto",
+        "codec": "auto"
+      },
+      "title": "⑥ 完整视频 · 保存下载"
+    },
+    {
+      "id": 7,
+      "type": "Note",
+      "title": "从整片到成片，仍在节点画布里",
+      "pos": [
+        50,
+        -120
+      ],
+      "size": [
+        1380,
+        210
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "1. 上传45秒或1分钟整片，点击运行：系统先自动分镜，不会付费生成。\n2. 在片段卡片选择分镜，播放确认后点击“确认当前分镜”。\n3. 设置换产品/颜色/Logo/背景/脸，上传素材，打开“确认生成”再运行。\n4. 先预览这一段，满意后点击“确认使用当前结果”并运行保存审核。切换分镜重复这一步。\n5. 所有分镜审核后，打开“确认合成”运行；完整视频在保存节点预览下载。改参数后请点“生成新版本”。"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "ZJ_VIDEO_PROJECT"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      0,
+      "ZJ_VIDEO_SEGMENT"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      0,
+      "ZJ_EDITED_SEGMENT"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      0,
+      "ZJ_VIDEO_PROJECT"
+    ],
+    [
+      5,
+      5,
+      0,
+      6,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.65,
+      "offset": [
+        80,
+        200
+      ]
+    }
+  },
+  "version": 0.4
+}
