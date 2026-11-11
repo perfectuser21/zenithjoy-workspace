@@ -96,6 +96,8 @@ async function fixture(
   }
   let serial = 0;
   async function node(type, fields) {
+    if (type === "ZenithJoyVideoSegment")
+      fields = { ...fields, 已预览分镜ID: fields.已预览分镜ID ?? "" };
     class Node {
       constructor() {
         this.id = ++serial;
@@ -376,6 +378,7 @@ test("short-video template retains native typed links and stops before every pai
       ),
     );
   assert.equal(nodes[1].widgets_values_named["确认分镜"], false);
+  assert.equal(nodes[1].widgets_values_named["已预览分镜ID"], "");
   assert.equal(nodes[2].widgets_values_named["确认生成"], false);
   assert.equal(nodes[3].widgets_values_named["审核任务ID"], "");
   assert.equal(nodes[4].widgets_values_named["确认合成"], false);
@@ -441,13 +444,84 @@ for (const files of [
     f.connect(remake, approval);
     f.connect(approval, assembly);
     f.field(selector, "确认分镜").value = true;
+    f.field(selector, "已预览分镜ID").value = "previous-segment";
     f.field(remake, "确认生成").value = true;
     f.field(approval, "审核任务ID").value = jobId;
     f.field(assembly, "确认合成").value = true;
     f.field(source, "新建视频项目").callback();
     assert.equal(f.field(selector, "确认分镜").value, false);
+    assert.equal(f.field(selector, "已预览分镜ID").value, "");
     assert.equal(f.field(remake, "确认生成").value, false);
     assert.equal(f.field(approval, "审核任务ID").value, "");
     assert.equal(f.field(assembly, "确认合成").value, false);
   });
 }
+
+test("scene confirmation binds only an explicitly reviewed segment and never renews on incoming preview", async () => {
+  const f = await fixture();
+  const selector = await f.node("ZenithJoyVideoSegment", {
+    分镜序号: 1,
+    确认分镜: true,
+    已预览分镜ID: "old-segment",
+  });
+  selector.onExecuted({
+    segment: [
+      {
+        id: "new-segment",
+        projectId: "project-1",
+        start: 0,
+        end: 10,
+        videoUrl: "https://media.example/new.mp4",
+      },
+    ],
+  });
+  assert.equal(f.field(selector, "确认分镜").value, false);
+  assert.equal(
+    f.field(selector, "已预览分镜ID").value,
+    "",
+    "incoming preview must not renew old confirmation",
+  );
+  f.field(selector, "确认当前分镜").callback();
+  assert.equal(f.field(selector, "确认分镜").value, true);
+  assert.equal(f.field(selector, "已预览分镜ID").value, "new-segment");
+  assert.equal(
+    await f.field(selector, "已预览分镜ID").serializeValue(),
+    "new-segment",
+  );
+  selector.onExecuted({
+    segment: [
+      {
+        id: "another-segment",
+        projectId: "project-1",
+        start: 0,
+        end: 10,
+        videoUrl: "https://media.example/another.mp4",
+      },
+    ],
+  });
+  assert.equal(f.field(selector, "确认分镜").value, false);
+  assert.equal(f.field(selector, "已预览分镜ID").value, "");
+});
+
+test("scene boolean cannot confirm without a preview and must explicitly bind the displayed segment", async () => {
+  const f = await fixture();
+  const selector = await f.node("ZenithJoyVideoSegment", {
+    分镜序号: 1,
+    确认分镜: false,
+  });
+  f.field(selector, "确认分镜").value = true;
+  f.field(selector, "确认分镜").callback(true);
+  assert.equal(f.field(selector, "确认分镜").value, false);
+  assert.equal(f.field(selector, "已预览分镜ID").value, "");
+  selector.onExecuted({
+    segment: [
+      { id: "previewed-segment", projectId: "project-1", start: 0, end: 10 },
+    ],
+  });
+  f.field(selector, "确认分镜").value = true;
+  f.field(selector, "确认分镜").callback(true);
+  assert.equal(f.field(selector, "已预览分镜ID").value, "previewed-segment");
+  f.field(selector, "确认分镜").value = false;
+  f.field(selector, "确认分镜").callback(false);
+  assert.equal(f.field(selector, "已预览分镜ID").value, "");
+});
