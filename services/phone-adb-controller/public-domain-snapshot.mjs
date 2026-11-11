@@ -3,6 +3,7 @@ import {join,resolve,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
+import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
 import {agentInput} from './runtime-definition.mjs';
 import {validateStandaloneIdentity,standaloneScope} from './standalone-skill-authority.mjs';
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -54,7 +55,9 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   const scope=template[cfg.workflow_key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
   if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==logicalHost(fixed.machine)||scope.policy?.host_id!==logicalHost(fixed.machine))fail('RESOURCE_SCOPE');
   if(scope.policy.schema_version===2){
-   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
+   // 使用真实本轮身份构造原record验证视图，不改候选scope或原epoch事实。
+   const recordScope=standalone?epochCompatibilityRecordScope({...template,execution_mode:cfg.execution_mode,primary_host:cfg.primary_host,standalone_skill:identity}):scope;
+   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope:recordScope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
    env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
   }else if(scope.policy?.endpoint!==(logicalHost(fixed.machine)==='xian-m4'?'tcp:127.0.0.1:5037':'tcp:127.0.0.1:5041')||logicalHost(fixed.machine)==='xian-m4'&&scope.policy.transport!=='usb'||template.public_preflight_route)fail('RESOURCE_SCOPE');
  }

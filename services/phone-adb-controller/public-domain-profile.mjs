@@ -6,6 +6,7 @@ import {digest,canonical} from './runtime-definition.mjs';
 import {preflightPgDeployment,preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
+import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const HASH=/^[a-f0-9]{64}$/;
 const need=(ok,reason)=>{if(!ok)throw Error('PUBLIC_DOMAIN_PROFILE_'+reason);};
@@ -146,7 +147,10 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
   if(scope){
    domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;
    if(target==='mmv')domainEnv.LEADGEN_MMV_DEVICE_RUNTIME='1';else delete domainEnv.LEADGEN_MMV_DEVICE_RUNTIME;
-   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});
+   // 构建时只验证原record视图；运行时仍须fresh Brain审核及完整源码兼容准入。
+   if(standaloneSkill&&template.epoch_source_compatibility!==undefined)need(UUID.test(scope.task_id||''),'COMPATIBILITY_TASK');
+   const recordScope=standaloneSkill?epochCompatibilityRecordScope({...template,standalone_skill:{protocol:'codex-exec-v1',task_id:scope.task_id}}):scope;
+   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope:recordScope});
    if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;}
   }
  }
