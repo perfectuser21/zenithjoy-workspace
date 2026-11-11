@@ -62,7 +62,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata,preflightRuntime,scoringRuntime,phoneRuntime}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata,preflightRuntime,scoringRuntime,phoneRuntime,qualificationTransfer,getPhoneOperationAdmission}) {
   const trustedScoring=isNativeScoringWorkflow(scoringRuntime),trustedPhone=isNativePhoneRuntime(phoneRuntime);
   const officialChildHost=Boolean(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))&&readFrozen(env.WFR_RUN_DIR).primary_host==='official-child-v1');
   const provedOfficialReturn=(result,command,args,opts)=>officialChildHost&&officialChildOperationReturned(result,{command,args,receipt:opts.receipt,root,frozen:readFrozen(env.WFR_RUN_DIR)});
@@ -240,6 +240,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   };
   const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;},verifyPhoneAssociation});
   const getDiscovery=discoveryAction.getDiscovery;
+  const operationAdmission=scope=>getPhoneOperationAdmission?{admission:getPhoneOperationAdmission(scope),context:{root,env,frozen:readFrozen(env.WFR_RUN_DIR),state,scope,binding:readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT),taskId}}:undefined;
   const intake=()=>verifyAgentUpstream({env,state,queue,sampleInput,profile,serial,line,run});
   const collectionTiming=()=>{
     const actionMax=collectionBudgetExplicit?collectionBudget+480:960;
@@ -371,12 +372,12 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(!state.company_config?.company_id||!state.company_config.tenant_id||!Number.isSafeInteger(state.company_config.version))throw Error('COMPANY_CONFIG_UNVERIFIED');
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
-    if(scope.activity==='collect_videos'&&!trustedPhone)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,verifyPhoneAssociation});
-    if(scope.activity==='collection'&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation});
+    if(scope.activity==='collect_videos'&&!trustedPhone)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,verifyPhoneAssociation,operationAdmission:operationAdmission(scope)});
+    if(scope.activity==='collection'&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation,operationAdmission:operationAdmission(scope)});
     if(scope.activity==='cleanup'){
       if(trustedPreflight){preflightScope=await preflightRuntime.prepare(scope,{state,assertResources:assertAgentScope,verifyPhoneAssociation,central:getCentral()});return preflightScope.snapshot().resource_only_cleanup?{native_cleanup_not_required:true}:undefined;}
-      if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
-      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
+      if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup',operationAdmission:operationAdmission(scope)});
+      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation,operationAdmission:operationAdmission(scope)});
     }
   };
   const createAgentTools=async(activity,scope)=>{
@@ -691,7 +692,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         const remote=`/tmp/qv-${run}-${v.video_id}.wav`;
         if(env.WFR_HOSTKEY!=='mmv'){
           const transport=env.LEADGEN_MMV_HOSTNAME&&env.LEADGEN_MMV_HOSTKEY_ALIAS?['-o','HostName='+env.LEADGEN_MMV_HOSTNAME,'-o','HostKeyAlias='+env.LEADGEN_MMV_HOSTKEY_ALIAS]:[];
-          await checked('scp',[...transport,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15',audio.audioPath,'mmv:'+remote]);
+          if(qualificationTransfer)await qualificationTransfer({audioPath:audio.audioPath,remote,videoId:v.video_id});
+          else await checked('scp',[...transport,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15',audio.audioPath,'mmv:'+remote]);
         }else{if(resolve(audio.audioPath)!==resolve(remote))copyFileSync(audio.audioPath,remote,constants.COPYFILE_EXCL);}
         judgment=(await rpc({kind:'qualify',request:{cmd:'judge',line,run,sourceRun:env.LEADGEN_SOURCE_RUN||undefined,videoId:v.video_id,audio:remote}})).result;
       }

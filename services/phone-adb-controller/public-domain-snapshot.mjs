@@ -1,3 +1,5 @@
+import {freezePhonePeerSsh} from './official-phone-peer-transport.mjs';
+import {validatePhoneExecution} from './official-phone-execution.mjs';
 import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync} from 'node:fs';
 import {join,resolve,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -33,19 +35,23 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  if(requiresSource&&(!/^[A-Za-z0-9_-]{1,120}$/.test(env.LEADGEN_SOURCE_RUN||'')||env.LEADGEN_SOURCE_RUN===env.WFR_TAG))fail('SOURCE_RUN');
  if(requiresSource&&(!input.upstream||!['run_id','task_id'].every(k=>/^[a-f0-9-]{36}$/.test(input.upstream[k]||''))||typeof input.upstream.run_directory!=='string'||!/^[a-f0-9]{64}$/.test(input.upstream.profile_sha256||'')))fail('UPSTREAM');
  const fixed=cfg.resources;
+ const remote=cfg.phone_execution?validatePhoneExecution(cfg.phone_execution,{sourceCommit:template.deployment.source_commit,workflow:cfg.workflow_key,resources:fixed}):null;
+ if(remote&&(identity.machine_id!=='us-mac-m4'||cfg.primary_host!=='official-child-v1'||hash(template.phone_execution)!==hash(remote)))fail('PHONE_PEER_WORKER');
+ if(remote&&(!cfg.phone_peer_ssh||!template.phone_peer_ssh||hash(cfg.phone_peer_ssh)!==hash(template.phone_peer_ssh)||hash(template.phone_peer_ssh)!==hash(freezePhonePeerSsh())))fail('PHONE_PEER_SSH_SOURCE');
+ const phoneHost=remote?'xian-m4':logicalHost(fixed.machine);
  if(!fixed||fixed.machine!==identity.machine_id||fixed.profile!==env.P||fixed.serial!==env.SERIAL||fixed.line!==env.LEADGEN_LINE||!fixed.account)fail('RESOURCE_IDENTITY');
  if(template.deployment.target!==logicalHost(fixed.machine)||template.release.target!==logicalHost(fixed.machine))fail('RESOURCE_IDENTITY');
  if(cfg.workflow_key!=='douyin_comment_scoring'){
-  if(!template.preflight_profile||hash(freezePreflightProfile({env}))!==hash(template.preflight_profile))fail('PREFLIGHT_PROFILE');
+  if(!template.preflight_profile||!remote&&hash(freezePreflightProfile({env}))!==hash(template.preflight_profile))fail('PREFLIGHT_PROFILE');
   const scope=template[cfg.workflow_key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
-  if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==logicalHost(fixed.machine)||scope.policy?.host_id!==logicalHost(fixed.machine))fail('RESOURCE_SCOPE');
+  if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==phoneHost||scope.policy?.host_id!==phoneHost)fail('RESOURCE_SCOPE');
   if(scope.policy.schema_version===2){
    if(hash(freezePublicPreflightRoute({root,files:profile.files,scope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
    env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
-  }else if(scope.policy?.endpoint!==(logicalHost(fixed.machine)==='xian-m4'?'tcp:127.0.0.1:5037':'tcp:127.0.0.1:5041')||logicalHost(fixed.machine)==='xian-m4'&&scope.policy.transport!=='usb'||template.public_preflight_route)fail('RESOURCE_SCOPE');
+  }else if(scope.policy?.endpoint!==(phoneHost==='xian-m4'?'tcp:127.0.0.1:5037':'tcp:127.0.0.1:5041')||phoneHost==='xian-m4'&&scope.policy.transport!=='usb'||template.public_preflight_route)fail('RESOURCE_SCOPE');
  }
  if(cfg.workflow_key==='douyin_comment_scoring'){if(env.P!=='mmv-scoring'||env.SERIAL!=='none')fail('RESOURCE_ROUTE');}
- else {const endpoint=(template.discovery_phone_scope||template.collection_phone_scope).policy.endpoint;if((logicalHost(fixed.machine)==='mmv'?env.LEADGEN_MMV_DEVICE_RUNTIME!=='1':env.LEADGEN_MMV_DEVICE_RUNTIME!==undefined)||env.DOUYIN_ADB_PORT!==endpoint.split(':').at(-1)||env.ADB_SERVER_SOCKET!==endpoint)fail('RESOURCE_ROUTE');}
+ else {const endpoint=(template.discovery_phone_scope||template.collection_phone_scope).policy.endpoint;if((phoneHost==='mmv'?env.LEADGEN_MMV_DEVICE_RUNTIME!=='1':env.LEADGEN_MMV_DEVICE_RUNTIME!==undefined)||env.DOUYIN_ADB_PORT!==endpoint.split(':').at(-1)||env.ADB_SERVER_SOCKET!==endpoint)fail('RESOURCE_ROUTE');}
  const executionMode=cfg.execution_mode??'code';if(!['code','agent'].includes(executionMode)||executionMode!==(template.execution_mode??'code'))fail('EXECUTION_MODE');
  const planned=profile.contract?.activities||[];
  if(planned.length!==template.activities.length||planned.some(a=>!identity.run_binding.activities[a.key]||profile.metadata?.[a.key]?.executor_kind!==(executionMode==='agent'?'agent':'code')))fail('EXECUTION_ACTIVITIES_REQUIRED');
@@ -65,7 +71,7 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  if(executionMode==='agent'&&cfg.primary_host==='official-child-v1'){if(template.execution_transport!==undefined||template.max_turns!==undefined)fail('AGENT_TRANSPORT');template.primary_host='official-child-v1';}
  else if(executionMode==='agent'){if(template.execution_transport!=='raw-model-v1'||!Number.isInteger(template.max_turns)||template.max_turns<1||template.max_turns>64)fail('AGENT_TRANSPORT');env.LEADGEN_EXECUTION_TRANSPORT=template.execution_transport;env.LEADGEN_MAX_TURNS=String(template.max_turns);}else{delete template.execution_transport;delete template.max_turns;}
  const binding=identity.run_binding;
- Object.assign(template,{execution_mode:executionMode,files,public_domain:{protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
+ Object.assign(template,{execution_mode:executionMode,files,public_domain:{protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(remote?{phone_resources:structuredClone(fixed)}:{}),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
  for(const key of ['discovery_phone_scope','collection_phone_scope'])if(template[key])Object.assign(template[key],{task_id:identity.task_id,run_id:identity.run_id,attempt:'a1',source_commit:template.deployment.source_commit});
  privateWrite(join(dir,'activity.log'),'');privateWrite(join(dir,'comments.tsv'),'');mkdirSync(join(dir,'native-operations'),{mode:0o700});
  return {env,runtime,dir,snapshot:template,privateWrite};

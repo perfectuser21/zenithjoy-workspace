@@ -1,3 +1,4 @@
+import {phonePeerPermitRecord} from './official-phone-peer-authority.mjs';
 import {realpathSync} from 'node:fs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const authorities=new Map();
@@ -52,4 +53,11 @@ export function publicDomainActivityScopeMatches(runDirectory,scope,frozen,activ
   const end=av.version.payload?.contract?.runtime?.phase==='finalize'?a.cleanup_deadline_ms:a.deadline_ms;
   return Date.now()<end&&(scope.deadline_ms===undefined||Number.isSafeInteger(scope.deadline_ms)&&scope.deadline_ms<=end);
  }catch{return false;}
+}
+
+export function registerDelegatedPhoneAuthority({permit,runDirectory,frozen}){
+ const p=phonePeerPermitRecord(permit);
+ if(frozen.public_domain?.run_id!==p.identity.run_id||frozen.public_domain?.task_id!==p.identity.task_id||JSON.stringify(frozen.phone_execution)!==JSON.stringify(p.descriptor)||frozen.deployment.target!=='xian-m4')fail();
+ const off=registerPublicDomainAuthority({runDirectory,identity:p.identity,deadline_ms:frozen.public_domain.deadline_ms,cleanup_deadline_ms:p.deadline_ms,snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:frozen.public_domain.runtime_snapshot_sha256},business_scope:{run:frozen.agent_input.run_tag,run_id:p.identity.run_id,task_id:p.identity.task_id,source_commit:p.parent.source_commit,profile:frozen.agent_input.profile,serial:frozen.agent_input.serial,attempt:'a1'}});
+ const dir=realpathSync(runDirectory),r=authorities.get(dir);r.role='delegated-phone-peer';r.phone_host='xian-m4';r.parent_snapshot_sha256=p.parent.snapshot_sha256;return off;
 }

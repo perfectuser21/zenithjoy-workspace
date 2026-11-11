@@ -21,7 +21,7 @@ const epochEntries=['device-epoch-fence-resume.mjs','device-epoch-fence-auth-ref
 for(const role of roles)test(`real ${role.name} deployment package imports the Skill-first entries with its own closure`,t=>{
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'skill-deploy-package-')));
  t.after(()=>rmSync(directory,{recursive:true,force:true}));
- const names=role.files();
+ const names=role.files();assert.equal(new Set(names).size,names.length,`${role.name} duplicate deployment paths are rejected by deploymentManifest`);
  for(const name of names){const target=join(directory,name);mkdirSync(dirname(target),{recursive:true});copyFileSync(join(root,name),target);}
  // Parse the actual copied Python helper; never import it or invoke a service.
  // Its source_manifest requires more than the static Node import graph.
