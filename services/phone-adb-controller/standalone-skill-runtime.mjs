@@ -86,8 +86,10 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   const leaves=leaf?await leaf.seal():null;
   if(leaves&&!leaves.requests_returned&&!leaves.empty_requests_returned)unknown=true;
   if(local&&!unknown){await controller('lock-release-exact',[scope.run_tag]);const status=await controller('lock-status');if(!/^lock=free\b/m.test(status.stdout))fail('RELEASE_READBACK');local=false;}
+  let quarantineVerified=false;
+  if(local&&unknown){const status=await controller('lock-quarantine',[scope.run_tag]);quarantineVerified=status.stdout.trim()===`lock=quarantined owner=${scope.run_tag} review_required=true`;if(!quarantineVerified)fail('QUARANTINE_READBACK');}
   if(!local)await lease.release();
-  const receipt={task_id:identity.task_id,run_id:identity.run_id,execution_mode:'codex-direct',native_return_unknown:unknown,local_released:!local,central_released:!local,desktop:desktop?.stdout??null,leaves};
+  const receipt={task_id:identity.task_id,run_id:identity.run_id,execution_mode:'codex-direct',native_return_unknown:unknown,quarantine_verified:quarantineVerified,local_released:!local,central_released:!local,desktop:desktop?.stdout??null,leaves};
   writeFileSync(join(dir,'standalone-cleanup.json'),JSON.stringify(receipt),{flag:'wx',mode:0o600});return receipt;
  })();
  try{
