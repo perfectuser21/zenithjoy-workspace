@@ -17,6 +17,7 @@ import { AliVideoProvider, AliVideoProviderError, type AliVideoTask, type WanVid
 import { isCosConfigured, type MaterialStorage } from '../services/material-storage';
 import { ToApisImageProvider, type CreativeImageProvider } from '../services/creative-image-provider';
 import { parseRemake, remakeAssets, compileRemake, type RemakeConfig } from '../services/wan-remake-workflow';
+import { createVideoProjectsRouter } from './video-projects';
 
 type Kind = 'wan' | 'upscale';
 interface Job extends AliVideoTask {
@@ -526,6 +527,39 @@ export function createVideoToolsRouter(options: Options = {}): Router {
     res.setHeader('Cache-Control', 'private, no-store');
     await pipeline(Readable.fromWeb(upstream.body as never), res);
   }));
+  // Business workflow uses the same authenticated staff ownership and durable assets as Wan jobs.
+  router.use('/projects', createVideoProjectsRouter({
+    directory,
+    asset: async (req, id) => {
+      if (!uuid.test(id)) return fail(404, '素材不存在或无权访问');
+      const asset = await load<Asset>(assetPath(req, id), directory);
+      if (!asset) return fail(404, '素材不存在或无权访问');
+      const suffix = extname(asset.name).toLowerCase();
+      asset.url = await (await getStorage()).getSignedUrl(`video-tools/${hash(req.videoStaffId!)}/${asset.id}${suffix}`, 86400);
+      return asset;
+    },
+    store: async (req, file, name, metadata) => {
+      const id = randomUUID(), objectStorage = await getStorage();
+      const key = `video-tools/${hash(req.videoStaffId!)}/${id}.mp4`;
+      await objectStorage.putObject({ key, filePath: file, contentType: 'video/mp4' });
+      const asset: Asset = { id, name, kind: 'video', ...metadata, url: await objectStorage.getSignedUrl(key, 86400), createdAt: new Date().toISOString() };
+      await save(assetPath(req, id), asset);
+      return asset;
+    },
+    job: async (req, id) => { if (!uuid.test(id)) return fail(404, '任务不存在或无权访问'); const job=await refreshJob(req,id);return {...view(job),clientRequestId:job.clientRequestId}; },
+    findJob: async (req, clientRequestId) => {
+      await locks.get(`submit:${req.videoStaffId}`);
+      const existing = (await jobs(req)).find(job => job.clientRequestId === clientRequestId);
+      if(!existing)return undefined;const job=await refreshJob(req,existing.id);return {...view(job),clientRequestId:job.clientRequestId};
+    },
+    download: async (url, result) => {
+      if (result) return provider.downloadResult(publicUrl(url));
+      const source = new URL(url);
+      if (source.protocol !== 'https:' || source.username || source.password || source.port || !/^[a-z0-9-]+\.cos\.[a-z0-9-]+\.myqcloud\.com$/.test(source.hostname)) return fail(503, '素材存储地址配置无效，请联系管理员');
+      return fetch(source.href, { redirect: 'error', signal: AbortSignal.timeout(120000) });
+    },
+  }));
+
   router.use((err: Error & { status?: number; code?: string }, _req: Request, res: Response, next: NextFunction) => {
     if (res.headersSent) return next(err);
     const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : err.status ?? 500;
