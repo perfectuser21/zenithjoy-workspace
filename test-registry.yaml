@@ -11658,3 +11658,11 @@ tests:
     status: active
     product: AI员工
     note: "官方USB必需真实同scope品牌；原Code与云epoch兼容"
+
+  - id: leadgen-fixture-runtime-import-closure
+    path: services/phone-adb-controller/__tests__/fixture-runtime-import-closure.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实冻结runtime和候选collector静态依赖完整，零SSH/真机"
