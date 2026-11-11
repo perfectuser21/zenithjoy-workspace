@@ -77,7 +77,7 @@ export function createPhoneOperationAdmission(context,dependencies={}){
    const out=join(directory,'inventory-'+String(++sequence).padStart(4,'0'));mkdirSync(out,{mode:0o700});
    const q={endpoint:policy.endpoint,serial:spec.serial};
    const result=await inventory({operation:'inventory',scope:q,directory:out,checkOperationTime:()=>current(),readAuthority:async()=>{current();source();owner();return {scope:q,authorized_action:'inventory',lease_until:proof.central.expires_at};}});
-   current();source();owner();await authority(request);
+   current();source();owner();await authority(request);current();source();owner();current();
    if(result.wire_complete!==true||result.socket_closed!==true||result.peer_eof!==true||result.pending!==0)throw fail('USB_INVENTORY_UNKNOWN');
    const rows=parseDeviceInventory(result.response).filter(x=>x.serial===spec.serial),properties=rows[0]?.properties?.split(/\s+/)||[];
    if(rows.length!==1||rows[0].state!=='device'||!properties.includes('transport_id:'+usb.transport.transport_id)||!properties.includes('usb:'+usb.transport.usb_path))throw fail('USB_TRANSPORT');
