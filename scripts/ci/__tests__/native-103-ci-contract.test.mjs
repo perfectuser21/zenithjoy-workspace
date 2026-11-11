@@ -74,3 +74,21 @@ test('public Code preflight and epoch producer native regressions require an own
  assert.doesNotThrow(()=>checkGate('code',needs));needs[key]={result:'skipped'};assert.throws(()=>checkGate('code',needs),/public-code-phone-darwin-test=skipped/);
  assert.equal(doc.jobs['collection-phone-darwin-test']['timeout-minutes'],10,'existing Darwin budget remains unchanged');
 });
+
+test('both collection Darwin shards retain every original kernel file and fail the required aggregate on any shard failure',()=>{
+ const doc=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const key='collection-phone-darwin-test',job=doc.jobs[key],matrix=job.strategy?.matrix?.include;
+ assert.equal(job.strategy?.['fail-fast'],false,'one shard failure must not cancel the other evidence');
+ assert.equal(matrix?.length,2,'split the aggregate workload without increasing the original job budget');
+ const expected=['adb-host-terminal','native-operation-ipc','native-operation-identity','native-operation-races','discovery-phase-budget','discovery-cleanup-scope','collection-leaf-returned','uiautomator-dump-crash','collection-returned-authority','collection-panel-readback','collection-leaf-scope','collection-phone-proof','collection-evidence-layout','collection-cleanup-only'].map(n=>'services/phone-adb-controller/__tests__/'+n+'.test.mjs');
+ const actual=matrix.flatMap(row=>row.suites.trim().split(/\s+/));assert.equal(new Set(actual).size,actual.length);assert.deepEqual(actual.toSorted(),expected.toSorted());
+ assert.deepEqual(matrix.map(row=>row.shard).toSorted(),[0,1]);assert.equal(job['timeout-minutes'],10);assert.equal(job['runs-on'],'macos-latest');
+ const kernel=job.steps.find(s=>s.name==='Require real Darwin kernel tests').run;
+ assert.match(kernel,/node --test --test-concurrency=1 \$\{\{ matrix\.suites \}\}/);
+ for(const name of ['collection-review-maintenance.test.py','collection-review-gap.test.py','collection-review-maintenance-claim.test.py'])assert.ok(kernel.includes(name));
+ assert.ok(job.name.includes('${{ matrix.shard }}'));assert.ok(doc.jobs['l3-passed'].needs.includes(key));assert.ok(gates.code.always.includes(key));
+ for(const result of ['failure','cancelled','skipped','missing']){
+  const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}])),[key]:{result}};
+  assert.throws(()=>checkGate('code',needs),/collection-phone-darwin-test/);
+ }
+});

@@ -529,7 +529,30 @@ jobs:
 
   # 本机内核nofork守卫不能由Linux上的platform skip代替。
   collection-phone-darwin-test:
-    name: Collection Phone Darwin Test
+    name: Collection Phone Darwin Test (${{ matrix.shard }})
+    # 两次完整串行集合在10min总预算被取消且0 not-ok；按文件均分，单case/串行度/预算不变。
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 0
+            suites: >-
+              services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs
+              services/phone-adb-controller/__tests__/collection-cleanup-only.test.mjs
+              services/phone-adb-controller/__tests__/collection-evidence-layout.test.mjs
+              services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs
+              services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs
+              services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs
+              services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs
+          - shard: 1
+            suites: >-
+              services/phone-adb-controller/__tests__/adb-host-terminal.test.mjs
+              services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs
+              services/phone-adb-controller/__tests__/native-operation-identity.test.mjs
+              services/phone-adb-controller/__tests__/native-operation-races.test.mjs
+              services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs
+              services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs
+              services/phone-adb-controller/__tests__/uiautomator-dump-crash.test.mjs
     runs-on: macos-latest
     timeout-minutes: 10
     steps:
@@ -588,15 +611,16 @@ jobs:
           python3 services/phone-adb-controller/__tests__/collection-review-maintenance-claim.test.py
           # 文件级隔离冷启动/observer重夹具，避免并行文件消耗彼此真实300ms/.4s预算。
           # 不改生产deadline、单项断言或case内部fork/IPC/race并发；原有项与新增清场项仍全部实跑。
-          node --test --test-concurrency=1 services/phone-adb-controller/__tests__/adb-host-terminal.test.mjs services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs services/phone-adb-controller/__tests__/native-operation-identity.test.mjs services/phone-adb-controller/__tests__/native-operation-races.test.mjs services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/uiautomator-dump-crash.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs services/phone-adb-controller/__tests__/collection-evidence-layout.test.mjs services/phone-adb-controller/__tests__/collection-cleanup-only.test.mjs
+          node --test --test-concurrency=1 ${{ matrix.suites }}
       - name: Preserve failed collection fixture evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: collection-phone-darwin-failures
+          name: collection-phone-darwin-failures-${{ matrix.shard }}
           path: ${{ runner.temp }}/collection-phone-failures
           if-no-files-found: warn
           retention-days: 7
+
 
   # ─── apps/api/scripts ────────────────────────────────────────────────
   # apps/api/scripts/ 下的独立 Python 脚本（如 wechat-mp-freepublish.py）不属于任何
