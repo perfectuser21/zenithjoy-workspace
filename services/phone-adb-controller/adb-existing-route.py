@@ -217,14 +217,34 @@ def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2
     return matches[0][0]
 
 
+def _proxy_version_timeout(binary, environment):
+    env = os.environ if environment is None else environment
+    if 'WFR_COLLECTION_LEAF_SOCKET' not in env or Path(binary).resolve() != Path(__file__).resolve().with_name('adb-managed-client.py'):
+        return None
+    # The managed proxy includes both fresh authority checks. It is not the
+    # local 2s binary probe, and retrying a disconnected proxy would replay IPC.
+    if not os.path.isabs(env.get('WFR_COLLECTION_LEAF_SOCKET', '')) or not re.fullmatch(r'[a-f0-9]{48}', env.get('WFR_COLLECTION_LEAF_NONCE', '')):
+        raise ValueError('ADB_ROUTE_CLIENT_PROXY_CONTEXT')
+    raw = env.get('WFR_COLLECTION_LEAF_DEADLINE_MS', '')
+    if not isinstance(raw, str) or not re.fullmatch(r'[1-9][0-9]{0,15}', raw):
+        raise ValueError('ADB_ROUTE_CLIENT_PROXY_DEADLINE')
+    remaining = int(raw) / 1000 - time.time()
+    if remaining <= 0:
+        raise ValueError('ADB_ROUTE_CLIENT_PROXY_DEADLINE')
+    # parent_leaf already has this finite transport cap; the producer's fixed
+    # absolute admission deadline can only shorten it, never extend authority.
+    return min(300, remaining)
+
+
 def verified_client_version(binary, *, environment=None):
-    """Bound local version startup jitter to three reads; never invoke server lifecycle."""
-    for attempt in range(3):
+    """Local probes retain 2s/three reads; a bounded managed proxy is one call."""
+    proxy_timeout = _proxy_version_timeout(binary, environment)
+    for attempt in range(1 if proxy_timeout is not None else 3):
         try:
-            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2,
+            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=proxy_timeout if proxy_timeout is not None else 2,
                                     **({'env': environment} if environment is not None else {}))
         except subprocess.TimeoutExpired:
-            if attempt < 2:
+            if proxy_timeout is None and attempt < 2:
                 continue
             raise
         if result.returncode or not re.search(r'^Android Debug Bridge version 1\.0\.41\r?$', result.stdout, re.M):
