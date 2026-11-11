@@ -11,7 +11,7 @@ import {captureOwnerGatewayRoute,createOwnerReadConnectionFactory} from '../offi
 import {loadOfficialGatewayDependencies} from '../official-gateway-dependencies.mjs';
 const runtimeRoot=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,'');
 const source={commit:'a'.repeat(40),files:['official-owner-read-connection.mjs','official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'].map(path=>({path,sha256:createHash('sha256').update(readFileSync(join(runtimeRoot,path))).digest('hex')}))};
-async function fixture(t,{noReply=false,shutdown=false,closeMissing=false,invalidFrame,stopThrows=false,authorityRevoked=false,configToken='fixture'}={}){
+async function fixture(t,{noReply=false,shutdown=false,closeMissing=false,invalidFrame,stopThrows=false,authorityRevoked=false,configToken='fixture',envToken='fixture'}={}){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'owner-read-wire-'))),http=createServer(),wss=new WebSocketServer({server:http}),sockets=new Set(),frames=[];
  let connections=0;
  wss.on('connection',ws=>{connections++;sockets.add(ws);ws.on('close',()=>sockets.delete(ws));ws.send(JSON.stringify({type:'event',event:'connect.challenge',payload:{nonce:'fixture',ts:Date.now()}}));ws.on('message',raw=>{
@@ -22,7 +22,7 @@ async function fixture(t,{noReply=false,shutdown=false,closeMissing=false,invali
   ws.send(JSON.stringify({type:'res',id:f.id,ok:true,payload}));
  });});await new Promise(r=>http.listen(0,'127.0.0.1',r));
  t.after(async()=>{for(const s of sockets)s.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>http.close(r));rmSync(dir,{recursive:true,force:true});});
- const port=http.address().port,config=join(dir,'config.json'),env={OPENCLAW_CONFIG_PATH:config,OPENCLAW_STATE_DIR:dir,OPENCLAW_GATEWAY_PORT:String(port),OPENCLAW_GATEWAY_TOKEN:'fixture'};
+ const port=http.address().port,config=join(dir,'config.json'),env={OPENCLAW_CONFIG_PATH:config,OPENCLAW_STATE_DIR:dir,OPENCLAW_GATEWAY_PORT:String(port),OPENCLAW_GATEWAY_TOKEN:envToken};
  writeFileSync(config,JSON.stringify({gateway:{port,bind:'loopback',mode:'local',auth:{mode:'token',token:configToken}}}),{mode:0o600});
  const deps={...await loadOfficialGatewayDependencies({runtimeRoot,source})};let wire;
  class Socket extends deps.WebSocket{constructor(...args){super(...args);wire=this;if(closeMissing==='request')this._req.once=()=>this._req;else if(closeMissing==='socket'){const once=this._req.once.bind(this._req);this._req.once=(event,fn)=>once(event,event==='socket'?s=>fn({once:()=>{},destroy:()=>s.destroy()}):fn);}}on(event,fn){return closeMissing==='websocket'&&event==='close'?this:super.on(event,fn);}}
@@ -70,3 +70,6 @@ test('官方精确Gateway环境变量引用和literal凭据同路由完成实际
  await c.read('sessions.describe',{key:f.scope.parent,agentId:'work-commander'});
  const proof=await c.close();assert.equal(f.connections(),1);assert.equal(proof.request_closed,true);assert.equal(proof.websocket_closed,true);assert.equal(proof.socket_closed,true);
 });
+
+for(const configToken of ['${OTHER_TOKEN}','${OPENCLAW_GATEWAY_TOKEN:-fallback}','prefix${OPENCLAW_GATEWAY_TOKEN}'])test('拒绝非精确Gateway变量引用 '+configToken,async t=>{const f=await fixture(t,{configToken});await assert.rejects(f.open);assert.equal(f.connections(),0);});
+for(const envToken of [undefined,'','${OPENCLAW_GATEWAY_TOKEN}','${OTHER_TOKEN}'])test('精确Gateway变量引用仍拒绝缺失或未解析认证值 '+String(envToken),async t=>{const f=await fixture(t,{configToken:'${OPENCLAW_GATEWAY_TOKEN}',envToken});if(envToken===undefined)f.options.gatewayRoute=captureOwnerGatewayRoute({...f.env,OPENCLAW_GATEWAY_TOKEN:undefined});await assert.rejects(f.open);assert.equal(f.connections(),0);});

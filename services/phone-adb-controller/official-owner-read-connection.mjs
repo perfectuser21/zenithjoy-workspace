@@ -18,11 +18,11 @@ export function captureOwnerGatewayRoute(environment=process.env){
   const port=Number(env.OPENCLAW_GATEWAY_PORT),path=env.OPENCLAW_CONFIG_PATH;
   if(!pin||!/^\d+$/.test(env.OPENCLAW_GATEWAY_PORT||'')||port<1||port>65535||env.OPENCLAW_GATEWAY_URL
    ||!path?.startsWith('/')||realpathSync(path)!==path||!env.OPENCLAW_STATE_DIR?.startsWith('/')
-   ||realpathSync(env.OPENCLAW_STATE_DIR)!==env.OPENCLAW_STATE_DIR||!env.OPENCLAW_GATEWAY_TOKEN||/[\r\n]/.test(env.OPENCLAW_GATEWAY_TOKEN))throw fail();
+   ||realpathSync(env.OPENCLAW_STATE_DIR)!==env.OPENCLAW_STATE_DIR||typeof env.OPENCLAW_GATEWAY_TOKEN!=='string'||!env.OPENCLAW_GATEWAY_TOKEN||/[\r\n]/.test(env.OPENCLAW_GATEWAY_TOKEN)||env.OPENCLAW_GATEWAY_TOKEN.includes('${'))throw fail();
   const st=lstatSync(path),bytes=readFileSync(path),config=JSON.parse(bytes);
   if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o600||st.dev!==pin.dev||st.ino!==pin.ino||hash(bytes)!==pin.sha256
    ||config.gateway?.mode!=='local'||config.gateway?.bind!=='loopback'||config.gateway?.port!==port||config.gateway?.remote
-   ||config.gateway?.auth?.mode!=='token'||config.gateway?.auth?.token!==env.OPENCLAW_GATEWAY_TOKEN)throw fail();
+   ||config.gateway?.auth?.mode!=='token'||config.gateway?.auth?.token!==env.OPENCLAW_GATEWAY_TOKEN&&config.gateway?.auth?.token!=='${OPENCLAW_GATEWAY_TOKEN}')throw fail();
   return {url:'ws://127.0.0.1:'+port,token:env.OPENCLAW_GATEWAY_TOKEN,config_path:path,config_sha256:pin.sha256};
  });return route;
 }

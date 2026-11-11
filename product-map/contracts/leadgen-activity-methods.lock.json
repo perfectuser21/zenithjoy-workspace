@@ -756,7 +756,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -808,13 +808,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "266752778f92c0ccb5cdcffa757b918f01ea061bd572f54dcd738ab062d147c8",
+      "code_digest": "8466b6f32f699eb92e59e392d5fe45470025c0cd4aa78b4bc588ff95e9a5bbb7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
-        "current_code_digest": "266752778f92c0ccb5cdcffa757b918f01ea061bd572f54dcd738ab062d147c8"
+        "current_code_digest": "8466b6f32f699eb92e59e392d5fe45470025c0cd4aa78b4bc588ff95e9a5bbb7"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1625,7 +1625,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -1656,13 +1656,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d7f0d2f9690976e163d747fac58509edcfc47b616f4a3fbbd07fb504a46a244c",
+      "code_digest": "95a6e47a3c8292005ab413f753eca0141cc56312ec3277cf74ddded087c98cb0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
-        "current_code_digest": "d7f0d2f9690976e163d747fac58509edcfc47b616f4a3fbbd07fb504a46a244c"
+        "current_code_digest": "95a6e47a3c8292005ab413f753eca0141cc56312ec3277cf74ddded087c98cb0"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2392,7 +2392,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -2451,13 +2451,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "570d6e6195cf2293b89a848a6701038328d32d89fe4b992c6d8bccf5473e2b7a",
+      "code_digest": "21cea93d105b19efb95b6a25e39ef153bd8b1bab5ac6f4a0e94eab09eea217f4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
-        "current_code_digest": "570d6e6195cf2293b89a848a6701038328d32d89fe4b992c6d8bccf5473e2b7a"
+        "current_code_digest": "21cea93d105b19efb95b6a25e39ef153bd8b1bab5ac6f4a0e94eab09eea217f4"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3229,7 +3229,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -3330,13 +3330,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "3825ca827c174d6be4ccdd9a24780869e125bc4353f133416c165343893ffa84",
+      "code_digest": "7a15c5f32c21aaeff55e187619037e45197f567c8589a9b886ccdc6fb16d9e11",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
-        "current_code_digest": "3825ca827c174d6be4ccdd9a24780869e125bc4353f133416c165343893ffa84"
+        "current_code_digest": "7a15c5f32c21aaeff55e187619037e45197f567c8589a9b886ccdc6fb16d9e11"
       }
     },
     "douyin_video_processing.collection": {
@@ -4095,7 +4095,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -4147,13 +4147,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "e769595bfdaec32d7e93b19496fe71844262f088ebf99d546c4e071e5c5eafa0",
+      "code_digest": "4736975d0fba93f3286af6eec76e452d1f7a7dd89d127cfdedae1521843afbc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
-        "current_code_digest": "e769595bfdaec32d7e93b19496fe71844262f088ebf99d546c4e071e5c5eafa0"
+        "current_code_digest": "4736975d0fba93f3286af6eec76e452d1f7a7dd89d127cfdedae1521843afbc8"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4942,7 +4942,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -4973,13 +4973,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4bdbc4b9dccbc02a30e126db9d893a4680b5555a257c3e4b2d34f937ca644915",
+      "code_digest": "439527c951557b9c7d7b4d585db8d5fc6455f8df26c9ed3c210be45b474f4b76",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
-        "current_code_digest": "4bdbc4b9dccbc02a30e126db9d893a4680b5555a257c3e4b2d34f937ca644915"
+        "current_code_digest": "439527c951557b9c7d7b4d585db8d5fc6455f8df26c9ed3c210be45b474f4b76"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5688,7 +5688,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -5782,13 +5782,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "a1d0dd8a99fcde3ed8a1de709e77a2be8070de37d333442544f11a01a48a6dd9",
+      "code_digest": "4becf3596779fe14c937679db94fad638ac6bbbe638e736d3bf8ea7d42d742d8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
-        "current_code_digest": "a1d0dd8a99fcde3ed8a1de709e77a2be8070de37d333442544f11a01a48a6dd9"
+        "current_code_digest": "4becf3596779fe14c937679db94fad638ac6bbbe638e736d3bf8ea7d42d742d8"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6504,7 +6504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -6633,13 +6633,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6e28a5450511a5b60518f2deb44ffac70fc53b2fdf6aed509a53988a14a560ee",
+      "code_digest": "f5dd1385018d43029320167a41a9735a2824275adc7ef8684d187d87ea124c8b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
-        "current_code_digest": "6e28a5450511a5b60518f2deb44ffac70fc53b2fdf6aed509a53988a14a560ee"
+        "current_code_digest": "f5dd1385018d43029320167a41a9735a2824275adc7ef8684d187d87ea124c8b"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7369,7 +7369,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -7414,13 +7414,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "561544eba8356607af8d41b4b9056b68ec76dece8350bd3eedde7a1ab9570c27",
+      "code_digest": "6d627e6ff769cbc653baa09b748e7e3da6fe18e09ad33674f9f519a9cd057195",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
-        "current_code_digest": "561544eba8356607af8d41b4b9056b68ec76dece8350bd3eedde7a1ab9570c27"
+        "current_code_digest": "6d627e6ff769cbc653baa09b748e7e3da6fe18e09ad33674f9f519a9cd057195"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8139,7 +8139,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -8170,13 +8170,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7681d83c09e890f4b8cbea62debff677a77777fb60e29c55438c0b24ad6f5c05",
+      "code_digest": "bff8b09326a0d15a67a6be8a4a5e9d6aa295419526d300dac20d4a002407508e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
-        "current_code_digest": "7681d83c09e890f4b8cbea62debff677a77777fb60e29c55438c0b24ad6f5c05"
+        "current_code_digest": "bff8b09326a0d15a67a6be8a4a5e9d6aa295419526d300dac20d4a002407508e"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8888,7 +8888,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -8919,13 +8919,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bdb5ae7d61a3daf15b30debe67ea59c520ee3e066ded44d1d3f137cf212efeb7",
+      "code_digest": "797e5d910d07deec79479f4cc31c7eafbcd926945cdbe8f8af7a69a7dcb8afab",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
-        "current_code_digest": "bdb5ae7d61a3daf15b30debe67ea59c520ee3e066ded44d1d3f137cf212efeb7"
+        "current_code_digest": "797e5d910d07deec79479f4cc31c7eafbcd926945cdbe8f8af7a69a7dcb8afab"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9647,7 +9647,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-owner-read-connection.mjs",
           "revision": "contract",
-          "sha256": "c165b6b5998962a8c8413332d4d8b7e5fd84ac258f0c9ae81e665c9c24dba0af"
+          "sha256": "8854bb06a72219fe6ffee26d8c50438dfb60390fc78cd0db544c46ce04258430"
         },
         {
           "kind": "code",
@@ -9678,13 +9678,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1da7a7279236a374a3c18776e1ba62dab0dfe774977f79b250f2fb44500f3fcc",
+      "code_digest": "1546c5156db2d126d4c2066d2fe86e3869b9acb713ec0083944b7b3a0cba9cc5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭的私有读传输采用固定SDK单连接并补齐helper实现绑定，原Skill正文、活动合同、原截止及finished/delivered关闭判据保持。",
+        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
         "reviewed_by": "/root/review_owner_connection_boundaries",
         "previous_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
-        "current_code_digest": "1da7a7279236a374a3c18776e1ba62dab0dfe774977f79b250f2fb44500f3fcc"
+        "current_code_digest": "1546c5156db2d126d4c2066d2fe86e3869b9acb713ec0083944b7b3a0cba9cc5"
       }
     }
   },
