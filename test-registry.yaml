@@ -50,6 +50,54 @@ agent_suite:
 
 tests:
 
+  - id: simple-video-workflow-entry
+    path: apps/dashboard/src/pages/__tests__/VideoWorkflowEntry.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 视频创作
+    note: 默认业务步骤入口与高级画布分离。
+
+  - id: simple-video-workflow-ui
+    path: apps/dashboard/src/pages/__tests__/VideoWorkflowPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 视频创作
+    note: 确认分镜、单段生成幂等重试、审核与合成门禁。
+
+  - id: simple-video-workflow-projects
+    path: apps/api/src/routes/__tests__/video-projects.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 视频创作
+    note: 员工项目隔离、修改任务关联、审核状态。
+
+  - id: simple-video-workflow-media
+    path: apps/api/src/services/__tests__/video-project-media.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 视频创作
+    note: 真实ffmpeg场景切段、时长限制、原声合成。
+
+  - id: simple-video-workflow-browser
+    path: apps/dashboard/e2e/video-workflow.spec.ts
+    type: e2e
+    ci: unverified
+    status: pending-ci
+    product: 视频创作
+    note: 浏览器业务步骤验证，模拟API；不作为真实模型效果证据。
+
+  - id: simple-video-workflow-smoke
+    path: .github/workflows/scripts/smoke/simple-video-workflow-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 视频创作
+    note: 前端业务合同、项目接口和真实媒体处理检查。
+
   - id: phone-maintenance-reopen-proof
     path: services/phone-adb-controller/__tests__/maintenance-reopen-proof.test.py
     type: unit

@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 // Browser interaction regression with a simulated API. Real media processing is
 // verified independently by video-project-media.test.ts; no model call is made here.
 test('分步制作：检查分镜、设置修改、审核和成片', async ({ page }) => {
+  page.on('pageerror', error => console.error('浏览器运行错误：', error.message));
   const source = { id: 'source-1', kind: 'video', name: '产品展示原片.mp4', url: '/test-media.mp4', duration: 45, width: 720, height: 1280 };
   let project: any = {
     id: 'project-1', name: '产品展示原片', sourceAssetId: source.id, source,
@@ -15,6 +16,7 @@ test('分步制作：检查分镜、设置修改、审核和成片', async ({ pa
   let paidSubmissions = 0;
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
+    if (!url.pathname.startsWith('/api/')) { await route.continue(); return; }
     const body = route.request().postDataJSON();
     let result: unknown = {};
     if (url.pathname === '/api/video-tools/config') result = { wan: { configured: true }, uploads: { configured: true } };
@@ -40,4 +42,14 @@ test('分步制作：检查分镜、设置修改、审核和成片', async ({ pa
   await expect(page.getByRole('button', { name: '合成完整视频' })).toBeDisabled();
   expect(paidSubmissions).toBe(0);
   await page.screenshot({ path: '/tmp/zenithjoy-video-workflow-edit.png', fullPage: true });
+  for (let index = 0; index < 4; index++) {
+    await page.getByRole('button', { name: new RegExp(`片段 ${index + 1}.*秒`) }).click();
+    await page.getByRole('button', { name: '这一段保持原样' }).click();
+    await expect(page.getByText('已确认使用', { exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole('button', { name: '合成完整视频' })).toBeEnabled();
+  await page.getByRole('button', { name: '合成完整视频' }).click();
+  await expect(page.getByLabel('完整成片')).toBeVisible();
+  await expect(page.getByRole('link', { name: '下载完整视频' })).toHaveAttribute('href', '/api/video-tools/projects/project-1/download');
+  expect(paidSubmissions).toBe(0);
 });
