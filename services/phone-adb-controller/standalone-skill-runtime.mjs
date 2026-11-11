@@ -94,7 +94,7 @@ if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(i
  try{
   const [operation,path,...rest]=process.argv.slice(2);
   if(operation==='serve'){
-   const value=JSON.parse(readFileSync(join(path,'environment.json'),'utf8'));process.env.BRAIN_INTERNAL_TOKEN=value.BRAIN_INTERNAL_TOKEN;const runtime=await startStandaloneSkillRuntime({runDirectory:path,environment:{...process.env,...value}});process.stdout.write(JSON.stringify({connection_path:runtime.connectionPath})+'\n');
+   const value=JSON.parse(readFileSync(join(path,'environment.json'),'utf8'));const allowed=new Set(['DOUYIN_PHONE_REGISTRY','DOUYIN_ACCOUNT_REGISTRY','DOUYIN_PHONE_TMP_ROOT','DOUYIN_PHONE_LOCK_ROOT']);if(!value||Array.isArray(value)||typeof value!=='object'||Object.entries(value).some(([k,v])=>!allowed.has(k)||typeof v!=='string'||/[\r\n\0]/.test(v)))fail('ENVIRONMENT');const runtime=await startStandaloneSkillRuntime({runDirectory:path,environment:{...process.env,...value}});process.stdout.write(JSON.stringify({connection_path:runtime.connectionPath})+'\n');
    let closing=false;const stop=async()=>{if(closing)return;closing=true;try{await runtime.close();process.exitCode=0;}catch{process.exitCode=1;}};process.once('SIGTERM',stop);process.once('SIGINT',stop);
   }else if(operation==='call'){
    const input=JSON.parse(readFileSync(0,'utf8')||'{}');const result=await callStandaloneSkillTool(path,rest[0],input);process.stdout.write(JSON.stringify(result)+'\n');

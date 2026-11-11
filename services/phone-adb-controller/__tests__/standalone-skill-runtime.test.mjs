@@ -37,3 +37,12 @@ test('failed producer startup preserves local and central ownership because no r
   const cleanup=JSON.parse(fs.readFileSync(path.join(dir,'standalone-cleanup.json'),'utf8'));assert.equal(cleanup.native_return_unknown,true);assert.equal(cleanup.local_released,false);assert.equal(cleanup.central_released,false);
  }finally{if(prior===undefined)delete process.env.BRAIN_INTERNAL_TOKEN;else process.env.BRAIN_INTERNAL_TOKEN=prior;fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('serve refuses credentials or undeclared controls in an artifact configuration without echoing their values',async()=>{
+ const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path'),{spawnSync}=await import('node:child_process');const d=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'direct-env-'));
+ try{
+  for(const config of [{OPENAI_API_KEY:'PRIVATE_SENTINEL'},{BRAIN_INTERNAL_TOKEN:'PRIVATE_SENTINEL'},{NODE_OPTIONS:'PRIVATE_SENTINEL'}]){
+   fs.writeFileSync(path.join(d,'environment.json'),JSON.stringify(config),{mode:0o600});const r=spawnSync(process.execPath,[new URL('../standalone-skill-runtime.mjs',import.meta.url).pathname,'serve',d],{encoding:'utf8'});assert.notEqual(r.status,0);assert.match(r.stderr,/STANDALONE_NATIVE_ENVIRONMENT/);assert.doesNotMatch(r.stderr+r.stdout,/PRIVATE_SENTINEL/);
+  }
+ }finally{fs.rmSync(d,{recursive:true,force:true});}
+});

@@ -66,7 +66,7 @@ export function createStandaloneSkillTools({frozen,assertAuthority,phone,rpc}){
  const reserveEvidence=q=>{
   const id=evidenceArg.has(q.command)||q.command==='current-video-link'?q.args[0]:['search-time-layer','open-search-card'].includes(q.command)?q.args[1]:null;
   if(id===null)return;
-  if(usedEvidence.has(id))fail('EVIDENCE_REUSED');
+  if([...usedEvidence].some(previous=>previous===id||id.startsWith(previous+'-')||previous.startsWith(id+'-')))fail('EVIDENCE_REUSED');
   usedEvidence.add(id);
  };
  let busy=false;
