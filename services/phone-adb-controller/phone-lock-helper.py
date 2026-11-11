@@ -13,6 +13,8 @@ import signal
 import time
 import subprocess
 import sys
+import stat
+from pathlib import Path
 
 
 def record_claim():
@@ -164,18 +166,90 @@ def verify_owner():
         sys.exit(2)
 
 
-def verify_guard():
+def verify_guard(path=None):
     # 实际继承FD须对应本设备guard；取得同一open-description锁，父进程持续持有。
     try:
         fd = int(os.environ.get('DOUYIN_LOCK_GUARD_FD', ''))
         if fd < 3:
             raise ValueError('invalid fd')
-        actual, expected = os.fstat(fd), os.stat(sys.argv[2])
+        actual, expected = os.fstat(fd), os.stat(path if path is not None else sys.argv[2])
         if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
             raise ValueError('guard file mismatch')
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (ValueError, OSError):
         print('guard descriptor ownership is not verifiable', file=sys.stderr)
+        sys.exit(2)
+
+
+def persist_quarantine():
+    """Hold the existing device guard; publish quarantine before the legacy review marker.
+
+    Any partially created flag stays in place and blocks all automatic cleanup.
+    """
+    requested, expected = Path(sys.argv[2]), sys.argv[3]
+    try:
+        if not requested.is_absolute() or not requested.name.endswith('.lock') or requested.is_symlink():
+            raise ValueError('lock path')
+        # macOS temporary fixtures may use /var's canonical /private/var alias.
+        # The inherited guard inode below still pins the physical device lock.
+        lock = requested.resolve(strict=True)
+        directory = lock.lstat()
+        if not stat.S_ISDIR(directory.st_mode) or directory.st_uid != os.geteuid() or directory.st_mode & 0o022:
+            raise ValueError('lock directory')
+        verify_guard(str(lock.with_suffix('.guard')))
+
+        def sync_directory():
+            fd = os.open(lock, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                current = os.fstat(fd)
+                if (current.st_dev, current.st_ino) != (directory.st_dev, directory.st_ino):
+                    raise ValueError('lock directory changed')
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+
+        def read_regular(path):
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                value = os.fstat(fd)
+                if not stat.S_ISREG(value.st_mode) or value.st_uid != os.geteuid() or value.st_nlink != 1 or value.st_mode & 0o022 or value.st_size > 512:
+                    raise ValueError('owner or marker file')
+                return os.read(fd, 513)
+            finally:
+                os.close(fd)
+
+        owner = read_regular(lock / 'owner')
+        if owner not in (expected.encode(), (expected + '\n').encode()):
+            raise ValueError('exact owner changed')
+        for name in ('standalone_quarantined', 'standalone_review_required'):
+            target = lock / name
+            try:
+                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:
+                if read_regular(target) != owner:
+                    raise ValueError('existing marker differs')
+                sync_directory()
+                continue
+            try:
+                # First persist the existence: a crash or short write remains a quarantine.
+                sync_directory()
+                offset = 0
+                while offset < len(owner):
+                    count = os.write(fd, owner[offset:])
+                    if count <= 0:
+                        raise ValueError('marker short write')
+                    offset += count
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+                sync_directory()
+            if read_regular(target) != owner or read_regular(lock / 'owner') != owner:
+                raise ValueError('marker readback changed')
+        if read_regular(lock / 'owner') != owner or any(read_regular(lock / name) != owner for name in ('standalone_quarantined', 'standalone_review_required')):
+            raise ValueError('quarantine readback')
+    except (OSError, ValueError) as error:
+        reason = str(error) if isinstance(error, ValueError) else 'filesystem errno ' + str(error.errno)
+        print('quarantine persistence or exact-owner readback failed; partial quarantine retained: ' + reason, file=sys.stderr)
         sys.exit(2)
 
 
@@ -465,6 +539,8 @@ if __name__ == '__main__':
         verify_owner()
     elif sys.argv[1] == 'guard-check':
         verify_guard()
+    elif sys.argv[1] == 'persist-quarantine':
+        persist_quarantine()
     elif sys.argv[1] == 'stop':
         stop_child()
     elif sys.argv[1] == 'run':

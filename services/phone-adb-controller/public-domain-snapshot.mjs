@@ -1,8 +1,11 @@
-import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync} from 'node:fs';
+import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync,readdirSync} from 'node:fs';
 import {join,resolve,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
+import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
+import {agentInput} from './runtime-definition.mjs';
+import {validateStandaloneIdentity,standaloneScope} from './standalone-skill-authority.mjs';
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 export const hash=v=>createHash('sha256').update(Buffer.isBuffer(v)||typeof v==='string'?v:JSON.stringify(canonical(v))).digest('hex');
 const fail=s=>{throw Error('PUBLIC_DOMAIN_'+s);};
@@ -10,8 +13,20 @@ const logicalHost=machine=>({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[machine
 const inputEnv={profile:'P',serial:'SERIAL',line:'LEADGEN_LINE',run_tag:'WFR_TAG',limit:'LEADGEN_LIMIT',source_run:'LEADGEN_SOURCE_RUN',comment_limit:'LEADGEN_COMMENT_LIMIT',sort:'LEADGEN_SORT',time_layer:'LEADGEN_TIME_LAYER',location:'LEADGEN_LOCATION',max_screens:'LEADGEN_MAX_SCREENS',max_attempts:'LEADGEN_DISCOVERY_MAX_ATTEMPTS',collection_budget_s:'QUEUED_VIDEO_COLLECTION_SECONDS'};
 const allowedEnv=new Set([...Object.values(inputEnv),'LEADGEN_MMV_DEVICE_RUNTIME','DOUYIN_ADB_PORT','ADB_SERVER_SOCKET','DOUYIN_PHONE_REGISTRY','LEADGEN_DISCOVERY_MAX_SECONDS','LEADGEN_SOURCE_KIND','QUEUED_VIDEO_RECORD_SECONDS']);
 function privateWrite(file,bytes){const fd=openSync(file,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}}
-export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadline_ms,cleanup_deadline_ms}){
+// 全部Skill参考资料固定到本轮目录；执行期间不再读取可变源目录。
+export function freezeStandaloneSkillFiles({source,runDirectory,files}){
+ const base=dirname(realpathSync(source)),entries=[];let size=0;
+ const walk=(directory,prefix='')=>{for(const entry of readdirSync(directory,{withFileTypes:true})){
+  const relative=prefix?prefix+'/'+entry.name:entry.name,path=join(directory,entry.name),stat=lstatSync(path);
+  if(!/^[A-Za-z0-9_.-]+$/.test(entry.name)||entry.name==='.'||entry.name==='..'||stat.isSymbolicLink()||realpathSync(path)!==path)fail('STANDALONE_SKILL_PATH');
+  if(stat.isDirectory())walk(path,relative);else {if(!stat.isFile()||(stat.mode&0o022))fail('STANDALONE_SKILL_FILE');const bytes=readFileSync(path);size+=bytes.length;entries.push({relative,bytes});if(entries.length>64||size>2*1024*1024)fail('STANDALONE_SKILL_LIMIT');}
+ }};walk(base);
+ for(const {relative,bytes}of entries){const name='skill/'+relative,dest=join(runDirectory,name);mkdirSync(dirname(dest),{recursive:true,mode:0o700});privateWrite(dest,bytes);files[name]=hash(bytes);}
+}
+export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadline_ms,cleanup_deadline_ms,standaloneSkillPath}){
  const cfg=profile.domain_adapter.config,template=structuredClone(cfg.snapshot);
+ const standalone=cfg.primary_host==='codex-exec-v1';
+ if(standalone&&(identity.protocol!=='codex-exec-v1'||!standaloneSkillPath||!isAbsolute(standaloneSkillPath)||identity.skill?.path!=='skill/SKILL.md'||hash(readFileSync(standaloneSkillPath))!==identity.skill.sha256))fail('STANDALONE_SKILL');
  if(!template?.deployment?.source_commit||!template.release?.id||!template.workflow_version?.id||!Array.isArray(template.activities)||!cfg.step_spec)fail('SNAPSHOT_REQUIRED');
  if(cfg.primary_host==='raw-model-v1'&&[template.discovery_phone_scope,template.collection_phone_scope].some(s=>s?.policy?.schema_version===2))fail('RAW_EPOCH_UNSUPPORTED');
  if(!cfg.company||!['company_id','tenant_id'].every(k=>/^[a-f0-9-]{36}$/.test(cfg.company[k]||''))||!Number.isSafeInteger(cfg.company.version)||cfg.company.version<1||typeof cfg.company.policy_id!=='string'||!cfg.company.policy_id)fail('COMPANY');
@@ -40,7 +55,9 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   const scope=template[cfg.workflow_key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
   if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==logicalHost(fixed.machine)||scope.policy?.host_id!==logicalHost(fixed.machine))fail('RESOURCE_SCOPE');
   if(scope.policy.schema_version===2){
-   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
+   // 使用真实本轮身份构造原record验证视图，不改候选scope或原epoch事实。
+   const recordScope=standalone?epochCompatibilityRecordScope({...template,execution_mode:cfg.execution_mode,primary_host:cfg.primary_host,standalone_skill:identity}):scope;
+   if(hash(freezePublicPreflightRoute({root,files:profile.files,scope:recordScope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
    env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
   }else if(scope.policy?.endpoint!==(logicalHost(fixed.machine)==='xian-m4'?'tcp:127.0.0.1:5037':'tcp:127.0.0.1:5041')||logicalHost(fixed.machine)==='xian-m4'&&scope.policy.transport!=='usb'||template.public_preflight_route)fail('RESOURCE_SCOPE');
  }
@@ -62,10 +79,18 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   if(!input.sources.length||input.sources.some(s=>typeof s!=='string'||!s.trim()||/[\r\n\0]/.test(s)))fail('SOURCES');const bytes=Buffer.from(input.sources.join('\n')+'\n');privateWrite(join(dir,'sources.txt'),bytes);files['sources.txt']=hash(bytes);env.LEADGEN_SOURCES_FILE=join(dir,'sources.txt');
  }
  delete template.snapshot_sha256;delete template.agent_input;delete template.native_task_lease;delete template.native_claim;
- if(executionMode==='agent'&&cfg.primary_host==='official-child-v1'){if(template.execution_transport!==undefined||template.max_turns!==undefined)fail('AGENT_TRANSPORT');template.primary_host='official-child-v1';}
+ if(executionMode==='agent'&&['official-child-v1','codex-exec-v1'].includes(cfg.primary_host)){if(template.execution_transport!==undefined||template.max_turns!==undefined)fail('AGENT_TRANSPORT');template.primary_host=cfg.primary_host;}
  else if(executionMode==='agent'){if(template.execution_transport!=='raw-model-v1'||!Number.isInteger(template.max_turns)||template.max_turns<1||template.max_turns>64)fail('AGENT_TRANSPORT');env.LEADGEN_EXECUTION_TRANSPORT=template.execution_transport;env.LEADGEN_MAX_TURNS=String(template.max_turns);}else{delete template.execution_transport;delete template.max_turns;}
  const binding=identity.run_binding;
  Object.assign(template,{execution_mode:executionMode,files,public_domain:{protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
+ if(standalone){
+  delete template.public_domain;
+  template.agent_input=agentInput(env);
+  const scope={...template.agent_input,source_commit:template.deployment.source_commit,expected_account:fixed.account,company:structuredClone(cfg.company),machine_id:identity.machine_id,approved_keywords:identity.approved_keywords};
+  template.standalone_skill={...structuredClone(identity),scope,scope_sha256:hash(scope),runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company)};
+  freezeStandaloneSkillFiles({source:standaloneSkillPath,runDirectory:dir,files});
+  validateStandaloneIdentity(template.standalone_skill);standaloneScope(template);
+ }
  for(const key of ['discovery_phone_scope','collection_phone_scope'])if(template[key])Object.assign(template[key],{task_id:identity.task_id,run_id:identity.run_id,attempt:'a1',source_commit:template.deployment.source_commit});
  privateWrite(join(dir,'activity.log'),'');privateWrite(join(dir,'comments.tsv'),'');mkdirSync(join(dir,'native-operations'),{mode:0o700});
  return {env,runtime,dir,snapshot:template,privateWrite};

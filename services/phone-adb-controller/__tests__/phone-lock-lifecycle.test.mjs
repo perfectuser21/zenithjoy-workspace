@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync, realpathSync, readdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const script = new URL('../douyin-phone-adb', import.meta.url).pathname;
@@ -603,4 +603,40 @@ test('unknown execution quarantine is exact-owner persistent across TTL and dead
  c.stale('probe');writeFileSync(join(c.lock,'pid'),'99999999\n');
  assert.notEqual(c.run('lock-acquire','next-run').status,0);assert.notEqual(c.run('lock-release','probe').status,0);
  assert.match(c.run('lock-reap').stdout,/preserved.*review-required/);assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),'probe');assert.equal(c.actions(),'');
+});
+
+test('fresh independent lock is distinct from external quarantine even while its global host proof stays live',async t=>{
+ const c=setup(t),run='live-protected-root',authority=await import('../standalone-skill-authority.mjs'),{digest}=await import('../runtime-definition.mjs');
+ const id=n=>`${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`,home=realpathSync(c.dir),runDirectory=join(home,'run');mkdirSync(runDirectory,{mode:0o700});
+ const p={protocol:'codex-exec-v1',task_id:id('1'),run_id:id('2'),task_run_id:id('3'),claimer:'fixture-direct-host',claimed_at:new Date().toISOString(),machine_id:'mmv',profile_sha256:'a'.repeat(64),scope_sha256:'b'.repeat(64),approved_keywords:['AI办公'],skill:{name:'douyin-leadgen-direct',version:'0.1.0',source_commit:'c'.repeat(40),path:'skill/SKILL.md',sha256:'d'.repeat(64)},company:{company_id:id('4'),tenant_id:id('5'),version:1,policy_id:'original'},run_binding:{run_binding_id:id('6'),workflow_id:id('7'),workflow_definition_version_id:id('8'),attempt_key:'a1',activities:{preflight:{reference_id:id('9'),activity_id:id('a'),activity_definition_version_id:id('b')}}}};
+ const body={execution_mode:'agent',primary_host:'codex-exec-v1',standalone_skill:p,deployment:{source_commit:'e'.repeat(40)},run_identity:{tag:run},files:{}},frozen={...body,snapshot_sha256:digest(body)},paths=authority.standaloneHostProofPaths(frozen,{home});mkdirSync(paths.directory,{recursive:true,mode:0o700});writeFileSync(paths.proof_path,JSON.stringify(authority.createStandaloneHostProof({frozen,runDirectory})),{flag:'wx',mode:0o600});
+ assert.equal(c.run('lock-acquire-new',run).status,0);assert.equal(existsSync(join(c.lock,'standalone_quarantined')),false);assert.equal(authority.standaloneLocalLockQuarantined(frozen,readdirSync(c.lock),readFileSync(join(c.lock,'standalone_review_required'),'utf8')),false);
+ const quarantined=c.run('lock-quarantine',run);assert.equal(quarantined.status,0,quarantined.stderr);assert.equal(readFileSync(join(c.lock,'standalone_quarantined'),'utf8'),run+'\n');assert.equal(authority.readStandaloneHostProof({frozen,runDirectory,home}).process_identity.pid,process.pid);
+ assert.equal(authority.standaloneLocalLockQuarantined(frozen,readdirSync(c.lock),readFileSync(join(c.lock,'standalone_review_required'),'utf8')),true);assert.equal(c.actions(),'');
+});
+test('wrong quarantine owner writes neither quarantine flag nor review marker',t=>{
+ const c=setup(t);assert.equal(c.run('lock-acquire','exact-owner').status,0);assert.notEqual(c.run('lock-quarantine','other-owner').status,0);assert.equal(existsSync(join(c.lock,'standalone_quarantined')),false);assert.equal(existsSync(join(c.lock,'standalone_review_required')),false);assert.equal(c.actions(),'');
+});
+for(const kind of ['regular','directory','dangling-link'])test('partial standalone quarantine remains protected from old adoption and cleanup: '+kind,t=>{
+ const c=setup(t);c.stale('partial-owner');writeFileSync(join(c.lock,'pid'),'99999999\n');const flag=join(c.lock,'standalone_quarantined');
+ if(kind==='directory')mkdirSync(flag);else if(kind==='dangling-link')symlinkSync(join(c.dir,'missing-target'),flag);else writeFileSync(flag,'partial-owner\n');
+ assert.notEqual(c.run('lock-acquire','next-owner').status,0);assert.notEqual(c.run('lock-release','partial-owner').status,0);assert.notEqual(c.run('lock-cleanup','partial-owner','99999999').status,0);assert.notEqual(c.run('close-app').status,0);assert.match(c.run('lock-reap').stdout,/preserved.*review-required/);assert.match(c.run('lock-status').stdout,/reclaimable=false/);assert.equal(c.actions(),'');
+});
+
+test('failed legacy marker persistence retains the already durable independent quarantine flag',t=>{
+ const c=setup(t),run='partial-persist-owner';assert.equal(c.run('lock-acquire',run).status,0);mkdirSync(join(c.lock,'standalone_review_required'));
+ const r=c.run('lock-quarantine',run);assert.notEqual(r.status,0);assert.match(r.stderr,/partial.*retain|partial.*protection/);assert.equal(readFileSync(join(c.lock,'standalone_quarantined'),'utf8'),run+'\n');assert.ok(existsSync(join(c.lock,'standalone_review_required')));
+ assert.notEqual(c.run('lock-acquire','another').status,0);assert.notEqual(c.run('lock-cleanup',run,'99999999').status,0);assert.notEqual(c.run('close-app').status,0);assert.equal(c.actions(),'');
+ assert.notEqual(c.run('lock-release-exact','wrong-owner').status,0);assert.equal(c.run('lock-release-exact',run).status,0);
+});
+test('quarantine persistence helper requires the inherited real device guard before writing either flag',t=>{
+ const c=setup(t),run='guarded-owner';assert.equal(c.run('lock-acquire',run).status,0);
+ const r=spawnSync(python,[new URL('../phone-lock-helper.py',import.meta.url).pathname,'persist-quarantine',c.lock,run],{env:c.env,encoding:'utf8'});assert.notEqual(r.status,0);assert.equal(existsSync(join(c.lock,'standalone_quarantined')),false);assert.equal(existsSync(join(c.lock,'standalone_review_required')),false);assert.equal(c.actions(),'');
+});
+
+test('persistent lock-root migration preserves the independent quarantine flag in both inventories',t=>{
+ const c=setup(t),old=join(c.dir,'tmp','locks'),durable=join(realpathSync(c.dir),'durable-lock-root');mkdirSync(c.lock,{recursive:true});
+ for(const name of ['owner','standalone_review_required','standalone_quarantined'])writeFileSync(join(c.lock,name),'quarantined-owner\n');writeFileSync(join(c.lock,'pid'),'99999999\n');writeFileSync(join(c.lock,'acquired_at'),'1\n');writeFileSync(join(old,'SER1.guard'),'');
+ const migrated=spawnSync(python,[rootScript,'migrate',old,durable],{encoding:'utf8'});assert.equal(migrated.status,0,migrated.stderr);assert.equal(readFileSync(join(durable,'SER1.lock','standalone_quarantined'),'utf8'),'quarantined-owner\n');assert.equal(readFileSync(join(c.lock,'standalone_quarantined'),'utf8'),'quarantined-owner\n');
+ const verified=spawnSync(python,[rootScript,'verify-review',old,durable],{encoding:'utf8'});assert.equal(verified.status,0,verified.stderr);assert.equal(c.actions(),'');
 });

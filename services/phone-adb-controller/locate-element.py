@@ -22,11 +22,17 @@ UI-TARS 是 **GUI agent 模型**，必须按它的 `Thought / Action` 协议提�
 改 prompt 前先跑 scripts/uitars-probe2.py 对真机截图验一轮，别凭感觉改。
 """
 import base64
+import datetime
+import fcntl
 import json
 import os
 import re
 import sys
+import stat
+import urllib.error
+import urllib.parse
 import urllib.request
+import uuid
 
 # UI-TARS 官方 agent 协议。改这段等于换一个模型的行为，必须真机验证后再动。
 SYSTEM_PROMPT = """You are a GUI agent. You are given a task and a screenshot. \
@@ -116,6 +122,121 @@ def encode_shot(shot_path: str) -> tuple:
         return base64.b64encode(raw).decode(), 'image/png'
 
 
+
+class _ExternalLedger:
+    """固定运行目录下的仅追加外发账；不能安全留intent就不能发HTTP。"""
+    def __init__(self, path):
+        self.parent_fd = self.fd = None
+        self.path = path
+        try:
+            parent, name = os.path.split(path)
+            if (not os.path.isabs(path) or os.path.normpath(path) != path
+                    or not name or os.path.realpath(parent) != parent):
+                raise ValueError()
+            self.parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            self.parent_identity = os.fstat(self.parent_fd)
+            if (not stat.S_ISDIR(self.parent_identity.st_mode)
+                    or self.parent_identity.st_uid != os.geteuid()
+                    or stat.S_IMODE(self.parent_identity.st_mode) != 0o700):
+                raise ValueError()
+            self.name = name
+            self.fd = os.open(name, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW
+                              | os.O_NONBLOCK, 0o600, dir_fd=self.parent_fd)
+            self._check()
+        except Exception:
+            self.close()
+            raise RuntimeError('LOCATE_EXTERNAL_LEDGER_UNSAFE') from None
+
+    def _check(self):
+        parent = os.stat(os.path.dirname(self.path), follow_symlinks=False)
+        actual = os.fstat(self.fd)
+        named = os.stat(self.name, dir_fd=self.parent_fd, follow_symlinks=False)
+        if (parent.st_dev != self.parent_identity.st_dev
+                or parent.st_ino != self.parent_identity.st_ino
+                or parent.st_uid != os.geteuid() or stat.S_IMODE(parent.st_mode) != 0o700
+                or os.path.realpath(os.path.dirname(self.path)) != os.path.dirname(self.path)
+                or not stat.S_ISREG(actual.st_mode) or actual.st_uid != os.geteuid()
+                or stat.S_IMODE(actual.st_mode) != 0o600 or actual.st_nlink != 1
+                or actual.st_dev != named.st_dev or actual.st_ino != named.st_ino
+                or stat.S_ISLNK(named.st_mode)):
+            raise ValueError()
+
+    def append(self, entry):
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
+            try:
+                self._check()
+                raw = (json.dumps(entry, separators=(',', ':')) + '\n').encode()
+                if len(raw) > 4096:
+                    raise ValueError()
+                remaining = memoryview(raw)
+                while remaining:
+                    count = os.write(self.fd, remaining)
+                    if count <= 0:
+                        raise ValueError()
+                    remaining = remaining[count:]
+                os.fsync(self.fd)
+                os.fsync(self.parent_fd)
+                self._check()
+            finally:
+                fcntl.flock(self.fd, fcntl.LOCK_UN)
+        except Exception:
+            raise RuntimeError('LOCATE_EXTERNAL_LEDGER_WRITE') from None
+
+    def close(self):
+        for name in ('fd', 'parent_fd'):
+            fd = getattr(self, name, None)
+            if fd is not None:
+                os.close(fd)
+                setattr(self, name, None)
+
+
+class _NoExternalRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # 一个intent只覆盖一次请求；不隐式跟随到未计数的第二个host或URL。
+        return None
+
+
+def _request_model(req, model):
+    path = os.environ.get('ZJ_EXTERNAL_LEDGER')
+    if path is None:
+        return json.load(urllib.request.urlopen(req, timeout=TIMEOUT_S))
+    endpoint = urllib.parse.urlsplit(req.full_url).hostname
+    if (not endpoint or not isinstance(model, str) or not model
+            or len(model) > 200 or any(c in model for c in '\r\n\0')):
+        raise RuntimeError('LOCATE_EXTERNAL_LEDGER_METADATA')
+    ledger = _ExternalLedger(path)
+    request_id = str(uuid.uuid4())
+    now = lambda: datetime.datetime.now(datetime.timezone.utc).isoformat()
+    try:
+        ledger.append({'phase': 'intent', 'provider': 'openrouter', 'endpoint': endpoint,
+                       'model': model, 'kind': 'image_grounding', 'at': now(),
+                       'request_id': request_id})
+        status, error = None, None
+        try:
+            with urllib.request.build_opener(_NoExternalRedirect()).open(req, timeout=TIMEOUT_S) as response:
+                status = response.status
+                try:
+                    return json.load(response)
+                except Exception:
+                    error = 'invalid_response'
+                    raise
+        except urllib.error.HTTPError as exc:
+            status, error = exc.code, 'http_error'
+            raise
+        except (TimeoutError, urllib.error.URLError) as exc:
+            error = 'timeout' if isinstance(exc, TimeoutError) or isinstance(getattr(exc, 'reason', None), TimeoutError) else 'transport_error'
+            raise
+        except Exception:
+            error = error or 'response_error'
+            raise
+        finally:
+            ledger.append({'phase': 'returned', 'request_id': request_id, 'at': now(),
+                           'status': status, 'error': error})
+    finally:
+        ledger.close()
+
+
 def locate(shot_path: str, desc: str, width: int, height: int,
            endpoint: str, model: str, key: str) -> tuple:
     img, mime = encode_shot(shot_path)
@@ -123,7 +244,7 @@ def locate(shot_path: str, desc: str, width: int, height: int,
         endpoint,
         data=json.dumps(build_body(img, desc, model, mime)).encode(),
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key})
-    resp = json.load(urllib.request.urlopen(req, timeout=TIMEOUT_S))
+    resp = _request_model(req, model)
     text = resp['choices'][0]['message']['content']
     xy = parse_xy(text)
     if xy is None:

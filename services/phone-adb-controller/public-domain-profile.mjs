@@ -6,6 +6,7 @@ import {digest,canonical} from './runtime-definition.mjs';
 import {preflightPgDeployment,preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
+import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const HASH=/^[a-f0-9]{64}$/;
 const need=(ok,reason)=>{if(!ok)throw Error('PUBLIC_DOMAIN_PROFILE_'+reason);};
@@ -35,7 +36,21 @@ function metadataFor(w,ref,av,entry,entryHash,skill){
   questions:Object.fromEntries(Object.entries(declarations).map(([key,declared])=>[key,{ref:base+'#'+key,version,declared:clone(declared)}]))};
 }
 /** Inputs are original readbacks. All identities/versions/budgets derive from them. */
-export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost}={}){
+export function buildPublicDomainProfile(options={}){
+ need(!['standaloneSkill','standalone','direct'].some(key=>Object.hasOwn(options,key)),'STANDALONE_OPTIONS');
+ return buildProfile(options,null);
+}
+/** 新方法仅编译单步工具资料；原AV是业务合同输入，不冒充其旧执行方法。 */
+export function buildStandaloneSkillProfile(options={}){
+ need(options.commander===undefined&&(options.primaryHost===undefined||options.primaryHost==='codex-exec-v1')
+  &&!['standalone','direct'].some(key=>Object.hasOwn(options,key)),'STANDALONE_OPTIONS');
+ const skill=clone(options.standaloneSkill);
+ need(skill&&Object.keys(skill).sort().join(',')==='name,path,sha256,source_commit,version'
+  &&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill.name||'')&&typeof skill.version==='string'&&skill.version.trim()===skill.version&&skill.version.length>0&&skill.version.length<=80&&!/[\r\n\0]/.test(skill.version)
+  &&/^[a-f0-9]{40}$/.test(skill.source_commit||'')&&safe(skill.path)&&skill.path.startsWith('skill/')&&skill.path.endsWith('/SKILL.md')&&HASH.test(skill.sha256||''),'STANDALONE_SKILL');
+ return buildProfile({...options,primaryHost:'codex-exec-v1'},skill);
+}
+function buildProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost}={},standaloneSkill){
  need(isAbsolute(sourceRoot||'')&&realpathSync(sourceRoot)===sourceRoot,'SOURCE_ROOT');
  need(/^[a-z][a-z0-9-]{0,63}$/.test(profileId||''),'PROFILE_ID');
  const f=clone(frozen),r=f?.release,d=f?.deployment,w=f?.workflow_version;
@@ -69,9 +84,10 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  const pg=preflightPgDeployment({runtimeRoot:sourceRoot,sourceCommit:d.source_commit});
  need(same(pg,d.dependencies?.preflight_pg),'PG_DEPLOYMENT');
  for(const row of pg.files){file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
- need(primaryHost===undefined||primaryHost==='official-child-v1','PRIMARY_HOST');
+ need(primaryHost===undefined||primaryHost===(standaloneSkill?'codex-exec-v1':'official-child-v1'),'PRIMARY_HOST');
  const executionMode=primaryHost?'agent':f.execution_mode??'code';need(['code','agent'].includes(executionMode),'EXECUTION_MODE');
- const entry='leadgen-public-domain.mjs',metadata={},preconditions={},validators={},activities=[],expected_path=[];
+ const entry=standaloneSkill?'standalone-skill-runtime.mjs':'leadgen-public-domain.mjs',metadata={},preconditions={},validators={},activities=[],expected_path=[];
+ need(files[entry],'DOMAIN_SOURCE');
  const runtime_snapshot_sha256=digest(files);
  for(const ref of refs){
   need(UUID.test(ref.reference_id||'')&&UUID.test(ref.activity_id||'')&&UUID.test(ref.activity_version_id||'')&&typeof ref.slot_key==='string'&&!metadata[ref.slot_key],'ACTIVITY_IDENTITY');
@@ -87,7 +103,8 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
   delete runtime.per_item;
   activities.push({...c,key:ref.slot_key,runtime});
   let skill;
-  if(executionMode==='agent'){
+  if(standaloneSkill){skill={...clone(standaloneSkill),entry:standaloneSkill.path};}
+  else if(executionMode==='agent'){
    const bindings=(av.payload.implementation_bindings||[]).filter(b=>b.kind==='skill');
    const verified=(original.implementations||[]).filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local');
    need(bindings.length===1&&verified.length===1,'SKILL_BINDING');const b=bindings[0],v=verified[0],prefix='services/phone-adb-controller/';
@@ -98,7 +115,9 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
    if(primaryHost)need(/(?:^|\n)  primary_hosts: *\[official-child-v1\] *(?:\n|$)/.test(text)||/(?:^|\n)  primary_hosts: *\n    - official-child-v1 *(?:\n|$)/.test(text),'SKILL_PRIMARY_HOST');
    need(text.includes('  primary_execution: agent-v1')&&text.includes('  version: '+b.version),'SKILL_PRIMARY');skill={entry:name,version:b.version};
   }
-  const m=metadataFor(w,ref,av,entry,files[entry],skill);m.runtime_snapshot_sha256=runtime_snapshot_sha256;metadata[ref.slot_key]=m;
+  const m=metadataFor(w,ref,av,entry,files[entry],skill);m.runtime_snapshot_sha256=runtime_snapshot_sha256;
+  if(standaloneSkill){m.implementation.method_origin='standalone-skill';m.input_evidence={role:'business_contract_input',workflow_definition_version_id:w.id,activity_definition_version_id:av.id,implementation_bindings:clone(av.payload.implementation_bindings??[])};}
+  metadata[ref.slot_key]=m;
   preconditions[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A2.ref}};
   validators[ref.slot_key]={entry,timeout_s:Math.min(30,c.budget.max_duration_s),acceptance:{ref:m.questions.A4.ref}};
   expected_path.push({reference_id:ref.reference_id,activity_id:ref.activity_id,activity_definition_version_id:av.id});
@@ -109,10 +128,12 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  const cleanup_grace_s=Math.min(cleanup.length?sum(cleanup):Math.min(30,sum(work)-1),policy?.cleanup_timeout_sec??(cleanup.length?sum(cleanup):Math.min(30,sum(work)-1)));
  const max_duration_s=Math.min(sum(work),policy?.total_timeout_sec!==undefined?policy.total_timeout_sec-cleanup_grace_s:(cleanup.length?sum(work):sum(work)-cleanup_grace_s));
  need(Number.isSafeInteger(max_duration_s)&&max_duration_s>0&&Number.isSafeInteger(cleanup_grace_s)&&cleanup_grace_s>0&&max_duration_s+cleanup_grace_s<=14400,'WORKFLOW_BUDGET');
+ if(!standaloneSkill){
  need(commander?.kind==='openclaw'&&commander.skill?.version&&files[commander.skill?.entry]
   &&Number.isSafeInteger(commander.timeout_s)&&commander.timeout_s>0&&commander.timeout_s<=300,'COMMANDER');
  const skill=file(sourceRoot,commander.skill.entry,files[commander.skill.entry]).toString('utf8');
  need(new RegExp('(?:^|\\n) *(?:version|version:)').test(skill)&&skill.includes(commander.skill.version),'COMMANDER_VERSION');
+ }
  const step_spec=`plans/${w.payload.key}.steps.json`;need(files[step_spec],'STEP_SPEC');
  validators.workflow={entry,timeout_s:30,acceptance:{ref:`workflow-definition:${w.id}#acceptance`}};
  // cleanup is also an Activity key: retain its original AV A4 acceptance
@@ -126,13 +147,16 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
   if(scope){
    domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;
    if(target==='mmv')domainEnv.LEADGEN_MMV_DEVICE_RUNTIME='1';else delete domainEnv.LEADGEN_MMV_DEVICE_RUNTIME;
-   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope});
+   // 构建时只验证原record视图；运行时仍须fresh Brain审核及完整源码兼容准入。
+   if(standaloneSkill&&template.epoch_source_compatibility!==undefined)need(UUID.test(scope.task_id||''),'COMPATIBILITY_TASK');
+   const recordScope=standaloneSkill?epochCompatibilityRecordScope({...template,standalone_skill:{protocol:'codex-exec-v1',task_id:scope.task_id}}):scope;
+   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope:recordScope});
    if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;}
   }
  }
- const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
-  contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
+ const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,...(standaloneSkill?{}:{commander:clone(commander)}),
+  contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:standaloneSkill?'codex-skill-tools/v1':'workflow-domain/v1',entry,export_name:standaloneSkill?'startStandaloneSkillRuntime':'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
+   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(standaloneSkill?{standalone_skill:clone(standaloneSkill)}:{}),...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};
