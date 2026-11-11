@@ -8,6 +8,22 @@ import { additionalRoutes } from '../../config/navigation.config';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('创作画布', () => {
+  it('在原生Comfy图中加载已连线的短视频分镜工作流', async () => {
+    const graph = {nodes:[{type:'ZenithJoyVideoProject'},{type:'ZenithJoyAssembleVideo'}],links:[]};
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({available:true}),{status:200})).mockResolvedValueOnce(new Response(JSON.stringify(graph),{status:200}));
+    vi.stubGlobal('fetch',fetchMock);
+    render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    const frame = await screen.findByTitle('视频创作画布') as HTMLIFrameElement;
+    const loadGraphData = vi.fn().mockResolvedValue({});
+    Object.defineProperty(frame.contentWindow!, 'app', {value:{graph:{},loadGraphData}, configurable:true});
+    fireEvent.load(frame);
+    const button = screen.getByRole('button',{name:'打开短视频分镜工作流'});
+    await vi.waitFor(()=>expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await vi.waitFor(()=>expect(loadGraphData).toHaveBeenCalledWith(graph,true,true,expect.stringMatching(/^短视频分镜工作流/)));
+    expect(fetchMock).toHaveBeenCalledWith('/api/creative-canvas/extensions/zenithjoy/short-video-wan.json',expect.objectContaining({credentials:'include'}));
+    expect(screen.getByTitle('视频创作画布')).toBe(frame);
+  });
   it('图片拖到画布外时阻止浏览器打开文件并离开页面', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ available: true }), { status: 200 })));
     render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);

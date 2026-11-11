@@ -20,6 +20,7 @@ function fixture(t) {
   };
   mkdirSync(join(repo,'scripts/deploy'),{recursive:true}); copyFileSync(resolve('scripts/deploy/staging-image-identity.py'),join(repo,'scripts/deploy/staging-image-identity.py'));
   copyFileSync(resolve('scripts/deploy/video-tools-release.mjs'),join(repo,'scripts/deploy/video-tools-release.mjs'));
+  copyFileSync(resolve('scripts/deploy/canvas-capabilities.py'),join(repo,'scripts/deploy/canvas-capabilities.py'));
   git('init', '-b', 'main'); git('config', 'user.email', 'test@example.invalid'); git('config', 'user.name', 'test');
   writeFileSync(join(repo, 'deploy/docker-compose.prod-api.yml'), 'services:\n  zenithjoy-api-prod:\n    image: zenithjoy-api-prod:latest\n');
   writeFileSync(join(repo, 'deploy/docker-compose.staging-api.yml'), 'services:\n  zenithjoy-api-staging:\n    image: zenithjoy-api-staging:latest\n');
@@ -50,6 +51,12 @@ if(args[0]==='inspect'){
  else throw Error('unknown inspect '+args); process.exit(0);
 }
 if(args[0]==='network'&&args[1]==='inspect'&&process.env.FAKE_CANVAS_PLAN){const p=JSON.parse(fs.readFileSync(process.env.FAKE_CANVAS_PLAN));console.log(JSON.stringify([{Containers:Object.fromEntries(Object.values(p.compose.services).filter(s=>s.networks.includes(args[2])).map(s=>[s.container_name,{Name:s.container_name}]))}]));process.exit(0);}
+if(args[0]==='exec'&&process.env.FAKE_CANVAS_PLAN){
+ const p=JSON.parse(fs.readFileSync(process.env.FAKE_CANVAS_PLAN));
+ if(!Object.values(p.compose.services).some(s=>s.container_name===args[1])||args[2]!=='python'||args[3]!=='-c'||args.length!==5)throw Error('unexpected canvas probe invocation');
+ const prelude='import ast,json,io,urllib.request\\nsource='+JSON.stringify(args[4])+'\\nassignments={n.targets[0].id:ast.literal_eval(n.value) for n in ast.parse(source).body if isinstance(n,ast.Assign) and isinstance(n.targets[0],ast.Name) and n.targets[0].id in ("NODES","TEMPLATES")}\\nclass Reply(io.BytesIO):\\n status=200\\ndef open_fixture(url,timeout):\\n from urllib.parse import urlparse\\n path=urlparse(url).path\\n if path=="/object_info": value={n:{} for n in assignments["NODES"]}\\n elif path.startswith("/extensions/zenithjoy/") and path.rsplit("/",1)[1] in assignments["TEMPLATES"]: value={"nodes":[],"links":[]}\\n else: raise RuntimeError("unexpected fixture HTTP path")\\n return Reply(json.dumps(value).encode())\\nurllib.request.urlopen=open_fixture\\n';
+ const result=require('node:child_process').spawnSync('python3',['-c',prelude+args[4]],{encoding:'utf8'});process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');process.exit(result.status??1);
+}
 if(args[0]==='image'&&args[1]==='inspect'){
  const image=args[2]; if(!s.images[image])process.exit(1); console.log(image); process.exit(0);
 }

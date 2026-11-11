@@ -55,6 +55,14 @@ def _api(method, path, payload=None, stream=False, files=None):
             allow_redirects=False, stream=stream)
     except requests.RequestException:
         raise RuntimeError('无法连接创作服务，请检查任务记录后重试') from None
+    if response.status_code == 409 and path.startswith('/projects'):
+        try:
+            message = response.json().get('error', '')
+        except (ValueError, AttributeError):
+            message = ''
+        if isinstance(message, str) and 0 < len(message) <= 200 and not re.search(r'[\x00-\x1f]|https?://|Bearer |[A-Za-z0-9_=-]{48,}', message):
+            raise RuntimeError(message)
+        raise RuntimeError('视频项目已更新，请重新读取当前分镜后重试')
     if response.status_code == 409:
         try:
             message = response.json().get('error', '')
@@ -316,6 +324,45 @@ class WanRemakeGenerate:
         return {'ui': {'text': [job['id']]}, 'result': (_download_job_video(job),)}
 
 
+def _download_project_video(project):
+    from comfy_api.input_impl import VideoFromFile
+    project_id = project.get('id') if isinstance(project, dict) else None
+    if not isinstance(project_id, str) or not re.fullmatch(r'[A-Fa-f0-9]{8}(?:-[A-Fa-f0-9]{4}){3}-[A-Fa-f0-9]{12}', project_id):
+        raise ValueError('成片项目ID无效，请重新加载项目')
+    filename = os.path.join(folder_paths.get_temp_directory(), 'zenithjoy-project-' + project_id + '.mp4')
+    try:
+        with _api('GET', '/projects/' + project_id + '/download', stream=True) as response, open(filename, 'wb') as output:
+            size = 0
+            for chunk in response.iter_content(65536):
+                size += len(chunk)
+                if size > 200 * 1024 * 1024:
+                    raise RuntimeError('视频结果超过大小限制')
+                output.write(chunk)
+        if not size:
+            raise RuntimeError('成片文件为空，请重新读取项目结果')
+        return VideoFromFile(filename)
+    except Exception:
+        if os.path.exists(filename):
+            os.unlink(filename)
+        raise
+
+
 WEB_DIRECTORY = './web'
 NODE_CLASS_MAPPINGS = {'ZenithJoyUploadImage': RegisterUploadedImage, 'ZenithJoyImage2': Image2Generate, 'ZenithJoyLoadAsset': LoadSavedAsset, 'ZenithJoyChooseAsset': ChooseAsset, 'ZenithJoyWan': WanGenerate, 'ZenithJoyWanRemake': WanRemakeGenerate}
 NODE_DISPLAY_NAME_MAPPINGS = {'ZenithJoyUploadImage': '登记上传图片', 'ZenithJoyImage2': 'Image2 图片生成', 'ZenithJoyLoadAsset': '加载已生成图片', 'ZenithJoyChooseAsset': '选择图片', 'ZenithJoyWan': 'Wan 视频生成', 'ZenithJoyWanRemake': 'Wan 视频修改'}
+
+
+# Native business nodes preserve Comfy's graph, typed links and built-in widgets.
+# The pinned upstream exports ExecutionBlocker here; None pauses downstream
+# execution without a generic model error or an implicit approval.
+from comfy_execution.graph_utils import ExecutionBlocker
+from .native_video_workflow import build_video_nodes
+NODE_CLASS_MAPPINGS.update(build_video_nodes(_api, _submit_and_wait, _download_job_video,
+                                           _download_project_video, ExecutionBlocker))
+NODE_DISPLAY_NAME_MAPPINGS.update({
+    'ZenithJoyVideoProject': '上传原片并按场景分镜',
+    'ZenithJoyVideoSegment': '预览并选择分镜',
+    'ZenithJoySegmentRemake': '修改当前分镜',
+    'ZenithJoyApproveSegment': '审核当前生成结果',
+    'ZenithJoyAssembleVideo': '合成完整视频',
+})

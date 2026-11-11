@@ -3,7 +3,7 @@ import { app } from '../../scripts/app.js';
 app.registerExtension({
   name: 'ZenithJoy.PersistentRequestIds',
   async beforeRegisterNodeDef(nodeType, nodeData) {
-    if (!['ZenithJoyImage2', 'ZenithJoyWan', 'ZenithJoyWanRemake'].includes(nodeData.name)) return;
+    if (!['ZenithJoyImage2', 'ZenithJoyWan', 'ZenithJoyWanRemake', 'ZenithJoyVideoProject', 'ZenithJoySegmentRemake'].includes(nodeData.name)) return;
     const oldConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function() {
       const result = oldConfigure?.apply(this, arguments);
@@ -47,11 +47,12 @@ app.registerExtension({
         const bytes = new Uint8Array(16);
         crypto.getRandomValues(bytes);
         field.value = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+        this.__zjRequestChanged?.();
         this.setDirtyCanvas(true, true);
       };
       if (field) {
         if (!field.value) newId();
-        this.addWidget('button', '生成新版本', null, newId, { serialize: false });
+        this.addWidget('button', nodeData.name === 'ZenithJoyVideoProject' ? '新建视频项目' : '生成新版本', null, newId, { serialize: false });
       }
       return result;
     };
