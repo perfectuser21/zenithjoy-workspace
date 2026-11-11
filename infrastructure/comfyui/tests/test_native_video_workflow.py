@@ -54,8 +54,33 @@ class NativeVideoWorkflowTest(unittest.TestCase):
             '背景说明': '海边', '背景图片ID': '', '更换人脸': False, '原片人脸': '尚未确认', '人脸图片ID': '', '确认生成': True, 'request_id': REQUEST}
 
     def select(self):
-        result = self.nodes['ZenithJoyVideoSegment']().run({'id': PROJECT}, 1, True)
+        result = self.nodes['ZenithJoyVideoSegment']().run({'id': PROJECT}, 1, True, 已预览分镜ID=SEGMENT)
         return result['result'][0]
+
+    def test_confirmation_without_a_preview_identity_never_confirms_or_releases_a_segment(self):
+        result = self.nodes['ZenithJoyVideoSegment']().run({'id': PROJECT}, 1, True)
+        self.assertIsInstance(result['result'][0], Blocker)
+        self.assertFalse(self.project['confirmed'])
+        self.assertFalse(any(method == 'PATCH' for method, _path, _payload in self.calls))
+        self.submit.assert_not_called()
+
+    def test_recut_invalidates_old_preview_identity_even_with_confirmation_checked(self):
+        old_preview = copy.deepcopy(self.project)
+        replacement_id = '77777777-7777-7777-7777-777777777777'
+        self.project['segments'][0]['id'] = replacement_id
+        self.project['segments'][0]['assetId'] = '88888888-8888-8888-8888-888888888888'
+        for confirmed in (False, True):
+            with self.subTest(project_already_confirmed=confirmed):
+                self.project['confirmed'] = confirmed
+                result = self.nodes['ZenithJoyVideoSegment']().run(old_preview, 1, True, 已预览分镜ID=SEGMENT)
+                self.assertIsInstance(result['result'][0], Blocker)
+                self.assertEqual(result['ui']['segment'][0]['id'], replacement_id)
+                self.assertFalse(any(method == 'PATCH' for method, _path, _payload in self.calls))
+                self.submit.assert_not_called()
+        self.project['confirmed'] = False
+        accepted = self.nodes['ZenithJoyVideoSegment']().run(old_preview, 1, True, 已预览分镜ID=replacement_id)
+        self.assertEqual(accepted['result'][0]['segmentId'], replacement_id)
+        self.assertTrue(self.project['confirmed'])
 
     def test_project_uses_stable_idempotency_and_real_typed_outputs(self):
         node = self.nodes['ZenithJoyVideoProject']()
@@ -125,7 +150,7 @@ class NativeVideoWorkflowTest(unittest.TestCase):
         for key in ('jobId', 'job', 'clientRequestId', 'remake'):
             other.pop(key, None)
         self.project['segments'].append(other)
-        second = self.nodes['ZenithJoyVideoSegment']().run({'id': PROJECT}, 2, True)['result'][0]
+        second = self.nodes['ZenithJoyVideoSegment']().run({'id': PROJECT}, 2, True, 已预览分镜ID=other['id'])['result'][0]
         self.nodes['ZenithJoySegmentRemake']().run(second, **self.options)
         self.assertNotEqual(self.submit.call_args.args[2], first_key, 'selecting another segment cannot reuse the same paid idempotency key')
         self.assertRegex(first_key, r'^[a-f0-9]{64}$')
