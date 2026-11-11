@@ -4,9 +4,12 @@ import {mkdtempSync,realpathSync,readFileSync,lstatSync,existsSync,chmodSync,sym
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {request} from 'node:http';
+import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const load=()=>import('../standalone-skill-ipc.mjs');
 function dir(t){const d=mkdtempSync(join(realpathSync(tmpdir()),'skill-ipc-test-'));chmodSync(d,0o700);return d;}
-function raw(c,body,{nonce=c.nonce,method='POST'}={}){return new Promise((resolve,reject)=>{const req=request({socketPath:c.socket,path:'/tool',method,headers:{'content-type':'application/json','x-standalone-nonce':nonce}},res=>{let b='';res.on('data',x=>b+=x);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(b)}));});req.on('error',reject);req.end(body);});}
+function raw(c,body,{nonce=c.nonce,method='POST'}={}){return new Promise((resolve,reject)=>{const req=request({socketPath:c.socket,path:'/tool',method,headers:{'content-type':'application/json','x-standalone-nonce':nonce}},res=>{const chunks=[];res.on('data',x=>chunks.push(x));res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(Buffer.concat(chunks).toString('utf8'))}));});req.on('error',reject);req.end(body);});}
 test('a real private IPC request dispatches one step and close removes its connection and socket',async t=>{
  const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),directory=dir(t),calls=[];
  const host=await serveStandaloneSkillTools({directory,call:async(op,input)=>{calls.push({op,input});return {value:input.value};}});t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
@@ -20,7 +23,7 @@ test('a real private IPC request dispatches one step and close removes its conne
 test('bad credentials, shape, JSON, method and oversize requests never dispatch',async t=>{
  const {serveStandaloneSkillTools}=await load(),directory=dir(t);let effects=0;
  const host=await serveStandaloneSkillTools({directory,call:async()=>{effects++;return {};}});t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});const c=JSON.parse(readFileSync(host.connectionPath));
- for(const [body,options,status]of [[JSON.stringify({operation:'phone',input:{}}),{nonce:'incorrect'},403],[JSON.stringify({operation:'phone',input:{},override:'secret'}),{},400],['{bad',{},400],[JSON.stringify({operation:'phone',input:{}}),{method:'GET'},400],[JSON.stringify({operation:'phone',input:{text:'a'.repeat(65536)}}),{},413]]){
+ for(const [body,options,status]of [[JSON.stringify({operation:'phone',input:{}}),{nonce:'incorrect'},403],[JSON.stringify({operation:'phone',input:{},override:'secret'}),{},400],['{bad',{},400],[JSON.stringify({operation:'phone',input:{}}),{method:'GET'},400],[JSON.stringify({operation:'phone',input:{text:'a'.repeat(4*1024*1024)}}),{},413]]){
   const response=await raw(c,body,options);assert.equal(response.status,status);assert.equal(response.body.ok,false);
  }
  assert.equal(effects,0);
@@ -58,4 +61,24 @@ test('IPC preserves only reviewed finite provider codes while unknown prefixes a
  for(const code of ['EPOCH_BUSINESS_TASK_secret-token','STANDALONE_TOOL_UNREVIEWED','STANDALONE_NATIVE_ACCOUNT:private']){
   const response=await raw(c,JSON.stringify({operation:'phone',input:{code}}));assert.deepEqual(response.body,{ok:false,error:'IPC_CALL_FAILED'});assert.equal(JSON.stringify(response).includes('secret-token'),false);
  }
+});
+
+
+test('valid inline native observations larger than 64KiB cross both the client and real server intact',async t=>{
+ const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),{buildObservation}=createRequire(import.meta.url)('../discovery-metrics.js'),directory=dir(t);
+ const xml='<hierarchy><node content-desc="未点赞，喜欢1，按钮"/><node content-desc="评论2，按钮"/><node text="'+'合法观测'.repeat(6000)+'"/></hierarchy>';
+ const metrics=buildObservation({run:'fixture-direct101',run_id:'00000000-0000-4000-8000-000000000001',profile:'cloud-phone-test',source_commit:'a'.repeat(40),line_key:'yuesheng',video_id:'7646309328911907195',video_url:'https://www.douyin.com/video/7646309328911907195',observed_at:'2026-11-11T08:00:00.000Z',evidence_id:'fixture-direct101-candidate1-link-t1',xml});
+ const input={operation:'discover',input:{video:{videoId:metrics.video_id,videoUrl:metrics.video_url,title:'离线原生指标传输夹具',keyword:'AI办公',metrics}}};
+ const body=JSON.stringify({operation:'business',input});assert.ok(Buffer.byteLength(body)>65536);assert.ok(Buffer.byteLength(xml)<=1024*1024);
+ const effects=[],host=await serveStandaloneSkillTools({directory,call:async(operation,received)=>{effects.push({operation,request_sha256:hash(JSON.stringify(received))});return {metrics_digest:received.input.video.metrics.digest,xml_sha256:hash(received.input.video.metrics.evidence.xml)};}});t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
+ assert.deepEqual(await callStandaloneSkillTool(host.connectionPath,'business',input),{ok:true,result:{metrics_digest:metrics.digest,xml_sha256:hash(xml)}});
+ const c=JSON.parse(readFileSync(host.connectionPath)),serverReply=await raw(c,body);assert.equal(serverReply.status,200);assert.deepEqual(serverReply.body,{ok:true,result:{metrics_digest:metrics.digest,xml_sha256:hash(xml)}});
+ assert.deepEqual(effects,[{operation:'business',request_sha256:hash(JSON.stringify(input))},{operation:'business',request_sha256:hash(JSON.stringify(input))}]);
+});
+test('requests above 4MiB are rejected by the client and real server without invoking the provider',async t=>{
+ const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),directory=dir(t);let effects=0;
+ const host=await serveStandaloneSkillTools({directory,call:async()=>{effects++;return {};}});t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
+ const input={evidence:{xml:'x'.repeat(4*1024*1024)}},body=JSON.stringify({operation:'business',input});assert.ok(Buffer.byteLength(body)>4*1024*1024);
+ await assert.rejects(callStandaloneSkillTool(host.connectionPath,'business',input),error=>error.code==='IPC_REQUEST_INVALID');assert.equal(effects,0);
+ const c=JSON.parse(readFileSync(host.connectionPath)),response=await raw(c,body);assert.equal(response.status,413);assert.deepEqual(response.body,{ok:false,error:'IPC_REQUEST_INVALID'});assert.equal(effects,0);
 });
