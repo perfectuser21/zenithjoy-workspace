@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
 import {createHash} from 'node:crypto';
-import {mkdtempSync,mkdirSync,readFileSync,readdirSync,realpathSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,readdirSync,realpathSync,rmSync,cpSync,appendFileSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {fileURLToPath} from 'node:url';
 import {createAdbShellV2Observer} from '../adb-shell-v2.mjs';
 
@@ -95,4 +96,73 @@ test('unreturned authority admission leaves a durable pending close snapshot wit
  const names=readdirSync(directory);assert.ok(names.includes('close-0.snapshot.json'),'a close that cannot drain the pipeline must durably retain its pending state');
  const close=JSON.parse(readFileSync(join(directory,'close-0.snapshot.json'),'utf8'));assert.deepEqual(close.snapshot,stopped);assert.match(close.scope_sha256,/^[a-f0-9]{64}$/);assert.match(close.error_code,/^ADB_SHELL_V2_[A-Z_]+$/);assert.ok(Number.isFinite(Date.parse(close.observed_at)));assert.equal(close.snapshot.remote_execution_stopped,'not_attested');
  assert.equal(names.includes('command.outcome.json'),false);assert.equal(names.includes('terminal.json'),false,'a pending pipeline has not produced a terminal outcome');
+});
+
+async function fragmentedWire(t,{pieces=1,change,changeAt='payload',trailing=false}={}){
+ const temporary=realpathSync(mkdtempSync(join(tmpdir(),'shell-v2-fragments-'))),runtime=join(temporary,'runtime'),directory=join(temporary,'journal');
+ mkdirSync(runtime,{mode:0o700});mkdirSync(directory,{mode:0o700});
+ cpSync(root,runtime,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
+ const fixed={commit:source.commit,files:source.files.map(f=>({...f,sha256:sha(readFileSync(join(runtime,f.path)))}))};
+ const {createAdbShellV2Observer:create}=await import(pathToFileURL(join(runtime,'adb-shell-v2.mjs')));
+ const sockets=new Set(),requests=[],timers=new Set();let connections=0,admissions=0,revoked=false,observer;
+ const mutate=()=>{
+  if(change==='source')appendFileSync(join(runtime,'adb-shell-v2-protocol.mjs'),'\n');
+  else if(change==='owner')chmodSync(directory,0o755);
+  else if(change==='cancel')observer.seal();
+  else if(change)revoked=true;
+ };
+ const later=fn=>{const timer=setTimeout(()=>{timers.delete(timer);fn();},15);timers.add(timer);};
+ const server=createServer(socket=>{
+  sockets.add(socket);socket.on('error',()=>{});socket.once('close',()=>sockets.delete(socket));
+  const index=connections++;let buffer=Buffer.alloc(0),phase=0;
+  const output=()=>{
+   let n=0;const send=()=>{
+    if(socket.destroyed)return;
+    if(n===pieces){socket.end(Buffer.concat([frame(3,Buffer.from([0])),...(trailing?[frame(1,Buffer.from('late'))]:[])]));return;}
+    socket.write(frame(1,Buffer.from('part-'+n+'\n')));if(n++===0&&changeAt==='payload')mutate();later(send);
+   };send();
+  };
+  socket.on('data',bytes=>{
+   buffer=Buffer.concat([buffer,bytes]);
+   while(true){
+    if(index===1&&phase===2){if(buffer.length<5)return;assert.deepEqual(buffer.subarray(0,5),Buffer.from([4,0,0,0,0]));requests.push('CloseStdin');phase++;output();return;}
+    if(buffer.length<4)return;const size=parseInt(buffer.subarray(0,4).toString(),16);if(buffer.length<4+size)return;
+    const request=buffer.subarray(4,4+size).toString();buffer=buffer.subarray(4+size);requests.push(request);
+    if(index===0){socket.end('OKAY0008shell_v2');return;}
+    if(phase++===0){if(changeAt==='transport')mutate();socket.write('OKAY');}else socket.write('OKAY');
+   }
+  });
+ });
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const now=Date.now(),scope={protocol:'adb-shell-v2-observation/v1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',run_id:'fragments__a1',source_commit:source.commit,profile:'synthetic',serial:'synthetic-fixture',endpoint:'tcp:127.0.0.1:'+server.address().port,epoch:1,claim:{claimed_by:'synthetic-fragments',claimed_at:new Date(now).toISOString()},worker_deadline_ms:now+5000,cleanup_deadline_ms:now+6000};
+ observer=create({source:fixed,runtimeRoot:runtime,directory,scope,readAuthority:async()=>{
+  admissions++;if(revoked&&change==='daemon')throw Object.assign(Error('FIXTURE_DAEMON_CHANGED'),{code:'FIXTURE_DAEMON_CHANGED'});
+  return {scope,claimed_by:revoked&&change==='task'?'revoked':scope.claim.claimed_by,claimed_at:scope.claim.claimed_at,lease_until:new Date(revoked&&change==='lease'?now-1:scope.cleanup_deadline_ms+1000).toISOString()};
+ }});
+ t.after(async()=>{for(const timer of timers)clearTimeout(timer);try{await observer.close();}finally{for(const socket of sockets)socket.destroy();await new Promise(r=>server.close(r));rmSync(temporary,{recursive:true,force:true});}});
+ let receipt,error;try{receipt=await observer.observeDump();}catch(value){error=value;}
+ let stopped;try{stopped=await observer.close();}catch(closeError){if(change!=='owner')throw closeError;assert.match(closeError.code,/ADB_SHELL_V2_JOURNAL/);stopped=observer.snapshot();chmodSync(directory,0o700);}return {receipt,error,stopped,admissions,requests,observer,scope,directory};
+}
+
+test('pure shell response fragmentation does not multiply fresh business admissions',async t=>{
+ const one=await fragmentedWire(t),many=await fragmentedWire(t,{pieces:8});
+ assert.equal(one.error,undefined);assert.equal(many.error,undefined);assert.deepEqual(many.requests,one.requests);
+ assert.equal(many.admissions,one.admissions,'receiving more response frames must not reauthorize a business effect');
+ assert.equal(one.admissions,7,'two connects, four writes including CloseStdin, and final capability admission remain fresh');
+ assert.equal(many.stopped.wire_complete,true);assert.equal(many.receipt.stdout_bytes,56);
+});
+
+for(const change of ['task','lease','daemon','source','owner','cancel'])test('receive-time '+change+' drift never grants a wire capability',async t=>{
+ const f=await fragmentedWire(t,{pieces:4,change});assert.ok(f.error);assert.equal(f.receipt,undefined);assert.equal(f.stopped.wire_complete,false);assert.equal(f.stopped.unknown,true);
+ assert.equal(f.requests.at(-1),'CloseStdin');assert.equal(f.requests.length,4,'draining cannot send a new business request');
+ assert.equal(f.observer.verifyWireReceipt({}, {scope:f.scope}),false);
+});
+
+for(const change of ['task','lease','daemon','source','owner','cancel'])test('transport response '+change+' drift rejects the next write before sending',async t=>{
+ const f=await fragmentedWire(t,{change,changeAt:'transport'});assert.ok(f.error);assert.equal(f.receipt,undefined);assert.equal(f.stopped.wire_complete,false);
+ assert.equal(f.requests.length,2);assert.match(f.requests[1],/^host:transport:/);assert.equal(f.requests.some(r=>r.startsWith('shell,')),false);
+});
+
+test('trailing shell frame after EXIT cannot become a wire capability',async t=>{
+ const f=await fragmentedWire(t,{pieces:3,trailing:true});assert.ok(f.error);assert.equal(f.receipt,undefined);assert.equal(f.stopped.wire_complete,false);assert.equal(f.stopped.unknown,true);
 });
