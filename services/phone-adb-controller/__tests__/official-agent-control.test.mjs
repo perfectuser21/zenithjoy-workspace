@@ -31,13 +31,17 @@ test('Code claim投影来自同次完整授权的真实Task读取，不补造lea
  await instance.close();await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_RAW_SCOPE/);assert.equal(count(),4);
 },{rawTransport:true}));
 
-test('Code claim读取拒绝缺失归属，旧bool授权接口仍保持原行为',async()=>using(async({instance,q,routes})=>{
- assert.equal(typeof instance.readAuthorizedTaskClaim,'function');
- assert.equal(await instance.authorizeParentContext(q),true);
- await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_TASK_CLAIM/);
- const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_by=null;task.claimed_at=null;
- await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID/);
-},{rawTransport:true}));
+test('Code claim读取拒绝缺失归属，旧bool授权接口仍保持原行为',async()=>{
+ await using(async({instance,q})=>{
+  assert.equal(typeof instance.readAuthorizedTaskClaim,'function');
+  assert.equal(await instance.authorizeParentContext(q),true);
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_TASK_CLAIM/);
+ },{rawTransport:true});
+ await using(async({instance,q,routes})=>{
+  const task=routes.get('/api/brain/tasks/'+q.task_id);task.claimed_by=null;task.claimed_at=null;
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID/);
+ },{rawTransport:true});
+});
 
 test('deadline取消同步异常不逃出定时器，收尾保留unknown',async()=>using(async({q,options,createControl,firstRequest,journalDirectory})=>{
  const directory=join(journalDirectory,'deadline-throw');fs.mkdirSync(directory,{mode:0o700});let actualDestroy,throws=0;
@@ -218,7 +222,7 @@ test('concurrent pure claim jobs each execute their own complete barrier',async(
  check.onBarrier=({fd,original,rows})=>{const result=original(fd);atBarriers.push(rows().filter(r=>r.event==='task_claim_projected').length);return result;};await claimLedgerFixture(check);
 });
 
-for(const drift of ['barrier-failure','seal','source','ledger-inode','deadline'])test('claim barrier '+drift+' denies the projection after actual append',async()=>{
+for(const drift of ['barrier-failure','seal','close','source','ledger-inode','ledger-mode','directory-mode','deadline'])test('claim barrier '+drift+' denies the projection after actual append',async()=>{
  const originalNow=Date.now;let fired=false;
  const check=async({instance,q})=>{
   await assert.rejects(()=>instance.readAuthorizedTaskClaim(q));assert.equal(fired,true);assert.equal(instance.snapshot().execution_unknown,true);
@@ -228,10 +232,50 @@ for(const drift of ['barrier-failure','seal','source','ledger-inode','deadline']
   fired=true;if(drift==='barrier-failure')throw Error('synthetic claimed-barrier fsync failure');
   const result=original(fd);
   if(drift==='seal')instance.seal();
+  if(drift==='close')void instance.close();
+  if(drift==='ledger-mode')fs.chmodSync(join(journalDirectory,readdirSync(journalDirectory).find(n=>n.endsWith('.jsonl'))),0o644);
+  if(drift==='directory-mode')fs.chmodSync(journalDirectory,0o755);
   if(drift==='source')fs.appendFileSync(join(runtimeRoot,'leadgen-rpc.mjs'),'\n');
   if(drift==='ledger-inode'){const ledger=join(journalDirectory,readdirSync(journalDirectory).find(n=>n.endsWith('.jsonl')));fs.renameSync(ledger,ledger+'.original');fs.writeFileSync(ledger,'replaced\n',{mode:0o600});}
   if(drift==='deadline')Date.now=()=>q.deadline_ms+1;
   return result;
  };
  try{await claimLedgerFixture(check);}finally{Date.now=originalNow;}
+});
+
+
+test('failed claim transaction taints the original Caller and sends no subsequent GET',async()=>using(async({instance,q,count})=>{
+ await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_TASK_CLAIM/);
+ const requests=count();assert.equal(instance.snapshot().execution_unknown,true);
+ await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_UNKNOWN/);assert.equal(count(),requests);
+ await assert.rejects(()=>instance.authorizeParentContext(q),/OFFICIAL_CONTROL_UNKNOWN/);assert.equal(count(),requests);
+},{rawTransport:true}));
+
+test('failed pure GET keeps its failure record immediately durable without any claim projection',async()=>{
+ let failureDurable=false;
+ const check=async({instance,q,routes,rows})=>{
+  routes.delete('/api/brain/runs/'+q.run_id+'/definition');
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q));assert.equal(failureDurable,true);
+  assert.deepEqual(rows().map(r=>r.event),['read_intent','read_failed']);assert.equal(instance.snapshot().execution_unknown,true);
+ };
+ check.onBarrier=({fd,original,rows})=>{const result=original(fd);if(rows().at(-1)?.event==='read_failed')failureDurable=true;return result;};await claimLedgerFixture(check);
+});
+
+
+test('one successful concurrent claim barrier cannot commit the other failed job',async()=>{
+ const check=async({instance,q,barriers,count})=>{
+  const results=await Promise.allSettled([instance.readAuthorizedTaskClaim(q),instance.readAuthorizedTaskClaim(q)]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.filter(r=>r.status==='rejected').length,1);
+  assert.equal(barriers(),2);assert.equal(instance.snapshot().execution_unknown,true);const requests=count();
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/OFFICIAL_CONTROL_UNKNOWN/);assert.equal(count(),requests);
+ };
+ check.onBarrier=({fd,original,rows})=>{if(rows().filter(r=>r.event==='task_claim_projected').length===2)throw Error('second job barrier failed');return original(fd);};await claimLedgerFixture(check);
+});
+
+test('Task revocation during fresh claim GET denies the transaction before its final authority record',async()=>{
+ await claimLedgerFixture(async({instance,q,routes,count,rows})=>{
+  routes.get('/api/brain/tasks/'+q.task_id).status='paused';
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q),/RPC_SKILL_PRIMARY_TASK_SCOPE_INVALID/);assert.equal(count(),3);
+  assert.equal(rows().some(r=>r.event==='task_claim_projected'),false);assert.equal(instance.snapshot().execution_unknown,true);
+ });
 });
