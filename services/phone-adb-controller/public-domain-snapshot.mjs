@@ -1,3 +1,4 @@
+import {freezePhonePeerSsh} from './official-phone-peer-transport.mjs';
 import {validatePhoneExecution} from './official-phone-execution.mjs';
 import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync} from 'node:fs';
 import {join,resolve,dirname,isAbsolute} from 'node:path';
@@ -36,6 +37,7 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  const fixed=cfg.resources;
  const remote=cfg.phone_execution?validatePhoneExecution(cfg.phone_execution,{sourceCommit:template.deployment.source_commit,workflow:cfg.workflow_key,resources:fixed}):null;
  if(remote&&(identity.machine_id!=='us-mac-m4'||cfg.primary_host!=='official-child-v1'||hash(template.phone_execution)!==hash(remote)))fail('PHONE_PEER_WORKER');
+ if(remote&&(!cfg.phone_peer_ssh||!template.phone_peer_ssh||hash(cfg.phone_peer_ssh)!==hash(template.phone_peer_ssh)||hash(template.phone_peer_ssh)!==hash(freezePhonePeerSsh())))fail('PHONE_PEER_SSH_SOURCE');
  const phoneHost=remote?'xian-m4':logicalHost(fixed.machine);
  if(!fixed||fixed.machine!==identity.machine_id||fixed.profile!==env.P||fixed.serial!==env.SERIAL||fixed.line!==env.LEADGEN_LINE||!fixed.account)fail('RESOURCE_IDENTITY');
  if(template.deployment.target!==logicalHost(fixed.machine)||template.release.target!==logicalHost(fixed.machine))fail('RESOURCE_IDENTITY');

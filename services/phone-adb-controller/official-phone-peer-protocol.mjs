@@ -66,7 +66,7 @@ export function createPhonePeerOperationClient({session:provided,key,exchange,cl
  };
  const client=Object.freeze({request,readOperation,snapshot:()=>({unknown,closed,pending_operation_id:pending?.operation_id??null,state:structuredClone(lastState),last_receipt:lastResult?structuredClone(lastResult):null}),async close(){
   const value=lastResult?.operation==='close'?structuredClone(lastResult.result):await request('close');const body=lastResult;need(body?.physical_sealed===true&&body.state.pending===0&&!body.state.active&&value?.execution_stopped===true,'PRODUCER_CLOSE');
-  const transport=await closeTransport();need(transport?.closed===true&&transport.code===0&&!transport.signal,'TRANSPORT_CLOSE');closed=true;
+  const transport=await closeTransport();need(transport?.closed===true&&transport.code===0&&!transport.signal,'TRANSPORT_CLOSE');need(Date.now()<session.deadline_ms,'DEADLINE');closed=true;
   const proof=Object.freeze({protocol:'official-phone-peer-stopped/v1',execution_stopped:true,scope_sha256:scopeHash,receipt_sha256:peerHash(body),transport_closed:true});stopped.set(proof,{scopeHash,owner});return proof;
  }});clients.set(client,owner);return client;
 }

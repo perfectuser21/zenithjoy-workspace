@@ -1,3 +1,4 @@
+import {freezePhonePeerSsh} from './official-phone-peer-transport.mjs';
 import {validatePhoneExecution} from './official-phone-execution.mjs';
 // Offline assembly only. The dispatcher creates the first internal binding;
 // this builder never starts a run, writes Brain, creates grants or issues ACKs.
@@ -123,7 +124,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  const template={...f,...(primaryHost?{execution_mode:'agent',primary_host:primaryHost}:{}),public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
  if(primaryHost){for(const key of ['agent_input','native_claim','native_task_lease','execution_transport','max_turns'])delete template[key];}
  const domainEnv=clone(env);delete domainEnv.ZJ_ADB_HOST_CONFIG;
- if(remote){template.phone_execution=remote;for(const key of ['discovery_phone_scope','collection_phone_scope','preflight_profile'])if(remote.snapshot[key])template[key]=clone(remote.snapshot[key]);}
+ if(remote){template.phone_peer_ssh=freezePhonePeerSsh();template.phone_execution=remote;for(const key of ['discovery_phone_scope','collection_phone_scope','preflight_profile'])if(remote.snapshot[key])template[key]=clone(remote.snapshot[key]);}
  if(!remote&&w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
  if(w.payload.key!=='douyin_comment_scoring'){
   const scope=template.discovery_phone_scope||template.collection_phone_scope;
@@ -136,7 +137,7 @@ export function buildPublicDomainProfile({sourceRoot,frozen,observation,gate,res
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,commander:clone(commander),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:'workflow-domain/v1',entry,export_name:'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),...(remote?{phone_execution:remote}:{}),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
+   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),...(remote?{phone_execution:remote,phone_peer_ssh:template.phone_peer_ssh}:{}),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};

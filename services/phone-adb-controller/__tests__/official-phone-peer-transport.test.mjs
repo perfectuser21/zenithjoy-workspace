@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {createPhonePeerOperationHost,createPhonePeerOperationClient,phonePeerStopped} from '../official-phone-peer-protocol.mjs';
-import {createFixedPhonePeerTransport} from '../official-phone-peer-transport.mjs';
+import {createFixedPhonePeerTransport,freezePhonePeerSsh} from '../official-phone-peer-transport.mjs';
 test('未请求尾帧即使SSH exit0也不能授予stop品牌',async()=>{
 const key='independent-local-fixture-authentication-material';
 const directory=realpathSync(mkdtempSync(join(tmpdir(),'peer-poison-review-')));
@@ -22,7 +22,7 @@ child.stdin=new Writable({write(bytes,encoding,done){
  }).catch(done);
 },final(done){queueMicrotask(()=>child.emit('close',0,null));done();}});
 const descriptor={host:'xian-m4',runtime_root:'/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-candidates/'+session.source_commit+'/runtime',deployment:{source_commit:session.source_commit}};
-const transport=createFixedPhonePeerTransport({descriptor,deadline_ms:session.deadline_ms,spawnProcess:()=>child});
+const transport=createFixedPhonePeerTransport({descriptor,ssh:freezePhonePeerSsh(),deadline_ms:session.deadline_ms,spawnProcess:()=>child});
 const client=createPhonePeerOperationClient({session,key,exchange:transport.exchange,closeTransport:transport.close});
 try{
  let proof,error;
