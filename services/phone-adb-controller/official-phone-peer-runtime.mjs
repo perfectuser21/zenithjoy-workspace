@@ -9,7 +9,7 @@ const allowedEnv=new Set(['P','SERIAL','WFR_TAG','LEADGEN_LINE','LEADGEN_LIMIT',
 export async function createPhonePeerRuntime({bootstrap,root,environment=process.env}){
  const admitted=await verifyPhonePeerBootstrap({bootstrap,root,env:environment});
  const {descriptor:d,parent:{frozen:parent},identity,session}=bootstrap;
- const runDir=join(d.run_root,identity.run_id);mkdirSync(d.run_root,{recursive:true,mode:0o700});need(realpathSync(d.run_root)===d.run_root,'DIRECTORY');mkdirSync(runDir,{mode:0o700});const runtime=join(runDir,'runtime');mkdirSync(runtime,{mode:0o700});
+ const runDir=join(d.run_root,identity.run_id);mkdirSync(d.run_root,{recursive:true,mode:0o700});const runRoot=lstatSync(d.run_root);need(realpathSync(d.run_root)===d.run_root&&runRoot.isDirectory()&&!runRoot.isSymbolicLink()&&runRoot.uid===process.getuid()&&!(runRoot.mode&0o077),'DIRECTORY');mkdirSync(runDir,{mode:0o700});const runtime=join(runDir,'runtime');mkdirSync(runtime,{mode:0o700});
  const f=structuredClone(d.snapshot),files={};
  for(const [relative,hash]of Object.entries(f.files)){
   if(!relative.startsWith('runtime/'))continue;const name=relative.slice(8),source=join(root,name),s=lstatSync(source),bytes=readFileSync(source);need(s.isFile()&&!s.isSymbolicLink()&&realpathSync(source)===source&&peerHash(bytes)===hash,'SOURCE');const path=join(runtime,name);mkdirSync(dirname(path),{recursive:true,mode:0o700});safeWrite(path,bytes);if(s.mode&0o111)chmodSync(path,0o700);files[relative]=hash;
