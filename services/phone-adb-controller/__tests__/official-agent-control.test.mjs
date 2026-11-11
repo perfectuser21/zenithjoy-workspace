@@ -181,3 +181,57 @@ test('close reentry during descriptor cleanup shares the same pipeline and final
  try{first=await instance.close();await second;}finally{fs.closeSync=original;syncBuiltinESMExports();}
  assert.equal(first.execution_stopped,true);assert.equal(finalFiles(journalDirectory).length,1);assert.equal(instance.snapshot().execution_unknown,false);
 }));
+
+async function claimLedgerFixture(fn){
+ return using(async f=>{
+  f.routes.get('/api/brain/tasks/'+f.q.task_id).claimed_at='2026-11-06T00:00:00.000Z';
+  const ledger=join(f.journalDirectory,readdirSync(f.journalDirectory).find(n=>n.endsWith('.jsonl'))),identity=fs.statSync(ledger),original=fs.fsyncSync;
+  let barriers=0;const rows=()=>fs.readFileSync(ledger,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  fs.fsyncSync=function(fd){const st=fs.fstatSync(fd);if(st.dev===identity.dev&&st.ino===identity.ino){barriers++;return fn.onBarrier?fn.onBarrier({fd,original,rows,barriers,...f}):original(fd);}return original(fd);};syncBuiltinESMExports();
+  try{await fn({...f,ledger,rows,barriers:()=>barriers});}finally{fs.fsyncSync=original;syncBuiltinESMExports();}
+ },{rawTransport:true});
+}
+const claimEvents=['read_intent','read_returned','read_intent','read_returned','read_intent','read_returned','read_intent','read_returned','raw_parent_authority','task_claim_projected'];
+
+test('one pure claim transaction durably appends all ten original records with one owned barrier',async()=>{
+ let durableRows;
+ const check=async({instance,q,rows,barriers,count})=>{
+  const claim=await instance.readAuthorizedTaskClaim(q);assert.equal(claim.id,q.task_id);assert.equal(count(),4);
+  assert.deepEqual(rows().map(r=>r.event),claimEvents);assert.deepEqual(durableRows.map(r=>r.event),claimEvents,'all original records must precede the successful barrier');
+  assert.equal(barriers(),1,'a single pure GET claim transaction owns one durability barrier');
+ };
+ check.onBarrier=({fd,original,rows})=>{const result=original(fd);durableRows=rows();return result;};await claimLedgerFixture(check);
+});
+
+test('nonprojecting parent authority keeps every original record individually durable',async()=>{
+ await claimLedgerFixture(async({instance,q,rows,barriers,count})=>{
+  assert.equal(await instance.authorizeParentContext(q),true);assert.equal(count(),4);assert.equal(barriers(),9);assert.deepEqual(rows().map(r=>r.event),claimEvents.slice(0,9));
+ });
+});
+
+test('concurrent pure claim jobs each execute their own complete barrier',async()=>{
+ const atBarriers=[];const check=async({instance,q,rows,barriers,count})=>{
+  const values=await Promise.all([instance.readAuthorizedTaskClaim(q),instance.readAuthorizedTaskClaim(q)]);assert.equal(values.length,2);assert.equal(count(),8);
+  assert.equal(barriers(),2,'another job flushing the same descriptor cannot stand in for this job commit');
+  assert.deepEqual(atBarriers,[1,2]);assert.equal(rows().filter(r=>r.event==='task_claim_projected').length,2);assert.equal(rows().length,20);
+ };
+ check.onBarrier=({fd,original,rows})=>{const result=original(fd);atBarriers.push(rows().filter(r=>r.event==='task_claim_projected').length);return result;};await claimLedgerFixture(check);
+});
+
+for(const drift of ['barrier-failure','seal','source','ledger-inode','deadline'])test('claim barrier '+drift+' denies the projection after actual append',async()=>{
+ const originalNow=Date.now;let fired=false;
+ const check=async({instance,q})=>{
+  await assert.rejects(()=>instance.readAuthorizedTaskClaim(q));assert.equal(fired,true);assert.equal(instance.snapshot().execution_unknown,true);
+ };
+ check.onBarrier=({fd,original,rows,instance,runtimeRoot,journalDirectory,q})=>{
+  if(rows().filter(r=>r.event==='task_claim_projected').length!==1)return original(fd);
+  fired=true;if(drift==='barrier-failure')throw Error('synthetic claimed-barrier fsync failure');
+  const result=original(fd);
+  if(drift==='seal')instance.seal();
+  if(drift==='source')fs.appendFileSync(join(runtimeRoot,'leadgen-rpc.mjs'),'\n');
+  if(drift==='ledger-inode'){const ledger=join(journalDirectory,readdirSync(journalDirectory).find(n=>n.endsWith('.jsonl')));fs.renameSync(ledger,ledger+'.original');fs.writeFileSync(ledger,'replaced\n',{mode:0o600});}
+  if(drift==='deadline')Date.now=()=>q.deadline_ms+1;
+  return result;
+ };
+ try{await claimLedgerFixture(check);}finally{Date.now=originalNow;}
+});
