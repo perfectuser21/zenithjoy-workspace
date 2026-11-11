@@ -33,11 +33,24 @@ export function standaloneScope(frozen){
   ||Date.now()>=(input.run_start_ts+input.run_max_seconds)*1000)fail();
  return {...input,approved_keywords:p.approved_keywords,source_commit:frozen.deployment.source_commit,expected_account:scoring?'none':spec.expected_account,company:p.company,machine_id:p.machine_id};
 }
+function scopeWithTaskId(requested,taskId){
+ return requested&&typeof requested==='object'&&!Array.isArray(requested)?{...requested,...(!Object.hasOwn(requested,'task_id')?{task_id:taskId}:{})}:null;
+}
+export function standaloneExecutionContextProjection(context){
+ return context&&Object.fromEntries(['source','executor_kind','executor','claimed_at','skill','scope'].map(key=>[key,context[key]]));
+}
+export function standaloneExecutionContextMatches(context,identity,scope){
+ try{
+  const p=validateStandaloneIdentity(identity);
+  return context?.source==='standalone-skill'&&context.executor_kind==='codex-exec-v1'&&context.executor===p.claimer&&context.claimed_at===p.claimed_at
+   &&canonical(context.skill)===canonical(p.skill)&&canonical(scopeWithTaskId(context.scope,p.task_id))===canonical(scope)&&digest(scope)===p.scope_sha256;
+ }catch{return false;}
+}
 export function standaloneTaskProjectionMatches(task,identity,scope){
  try{
   const p=validateStandaloneIdentity(identity),c=validateStandaloneIdentity(task?.result?.codex_skill_direct),requested=task?.payload?.scope;
   // 建单时Task ID由Brain生成；仅这个字段可从实际Task派生。
-  const taskScope=requested&&typeof requested==='object'&&!Array.isArray(requested)?{...requested,...(!Object.hasOwn(requested,'task_id')?{task_id:task.id}:{})}:null;
+  const taskScope=scopeWithTaskId(requested,task.id);
   return task.id===p.task_id&&task.status==='in_progress'&&task.claimed_by===p.claimer&&task.claimed_at===p.claimed_at
    &&task.payload?.execution_mode==='standalone-skill'&&canonical(taskScope)===canonical(scope)
    &&canonical(task.payload.skill)===canonical(p.skill)&&digest(scope)===p.scope_sha256&&canonical(c)===canonical(p);

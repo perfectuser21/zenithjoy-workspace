@@ -1,10 +1,11 @@
 // 独立Skill工具宿主；只管理资源和单步工具，不执行业务循环或启动模型。
 import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {readFileSync,writeFileSync,appendFileSync,mkdirSync,realpathSync} from 'node:fs';
+import {readFileSync,writeFileSync,appendFileSync,mkdirSync,realpathSync,lstatSync,openSync,closeSync,fsyncSync,constants} from 'node:fs';
 import {createRequire} from 'node:module';
+import {userInfo} from 'node:os';
 import {readFrozen} from './runtime-definition.mjs';
-import {standaloneScope,standaloneTaskProjectionMatches} from './standalone-skill-authority.mjs';
+import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
 import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
 import {createCentralDeviceLease} from './central-device-lease.mjs';
@@ -41,13 +42,24 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
  };
 }
 
+// 每台执行机对真实run只允许一份宿主；换目录不能重置未知提交或资源账。
+export function claimStandaloneHost({runId,runDirectory,registry=join(userInfo().homedir,'.local/state/zenithjoy/standalone-skill-hosts')}){
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId)||resolve(registry)!==registry||resolve(runDirectory)!==runDirectory)fail('HOST_SCOPE');
+ mkdirSync(registry,{recursive:true,mode:0o700});const stat=lstatSync(registry);
+ if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o777)!==0o700||realpathSync(registry)!==registry)fail('HOST_SCOPE');
+ const path=join(registry,runId+'.json');let fd;
+ try{fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);}catch(error){if(error.code==='EEXIST')fail('HOST_ALREADY_STARTED');throw error;}
+ try{writeFileSync(fd,JSON.stringify({run_id:runId,run_directory:runDirectory,pid:process.pid,started_at:new Date().toISOString()})+'\n');fsyncSync(fd);}finally{closeSync(fd);}
+ const parent=openSync(registry,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(parent);}finally{closeSync(parent);}return path;
+}
+
 export async function verifyStandaloneBootstrap({frozen,scope,read=readBrain}){
  const p=frozen.standalone_skill;
  const [value,definition,reconciliation]=await Promise.all([read('/api/brain/tasks/'+p.task_id),read('/api/brain/runs/'+p.run_id+'/definition'),read('/api/brain/runs/'+p.run_id+'/reconciliation')]);
  const task=value.task??value,b=definition.binding,r=reconciliation.task_run,links=reconciliation.links;
  if(!standaloneTaskProjectionMatches(task,p,scope)||b?.source_kind!=='internal'||b.id!==p.run_binding.run_binding_id||b.run_id!==p.run_id||b.task_run_id!==p.task_run_id
   ||b.release_id!==frozen.release?.id||b.observation_id!==frozen.deployment?.observation_id||r?.id!==p.task_run_id||r.task_id!==p.task_id||r.run_id!==p.run_id||r.status!=='running'||r.ended_at!==null
-  ||links?.task_id!==p.task_id||links.task_run_id!==p.task_run_id)fail('BOOTSTRAP');
+  ||!standaloneExecutionContextMatches(r?.context,p,scope)||links?.task_id!==p.task_id||links.task_run_id!==p.task_run_id)fail('BOOTSTRAP');
  return true;
 }
 
@@ -59,6 +71,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   WF_RUN_START_TS:String(scope.run_start_ts),WF_RUN_MAX_SECONDS:String(scope.run_max_seconds),DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),ZJ_ADB_HOST_CONFIG:frozen.discovery_phone_scope.policy_binding.policy_path,ADB_SERVER_SOCKET:frozen.discovery_phone_scope.policy.endpoint,DOUYIN_ADB_PORT:String(frozen.discovery_phone_scope.policy.port??frozen.discovery_phone_scope.policy.endpoint.split(':').at(-1)),LEADGEN_MMV_DEVICE_RUNTIME:'1',ZJ_EXTERNAL_LEDGER:join(dir,'external-interactions.jsonl')};
  if(env.BRAIN_INTERNAL_TOKEN!==process.env.BRAIN_INTERNAL_TOKEN)fail('CREDENTIAL_CONTEXT');
  await (dependencies.bootstrap??verifyStandaloneBootstrap)({frozen,scope});
+ claimStandaloneHost({runId:identity.run_id,runDirectory:dir,registry:dependencies.hostRegistry});
  const lease=(dependencies.leaseFactory??createCentralDeviceLease)({brainUrl:env.BRAIN_URL||'http://127.0.0.1:5221',token:env.BRAIN_INTERNAL_TOKEN,deviceName:scope.serial,taskId:identity.task_id,runId:identity.run_id,runSeconds:scope.run_max_seconds});
  // O_EXCL保留本目录已启动事实：进程崩溃也不靠重建工具实例丢掉未知提交/数量账。
  writeFileSync(join(dir,'standalone-host-started.json'),JSON.stringify({task_id:identity.task_id,run_id:identity.run_id,pid:process.pid,started_at:new Date().toISOString()}),{flag:'wx',mode:0o600});

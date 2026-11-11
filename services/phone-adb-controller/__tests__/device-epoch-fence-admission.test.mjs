@@ -32,6 +32,7 @@ async function standaloneFixture(){
  const identity={...p,approved_keywords,protocol:'codex-exec-v1',claimer:'codex-skill-direct',claimed_at:new Date().toISOString(),task_run_id:f.taskRun.id,skill,scope_sha256:digest(scope)};
  delete f.frozen.public_domain;f.frozen.standalone_skill=identity;f.frozen.files[skill.path]=skill.sha256;
  f.task.claimed_by=identity.claimer;f.task.claimed_at=identity.claimed_at;f.task.payload={execution_mode:'standalone-skill',scope,skill};f.task.result={codex_skill_direct:structuredClone(identity)};
+ f.taskRun.context={source:'standalone-skill',executor_kind:'codex-exec-v1',executor:identity.claimer,claimed_at:identity.claimed_at,skill:structuredClone(skill),scope:structuredClone(scope)};
  return f;
 }
 test('standalone Codex uses its true owner and pinned Skill without common-runner projection',async()=>{
@@ -106,7 +107,7 @@ async function compatibilityFixture(){
  const f=await standaloneFixture(),original=structuredClone(f.record.runtime_source),next='b'.repeat(40),newFile='2'.repeat(64);
  f.source={commit:next,files:{...original.files,'standalone-skill-authority.mjs':newFile}};f.frozen.deployment.source_commit=next;f.frozen.discovery_phone_scope.source_commit=next;
  f.frozen.files['runtime/standalone-skill-authority.mjs']=newFile;f.binding.payload.runtime_snapshot_sha256=digest({'code.mjs':'0'.repeat(64),'standalone-skill-authority.mjs':newFile});
- f.task.payload.scope.source_commit=next;f.frozen.standalone_skill.scope_sha256=digest(f.task.payload.scope);f.task.result.codex_skill_direct=structuredClone(f.frozen.standalone_skill);
+ f.task.payload.scope.source_commit=next;f.frozen.standalone_skill.scope_sha256=digest(f.task.payload.scope);f.task.result.codex_skill_direct=structuredClone(f.frozen.standalone_skill);f.taskRun.context.scope=structuredClone(f.task.payload.scope);
  const recordSha256=digest(JSON.stringify(f.record));f.recordSha256=recordSha256;f.frozen.discovery_phone_scope.policy_binding.epoch_fence={sha256:recordSha256};
  const receipt={protocol:'epoch-source-compatibility/v1',original_record_sha256:recordSha256,original_runtime_source:original,candidate_runtime_source:f.source,candidate_manifest_sha256:f.binding.payload.runtime_snapshot_sha256,release_id:f.frozen.release.id,observation_id:f.frozen.deployment.observation_id,serial:f.record.resource.serial,instance_id:f.record.new_route.instance_id,policy_sha256:f.policySha256,changes:[{path:'standalone-skill-authority.mjs',before_sha256:null,after_sha256:newFile}],evidence_refs:['artifact://review/source-diff'],actor:'codex-independent-source-review'};
  f.frozen.epoch_source_compatibility={review_task_id:id('f'),receipt,receipt_sha256:digest(receipt)};f.compatibilityReview={id:id('f'),status:'completed',task_type:'research',parent_task_id:id('d'),payload:{work_kind:'epoch_source_compatibility_review',reviewer:receipt.actor,business_task_id:f.task.id,candidate_source_commit:next,original_record_sha256:recordSha256,development_task_id:id('d')},result:{actor:receipt.actor,audit_evidence:{path:receipt.evidence_refs[0],sha256:'8'.repeat(64),verdict:'pass'},epoch_source_compatibility:structuredClone(receipt)}};f.compatibilityDevelopment={id:id('d'),task_type:'dev'};
@@ -128,4 +129,19 @@ test('compatibility fresh projection includes the real development Task type and
  for(const change of [v=>v.compatibilityDevelopment.task_type='research',v=>v.compatibilityDevelopment.id=id('c'),v=>v.compatibilityReview.payload.business_task_id=id('c'),v=>v.compatibilityReview.result.audit_evidence.sha256='0'.repeat(64)]){
   const later=structuredClone(f);change(later);assert.notDeepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
  }
+});
+
+test('same run and binding do not admit altered or missing standalone execution context',async()=>{
+ const {verifyEpochFacts}=await load();
+ for(const change of [f=>delete f.taskRun.context,f=>f.taskRun.context.source='generic',f=>f.taskRun.context.executor_kind='common-runner',f=>f.taskRun.context.executor='other',f=>f.taskRun.context.claimed_at='other',f=>f.taskRun.context.skill.sha256='0'.repeat(64),f=>f.taskRun.context.scope.limit=2,f=>f.taskRun.context.scope.task_id=id('f'),f=>delete f.taskRun.context.scope.serial,f=>f.taskRun.context.scope.extra='not-approved']){
+  const f=await standaloneFixture();change(f);assert.throws(()=>verifyEpochFacts(f),/EPOCH_BUSINESS_TASK_RUN/);
+ }
+ const withoutId=await standaloneFixture();delete withoutId.taskRun.context.scope.task_id;assert.equal(verifyEpochFacts(withoutId).authorized,true);
+});
+test('fresh standalone task_run projection includes authorization context but excludes heartbeat metadata',async()=>{
+ const {businessAuthorityProjection}=await load(),f=await standaloneFixture();
+ for(const change of [v=>v.taskRun.context.source='generic',v=>v.taskRun.context.executor_kind='generic',v=>v.taskRun.context.executor='other',v=>v.taskRun.context.claimed_at='other',v=>v.taskRun.context.skill.sha256='0'.repeat(64),v=>v.taskRun.context.scope.limit=2]){
+  const later=structuredClone(f);change(later);assert.notDeepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
+ }
+ const later=structuredClone(f);later.taskRun.context.heartbeat_at='later';later.taskRun.context.span_count=99;assert.deepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
 });
