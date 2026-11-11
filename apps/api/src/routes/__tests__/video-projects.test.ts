@@ -23,6 +23,15 @@ vi.mock('../../services/video-project-media',()=>({
 const sourceId=randomUUID(),assetId=randomUUID(),jobId=randomUUID();
 let directory:string;
 afterEach(async()=>{if(directory) await rm(directory,{recursive:true,force:true});});
+async function waitForProcessing(app:express.Express,id:string,processingStatus:string) {
+ const deadline=Date.now()+5000;
+ while(Date.now()<deadline){
+  const response=await request(app).get(`/projects/${id}`);expect(response.status).toBe(200);
+  if(response.body.status!==processingStatus)return response.body;
+  await new Promise<void>(done=>setImmediate(done));
+ }
+ throw new Error(`项目 ${id} 在期限内未完成 ${processingStatus}`);
+}
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),'video-projects-test-'));
  const asset={id:sourceId,kind:'video' as const,name:'source.mp4',url:'https://owned.example/source.mp4',width:640,height:360,duration:5,fps:30,size:6};
@@ -31,11 +40,10 @@ async function setup() {
  const app=express();app.use(express.json());app.use((req,_res,next)=>{(req as express.Request & {videoStaffId?:string}).videoStaffId=String(req.headers['x-test-user']||'alice');next();});
  app.use('/projects',createVideoProjectsRouter({directory,asset:async(_req,id)=>{if(id!==sourceId&&id!==assetId) throw Object.assign(new Error('无权访问'),{status:404});return{...asset,id};},store:async()=>({...asset,id:assetId}),job:async(_req,id)=>{if(!jobs[id]) throw Object.assign(new Error('不存在'),{status:404});return jobs[id] as unknown as Job;},findJob:async(_req,id)=>Object.values(jobs).find(job=>job.clientRequestId===id) as unknown as Job|undefined,download:async()=>new Response('video')}));
  app.use((err:Error & {status?:number},_req:express.Request,res:express.Response,next:express.NextFunction)=>{if(res.headersSent)return next(err);res.status(err.status||500).json({error:err.message});});
- const get=(url:string)=>request(app).get(url);
  const created=await request(app).post('/projects').send({sourceAssetId:sourceId,name:'测试视频'});
  expect(created.status).toBe(202);
- let project=created.body;
- for(let n=0;n<50&&project.status==='splitting';n++){await new Promise(done=>setTimeout(done,2));project=(await get(`/projects/${project.id}`)).body;}
+ const project=await waitForProcessing(app,created.body.id,'splitting');
+ expect(project.status,project.error).toBe('review');
  return{app,project,jobs};
 }
 async function patchSegment(app:express.Express,url:string,body:Record<string,unknown>) {
@@ -82,10 +90,11 @@ describe('video project ownership and approval workflow',()=>{
   const file=join(directory,createHash('sha256').update('alice').digest('hex'),'projects',`${project.id}.json`);
   const saved=JSON.parse(await readFile(file,'utf8'));saved.status='splitting';saved.runId='previous-process';await writeFile(file,JSON.stringify(saved));
   const interrupted=await request(app).get(`/projects/${project.id}`);expect(interrupted.body.status).toBe('failed');expect(interrupted.body.error).toContain('服务重启');
+  expect(JSON.parse(await readFile(file,'utf8')).status).toBe('splitting');
   await request(app).patch(`/projects/${project.id}`).send({confirmed:true});
   await patchSegment(app,`/projects/${project.id}/segments/${project.segments[0].id}`,{useOriginal:true,approved:true});
   const assembled=await request(app).post(`/projects/${project.id}/assemble`).send({});expect(assembled.status).toBe(202);
-  let current=assembled.body;for(let n=0;n<50&&current.status==='assembling';n++){await new Promise(done=>setTimeout(done,2));current=(await request(app).get(`/projects/${project.id}`)).body;}
+  const current=await waitForProcessing(app,project.id,'assembling');
   expect(current.status).toBe('completed');expect((await request(app).get(`/projects/${project.id}/download`)).status).toBe(200);
  });
 
@@ -127,7 +136,7 @@ describe('video project ownership and approval workflow',()=>{
   // Only an explicitly rejected submit with no recorded task may clear its marker and retry cutting.
   expect((await patchSegment(app,url,{clientRequestId:null})).status).toBe(200);
   const recut=await request(app).post(`/projects/${project.id}/split`).send({});expect(recut.status).toBe(202);
-  let current=recut.body;for(let n=0;n<50&&current.status==='splitting';n++){await new Promise(done=>setTimeout(done,2));current=(await request(app).get(`/projects/${project.id}`)).body;}
+  const current=await waitForProcessing(app,project.id,'splitting');
   expect(current.status).toBe('review');
  });
 

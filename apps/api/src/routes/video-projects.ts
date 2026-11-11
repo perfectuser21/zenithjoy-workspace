@@ -40,7 +40,11 @@ export function createVideoProjectsRouter(deps:Dependencies) {
   let project:Project;
   try {project=JSON.parse(await readFile(file(req,id),'utf8'));}
   catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT') return fail(404,'项目不存在或无权访问');throw error;}
-  if(['splitting','assembling'].includes(project.status) && (project.runId!==PROCESS_ID || !activeOwners.has(req.videoStaffId!))){project.status='failed';project.error='上次处理因服务重启中断，请重新分段或重新合成；已保存的素材仍可使用。';await save(req,project);}
+  // An in-flight read may contain the previous processing snapshot even after
+  // the worker has published its terminal state and released the owner. Owner
+  // absence is not evidence of interruption. Reads never write derived errors:
+  // a stale reader must not overwrite a newer worker or a restarted operation.
+  if(['splitting','assembling'].includes(project.status) && project.runId!==PROCESS_ID){project.status='failed';project.error='上次处理因服务重启中断，请重新分段或重新合成；已保存的素材仍可使用。';}
   return project;
  }
  async function visible(req:OwnerRequest,project:Project){
