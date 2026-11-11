@@ -1,3 +1,5 @@
+import {join} from 'node:path';
+import {verifyPhonePeerBootstrap} from './official-phone-peer-authority.mjs';
 import {readPhonePeerPrivateEnvironment} from './official-phone-peer-private-env.mjs';
 // Fixed SSH stdio entry. No listening socket, model session or Activity loop.
 import {createInterface} from 'node:readline';
@@ -18,8 +20,9 @@ export async function runPhonePeerStdio({input=process.stdin,output=process.stdo
    const envelope=JSON.parse(line);
    if(!host){
     const bootstrap=verifyPhonePeerEnvelope(envelope,key);
-    runtime=await createPhonePeerRuntime({bootstrap,root,environment});
-    host=createPhonePeerOperationHost({session:runtime.session,key,directory:runtime.directory,authorize:runtime.assertAuthority,execute:runtime.execute,snapshot:runtime.snapshot,seal:runtime.close,hostIdentity:{hostname:hostname(),pid:process.pid,uid:process.getuid(),runtime_root:root}});
+    if(bootstrap.read_only===true){const admitted=await verifyPhonePeerBootstrap({bootstrap,root,env:environment});runtime={session:bootstrap.session,directory:join(bootstrap.descriptor.run_root,bootstrap.identity.run_id),assertAuthority:()=>admitted.assertAuthority({phase:'prepare'}),execute:async()=>{throw Error('OFFICIAL_PHONE_PEER_READ_ONLY');},snapshot:()=>({active:false,pending:0,execution_unknown:true}),close:async()=>({execution_stopped:false}),abort:async()=>({execution_stopped:false})};closed=true;}
+    else runtime=await createPhonePeerRuntime({bootstrap,root,environment});
+    host=createPhonePeerOperationHost({session:runtime.session,key,directory:runtime.directory,authorize:runtime.assertAuthority,execute:runtime.execute,snapshot:runtime.snapshot,seal:runtime.close,readOnly:bootstrap.read_only===true,hostIdentity:{hostname:hostname(),pid:process.pid,uid:process.getuid(),runtime_root:root}});
     deadline=setTimeout(()=>{lines.close();input.destroy();},Math.max(1,runtime.session.deadline_ms-Date.now()));
     await emit(phonePeerEnvelope({protocol:'official-phone-peer-ready/v1',session_sha256:peerHash(runtime.session),descriptor_sha256:runtime.session.descriptor_sha256,host:'xian-m4'},key));
    }else{await emit(await host.handle(envelope));if(host.snapshot().closed)closed=true;}

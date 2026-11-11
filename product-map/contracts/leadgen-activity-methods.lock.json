@@ -26,6 +26,76 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
           "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
@@ -280,7 +350,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -497,7 +567,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -560,7 +630,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -602,7 +672,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -700,7 +770,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -808,13 +878,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "8466b6f32f699eb92e59e392d5fe45470025c0cd4aa78b4bc588ff95e9a5bbb7",
+      "code_digest": "a332bc720ebb1e5a7003c0cc6160f974b6f97ca11b63370c27367175fd9a6a90",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
-        "current_code_digest": "8466b6f32f699eb92e59e392d5fe45470025c0cd4aa78b4bc588ff95e9a5bbb7"
+        "current_code_digest": "a332bc720ebb1e5a7003c0cc6160f974b6f97ca11b63370c27367175fd9a6a90"
       }
     },
     "douyin_video_processing.preflight": {
@@ -839,6 +909,76 @@
         "content_digest": "1fe3e57642fa03c3775ef743e86989252eed4f076730ed783a93a74be8f2e73f"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -1103,7 +1243,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -1362,7 +1502,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -1425,7 +1565,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -1467,7 +1607,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -1576,7 +1716,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -1656,13 +1796,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "95a6e47a3c8292005ab413f753eca0141cc56312ec3277cf74ddded087c98cb0",
+      "code_digest": "3aaa23e7791a6757b72d8726a4f8ad0854828bc841323290b0c862870cc1d6e6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
-        "current_code_digest": "95a6e47a3c8292005ab413f753eca0141cc56312ec3277cf74ddded087c98cb0"
+        "current_code_digest": "3aaa23e7791a6757b72d8726a4f8ad0854828bc841323290b0c862870cc1d6e6"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1687,6 +1827,76 @@
         "content_digest": "796a4714700abf3811a9eac27b8bf51092cd27e18339e95183c8d1483b25896a"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -1930,7 +2140,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -2154,7 +2364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -2217,7 +2427,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -2259,7 +2469,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -2357,7 +2567,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -2451,13 +2661,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "21cea93d105b19efb95b6a25e39ef153bd8b1bab5ac6f4a0e94eab09eea217f4",
+      "code_digest": "bd0c48a6ca9b0456b157457bff7cffc4298346a793e13275dbae257467b99b57",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
-        "current_code_digest": "21cea93d105b19efb95b6a25e39ef153bd8b1bab5ac6f4a0e94eab09eea217f4"
+        "current_code_digest": "bd0c48a6ca9b0456b157457bff7cffc4298346a793e13275dbae257467b99b57"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2482,6 +2692,76 @@
         "content_digest": "ad1a5bfc9538c3c25e82ca655cd714b728cc7fa3a7547437d88855c7fabf6e32"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -2725,7 +3005,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -2977,7 +3257,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -3040,7 +3320,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -3082,7 +3362,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -3180,7 +3460,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -3330,13 +3610,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "7a15c5f32c21aaeff55e187619037e45197f567c8589a9b886ccdc6fb16d9e11",
+      "code_digest": "c879f6e284135c0ff083b6f5e272e3775c557ebc7a6e3be36bfd9f88b4e0b2b0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
-        "current_code_digest": "7a15c5f32c21aaeff55e187619037e45197f567c8589a9b886ccdc6fb16d9e11"
+        "current_code_digest": "c879f6e284135c0ff083b6f5e272e3775c557ebc7a6e3be36bfd9f88b4e0b2b0"
       }
     },
     "douyin_video_processing.collection": {
@@ -3361,6 +3641,76 @@
         "content_digest": "4619e11cdb95a3bce532e0f0d7b77983f857356079a934f70507aad068a00678"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -3604,7 +3954,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -3828,7 +4178,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -3891,7 +4241,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -3933,7 +4283,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -4039,7 +4389,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -4147,13 +4497,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "4736975d0fba93f3286af6eec76e452d1f7a7dd89d127cfdedae1521843afbc8",
+      "code_digest": "3afeab204bf8a24b80b94fc296d1b100011ffddc41a1dd0e4a6dc92f80e5b700",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
-        "current_code_digest": "4736975d0fba93f3286af6eec76e452d1f7a7dd89d127cfdedae1521843afbc8"
+        "current_code_digest": "3afeab204bf8a24b80b94fc296d1b100011ffddc41a1dd0e4a6dc92f80e5b700"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4178,6 +4528,76 @@
         "content_digest": "183734e07acc285b61455f5173257f0add35ca8a5141aa592d07d3d7f2c8e915"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -4435,7 +4855,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -4680,7 +5100,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -4743,7 +5163,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -4785,7 +5205,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -4886,7 +5306,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -4973,13 +5393,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "439527c951557b9c7d7b4d585db8d5fc6455f8df26c9ed3c210be45b474f4b76",
+      "code_digest": "2abd8a513984623386908915030ce321e375f55ea50d9903c5753b88fa62b0c7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
-        "current_code_digest": "439527c951557b9c7d7b4d585db8d5fc6455f8df26c9ed3c210be45b474f4b76"
+        "current_code_digest": "2abd8a513984623386908915030ce321e375f55ea50d9903c5753b88fa62b0c7"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5004,6 +5424,76 @@
         "content_digest": "1fc55d52127efc62a98a974d5518df2706cb2c70a61511561eb6526db64403e6"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -5261,7 +5751,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -5478,7 +5968,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -5541,7 +6031,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -5583,7 +6073,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -5653,7 +6143,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -5782,13 +6272,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "4becf3596779fe14c937679db94fad638ac6bbbe638e736d3bf8ea7d42d742d8",
+      "code_digest": "2ef0687812cf26ec94d4ac0ff878e76e12f9c06d863aa9573ecd1377f9a9f6ac",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
-        "current_code_digest": "4becf3596779fe14c937679db94fad638ac6bbbe638e736d3bf8ea7d42d742d8"
+        "current_code_digest": "2ef0687812cf26ec94d4ac0ff878e76e12f9c06d863aa9573ecd1377f9a9f6ac"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -5813,6 +6303,76 @@
         "content_digest": "8c40637d8b13a8fe37151895ee06e8cb1f9f91e0e0c5e37a945fd72ffbb527a9"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -6070,7 +6630,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -6294,7 +6854,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-executor.mjs",
           "revision": "contract",
-          "sha256": "dd2c471a95f3e914eb31e9a66974f3054a15a669c37059908f5cf665331bcabe"
+          "sha256": "e06490e1aa198b23e8833df99f9a8b6dbd57f95b7ee68fb4fe04b690c2fe40d6"
         },
         {
           "kind": "code",
@@ -6357,7 +6917,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -6399,7 +6959,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -6469,7 +7029,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -6633,13 +7193,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f5dd1385018d43029320167a41a9735a2824275adc7ef8684d187d87ea124c8b",
+      "code_digest": "0232fae068a090a45a502e48b0dbae6d8af1c825ae97c4c94ee7b5b936b603ef",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
-        "current_code_digest": "f5dd1385018d43029320167a41a9735a2824275adc7ef8684d187d87ea124c8b"
+        "current_code_digest": "0232fae068a090a45a502e48b0dbae6d8af1c825ae97c4c94ee7b5b936b603ef"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -6660,6 +7220,76 @@
         "content_digest": "620bfd956dc60d85809e9a46b9c82b7110efeaa53de18abc686876d819b903a3"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -7008,7 +7638,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -7148,7 +7778,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -7190,7 +7820,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -7306,7 +7936,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -7414,13 +8044,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6d627e6ff769cbc653baa09b748e7e3da6fe18e09ad33674f9f519a9cd057195",
+      "code_digest": "3eb4f23b10d1e9affb64caf1757eb51540ea548869b62c16fb288bae9e276331",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
-        "current_code_digest": "6d627e6ff769cbc653baa09b748e7e3da6fe18e09ad33674f9f519a9cd057195"
+        "current_code_digest": "3eb4f23b10d1e9affb64caf1757eb51540ea548869b62c16fb288bae9e276331"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -7444,6 +8074,76 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
           "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
@@ -7789,7 +8489,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -7929,7 +8629,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -7971,7 +8671,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -8076,7 +8776,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -8170,13 +8870,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bff8b09326a0d15a67a6be8a4a5e9d6aa295419526d300dac20d4a002407508e",
+      "code_digest": "2475d81319c37c79235da62a11596a88b99613ee21f0ffbc9f479a9e827da2a8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
-        "current_code_digest": "bff8b09326a0d15a67a6be8a4a5e9d6aa295419526d300dac20d4a002407508e"
+        "current_code_digest": "2475d81319c37c79235da62a11596a88b99613ee21f0ffbc9f479a9e827da2a8"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8200,6 +8900,76 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
           "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
@@ -8545,7 +9315,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -8685,7 +9455,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -8727,7 +9497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -8832,7 +9602,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -8919,13 +9689,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "797e5d910d07deec79479f4cc31c7eafbcd926945cdbe8f8af7a69a7dcb8afab",
+      "code_digest": "c7a123010fa09bafa83f011904036cd03db9b1ffa1d3a7c74aba12fe8c14de60",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
-        "current_code_digest": "797e5d910d07deec79479f4cc31c7eafbcd926945cdbe8f8af7a69a7dcb8afab"
+        "current_code_digest": "c7a123010fa09bafa83f011904036cd03db9b1ffa1d3a7c74aba12fe8c14de60"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -8946,6 +9716,76 @@
         "content_digest": "15f12a8b140b11868626a5f76b98ab78b5809beca9546ec5be2bf5e386b27e79"
       },
       "code_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-execution.mjs",
+          "revision": "contract",
+          "sha256": "5cae01fadbe0f2f36f8859462078e509a709f4f21d86bd39b1b78e16f1210a9b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
+          "revision": "contract",
+          "sha256": "cd9ef4862f41d6eb595f845610af1b7b5bae1582640a49ae4cbf13bad6185042"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
+          "revision": "contract",
+          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-private-env.mjs",
+          "revision": "contract",
+          "sha256": "c212099ebc2e0bd8fb22a98abd1e389fa35440e7a1a5c568998a57aa5c18c056"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-protocol.mjs",
+          "revision": "contract",
+          "sha256": "a6ea5923d7af670824bb69b0557b8c922259384c5e05363532581898422de982"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-runtime.mjs",
+          "revision": "contract",
+          "sha256": "721f7b255600dadeb180fca0d9cca2faf98d05dc9b8e50135d9a988fc895941e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
+          "revision": "contract",
+          "sha256": "d097dfe5976901e8ee943d9cb1654e11e729b4ae4bb23acbd0589d591ade3861"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-peer.mjs",
+          "revision": "contract",
+          "sha256": "623c6ac0c8f47f21ddbc231dd7131f309d77f091e3a7d2d8c6aea9abcdd19444"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/official-phone-audio-transfer.mjs",
+          "revision": "contract",
+          "sha256": "a2a1522d9a35e67b3ca32889730a5f64a7b7f3546ec3543765e3f77a598694e8"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/phone-operation-admission.mjs",
+          "revision": "contract",
+          "sha256": "a306221d01f0d0bf281a850e089ccf383f0e2b61d4a19e38ecbc8c73ba150ac6"
+        },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
@@ -9294,7 +10134,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-native-domain.mjs",
           "revision": "contract",
-          "sha256": "2e798bf17ddbc104793ea8fd70bf0c1c8c8bd28013a3a5912fb3dc48a2b21879"
+          "sha256": "7db4025f36e7e5d550d03d165122c2361d2b5bac38e9b9a5e224bcac6e4363b0"
         },
         {
           "kind": "code",
@@ -9434,7 +10274,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "0fddbcc1fd88418e5b6c24270dd9bbb243a1b22a9ccfa4f25e3a473c947a20bb"
+          "sha256": "82fb0103c67d9a725f506f88a4c62c2546a8dc33ac38b0e45030acfb39bc8db7"
         },
         {
           "kind": "code",
@@ -9476,7 +10316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-leaf-producer.mjs",
           "revision": "contract",
-          "sha256": "7d5974227b9f7c66bf85cbc3684ac68ed9932015868d52d222f2c08f7ef52228"
+          "sha256": "1e9785efbbdb3fccdb1f7de74cd10deb39bf89900dca4433217e2660b688ae2d"
         },
         {
           "kind": "code",
@@ -9584,7 +10424,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "f06c242c2edc02ad080a950e2eae8a70782e6e4f6bc138b079a357c8eb31e0df"
+          "sha256": "8907c6e786f9da3f53b58ff0135cdc67774602498d10068b578514e9319dd3b7"
         },
         {
           "kind": "code",
@@ -9678,13 +10518,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1546c5156db2d126d4c2066d2fe86e3869b9acb713ec0083944b7b3a0cba9cc5",
+      "code_digest": "62a305babb7865d30842048ce74ef3c1e4fc39a56ee8bf2652603f673015821b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "仅新增显式M4有限手机执行边界与原任务来源及收束核验；默认本地路径、Skill正文、原业务验收和公司政策保持原合同。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
-        "current_code_digest": "1546c5156db2d126d4c2066d2fe86e3869b9acb713ec0083944b7b3a0cba9cc5"
+        "current_code_digest": "62a305babb7865d30842048ce74ef3c1e4fc39a56ee8bf2652603f673015821b"
       }
     }
   },

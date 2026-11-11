@@ -16,12 +16,13 @@ export function validatePhoneExecution(value,{sourceCommit,workflow,resources}={
  const {snapshot_sha256,...body}=f||{};need(snapshot_sha256===peerHash(body)&&same(f.deployment,m)&&same(f.release,r)&&f.workflow_version?.payload?.key===workflow,'SNAPSHOT');
  need(['douyin_video_discovery','douyin_video_processing'].includes(workflow)&&resources?.profile===d.profile&&resources.serial===d.serial&&resources.account===d.account,'RESOURCE');
  const brain=new URL(d.brain_url);need(['http:','https:'].includes(brain.protocol)&&!brain.username&&!brain.password&&!brain.search&&!brain.hash&&brain.pathname==='/'&&!['localhost','127.0.0.1','::1','[::1]'].includes(brain.hostname),'BRAIN_ROUTE');
+ if(workflow==='douyin_video_processing')for(const name of ['scp','ssh'])need(d.audio_transfer?.executables?.[name]?.path==='/usr/bin/'+name&&/^[a-f0-9]{64}$/.test(d.audio_transfer.executables[name].sha256),'AUDIO_TRANSFER');
  const scope=f.discovery_phone_scope||f.collection_phone_scope;
  need(scope?.target==='xian-m4'&&scope.profile===d.profile&&scope.serial===d.serial&&scope.expected_account===d.account&&scope.policy?.schema_version===1&&scope.policy.host_id==='xian-m4'&&scope.policy.transport==='usb'&&scope.policy.endpoint==='tcp:127.0.0.1:5037'&&same(scope.policy.forbidden_ports,[5041,5042]),'USB');
  need(scope.policy_binding?.usb_local?.protocol==='usb-local-lease/v1'&&scope.policy_binding.usb_local.device_sdk===35,'USB_BINDING');
  need(f.preflight_profile?.profile===d.profile&&f.preflight_profile?.serial===d.serial&&f.preflight_profile.enabled===true,'PROFILE');
  const files=Object.fromEntries(Object.entries(f.files||{}).filter(([p])=>p.startsWith('runtime/')).map(([p,h])=>[p.slice(8),h]));
- need((m.files||[]).every(row=>files[row.deployed_path]===row.content_sha256),'FILE_CLOSURE');
+ need(Array.isArray(m.files)&&m.files.length>0&&m.files.every(row=>files[row.deployed_path]===row.content_sha256),'FILE_CLOSURE');
  need(files['official-phone-peer-host.mjs']&&files['official-phone-peer-runtime.mjs']&&files['phone-operation-admission.mjs']&&files['deployment-manifest.json']&&Object.keys(files).every(p=>p&&!p.startsWith('/')&&p.split('/').every(v=>v&&v!=='.'&&v!=='..')&&/^[a-f0-9]{64}$/.test(files[p])),'FILES');
  return Object.freeze(d);
 }

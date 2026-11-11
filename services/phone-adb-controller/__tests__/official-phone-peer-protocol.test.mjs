@@ -43,3 +43,14 @@ test('原claim撤销和过期session不能产生新物理动作',async t=>{
 test('SSH断连与非零退出即使producer已sealed也不能品牌化',async t=>{
  const f=fixture(t);const client=createPhonePeerOperationClient({session:f.session,key,exchange:q=>f.host.handle(q),closeTransport:async()=>({closed:true,code:255,signal:null})});await assert.rejects(client.close(),/TRANSPORT_CLOSE/);assert.equal(phonePeerStopped({},f.session),false);
 });
+test('断连后的新peer只能读原operation；pending intent不能被补执行或洗成成功',async t=>{
+ const f=fixture(t,{execute:async()=>{throw Error('PRODUCER_LOST');}});const id=randomUUID();await assert.rejects(f.client.request('phone',{command:'tap',args:['10','20']},{operationId:id}));
+ const {phonePeerEnvelope,peerHash,verifyPhonePeerEnvelope}=await import('../official-phone-peer-protocol.mjs');
+ const directory=realpathSync(mkdtempSync(join(tmpdir(),'peer-read-only-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));let calls=0;
+ const host=createPhonePeerOperationHost({session:f.session,key,directory,readOnly:true,authorize:async()=>true,execute:async()=>{calls++;},snapshot:()=>({active:false,pending:0,execution_unknown:true}),seal:async()=>({execution_stopped:false})});
+ const q={protocol:'official-phone-peer-operation/v1',scope_sha256:peerHash(f.session),operation_id:randomUUID(),sequence:1,operation:'phone',input:{command:'tap',args:['10','20']},deadline_ms:f.session.deadline_ms};q.input_sha256=peerHash(q.input);await assert.rejects(host.handle(phonePeerEnvelope(q,key)),/OPERATION/);assert.equal(calls,0);
+ await assert.rejects(f.client.readOperation(id),/READBACK_UNCONFIRMED/);assert.equal(f.client.snapshot().pending_operation_id,id);
+});
+test('同session另一个client也不能借用停止brand',async t=>{
+ const f=fixture(t),proof=await f.client.close();const other=createPhonePeerOperationClient({session:f.session,key,exchange:q=>f.host.handle(q),closeTransport:async()=>({closed:true,code:0})});assert.equal(phonePeerStopped(proof,f.session,other),false);
+});

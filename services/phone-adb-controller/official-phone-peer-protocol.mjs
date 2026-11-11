@@ -19,7 +19,7 @@ export function verifyPhonePeerEnvelope(envelope,key){
 }
 function privateRead(path){const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);try{const s=fstatSync(fd);need(s.isFile()&&s.uid===process.getuid()&&(s.mode&0o777)===0o600&&s.nlink===1&&s.size<=8*1024*1024,'JOURNAL');const bytes=readFileSync(fd),after=fstatSync(fd);need(s.dev===after.dev&&s.ino===after.ino&&s.size===bytes.length&&s.size===after.size&&s.mtimeMs===after.mtimeMs,'JOURNAL');return JSON.parse(bytes);}finally{closeSync(fd);}}
 function durable(directory,name,value){const fd=openSync(join(directory,name),'wx',0o600);try{writeFileSync(fd,peerCanonical(value));fsyncSync(fd);}finally{closeSync(fd);}const d=openSync(directory,'r');try{fsyncSync(d);}finally{closeSync(d);}}
-export function createPhonePeerOperationHost({session:provided,key,directory,authorize,execute,snapshot,seal,hostIdentity}={}){
+export function createPhonePeerOperationHost({session:provided,key,directory,authorize,execute,snapshot,seal,hostIdentity,readOnly=false}={}){
  const session=checkedSession(provided),scopeHash=peerHash(session),s=lstatSync(directory);
  need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(directory)===directory&&s.uid===process.getuid()&&!(s.mode&0o077)&&[authorize,execute,snapshot,seal].every(f=>typeof f==='function'),'HOST');
  let busy=false,closed=false,unknown=false,sequence=0;
@@ -30,7 +30,7 @@ export function createPhonePeerOperationHost({session:provided,key,directory,aut
   const q=verifyPhonePeerEnvelope(envelope,key);need(q?.protocol==='official-phone-peer-operation/v1'&&q.scope_sha256===scopeHash&&Number.isSafeInteger(q.sequence)&&q.sequence>0&&uuid.test(q.operation_id||'')&&q.input_sha256===peerHash(q.input),'REQUEST');
   const requestHash=peerHash(q);
   if(q.operation==='read_operation'){sequence=Math.max(sequence,q.sequence);need(Object.keys(q.input||{}).join(',')==='operation_id','READ_ONLY');return phonePeerEnvelope({protocol:'official-phone-peer-readback/v1',scope_sha256:scopeHash,operation_id:q.operation_id,sequence:q.sequence,request_sha256:requestHash,record:read(q.input.operation_id)},key);}
-  need(operations.has(q.operation)&&q.deadline_ms===session.deadline_ms,'OPERATION');
+  need(!readOnly&&operations.has(q.operation)&&q.deadline_ms===session.deadline_ms,'OPERATION');
   const intentPath=join(directory,q.operation_id+'.intent.json');
   try{const old=privateRead(intentPath);need(old.scope_sha256===scopeHash&&old.operation===q.operation&&old.input_sha256===q.input_sha256,'OPERATION_CONFLICT');return phonePeerEnvelope(read(q.operation_id),key);}catch(e){if(e.code!=='ENOENT')throw e;}
   need(!busy&&!closed&&!unknown&&q.sequence===sequence+1,'ORDER');await current();need(!busy&&!unknown,'ORDER');busy=true;sequence=q.sequence;
