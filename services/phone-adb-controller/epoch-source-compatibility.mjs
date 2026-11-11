@@ -26,10 +26,10 @@ export function epochCompatibilityRecordScope(frozen){
 }
 export function verifyEpochSourceCompatibility({frozen,record,recordSha256,source,reviewTask,developmentTask}){
  const ref=epochSourceCompatibilityReference(frozen);need(ref);const r=ref.receipt,spec=phone(frozen),p=reviewTask?.payload,audit=reviewTask?.result?.audit_evidence;
- need(reviewTask?.task_type==='research'&&p?.work_kind==='epoch_source_compatibility_review'&&p.reviewer===r.actor
+ need(reviewTask?.task_type==='research'&&(p?.work_kind==='epoch_source_compatibility_review'||p?.work_kind==='coding_review')&&p.reviewer===r.actor
   &&p.business_task_id===frozen.standalone_skill.task_id&&p.candidate_source_commit===source?.commit&&p.original_record_sha256===r.original_record_sha256
   &&uuid.test(p.development_task_id||'')&&reviewTask.parent_task_id===p.development_task_id&&p.development_task_id!==p.business_task_id
-  &&developmentTask?.id===p.development_task_id&&developmentTask.task_type==='dev'
+  &&developmentTask?.id===p.development_task_id&&(developmentTask.task_type==='dev'||(developmentTask.task_type==='harness_initiative'&&developmentTask.payload?.requested_task_type==='dev'&&developmentTask.payload?.work_kind==='coding_mutation'))
   &&typeof frozen.standalone_skill.claimer==='string'&&r.actor!==frozen.standalone_skill.claimer
   &&audit&&typeof audit.path==='string'&&audit.path.trim()&&sha.test(audit.sha256||'')&&audit.verdict==='pass'&&r.evidence_refs.includes(audit.path));
  need(reviewTask?.id===ref.review_task_id&&reviewTask.status==='completed'&&reviewTask.result?.actor===r.actor&&same(reviewTask.result?.epoch_source_compatibility,r));
