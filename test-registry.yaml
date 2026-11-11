@@ -11586,3 +11586,75 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；原Activity截止内同GET有限重读与拒绝边界；非真机业务验收"
+
+  - id: official-phone-audio-transfer
+    path: services/phone-adb-controller/__tests__/official-phone-audio-transfer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "固定录音上传与失ACK读回反例；非真实M4业务验收"
+
+  - id: official-phone-execution
+    path: services/phone-adb-controller/__tests__/official-phone-execution.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "双端冻结身份与部署源闭包反例；非真实M4业务验收"
+
+  - id: official-phone-peer-close-deadline
+    path: services/phone-adb-controller/__tests__/official-phone-peer-close-deadline.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "await transport close后重核原截止；模拟transport边界"
+
+  - id: official-phone-peer-private-env
+    path: services/phone-adb-controller/__tests__/official-phone-peer-private-env.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "本人私密凭据文件元数据与路由解析；仅dummy材料"
+
+  - id: official-phone-peer-protocol
+    path: services/phone-adb-controller/__tests__/official-phone-peer-protocol.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "持久opID、失ACK只读恢复与本实例停止品牌反例"
+
+  - id: official-phone-peer-runtime-contracts
+    path: services/phone-adb-controller/__tests__/official-phone-peer-runtime-contracts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "离线PG真实加载及远端验收身份事实；非真实M4业务验收"
+
+  - id: official-phone-peer-ssh-identity
+    path: services/phone-adb-controller/__tests__/official-phone-peer-ssh-identity.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "固定SSH源与私密环境隔离；真实本地假进程，不连接M4"
+
+  - id: official-phone-peer-transport
+    path: services/phone-adb-controller/__tests__/official-phone-peer-transport.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "污染尾帧不可由SSH exit0洗白；模拟transport边界"
+
+  - id: phone-scope-admission
+    path: services/phone-adb-controller/__tests__/phone-scope-admission.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "官方USB必需真实同scope品牌；原Code与云epoch兼容"
