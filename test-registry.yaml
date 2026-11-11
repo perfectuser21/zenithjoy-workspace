@@ -11298,6 +11298,14 @@ tests:
     product: AI员工
     note: "真实原tools与collection产物的live公共UUID作用域"
 
+  - id: leadgen-phone-operation-admission
+    path: services/phone-adb-controller/__tests__/phone-operation-admission.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "原scope品牌、USB5037身份/准入/真实producer关闭及云epoch兼容"
+
   - id: leadgen-official-cli-closure
     path: services/phone-adb-controller/__tests__/official-cli-closure.test.mjs
     type: unit
