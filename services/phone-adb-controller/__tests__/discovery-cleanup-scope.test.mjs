@@ -1,7 +1,7 @@
 // 不连接手机：真实handler/发现循环/guard；设备与PG只在各自外部边界隔离。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,existsSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,existsSync,rmSync,renameSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -66,6 +66,34 @@ test('真实guard根143但live PG仍在：unknown标记保留且不能清场/重
 });
 
 import {discoveryFixture,discoveredId} from './helpers/discovery-cleanup-fixture.mjs';
+for(const mode of ['production','isolated','explicit'])test(`101采集scope使用控制器同一${mode}锁根`,{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true});let scope;
+ try{
+  const root=mode==='production'?join(f.env.HOME,'.local/share/zenithjoy/phone-locks'):mode==='explicit'?join(f.d,'selected-locks'):join(f.env.DOUYIN_PHONE_TMP_ROOT,'locks');
+  if(mode!=='isolated'){
+   delete f.env.DOUYIN_PHONE_LOCK_TEST_MODE;
+   mkdirSync(root,{recursive:true});renameSync(join(f.env.DOUYIN_PHONE_TMP_ROOT,'locks',f.env.SERIAL+'.lock'),join(root,f.env.SERIAL+'.lock'));
+  }
+  if(mode==='explicit')f.env.DOUYIN_PHONE_LOCK_ROOT=root;
+  const {startDiscoveryPhoneScope}=await f.load('discovery-phone-scope.mjs');
+  scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:f.context.source_commit,taskId:f.context.task_id,lockHeld:true});
+  scope.assert();
+  assert.equal(readFileSync(join(root,f.env.SERIAL+'.lock','owner'),'utf8'),'scope-owner\n');
+  assert.equal(f.phoneCalls().some(row=>row.cmd==='open-search'),false);
+ }finally{await scope?.close();rmSync(f.d,{recursive:true,force:true});}
+});
+for(const mutation of ['wrong-owner','owner-symlink'])test(`101采集scope锁根对齐仍拒绝${mutation}`,{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true});
+ try{
+  f.env.DOUYIN_PHONE_LOCK_ROOT=join(f.env.DOUYIN_PHONE_TMP_ROOT,'locks');
+  if(mutation==='wrong-owner')writeFileSync(f.ownerFile,'another-owner\n');
+  else{const target=join(f.d,'owner-target');writeFileSync(target,'scope-owner\n');rmSync(f.ownerFile);symlinkSync(target,f.ownerFile);}
+  const {startDiscoveryPhoneScope}=await f.load('discovery-phone-scope.mjs');
+  await assert.rejects(startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:f.context.source_commit,taskId:f.context.task_id,lockHeld:true}),/DISCOVERY_PHONE_LOCK_OWNER_MISMATCH/);
+  assert.equal(existsSync(join(f.d,'discovery-phone-scopes')),false);
+  assert.equal(f.phoneCalls().some(row=>row.cmd==='open-search'),false);
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
 test('101 原生137即使外层回报视频，仍不得写PG或释放原锁',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{unknownAfterLink:true,stop:false});
  try{
