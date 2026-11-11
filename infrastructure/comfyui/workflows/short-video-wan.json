@@ -94,6 +94,14 @@
             "name": "确认分镜"
           },
           "link": null
+        },
+        {
+          "name": "已预览分镜ID",
+          "type": "STRING",
+          "widget": {
+            "name": "已预览分镜ID"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -110,11 +118,13 @@
       },
       "widgets_values": [
         1,
-        false
+        false,
+        ""
       ],
       "widgets_values_named": {
         "分镜序号": 1,
-        "确认分镜": false
+        "确认分镜": false,
+        "已预览分镜ID": ""
       }
     },
     {

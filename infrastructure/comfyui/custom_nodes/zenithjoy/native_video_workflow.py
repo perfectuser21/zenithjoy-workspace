@@ -157,7 +157,7 @@ def build_video_nodes(api, submit_and_wait, download_job, download_project, exec
     class VideoSegment:
         @classmethod
         def INPUT_TYPES(cls):
-            return {'required': {'视频项目': ('ZJ_VIDEO_PROJECT',), '分镜序号': ('INT', {'default': 1, 'min': 1, 'max': 120}), '确认分镜': ('BOOLEAN', {'default': False})}}
+            return {'required': {'视频项目': ('ZJ_VIDEO_PROJECT',), '分镜序号': ('INT', {'default': 1, 'min': 1, 'max': 120}), '确认分镜': ('BOOLEAN', {'default': False}), '已预览分镜ID': ('STRING', {'default': ''})}}
         RETURN_TYPES = ('ZJ_VIDEO_SEGMENT',)
         RETURN_NAMES = ('选中分镜',)
         FUNCTION = 'run'
@@ -166,7 +166,7 @@ def build_video_nodes(api, submit_and_wait, download_job, download_project, exec
         @classmethod
         def IS_CHANGED(cls, **kwargs):
             return float('nan')
-        def run(self, 视频项目, 分镜序号, 确认分镜):
+        def run(self, 视频项目, 分镜序号, 确认分镜, 已预览分镜ID=''):
             project_id = _project_identity(视频项目)
             project = read_project(project_id)
             if not isinstance(分镜序号, int) or isinstance(分镜序号, bool) or 分镜序号 < 1 or 分镜序号 > len(project['segments']):
@@ -175,6 +175,11 @@ def build_video_nodes(api, submit_and_wait, download_job, download_project, exec
             preview = {'project': [project], 'segment': [segment_ui(project, segment)]}
             if not 确认分镜:
                 return paused(1, '请先预览全部分镜，再打开确认分镜；后续生成尚未执行', **preview)
+            # Ordinals and confirmation booleans survive saved graph queues.
+            # Re-cutting replaces segment UUIDs, so a previous preview cannot
+            # authorize a new segment merely because its ordinal is unchanged.
+            if 已预览分镜ID != segment['id']:
+                return paused(1, '分镜已更新或尚未预览，请重新预览当前分镜后再确认；尚未执行生成', **preview)
             if not project.get('confirmed'):
                 project = api('PATCH', '/projects/' + project_id, {'confirmed': True}).json()
                 segment = find_segment(project, segment['id'])

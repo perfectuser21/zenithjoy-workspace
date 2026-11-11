@@ -64,6 +64,8 @@ function status(node, message) {
 }
 function clearResult(node) {
   node.__zjEdited = null;
+  node.__zjSelectedSegment = null;
+  if (field(node, "已预览分镜ID")) field(node, "已预览分镜ID").value = "";
   node.__zjProject = null;
   node.__zjConflict = false;
   if (field(node, "确认分镜")) field(node, "确认分镜").value = false;
@@ -216,7 +218,49 @@ function renderProject(node, project) {
       `${project.name || "视频项目"} · ${project.segments?.length ?? 0} 个分镜。选择片段后继续。`,
   );
 }
+function confirmSelected(node, confirmed) {
+  const toggle = field(node, "确认分镜"),
+    receipt = field(node, "已预览分镜ID");
+  if (!toggle || !receipt) {
+    status(node, "请重新加载新版选择分镜节点，再预览确认");
+    return;
+  }
+  const selected = node.__zjSelectedSegment;
+  if (!confirmed || !selected?.id) {
+    toggle.value = false;
+    receipt.value = "";
+    invalidate(node, false);
+    status(
+      node,
+      confirmed
+        ? "请先运行自动分镜并预览当前片段，再确认分镜"
+        : "当前分镜尚未确认",
+    );
+    return;
+  }
+  toggle.value = true;
+  receipt.value = selected.id;
+  invalidate(node, false);
+  status(node, "已确认当前预览分镜。设置下游修改要求，打开“确认生成”后运行。");
+}
 function renderSegment(node, segment, ordinal) {
+  if (field(node, "确认分镜")) {
+    const id = typeof segment.id === "string" ? segment.id : segment.segmentId;
+    const previous = node.__zjSelectedSegment;
+    const receipt = field(node, "已预览分镜ID");
+    if (
+      (previous &&
+        (previous.id !== id || previous.projectId !== segment.projectId)) ||
+      (receipt?.value && receipt.value !== id) ||
+      (field(node, "确认分镜").value && receipt?.value !== id)
+    )
+      invalidate(node);
+    // A preview is evidence for the next explicit user action, never approval itself.
+    node.__zjSelectedSegment =
+      typeof id === "string" && id
+        ? { id, projectId: segment.projectId }
+        : null;
+  }
   const container = preview(node);
   container.replaceChildren();
   container.append(
@@ -338,6 +382,7 @@ app.registerExtension({
         "背景图片ID",
         "人脸图片ID",
         "审核任务ID",
+        "已预览分镜ID",
         "request_id",
       ])
         hide(field(node, name));
@@ -354,14 +399,7 @@ app.registerExtension({
           "button",
           "确认当前分镜",
           null,
-          () => {
-            if (field(node, "确认分镜")) field(node, "确认分镜").value = true;
-            invalidate(node, false);
-            status(
-              node,
-              "已确认当前分镜。设置下游修改要求，打开“确认生成”后运行。",
-            );
-          },
+          () => confirmSelected(node, true),
           { serialize: false },
         );
       if (nodeData.name === "ZenithJoyApproveSegment")
@@ -397,6 +435,7 @@ app.registerExtension({
             "确认当前分镜",
             "确认使用当前结果",
             "审核任务ID",
+            "已预览分镜ID",
             "生成新版本",
             "新建视频项目",
           ].includes(widget.name) ||
@@ -407,7 +446,8 @@ app.registerExtension({
         widget.callback = function () {
           const value = previous?.apply(this, arguments);
           const chosen = widget.value;
-          if (widget.name === "确认分镜") invalidate(node, false);
+          if (widget.name === "确认分镜")
+            confirmSelected(node, chosen === true);
           else invalidate(node);
           if (["确认生成", "确认合成"].includes(widget.name))
             widget.value = chosen;
