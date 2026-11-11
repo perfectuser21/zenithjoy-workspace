@@ -154,7 +154,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -885,13 +885,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "d0729b3e59aa843df614d6bd0564218e32980af5ddd4a581ad52b6a044b38ba5",
+      "code_digest": "c1ff52662194ed50e293c2f00382ff261f6a8f4650304595ef75cf1a9cd8ea2f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
-        "current_code_digest": "d0729b3e59aa843df614d6bd0564218e32980af5ddd4a581ad52b6a044b38ba5"
+        "current_code_digest": "c1ff52662194ed50e293c2f00382ff261f6a8f4650304595ef75cf1a9cd8ea2f"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1054,7 +1054,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -1810,13 +1810,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b50f54f3b08996a1fce6d15bc7cb9dbf7fb5b212ac04fd05ba5057c64331a8cf",
+      "code_digest": "92c0150577d99e298cf80b03f46ad40f5ad24a71a82e6bec3f7cee920c8e0d12",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
-        "current_code_digest": "b50f54f3b08996a1fce6d15bc7cb9dbf7fb5b212ac04fd05ba5057c64331a8cf"
+        "current_code_digest": "92c0150577d99e298cf80b03f46ad40f5ad24a71a82e6bec3f7cee920c8e0d12"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1972,7 +1972,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -2682,13 +2682,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "76522251d3490617b264515b10e3acf2e9bfff4776e9803dc2046a9c305ee243",
+      "code_digest": "6d223d7a1c985cda076f334daacdc0a66b885d0595849256ac9e3d77f124d65c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
-        "current_code_digest": "76522251d3490617b264515b10e3acf2e9bfff4776e9803dc2046a9c305ee243"
+        "current_code_digest": "6d223d7a1c985cda076f334daacdc0a66b885d0595849256ac9e3d77f124d65c"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2844,7 +2844,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -3638,13 +3638,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "c61771e78a685c2dead26526cb2315efde3695938b664b0e67a5e4a745dc3bb4",
+      "code_digest": "1f9cd941610745f5a6aecaa99998ebed4bf096cce8edaaa9221dd417ed97438e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
-        "current_code_digest": "c61771e78a685c2dead26526cb2315efde3695938b664b0e67a5e4a745dc3bb4"
+        "current_code_digest": "1f9cd941610745f5a6aecaa99998ebed4bf096cce8edaaa9221dd417ed97438e"
       }
     },
     "douyin_video_processing.collection": {
@@ -3800,7 +3800,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -4532,13 +4532,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "007b245ebbd6669d1e766a8781e2f66f62d94e7177b476f48f7866791199a7e0",
+      "code_digest": "f4309c5bce086c8ca86ccf32b866395dedf47ac2364659c0f1ad1cafadad74bb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
-        "current_code_digest": "007b245ebbd6669d1e766a8781e2f66f62d94e7177b476f48f7866791199a7e0"
+        "current_code_digest": "f4309c5bce086c8ca86ccf32b866395dedf47ac2364659c0f1ad1cafadad74bb"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4694,7 +4694,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -5435,13 +5435,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5d1989db23295f36e77466aea4cc615af3370b98cf12caccc30afe899fab2c42",
+      "code_digest": "571388bf5a167865a2fa47f1c9df080519db098f402b51badbb4716aee110737",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
-        "current_code_digest": "5d1989db23295f36e77466aea4cc615af3370b98cf12caccc30afe899fab2c42"
+        "current_code_digest": "571388bf5a167865a2fa47f1c9df080519db098f402b51badbb4716aee110737"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5597,7 +5597,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -6321,13 +6321,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "4e25371765599b87cf33a9686cd21b3052c191b7550e2ecf1e66c1fcc1cc3f83",
+      "code_digest": "2d9d912d2bfb4346f704a81ebc11ae57e0a2e5d8f8908d5dfd7ee5f1e372c74f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
-        "current_code_digest": "4e25371765599b87cf33a9686cd21b3052c191b7550e2ecf1e66c1fcc1cc3f83"
+        "current_code_digest": "2d9d912d2bfb4346f704a81ebc11ae57e0a2e5d8f8908d5dfd7ee5f1e372c74f"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6483,7 +6483,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -7249,13 +7249,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "dd8f1937916ae413d367eef61678bae9eed660113fb0f5d3b13c07f7697f66fe",
+      "code_digest": "dee8f89c458ca60594b2e977afdb6796ffa742a17f93d0c513d9f2e7183b401b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
-        "current_code_digest": "dd8f1937916ae413d367eef61678bae9eed660113fb0f5d3b13c07f7697f66fe"
+        "current_code_digest": "dee8f89c458ca60594b2e977afdb6796ffa742a17f93d0c513d9f2e7183b401b"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7407,7 +7407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -8107,13 +8107,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "bbbdfabbe19169117f4b095a9170f194105bb72a3f364a2996c34b2c6321beba",
+      "code_digest": "cafc2e90d2b15b4280e19c443a2acf64b04fde068e844a84bc7b854569a99c77",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
-        "current_code_digest": "bbbdfabbe19169117f4b095a9170f194105bb72a3f364a2996c34b2c6321beba"
+        "current_code_digest": "cafc2e90d2b15b4280e19c443a2acf64b04fde068e844a84bc7b854569a99c77"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8265,7 +8265,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -8940,13 +8940,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cf9b88623d8505da75a8dd55ae870e6afb327e24d0000f864790984958ec477e",
+      "code_digest": "b7d596390f9e51f678fe69efbbdd2b19ad22bcd6b29c75fbaf52cb91bd8fb7d7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
-        "current_code_digest": "cf9b88623d8505da75a8dd55ae870e6afb327e24d0000f864790984958ec477e"
+        "current_code_digest": "b7d596390f9e51f678fe69efbbdd2b19ad22bcd6b29c75fbaf52cb91bd8fb7d7"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9098,7 +9098,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -9766,13 +9766,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d793371cd7cb95a7cd6d71342561419d4491fcbdc86057ec13f8a35a6f45b1fc",
+      "code_digest": "12a71cacf3e359efd12c3621bfe9b50fd9bc48d5871d9ed747c19019092c76b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
-        "current_code_digest": "d793371cd7cb95a7cd6d71342561419d4491fcbdc86057ec13f8a35a6f45b1fc"
+        "current_code_digest": "12a71cacf3e359efd12c3621bfe9b50fd9bc48d5871d9ed747c19019092c76b6"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9924,7 +9924,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/adb-shell-v2.mjs",
           "revision": "contract",
-          "sha256": "a2bb83e41799952edee446fe249463e3c40775ce71eabc72b6393cf4fcfedc64"
+          "sha256": "36fc65f14a70738589e7dd018bf242691b41335f580cb404fcc0f2470b7a6fcc"
         },
         {
           "kind": "code",
@@ -10602,13 +10602,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "30b757cb9c691a8e2b351e5525b9dbbe3ee6c8a800a5c4b479f87e526f10e5c5",
+      "code_digest": "bf5f90dd2887b4554eac7467343df1a0b6151b7c9c730c35dbb0ee8276e56535",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "统一通用owner单连接关闭修复及受控M4纯Skill接入；保原Activity合同、Skill正文、DoD与业务政策。owner真实nonce在原截止内关闭，M4协议/USB/原Code兼容反例独审通过；完整M4业务与恢复仍未验收。",
-        "reviewed_by": "codex-pstack-commander; owner-53d-independent; bootstrap-f6eaa9; protocol-92e658; integration-c358",
+        "reason": "统一owner单连接关闭、受控M4纯Skill接入及原socket只读接收去重；保连接/每次发送/最终授cap实时授权和原截止、源、租约、漂移边界。Skill正文、Activity合同、DoD与业务政策不变；176回归及16独立攻击复核通过，完整真机/冷恢复未验收。",
+        "reviewed_by": "codex-pstack-commander; owner53d; bootstrap-f6eaa9; protocol92e658; receive-be029-2dbae633",
         "previous_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
-        "current_code_digest": "30b757cb9c691a8e2b351e5525b9dbbe3ee6c8a800a5c4b479f87e526f10e5c5"
+        "current_code_digest": "bf5f90dd2887b4554eac7467343df1a0b6151b7c9c730c35dbb0ee8276e56535"
       }
     }
   },
