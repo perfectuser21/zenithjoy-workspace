@@ -3,6 +3,8 @@ import {realpathSync,readFileSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {canonical,readFrozen,frozenExecutionMode} from './runtime-definition.mjs';
+import {execInput,rpcSource} from './leadgen-client.mjs';
+import {captureOwnerGatewayRoute,createOwnerReadConnectionFactory} from './official-owner-read-connection.mjs';
 import {publicDomainAuthority} from './public-domain-authority.mjs';
 import {verifySkillRequest,runSkillAgent,skillAuthority,stopSkillAgent} from './leadgen-skill-agent.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
@@ -39,6 +41,8 @@ export function createPublicOfficialChildRpc({runDir,frozen,baseRpc,get,agentOpt
   }
  }
  local();
+ const gatewayRoute=captureOwnerGatewayRoute(),execute=agentOptions.execute??execInput;
+ const fixedOptions={...agentOptions,execute:(command,args,options)=>execute(command,args,{...options,env:gatewayRoute.environment})};
  const authorize=async q=>{local(q);await verifySkillRequest(q,{...(get?{get}:{}),publicRunDirectory:dir});local(q);return true;};
  return async(body,options)=>{
   if(!kinds.has(body?.kind))return baseRpc(body,options);
@@ -48,11 +52,12 @@ export function createPublicOfficialChildRpc({runDir,frozen,baseRpc,get,agentOpt
   if(body.kind==='activity_skill_authority'){
    await authorize(q);return {ok:true,authorized:skillAuthority(q,agentOptions)};
   }
+  const ownerReadConnectionFactory=agentOptions.ownerReadConnectionFactory??(scope=>createOwnerReadConnectionFactory({runtimeRoot:root,source:rpcSource(fixed),gatewayRoute,authorize:()=>authorize(q)})(scope));
   let result;
   if(body.kind==='activity_skill'){
-   result=await runSkillAgent(q,{...agentOptions,beforeLaunch:()=>authorize(q)});
+   result=await runSkillAgent(q,{...fixedOptions,ownerReadConnectionFactory,beforeLaunch:()=>authorize(q)});
   }else{
-   await authorize(q);result=await stopSkillAgent(q,agentOptions);
+   await authorize(q);result=await stopSkillAgent(q,fixedOptions);
   }
   try{await authorize(q);}catch{throw Object.assign(Error('PUBLIC_OFFICIAL_CHILD_AUTHORITY_REVOKED'),{executionStopped:false});}
   return {ok:true,result};

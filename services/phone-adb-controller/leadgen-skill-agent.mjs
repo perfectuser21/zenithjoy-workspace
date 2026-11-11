@@ -324,7 +324,7 @@ export async function stopSkillAgent(q,{home=homedir(),execute=execInput,verifyW
  try{const terminal=privateJson(join(dir,'child-stop-readback.json'));child=terminal.runId===binding.child_run_id&&Number.isFinite(terminal.endedAt)&&['ok','error','aborted','timeout'].includes(terminal.status);}catch{/* 未验证停止。 */}
  return {status:'unknown',execution_stopped:false,child_execution_stopped:child,child_run_id:binding.child_run_id,reason:'commander_stop_owner_readback_required'};
 }
-export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace,beforeLaunch}={}){
+export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace,beforeLaunch,ownerReadConnectionFactory}={}){
  validate(q);
  if(publicWorkspaceScope(q)&&(!beforeLaunch||typeof beforeLaunch!=='function'||await beforeLaunch()!==true))throw Error('RPC_SKILL_LAUNCH_UNAUTHORIZED');
  let workspace=verifyWorkspace({home,request:q});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
@@ -424,7 +424,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   writeFileSync(join(dir,'parent-cli-result.json'),JSON.stringify(parentResult),{mode:0o600});
  }catch(error){writeFileSync(join(dir,'parent-cli-error.json'),JSON.stringify({reason:String(error.message).slice(0,200)}),{mode:0o600});if(executionDidNotStart(error,'openclaw',parentArgs)){await ownerTurn.notStarted(error,'openclaw',parentArgs);return {status:'blocked',execution_stopped:true,reason:'parent_cli_not_started'};}}
  const archiveOwner=raw=>officialParent(q)?ownerTurn.observedTerminal(parentResult):ownerTurn.returned(raw);
- const closeOwner=async child=>{if(officialParent(q)&&officialOwnerRunTerminated(parentResult,q))parentResult=await closeOfficialSkillOwner({result:parentResult,request:q,child,directory:dir,execute});};
+ const closeOwner=async child=>{if(officialParent(q)&&officialOwnerRunTerminated(parentResult,q))parentResult=await closeOfficialSkillOwner({result:parentResult,request:q,child,directory:dir,execute,ownerReadConnectionFactory});};
  try{
   const binding=official(q,dir);
   const awaited=await execute('python3',[helper,'await',dir],{timeoutMs:Math.max(1,receiptDeadline-Date.now())});

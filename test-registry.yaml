@@ -11266,6 +11266,14 @@ tests:
     product: AI员工
     note: "公共同进程Skill宿主来源/撤销/双停保守行为；离线模型CLI夹具，不冒真机成功"
 
+  - id: leadgen-official-owner-read-connection
+    path: services/phone-adb-controller/__tests__/official-owner-read-connection.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实本地WebSocket验证owner单连接七读、显式路由、严禁写RPC、原截止及全部连接关闭；不冒真实模型或手机验收"
+
   - id: leadgen-official-skill-owner
     path: services/phone-adb-controller/__tests__/official-skill-owner.test.mjs
     type: integration

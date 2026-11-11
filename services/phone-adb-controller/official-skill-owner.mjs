@@ -134,7 +134,7 @@ export async function runOfficialSkillOwner({request,parent,directory,message,ex
 // A finished RPC run does not rule out completion delivery starting another
 // turn in the same parent session. Only fresh, repeated official readbacks can
 // close that owner scope; this never turns its business result into success.
-export async function closeOfficialSkillOwner({result,request,child,directory,execute}){
+export async function closeOfficialSkillOwner({result,request,child,directory,execute,ownerReadConnectionFactory}){
  if(!officialOwnerRunTerminated(result,request)||typeof execute!=='function')fail();
  const scopeHash=hash(request),parent=result.parent_session_key,end=request.receipt_deadline_ms;
  const identity=['run_id','task_id','parent_session_key','nonce','child_run_id','child_session_key'];
@@ -145,12 +145,14 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
    ||!child||identity.some(k=>binding[k]!==child[k])||binding.run_id!==request.run_id||binding.task_id!==request.task_id
    ||binding.nonce!==request.nonce||binding.parent_session_key!==parent||Date.now()>=end)fail();
  };
- let reads=0,sessionId,verified=false;
+ let reads=0,sessionId,verified=false,connection,connectionProof;
  const read=async(method,params)=>{
   current();const start=Date.now(),remaining=end-start;
-  const raw=await execute('openclaw',['gateway','call',method,'--params',JSON.stringify(params),'--json','--timeout',String(Math.min(5000,remaining))],{timeoutMs:Math.min(5000,remaining),maxBuffer:1024*1024});
-  if(raw.code!==0||raw.signal)fail();const body=JSON.parse(raw.stdout);
-  durable(join(directory,`owner-closure-read-${String(++reads).padStart(3,'0')}.json`),{method,params,start_ms:start,end_ms:Date.now(),raw});current();return {body,start};
+  let body,evidence;
+  if(connection){const value=await connection.read(method,params);body=value.body;evidence={transport:'official-sdk-single-connection/v1',request_id:value.request_id,body};}
+  else{const raw=await execute('openclaw',['gateway','call',method,'--params',JSON.stringify(params),'--json','--timeout',String(Math.min(5000,remaining))],{timeoutMs:Math.min(5000,remaining),maxBuffer:1024*1024});
+   if(raw.code!==0||raw.signal)fail();body=JSON.parse(raw.stdout);evidence={raw};}
+  durable(join(directory,`owner-closure-read-${String(++reads).padStart(3,'0')}.json`),{method,params,start_ms:start,end_ms:Date.now(),...evidence});current();return {body,start};
  };
  const describe=async()=>{
   const {body:description,start}=await read('sessions.describe',{key:parent,agentId:'work-commander'}),row=description.session;
@@ -183,6 +185,7 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
   return 'ready';
  };
  try{
+  current();if(ownerReadConnectionFactory!==undefined){if(typeof ownerReadConnectionFactory!=='function')fail();connection=await ownerReadConnectionFactory({request,parent,child,directory,assertCurrent:current});if(typeof connection?.read!=='function'||typeof connection?.close!=='function')fail();current();}
   let rounds=0;
   while(Date.now()<end){
    if(await census()==='ready'){
@@ -192,8 +195,11 @@ export async function closeOfficialSkillOwner({result,request,child,directory,ex
    rounds=0;
    await new Promise(resolve=>setTimeout(resolve,Math.max(0,Math.min(100,end-Date.now()))));
   }
- }catch{/* An unfinished delivery or an uncertain census retains the original reservation. */}
+ }catch{verified=false;}
+ finally{
+  if(connection){try{connectionProof=await connection.close();current();if(connectionProof?.protocol!=='official-owner-read-connection/v1'||connectionProof.connection_count!==1||connectionProof.reconnect_count!==0||connectionProof.pending_request_count!==0||connectionProof.request_closed!==true||connectionProof.websocket_closed!==true||connectionProof.socket_closed!==true||connectionProof.shutdown_seen!==false||connectionProof.restart_seen!==false)fail();}catch{verified=false;}}
+ }
  const proof=Object.freeze({...result,protocol:'official-skill-owner-closure/v1',owner_run_execution_stopped:true,
-  execution_stopped:verified,session_quiescent:verified,session_id:sessionId??null,closure_read_count:reads});
+  execution_stopped:verified,session_quiescent:verified,session_id:sessionId??null,closure_read_count:reads,...(ownerReadConnectionFactory!==undefined?{transport:'official-sdk-single-connection/v1',connection_proof:connectionProof??null}:{})});
  durable(join(directory,'parent-owner-closure.json'),proof);if(verified)closed.set(proof,{scope_sha256:scopeHash,result_sha256:hash(proof)});return proof;
 }
