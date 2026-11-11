@@ -44,6 +44,7 @@ async function fixture(
   fetch = async () => {
     throw new Error("Unexpected network call");
   },
+  files = ["identifiers.js", "video-project.js"],
 ) {
   const extensions = [],
     elements = [];
@@ -73,7 +74,7 @@ async function fixture(
       },
     },
   });
-  for (const filename of ["identifiers.js", "video-project.js"]) {
+  for (const filename of files) {
     const module = new vm.SourceTextModule(
       await readFile(
         new URL(`custom_nodes/zenithjoy/web/${filename}`, root),
@@ -386,3 +387,67 @@ test("short-video template retains native typed links and stops before every pai
     /COPY infrastructure\/comfyui\/workflows\/short-video-wan.json/,
   );
 });
+
+for (const files of [
+  ["identifiers.js", "video-project.js"],
+  ["video-project.js", "identifiers.js"],
+]) {
+  test(`new-version invalidates downstream approval in extension order ${files.join(" → ")}`, async () => {
+    const f = await fixture(undefined, files);
+    const remake = await f.node("ZenithJoySegmentRemake", {
+      确认生成: false,
+      request_id: "",
+    });
+    const approval = await f.node("ZenithJoyApproveSegment", {
+      审核任务ID: "",
+    });
+    f.connect(remake, approval);
+    f.field(remake, "确认生成").value = true;
+    f.field(approval, "审核任务ID").value = jobId;
+    const original = f.field(remake, "request_id").value;
+    f.field(remake, "生成新版本").callback();
+    assert.notEqual(f.field(remake, "request_id").value, original);
+    assert.equal(f.field(remake, "确认生成").value, false);
+    assert.equal(f.field(approval, "审核任务ID").value, "");
+  });
+}
+
+for (const files of [
+  ["identifiers.js", "video-project.js"],
+  ["video-project.js", "identifiers.js"],
+]) {
+  test(`new project clears every downstream checkpoint in extension order ${files.join(" → ")}`, async () => {
+    const f = await fixture(undefined, files);
+    const source = await f.node("ZenithJoyVideoProject", {
+      原片视频ID: assetId,
+      request_id: "",
+    });
+    const selector = await f.node("ZenithJoyVideoSegment", {
+      分镜序号: 1,
+      确认分镜: false,
+    });
+    const remake = await f.node("ZenithJoySegmentRemake", {
+      确认生成: false,
+      request_id: "",
+    });
+    const approval = await f.node("ZenithJoyApproveSegment", {
+      审核任务ID: "",
+    });
+    const assembly = await f.node("ZenithJoyAssembleVideo", {
+      确认合成: false,
+    });
+    f.connect(source, selector);
+    f.connect(selector, remake);
+    f.connect(remake, approval);
+    f.connect(approval, assembly);
+    f.field(selector, "确认分镜").value = true;
+    f.field(remake, "确认生成").value = true;
+    f.field(approval, "审核任务ID").value = jobId;
+    f.field(assembly, "确认合成").value = true;
+    f.field(source, "新建视频项目").callback();
+    assert.equal(f.field(selector, "确认分镜").value, false);
+    assert.equal(f.field(remake, "确认生成").value, false);
+    assert.equal(f.field(approval, "审核任务ID").value, "");
+    assert.equal(f.field(assembly, "确认合成").value, false);
+  });
+}
