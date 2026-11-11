@@ -81,3 +81,7 @@ test('failed or unknown phone effects retain the evidence reservation while pre-
  let allowed=false;const fresh=make({assertAuthority:async()=>{if(!allowed)throw Error('AUTHORITY_NOT_READY');}});await assert.rejects(fresh.call('phone',q),/AUTHORITY_NOT_READY/);allowed=true;
  await assert.rejects(fresh.call('phone',{command:'snapshot-evidence',args:['direct101-unknown','extra']}),/STANDALONE_TOOL_/);await fresh.call('phone',q);assert.equal(fresh.effects.filter(Array.isArray).length,1,'invalid parameters and failed admission do not consume an unused ID');
 });
+for(const [first,next] of [['direct101-card','direct101-card-open'],['direct101-card-open','direct101-card']])test(`reserved evidence namespaces refuse ${first} followed by ${next}`,async()=>{
+ const {call,effects}=make();await call('phone',{command:'snapshot-evidence',args:[first]});await assert.rejects(call('phone',{command:'snapshot-evidence',args:[next]}),/STANDALONE_TOOL_EVIDENCE_REUSED/);assert.equal(effects.filter(Array.isArray).length,1);
+ await call('phone',{command:'snapshot-evidence',args:['direct101-card2']});assert.equal(effects.filter(Array.isArray).length,2,'a shared text fragment without a hyphen boundary is a separate namespace');
+});
