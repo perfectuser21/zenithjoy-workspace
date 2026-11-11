@@ -45,6 +45,10 @@ test('真实员工可进入Wan、Aidge及本人画布，未登录请求仍拒绝
   const access = await page.request.get(`${STAGING}/api/aidge/access`);
   expect(await access.json()).toEqual({ role: 'staff' });
   await page.goto('/creative-canvas');
+  await expect(page.getByRole('heading', { name: '把整条视频，一步步改好' })).toBeVisible();
+  await expect(page.locator('iframe')).toHaveCount(0);
+  await page.getByRole('link', { name: '高级编辑' }).click();
+  await expect(page).toHaveURL(/\/creative-canvas\/advanced$/);
   const status = await page.request.get(`${STAGING}/api/creative-canvas/status`);
   expect(status.status()).toBe(200);
   expect(await status.json()).toMatchObject({ available: true });
