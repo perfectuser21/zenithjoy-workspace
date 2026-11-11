@@ -811,8 +811,8 @@
       "code_digest": "8466b6f32f699eb92e59e392d5fe45470025c0cd4aa78b4bc588ff95e9a5bbb7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "48383c84d75e2c70a96c314d4c529036741ee8667b98a2a60df3cb0168f476b3",
         "current_code_digest": "8466b6f32f699eb92e59e392d5fe45470025c0cd4aa78b4bc588ff95e9a5bbb7"
       }
@@ -1215,14 +1215,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "bedb6fcf21aea785c0502560c0243483002844f09c8f400ac5c22bcf11342a56"
+          "sha256": "7e2e6b699e98a17845b0e009c2585a3a8c9962ca1d6416a496fc5836465d4c35"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "1e8fee386f8d3c954e6a032eaa201e3326cec0ee2fe8d4d2fedf8c6083da1fd5"
+          "sha256": "5123a1d2d155a85ef93d6314c0b2bd7e37aee866dbaa9d5ee925ac7f9a9f9c23"
         },
         {
           "kind": "code",
@@ -1656,13 +1656,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "95a6e47a3c8292005ab413f753eca0141cc56312ec3277cf74ddded087c98cb0",
+      "code_digest": "d20796ce72e0608ad8ad877ac601c45986c6168a8b7d279b5dd54010c05c0dce",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "0c934796a4901636866543ba3d6d250e9b2477f7d414e1980bda2364148f2fa9",
-        "current_code_digest": "95a6e47a3c8292005ab413f753eca0141cc56312ec3277cf74ddded087c98cb0"
+        "current_code_digest": "d20796ce72e0608ad8ad877ac601c45986c6168a8b7d279b5dd54010c05c0dce"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2454,8 +2454,8 @@
       "code_digest": "21cea93d105b19efb95b6a25e39ef153bd8b1bab5ac6f4a0e94eab09eea217f4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "ad6e8b041de53b2cb884d11bb77d8817fcc9029c55262594317f23c760766009",
         "current_code_digest": "21cea93d105b19efb95b6a25e39ef153bd8b1bab5ac6f4a0e94eab09eea217f4"
       }
@@ -3333,8 +3333,8 @@
       "code_digest": "7a15c5f32c21aaeff55e187619037e45197f567c8589a9b886ccdc6fb16d9e11",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "1aeeea6537148a4361178411200c9eff4d1ab1a819852671237684e5039df898",
         "current_code_digest": "7a15c5f32c21aaeff55e187619037e45197f567c8589a9b886ccdc6fb16d9e11"
       }
@@ -4150,8 +4150,8 @@
       "code_digest": "4736975d0fba93f3286af6eec76e452d1f7a7dd89d127cfdedae1521843afbc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "bfe11232dd801a5314b563e22c2fc1ef6dce3e9122e3b0900df913fbfc7c2775",
         "current_code_digest": "4736975d0fba93f3286af6eec76e452d1f7a7dd89d127cfdedae1521843afbc8"
       }
@@ -4547,14 +4547,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "bedb6fcf21aea785c0502560c0243483002844f09c8f400ac5c22bcf11342a56"
+          "sha256": "7e2e6b699e98a17845b0e009c2585a3a8c9962ca1d6416a496fc5836465d4c35"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "1e8fee386f8d3c954e6a032eaa201e3326cec0ee2fe8d4d2fedf8c6083da1fd5"
+          "sha256": "5123a1d2d155a85ef93d6314c0b2bd7e37aee866dbaa9d5ee925ac7f9a9f9c23"
         },
         {
           "kind": "code",
@@ -4973,13 +4973,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "439527c951557b9c7d7b4d585db8d5fc6455f8df26c9ed3c210be45b474f4b76",
+      "code_digest": "f6ba28592dff5fbbf545140a354d16de0813c134cb37446b7176d6d4928993ac",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "6310d6e864ee9b6f17fe11860d86a583802fd77493290255c2209b4b15bad7e8",
-        "current_code_digest": "439527c951557b9c7d7b4d585db8d5fc6455f8df26c9ed3c210be45b474f4b76"
+        "current_code_digest": "f6ba28592dff5fbbf545140a354d16de0813c134cb37446b7176d6d4928993ac"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5785,8 +5785,8 @@
       "code_digest": "4becf3596779fe14c937679db94fad638ac6bbbe638e736d3bf8ea7d42d742d8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "38ed8273c5ecf224a867e967ed4535a922335f181670b5b1ff410ed2804a9d1f",
         "current_code_digest": "4becf3596779fe14c937679db94fad638ac6bbbe638e736d3bf8ea7d42d742d8"
       }
@@ -6636,8 +6636,8 @@
       "code_digest": "f5dd1385018d43029320167a41a9735a2824275adc7ef8684d187d87ea124c8b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "75e44555f3ccfd8bed33406092a2e53c167507f66c1a1ff204b11bc6553423a7",
         "current_code_digest": "f5dd1385018d43029320167a41a9735a2824275adc7ef8684d187d87ea124c8b"
       }
@@ -7417,8 +7417,8 @@
       "code_digest": "6d627e6ff769cbc653baa09b748e7e3da6fe18e09ad33674f9f519a9cd057195",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "279c0ca21f964d528e215cf31680d85ac70cd742a8de2617519e83b70fd21e35",
         "current_code_digest": "6d627e6ff769cbc653baa09b748e7e3da6fe18e09ad33674f9f519a9cd057195"
       }
@@ -8173,8 +8173,8 @@
       "code_digest": "bff8b09326a0d15a67a6be8a4a5e9d6aa295419526d300dac20d4a002407508e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "ac48e330a082fd5dc700fc9352fcf4d32530b2415105d863d950cacf42ac17a0",
         "current_code_digest": "bff8b09326a0d15a67a6be8a4a5e9d6aa295419526d300dac20d4a002407508e"
       }
@@ -8922,8 +8922,8 @@
       "code_digest": "797e5d910d07deec79479f4cc31c7eafbcd926945cdbe8f8af7a69a7dcb8afab",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "f4edcf26ab92b334a83de7b13ee03ee93614d2f79ebed714ed1ee3c60c3a00dc",
         "current_code_digest": "797e5d910d07deec79479f4cc31c7eafbcd926945cdbe8f8af7a69a7dcb8afab"
       }
@@ -9681,8 +9681,8 @@
       "code_digest": "1546c5156db2d126d4c2066d2fe86e3869b9acb713ec0083944b7b3a0cba9cc5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅通用owner关闭读传输采用固定SDK单连接并按官方语义接受精确Gateway token环境引用，原Skill正文、活动合同、原截止及finished/delivered判据保持。",
-        "reviewed_by": "/root/review_owner_connection_boundaries",
+        "reason": "通用owner仅改冻结SDK单连接关闭读传输；保持原截止及finished/delivered严门。新增helper实现绑定并同步生成计划/步骤的合同摘要，业务合同、Skill正文及DoD内容不变。",
+        "reviewed_by": "codex-pstack-commander",
         "previous_code_digest": "bc3fc3f65a3723594eb967179edbe5846d38e88762da74f6fdddfcfbe0a2816e",
         "current_code_digest": "1546c5156db2d126d4c2066d2fe86e3869b9acb713ec0083944b7b3a0cba9cc5"
       }

@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_comment_scoring",
   "brain_workflow_key": "douyin_comment_scoring",
-  "contract_sha256": "acf21928625015dd17a405b4eb464b003810cee15fab5c20a2cdc75be310ffa1",
+  "contract_sha256": "00b4e5e271e7fd9ce92d03a80cd2a42e548430c4996697698faf4dbc3c102d1e",
   "promotion": {
     "min_consecutive_pass": 20
   },
