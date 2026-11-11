@@ -25,11 +25,12 @@ let directory:string;
 afterEach(async()=>{if(directory) await rm(directory,{recursive:true,force:true});});
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),'video-projects-test-'));
- const asset={id:sourceId,kind:'video',name:'source.mp4',url:'https://owned.example/source.mp4',width:640,height:360,duration:5,fps:30,size:6};
- const jobs:Record<string,unknown>={};
- const app=express();app.use(express.json());app.use((req,_res,next)=>{(req as any).videoStaffId=req.headers['x-test-user']||'alice';next();});
- app.use('/projects',createVideoProjectsRouter({directory,asset:async(_req,id)=>{if(id!==sourceId&&id!==assetId) throw Object.assign(new Error('无权访问'),{status:404});return{...asset,id};},store:async()=>({...asset,id:assetId}),job:async(_req,id)=>{if(!jobs[id]) throw Object.assign(new Error('不存在'),{status:404});return jobs[id] as any;},findJob:async(_req,id)=>Object.values(jobs).find((job:any)=>job.clientRequestId===id) as any,download:async()=>new Response('video')}));
- app.use((err:any,_req:any,res:any,_next:any)=>res.status(err.status||500).json({error:err.message}));
+ const asset={id:sourceId,kind:'video' as const,name:'source.mp4',url:'https://owned.example/source.mp4',width:640,height:360,duration:5,fps:30,size:6};
+ type Job=Awaited<ReturnType<Parameters<typeof createVideoProjectsRouter>[0]['job']>>;
+ const jobs:Record<string,Record<string,unknown>>={};
+ const app=express();app.use(express.json());app.use((req,_res,next)=>{(req as express.Request & {videoStaffId?:string}).videoStaffId=String(req.headers['x-test-user']||'alice');next();});
+ app.use('/projects',createVideoProjectsRouter({directory,asset:async(_req,id)=>{if(id!==sourceId&&id!==assetId) throw Object.assign(new Error('无权访问'),{status:404});return{...asset,id};},store:async()=>({...asset,id:assetId}),job:async(_req,id)=>{if(!jobs[id]) throw Object.assign(new Error('不存在'),{status:404});return jobs[id] as unknown as Job;},findJob:async(_req,id)=>Object.values(jobs).find(job=>job.clientRequestId===id) as unknown as Job|undefined,download:async()=>new Response('video')}));
+ app.use((err:Error & {status?:number},_req:express.Request,res:express.Response,next:express.NextFunction)=>{if(res.headersSent)return next(err);res.status(err.status||500).json({error:err.message});});
  const get=(url:string)=>request(app).get(url);
  const created=await request(app).post('/projects').send({sourceAssetId:sourceId,name:'测试视频'});
  expect(created.status).toBe(202);
