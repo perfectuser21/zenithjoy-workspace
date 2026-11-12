@@ -48,4 +48,4 @@ for(const [name,xml] of [
  ['仅comment无支持input',returned.replace(':id/ezx',':id/unrelated')],
 ])test('Honor原生ezx布局拒绝'+name,()=>assert.throws(()=>parse(profile,xml),/RECIPIENT_/));
 
-test('Honor ezx 原生枚举与身份验证共用新布局',()=>{const r=parseNativeCommentXml(returned);assert.equal(r.rows.length,5);assert.equal(r.rows[0].nickname,scope.nickname);assert.equal(r.rows[0].body,scope.commentBody);assert.equal(r.exhausted,false);});
+test('Honor ezx 原生枚举与身份验证共用新布局',()=>{const r=parseNativeCommentXml(returned);assert.equal(r.rows.length,5);assert.equal(r.rows[0].nickname,scope.nickname);assert.equal(r.rows[0].body,scope.commentBody);assert.equal(r.footer_reached,false);});
