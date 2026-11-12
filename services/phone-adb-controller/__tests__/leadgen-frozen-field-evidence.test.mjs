@@ -48,3 +48,11 @@ test('legacy explicit signal fields remain accepted by the same single-pass mapp
  const legacy=structuredClone(rules);legacy.audiences=[{id:'old-id',fields:{意向信号:'怎么报名',人群描述:'职业学习',排除信号:'广告'}}];let calls=0;
  const r=await judge.judgeCommentOnce('怎么报名？','职业学习怎么报名','画像',{scoringRules:legacy,apiKey:'fixture-only',httpPost:async()=>{calls++;return {id:'legacy-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:JSON.stringify({grade:'A',policy_evidence:{audience_id:'old-id',matched_rule:'怎么报名',comment_signal:'怎么报名',video_signal:'怎么报名',exclusion_rule:null,reason:'本人咨询'}})}}]};}});assert.equal(r.grade,'A');assert.equal(calls,1);
 });
+
+test('legacy deterministic saved-policy evaluation uses the same v26 business-reference mapper',async()=>{
+ const snapshot=companyFixture('yuesheng');snapshot.runtime_config.comment_scoring=structuredClone(rules);
+ const row={id:'00000000-0000-4000-8000-000000000632',comment_body:body,source_video:video,source_video_url:'https://www.douyin.com/video/7704584547186793910',relevance:'相关',intent_grade:'B',judgment_config:{run_id:'stored103',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id}};
+ const verdict={grade:'B',audit:{model:judge.COMMANDER_MODEL,response_id:'stored-reference',policy_evidence:proof()}};
+ assert.equal((await policy.evaluatePolicy(row,snapshot,{judgePolicy:async()=>verdict})).status,'pass');
+ verdict.audit.policy_evidence.matched_rule='管理专属待复核';assert.equal((await policy.evaluatePolicy(row,snapshot,{judgePolicy:async()=>verdict})).status,'unknown');
+});

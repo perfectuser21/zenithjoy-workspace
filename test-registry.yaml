@@ -11815,3 +11815,12 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition；显式已认证评论异步评分、受限补证和未知/错身份/错公司守卫；隔离PG夹具，非真机已验"
+
+  - id: leadgen-frozen-field-evidence
+    path: services/phone-adb-controller/__tests__/leadgen-frozen-field-evidence.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition；v26实际业务字段形状、冻结引用白名单、单次模型和评分落库/标记一致核验；隔离模型夹具不代表真机已验"

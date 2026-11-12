@@ -796,7 +796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "31bff7db28451bc0c5d9ae82db86c2dec8120e2b1afb0a33dcd2517c69b7866c",
+      "code_digest": "ef2182be12482fb30290e52773c13b42a8590cd732fa38759669badcd6ab60f1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "d72a5d6974b292479aca32dba060159b3cd7655047fdbbb887eec43eb701050e",
-        "current_code_digest": "31bff7db28451bc0c5d9ae82db86c2dec8120e2b1afb0a33dcd2517c69b7866c"
+        "current_code_digest": "ef2182be12482fb30290e52773c13b42a8590cd732fa38759669badcd6ab60f1"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1747,7 +1747,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5c1b4fb1c652f517541b9d78c4eeafd0b7df21ac21fa4e3459c05fde253b6e4e",
+      "code_digest": "bdd9235848c2649b70f45d82af18f1ae32d61c949ec78c3cb076cf6247f7355c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1",
-        "current_code_digest": "5c1b4fb1c652f517541b9d78c4eeafd0b7df21ac21fa4e3459c05fde253b6e4e"
+        "current_code_digest": "bdd9235848c2649b70f45d82af18f1ae32d61c949ec78c3cb076cf6247f7355c"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2680,16 +2680,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "fc4315fa6a20e6e26b2ffa7c7871938c52a7f82ebde35f9987e00f2b9702b889",
+      "code_digest": "485f7c16f3402f357a0debb5451c3773a3b43e48c658dfb784f2d0dd13b43aac",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "466198b9fa0e487f48c10b3e51c708c7da3165bebc68c7d0a544604a65216005",
-        "current_code_digest": "fc4315fa6a20e6e26b2ffa7c7871938c52a7f82ebde35f9987e00f2b9702b889"
+        "current_code_digest": "485f7c16f3402f357a0debb5451c3773a3b43e48c658dfb784f2d0dd13b43aac"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3527,7 +3527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -3649,26 +3649,26 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "30d5f28f2002930865fa7c87f0673fdda9d768c120838d6983aefa21b70e4d0b",
+      "code_digest": "76933c6177fc4854024f4432109b4e755d5b822e9b6694dee9b982be627a9064",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "17772ce845c3688b9a5fa83974c15cd51fc225cf836f7dad9e622498e35e241c",
-        "current_code_digest": "30d5f28f2002930865fa7c87f0673fdda9d768c120838d6983aefa21b70e4d0b"
+        "current_code_digest": "76933c6177fc4854024f4432109b4e755d5b822e9b6694dee9b982be627a9064"
       }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.7.2",
       "contract_digest": "a769941c2879f6b2af0fa33dc5fd4e230b2aab7339ab9a2fceea57a18f8b789b",
-      "method_version": "0.8.0",
+      "method_version": "0.9.0",
       "skill": {
         "name": "douyin-leadgen-activity-102-collection",
-        "version": "0.8.0",
+        "version": "0.9.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md",
-        "sha256": "6a445d19e33dd29991cfad215b692a09c0b2db5e82fc07303c4814bd1e4c8a43",
+        "sha256": "af84f8098be50b79c6aed185656c1a125dba5095c6b3f70535571cdff4e52009",
         "support_files": [],
-        "content_digest": "270a4608dd70f86e5bf714bc0ea4d4d0902df78c0144105101e17e4c9fad243e"
+        "content_digest": "597586698b3efbbd24f96cc9ccc70853a5bfffb5528f209e10cbda97c1cbf598"
       },
       "code_bindings": [
         {
@@ -4461,7 +4461,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -4541,14 +4541,7 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "ee71c03e8357808a8a079b004b11179e953b26ae1eb5bb3f66841d109830280b",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "d02408369412306b339c1de71d37258d359765031eeff228d8a7e8cce151dfe9",
-        "current_code_digest": "ee71c03e8357808a8a079b004b11179e953b26ae1eb5bb3f66841d109830280b"
-      }
+      "code_digest": "2370d1d018e63f14c5ecb74aaf018c355bd4474ee72c0bd82a0d2e387a0a913c"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.3.0",
@@ -5383,7 +5376,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -5442,31 +5435,31 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ac3bc4cd1cd62fa9f9d6791dcfa6845a681aa0cf52e2c2fc412b50529ccde4c8",
+      "code_digest": "3c918c1681ed3beb3262a004a9dbad18b7a6ad0edc06d72e5acd4e62f8fa4250",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031",
-        "current_code_digest": "ac3bc4cd1cd62fa9f9d6791dcfa6845a681aa0cf52e2c2fc412b50529ccde4c8"
+        "current_code_digest": "3c918c1681ed3beb3262a004a9dbad18b7a6ad0edc06d72e5acd4e62f8fa4250"
       }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.8.0",
       "contract_digest": "fa558658110266d1767bb212e220c70ec6691361a66c81c9b4c73544a838af57",
-      "method_version": "0.16.1",
+      "method_version": "0.17.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-scoring",
-        "version": "0.16.1",
+        "version": "0.17.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
-        "sha256": "d39414fb232a4d53e59545b92020a9bc14bd3b3b759537e6405a98e4459934f9",
+        "sha256": "26f46bb668c5ce3efb2d192c370a34fbed92acf5d5020eb35f199ef4b364c4b5",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/references/maintenance-scopes.md",
             "sha256": "9d125f245f6145bcc64490b99fad68cd6e89ac2a0646d090f6fd109adb8f7a86"
           }
         ],
-        "content_digest": "e7032c607ca67adb2a01e8d35f9a9647e5fca3d50e39bc5637b5e1799adb298a"
+        "content_digest": "d1c335fb4053973bffac7bb92e7267627d7677771009087c08ca8abe59f62271"
       },
       "code_bindings": [
         {
@@ -6321,14 +6314,21 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/judge-comment.js",
           "revision": "contract",
-          "sha256": "edea0ea5e0f69a20b1e19f4c8b1c080442258292782585d023e1e35fb3c10a86"
+          "sha256": "4f370f28196ce5e92d5fcbf6a44e661545007cfe02d74ca4670529bf81b4832f"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-frozen-policy-evidence.js",
+          "revision": "contract",
+          "sha256": "862f9e53b06d8e4b2114f2f4130bda456423c742163b028e1f46ee1128ec427f"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -6338,31 +6338,24 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "bc779366f8a2158d87f5875a37021f1c873a6234a994e02fb1ec4c0e6adfa932",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "6fa7ad1eb1ccb5e471bf5e87a935de273bac4aad3d78b6962c428a59bd076a96",
-        "current_code_digest": "bc779366f8a2158d87f5875a37021f1c873a6234a994e02fb1ec4c0e6adfa932"
-      }
+      "code_digest": "47e83b1f25bb0d939f69575210b2df45e591ef4e0efca74cfb0aa8ee9bbbacc0"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.9.0",
       "contract_digest": "3c80fa9e96c4eef66b56fa31cc188247d9b1fb52f004718fb041af34ccaafcf3",
-      "method_version": "0.17.0",
+      "method_version": "0.18.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-mark-leads",
-        "version": "0.17.0",
+        "version": "0.18.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
-        "sha256": "9cbf8294aee9f3caa91f8aa3faabcc879ac01fa54dc1f1af875ab4c68594a3a2",
+        "sha256": "8a247698a61b2e009f55f5342042ae0e46fc706a450c3730cf702c1dabf72dae",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/references/maintenance-scopes.md",
             "sha256": "9f5f947d0ed82da0f333cf9cdead99640fe82d12a2d96eff814fbe94c2991d4a"
           }
         ],
-        "content_digest": "b48fe2308969177fd25ee7f21d132d81f4758c9462cd8c3bbf7b3b756624e90b"
+        "content_digest": "ca00fd21c82ff9d57e3b7182d6627ea17b50c0089d3502b79a70981528b017c1"
       },
       "code_bindings": [
         {
@@ -7224,7 +7217,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -7276,14 +7269,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "dfe1f266fc46f057b007771723ec26eee6d78363bbd715401397befa2551e2f1",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "d596ce7e6905b49ba4cbeb7f0fad63ae8e5f336a95784d5ee44783e2e218fbbf",
-        "current_code_digest": "dfe1f266fc46f057b007771723ec26eee6d78363bbd715401397befa2551e2f1"
-      }
+      "code_digest": "cf65a1f5a7cdd208d03e95338c528f4f9f8fabfcedc75aaf16381ac0d4931a05"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.1",
@@ -8049,7 +8035,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -8136,13 +8122,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "613a5425e7396b161973b20bd2c4e97a1a82b8eee18b8bc77303259a93d42570",
+      "code_digest": "5a7d6fb7d4159878fdfa05025a3f5d04c7e6216b311fe7730a8a6ad0b390c191",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb",
-        "current_code_digest": "613a5425e7396b161973b20bd2c4e97a1a82b8eee18b8bc77303259a93d42570"
+        "current_code_digest": "5a7d6fb7d4159878fdfa05025a3f5d04c7e6216b311fe7730a8a6ad0b390c191"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8898,7 +8884,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -8971,13 +8957,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "110244ed7d8195ba2eb70d8be28d2feab6d55c87421c7bcc3177afb69603a936",
+      "code_digest": "7967201d3abe4861a0b196ebb1cf76942037b4e355acdc80e18077164ebb7c19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2",
-        "current_code_digest": "110244ed7d8195ba2eb70d8be28d2feab6d55c87421c7bcc3177afb69603a936"
+        "current_code_digest": "7967201d3abe4861a0b196ebb1cf76942037b4e355acdc80e18077164ebb7c19"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9726,7 +9712,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -9799,13 +9785,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "175147473777444995d368c69d0124d76ae4513e5bc1c83775a2bbe0a57bea73",
+      "code_digest": "0091dcdb22e7e1bd90f418bf2b73201cd7336282c5448ac41e47991f8b45dc19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475",
-        "current_code_digest": "175147473777444995d368c69d0124d76ae4513e5bc1c83775a2bbe0a57bea73"
+        "current_code_digest": "0091dcdb22e7e1bd90f418bf2b73201cd7336282c5448ac41e47991f8b45dc19"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10564,7 +10550,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "1c1ff5a51a7ea84c59446914b0e71ece067accd85ec459e28b0c862dde90a399"
+          "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         },
         {
           "kind": "code",
@@ -10637,13 +10623,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "868a489da354f7e71cb3a3fdaf6461c6a28bebce252b24e6a2a5e6c95ae11fed",
+      "code_digest": "d6c1a51cc9b37b7985a4fd27e1d60148aa2b297367e4ce9263fc7e5a280d1629",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次仅添加显式ID普通API已认证评论交接和原证据受限补齐；默认采集、评分单次、正式采样与发送授权合同不变，265回归和实际PG未知证据拒绝读回已验证。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
         "previous_code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6",
-        "current_code_digest": "868a489da354f7e71cb3a3fdaf6461c6a28bebce252b24e6a2a5e6c95ae11fed"
+        "current_code_digest": "d6c1a51cc9b37b7985a4fd27e1d60148aa2b297367e4ce9263fc7e5a280d1629"
       }
     }
   },
@@ -10698,28 +10684,28 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.11.0",
+        "version": "0.12.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "9ccfa51081b3ddb8172e081947fbae16656334b5655033b0fd8c31e2c91ab756",
+        "sha256": "6c02447069c7ede713f646909819bbe8649fc1c7d2df5f416a20b1e04595f5ee",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-            "sha256": "9b2ed6aa0e6255817a6a0e7a27c30e75c0a09d3e4e6565245d058fab16672b59"
+            "sha256": "e1cdbe875ed43d91e194b7bf748c9bf01863764a764f42839b57e0047a88b038"
           }
         ],
-        "content_digest": "1bfce9e664d545479681405f1f0a6fea7bde11733425c60fcc2481f57dcdb54c"
+        "content_digest": "c2f0b089d56f0327436040735715086193f9e42aef0beabb6f9ea17f017891e7"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.11.0",
+        "version": "0.11.1",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "5df65d4cb8b998fdb7757ee171946e5424ff6d3eaae1610982d18d2d8e9b8007",
+        "sha256": "b0d954d9f37a95240a26f1ffb69ae1b780530bb2e391cc337c9f85418a271ca4",
         "support_files": [],
-        "content_digest": "34b45e80bb0549f01350ea893aac82c51f8c2dd170b6cac6a6d336c4c9cf9ba3"
+        "content_digest": "8ead79b77345ec5b77715461e9acc065c5f7e2cdbec283728c49197c86a4267a"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-        "sha256": "9b2ed6aa0e6255817a6a0e7a27c30e75c0a09d3e4e6565245d058fab16672b59"
+        "sha256": "e1cdbe875ed43d91e194b7bf748c9bf01863764a764f42839b57e0047a88b038"
       },
       "activities": [
         {
@@ -10743,7 +10729,7 @@
         {
           "activity_ref": "douyin_video_processing.collection",
           "skill_name": "douyin-leadgen-activity-102-collection",
-          "skill_version": "0.8.0",
+          "skill_version": "0.9.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md"
         },
         {
@@ -10757,40 +10743,40 @@
     "douyin_comment_scoring": {
       "workflow_skill": {
         "name": "douyin-leadgen-103",
-        "version": "0.19.0",
+        "version": "0.20.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "bae55bcda27b2a0abcc6c8284d75248e3a6540d8c3270f0204b4db756312b260",
+        "sha256": "3a39b2d2e41d5754c7ceab1e4049f27cd5de62a01dbfd5051f410560a5770f43",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-            "sha256": "76e376a476a5ca1fc38f163f685e2cb66ebff86352ea3a810edf91c7eb559ef3"
+            "sha256": "9b1fc4fa68af648f68e7286e36cf05bf52fb68d860162519dc3353f913be3a7d"
           }
         ],
-        "content_digest": "1b1cf60c0426c9718b12cc285161f94b1d2a7f50ed808f07cd4edcaf54a4b918"
+        "content_digest": "54e1951a7c0be63d9c0ba840a9b788737e0af57f3b16e77dcfc5d0bfa61d0eef"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
-        "version": "0.17.0",
+        "version": "0.18.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_comment_scoring/SKILL.md",
-        "sha256": "d64218c708495f0e46822aa467881cc2d45264b0eb49dfc5f3b364713211db5c",
+        "sha256": "08a6b5564113fdc5aae741c9342a0aae7f3659b496bc2ec8d07b14592b4541af",
         "support_files": [],
-        "content_digest": "6a9c45ca39f80e739a9a91ff4759438fe961a3c1e133b1fc8125df31b1ecdd65"
+        "content_digest": "8539d9e03b9d1766d68569c59fc8ac4adc2d15b3c4a3f599532b7920acfdb8ff"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-        "sha256": "76e376a476a5ca1fc38f163f685e2cb66ebff86352ea3a810edf91c7eb559ef3"
+        "sha256": "9b1fc4fa68af648f68e7286e36cf05bf52fb68d860162519dc3353f913be3a7d"
       },
       "activities": [
         {
           "activity_ref": "douyin_comment_scoring.scoring",
           "skill_name": "douyin-leadgen-activity-103-scoring",
-          "skill_version": "0.16.1",
+          "skill_version": "0.17.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md"
         },
         {
           "activity_ref": "douyin_comment_scoring.mark_leads",
           "skill_name": "douyin-leadgen-activity-103-mark-leads",
-          "skill_version": "0.17.0",
+          "skill_version": "0.18.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md"
         }
       ]
