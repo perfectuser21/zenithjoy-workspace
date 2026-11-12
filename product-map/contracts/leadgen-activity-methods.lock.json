@@ -4503,10 +4503,17 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
+          "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "63f88f4531f43505d3683e939dede1527e82f2fc9c649bf212c290c064f64ef5"
+      "code_digest": "d02408369412306b339c1de71d37258d359765031eeff228d8a7e8cce151dfe9",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅增加实屏ezx/fmu/jn+/kh4精确同面板布局，既有包、UID、昵称、全文、唯一行及跨布局拒绝不变；174项回归及本次完整原件只读验证通过，业务合同和Skill方法未变。",
+        "reviewed_by": "codex-live-layout-fix (Task 6e1b212f-cf02-42e4-9eef-61a193931de4)",
+        "previous_code_digest": "63f88f4531f43505d3683e939dede1527e82f2fc9c649bf212c290c064f64ef5",
+        "current_code_digest": "d02408369412306b339c1de71d37258d359765031eeff228d8a7e8cce151dfe9"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.3.0",
@@ -7168,7 +7175,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
+          "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         },
         {
           "kind": "code",
@@ -7213,7 +7220,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a91c387d36fb565c8339a05dc2a852d313251c789f883846c3bb6e609194aa17"
+      "code_digest": "d596ce7e6905b49ba4cbeb7f0fad63ae8e5f336a95784d5ee44783e2e218fbbf",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅增加实屏ezx/fmu/jn+/kh4精确同面板布局，既有包、UID、昵称、全文、唯一行及跨布局拒绝不变；174项回归及本次完整原件只读验证通过，业务合同和Skill方法未变。",
+        "reviewed_by": "codex-live-layout-fix (Task 6e1b212f-cf02-42e4-9eef-61a193931de4)",
+        "previous_code_digest": "a91c387d36fb565c8339a05dc2a852d313251c789f883846c3bb6e609194aa17",
+        "current_code_digest": "d596ce7e6905b49ba4cbeb7f0fad63ae8e5f336a95784d5ee44783e2e218fbbf"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.1",
