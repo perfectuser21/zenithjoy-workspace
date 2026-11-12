@@ -97,7 +97,7 @@ jobs:
     name: Complete pilot release verification
     if: github.ref == 'refs/heads/main'
     needs: [caller-contract, authoring-main-source]
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@0ed23d135ba1fa977db71d70bb742e8522c07917
+    uses: ./.github/workflows/pilot-release-regression.yml
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: zenithjoy
@@ -113,7 +113,7 @@ jobs:
     name: Complete commander release verification
     if: github.ref == 'refs/heads/main'
     needs: [caller-contract, authoring-main-source]
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@0ed23d135ba1fa977db71d70bb742e8522c07917
+    uses: ./.github/workflows/pilot-release-regression.yml
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: commander-generic
@@ -129,7 +129,7 @@ jobs:
     name: Complete patrol definitions release verification
     if: github.ref == 'refs/heads/main'
     needs: [caller-contract, authoring-main-source]
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@0ed23d135ba1fa977db71d70bb742e8522c07917
+    uses: ./.github/workflows/pilot-release-regression.yml
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: cecelia-device-patrol-definitions

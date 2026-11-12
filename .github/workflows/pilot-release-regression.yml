@@ -1,0 +1,141 @@
+name: Pilot release verification
+on:
+  workflow_call:
+    inputs:
+      source_repo: {required: true, type: string}
+      scope: {required: true, type: string}
+      head_revision: {required: true, type: string}
+      tooling_revision: {required: true, type: string}
+    secrets:
+      TS_AUTHKEY: {required: true}
+      CECELIA_INTERNAL_TOKEN: {required: true}
+      BRAIN_DEPLOY_URL: {required: false}
+      SKILLS_SOURCE_SSH_KEY: {required: false}
+permissions:
+  contents: read
+  actions: read
+jobs:
+  snapshot:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REPO: ${{ inputs.source_repo || github.repository }}
+      MAP_SCOPE: ${{ inputs.scope || 'cecelia-kr' }}
+      HEAD: ${{ inputs.head_revision || github.sha }}
+    steps:
+      - name: 固定同仓当前main及受支持试点
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CALLER_REPO: ${{ github.repository }}
+          CALLER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_REPO" = "$CALLER_REPO"
+          test "$HEAD" = "$CALLER_SHA"
+          case "$SOURCE_REPO:$MAP_SCOPE" in
+            perfectuser21/cecelia:cecelia-kr|perfectuser21/zenithjoy-workspace:zenithjoy|perfectuser21/zenithjoy-workspace:commander-generic|perfectuser21/zenithjoy-workspace:cecelia-device-patrol-definitions) ;;
+            *) exit 1 ;;
+          esac
+          test "$(gh api "repos/$SOURCE_REPO/git/ref/heads/main" --jq .object.sha)" = "$HEAD"
+      - uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+      - name: 仅主线刷新并导出中央规范快照
+        env:
+          BRAIN_URL: ${{ secrets.BRAIN_DEPLOY_URL || 'http://100.79.41.61:5221' }}
+          CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          trap 'code=$?; if (( code != 0 )); then printf "%s\n" "{\"status\":\"unknown\",\"stage\":\"pilot_snapshot\",\"exit_code\":$code}" > evidence/gap.json; fi' EXIT
+          test -n "$CECELIA_INTERNAL_TOKEN"
+          jq -n --arg scope "$MAP_SCOPE" --arg repo "$SOURCE_REPO" --arg revision "$HEAD" '{scope:$scope,repo:$repo,revision:$revision}' > evidence/request.json
+          status=$(curl --silent --show-error --output evidence/head.json --write-out '%{http_code}' "$BRAIN_URL/api/brain/implementation-ci/refresh" \
+            -H "X-Internal-Token: $CECELIA_INTERNAL_TOKEN" -H 'Content-Type: application/json' \
+            --data-binary @evidence/request.json)
+          if [[ "$status" == 409 ]]; then
+            curl --fail-with-body --silent --show-error --get "$BRAIN_URL/api/brain/implementation-ci/snapshot" \
+              -H "X-Internal-Token: $CECELIA_INTERNAL_TOKEN" --data-urlencode "scope=$MAP_SCOPE" \
+              --data-urlencode "repo=$SOURCE_REPO" --data-urlencode "revision=$HEAD" > evidence/head.json
+          else
+            [[ "$status" == 200 ]]
+          fi
+          jq -e '.snapshot.status == "verified" and (.snapshot.gaps | length == 0)' evidence/head.json
+      - name: 快照前置失败保留缺口
+        if: failure()
+        run: |
+          mkdir -p evidence
+          if [[ ! -f evidence/gap.json ]]; then printf '%s\n' '{"status":"unknown","stage":"pilot_snapshot","code":"PILOT_SNAPSHOT_FAILED"}' > evidence/gap.json; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pilot-release-snapshot-${{ inputs.scope || 'cecelia-kr' }}-${{ inputs.head_revision || github.sha }}
+          path: evidence/*.json
+          if-no-files-found: error
+  verify:
+    name: Declared pilot regression verification
+    needs: snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SOURCE_REPO: ${{ inputs.source_repo || github.repository }}
+      HEAD: ${{ inputs.head_revision || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: perfectuser21/cecelia
+          ref: ${{ inputs.tooling_revision || github.sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repo || github.repository }}
+          ref: ${{ inputs.head_revision || github.sha }}
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 可信初始化先于产物下载
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y zsh jq libxml2-utils
+          (cd tooling && npm ci --ignore-scripts)
+          (cd source && npm ci --ignore-scripts)
+          mkdir -p output
+      - uses: actions/download-artifact@v4
+        with:
+          name: pilot-release-snapshot-${{ inputs.scope || 'cecelia-kr' }}-${{ inputs.head_revision || github.sha }}
+          path: snapshot
+      - name: 准备固定中央Skill对象缓存
+        env:
+          SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          jq -ce '.snapshot | select(type=="object")' "$PWD/snapshot/head.json" > "$PWD/snapshot/canonical.json"
+          cache="$(node tooling/scripts/ci/implementation-skill-source.mjs --prepare-ci-cache "$GITHUB_WORKSPACE/source" "$SOURCE_REPO" "$HEAD" --snapshot "$PWD/snapshot/canonical.json")"
+          case "$cache" in "$RUNNER_TEMP"/implementation-skills-ci-*/objects) test -d "$cache" ;; *) echo 'invalid fixed Skill cache' >&2; exit 1 ;; esac
+          printf 'IMPLEMENTATION_SKILLS_SOURCE_DIR=%s\n' "$cache" >> "$GITHUB_ENV"
+      - name: 固定完整计划及白名单环境运行全部登记回归
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          node tooling/scripts/ci/pilot-release-verification.mjs --repo-root "$PWD/source" \
+            --snapshot "$PWD/snapshot/head.json" --output-dir "$PWD/output" --event "$EVENT" --ref "$REF"
+      - name: 失败保留缺口，绝不合成PASS收据
+        if: failure()
+        run: |
+          mkdir -p output
+          if [[ ! -f output/gap.json ]]; then printf '%s\n' '{"status":"unknown","stage":"pilot_workflow","code":"PILOT_WORKFLOW_FAILED"}' > output/gap.json; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pilot-release-verification-${{ inputs.scope || 'cecelia-kr' }}-${{ inputs.head_revision || github.sha }}
+          path: output/*.json
+          retention-days: 90
+          if-no-files-found: error
