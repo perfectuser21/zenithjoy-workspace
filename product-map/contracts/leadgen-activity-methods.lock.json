@@ -26,7 +26,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "72dbdf70b37e8ecc08b39767ade2166037852c5c28083ce043102c63134b246f",
+      "code_digest": "9e5b5cf74347cb0edc57a8f5a88f646b76ba858446eacdd6fb5b00ff7c650aea",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "d72a5d6974b292479aca32dba060159b3cd7655047fdbbb887eec43eb701050e",
-        "current_code_digest": "72dbdf70b37e8ecc08b39767ade2166037852c5c28083ce043102c63134b246f"
+        "previous_code_digest": "b2f16aba33ea000068c2238961b82b49664a6ee3e0bee82129d9f0016a0e70c0",
+        "current_code_digest": "9e5b5cf74347cb0edc57a8f5a88f646b76ba858446eacdd6fb5b00ff7c650aea"
       }
     },
     "douyin_video_processing.preflight": {
@@ -917,7 +917,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "dd62ed274d025fe4bebbf1443021b017f9de8a861f8757cd20dd61f46c5be38f",
+      "code_digest": "3f44492e7e6d2bbb30c3ee59b4c95e536dfe282f7a0fb94c04007088175a2a24",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1",
-        "current_code_digest": "dd62ed274d025fe4bebbf1443021b017f9de8a861f8757cd20dd61f46c5be38f"
+        "previous_code_digest": "df7b5cc1c04f24422f5fc5540d7263e051a9f28e39778e9596c5c31587b08a4c",
+        "current_code_digest": "3f44492e7e6d2bbb30c3ee59b4c95e536dfe282f7a0fb94c04007088175a2a24"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1840,7 +1840,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "c2bfc6f147e2f0c6f110ad4ae108237f07f57c288ad557d938e302d2d63c51b3",
+      "code_digest": "a104700a0f7afb8a3d28d7636154d3e1d1e1d6ff1c74c093663580fe42554379",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "466198b9fa0e487f48c10b3e51c708c7da3165bebc68c7d0a544604a65216005",
-        "current_code_digest": "c2bfc6f147e2f0c6f110ad4ae108237f07f57c288ad557d938e302d2d63c51b3"
+        "previous_code_digest": "7730e3482e7e152943265c02b6c475c410cff601ffd7b9abe8ce13a0cb50eec4",
+        "current_code_digest": "a104700a0f7afb8a3d28d7636154d3e1d1e1d6ff1c74c093663580fe42554379"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2722,7 +2722,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "e7b05017740ef0aade0c50af2c3683d3704cde27b10ace1676604dfa9beaabf9",
+      "code_digest": "ea65183c62e9a8b070a23a84c30ee42642ed50b398651eec6ce200e273cb853e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "17772ce845c3688b9a5fa83974c15cd51fc225cf836f7dad9e622498e35e241c",
-        "current_code_digest": "e7b05017740ef0aade0c50af2c3683d3704cde27b10ace1676604dfa9beaabf9"
+        "previous_code_digest": "763505b6a07cf916809ab434288c482ed41c3145da19eec27a288a3f86ae8a97",
+        "current_code_digest": "ea65183c62e9a8b070a23a84c30ee42642ed50b398651eec6ce200e273cb853e"
       }
     },
     "douyin_video_processing.collection": {
@@ -3683,7 +3683,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -4541,7 +4541,7 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "bc77e3072afe395de1c23fa17eba98bfea6d229995003fea75d02c1e1f223d41"
+      "code_digest": "01310fa7280529f912129645a2c16ece05ebca1e8b4fce4437f340953574d986"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.3.0",
@@ -4568,7 +4568,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -5435,13 +5435,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "76b632e99c3dcca9e6c2bdb1ba6c5c418e23efeb0ee5ad1d9708630aefdc07cc",
+      "code_digest": "a0f6b99c58c36abf5e2d82dd3b8582d6776e8b6b12269f19909ce0649769b3b3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031",
-        "current_code_digest": "76b632e99c3dcca9e6c2bdb1ba6c5c418e23efeb0ee5ad1d9708630aefdc07cc"
+        "previous_code_digest": "05d7c26212d01453e564501aee36578ec09a47b749b039bb8845286eee925e93",
+        "current_code_digest": "a0f6b99c58c36abf5e2d82dd3b8582d6776e8b6b12269f19909ce0649769b3b3"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5474,7 +5474,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -6345,7 +6345,7 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "ac7e68642f08726829fbcd228cef0185de64651db9909c635a0e94772964dd37"
+      "code_digest": "21eb43d41a20888c9b8530e39d8abe195fc33334c280686227bd42cda03b5ce1"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.9.0",
@@ -6377,7 +6377,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -7276,7 +7276,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "96be11e7cb5010ebe13b617b808ece3b8350e741967deb9d352bd9c2983b1204"
+      "code_digest": "0eb51d9a47f0800f83ad4b0765d0c283eedd2232ca9b0ed692ce981d4e720588"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.1",
@@ -7303,7 +7303,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -8129,13 +8129,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a5bb55c8e22a074cb8ab330060b095e4fec69a092c3c2954aa7c422fdf040705",
+      "code_digest": "344ffcd0de2403bafda83437f8ac8bc60fb6153db03f607c98e56dbacf75ef63",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb",
-        "current_code_digest": "a5bb55c8e22a074cb8ab330060b095e4fec69a092c3c2954aa7c422fdf040705"
+        "previous_code_digest": "c30cf216af81d3336420b88596ab4a8f5aac366ba77eec6eca8d7e1e7ad9c04a",
+        "current_code_digest": "344ffcd0de2403bafda83437f8ac8bc60fb6153db03f607c98e56dbacf75ef63"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8163,7 +8163,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -8964,13 +8964,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "90b5dde394faa913ad30ff13817904e1c0e6928fb98860177a5ed604729ad4d2",
+      "code_digest": "a9d5e338eb6ba38f66b0550952ea4502935fcee9a5e620409a625726807d0c7a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2",
-        "current_code_digest": "90b5dde394faa913ad30ff13817904e1c0e6928fb98860177a5ed604729ad4d2"
+        "previous_code_digest": "548b99a3fcb31992b5ce317264c989486e638cbd15efdc0d966927a9b6f6892e",
+        "current_code_digest": "a9d5e338eb6ba38f66b0550952ea4502935fcee9a5e620409a625726807d0c7a"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -8998,7 +8998,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -9792,13 +9792,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9b9b936e16bc3addd529174de33c8f6cfa7e1ba84f080bca0724e0502d53f9b3",
+      "code_digest": "3db499bd441f9e4bf5ff52e4f7b1e8624f756f57e3aec872fc82b57658ff8f25",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475",
-        "current_code_digest": "9b9b936e16bc3addd529174de33c8f6cfa7e1ba84f080bca0724e0502d53f9b3"
+        "previous_code_digest": "6ec8014b3249cad585bdba93b2680b4264b75f0d8a4e4d4411a30863e34e62e3",
+        "current_code_digest": "3db499bd441f9e4bf5ff52e4f7b1e8624f756f57e3aec872fc82b57658ff8f25"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9826,7 +9826,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -10630,13 +10630,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c2389dd1d0c31d54232bc2e733cc951f250f1b9b4857105ea7ba417f28c74618",
+      "code_digest": "4040a7474fe648c13462dea5437c6ba24432f47a0e7fa9b804d243c2049385d0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。282相关回归与实际PG只读冻结引用验证，未冒称真机通过。",
+        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
         "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6",
-        "current_code_digest": "c2389dd1d0c31d54232bc2e733cc951f250f1b9b4857105ea7ba417f28c74618"
+        "previous_code_digest": "fd5aea462c8e6947a35632a7150dea0a7329a02f31e30a46742192ca51f498e0",
+        "current_code_digest": "4040a7474fe648c13462dea5437c6ba24432f47a0e7fa9b804d243c2049385d0"
       }
     }
   },
