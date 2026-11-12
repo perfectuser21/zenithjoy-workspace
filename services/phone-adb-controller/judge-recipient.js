@@ -27,3 +27,24 @@ async function qualifyRecipient(comment,snapshot,{httpPost=(url,body,key)=>defau
  }catch{return {...model,status:'unknown',reason:'recipient_model_unavailable'};}
 }
 module.exports={qualifyRecipient};
+
+// 普通103标记：消费已保存评分和真实UID证据，不再评估同一评论的人群/意向。
+async function qualifyRecipientFromScore(comment,snapshot,{companyBinding,verifyRecipient=validateEvidence}={}){
+ const base={model_call_count:0,model_response_id:null,model_provider:null,model:null,model_endpoint:null};
+ try{
+  if(companyBinding&&(companyBinding.company_id!==snapshot?.company_id||companyBinding.tenant_id!==snapshot?.tenant_id))throw Error('scope');
+  verifyRecipient(comment.recipient_evidence,{line_key:comment.line_key,run:comment.harvest_batch,
+    douyin_id:comment.douyin_id,nickname:comment.nickname,video_url:comment.source_video_url,
+    comment_body:comment.comment_body,comment_body_sha256:hash(comment.comment_body)},{companyBinding});
+ }catch{return {...base,status:'unknown',reason:'native_profile_proof_missing_or_invalid'};}
+ const stored=require('./leadgen-policy-review.js');
+ const proof=comment.judgment_config?.scoring_mode==='single-evaluation-v1'
+   ?stored.verifyStoredScore(comment,snapshot):await stored.verifyStoredPolicy(comment,snapshot);
+ if(proof.status!=='pass')return {...base,status:'unknown',reason:'stored_score_unverified'};
+ return {...base,status:comment.relevance==='相关'?'passed':'excluded',reason:'stored_score_and_native_identity',
+   company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,company_version:snapshot.version,
+   policy_id:snapshot.policy_id||snapshot.runtime_config.policy_id,
+   native_profile_sha256:comment.recipient_evidence.sha256.profile,
+   scoring_response_id:comment.judgment_config.model_audit?.response_id};
+}
+module.exports.qualifyRecipientFromScore=qualifyRecipientFromScore;

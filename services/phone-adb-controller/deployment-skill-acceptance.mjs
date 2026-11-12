@@ -8,11 +8,59 @@ const acceptance=['验收与记录','验收','Commander 接手与验收'];
 const excluded=['Activity 方法配套'];
 const conditional=['复用已有Skill','纯 Skill 执行选择','调用范围与当前接口','单Activity受控接手','冻结来源绑定','同run有界Agent恢复合同'];
 export const requiresSkillAcceptance=key=>Object.hasOwn(skills,key);
+// Workflow目录的验收真身是该固定索引和它逐项点名的Activity方法，不能只验目录。
+function indexedAcceptance(key,path,bytes,text,readFile){
+ const parseSections=(raw,allowed)=>{
+  const body=raw.replace(/^---\n[\s\S]*?\n---\n/,'');
+  const sections=[...body.matchAll(/^## ([^\n]+)\n([\s\S]*?)(?=^## |$(?![\s\S]))/gm)];
+  const names=sections.map(s=>s[1]);
+  need(names.length===allowed.length&&new Set(names).size===names.length&&names.every(n=>allowed.includes(n)),'未知或重复规范段落');
+  need(sections.every(s=>s[2].trim()&&!/^#{1,6} /m.test(s[2])),'规范段落为空或结构未知');return sections;
+ };
+ const checks=[];const add=(section,content)=>{
+  const blocks=content.trim().split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+  for(const block of blocks)checks.push({id:digest(section+'\n'+block),section,text:block});
+ };
+ for(const [,name,body]of parseSections(text,['活动组织','输入与交接',...(/^## 工作流之间的异步交接$/m.test(text)?['工作流之间的异步交接']:[]),'实现与状态','历史宿主兼容声明']))add('Workflow/'+name,body);
+ const base=path.slice(0,path.lastIndexOf('/')),manifestPath=base+'/references/activity-methods.json',manifestBytes=readFile(manifestPath);
+ let manifest;try{manifest=JSON.parse(Buffer.from(manifestBytes).toString('utf8'));}catch{need(false,'Activity清单无效');}
+ need(manifest.workflow_key===key&&Array.isArray(manifest.activities)&&manifest.activities.length>0,'Activity清单身份无效');
+ const declared=[...text.matchAll(/^\| `([a-z_]+)` \| \[(douyin-leadgen-activity-[a-z0-9-]+)\]\(\.\.\/\2\/SKILL\.md\) \| `(\d+\.\d+\.\d+)` \|$/gm)].map(m=>({activity:m[1],name:m[2],version:m[3]}));
+ need(declared.length===manifest.activities.length&&new Set(declared.map(r=>r.name)).size===declared.length
+   &&manifest.activities.every(row=>declared.some(d=>d.name===row.skill_name&&d.version===row.skill_version
+     &&row.activity_ref?.split('.').at(-1)===d.activity)),'Activity清单与Workflow索引范围不一致');
+ const seen=new Set(),activities=[];
+ for(const row of manifest.activities){
+  need(typeof row.skill_name==='string'&&/^douyin-leadgen-activity-[a-z0-9-]+$/.test(row.skill_name)
+   &&row.skill_path===`services/phone-adb-controller/skills/${row.skill_name}/SKILL.md`
+   &&typeof row.activity_ref==='string'&&!seen.has(row.activity_ref),'Activity来源无效或重复');seen.add(row.activity_ref);
+  need(row.activity_ref.startsWith(key+'.')||key==='douyin_video_discovery'
+    &&['douyin_video_processing.preflight','douyin_video_processing.cleanup'].includes(row.activity_ref),'Activity所属Workflow不符');
+  const data=readFile(row.skill_path),body=Buffer.from(data).toString('utf8'),header=body.match(/^---\n([\s\S]*?)\n---\n/)?.[1];
+  need(header&&new RegExp('^name: '+row.skill_name+'$','m').test(header)
+   &&header.match(/^  version: (\S+)$/m)?.[1]===row.skill_version
+   &&header.match(/^  activity_ref: (\S+)$/m)?.[1]===row.activity_ref
+   &&/^  method_role: single-activity$/m.test(header),'Activity方法身份或版本不符');
+  for(const [,name,content]of parseSections(body,['执行上下文与工具边界','输入与交付','操作',...(row.skill_name==='douyin-leadgen-activity-101-collect-videos'?['有界首屏输入']:row.skill_name==='douyin-leadgen-activity-102-dedup'?['明示producer交接']:[]),'成功条件','副作用','结果与验收','宿主恢复声明']))add(row.activity_ref+'/'+name,content);
+  const supporting=[];
+  for(const match of body.matchAll(/\]\((references\/[^)]+)\)/g)){
+   const rel=match[1];need(/^references\/[a-z0-9-]+\.md$/.test(rel),'Activity支持文件路径无效');
+   const supportPath=row.skill_path.slice(0,row.skill_path.lastIndexOf('/'))+'/'+rel;
+   if(supporting.some(s=>s.path===supportPath))continue;
+   const support=readFile(supportPath);need(Buffer.from(support).length>0,'Activity支持文件为空');supporting.push({path:supportPath,sha256:digest(support)});
+   add(row.activity_ref+'/'+rel,Buffer.from(support).toString('utf8'));
+  }
+  activities.push({activity_ref:row.activity_ref,path:row.skill_path,sha256:digest(data),supporting});
+ }
+ need(checks.length>0&&new Set(checks.map(c=>c.id)).size===checks.length,'断言缺失或重复');
+ return {schema_version:1,workflow_key:key,skill:{path,sha256:digest(bytes),manifest:{path:manifestPath,sha256:digest(manifestBytes)},activities},checks};
+}
 export function skillAcceptanceDefinition(key,readFile){
  need(requiresSkillAcceptance(key)&&typeof readFile==='function','缺固定原文读取器');
  const path=`services/phone-adb-controller/skills/douyin-leadgen-${skills[key]}/SKILL.md`;
  const bytes=readFile(path),text=Buffer.from(bytes).toString('utf8');
  need(text.startsWith('---\n')&&new RegExp(`^name: douyin-leadgen-${skills[key]}$`,'m').test(text),'原文身份/结构未知');
+ if(/^  document_role: workflow-index$/m.test(text.match(/^---\n([\s\S]*?)\n---\n/)?.[1]||''))return indexedAcceptance(key,path,bytes,text,readFile);
  const body=text.replace(/^---\n[\s\S]*?\n---\n/,'');
  const sections=[...body.matchAll(/^## ([^\n]+)\n([\s\S]*?)(?=^## |$(?![\s\S]))/gm)];
  const names=sections.map(x=>x[1]);

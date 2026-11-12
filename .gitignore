@@ -297,3 +297,8 @@ services/phone-adb-controller/commander/.admission.lock
 /services/phone-adb-controller/skills/runner-commander/
 
 /services/phone-adb-controller/skills/leadgen-official-child-host.md
+
+# Generated references pinned by .skills-source.json
+/services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/references/
+/services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/references/
+/services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/references/

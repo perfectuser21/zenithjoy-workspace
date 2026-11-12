@@ -45,99 +45,29 @@ function fixture(secondPass,firstQuoteBad=false,firstIntentMissing=false){
   counts:()=>({policyCalls,scoreCalls})};
 }
 
-test('两次独立复核均缺个人意向证据后评论终态排除，重复运行不再评分',async()=>{
- const f=fixture(false,false,true);
- const input={op:'score',line:'jinuo',run,source_run:sourceRun,limit:1};
- const first=await queueRequest(f.pool,input,f.deps);
- assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
- assert.equal(first.scored,0);
- assert.equal(first.excluded,1);
- assert.deepEqual(first.excluded_ids,[id]);
- assert.equal(f.committed.process_status,'已排除');
- assert.equal(f.committed.relevance,null);
- assert.equal(f.committed.intent_grade,null);
- assert.equal(f.committed.judgment_config.exclusion_reason,'personal_intent_evidence_missing');
- assert.equal(f.committed.judgment_config.policy_reviews.length,2);
- const again=await queueRequest(f.pool,input,f.deps);
- assert.equal(again.scored,0);
- assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
+test('评分一次保存，旧政策审核替身不再调用；重复运行不重评',async()=>{
+ const f=fixture(false,false,true),input={op:'score',line:'jinuo',run,source_run:sourceRun,limit:1};
+ const result=await queueRequest(f.pool,input,f.deps);
+ assert.equal(result.scored,1);assert.equal(result.excluded,0);
+ assert.deepEqual(f.counts(),{policyCalls:0,scoreCalls:1});
+ assert.equal(f.committed.intent_grade,'A');assert.equal(f.committed.judgment_config.scoring_mode,'single-evaluation-v1');
+ assert.equal(f.committed.judgment_config.policy_reviews,undefined);
+ assert.equal((await queueRequest(f.pool,input,f.deps)).scored,0);
+ assert.deepEqual(f.counts(),{policyCalls:0,scoreCalls:1});
 });
-
-test('同一评论首审通过、独立二审缺个人意向证据时整笔评分回滚',async()=>{
- const f=fixture(false);
+test('唯一评分调用失败时不落分、不补审核且不泄露原异常',async()=>{
+ const f=fixture(true);let calls=0;
+ f.deps.judgeComment=async()=>{calls++;throw new JudgeApiError('api_key=secret',{stage:'commander',status:429});};
  const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
- assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
- assert.equal(result.scored,0);
- assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'personal_intent_evidence_missing',policy_review_model_calls:2}]);
- assert.equal(f.committed.relevance,null);
- assert.equal(f.committed.intent_grade,null);
- assert.equal(f.committed.judgment_config,undefined);
- assert.equal(f.writes.length,0);
+ assert.equal(result.scored,0);assert.equal(result.blocked,1);assert.equal(calls,1);
+ assert.equal(f.counts().policyCalls,0);assert.equal(f.writes.length,0);
+ assert.equal(f.committed.relevance,null);assert.equal(JSON.stringify(result).includes('secret'),false);
 });
-
-test('政策模型HTTP失败的正式评分回执只含安全阶段/状态且PG零评分',async()=>{
- const f=fixture(true);
- f.deps.judgePolicy=async()=>{throw new JudgeApiError('private response api_key=secret',{stage:'commander',status:429});};
+test('评分返回无效等级时保持待处理且不补审核',async()=>{
+ const f=fixture(true);f.deps.judgeComment=async()=>({relevance:'相关',grade:'invalid'});
  const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
- assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:429,policy_review_model_calls:1}]);
- assert.equal(result.scored,0);
- assert.equal(f.committed.relevance,null);
- assert.equal(f.writes.length,0);
- assert.equal(JSON.stringify(result).includes('secret'),false);
-});
-
-test('政策证据无效回执含固定字段码和调用数，且不泄露原异常',async()=>{
- const f=fixture(true);
- f.deps.judgePolicy=async()=>{const error=Error('COMMANDER_EVIDENCE_INVALID');
-  error.evidence_check='matched_rule_not_frozen';error.private_response='api_key=secret';throw error;};
- const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
- assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_model_evidence_invalid',policy_review_stage:'commander',
-  policy_review_evidence_check:'matched_rule_not_frozen',policy_review_model_calls:1}]);
- assert.equal(JSON.stringify(result).includes('secret'),false);
- assert.equal(f.writes.length,0);
-});
-
-test('首审缺个人意向而二审HTTP失败时仍待分拣，并保留可重试HTTP分类',async()=>{
- const f=fixture(false,false,true);let calls=0;
- const original=f.deps.judgePolicy;
- f.deps.judgePolicy=async(...args)=>++calls===2
-  ?Promise.reject(new JudgeApiError('private response api_key=secret',{stage:'commander',status:503}))
-  :original(...args);
- const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
- assert.equal(calls,2);
- assert.equal(result.excluded,0);
- assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:503,policy_review_model_calls:2}]);
- assert.equal(f.committed.process_status,'待分拣');
- assert.equal(f.writes.length,0);
-});
-
-test('两份独立政策模型证据均通过才持久评分与两份可重验身份',async()=>{
- const f=fixture(true);
- const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
- assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
- assert.equal(result.scored,1);
- assert.equal(f.committed.relevance,'相关');
- assert.equal(f.committed.intent_grade,'A');
- assert.equal(f.writes.length,1);
- assert.equal(f.committed.judgment_config.policy_reviews.length,2);
- assert.deepEqual(f.committed.judgment_config.policy_reviews.map(v=>v.response_id),
-  ['policy-response-1','policy-response-2']);
- assert.equal(f.committed.judgment_config.policy_reviews.every(v=>v.status==='pass'),true);
-});
-
-test('第一次视频引用重试已用尽两次政策模型额度时阻断且PG零评分',async()=>{
- const f=fixture(true,true);
- const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
- assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
- assert.equal(result.scored,0);
- assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_review_budget_exhausted',policy_review_model_calls:2}]);
- assert.equal(f.committed.relevance,null);
- assert.equal(f.writes.length,0);
+ assert.equal(result.scored,0);assert.equal(result.blocked,1);assert.equal(f.writes.length,0);
+ assert.equal(f.counts().policyCalls,0);assert.equal(f.committed.intent_grade,null);
 });
 
 const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
@@ -212,7 +142,7 @@ test('mark_leads面对旧单份政策证据保持unknown且不补第三次模型
  assert.equal(modelCalls,0);
 });
 
-test('旧单审半提交行只在精确恢复范围内重新双审，成功才原子覆盖',async()=>{
+test('旧单审半提交行只在精确恢复范围内评分一次，成功才原子覆盖',async()=>{
  const oldId='1f3b113f-442f-425b-83b4-6c737c30a68c';
  const oldRun='accept4da3_jinuo103h_20261030t1525';
  const oldSource='accept3a903_jinuo102d_20261030t0245';
@@ -239,8 +169,8 @@ test('旧单审半提交行只在精确恢复范围内重新双审，成功才�
  const deps={freezeCompanyConfig:async()=>policy,
   readRecoveryTask:async()=>({id:recovery.maintenance_task_id,status:'in_progress',
    claimed_by:'interactive-leadgen-103-double-policy',project_id:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6'}),
-  judgeComment:async()=>({relevance:'相关',grade:'A',reason:'直接询问证书',
-   audit:{model:'scoring-model',response_id:'new-score'}}),
+  judgeComment:async()=>{if(!allowSecond)throw Error('single scoring failed');return {relevance:'相关',grade:'A',reason:'直接询问证书',
+   audit:{model:'scoring-model',response_id:'new-score'}};},
   judgePolicy:async()=>({grade:'A',audit:{model:'policy-model',response_id:`new-policy-${++policyCalls}`,
    policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',
     comment_signal:!allowSecond&&policyCalls%2===0?'FDE证书':comment,
@@ -256,66 +186,19 @@ test('旧单审半提交行只在精确恢复范围内重新双审，成功才�
  assert.equal(writes.length,0);
  outboxRows=[];allowSecond=true;
  const result=await queueRequest(pool,input,deps);
- assert.equal(result.scored,1);assert.equal(policyCalls,4);
+ assert.equal(result.scored,1);assert.equal(policyCalls,0);
  assert.equal(old.judgment_config.run_id,'new103');
- assert.equal(old.judgment_config.policy_reviews.length,2);
+ assert.equal(old.judgment_config.scoring_mode,'single-evaluation-v1');
  assert.equal(writes.length,1);
  assert.ok(calls.some(c=>c.sql.includes('leadgen_bridge_outbox')));
 });
 
-test('旧A半提交只经精确恢复双审一致缺意向后清分并排除，读回无outbox',async()=>{
- const oldId='1f3b113f-442f-425b-83b4-6c737c30a68c';
- const oldRun='accept4da3_jinuo103h_20261030t1525';
- const oldSource='accept3a903_jinuo102d_20261030t0245';
- const old={...storedPolicyRow().row,id:oldId,harvest_batch:oldSource};
- old.judgment_config={...old.judgment_config,run_id:oldRun};delete old.judgment_config.policy_reviews;
- let pending=null,policyCalls=0,scoreCalls=0,outbox=[];
- const client={release(){},async query(sql,args=[]){
-  if(sql==='BEGIN'){pending=[];return {rows:[]};}
-  if(sql==='COMMIT'){for(const write of pending)write();pending=null;return {rows:[]};}
-  if(sql==='ROLLBACK'){pending=null;return {rows:[]};}
-  if(sql.includes('count(*)::int AS used'))return {rows:[{used:old.judgment_config?.run_id==='new103'?1:0}]};
-  if(sql.includes('company_config_runs'))return {rows:[{snapshot:policy,company_id:policy.company_id,
-   tenant_id:policy.tenant_id,version:policy.version,run_id:sql.includes('company_id=$1')?oldRun:'new103'}]};
-  if(sql.includes('leadgen_bridge_outbox'))return {rows:outbox};
-  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:old.process_status==='待分拣'?[{...old}]:[]};
-  if(sql.includes('SELECT id,harvest_batch,line_key,process_status'))return {rows:[{...old}]};
-  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{title,video_url:old.source_video_url,judgment_status:'matched'}]};
-  if(sql.includes("process_status='已排除'")){pending.push(()=>Object.assign(old,{process_status:'已排除',
-   relevance:null,intent_grade:null,judgment_reason:args[1],judgment_config:JSON.parse(args[2])}));
-   return {rows:[],rowCount:1};}
-  if(sql.includes('pg_advisory_xact_lock'))return {rows:[]};
-  throw Error(`unexpected SQL ${sql}`);
- }};
- const deps={freezeCompanyConfig:async()=>policy,
-  readRecoveryTask:async()=>({id:'ef3927ba-1f9c-40ec-b1fa-53a8f7106ee6',status:'in_progress',
-   claimed_by:'interactive-leadgen-103-double-policy',project_id:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6'}),
-  judgeComment:async()=>{scoreCalls++;return {relevance:'相关',grade:'A',reason:'候选A',
-   audit:{model:'scoring-model',response_id:'new-score'}};},
-  judgePolicy:async()=>({grade:'A',audit:{model:'policy-model',response_id:`new-review-${++policyCalls}`,
-   policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:'FDE证书',
-    video_signal:'FDE证书',exclusion_rule:null,reason:'缺明确个人诉求'}}})};
- const input={op:'score',line:'jinuo',run:'new103',source_run:oldSource,ids:[oldId],budget_max:1,limit:1,
-  legacy_recovery:{comment_id:oldId,old_run:oldRun,maintenance_task_id:'ef3927ba-1f9c-40ec-b1fa-53a8f7106ee6'}};
- const pool={connect:async()=>client,query:(...args)=>client.query(...args)};
- const result=await queueRequest(pool,input,deps);
- assert.deepEqual({scored:result.scored,excluded:result.excluded,policyCalls,scoreCalls},{scored:0,excluded:1,policyCalls:2,scoreCalls:1});
- assert.deepEqual({status:old.process_status,relevance:old.relevance,grade:old.intent_grade},
-  {status:'已排除',relevance:null,grade:null});
- const readback=await queueRequest(pool,{op:'score_exclusion_readback',line:'jinuo',run:'new103',
-  source_run:oldSource,ids:[oldId]},deps);
- assert.equal(readback.verified,true);
- assert.deepEqual(readback.excluded_reasons,[{id:oldId,reason:'personal_intent_evidence_missing'}]);
- const recovery=await queueRequest(pool,{op:'score_recovery',line:'jinuo',run:'new103',
-  source_run:oldSource,ids:[oldId]},deps);
- assert.deepEqual(recovery.excluded_ids,[oldId]);
- old.comment_body+='篡改';
- await assert.rejects(queueRequest(pool,{op:'score_exclusion_readback',line:'jinuo',run:'new103',
-  source_run:oldSource,ids:[oldId]},deps),/POLICY_SCORE_RECOVERY_AMBIGUOUS/);
- old.comment_body=comment;outbox=[{comment_id:oldId}];
- const invalid=await queueRequest(pool,{op:'score_exclusion_readback',line:'jinuo',run:'new103',
-  source_run:oldSource,ids:[oldId]},deps);
- assert.equal(invalid.verified,false);
+test('不相关评分仍持久化一次结论，旧审核不能把它改为排除',async()=>{
+ const f=fixture(false);f.deps.judgeComment=async()=>({relevance:'不相关',grade:null,reason:'原评估不相关',audit:{model:'scoring-model',response_id:'unrelated-response'}});
+ const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
+ assert.equal(result.scored,1);assert.equal(result.excluded,0);assert.equal(f.counts().policyCalls,0);
+ assert.equal(f.committed.process_status,'待分拣');assert.equal(f.committed.relevance,'不相关');
+ assert.equal(f.committed.intent_grade,null);assert.equal(f.committed.judgment_config.scoring_mode,'single-evaluation-v1');
 });
 
 test('103失败102g来源默认只查受控审计回执，不领隔离视频或调用模型',async()=>{

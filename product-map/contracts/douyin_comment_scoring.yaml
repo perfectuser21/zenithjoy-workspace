@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.15.0
+  version: 0.17.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -29,7 +29,7 @@ trigger_inputs:
 activities:
   - key: scoring
     name: 评分
-    promise: 按冻结原政策为已提交评论写出可读回评分；双独立复核一致缺个人意向或受众主题证据时自动排除并留原因
+    promise: 按冻结公司政策对每条已提交评论评估一次并保存等级、理由与原文依据；不追加模型复核
     sample_candidates:
       index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
       workflow_keys:
@@ -38,7 +38,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.7.2
+    version: 2.8.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -77,12 +77,12 @@ activities:
     preconditions:
       - 从PG认领待分拣评论，带关联视频标题与转写
       - 普通来源视频须同102批次、matched且PG状态评论已采。正式102配额抽样可在视频仍待判定时仅消费collection主span逐视频点名的精确评论ID：必须核Brain原run绑定与全部pass/verified回执、资格及采集两主span同run/binding/SHA逐VID身份和旧判断run一致、冻结采样上限及101来源、公司/租户/版本/政策、配额=新增+历史、PG规范行摘要和原生身份；配额与footer/no_comments混合时只接纳quota_reached精确ID；历史行保留旧批次且只准本103新评分。软预算/失败102不得借待判定状态进入。金诺102d跨SHA只限Issue 3004abdb-d5b8-448c-b35c-58203ef84e1d固定run、绑定、VID和五条原件；金诺原102g失败run的VID7699489394579915663及三条固定原生评论仍仅经用户决定、旧执行实时停止、v14冻结政策、无旧outbox及db_audit接纳回执绑定单一103 run显式领取。两种例外均不伪造视频评论已采或改旧102结论
-      - 模型不可达、HTTP/网络异常、证据非法或双审不一致留待重试，不伪造C级成功，不转人工评分
+      - 模型不可达、HTTP/网络异常、证据非法或评分输出无效留待重试，不伪造C级成功，不转人工评分
     postconditions:
       - probe: scores_readback
-        asserts: 认领评论 ID 的 relevance、intent_grade 与两份不同模型回执的政策证据在 PG 独立读回；两审一致后原子提交，任一审失败不得写分；本活动只交评分，完成状态由后续 mark_leads 核资格和配送后决定
+        asserts: 认领评论ID的relevance、intent_grade、原文依据、唯一评分响应身份及冻结公司版本在PG原子保存并读回；评分后不追加模型审核；本活动只交评分、不创建线索或outbox，标记直接消费原评分
       - probe: exclusion_readback
-        asserts: 两份不同模型身份均判缺个人意向或受众主题证据且原因一致时，PG原子写已排除及安全双审摘要，relevance/intent_grade清空，原评论与冻结来源哈希、理由及无outbox独立读回；纯排除批次为完成，不以零评分误报partial
+        asserts: 新评分为不相关时保存relevance=不相关且intent_grade为空，不创建Lead/outbox；技术失败不写成排除。历史已排除记录保留原审计并可只读恢复，无需新增模型复核
     execution:
       primary_kind: code
       location: mmv
@@ -100,7 +100,7 @@ activities:
       empty_ok:
         - 本批无待分拣评论
       retryable:
-        - 模型HTTP/网络、鉴权/额度、证据非法或双审不一致保留待分拣，后续有界重试；不得转成人工评分或误排除
+        - 模型HTTP/网络、鉴权/额度、证据非法或评分输出无效保留待分拣，后续有界重试；不得转成人工评分或误排除
       needs_human:
         cases: []
         alert:
@@ -110,7 +110,7 @@ activities:
     side_effects:
       - kind: internal_write
         target: pg zenithjoy.leadgen_comments
-        description: 双审通过保存真实relevance/intent_grade；双审一致证据缺口则清空旧分并写已排除和安全原因；两者均不由本活动创建线索
+        description: 单次评估后保存真实relevance/intent_grade、理由、模型身份及原文摘要；技术失败保持未决，不由本活动创建线索
     invokers:
       - code
       - agent
@@ -381,7 +381,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.13.0
+        version: 0.16.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -620,11 +620,8 @@ activities:
         revision: contract
     model:
       - provider: openrouter
-        model: typesafe/jev-1.13
-        purpose: 评论 A/B/C/不相关分级（judge-comment.js:16）
-      - provider: openrouter
         model: google/gemini-2.5-flash
-        purpose: 复核（judge-comment.js:17）
+        purpose: 评论单次结构化评分及原文依据（judgeCommentOnce）
     steps:
       - key: scan_pending
         name: 扫池取待分拣
@@ -660,7 +657,7 @@ activities:
           - Comment.process_status
           - Comment.judgment_reason
           - Comment.judgment_config
-        check: 双审通过才写A/B/C/不相关评分；双独立复核一致缺个人意向或受众主题证据写已排除且清空旧分；模型故障与复核不一致不写分、不排除
+        check: 单次有效评分保存A/B/C/不相关及原文依据，后续不增加模型复核；模型或引用无效则不写分、不误排除
         implementation:
           status: implemented
           ref: leadgen-workflow.mjs + leadgen-queue.js scoring.judge_grade（原约束保留，真PG/证据读回）
@@ -691,7 +688,7 @@ activities:
       entry: activity-commander.mjs
   - key: mark_leads
     name: 标记人
-    promise: 仅依据双审通过的已评分评论核实原生收件人身份并交出线索、资格与配送状态；已排除评论不进入本活动
+    promise: 消费已保存的真实评分，核对原生UID和公司来源后交出线索及配送状态；不再次评估评分或受众意向
     sample_candidates:
       index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
       workflow_keys:
@@ -700,7 +697,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.8.2
+    version: 3.9.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -778,7 +775,7 @@ activities:
           - feishu_record_id
     preconditions:
       - 带company_binding的评论须按原102 harvest_batch只读既有PG冻结来源与选定设备，缺失不得补造历史run或仅信评论内绑定；当前评分政策仍独立冻结，来源公司/租户必须相同；103配送和读回沿同来源，104云profile仍未获授权
-      - 评分行须有两份不同模型身份的已持久政策证据，原评论与来源视频仍须同102身份；历史行保留旧harvest_batch，仅限正式回执精确ID集且本103新评分。普通视频须评论已采；正式102配额抽样视频可保持待判定，但评分及标记阶段都要核Brain pass/verified、资格与采集两主span同run/binding/SHA逐VID身份、旧判断run与PG冻结公司/租户/版本/政策、逐视频配额与PG规范行摘要及原生评论身份；金诺102d跨SHA仅限固定历史桥。旧单份证据、软预算及失败102不得推进线索；金诺102g隔离视频仍须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定，其他隔离视频阻断
+      - 评分行须有已保存的评分、原文依据、真实模型响应和冻结公司身份，原评论与来源视频仍须同102身份；历史行保留旧harvest_batch，仅限正式回执精确ID集且本103新评分。普通视频须评论已采；正式102配额抽样视频可保持待判定，但评分及标记阶段都要核Brain pass/verified、资格与采集两主span同run/binding/SHA逐VID身份、旧判断run与PG冻结公司/租户/版本/政策、逐视频配额与PG规范行摘要及原生评论身份；金诺102d跨SHA仅限固定历史桥。缺评分来源证据、软预算及失败102不得推进线索；金诺102g隔离视频仍须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定，其他隔离视频阻断
       - 评论 process_status=待分拣
       - 已排除评论保持 relevance/intent_grade 为空，不进入 Lead、outbox 或后续104；纯排除批次标记人空消费为正常完成
       - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
@@ -810,7 +807,7 @@ activities:
         - 判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）
       needs_human:
         cases:
-          - 整批判定失败（模型鉴权/额度）
+          - 已存评分身份或原生来源不完整
         alert:
           channel: bark
           object: sort-comments 整批失败 → Bark
@@ -823,10 +820,6 @@ activities:
         target: 原Feishu line-routes线索表
         description: 本103 mark活动消费durable
           outbox；原fields/1Pcache/orderLock复用，attempted先持久再单POST，全池UID+nick去重不修改protected/已发；未知仅GET读回
-      - kind: external_visible
-        target: OpenRouter /api/alpha/decisions（typesafe/jev-1.13）
-        description: 独立recipient资格判定会外发完整native主页text/content-desc、原评论/来源标题、原grade及冻结公司V3产品/人群/criteria/audiences；原grade不改变。每次实际调用model_call_count及服务可返回的model_response_id进入PG
-          outbox资格回执；缺proof/key为0，故障调用1且unknown不ready，不借其他模型generation冒本调用。
     invokers:
       - code
       - agent
@@ -1101,7 +1094,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.13.0
+        version: 0.17.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -1358,13 +1351,6 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/outreach-order-lock.py
         revision: contract
-    model:
-      - provider: openrouter
-        model: typesafe/jev-1.13
-        purpose: 评论 A/B/C/不相关分级（judge-comment.js:16）
-      - provider: openrouter
-        model: google/gemini-2.5-flash
-        purpose: 复核（judge-comment.js:17）
     steps:
       - key: upsert_lead
         name: 合格行进线索表
@@ -1386,14 +1372,14 @@ activities:
           - RecipientQualification.status
           - OutreachBridgeIntent.payload_sha256
           - OutreachBridgeIntent.state
-        check: 仅待分拣且双审通过的相关(A/B/C级)：新建（状态=待触达）或已有行
+        check: 仅待分拣且已保存合法单次评分的相关(A/B/C级)：新建（状态=待触达）或已有行
           repeat_hits+1，按抖音号去重；不相关及已排除均不建Lead/outbox，含C级仍留档；真实lead
           UID读回防昵称别名，独立recipient资格不改grade；同事务保存outbox再推进，正常103消费原Feishu桥
         implementation:
           status: implemented
           ref: leadgen-workflow.mjs + leadgen-queue.js
             mark_leads.upsert_lead（原约束保留，真PG/证据读回）
-        uses_llm: true
+        uses_llm: false
         dod:
           mode: checkpoint
           readback:

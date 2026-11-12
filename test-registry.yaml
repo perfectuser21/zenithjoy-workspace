@@ -7475,6 +7475,14 @@ tests:
     product: AI员工
     note: "四独立获客流程代码回归；设备和业务PG用隔离夹具，真实运行另行验收"
 
+  - id: leadgen-single-score
+    path: services/phone-adb-controller/__tests__/leadgen-single-score.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "103单次模型评分、失败不补审、持久读回和标记零额外模型调用"
+
   - id: leadgen-split-leadgen-queue
     path: services/phone-adb-controller/__tests__/leadgen-queue.test.mjs
     type: unit

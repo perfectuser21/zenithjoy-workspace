@@ -76,7 +76,7 @@ export function createNativeScoringRuntime({root,source,scope,directory,createPo
    if(!scoreScope||!Array.isArray(input.ids)||new Set(input.ids).size!==input.ids.length||input.ids.some(id=>!scoreScope.ids.includes(id)))throw fail('IDS');
    request.sources=Object.fromEntries(input.ids.map(id=>[id,scoreScope.sources[id]]));request.limit=op==='score'?1:Math.min(fixed.limit,input.ids.length);
    if(op==='score')request.budget_max=fixed.limit;
-   if(op==='policy_review'){request.claim=fixed.run;request.require_dual_review=true;}
+   if(op==='policy_review'){request.claim=fixed.run;}
   }
   if(op==='mark_leads'){if(!scoreScope)throw fail('IDS');request.ids=[...scoreScope.ids];}
   if(op==='bridge_outreach'){if(!marked)throw fail('IDS');request.comment_ids=[...marked.ids];}

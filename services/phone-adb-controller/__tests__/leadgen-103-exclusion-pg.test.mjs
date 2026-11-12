@@ -37,7 +37,7 @@ test('真实PG scratch：已排除是独立终态且不能携带旧A评分',
   }
 });
 
-test('真实PG scratch：并发限1只排除一次，读回留双审摘要，标记人不建线索',
+test('真实PG scratch：并发限1只评分一次，不相关标记不建线索',
  {skip:process.env.ZJ_METRICS_PG_REQUIRED!=='1'},async()=>{
   const {Pool}=await import('pg');const pool=new Pool();
   const schema=`leadgen_exclusion_${randomUUID().replaceAll('-','')}`;
@@ -69,22 +69,22 @@ test('真实PG scratch：并发限1只排除一次，读回留双审摘要，标
     }};
     let review=0,scoreCalls=0;
     const deps={freezeCompanyConfig:async()=>policy,
-      judgeComment:async()=>{scoreCalls++;return {relevance:'相关',grade:'A',reason:'候选A',
+      judgeComment:async()=>{scoreCalls++;return {relevance:'不相关',grade:'不相关',reason:'一次评分不相关',
         audit:{model:'score-model',response_id:'score-pg'}};},
       judgePolicy:async()=>({grade:'A',audit:{model:'policy-model',response_id:`policy-pg-${++review}`,
         policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:'FDE证书',
           video_signal:'FDE证书',exclusion_rule:null,reason:'缺可证个人意向'}}})};
     const input={op:'score',line:'jinuo',run,source_run:source,ids:[id],budget_max:1,limit:1};
     const results=await Promise.all([queueRequest(scoped,input,deps),queueRequest(scoped,input,deps)]);
-    assert.equal(results.reduce((sum,r)=>sum+r.excluded,0),1);
-    assert.equal(scoreCalls,1);assert.equal(review,2);
+    assert.equal(results.reduce((sum,r)=>sum+r.scored,0),1);
+    assert.equal(scoreCalls,1);assert.equal(review,0);
     const row=(await scoped.query('SELECT process_status,relevance,intent_grade,judgment_config FROM zenithjoy.leadgen_comments WHERE id=$1',[id])).rows[0];
-    assert.equal(row.process_status,'已排除');assert.equal(row.relevance,null);assert.equal(row.intent_grade,null);
-    assert.equal(row.judgment_config.policy_reviews.length,2);
-    const readback=await queueRequest(scoped,{op:'score_exclusion_readback',line:'jinuo',run,source_run:source,ids:[id]},deps);
+    assert.equal(row.process_status,'待分拣');assert.equal(row.relevance,'不相关');assert.equal(row.intent_grade,null);
+    assert.equal(row.judgment_config.policy_reviews,undefined);assert.equal(row.judgment_config.scoring_mode,'single-evaluation-v1');
+    const readback=await queueRequest(scoped,{op:'score_readback',line:'jinuo',run,source_run:source,ids:[id]},deps);
     assert.equal(readback.verified,true);
     const mark=await queueRequest(scoped,{op:'mark_leads',line:'jinuo',run:'mark_terminal_pg',source_run:source,limit:1},deps);
-    assert.equal(mark.marked,0);assert.equal(mark.created,0);
+    assert.equal(mark.marked,1);assert.equal(mark.created,0);
     assert.equal((await scoped.query('SELECT count(*)::int AS n FROM zenithjoy.leadgen_bridge_outbox')).rows[0].n,0);
   }finally{
     if(created)await admin.query(`DROP SCHEMA ${schema} CASCADE`);
