@@ -11659,7 +11659,7 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: "小型权威gate替代完整release正文读取；原Task、claim、观测、设备锁与期限拒绝守卫"
+    note: "兼容授权修复（line02/keyword_acquisition keep-green）：小型权威gate替代完整release正文读取；原Task、claim、观测、设备锁与期限拒绝守卫"
 
   - id: official-phone-peer-close-deadline
     path: services/phone-adb-controller/__tests__/official-phone-peer-close-deadline.test.mjs
