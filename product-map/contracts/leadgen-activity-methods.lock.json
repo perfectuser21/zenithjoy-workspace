@@ -1383,14 +1383,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "5a92e2c506d797eec5957206cb5e9cdfef6adea70497d513570b89ccffade62d"
+          "sha256": "38884491c6fec8c426d4ac8b3d04e4713e6d2510ebd25bd27c35764755cde09c"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "b7a02631b5802c8e4d8edc31708f3e9be3d881f388189d8c425434a99e8a1171"
+          "sha256": "a8025d26c92f5db53a456b59303333670257012f427ac5ace0eb8ec689e07ada"
         },
         {
           "kind": "code",
@@ -1824,13 +1824,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9422076825516ba418f824a7e1f302b5bb7b5728ac456bce7aa40b64a83033b0",
+      "code_digest": "49c410f9a46a9a3bd10473ce38ed2e011413fae92a8dba094d42fd67efe03d26",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
         "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "a0a2883739a2567c81f985e77038e21dade4183d3f7e38c6e36a4d897be02753",
-        "current_code_digest": "9422076825516ba418f824a7e1f302b5bb7b5728ac456bce7aa40b64a83033b0"
+        "current_code_digest": "49c410f9a46a9a3bd10473ce38ed2e011413fae92a8dba094d42fd67efe03d26"
       }
     },
     "douyin_video_processing.dedup": {
@@ -5051,14 +5051,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "5a92e2c506d797eec5957206cb5e9cdfef6adea70497d513570b89ccffade62d"
+          "sha256": "38884491c6fec8c426d4ac8b3d04e4713e6d2510ebd25bd27c35764755cde09c"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "b7a02631b5802c8e4d8edc31708f3e9be3d881f388189d8c425434a99e8a1171"
+          "sha256": "a8025d26c92f5db53a456b59303333670257012f427ac5ace0eb8ec689e07ada"
         },
         {
           "kind": "code",
@@ -5477,13 +5477,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "63adf078e0bc71485561279ad7913a5965071a9e203dac50e22d8665db0b090c",
+      "code_digest": "bcf714c2411691341dadc6a6e6b69e8bd8a4d72ea4180dde3db5a1861313e111",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
         "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
         "previous_code_digest": "4a89a68b0476516efb1c9071e6ba0a2abeadf3dd687fd36289c28ecc7e54313f",
-        "current_code_digest": "63adf078e0bc71485561279ad7913a5965071a9e203dac50e22d8665db0b090c"
+        "current_code_digest": "bcf714c2411691341dadc6a6e6b69e8bd8a4d72ea4180dde3db5a1861313e111"
       }
     },
     "douyin_comment_scoring.scoring": {
