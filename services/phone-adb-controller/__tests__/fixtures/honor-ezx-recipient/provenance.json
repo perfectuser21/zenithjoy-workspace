@@ -1,0 +1,6 @@
+{
+  "source": "physical-phone XML captured 2026-11-12",
+  "sanitization": "names, account ID, comments and unrelated text replaced; native hierarchy, IDs, classes, packages and bounds retained",
+  "original_profile_sha256": "25c739b30f42c1010f356b50c247a10a70265314605bb699bd4363a81be8e8a7",
+  "original_returned_sha256": "05b0543acd258b6218453909b163661e58ace8ce5f3ba9bbab15b18dc749c4c3"
+}
