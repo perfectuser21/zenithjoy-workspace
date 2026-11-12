@@ -6314,14 +6314,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/judge-comment.js",
           "revision": "contract",
-          "sha256": "4f370f28196ce5e92d5fcbf6a44e661545007cfe02d74ca4670529bf81b4832f"
+          "sha256": "efbdf9d6fe099e0b72ed188ce031203c82c9782628fd85a86fb5f29dd4205e79"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-frozen-policy-evidence.js",
           "revision": "contract",
-          "sha256": "862f9e53b06d8e4b2114f2f4130bda456423c742163b028e1f46ee1128ec427f"
+          "sha256": "26d8baa2ca066592f41e9fec2c9e7fb3ed94ee2d4a9b8253a2e86b0709e09949"
         },
         {
           "kind": "code",
@@ -6338,7 +6338,7 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "47e83b1f25bb0d939f69575210b2df45e591ef4e0efca74cfb0aa8ee9bbbacc0"
+      "code_digest": "c46cbc7acdd67cbd86197477a7e68c8c8e204ffd63cb6cafcd460e630645cb26"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.9.0",
