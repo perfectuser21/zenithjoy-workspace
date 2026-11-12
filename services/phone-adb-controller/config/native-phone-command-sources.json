@@ -145,7 +145,7 @@
       },
       "pillow": {
         "path": "config/native-phone-pillow-xian-m4.json",
-        "sha256": "3094d6d993052e22bb5738fe46f3d3d4238ee6800aaeec02f38ffd116b146ad8"
+        "sha256": "d9fd4f6ec0cbcdbb03e57eecb6ce0a278070719eeca44af20b6ef4843a45ddca"
       },
       "program_files": [
         {
@@ -223,6 +223,137 @@
         {
           "path": "/system/framework/uiautomator.jar",
           "sha256": "f0fa0bbaf458902594ddcff3feebe6b89e4a8000e4c7d14e91c0132d83202752"
+        }
+      ],
+      "commands": [
+        "pause",
+        "dump",
+        "tap",
+        "search",
+        "foreground",
+        "window",
+        "screenshot",
+        "sdk",
+        "keyevent",
+        "swipe",
+        "long-press",
+        "current-ime",
+        "ime-enable",
+        "ime-set",
+        "clear-nonce",
+        "broadcast-nonce",
+        "input-nonce",
+        "input-select-all",
+        "scratch-search",
+        "open-detail",
+        "remove-ui",
+        "stat-ui",
+        "stat-ui-mtime",
+        "ui-exists",
+        "ui-symlink",
+        "device-date",
+        "model",
+        "telecom",
+        "wake",
+        "unlock",
+        "open-app",
+        "close-app",
+        "home-resolve",
+        "dump-file",
+        "screenshot-file"
+      ]
+    },
+    {
+      "profile": "jinoshengyuan-work",
+      "serial": "ANGYVB4227006983",
+      "package": "com.ss.android.ugc.aweme",
+      "width": 1200,
+      "height": 2664,
+      "device_sdk": 36,
+      "review": {
+        "path": "config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json",
+        "sha256": "6cf7d6a1a681c5c5d00cc780e8ec7ce4184ce6d951e36331ced1b556350359a1"
+      },
+      "pillow": {
+        "path": "config/native-phone-pillow-xian-m4.json",
+        "sha256": "d9fd4f6ec0cbcdbb03e57eecb6ce0a278070719eeca44af20b6ef4843a45ddca"
+      },
+      "program_files": [
+        {
+          "path": "/system/bin/am",
+          "sha256": "24917ebf4ed753b96ceacac75762f6dc0d5c04dbe34d62020ceceaeae12c3f4d"
+        },
+        {
+          "path": "/system/bin/app_process",
+          "sha256": "93bf15c773776723022231eb1da227ace715a696ccd8c5693fbd2d928dc9cf24"
+        },
+        {
+          "path": "/system/bin/app_process32",
+          "sha256": "197fbf5503316462b57b04f3a485b3baef5ff208ec37ab9bc05dfa7159332d9e"
+        },
+        {
+          "path": "/system/bin/app_process64",
+          "sha256": "93bf15c773776723022231eb1da227ace715a696ccd8c5693fbd2d928dc9cf24"
+        },
+        {
+          "path": "/system/bin/cmd",
+          "sha256": "6804df68036232c82ad344cb6fcb9cf2675411acd2dd350f2b899a57170a73ad"
+        },
+        {
+          "path": "/system/bin/dumpsys",
+          "sha256": "6798ebccdce2e15ea55fe90664511849a692432c3b8a454f245d9b2522a014ee"
+        },
+        {
+          "path": "/system/bin/getprop",
+          "sha256": "4a05432867e0fc87f3ca2df3fddc9badd4040b6d09cb4b0f8a1ef8202d1ed573"
+        },
+        {
+          "path": "/system/bin/ime",
+          "sha256": "d0959c12d988f12b92b075a2222a0df1b66e1764f64ce75ef3d4bd9eacb282b7"
+        },
+        {
+          "path": "/system/bin/input",
+          "sha256": "108767c95965714fd7194257f37f6fe5d90f81ff9279e20a2326c1f7f63b737d"
+        },
+        {
+          "path": "/system/bin/monkey",
+          "sha256": "1cde380f3deaf3a8a075c96f8342a444ba96d12a6ea5773c882c31fe3a68b310"
+        },
+        {
+          "path": "/system/bin/screencap",
+          "sha256": "cb353377bdafc39774ab4473033989506da493c6197c497e7b905ff47b4e53b5"
+        },
+        {
+          "path": "/system/bin/settings",
+          "sha256": "5c447700471b694854e201453d8a588505e9a0913ca9583429dc6c9bfcef4dde"
+        },
+        {
+          "path": "/system/bin/sh",
+          "sha256": "4e925f869db65b809b381608b28f62c212f0a8473fb9db91681dda5112fd2d25"
+        },
+        {
+          "path": "/system/bin/toybox",
+          "sha256": "90b08e2509ebfd0d00eebc81fecd9407315675d3deba8eb74136094bd3d27a8b"
+        },
+        {
+          "path": "/system/bin/uiautomator",
+          "sha256": "588f4e89975e626c1ae185c350389e4fad005b2cb9525834a42dfa7dfd548545"
+        },
+        {
+          "path": "/system/bin/wm",
+          "sha256": "6aa95202ca1b2a691737daffc979bfd81dd497f2493cb37dc0972faf6af3fae2"
+        },
+        {
+          "path": "/system/framework/android.test.runner.jar",
+          "sha256": "b99c1ad8b79ab9aff340c207895b86b9f4e13849beaa311492c84b91a06e63c6"
+        },
+        {
+          "path": "/system/framework/monkey.jar",
+          "sha256": "3fbb3c8a30d899d29ff0c1c767d1a818798a90e92427698b6c4c6dd205b5d631"
+        },
+        {
+          "path": "/system/framework/uiautomator.jar",
+          "sha256": "a76f2710634810ea17a0f84f8195e8d2550aaffd5ef6d71e8ef7b663593d3f17"
         }
       ],
       "commands": [

@@ -57,7 +57,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   active++;
   let entry;
   try{
-   if(fenced)await assertAdmission();
+   if(typeof assertAdmission==='function')await assertAdmission();
    if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
    if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
    entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(argv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};leaves.push(entry);
@@ -80,7 +80,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    }
    append({...entry,phase:'exit'});
    if(result.code!==0||result.signal||result.tainted)tainted=true;
-   if(fenced)await assertAdmission();
+   if(typeof assertAdmission==='function')await assertAdmission();
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
   }catch(error){tainted=true;if(error.epochFenceLost){epochFenceLost=true;try{append({...entry,phase:'epoch_fence_lost',new_leaf_returned:entry?.request_returned===true});}catch{}}else{returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}}throw error;}finally{active--;}
  };

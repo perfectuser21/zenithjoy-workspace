@@ -10,6 +10,12 @@ export {validatePublicDomainIdentity,publicDomainRunId};
 const fail=s=>{throw Error('PUBLIC_DOMAIN_'+s);};
 const workflows=new Set(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring']);
 const statusOf=v=>v===undefined||v==='done'||v==='completed'?'completed':v==='skipped'?'completed':['partial','paused'].includes(v)?'partial':v==='empty'?'empty':v==='failed'?'failed':'needs_review';
+export function publicDomainFiniteEvidence({activity,evidence,phonePeer,discovery,scope}){
+ if(evidence?.status!=='partial')return false;
+ if(activity.key==='collection')return Boolean(evidence.result?.sampling_receipts?.length)&&(!phonePeer||phonePeer.isEvidence(evidence,activity.key));
+ if(activity.key!=='collect_videos')return false;
+ return phonePeer?phonePeer.isEvidence(evidence,activity.key)&&phonePeer.isFiniteEvidence(evidence,activity.key):Boolean(discovery.discoveryFiniteStopEvidence(evidence,scope));
+}
 export async function createWorkflowDomain({identity,profile,runDirectory,signal,recordEvidence=async()=>{},deadline_ms,cleanup_deadline_ms}){
  const cfg=profile?.domain_adapter?.config;
  if(!workflows.has(cfg?.workflow_key))fail('WORKFLOW');
@@ -27,7 +33,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
   if(cfg.workflow_key==='douyin_comment_scoring'){
    snapshot.scoring_pg=snapshot.public_pg;
    snapshot.scoring_control_scope=(await load('native-scoring-control.mjs')).freezeScoringControlScope({root:runtime,env});
-  }else{
+  }else if(!cfg.phone_execution){
    snapshot.preflight_pg=snapshot.public_pg;
    snapshot.preflight_control_scope=(await load('preflight-control-scope.mjs')).freezePreflightControlScope({root:runtime,env,runtimeTransport:snapshot.runtime_transport});
   }
@@ -39,11 +45,11 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
  const frozen=definitions.readFrozen(dir);
  const authority=await load('public-domain-authority.mjs');
  const unregister=authority.registerPublicDomainAuthority({runDirectory:dir,identity,deadline_ms,cleanup_deadline_ms,...(executionMode==='agent'?{snapshot_authority:{local_snapshot_sha256:frozen.snapshot_sha256,runtime_snapshot_sha256:frozen.public_domain.runtime_snapshot_sha256}}:{}),business_scope:{run:env.WFR_TAG,run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,attempt:env.WFR_ATTEMPT}});
- let closePromise,primitiveRuntime,handlers,closed=false,active=false,unsafe=false,last;
+ let closePromise,primitiveRuntime,phonePeer,handlers,closed=false,active=false,unsafe=false,last;
  const records=[],checks=new Map(),outcomes=new Map(),activities=new Map(frozen.activities.map(a=>[a.reference.slot_key,{...a.version.payload.contract,key:a.reference.slot_key}]));
  const proofScope=key=>({run_id:identity.run_id,task_id:identity.task_id,source_commit:frozen.deployment.source_commit,activity:key});
  const collection=await load('collection-phone-scope.mjs'),discovery=await load('discovery-phone-scope.mjs');
- const proofFor=(key,e)=>collection.collectionEvidenceProof(e,proofScope(key))||collection.collectionReturnedEvidence(e,proofScope(key))||collection.collectionCleanupEvidence(e,proofScope(key))||discovery.discoveryCleanupEvidence(e,proofScope(key));
+ const proofFor=(key,e)=>phonePeer?.isEvidence(e,key)||collection.collectionEvidenceProof(e,proofScope(key))||collection.collectionReturnedEvidence(e,proofScope(key))||collection.collectionCleanupEvidence(e,proofScope(key))||discovery.discoveryCleanupEvidence(e,proofScope(key));
  const evidenceFile=(kind,key,value)=>{
   const path=join(dir,`public-${kind}-${key}.json`);writeFileSync(path,JSON.stringify(value),{mode:0o600});return {path,sha256:hash(readFileSync(path))};
  };
@@ -59,7 +65,9 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
   let preflightRuntime;
   if(executionMode==='agent'){
    await (await load('native-task-lease.mjs')).issuePublicNativeTaskLease({runDir:dir,frozen,env});
-   if(frozen.primary_host==='official-child-v1'){
+   if(cfg.phone_execution){
+    phonePeer=await (await load('official-phone-peer.mjs')).createOfficialPhonePeer({identity,frozen,env,descriptor:cfg.phone_execution});handlers=phonePeer.handlers;
+   }else if(frozen.primary_host==='official-child-v1'){
     handlers=workflow.createHandlers({root:runtime,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:identity.task_id,execute:(...args)=>primitiveRuntime.execute(...args)});
     primitiveRuntime=(await load('official-child-primitives.mjs')).createOfficialChildPrimitives({root:runtime,env,frozen,binding,taskId:identity.task_id,state:handlers.state});
     const originalTools=handlers.createAgentTools,originalState=handlers.agentNativeState;
@@ -113,10 +121,10 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
     }
     const e=result?.adapter_result;
     if(!e||result.execution_stopped===false||unsafe)return verdict(options.acceptance,'unknown',evidenceFile('verification',a.key,{verified:false,reason:'execution_unknown'}));
-    const finite=e.status==='partial'&&(a.key==='collection'&&e.result?.sampling_receipts?.length||a.key==='collect_videos'&&discovery.discoveryFiniteStopEvidence(e,proofScope(a.key)));
+    const finite=publicDomainFiniteEvidence({activity:a,evidence:e,phonePeer,discovery,scope:proofScope(a.key)});
     let checked={verified:false};
-    if(e.status==='completed'||e.status==='empty'||finite)checked=await verifyWorkflowActivity({root:runtime,runDir:dir,frozen,env,binding:authority.readPublicDomainBinding(dir),rpc,handlers,preflightRuntime,records,executionMode},activities.get(a.key),e,{deadline_ms:handlers.state.budgetDeadline,signal:options.signal});
-    if(cfg.workflow_key==='douyin_video_processing'&&frozen.sampling_input&&checked.verified===true){const facts=await load('runtime-receipts.mjs');const binding=authority.readPublicDomainBinding(dir);if(a.key==='qualification')checked.qualification_identity_v1=facts.qualificationIdentityEvidence({dir,frozen,binding});if(a.key==='collection')checked.sampling_admission_v1=facts.samplingAdmissionEvidence({dir,artifact:e,frozen,binding});}
+    if(e.status==='completed'||e.status==='empty'||finite)checked=phonePeer?await phonePeer.verifyActivity(activities.get(a.key),e,records):await verifyWorkflowActivity({root:runtime,runDir:dir,frozen,env,binding:authority.readPublicDomainBinding(dir),rpc,handlers,preflightRuntime,records,executionMode},activities.get(a.key),e,{deadline_ms:handlers.state.budgetDeadline,signal:options.signal});
+    if(!phonePeer&&cfg.workflow_key==='douyin_video_processing'&&frozen.sampling_input&&checked.verified===true){const facts=await load('runtime-receipts.mjs');const binding=authority.readPublicDomainBinding(dir);if(a.key==='qualification')checked.qualification_identity_v1=facts.qualificationIdentityEvidence({dir,frozen,binding});if(a.key==='collection')checked.sampling_admission_v1=facts.samplingAdmissionEvidence({dir,artifact:e,frozen,binding});}
     checks.set(a.key,checked);const proof=evidenceFile('verification',a.key,checked);await recordEvidence({event_type:'ACTIVITY_AGENT_EVENT',activity:a.key,event:{kind:'business_readback',evidence:proof}});
     return {...verdict(options.acceptance,checked.verified===true?'pass':'fail',proof),step_checks:publicDomainStepChecks({frozen,executionSlot:a.key,checked,evidence:proof}),...(checked.sampling_admission_v1?{sampling_admission_v1:checked.sampling_admission_v1}:{}),...(checked.qualification_identity_v1?{qualification_identity_v1:checked.qualification_identity_v1}:{})};
    },
@@ -135,7 +143,7 @@ export async function createWorkflowDomain({identity,profile,runDirectory,signal
    async close(){
     if(closePromise)return closePromise;
     closePromise=(async()=>{closed=true;
-    const primitiveStop=primitiveRuntime?await primitiveRuntime.close():{execution_stopped:true};
+    const primitiveStop=phonePeer?await phonePeer.close():primitiveRuntime?await primitiveRuntime.close():{execution_stopped:true};
     const stopped=!active&&!unsafe&&!handlers.state.executionUnknown&&primitiveStop.execution_stopped===true;
     if(!stopped){if(primitiveRuntime)evidenceFile('protection','workflow',await primitiveRuntime.quarantine());await handlers.quarantineResources();}
     const result={protocol:'workflow-domain/v1',execution_mode:executionMode,...(frozen.primary_host?{primary_host:frozen.primary_host}:{}),run_id:identity.run_id,task_id:identity.task_id,workflow_key:cfg.workflow_key,profile:env.P,source_commit:frozen.deployment.source_commit,profile_sha256:identity.profile_sha256,...(frozen.sampling_input?{sampling_input:frozen.sampling_input,sampling_admission_v1:checks.get('collection')?.sampling_admission_v1,qualification_identity_v1:checks.get('qualification')?.qualification_identity_v1}:{}),execution_stopped:stopped,status:stopped&&[...activities.keys()].every(k=>checks.get(k)?.verified===true)?'validated':'failed',results:[...outcomes].map(([activity,e])=>({activity,status:e.status,verification:checks.get(activity)||{verified:false}}))};

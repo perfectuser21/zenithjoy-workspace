@@ -72,7 +72,7 @@ test('actual device policy binds the reviewed command entrypoints and local Pill
  for(const name of ['sh','input','cmd','am','uiautomator','app_process','toybox','monkey'])assert.match(programs.get('/system/bin/'+name)||'',/^[a-f0-9]{64}$/);
  for(const name of ['uiautomator.jar','monkey.jar','android.test.runner.jar'])assert.ok(programs.has('/system/framework/'+name));
  assert.equal(programs.has('/system/framework/input.jar'),false,'missing ROM file cannot become a verified source');
- const pillow=JSON.parse(text(row.pillow.path));assert.equal(pillow.root,'/opt/homebrew/lib/python3.14/site-packages/PIL');
+ const pillow=JSON.parse(text(row.pillow.path));assert.equal(pillow.root,row.pillow.path==='config/native-phone-pillow-xian-m4.json'?'/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-dependencies/pillow-xian-m4-9a1c85a313b8e6cc/PIL':'/opt/homebrew/lib/python3.14/site-packages/PIL');
  assert.equal(new Set(pillow.files.map(file=>file.path)).size,pillow.files.length);
  assert.ok(pillow.files.length>0);for(const file of pillow.files)assert.match(file.sha256,/^[a-f0-9]{64}$/);
  }
@@ -87,4 +87,24 @@ test('101 Drive admits the granted xian-m4 phone with its own reviewed ROM and P
  assert.notEqual(row.review.path,cloud.review.path);assert.notEqual(row.pillow.path,cloud.pillow.path);
  assert.equal(hash(row.review.path),row.review.sha256);assert.equal(hash(row.pillow.path),row.pillow.sha256);
  for(const command of ['wake','unlock','open-app','telecom','dump-file','screenshot-file','search','open-detail','close-app','home-resolve'])assert.ok(row.commands.includes(command),command+' is needed by the existing 101 sequence');
+});
+
+
+test('M4 Pillow uses a private content-addressed root and retains every reviewed source byte',()=>{
+ const row=policy.device_sources.find(row=>row.profile==='xiaolongxia'),pillow=JSON.parse(text(row.pillow.path));
+ const digest=createHash('sha256').update(JSON.stringify(pillow.files.map(({path,sha256})=>({path,sha256})))).digest('hex');
+ assert.equal(pillow.files.length,132);assert.equal(digest,'9a1c85a313b8e6ccecb01bc6d43f6a395f4ac0046aed61b8db0c4336fb119172');
+ assert.equal(pillow.root,'/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-dependencies/pillow-xian-m4-'+digest.slice(0,16)+'/PIL');
+ assert.equal(hash('native-phone-search-step.py'),'ed0d36c9198a098baf004984534cb835fb8bf7cc098adada8c0ed24502cd65b5','original complete-inventory predicate stays unchanged');
+ assert.equal(hash(row.pillow.path),row.pillow.sha256);
+});
+
+test('已审核小蓝SDK36按自己的ROM来源和原M4依赖闭包准入101与102',()=>{
+ const row=policy.device_sources.find(r=>r.profile==='jinoshengyuan-work'&&r.serial==='ANGYVB4227006983');
+ assert.ok(row,'approved alternate physical phone requires its own reviewed source');assert.equal(row.device_sdk,36);assert.equal(row.width,1200);assert.equal(row.height,2664);assert.equal(row.program_files.length,19);
+ assert.equal(row.program_files.find(p=>p.path==='/system/bin/am').sha256,'24917ebf4ed753b96ceacac75762f6dc0d5c04dbe34d62020ceceaeae12c3f4d');
+ assert.equal(hash(row.review.path),row.review.sha256);assert.ok(row.review.path.endsWith('.json'));assert.equal(row.pillow.path,'config/native-phone-pillow-xian-m4.json');assert.equal(hash(row.pillow.path),row.pillow.sha256);
+ const host=JSON.parse(text('config/collection-phone-hosts.json')).hosts.find(h=>h.profile===row.profile&&h.serial===row.serial);assert.deepEqual(host.workflow_keys,['douyin_video_discovery','douyin_video_processing']);
+ assert.deepEqual(row.commands,policy.device_sources.find(r=>r.profile==='xiaolongxia').commands,'another device does not widen the reviewed command set');
+ for(const path of ['leadgen-client.mjs','leadgen-rpc.mjs','deploy.sh'])assert.ok(text(path).includes(row.review.path),path+' must deliver the review');
 });

@@ -1,3 +1,5 @@
+import {freezePhonePeerSsh} from './official-phone-peer-transport.mjs';
+import {validatePhoneExecution} from './official-phone-execution.mjs';
 // Offline assembly only. The dispatcher creates the first internal binding;
 // this builder never starts a run, writes Brain, creates grants or issues ACKs.
 import {readFileSync,lstatSync,realpathSync} from 'node:fs';
@@ -50,7 +52,7 @@ export function buildStandaloneSkillProfile(options={}){
   &&/^[a-f0-9]{40}$/.test(skill.source_commit||'')&&safe(skill.path)&&skill.path.startsWith('skill/')&&skill.path.endsWith('/SKILL.md')&&HASH.test(skill.sha256||''),'STANDALONE_SKILL');
  return buildProfile({...options,primaryHost:'codex-exec-v1'},skill);
 }
-function buildProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost}={},standaloneSkill){
+function buildProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost,phoneExecution}={},standaloneSkill){
  need(isAbsolute(sourceRoot||'')&&realpathSync(sourceRoot)===sourceRoot,'SOURCE_ROOT');
  need(/^[a-z][a-z0-9-]{0,63}$/.test(profileId||''),'PROFILE_ID');
  const f=clone(frozen),r=f?.release,d=f?.deployment,w=f?.workflow_version;
@@ -68,7 +70,7 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
  const target=({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[resources?.machine];
  need(target&&r.target===target&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
  if(w.payload.key==='douyin_comment_scoring')need(resources.profile==='mmv-scoring'&&resources.serial==='none','SCORING_RESOURCE');
- else if(target==='mmv')need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
+ else if(target==='mmv'&&!phoneExecution)need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
  need(UUID.test(company?.company_id||'')&&UUID.test(company?.tenant_id||'')&&Number.isSafeInteger(company.version)&&company.version>0&&company.policy_id,'COMPANY');
  const files={};
  for(const row of d.files||[]){need(!Object.hasOwn(files,row.deployed_path),'DUPLICATE_FILE');file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
@@ -138,25 +140,28 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
  validators.workflow={entry,timeout_s:30,acceptance:{ref:`workflow-definition:${w.id}#acceptance`}};
  // cleanup is also an Activity key: retain its original AV A4 acceptance
  // for both per-Activity validation and the aggregate cleanup scope.
+ const remote=phoneExecution?validatePhoneExecution(phoneExecution,{sourceCommit:d.source_commit,workflow:w.payload.key,resources}):null;
+ need(!remote||target==='mmv'&&primaryHost==='official-child-v1','PHONE_PEER_WORKER');
  const template={...f,...(primaryHost?{execution_mode:'agent',primary_host:primaryHost}:{}),public_pg:preflightPgLockIdentity({runtimeRoot:sourceRoot})};
  if(primaryHost){for(const key of ['agent_input','native_claim','native_task_lease','execution_transport','max_turns'])delete template[key];}
  const domainEnv=clone(env);delete domainEnv.ZJ_ADB_HOST_CONFIG;
- if(w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
+ if(remote){template.phone_peer_ssh=freezePhonePeerSsh();template.phone_execution=remote;for(const key of ['discovery_phone_scope','collection_phone_scope','preflight_profile'])if(remote.snapshot[key])template[key]=clone(remote.snapshot[key]);}
+ if(!remote&&w.payload.key!=='douyin_comment_scoring')template.preflight_profile=freezePreflightProfile({env:{...env,P:resources.profile,SERIAL:resources.serial}});
  if(w.payload.key!=='douyin_comment_scoring'){
   const scope=template.discovery_phone_scope||template.collection_phone_scope;
   if(scope){
    domainEnv.DOUYIN_ADB_PORT=scope.policy.endpoint.split(':').at(-1);domainEnv.ADB_SERVER_SOCKET=scope.policy.endpoint;
-   if(target==='mmv')domainEnv.LEADGEN_MMV_DEVICE_RUNTIME='1';else delete domainEnv.LEADGEN_MMV_DEVICE_RUNTIME;
+   if(target==='mmv'&&!remote)domainEnv.LEADGEN_MMV_DEVICE_RUNTIME='1';else delete domainEnv.LEADGEN_MMV_DEVICE_RUNTIME;
    // 构建时只验证原record视图；运行时仍须fresh Brain审核及完整源码兼容准入。
    if(standaloneSkill&&template.epoch_source_compatibility!==undefined)need(UUID.test(scope.task_id||''),'COMPATIBILITY_TASK');
    const recordScope=standaloneSkill?epochCompatibilityRecordScope({...template,standalone_skill:{protocol:'codex-exec-v1',task_id:scope.task_id}}):scope;
-   const route=freezePublicPreflightRoute({root:sourceRoot,files,scope:recordScope});
+   const route=remote?null:freezePublicPreflightRoute({root:sourceRoot,files,scope:recordScope});
    if(route){need(same(route,scope.policy_binding),'SCOPE_ROUTE_BINDING');template.public_preflight_route=route;}
   }
  }
  const profile={cwd:sourceRoot,cleanup_required:cleanup.length>0,resources:cleanup.length?[clone(resources)]:[],files,metadata,preconditions,validators,...(standaloneSkill?{}:{commander:clone(commander)}),
   contract:{...clone(w.payload.contract),workflow:w.payload.key,activities},domain_adapter:{protocol:standaloneSkill?'codex-skill-tools/v1':'workflow-domain/v1',entry,export_name:standaloneSkill?'startStandaloneSkillRuntime':'createWorkflowDomain',budget:{max_duration_s,cleanup_grace_s},
-   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(standaloneSkill?{standalone_skill:clone(standaloneSkill)}:{}),...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
+   config:{workflow_key:w.payload.key,execution_mode:executionMode,...(standaloneSkill?{standalone_skill:clone(standaloneSkill)}:{}),...(executionMode==='agent'?{primary_host:primaryHost??(f.execution_transport==='raw-model-v1'?'raw-model-v1':'official-child-v1')}:{}),resources:clone(resources),...(remote?{phone_execution:remote,phone_peer_ssh:template.phone_peer_ssh}:{}),company:clone(company),env:domainEnv,step_spec,snapshot:template}}};
  const profile_sha256=digest(profile);
  const definition={release_id:r.id,observation_id:d.observation_id,workflow_id:w.payload.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256,expected_path};
  const route={machine_id:resources.machine,profile_sha256};

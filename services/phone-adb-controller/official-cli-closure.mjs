@@ -2,6 +2,7 @@
 // invocation's live outer-close fact, epoch admission and absence of sticky unknown.
 // It never proves Android/ADB service termination or a recording client's close.
 import {execInput,executionOuterReturned} from './leadgen-client.mjs';
+import {isPhoneOperationAdmission} from './phone-operation-admission.mjs';
 import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
 import {readFileSync,lstatSync,realpathSync,mkdirSync,symlinkSync,existsSync,openSync,closeSync,fstatSync,constants} from 'node:fs';
 import {join,dirname} from 'node:path';
@@ -34,14 +35,15 @@ export function describeOfficialCliInvocation({root,command,args,executables,pro
  if(metadata.has(operation)){const tail=argv.slice(offset+1);if(offset!==2||(['runtime-contract','lock-status'].includes(operation)?tail.length!==0:tail.length!==1||tail[0]!==owner))throw fail('OWNER');}
  return {kind:metadata.has(operation)?'local-metadata':recording.has(operation)?'recording-outer-only':'synchronous-cli',operation,binary:executables.zsh.path,args:['-f',controller,...argv]};
 }
-export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertAdmission,scope}={}){
+export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertAdmission,scope,operationAdmission}={}){
  if(realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||!frozen||!/^([a-f0-9]{64})$/.test(frozen.snapshot_sha256||'')||frozen.agent_input?.task_id!==taskId||typeof binding?.run_id!=='string')throw fail('SCOPE');
  const f=structuredClone(frozen),base={...env},input=f.agent_input,spec=f.discovery_phone_scope||f.collection_phone_scope,executables=spec?.executables;
- if(spec?.run_id!==binding.run_id||spec?.policy?.schema_version!==2||!executables?.zsh||!executables?.node||!executables?.python)throw fail('PINNED_RUNTIME');
+ if(spec?.run_id!==binding.run_id||![1,2].includes(spec?.policy?.schema_version)||!executables?.zsh||!executables?.node||!executables?.python)throw fail('PINNED_RUNTIME');
+ if(spec.policy.schema_version===1&&!isPhoneOperationAdmission(operationAdmission,{root,env,frozen,scope,binding,taskId}))throw fail('ADMISSION');
  const fixed={taskId,runId:binding.run_id,profile:input.profile,serial:input.serial,sourceCommit:f.deployment.source_commit,owner:input.run_tag,runDir:base.WFR_RUN_DIR};
  const slots=input.workflow_key==='douyin_video_discovery'?['preflight','collect_videos','cleanup']:input.workflow_key==='douyin_video_processing'?['preflight','dedup','qualification','collection','cleanup']:[];
  if(!slots.length||['profile','serial'].some(k=>spec[k]!==fixed[k])||input.profile!==base.P||input.serial!==base.SERIAL||input.run_tag!==base.WFR_TAG)throw fail('SCOPE');
- const state={},epoch=assertAdmission||createPhoneEpochGuard({root,env:base,frozen:f,state,deadlineMs:scope?.worker_deadline_ms});if(typeof epoch!=='function')throw fail('EPOCH');
+ const state={},epoch=operationAdmission?request=>operationAdmission.assert(request):assertAdmission||createPhoneEpochGuard({root,env:base,frozen:f,state,deadlineMs:scope?.worker_deadline_ms});if(typeof epoch!=='function')throw fail('EPOCH');
  let sealed=false,unknown=false,ownedProtection;const pending=new Set();
  const protectionRoot=base.DOUYIN_PHONE_LOCK_ROOT||join(base.HOME,'.local/share/zenithjoy/phone-locks');
  const protectionIdentity=s=>{if(![s.dev,s.ino].every(Number.isSafeInteger)||s.uid!==process.getuid()||s.mode&0o022)throw fail('QUARANTINE_CAPTURE');return {dev:s.dev,ino:s.ino};};
@@ -64,7 +66,7 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
   for(const program of Object.values(executables)){const path=program.path,s=lstatSync(path);if(realpathSync(path)!==path||!s.isFile()||s.mode&0o022||sha(readFileSync(path))!==program.sha256)throw fail('PINNED_RUNTIME');}
  };
  const active=()=>{if(Date.now()>=deadline)throw fail('DEADLINE');if(sealed||unknown)throw fail('CLOSED',unknown);verify();};
- const admission=async({phase='execute',resourceOnly=false}={})=>{active();if(resourceOnly&&!assertAdmission)throw fail('LOCAL_AUTHORITY');if((await epoch({phase,resourceOnly,activity,task_id:taskId,run_id:binding.run_id}))?.authorized!==true)throw fail('EPOCH',true);active();};
+ const admission=async({phase='execute',resourceOnly=false}={})=>{active();if(resourceOnly&&!assertAdmission&&!operationAdmission)throw fail('LOCAL_AUTHORITY');if((await epoch({phase,resourceOnly,activity,task_id:taskId,run_id:binding.run_id}))?.authorized!==true)throw fail('EPOCH',true);active();};
  function receiptScope(receipt){if(!receipt||(!slots.includes(receipt.activity)||activity!==undefined&&receipt.activity!==activity)||Object.entries(fixed).some(([k,v])=>receipt[k]!==v)||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(receipt.operationId||''))throw fail('RECEIPT');return receipt;}
  function plan(command,args,options={}){
   active();const receipt=receiptScope(options.receipt);
@@ -77,7 +79,7 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
   let dispatched=false;
   const operation=(async()=>{
    await admission({phase:'before',resourceOnly:invocation.kind==='local-metadata'});
-   const clean={...base,...options.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:bin,ENV:'',BASH_ENV:'',DOUYIN_BYPASS_REPORT:'off',DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:executables.python.path,DOUYIN_LOCATE_SCRIPT:join(root,'locate-element.py'),DOUYIN_CURL_BIN:'/usr/bin/curl',DOUYIN_SIPS_BIN:'/usr/bin/sips',WFR_NATIVE_UNKNOWN_FILE:marker,DOUYIN_PHONE_LOCK_ROOT:protectionRoot,P:fixed.profile,SERIAL:fixed.serial,WFR_TAG:fixed.owner,WFR_RUN_DIR:fixed.runDir};
+   const clean={...base,...options.env,...(operationAdmission?operationAdmission.environment():{}),PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:bin,ENV:'',BASH_ENV:'',DOUYIN_BYPASS_REPORT:'off',DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:executables.python.path,DOUYIN_LOCATE_SCRIPT:join(root,'locate-element.py'),DOUYIN_CURL_BIN:'/usr/bin/curl',DOUYIN_SIPS_BIN:'/usr/bin/sips',WFR_NATIVE_UNKNOWN_FILE:marker,DOUYIN_PHONE_LOCK_ROOT:protectionRoot,P:fixed.profile,SERIAL:fixed.serial,WFR_TAG:fixed.owner,WFR_RUN_DIR:fixed.runDir};
    for(const name of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(name)||['DOUYIN_LOCK_GUARDED','DOUYIN_LOCK_GUARD_FD','DOUYIN_BYPASS_REPORT_BIN'].includes(name))delete clean[name];
    if(clean.DOUYIN_PHONE_LOCK_TEST_MODE==='1')throw fail('TEST_ENV');
    if(!Number.isFinite(options.timeoutMs??180000)||(options.timeoutMs??180000)<=0)throw fail('DEADLINE');
@@ -98,7 +100,7 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
   return Object.freeze(proof);
  }
  const snapshot=()=>Object.freeze({domain:'official-cli-synchronous/v1',sealed,pending:pending.size,unknown,execution_unknown:unknown,execution_stopped:sealed&&!unknown&&!pending.size});
- return Object.freeze({plan,execute,snapshot,quarantine,prepare:async()=>{await admission({phase:'prepare',resourceOnly:true});rememberProtection();return true;},close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);return snapshot();}});
+ return Object.freeze({plan,execute,snapshot,quarantine,prepare:async()=>{await admission({phase:'prepare',resourceOnly:true});rememberProtection();return true;},close:async()=>{sealed=true;if(pending.size)await Promise.allSettled([...pending]);if(operationAdmission&&(await operationAdmission.close()).execution_stopped!==true)unknown=true;return snapshot();}});
 }
 
 // 独立兼容复核 /root/direct_tool_audit，报告sha256 06bcb8180338968a233e7b663d0eb3039138b5ab25f4f0d17637f4f85da6d587；仅追加已核controller/locate摘要，原同步调用边界不变。

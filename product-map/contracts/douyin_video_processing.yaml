@@ -171,6 +171,50 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-execution.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-authority.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-host.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-private-env.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-protocol.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-runtime.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-transport.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-audio-transfer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-operation-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-scope-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/cloud7-quarantine-supersession.py
         revision: contract
       - kind: code
@@ -256,6 +300,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -625,6 +673,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-owner-read-connection.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/official-skill-owner.mjs
         revision: contract
       - kind: code
@@ -866,6 +918,50 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-execution.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-authority.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-host.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-private-env.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-protocol.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-runtime.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-transport.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-audio-transfer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-operation-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-scope-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/native-phone-runtime.mjs
         revision: contract
       - kind: code
@@ -947,6 +1043,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1272,6 +1372,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-owner-read-connection.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/official-skill-owner.mjs
         revision: contract
       - kind: code
@@ -1466,6 +1570,50 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-execution.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-authority.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-host.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-private-env.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-protocol.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-runtime.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-transport.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-audio-transfer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-operation-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-scope-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/native-phone-runtime.mjs
         revision: contract
       - kind: code
@@ -1547,6 +1695,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1893,6 +2045,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-owner-read-connection.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -2266,6 +2422,50 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-execution.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-authority.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-host.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-private-env.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-protocol.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-runtime.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-transport.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-audio-transfer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-operation-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-scope-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/native-phone-runtime.mjs
         revision: contract
       - kind: code
@@ -2347,6 +2547,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -2689,6 +2893,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-owner-read-connection.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/official-skill-owner.mjs
         revision: contract
       - kind: code
@@ -2995,6 +3203,50 @@ activities:
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-execution.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-authority.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-host.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-private-env.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-protocol.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-runtime.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer-transport.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-peer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-phone-audio-transfer.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-operation-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-scope-admission.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/native-phone-runtime.mjs
         revision: contract
       - kind: code
@@ -3076,6 +3328,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/native-phone-command-sources.json
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -3433,6 +3689,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/official-owner-read-connection.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

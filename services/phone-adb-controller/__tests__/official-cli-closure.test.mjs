@@ -100,3 +100,23 @@ test('只有callee自身规划拒绝具有精确调用品牌，外部plan和其�
  let stickyError;try{sticky.facade.plan(command,args,{receipt:sticky.receipt});}catch(e){stickyError=e;}
  assert.match(stickyError.message,/PREVIOUS_UNKNOWN/);assert.equal(isOfficialCliInvocationNotStarted(stickyError,stickyContext),false);assert.equal((await sticky.facade.close()).unknown,true);
 });
+
+test('合法M4 USB边界经原作用域准入后可构造，JSON克隆不能代替准入能力',async t=>{
+ const api=await import('../phone-operation-admission.mjs');
+ const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-usb-cli-')));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const taskId='11111111-1111-4111-8111-111111111111',binding={run_id:'run__a1',id:'22222222-2222-4222-8222-222222222222'};
+ const input={task_id:taskId,profile:'xiaolongxia',serial:'ANGYVB4311010223',run_tag:'run',workflow_key:'douyin_video_discovery'};
+ const files={};for(const name of readdirSync(root)){const p=join(root,name);if(lstatSync(p).isFile())files['runtime/'+name]=digest(readFileSync(p));}
+ for(const path of ['config/collection-phone-hosts.json','config/native-phone-command-sources.json','config/native-phone-reviews/xiaolongxia-sdk35-xian-m4.md'])files['runtime/'+path]=digest(readFileSync(join(root,path)));
+ const policy=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.find(h=>h.profile==='xiaolongxia').policy;
+ const frozen={snapshot_sha256:'a'.repeat(64),deployment:{source_commit:'b'.repeat(40)},files,agent_input:input,discovery_phone_scope:{run_id:binding.run_id,target:'xian-m4',profile:input.profile,serial:input.serial,expected_account:'90915521618',policy,executables,policy_binding:{usb_local:{protocol:'usb-local-lease/v1',device_sdk:35,daemon:{pid:111,uid:process.getuid(),endpoint:policy.endpoint},transport:{serial:input.serial,transport_id:'11',usb_path:'0-1'}}}}};
+ const env={HOME:directory,WFR_RUN_DIR:directory,P:input.profile,SERIAL:input.serial,WFR_TAG:'run'},scope={activity:'preflight',task_id:taskId,run_id:binding.run_id,binding_id:binding.id,snapshot_sha256:frozen.snapshot_sha256,source_commit:frozen.deployment.source_commit,profile:input.profile,serial:input.serial,run:'run',workflow:input.workflow_key,worker_deadline_ms:Date.now()+20000,receipt_deadline_ms:Date.now()+25000,deadline_ms:Date.now()+30000};
+ const context={root,env,frozen,state:{},scope,binding,taskId,assertAuthority:async()=>({authorized:true})};
+ const admission=api.createPhoneOperationAdmission(context);
+ assert.equal(admission.kind,'usb-local');
+ assert.equal(api.isPhoneOperationAdmission(admission,context),true);
+ assert.equal(api.isPhoneOperationAdmission({...admission},context),false);
+ assert.throws(()=>createOfficialCliClosure({...context,operationAdmission:{kind:'usb-local',assert:async()=>({authorized:true})}}),/OFFICIAL_CLI_ADMISSION/);
+ const facade=createOfficialCliClosure({...context,operationAdmission:admission});
+ assert.equal((await facade.close()).execution_stopped,true);
+});

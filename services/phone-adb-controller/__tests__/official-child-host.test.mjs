@@ -16,7 +16,14 @@ const legacyFixture=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/comma
 for(const delivery of ['delivered','pending'])test('public production dispatch uses one durable owner RPC and preserves completion '+delivery,()=>using(async x=>{
  x.q.worker_deadline_ms=x.q.deadline_ms-2000;x.q.receipt_deadline_ms=x.q.deadline_ms-1000;
  let dispatches=0,waits=0;const dir=join(x.home,'.openclaw/leadgen-activity-runs',x.agent.skillRunKey(x.q)),child=id(81),session='agent:skill-factory:subagent:owner-rpc-fixture';
- const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,execute:async(command,args)=>{
+ let readerOpens=0,readerCloses=0;
+ const ownerReadConnectionFactory=async()=>{readerOpens++;return {async read(method,params){
+  const parent=params.key??params.sessionKey;
+  if(method==='sessions.describe')return {body:{session:{key:parent,sessionId:'owner-fixture',hasActiveRun:false,activeRunIds:[],snapshotAt:Date.now()}}};
+  if(method==='chat.history')return {body:{sessionKey:parent,sessionId:'owner-fixture',pendingInputs:{total:0,queuedCount:0,items:[]}}};
+  return {body:{ok:true,toolName:'subagents',source:'core',output:{details:{status:'ok',action:'list',callerIsSubagent:false,callerSessionKey:parent,requesterSessionKey:parent,active:[],recent:[{runId:child,sessionKey:session,execution:{state:'finished'},pendingDescendants:0,deliveryStatus:delivery}]}}}};
+ },async close(){readerCloses++;return {protocol:'official-owner-read-connection/v1',connection_count:1,reconnect_count:0,pending_request_count:0,request_closed:true,websocket_closed:true,socket_closed:true,shutdown_seen:false,restart_seen:false};}};};
+ const rpc=x.host.createPublicOfficialChildRpc({...x.options,agentOptions:{...x.options.agentOptions,ownerReadConnectionFactory,execute:async(command,args)=>{
   if(command==='openclaw'){
    assert.deepEqual(args.slice(0,2),['gateway','call'],'public path must not use the blocking agent CLI');const params=JSON.parse(args[args.indexOf('--params')+1]);
    const intent=JSON.parse(readFileSync(join(dir,'owner-rpc-intent.json')));
@@ -37,7 +44,7 @@ for(const delivery of ['delivered','pending'])test('public production dispatch u
   assert.equal(command,'python3');assert.ok(args.includes('await'));
   writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'error',endedAt:Date.now()}));return {code:0,stdout:''};
  }}});
- const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(dispatches,1);assert.equal(waits,1);
+ const result=await rpc({kind:'activity_skill',request:x.q});assert.equal(dispatches,1);assert.equal(waits,1);assert.equal(readerOpens,1);assert.equal(readerCloses,1);
  assert.equal(result.result.owner_execution_stopped,delivery==='delivered');assert.equal(result.result.child_execution_stopped,true);assert.equal(result.result.execution_stopped,delivery==='delivered');assert.equal(result.result.status,delivery==='delivered'?'error':'unknown');
  assert.equal(existsSync(join(dir,'parent-cli-result.json')),false);assert.equal(existsSync(join(dir,'parent-owner-result.json')),true);
  const closure=JSON.parse(readFileSync(join(dir,'parent-owner-closure.json')));assert.equal(closure.session_quiescent,delivery==='delivered');assert.equal(existsSync(join(dir,'agent-returned.json')),delivery==='delivered');

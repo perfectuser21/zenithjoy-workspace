@@ -58,13 +58,20 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   throw failure('OFFICIAL_CONTROL_JOURNAL');
  }
  const snapshot=()=>{const outstanding=[...rawTurns.values()].some(r=>r.dispatched&&!r.officialTerminal);const value=Object.freeze({sealed,pending:jobs.size,execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed&&!outstanding&&!previousCallerUnknown,caller_execution_stopped:sealed&&jobs.size===0&&!tainted&&journalClosed,execution_unknown:tainted||jobs.size>0||outstanding||externalEffectUnknown||previousCallerUnknown,external_effect_unknown:externalEffectUnknown,previous_caller_stop_unproven:previousCallerUnknown,final_record_failed:finalRecordFailed});privateSnapshots.add(value);return value;};
- const record=value=>{try{
+ const appendRecord=(value,flush)=>{try{
   const current=lstatSync(ledger),opened=fstatSync(descriptor);
   if(journalClosed||!current.isFile()||current.isSymbolicLink()||current.dev!==identity.dev||current.ino!==identity.ino||opened.dev!==identity.dev||opened.ino!==identity.ino||current.nlink!==1||current.uid!==process.getuid()||(current.mode&0o777)!==0o600)throw Error();
   const bytes=Buffer.from(JSON.stringify(value)+'\n');let offset=0;
   while(offset<bytes.length){const written=writeSync(descriptor,bytes,offset,bytes.length-offset);if(written<1)throw Error();offset+=written;}
-  fsyncSync(descriptor);ledgerHash.update(bytes);ledgerBytes+=bytes.length;
+  flush();ledgerHash.update(bytes);ledgerBytes+=bytes.length;
  }catch{tainted=true;throw failure('OFFICIAL_CONTROL_JOURNAL');}};
+ const record=value=>appendRecord(value,()=>fsyncSync(descriptor));
+ function claimJournal(job,e){
+  let committed=false;
+  const current=()=>{guard(e);if(committed||!jobs.has(job))throw failure('OFFICIAL_CONTROL_JOURNAL');};
+  const check=()=>{verifyJournalDirectory();const path=lstatSync(ledger),opened=fstatSync(descriptor);if(journalClosed||!path.isFile()||path.isSymbolicLink()||path.dev!==identity.dev||path.ino!==identity.ino||opened.dev!==identity.dev||opened.ino!==identity.ino||path.nlink!==1||path.uid!==process.getuid()||(path.mode&0o777)!==0o600)throw failure('OFFICIAL_CONTROL_JOURNAL');};
+  return {record(value){current();appendRecord(value,()=>{});},commit(){try{current();check();fsyncSync(descriptor);check();current();verify();rawGate();check();current();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');committed=true;}catch(error){tainted=true;throw error;}}};
+ }
  function stopOwnedResources(...actions){for(const action of actions){try{action();}catch{tainted=true;}}}
  const guard=e=>{if(previousCallerUnknown)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(tainted)throw failure('OFFICIAL_CONTROL_UNKNOWN');if(sealed||e!==epoch)throw failure('OFFICIAL_CONTROL_CLOSED');if(Date.now()>=deadlineMs)throw failure('OFFICIAL_CONTROL_DEADLINE');};
  function verify(){
@@ -72,12 +79,13 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
   if(own?.length!==1||hash(readFileSync(join(runtimeRoot,own[0].path)))!==own[0].sha256)throw failure('OFFICIAL_CONTROL_SOURCE');
   try{verifyRpcSource(fixedSource,{base:runtimeRoot});}catch{throw failure('OFFICIAL_CONTROL_SOURCE');}
  }
- function readCentral(path,e,job){
+ function readCentral(path,e,job,journal){
+  const readRecord=journal?value=>journal.record(value):record;
   guard(e);
   if(typeof path!=='string'||path.split('/').some(part=>part==='.'||part==='..')||path.includes('%')||!/^\/api\/brain\/(?:runs\/[^/?#]+\/(?:definition|reconciliation)|tasks\/[a-f0-9-]{36}|workflows\/[^/?#]+\/versions\/[^/?#]+|activities\/[^/?#]+\/versions\/[^/?#]+)$/.test(path))throw failure('OFFICIAL_CONTROL_SCOPE');
   if(path.endsWith('/reconciliation')&&(!fixed.public_domain||path!=='/api/brain/runs/'+fixed.run_id+'/reconciliation'))throw failure('OFFICIAL_CONTROL_SCOPE');
   const token=credential();if(typeof token!=='string'||!token||/[\r\n]/.test(token))throw failure('OFFICIAL_CONTROL_CREDENTIAL');
-  guard(e);record({event:'read_intent',path,epoch:e});
+  guard(e);readRecord({event:'read_intent',path,epoch:e});
   return new Promise((resolveRead,rejectRead)=>{
    let req,res,socket,requestClosed=false,responseClosed=true,socketClosed=true,error,value,ended=false,bytes=0;
    const chunks=[];let finished=false;
@@ -86,7 +94,7 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
     finished=true;job.cancelRead=null;
     try{
      guard(e);if(error)throw error;if(!ended)throw failure('OFFICIAL_CONTROL_READ');
-     record({event:'read_returned',path,epoch:e,bytes});resolveRead(value);
+     readRecord({event:'read_returned',path,epoch:e,bytes});resolveRead(value);
     }catch(cause){
      // This is a failed read with physically closed owned resources, never a
      // synthetic read_returned. Record before final journal closure.
@@ -228,10 +236,10 @@ export function createOfficialAgentControl({source,runtimeRoot,request,home=home
  function readAuthorizedTaskClaim(q){return authorizeParent(q,true);}
  async function authorizeParent(q,projectClaim){
   rawGate();if(!sameRequest(q)||rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');
-  return ownedJob(async(job,e)=>{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{publicRunDirectory,get:async path=>{const value=await readCentral(path,e,job);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');record({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
+  return ownedJob(async(job,e)=>{const journal=projectClaim?claimJournal(job,e):null,write=journal?value=>journal.record(value):record;try{let task,observedAt;verifyRawParentSources();await verifySkillRequest(fixed,{publicRunDirectory,get:async path=>{const value=await readCentral(path,e,job,journal);if(path==='/api/brain/tasks/'+fixed.task_id){validateControlTask(value);task=value?.task??value;observedAt=Date.now();}return value;}});guard(e);verify();rawGate();if(rawRevoked||externalEffectUnknown)throw failure('OFFICIAL_CONTROL_RAW_SCOPE');write({event:'raw_parent_authority',epoch:e,parent_source_verified:true,gateway_workspace_loaded:false});if(!projectClaim)return true;
    if(task?.id!==fixed.task_id||task.status!=='in_progress'||typeof task.claimed_by!=='string'||!task.claimed_by.trim()||task.claimed_by.length>512||typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||!Number.isSafeInteger(observedAt))throw failure('OFFICIAL_CONTROL_TASK_CLAIM');
-   const claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});record({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))});return claim;
-  });
+   const claim=Object.freeze({id:task.id,status:task.status,claimed_by:task.claimed_by,claimed_at:task.claimed_at,source_commit:fixed.source_commit,request_sha256:hash(canonical(fixed)),observed_at:observedAt,authorized_at:Date.now()});write({event:'task_claim_projected',epoch:e,task_id:task.id,claim_sha256:hash(canonical(claim))});journal.commit();return claim;
+  }catch(error){if(journal)tainted=true;throw error;}});
  }
  function durableRaw(name,value,onCreated){const path=join(journalDirectory,name),fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);const b=Buffer.from(JSON.stringify(value)+'\n');let writtenIdentity;try{onCreated?.(fstatSync(fd));let n=0;while(n<b.length){const wrote=writeSync(fd,b,n,b.length-n);if(wrote<1)throw failure('OFFICIAL_CONTROL_JOURNAL');n+=wrote;}fsyncSync(fd);writtenIdentity=fstatSync(fd);}finally{closeSync(fd);}const parent=openSync(journalDirectory,constants.O_RDONLY|constants.O_DIRECTORY);try{fsyncSync(parent);}finally{closeSync(parent);}durableArtifacts.set(name,{sha256:hash(b),bytes:b.length,identity:writtenIdentity});}
  function verifyJournalDirectory(){const current=lstatSync(journalDirectory);if(!current.isDirectory()||current.isSymbolicLink()||current.uid!==process.getuid()||(current.mode&0o077)||current.dev!==stat.dev||current.ino!==stat.ino||realpathSync(journalDirectory)!==resolve(journalDirectory))throw failure('OFFICIAL_CONTROL_JOURNAL');}

@@ -29,9 +29,9 @@ async function fixture(t,{leaseExpiresAt,failedCli=false,revokeAfterCli=false,re
  writeFileSync(join(runtime,'douyin-phone-adb'),'#!/bin/zsh\nexec "$DOUYIN_PYTHON_BIN" "${0:A:h}/fixture-capture-cli.py" "$@"\n',{mode:0o700});
  if(failedCli)writeFileSync(join(runtime,'douyin-phone-adb'),'#!/bin/zsh\nprintf started > "$FIXTURE_EVIDENCE/failed-cli-started"\nexit 2\n',{mode:0o700});
  const closure=join(runtime,'official-cli-closure.mjs');writeFileSync(closure,readFileSync(closure,'utf8').replace(/ "douyin-phone-adb":.*\n/,' "douyin-phone-adb": "'+hash(readFileSync(join(runtime,'douyin-phone-adb')))+'",\n'));
- const primitive=join(runtime,'official-child-primitives.mjs'),primitiveSource=readFileSync(primitive,'utf8'),epochAdmission='const proof=await createPhoneEpochGuard({root,env,frozen,state,deadlineMs:current.scope.worker_deadline_ms})();';
- assert.equal(primitiveSource.split(epochAdmission).length-1,1,'capture fixture epoch admission target must occur once');
- writeFileSync(primitive,primitiveSource.replace(epochAdmission,'const proof=await Promise.resolve({authorized:true});'));
+ const admission=join(runtime,'phone-operation-admission.mjs'),admissionSource=readFileSync(admission,'utf8'),epochAdmission='createPhoneEpochGuard({root,env,frozen,state,deadlineMs:scope.worker_deadline_ms})';
+ assert.equal(admissionSource.split(epochAdmission).length-1,1,'capture fixture epoch admission target must occur once');
+ writeFileSync(admission,admissionSource.replace(epochAdmission,'(async()=>({authorized:true}))'));
  const python=realpathSync(spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).stdout.trim()),program=path=>({path:realpathSync(path),sha256:hash(readFileSync(realpathSync(path)))});
  const workflow_id=id(),workflow_version=id(),ref=id(),av=id(),activity=id(),task_id=id(),run_id=id(),binding_id=id(),source='a'.repeat(40),tag='fixture102';
  const env={...process.env,LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_processing',WF_BRAIN_TASK_ID:task_id,WFR_RUN_ID:run_id,WFR_RUN_DIR:dir,WF_HOME:runtime,WFR_TAG:tag,P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',LEADGEN_LINE:'yuesheng',LEADGEN_SOURCE_RUN:'fixture101',LEADGEN_LIMIT:'1',LEADGEN_COMMENT_LIMIT:'5',QUEUED_VIDEO_COLLECTION_SECONDS:'60',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'90',FIXTURE_EVIDENCE:evidence,FIXTURE_FFMPEG:ffmpeg};
@@ -202,4 +202,18 @@ for(const mode of ['success','cleanup-success','cleanup-settle-reject','cleanup-
  else if(identityUnknown){assert.equal(error,undefined);assert.equal(outcome.execution_stopped,false);}
  else{assert.match(error.message,/AGENT_PRIMARY_NATIVE_SCOPE_UNVERIFIED/);assert.equal(error.executionStopped,false);}
  assert.equal(p.snapshot().active,!physicalKnown);assert.equal((await p.close()).execution_stopped,physicalKnown);
+});
+
+test('代码专属getter只交出当前同scope准入实例，关闭后及克隆能力均拒绝',async t=>{
+ const f=await fixture(t,{activityKey:'preflight'}),{createOfficialChildPrimitives}=await f.load('official-child-primitives.mjs'),{isPhoneOperationAdmission}=await f.load('phone-operation-admission.mjs');
+ const context={root:f.runtime,env:f.env,frozen:f.frozen,binding:f.binding,taskId:f.binding.task_id,state:f.state},p=createOfficialChildPrimitives(context);
+ const scope={activity:'preflight',workflow:f.frozen.agent_input.workflow_key,run:f.env.WFR_TAG,source_commit:f.frozen.deployment.source_commit,profile:f.env.P,serial:f.env.SERIAL,task_id:f.binding.task_id,run_id:f.binding.run_id,binding_id:f.binding.id,snapshot_sha256:f.frozen.snapshot_sha256,deadline_ms:Date.now()+60000,worker_deadline_ms:Date.now()+50000,receipt_deadline_ms:Date.now()+55000};
+ assert.equal(typeof p.operationAdmission,'function');assert.throws(()=>p.operationAdmission(scope),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+ await p.begin(scope);
+ try{
+  const admission=p.operationAdmission(scope);assert.equal(p.operationAdmission(structuredClone(scope)),admission);assert.equal(isPhoneOperationAdmission(admission,{...context,scope}),true);assert.equal(isPhoneOperationAdmission({...admission},{...context,scope}),false);
+  assert.throws(()=>p.operationAdmission({...scope,activity:'collection'}),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);assert.throws(()=>p.operationAdmission({...scope,worker_deadline_ms:scope.worker_deadline_ms+1}),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);assert.throws(()=>p.operationAdmission(),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+  assert.equal((await p.finish('preflight')).execution_stopped,true);assert.throws(()=>p.operationAdmission(scope),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
+ }finally{await p.close();}
+ assert.throws(()=>p.operationAdmission(scope),/OFFICIAL_CHILD_PRIMITIVE_UNCONFIRMED/);
 });

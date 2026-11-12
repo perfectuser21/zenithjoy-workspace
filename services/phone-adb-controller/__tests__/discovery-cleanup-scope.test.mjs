@@ -327,3 +327,13 @@ test('v2首屏4仅尝试2条重复VID，真实scope归还后正常cleanup且不�
   assert.equal(f.h.state.executionUnknown,undefined);assert.equal(f.h.state.nativeStopUnproven,true,'OS观察unknown保持，不冒完整OS停证');
  }finally{rmSync(f.d,{recursive:true,force:true});}
 });
+
+test('新增official USB准入不废除既有schema1 Code的原source/Task/锁/真实leaf与cleanup闭环',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{stop:false});
+ try{
+  assert.equal(f.frozen.discovery_phone_scope.policy.schema_version,1);assert.notEqual(f.frozen.primary_host,'official-child-v1');
+  const result=await f.h.collect_videos();assert.equal(f.stored.length,1);assert.equal(f.stored[0].videoId,discoveredId);assert.ok(result.cleanup_phone_scope);assert.ok(f.scopeLedgers().every(log=>log.includes('darwin-sandbox-deny-process-fork-v1')));
+  f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;
+  const cleanup=await f.h.cleanup();assert.equal(cleanup.lock_released,1);assert.equal(cleanup.cleanup_readback_verified,1);assert.equal(existsSync(f.ownerFile),false);
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});

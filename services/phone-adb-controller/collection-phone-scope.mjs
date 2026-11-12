@@ -1,4 +1,4 @@
-import {createPhoneEpochGuard} from './phone-epoch-admission.mjs';
+import {phoneScopeAdmission} from './phone-scope-admission.mjs';
 import {canonicalRunId} from './public-domain-authority.mjs';
 // 本能力只表示固定collection闭包的同步手机请求已归还，绝不表示OS全后代已停。
 import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,fstatSync,realpathSync,readlinkSync,symlinkSync,openSync,closeSync,constants,existsSync} from 'node:fs';
@@ -89,7 +89,7 @@ function returnedEvidence(evidence,context,key){
   ||!['run_id','task_id','source_commit','activity'].every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!returnedFresh(r))return null;
  return proof;
 }
-export async function startCollectionReturnedScope({evidence,context,purpose}){
+export async function startCollectionReturnedScope({evidence,context,purpose,operationAdmission}){
  const proof=purpose==='cleanup'?collectionCleanupEvidence(evidence,context):collectionReturnedEvidence(evidence,context),r=proof&&returnedRecords.get(proof);
  const keys=identityKeys.filter(k=>k!=='deadline_ms');
  if(!r||!keys.every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!['readback','cleanup'].includes(purpose)
@@ -102,7 +102,7 @@ export async function startCollectionReturnedScope({evidence,context,purpose}){
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});
  for(const [name,key]of [['python3','python'],['node','node'],['zsh','zsh']])symlinkSync(pinnedTool(r.specification.executables[key]),join(bin,name));
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(r.specification.policy),{flag:'wx',mode:0o600});
- let producer;try{producer=await startCollectionLeafProducer({directory,policy:r.specification.policy,serial:r.identity.serial,deadlineMs:deadline,env:r.env,assertAdmission:createPhoneEpochGuard({root:join(r.runDir,'runtime'),env:r.env,frozen:readFrozen(r.runDir),state:r.state,deadlineMs:deadline})});}catch(error){r.phase='closed';r.state.executionUnknown=true;error.executionStopped=false;throw error;}
+ let producer;try{producer=await startCollectionLeafProducer({directory,policy:r.specification.policy,serial:r.identity.serial,deadlineMs:deadline,env:r.env,assertAdmission:phoneScopeAdmission({root:join(r.runDir,'runtime'),env:operationAdmission?.context?.env??r.env,frozen:readFrozen(r.runDir),state:r.state,deadlineMs:deadline,operationAdmission})});}catch(error){r.phase='closed';r.state.executionUnknown=true;error.executionStopped=false;throw error;}
  let closing;
  return {purpose,zsh:pinnedTool(r.specification.executables.zsh),env:{...r.scopedEnv,...producer.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:directory,WFR_COLLECTION_POLICY_FILE:r.specification.policy.schema_version===2?r.specification.policy_binding.policy_path:policyFile,WFR_COLLECTION_ACCEPTANCE_INPUT:''},
   assertEvidence:()=>{if(!returnedFresh(r,{active:true}))throw Error('COLLECTION_RETURNED_SCOPE_CHANGED');},
@@ -165,7 +165,7 @@ function pinnedTool(tool){
  if(!stat.isFile()||(stat.mode&0o022)||sha(readFileSync(path))!==tool.sha256)throw Error('COLLECTION_INTERPRETER_PIN_MISMATCH');
  return path;
 }
-export async function startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds,verifyPhoneAssociation}){
+export async function startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds,verifyPhoneAssociation,operationAdmission}){
  let frozen;try{frozen=readFrozen(env.WFR_RUN_DIR);}catch(error){if(error.code==='ENOENT')return null;throw error;}
  if(!frozen.collection_phone_scope)return null;
  const specification=structuredClone(frozen.collection_phone_scope),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);
@@ -194,7 +194,7 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
  if(policy?.host_id!==identity.target||!['xian-m4','mmv'].includes(policy.host_id))throw Error('COLLECTION_PHONE_HOST_INVALID');
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(policy),{flag:'wx',mode:0o600});
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});for(const [name,path] of [['python3',python],['node',node],['zsh',zsh]])symlinkSync(path,join(bin,name));
- const producer=await startCollectionLeafProducer({directory,policy,serial:identity.serial,deadlineMs:identity.deadline_ms,env,assertAdmission:createPhoneEpochGuard({root,env,frozen,state,deadlineMs:identity.deadline_ms})});
+ const producer=await startCollectionLeafProducer({directory,policy,serial:identity.serial,deadlineMs:identity.deadline_ms,env,assertAdmission:phoneScopeAdmission({root,env,frozen,state,deadlineMs:identity.deadline_ms,operationAdmission})});
  let acceptanceEnv;try{acceptanceEnv=prepareCollectionAcceptanceProbe({frozen,binding,env,qualifiedVideoIds,directory,producer});}catch(error){await producer.close();throw error;}
  const scopedEnv={...producer.env,WFR_COLLECTION_ACCEPTANCE_INPUT:'',...acceptanceEnv,...(fixedEvidence?{DOUYIN_PHONE_TMP_ROOT:specification.evidence_alias.target}:{}),WFR_COLLECTION_POLICY_FILE:policy.schema_version===2?specification.policy_binding.policy_path:policyFile,DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
  return {env:scopedEnv,zsh,assertEvidence:()=>{if(!evidenceStillQuiet(evidence,specification))throw Error('COLLECTION_EVIDENCE_IDENTITY_OR_RECORDING_CHANGED');},panelFailure:(result,videoId,startedAt)=>verifiedCollectionPanelFailure(result,{evidenceRoot:evidence,videoId,owner:identity.owner,attempt:identity.attempt,startedAt})&&verifyCollectionAcceptanceConsumption({frozen,binding,env}),
