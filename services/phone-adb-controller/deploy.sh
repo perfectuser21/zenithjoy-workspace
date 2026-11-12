@@ -197,7 +197,6 @@ DEVICE_RPC_PROBE_FILES=(
   skills/douyin-leadgen-103/SKILL.md
   skills/douyin-leadgen-103/references/runtime-calls.json
   skills/douyin-leadgen-104/SKILL.md
-  skills/douyin-leadgen-104/references/reuse-map.json
   skills/douyin-leadgen-104/references/runtime-calls.json
 )
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。

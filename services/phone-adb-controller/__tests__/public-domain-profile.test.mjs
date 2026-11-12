@@ -98,7 +98,7 @@ for(const [flow,total,work]of [['douyin_video_discovery',2820,2700],['douyin_vid
  const load=key=>parseYaml(readFileSync(new URL('../../../product-map/contracts/'+key+'.yaml',import.meta.url),'utf8'));
  const owner=load('douyin_video_processing'),declaration=load(flow),preflight=owner.activities.find(a=>a.key==='preflight'),cleanup=owner.activities.find(a=>a.key==='cleanup');
  assert.equal(preflight.version,'2.3.0');assert.equal(preflight.budget.max_duration_s,600);assert.equal(cleanup.version,'2.3.0');assert.equal(cleanup.budget.max_duration_s,300);
- assert.deepEqual(declaration.recovery,{total_timeout_sec:total,cleanup_timeout_sec:120});assert.equal(declaration.commander_skill.version,'0.10.0');
+ assert.deepEqual(declaration.recovery,{total_timeout_sec:total,cleanup_timeout_sec:120});assert.equal(declaration.commander_skill.version,'0.11.0');
  const x=originalShape(await fixture(),flow);
  try{
   for(const a of x.frozen.activities){const actual=declaration.activities.find(c=>c.key===a.reference.slot_key)||owner.activities.find(c=>c.key===a.reference.slot_key);a.version.payload.contract.budget=structuredClone(actual.budget);a.version.payload.contract.version=actual.version;sign(a.version);}

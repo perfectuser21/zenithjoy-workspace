@@ -163,7 +163,8 @@ test('固定Workflow索引验收逐Activity正文及支持文件，不把目录�
  const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));
  for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103,douyin_lead_outreach:104})){
   const d=skillAcceptanceDefinition(key,read);assert.equal(d.workflow_key,key);assert.ok(d.checks.length>0);
-  if(n!==104){assert.equal(d.skill.activities.length,n===101?3:n===102?5:2);assert.ok(d.skill.activities.every(a=>a.sha256.length===64));assert.ok(d.checks.some(c=>c.section.endsWith('/成功条件')));}
+  assert.equal(d.skill.activities.length,n===101?3:n===102?5:n===103?2:4);assert.ok(d.skill.activities.every(a=>a.sha256.length===64));assert.ok(d.checks.some(c=>c.section.endsWith('/成功条件')));
+  if(n!==104)assert.ok(d.checks.some(c=>c.section==='Workflow/工作流之间的异步交接'&&c.text.includes('collect_partial')),'异步放行边界必须进入验收，不能静默遗漏');
  }
 });
 test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，真实方法变更改变验收摘要',async()=>{

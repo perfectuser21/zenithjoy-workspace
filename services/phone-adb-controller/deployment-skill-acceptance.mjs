@@ -21,7 +21,7 @@ function indexedAcceptance(key,path,bytes,text,readFile){
   const blocks=content.trim().split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
   for(const block of blocks)checks.push({id:digest(section+'\n'+block),section,text:block});
  };
- for(const [,name,body]of parseSections(text,['活动组织','输入与交接','实现与状态','历史宿主兼容声明']))add('Workflow/'+name,body);
+ for(const [,name,body]of parseSections(text,['活动组织','输入与交接',...(/^## 工作流之间的异步交接$/m.test(text)?['工作流之间的异步交接']:[]),'实现与状态','历史宿主兼容声明']))add('Workflow/'+name,body);
  const base=path.slice(0,path.lastIndexOf('/')),manifestPath=base+'/references/activity-methods.json',manifestBytes=readFile(manifestPath);
  let manifest;try{manifest=JSON.parse(Buffer.from(manifestBytes).toString('utf8'));}catch{need(false,'Activity清单无效');}
  need(manifest.workflow_key===key&&Array.isArray(manifest.activities)&&manifest.activities.length>0,'Activity清单身份无效');

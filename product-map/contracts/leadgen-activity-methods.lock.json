@@ -1358,14 +1358,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "f4f4093400dd407fe44877c99ed4f20a35bd9b08309e7653e1617889c343637d"
+          "sha256": "014c9e4395396930e954eaabd329c7b18ca0e3d508b3a9d396475e3cf4953766"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "6d379d10a670dc606d4708b874cdb1f88822894820ebb5bcffc2830940d5ccb9"
+          "sha256": "f1fcd5d5e3079feda0311adea4613edc1fc9aad119f505355bd7d712bc649acd"
         },
         {
           "kind": "code",
@@ -1799,7 +1799,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6019413158650fe4bf4408940084c454353167667d319f11aa78691be70d69ff"
+      "code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "逐文件比对该Activity前后代码闭包，仅101/102生成steps.json的contract_sha256随Workflow兼容说明版本更新；两份步骤JSON去掉该摘要后完全相同。Activity合同、方法正文与版本、步骤/探针/预算/权限及业务JS和Python均未变，不增加发送或恢复权。",
+        "reviewed_by": "/root/leadgen_async_contract_audit",
+        "previous_code_digest": "6019413158650fe4bf4408940084c454353167667d319f11aa78691be70d69ff",
+        "current_code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1"
+      }
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.2.1",
@@ -4967,14 +4974,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "f4f4093400dd407fe44877c99ed4f20a35bd9b08309e7653e1617889c343637d"
+          "sha256": "014c9e4395396930e954eaabd329c7b18ca0e3d508b3a9d396475e3cf4953766"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "6d379d10a670dc606d4708b874cdb1f88822894820ebb5bcffc2830940d5ccb9"
+          "sha256": "f1fcd5d5e3079feda0311adea4613edc1fc9aad119f505355bd7d712bc649acd"
         },
         {
           "kind": "code",
@@ -5393,7 +5400,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6dc901a26e11faa2bad1fad68466631116ed4b49d08b90852756a3e6582dae5e"
+      "code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "逐文件比对该Activity前后代码闭包，仅101/102生成steps.json的contract_sha256随Workflow兼容说明版本更新；两份步骤JSON去掉该摘要后完全相同。Activity合同、方法正文与版本、步骤/探针/预算/权限及业务JS和Python均未变，不增加发送或恢复权。",
+        "reviewed_by": "/root/leadgen_async_contract_audit",
+        "previous_code_digest": "6dc901a26e11faa2bad1fad68466631116ed4b49d08b90852756a3e6582dae5e",
+        "current_code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031"
+      }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.8.0",
@@ -6280,19 +6294,19 @@
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.9.0",
       "contract_digest": "3c80fa9e96c4eef66b56fa31cc188247d9b1fb52f004718fb041af34ccaafcf3",
-      "method_version": "0.16.0",
+      "method_version": "0.17.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-mark-leads",
-        "version": "0.16.0",
+        "version": "0.17.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
-        "sha256": "f4d30a15b210b11f1466023d55dd4b44baa5eb42edc132b38677edc6a342fe79",
+        "sha256": "9cbf8294aee9f3caa91f8aa3faabcc879ac01fa54dc1f1af875ab4c68594a3a2",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/references/maintenance-scopes.md",
             "sha256": "9f5f947d0ed82da0f333cf9cdead99640fe82d12a2d96eff814fbe94c2991d4a"
           }
         ],
-        "content_digest": "79797092472466ee1667c6c74b0cb9266517aef068fb6bb6ec233a1891571b5b"
+        "content_digest": "b48fe2308969177fd25ee7f21d132d81f4758c9462cd8c3bbf7b3b756624e90b"
       },
       "code_bindings": [
         {
@@ -7204,19 +7218,14 @@
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.1",
       "contract_digest": "ebab89717762a00619aae9ce25e2d8a8b33f0cf603cc8b3bab737781f64b5a28",
-      "method_version": "1.0.1",
+      "method_version": "1.1.0",
       "skill": {
         "name": "douyin-leadgen-activity-104-preflight",
-        "version": "1.0.1",
+        "version": "1.1.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md",
-        "sha256": "f1052842fbff2abb6a3c88b2875a301e4aefb565c65bb3b81846bf41219cc9f8",
-        "support_files": [
-          {
-            "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
-            "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
-          }
-        ],
-        "content_digest": "620bfd956dc60d85809e9a46b9c82b7110efeaa53de18abc686876d819b903a3"
+        "sha256": "a54624304c1e61109f60c3bf5991f627b4ee3b22bab1c2c148dfe58e69302649",
+        "support_files": [],
+        "content_digest": "2353e1efac53928174cbd46814438611304c6f13e472bb666553dba89889e135"
       },
       "code_bindings": [
         {
@@ -8057,31 +8066,19 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "核对差异仅适配已存单次评分的离线核验及103桥接资格投影；104原生UID、公司政策、发送账号、显式授权和单条预算校验未变，不新增发送权限。 本次RPC_FILES仅补102资格及103评分标记已有支持文档，与deploy.sh一致；不增加104可调用操作、账号、收件人或发送预算。",
-        "reviewed_by": "/root/single_score_failure_review",
-        "previous_code_digest": "f02241c4b07398e82519acae2a0d5c80cba059e909483ebdd936f6ac69a4d2e5",
-        "current_code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb"
-      }
+      "code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb"
     },
     "douyin_lead_outreach.send_dm": {
       "activity_version": "6.0.2",
       "contract_digest": "b4d0f8115e7c0e12816626ca05c5e5c029cc2664cb2a77c9dba6161446a37745",
-      "method_version": "1.2.2",
+      "method_version": "1.3.0",
       "skill": {
         "name": "douyin-leadgen-activity-104-send-dm",
-        "version": "1.2.2",
+        "version": "1.3.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md",
-        "sha256": "7619081ed727bdc7f55bb462882437a37c8f4297d74a142f447729d523ed194c",
-        "support_files": [
-          {
-            "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
-            "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
-          }
-        ],
-        "content_digest": "339cf0d0f9deee16ae7d281e768bc599c36e8d602ed4d752c552554e08e19f64"
+        "sha256": "09283328a490eacff1ace56113a53dd8722c7674056e097ebc07acefbe7e8499",
+        "support_files": [],
+        "content_digest": "383e4519af7a13ffcdd49dd3d6d9d601e3f792ceca89b2cf11c8125da2f66f88"
       },
       "code_bindings": [
         {
@@ -8897,31 +8894,19 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享评分运行时改动仅作用103；104发送实现及合同未改，仍校验显式发送授权、单条范围、原账号与目标UID、批准话术、日额度和永久预留，不增加发送次数。 本次RPC_FILES仅补102资格及103评分标记已有支持文档，与deploy.sh一致；不增加104可调用操作、账号、收件人或发送预算。",
-        "reviewed_by": "/root/single_score_failure_review",
-        "previous_code_digest": "71aac274acdb101bec2224ec42466c7c0227f4dba9e73eb85b6e0dfcafd18dad",
-        "current_code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2"
-      }
+      "code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2"
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "4.0.1",
       "contract_digest": "f07441d6ebe1c4b6a9765776d39c464d793e3f0f2e8029512ec49e4dccd07f87",
-      "method_version": "1.0.1",
+      "method_version": "1.1.0",
       "skill": {
         "name": "douyin-leadgen-activity-104-write-back",
-        "version": "1.0.1",
+        "version": "1.1.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md",
-        "sha256": "ef8ab5575fd4851f216c6b107b6b75c8e94ae3900593dc72a3d8a9090f58acd1",
-        "support_files": [
-          {
-            "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
-            "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
-          }
-        ],
-        "content_digest": "05b56c8a4725aad847fa317ae059091a7460554567bad1741e9eaf7f772dcbac"
+        "sha256": "05873299afb2d85b75d1231db9eefc89375a4752823f3328d1d473425cbb52e8",
+        "support_files": [],
+        "content_digest": "a4f4eb04e97a234cf137bec569e850864d5c80c538c63d037666019f7c87d39a"
       },
       "code_bindings": [
         {
@@ -9730,31 +9715,19 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享政策核验兼容单次已存评分且不再调用模型；104写回实现及原订单、发送身份、证据和未知结果保护未变，不改变收件人或授权范围。 本次RPC_FILES仅补102资格及103评分标记已有支持文档，与deploy.sh一致；不增加104可调用操作、账号、收件人或发送预算。",
-        "reviewed_by": "/root/single_score_failure_review",
-        "previous_code_digest": "dae2055b1d003802a2db71a9c7e3dfd4d0da5846669c9fdfcbde9d6280e5e30c",
-        "current_code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475"
-      }
+      "code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475"
     },
     "douyin_lead_outreach.cleanup": {
       "activity_version": "3.2.1",
       "contract_digest": "e9bb6ff9ddca0dbd6cf44a1b6d31d8c22a7007956db655d8a1fd6404d45b4330",
-      "method_version": "0.3.1",
+      "method_version": "0.4.0",
       "skill": {
         "name": "douyin-leadgen-activity-104-cleanup",
-        "version": "0.3.1",
+        "version": "0.4.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md",
-        "sha256": "8b410d51bfce77396d751e1cf7cdb34a3d0bb8cf8721f477b35f4658b082f8f4",
-        "support_files": [
-          {
-            "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
-            "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
-          }
-        ],
-        "content_digest": "15f12a8b140b11868626a5f76b98ab78b5809beca9546ec5be2bf5e386b27e79"
+        "sha256": "23156ee226582ba12c037242e6a35f9d399060fe28f7cc3bde50639a781808ef",
+        "support_files": [],
+        "content_digest": "9210b2301f5fb3b0ee0285549fe32044a38779761af7bd74dbf3b759632d91d8"
       },
       "code_bindings": [
         {
@@ -10573,38 +10546,31 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "变化来自共享103评分及离线核验闭包；104清理实现、资源回收和未决发送保护合同保持原样，不授予发送、不切换账号、不扩大目标或次数。 本次RPC_FILES仅补102资格及103评分标记已有支持文档，与deploy.sh一致；不增加104可调用操作、账号、收件人或发送预算。",
-        "reviewed_by": "/root/single_score_failure_review",
-        "previous_code_digest": "04b5bbaf14ebbd60617d360f90f89abebb119a8daf6195f1fa79640df70ed6fb",
-        "current_code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6"
-      }
+      "code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6"
     }
   },
   "workflows": {
     "douyin_video_discovery": {
       "workflow_skill": {
         "name": "douyin-leadgen-101",
-        "version": "0.10.0",
+        "version": "0.11.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/SKILL.md",
-        "sha256": "483a3924f5270fc9c83df3c40567479f2ea8c171041368cd2884e101a90b70ae",
+        "sha256": "f83592cf62bb10096a80332bc2841be91a0693bf5bd73757f46716ed623334c9",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
             "sha256": "c1e33292d1b4d083396d6cad3b692d7297b5eeb4ded719c87613cc829ecbb14e"
           }
         ],
-        "content_digest": "d2ecd17a4ce0ee0a59b8bd5745f60d8c05cc898a735bdd8f1974bac11e0639c1"
+        "content_digest": "c0eaa05967ea27086430d90a2749e21ec75d4fdebf00df49a31c3f949ece40dc"
       },
       "commander_skill": {
         "name": "wf-douyin_video_discovery",
-        "version": "0.10.0",
+        "version": "0.11.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_discovery/SKILL.md",
-        "sha256": "cfde984aa92d7d43581d14f0f457ce139665c9b26a5a123dc3e8bb38ba507ac0",
+        "sha256": "f7b3aa247e7f0ba3744c68b3a6786b09f187af4054f6a5be76374f6735792c64",
         "support_files": [],
-        "content_digest": "971c2f256c3eaad3fb991f80f99e88ecd11ffa7b905c44bb0f3a45bc494eb597"
+        "content_digest": "f1a2c9f8029e46b675521100096f2f91e96a9fa12effae6c6d9d0cf27790e3e0"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
@@ -10634,24 +10600,24 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.10.0",
+        "version": "0.11.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "d3971c54b17c017fb4745c106d900a7a72fb7f2585f489f683e78b56895d6729",
+        "sha256": "9ccfa51081b3ddb8172e081947fbae16656334b5655033b0fd8c31e2c91ab756",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
             "sha256": "9b2ed6aa0e6255817a6a0e7a27c30e75c0a09d3e4e6565245d058fab16672b59"
           }
         ],
-        "content_digest": "a6d6a23e2378c1066270c168c7844f16ed5a06c7cda7190ecf220f5dae8c622a"
+        "content_digest": "1bfce9e664d545479681405f1f0a6fea7bde11733425c60fcc2481f57dcdb54c"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.10.0",
+        "version": "0.11.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "c6865af0a6d481afdadb18f936cb65d23f5645b4ec390d51613243a66dcc03af",
+        "sha256": "5df65d4cb8b998fdb7757ee171946e5424ff6d3eaae1610982d18d2d8e9b8007",
         "support_files": [],
-        "content_digest": "15b47655fe389cc714aca876f3c72a7415abf343a117c7853db246cee7d38aeb"
+        "content_digest": "34b45e80bb0549f01350ea893aac82c51f8c2dd170b6cac6a6d336c4c9cf9ba3"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
@@ -10693,28 +10659,28 @@
     "douyin_comment_scoring": {
       "workflow_skill": {
         "name": "douyin-leadgen-103",
-        "version": "0.18.1",
+        "version": "0.19.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "4c40428cd053f63c13cd4741f5eb86c85aed0e5ab66f7e975ab8fc51c50d4616",
+        "sha256": "bae55bcda27b2a0abcc6c8284d75248e3a6540d8c3270f0204b4db756312b260",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-            "sha256": "deeba4102e221b7e9fed1b821d99cc007efee9e3b83df57fd0347cde7563995c"
+            "sha256": "76e376a476a5ca1fc38f163f685e2cb66ebff86352ea3a810edf91c7eb559ef3"
           }
         ],
-        "content_digest": "246f54be759bf722ab4e5fd2aa5038cc8a3d3e30881f3efba1f70264b20282b2"
+        "content_digest": "1b1cf60c0426c9718b12cc285161f94b1d2a7f50ed808f07cd4edcaf54a4b918"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
-        "version": "0.16.1",
+        "version": "0.17.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_comment_scoring/SKILL.md",
-        "sha256": "2bd497069f1e0dc1c394ccb94867406bceaf0c4356ad64a1c8ed9347c0c82c20",
+        "sha256": "d64218c708495f0e46822aa467881cc2d45264b0eb49dfc5f3b364713211db5c",
         "support_files": [],
-        "content_digest": "d2227a5a674f095291447410d07f51f6ae2f7ec38f31450b3a8b62ee8c332182"
+        "content_digest": "6a9c45ca39f80e739a9a91ff4759438fe961a3c1e133b1fc8125df31b1ecdd65"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-        "sha256": "deeba4102e221b7e9fed1b821d99cc007efee9e3b83df57fd0347cde7563995c"
+        "sha256": "76e376a476a5ca1fc38f163f685e2cb66ebff86352ea3a810edf91c7eb559ef3"
       },
       "activities": [
         {
@@ -10726,7 +10692,7 @@
         {
           "activity_ref": "douyin_comment_scoring.mark_leads",
           "skill_name": "douyin-leadgen-activity-103-mark-leads",
-          "skill_version": "0.16.0",
+          "skill_version": "0.17.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md"
         }
       ]
@@ -10734,60 +10700,52 @@
     "douyin_lead_outreach": {
       "workflow_skill": {
         "name": "douyin-leadgen-104",
-        "version": "0.7.2",
+        "version": "0.8.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-104/SKILL.md",
-        "sha256": "94b5ef09c254d9687bf0d1e796d0a46077061fc72f2deb9e38cb850f3d1f82d8",
+        "sha256": "fc6732a8f3dd946cacb42ded75f59d00153b6120082c6ec7b604726300549a19",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/activity-methods.json",
-            "sha256": "4d5dd7e0677f8b6e3aae1ec9c3b676572d08509dafaddd3acc040c5cfc5768f4"
-          },
-          {
-            "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/reuse-map.json",
-            "sha256": "4ebf41369bef27f5c0fab1584ae654ad87c81ba7bf1e5065708dcd484d739f48"
-          },
-          {
-            "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/runtime-calls.json",
-            "sha256": "81caa39c221a7421c69f7ada2f07526ffeb8286f71aeae539292dd0b6f8ddde2"
+            "sha256": "56ab41a53e928488d09aaafaa8a91889f980d5e0233f71dd9cb8322833b83796"
           }
         ],
-        "content_digest": "ab7a48b29478b5e75ea410581f9aa9e2ef140b5cfcca7b60a6d7e60c3646a253"
+        "content_digest": "c611122da91f1570b38e400b131e2946d60d5677a86e6bebe0a947d8eaaa4c3f"
       },
       "commander_skill": {
         "name": "wf-douyin_lead_outreach",
-        "version": "0.7.2",
+        "version": "0.8.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_lead_outreach/SKILL.md",
-        "sha256": "ef258f3be10d7a2b398e8b5542e38a7152a11efc1e6c1639697eb053e43b4d43",
+        "sha256": "f9434b8e35d29d81969e6efff60e7b1f68757ace9c264e03f04e84298be14a74",
         "support_files": [],
-        "content_digest": "9f27d7812a1e3a400656471415ee85547aa874b61107acac14afe5c4f5bfc7fc"
+        "content_digest": "c79dd6348820b367fbce8030556c41268ec8c4d7b88b9fb2c85430a04cd0a389"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/activity-methods.json",
-        "sha256": "4d5dd7e0677f8b6e3aae1ec9c3b676572d08509dafaddd3acc040c5cfc5768f4"
+        "sha256": "56ab41a53e928488d09aaafaa8a91889f980d5e0233f71dd9cb8322833b83796"
       },
       "activities": [
         {
           "activity_ref": "douyin_lead_outreach.preflight",
           "skill_name": "douyin-leadgen-activity-104-preflight",
-          "skill_version": "1.0.1",
+          "skill_version": "1.1.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md"
         },
         {
           "activity_ref": "douyin_lead_outreach.send_dm",
           "skill_name": "douyin-leadgen-activity-104-send-dm",
-          "skill_version": "1.2.2",
+          "skill_version": "1.3.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md"
         },
         {
           "activity_ref": "douyin_lead_outreach.write_back",
           "skill_name": "douyin-leadgen-activity-104-write-back",
-          "skill_version": "1.0.1",
+          "skill_version": "1.1.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md"
         },
         {
           "activity_ref": "douyin_lead_outreach.cleanup",
           "skill_name": "douyin-leadgen-activity-104-cleanup",
-          "skill_version": "0.3.1",
+          "skill_version": "0.4.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md"
         }
       ]

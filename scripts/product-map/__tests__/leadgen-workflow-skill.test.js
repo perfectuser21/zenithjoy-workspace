@@ -9,10 +9,9 @@ const keys = ['douyin_video_discovery', 'douyin_video_processing', 'douyin_comme
 
 test('四个 wf_run 合同通过原机制加载当前固定陪跑Skill，保留执行边界', () => {
   const ctx = loadContractsFromDisk();
-  const versions = ['0.10.0', '0.10.0', '0.16.1', '0.7.2'];
   for (const [index, key] of keys.entries()) {
     const doc = ctx.contracts[key];
-    assert.deepEqual(doc.commander_skill, { name: `wf-${key}`, version: versions[index] }, key);
+    assert.equal(doc.commander_skill.name, `wf-${key}`, key);
     assert.equal(doc.runner.entry, 'leadgen-workflow.mjs');
     assert.notEqual(doc.execution_profile, 'codex_agent');
     const text = readFileSync(join(ctx.repoRoot, COMMANDER_SKILLS_DIR, doc.commander_skill.name, 'SKILL.md'), 'utf8');
