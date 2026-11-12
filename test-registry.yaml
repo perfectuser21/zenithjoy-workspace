@@ -11637,6 +11637,14 @@ tests:
     product: AI员工
     note: "双端冻结身份与部署源闭包反例；非真实M4业务验收"
 
+  - id: official-phone-peer-authority
+    path: services/phone-adb-controller/__tests__/official-phone-peer-authority.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "小型权威gate替代完整release正文读取；原Task、claim、观测、设备锁与期限拒绝守卫"
+
   - id: official-phone-peer-close-deadline
     path: services/phone-adb-controller/__tests__/official-phone-peer-close-deadline.test.mjs
     type: integration
