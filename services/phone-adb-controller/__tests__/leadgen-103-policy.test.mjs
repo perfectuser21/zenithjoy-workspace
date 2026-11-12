@@ -117,7 +117,7 @@ test('终审只接单个 JSON 或单层 json fence，保留真实模型响应身
   {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost});
  assert.equal(r.grade,'A');assert.equal(r.audit.response_id,'actual-response-id');assert.equal(r.audit.confidence,.83);
  assert.match(requests[0].url,/\/api\/v1\/chat\/completions$/);assert.equal(requests[0].body.model,'google/gemini-2.5-flash');
- assert.match(requests[0].body.messages[0].content,/comment_signal 与 video_signal 必须分别逐字引用评论原文与视频标题/);
+ assert.match(requests[0].body.messages[0].content,/comment_signal 与非null的video_signal 必须分别逐字引用评论原文与视频标题/);
  await judgeCommander('人工智能训练师证书怎么报名',video.title,'冻结画像','video quote invalid',
   {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost,retryVideoQuote:true});
  assert.match(requests[1].body.messages[0].content,/上次 video_signal 未能逐字引用视频标题/);

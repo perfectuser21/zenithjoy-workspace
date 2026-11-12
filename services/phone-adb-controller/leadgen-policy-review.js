@@ -2,6 +2,7 @@
 const {configTargetProfile}=require('./company-config-lib.js');
 const {judgeCommander,scoreFailureReceipt}=require('./judge-comment.js');
 const crypto=require('node:crypto');
+const {REFERENCE_MODE,validateFrozenPolicyEvidence}=require('./leadgen-frozen-policy-evidence.js');
 const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 const sha=value=>crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
@@ -72,12 +73,9 @@ async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile
     }
     const audience=snapshot.runtime_config.comment_scoring.audiences?.find(a=>a.id===proof?.audience_id);
     const fields=audience?.fields||{};
-    if(!['A','B','C','不相关'].includes(verdict?.grade)||!verdict?.audit?.response_id||!verdict.audit.model||!proof||!audience||!proof.reason||proof.reason.length>500
-      ||row.comment_body.length>=8&&proof.reason.includes(row.comment_body)
-      ||!proof.matched_rule||proof.matched_rule.length>300
-      ||!(String(fields['意向信号']||'').includes(proof.matched_rule)||String(fields['人群描述']||'').includes(proof.matched_rule))
-      ||!(proof.exclusion_rule===null||typeof proof.exclusion_rule==='string'&&proof.exclusion_rule.trim()
-        &&String(fields['排除信号']||'').includes(proof.exclusion_rule)))return {...base,reason:'policy_evidence_invalid'};
+    if(!verdict?.audit?.response_id||!verdict.audit.model
+      ||validateFrozenPolicyEvidence({grade:verdict.grade,proof,rules:snapshot.runtime_config.comment_scoring,
+        comment:row.comment_body,video:row.source_video})!==null)return {...base,reason:'policy_evidence_invalid'};
     const expected=row.relevance==='不相关'?'不相关':row.intent_grade;
     const quotedComment=typeof proof.comment_signal==='string'&&proof.comment_signal.length>=3&&proof.comment_signal.length<=100
       &&row.comment_body.includes(proof.comment_signal);
@@ -176,6 +174,7 @@ function scoreDigest(row,snapshot,config){
     scoring_rules:snapshot.runtime_config.comment_scoring});
 }
 function makeSingleScoreAudit(row,snapshot,verdict,evidence){
+  if(verdict.audit?.policy_reference_mode===REFERENCE_MODE&&validateFrozenPolicyEvidence({grade:verdict.grade,proof:verdict.audit.policy_evidence,rules:snapshot.runtime_config.comment_scoring,comment:row.comment_body,video:row.source_video,requireQuotes:true})!==null)throw Error('FROZEN_POLICY_EVIDENCE_INVALID');
   const config={...evidence,scoring_mode:SINGLE_SCORE_MODE,scoring_decision_id:SINGLE_SCORE_DECISION,model_audit:verdict.audit};
   const scored={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,judgment_reason:verdict.reason};
   config.score_sha256=scoreDigest(scored,snapshot,config);return config;
@@ -191,6 +190,8 @@ function verifyStoredScore(row,snapshot){
     ||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade)
     ||row.relevance==='不相关'&&row.intent_grade!==null
     ||!snapshot.runtime_config?.comment_scoring||c.score_sha256!==scoreDigest(row,snapshot,c))return base;
+  if(c.model_audit.policy_reference_mode===REFERENCE_MODE&&validateFrozenPolicyEvidence({grade:row.relevance==='不相关'?'不相关':row.intent_grade,
+    proof:c.model_audit.policy_evidence,rules:snapshot.runtime_config.comment_scoring,comment:row.comment_body,video:row.source_video,requireQuotes:true})!==null)return base;
   return {id:row.id,status:'pass',reason:'stored_score_match',model_call_count:0,review_count:0,
     model:c.model_audit.model,response_id:c.model_audit.response_id,evidence_sha256:c.score_sha256};
 }
@@ -212,7 +213,10 @@ async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){
       if(frozen.length!==1||frozen[0].run_id!==binding.run||!mark||mark.company_id!==original.company_id
         ||mark.tenant_id!==original.tenant_id||Number(mark.version)!==Number(original.version)||mark.policy_id!==original.policy_id)return unknown;
     }
-    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id]},deps);
+    const committed=binding.committed_partial_ids;
+    if(committed!==undefined&&(!Array.isArray(committed)||committed.length!==1||committed[0]!==id))return unknown;
+    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,
+      source_run:committed?null:binding.source_run,ids:[id],...(committed?{committed_partial_ids:committed,sources:{[id]:rows[0].harvest_batch}}:{})},deps);
     return review.rows[0]||unknown;
   }catch{return unknown;}
 }

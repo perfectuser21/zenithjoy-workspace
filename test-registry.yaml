@@ -11814,3 +11814,30 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；独立Skill固定PG依赖与公司/Task投影守卫；fixture数据库响应，非业务已验"
+
+  - id: leadgen-committed-partial
+    path: services/phone-adb-controller/__tests__/leadgen-committed-partial.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition；显式已认证评论异步评分、受限补证和未知/错身份/错公司守卫；隔离PG夹具，非真机已验"
+
+  - id: leadgen-frozen-field-evidence
+    path: services/phone-adb-controller/__tests__/leadgen-frozen-field-evidence.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition；v26实际业务字段形状、冻结引用白名单、单次模型和评分落库/标记一致核验；隔离模型夹具不代表真机已验"
+
+  - id: leadgen-response-recovery
+    path: services/phone-adb-controller/__tests__/leadgen-response-recovery.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition；私有既有模型响应原件与Brain父子双claim精确授权守卫；匿名夹具，非真实模型或生产写入"

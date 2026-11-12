@@ -8,6 +8,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment,makeSingleScoreAudit,verifyStoredScore}=require('./leadgen-policy-review.js');
 const commentAdmission=require('./leadgen-comment-admission.js');
 const sampledAdmission=require('./leadgen-sampled-admission.js');
+const committedPartial=require('./leadgen-committed-partial.js');
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
@@ -64,10 +65,16 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const f=rows[0],p=f?.snapshot;const verified=rows.length===1&&f.tenant_id===d.tenant_id&&f.version===d.company_config_version&&p?.company_id===d.company_id&&p.tenant_id===d.tenant_id&&p.version===d.company_config_version&&p.policy_id===d.policy_id;
     return {verified,...(verified?{company_id:f.company_id,tenant_id:f.tenant_id,version:f.version,run_id:f.run_id,policy_id:p.policy_id}:{})};
   }
+  if(op==='score_response_recover')return require('./leadgen-response-recovery.js').recover(pool,input,{sourceCommit:deps.sourceCommit,execution:deps.execution});
   const sourceRun=input.source_run??null;
   if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
+  const partialIds=committedPartial.explicitIds(input,sourceRun);
+  if(partialIds&&input.op!=='score_scope'&&input.ids===undefined)input={...input,ids:partialIds};
+  const partial=partialIds?await committedPartial.admittedRows(pool,{lineKey,run,ids:partialIds}):[];
+  if(op==='certify_collected_comment')return transaction(pool,client=>committedPartial.certify(client,input,{lineKey}));
+  if(op==='certify_collected_comment_readback')return committedPartial.certificationReadback(pool,input,{lineKey});
   if(op==='policy_review'){
     const ids=input.ids;
     if(!Array.isArray(ids)||ids.length<1||ids.length>50||ids.some(id=>typeof id!=='string'||!uuid.test(id))||new Set(ids).size!==ids.length)
@@ -95,7 +102,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     for(const id of ids){const matches=rows.filter(r=>r.id===id);const row=matches[0];
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
       reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun||sampled.some(a=>a.id===id):row.harvest_batch===input.sources[id])
-        &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1||sampled.some(a=>a.id===id))
+        &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1||sampled.some(a=>a.id===id)||committedPartial.contains(partial,row))
         &&row.judgment_config?.run_id===run
         ?row.judgment_config?.scoring_mode==='single-evaluation-v1'?verifyStoredScore(row,snapshot)
           :row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot):{id,status:'unknown',reason:'stored_score_unverified',model_call_count:0}
@@ -104,7 +111,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return {verified:reviewed.every(r=>r.status==='pass'),rows:reviewed,ids,scope:{line:lineKey,run,claim:input.claim,source_run:sourceRun}};
   }
   if(op==='score_scope'){
-    const normal=sourceRun===commentAdmission.SOURCE_RUN?[]:(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments c WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
+    const normal=partialIds||sourceRun===commentAdmission.SOURCE_RUN?[]:(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments c WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
       AND process_status='待分拣' AND EXISTS (SELECT 1 FROM zenithjoy.leadgen_videos v WHERE v.line_key=c.line_key AND v.video_url=c.source_video_url AND v.title=c.source_video AND v.harvest_batch=c.harvest_batch AND v.process_status='评论已采' AND v.judgment_status='matched') ORDER BY collected_at,id LIMIT 1001`,[lineKey,sourceRun])).rows;
     const admitted=sourceRun===commentAdmission.SOURCE_RUN
       ?(await commentAdmission.admittedRows(pool,{lineKey,run,sourceRun})).filter(r=>r.process_status==='待分拣'&&r.relevance===null)
@@ -112,7 +119,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
       ?(await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}))
         .filter(r=>r.process_status==='待分拣'&&r.relevance===null):[];
-    const rows=[...normal,...admitted.map(r=>({id:r.id,harvest_batch:r.harvest_batch})),...sampled.map(r=>({id:r.id,harvest_batch:r.harvest_batch}))];
+    const rows=[...normal,...partial.filter(r=>r.process_status==='待分拣'&&r.relevance===null).map(r=>({id:r.id,harvest_batch:r.harvest_batch})),...admitted.map(r=>({id:r.id,harvest_batch:r.harvest_batch})),...sampled.map(r=>({id:r.id,harvest_batch:r.harvest_batch}))];
     if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)
       ||sourceRun&&r.harvest_batch!==sourceRun&&!sampled.some(a=>a.id===r.id)))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
@@ -391,8 +398,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           WHERE line_key=$1 AND video_url=$2 AND process_status='评论已采' AND harvest_batch=$3`,[lineKey,row.source_video_url,row.harvest_batch])).rows;
         const admitted=sourceRun===commentAdmission.SOURCE_RUN
           ?await commentAdmission.admittedRows(client,{lineKey,run,sourceRun}):[];
+        const currentPartial=partialIds?await committedPartial.admittedRows(client,{lineKey,run,ids:[row.id]}):[];
         if(!(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===row.id)
-          :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched'||sampled.some(a=>a.id===row.id))){
+          :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched'||sampled.some(a=>a.id===row.id)||committedPartial.contains(currentPartial,row))){
           const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
         }
         let verdict;
@@ -479,10 +487,12 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           ?await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun,
             sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
         if(sourceRun&&row.harvest_batch!==sourceRun&&!sampled.some(a=>a.id===row.id))return {blocked:true,id:row.id};
+        if(partialIds){const currentPartial=await committedPartial.admittedRows(client,{lineKey,run,ids:[row.id]});
+          if(!committedPartial.contains(currentPartial,row))return {blocked:true,id:row.id};}
         if(row.relevance==='相关'){
           const policy=await reviewBoundComment(client,lineKey,row.id,{run,scoring_run:row.judgment_config?.run_id,
             source_run:sourceRun||row.harvest_batch,source_batch:row.harvest_batch,
-            source_video:row.source_video,source_video_url:row.source_video_url},deps,queueRequest);
+            source_video:row.source_video,source_video_url:row.source_video_url,...(partialIds?{committed_partial_ids:[row.id]}:{})},deps,queueRequest);
           if(policy.status!=='pass')return {blocked:true,id:row.id};
         }
         let lead = null;
@@ -491,7 +501,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           commentBody: row.comment_body, sourceVideo: row.source_video,
           aiJudgmentReason: `[${row.intent_grade}] ${row.judgment_reason || ''}` });
         let bridge=null;
-        if(lead)bridge=await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead,config:bridgeConfig},deps);
+        if(lead)bridge=await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead,config:bridgeConfig,...(partialIds?{committed_partial_ids:[row.id]}:{})},deps);
         await db.markCommentJudgment(client, { lineKey, dedupKey: row.dedup_key,
           relevance: row.relevance, intentGrade: row.intent_grade, reason: row.judgment_reason });
         return { lead, id:row.id, qualification:bridge?.qualification };
