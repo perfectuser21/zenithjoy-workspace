@@ -1358,14 +1358,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "38884491c6fec8c426d4ac8b3d04e4713e6d2510ebd25bd27c35764755cde09c"
+          "sha256": "f4f4093400dd407fe44877c99ed4f20a35bd9b08309e7653e1617889c343637d"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "a8025d26c92f5db53a456b59303333670257012f427ac5ace0eb8ec689e07ada"
+          "sha256": "6d379d10a670dc606d4708b874cdb1f88822894820ebb5bcffc2830940d5ccb9"
         },
         {
           "kind": "code",
@@ -1799,7 +1799,7 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b46c6569d365b9a8ca83ceef993fb870a2c7254b2878b6f5deb3bea36b768727"
+      "code_digest": "b94f6260b45967bae83e058fba263cabf7fc48fd7607e8ef0a7b4e85ab9165d1"
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.2.1",
@@ -4967,14 +4967,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "38884491c6fec8c426d4ac8b3d04e4713e6d2510ebd25bd27c35764755cde09c"
+          "sha256": "f4f4093400dd407fe44877c99ed4f20a35bd9b08309e7653e1617889c343637d"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "a8025d26c92f5db53a456b59303333670257012f427ac5ace0eb8ec689e07ada"
+          "sha256": "6d379d10a670dc606d4708b874cdb1f88822894820ebb5bcffc2830940d5ccb9"
         },
         {
           "kind": "code",
@@ -5393,24 +5393,24 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "088e46ffdf4b7cd5e84dbf24265b2e431ce49cbb0d2c2de49718cd22ea732c27"
+      "code_digest": "b69b771071e1dafe75d0ff042c105569283eaefafdfefc6b78ff3738eecdbdd7"
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.8.0",
       "contract_digest": "fa558658110266d1767bb212e220c70ec6691361a66c81c9b4c73544a838af57",
-      "method_version": "0.16.0",
+      "method_version": "0.16.1",
       "skill": {
         "name": "douyin-leadgen-activity-103-scoring",
-        "version": "0.16.0",
+        "version": "0.16.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
-        "sha256": "7493a89003c023bf08e4b0c779559579007a13826f0d72f8e47bcc8bccc1ada0",
+        "sha256": "d39414fb232a4d53e59545b92020a9bc14bd3b3b759537e6405a98e4459934f9",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/references/maintenance-scopes.md",
             "sha256": "9d125f245f6145bcc64490b99fad68cd6e89ac2a0646d090f6fd109adb8f7a86"
           }
         ],
-        "content_digest": "09ffc2a865b6b0c26be6df73ea95de81eb817c22c38cb0f26e5c0ab3ab7f1f60"
+        "content_digest": "e7032c607ca67adb2a01e8d35f9a9647e5fca3d50e39bc5637b5e1799adb298a"
       },
       "code_bindings": [
         {
@@ -10693,34 +10693,34 @@
     "douyin_comment_scoring": {
       "workflow_skill": {
         "name": "douyin-leadgen-103",
-        "version": "0.18.0",
+        "version": "0.18.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "c7c693aab1967e9da7764c8ba2ebbbc4cbce37cf2ef5599ed313136f0a29fbdb",
+        "sha256": "4c40428cd053f63c13cd4741f5eb86c85aed0e5ab66f7e975ab8fc51c50d4616",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-            "sha256": "71e1484e4b488f380817b84f6f80be9a4502a9af9f54805f980e29bb79207afe"
+            "sha256": "deeba4102e221b7e9fed1b821d99cc007efee9e3b83df57fd0347cde7563995c"
           }
         ],
-        "content_digest": "6feb36fc0ee97492383693b500c16e230263281e6894c2268a8268435b92d88b"
+        "content_digest": "246f54be759bf722ab4e5fd2aa5038cc8a3d3e30881f3efba1f70264b20282b2"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
-        "version": "0.16.0",
+        "version": "0.16.1",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_comment_scoring/SKILL.md",
-        "sha256": "6a50757f0c0a165fd5674f77205a83f3cfc0abbaebb9936014709c41740da9b7",
+        "sha256": "2bd497069f1e0dc1c394ccb94867406bceaf0c4356ad64a1c8ed9347c0c82c20",
         "support_files": [],
-        "content_digest": "d3bdb089b49e1f5f1fba337c93441bea9c05c630013161bbb5aa39ca87f8e4ea"
+        "content_digest": "d2227a5a674f095291447410d07f51f6ae2f7ec38f31450b3a8b62ee8c332182"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-        "sha256": "71e1484e4b488f380817b84f6f80be9a4502a9af9f54805f980e29bb79207afe"
+        "sha256": "deeba4102e221b7e9fed1b821d99cc007efee9e3b83df57fd0347cde7563995c"
       },
       "activities": [
         {
           "activity_ref": "douyin_comment_scoring.scoring",
           "skill_name": "douyin-leadgen-activity-103-scoring",
-          "skill_version": "0.16.0",
+          "skill_version": "0.16.1",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md"
         },
         {

@@ -171,7 +171,7 @@ test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，�
  const key='douyin_comment_scoring',base='services/phone-adb-controller/skills/',method=base+'douyin-leadgen-activity-103-scoring/SKILL.md';
  const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));const original=skillAcceptanceDefinition(key,read);
  assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace('## 成功条件\n','## 未声明验收\n')):read(path)),/未知或重复/);
- assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace('  version: 0.16.0','  version: 9.9.9')):read(path)),/版本不符/);
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace(/^  version: \S+$/m,'  version: 9.9.9')):read(path)),/版本不符/);
  assert.throws(()=>skillAcceptanceDefinition(key,path=>{if(path===method)throw Error('fixed source missing');return read(path);}),/fixed source missing/);
  const manifest='services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json';
  assert.throws(()=>skillAcceptanceDefinition(key,path=>{if(path!==manifest)return read(path);const m=JSON.parse(read(path));m.activities.pop();return Buffer.from(JSON.stringify(m));}),/范围不一致/);
