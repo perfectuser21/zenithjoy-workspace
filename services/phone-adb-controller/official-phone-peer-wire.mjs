@@ -24,21 +24,21 @@ export function decodePhonePeerBootstrap(value){
  return envelope;
 }
 export async function* readPhonePeerLines(input){
- let buffer=Buffer.allocUnsafe(64*1024),length=0;
+ let buffer=Buffer.allocUnsafe(64*1024),length=0,skipLF=false;
  for await(const chunk of input){
   const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);let start=0;
   while(start<bytes.length){
-   const newline=bytes.indexOf(10,start),end=newline<0?bytes.length:newline;
-   const total=length+end-start;
-   if(total>PHONE_PEER_FRAME_LIMIT&&(total!==PHONE_PEER_FRAME_LIMIT+1||(end>start?bytes[end-1]:buffer[length-1])!==13))fail();
-   const needed=length+end-start;
-   if(needed>buffer.length){const grown=Buffer.allocUnsafe(Math.min(PHONE_PEER_FRAME_LIMIT+1,Math.max(needed,buffer.length*2)));buffer.copy(grown,0,0,length);buffer=grown;}
+   if(skipLF){skipLF=false;if(bytes[start]===10){start++;continue;}}
+   let end=start;while(end<bytes.length&&bytes[end]!==10&&bytes[end]!==13)end++;
+   const newline=end<bytes.length?end:-1;
+   const needed=length+end-start;if(needed>PHONE_PEER_FRAME_LIMIT)fail();
+   if(needed>buffer.length){const grown=Buffer.allocUnsafe(Math.min(PHONE_PEER_FRAME_LIMIT,Math.max(needed,buffer.length*2)));buffer.copy(grown,0,0,length);buffer=grown;}
    bytes.copy(buffer,length,start,end);length=needed;
    if(newline<0)break;
-   const line=buffer.subarray(0,length);length=0;
-   yield line.subarray(0,line.at(-1)===13?line.length-1:line.length).toString('utf8');
+   const line=buffer.subarray(0,length).toString('utf8');length=0;skipLF=bytes[newline]===13;
+   yield line;
    start=newline+1;
   }
  }
- if(length){if(length>PHONE_PEER_FRAME_LIMIT)fail();yield buffer.subarray(0,length).toString('utf8');}
+ if(length)yield buffer.subarray(0,length).toString('utf8');
 }

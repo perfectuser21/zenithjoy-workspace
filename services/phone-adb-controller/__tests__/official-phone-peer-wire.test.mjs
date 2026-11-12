@@ -48,9 +48,9 @@ test('按输入累计限制无换行超限，排队多行逐帧消费，UTF8跨c
  const read=wire.readPhonePeerLines;
  await assert.rejects(async()=>{for await(const line of read(Readable.from([Buffer.alloc(max),Buffer.from('x')]))){assert.fail(line);}},/FRAME/);
  for await(const line of read(Readable.from([Buffer.alloc(max,120),Buffer.from('\r'),Buffer.from('\n')]))){assert.equal(Buffer.byteLength(line),max);}
- const chunks=Buffer.from('中文\r\n\n尾帧');const result=[];
+ const chunks=Buffer.from('中文\r\n\n裸CR\r尾帧');const result=[];
  for await(const line of read(Readable.from([...chunks].map(byte=>Buffer.from([byte])))))result.push(line);
- assert.deepEqual(result,['中文','','尾帧']);
+ assert.deepEqual(result,['中文','','裸CR','尾帧']);
  const queued=Readable.from([Buffer.from(('x'.repeat(1024)+'\n').repeat(18000))]);let count=0;for await(const line of read(queued)){assert.equal(line.length,1024);count++;}assert.equal(count,18000);
  const invalid=Readable.from([Buffer.from('{}\n'),Buffer.alloc(max+1)]);const iter=read(invalid);assert.equal((await iter.next()).value,'{}');await assert.rejects(iter.next(),/FRAME/);
 });
