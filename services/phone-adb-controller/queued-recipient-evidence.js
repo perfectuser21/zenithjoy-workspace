@@ -19,7 +19,7 @@ def native_panel(s):
  b=native_nodes(s)
  headers=[n for n in b if n.get('class')=='android.widget.TextView' and ((n.get('resource-id')==pkg+':id/title' and re.fullmatch(r'[0-9万.]+条评论',n.get('text',''))) or (n.get('resource-id')==pkg+':id/ez-' and re.fullmatch(r'评论 [0-9万.]+',n.get('text',''))))]
  legacy_input=[n for n in b if n.get('resource-id')==pkg+':id/ety']
- layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8'),'e1b':('fod','jqh','kj+')}
+ layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8'),'e1b':('fod','jqh','kj+'),'ezx':('fmu','jn+','kh4')}
  strict_input=[n for n in b if n.get('resource-id') in [pkg+':id/'+i for i in layouts]]
  comment_nodes=b;row_id='fhn';strict_layout=False
  if strict_input:
@@ -27,7 +27,7 @@ def native_panel(s):
   if legacy_input or len(strict_input)!=1 or strict_input[0].get('class')!='android.widget.EditText': raise ValueError('layout')
   row_id,panel_id,expand_id=layouts[strict_input[0].get('resource-id').split(':id/')[1]]
   panels=[n for n in b if n.get('resource-id')==pkg+':id/'+panel_id]
-  if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq','fod') if r!=row_id] for n in b): raise ValueError('layout')
+  if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq','fod','fmu') if r!=row_id] for n in b): raise ValueError('layout')
   comment_nodes=list(panels[0].iter('node'))
   if strict_input[0] not in comment_nodes or len(headers)!=1 or headers[0] not in comment_nodes: raise ValueError('panel')
   for rid,desc in [('back_btn','关闭'),(expand_id,'放大评论区')]:
@@ -84,7 +84,7 @@ viewport=None
 lists=[n for n in comment_nodes if n.get('class','').endswith('.RecyclerView')]
 if strict_layout and len(lists)==1:
  panel_bounds=bounds(comment_nodes[0]);list_bounds=bounds(lists[0])
- controls=[n for n in comment_nodes if n.get('class')=='android.widget.EditText' or n.get('resource-id','').split(':id/')[-1] in ('back_btn','jqe','jn1','kj+') or n.get('text','').strip()=='发送' or n.get('content-desc','').strip()=='发送']
+ controls=[n for n in comment_nodes if n.get('class')=='android.widget.EditText' or n.get('resource-id','').split(':id/')[-1] in ('back_btn','jqe','jn1','kj+','kh4') or n.get('text','').strip()=='发送' or n.get('content-desc','').strip()=='发送']
  def inside(a,b):return bool(a and b and b[0]<=a[0]<a[2]<=b[2] and b[1]<=a[1]<a[3]<=b[3])
  def overlaps(a,b):return bool(a and b and a[0]<b[2] and b[0]<a[2] and a[1]<b[3] and b[1]<a[3])
  row_nodes=[n for n in comment_nodes if n.get('resource-id')==pkg+':id/'+row_id]
