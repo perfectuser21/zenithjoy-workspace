@@ -87,3 +87,7 @@ test('successful private audit records one response and absence of opt-in writes
  await judge.judgeCommentOnce(body,video,'profile',{...opts,env:{}});assert.equal(calls,2);assert.deepEqual(fs.readdirSync(dir),files);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('composite reference deterministically extracts only a complete original business field',async()=>{
+ const full=rules.audiences[0].fields.核心痛点;const p={...proof(),matched_rule:'用户属于小微企业，'+full+'，需要工具',video_signal:null};
+ const {result,calls}=await score({grade:'B',policy_evidence:p});assert.equal(calls,1);assert.equal(result.audit.policy_evidence.matched_rule,full);assert.equal(result.audit.evidence_normalization.original_matched_rule,p.matched_rule);assert.equal(result.grade,'B');assert.equal(result.audit.policy_evidence.audience_id,p.audience_id);
+});
