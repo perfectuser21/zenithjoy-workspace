@@ -35,7 +35,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -892,13 +892,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "f60b5339345999ffd63d341be7d5c246826a27d8ef8f343248a40bcfb94b73f9",
+      "code_digest": "59605b3df89caf4acd22cde50c0f40170db139578b0233a7b99892bf7bececa1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "ad9644d414ecc66aaee76afb2bed46c05c6fe8b1f05e5acd35783f01232a7790",
-        "current_code_digest": "f60b5339345999ffd63d341be7d5c246826a27d8ef8f343248a40bcfb94b73f9"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "f60b5339345999ffd63d341be7d5c246826a27d8ef8f343248a40bcfb94b73f9",
+        "current_code_digest": "59605b3df89caf4acd22cde50c0f40170db139578b0233a7b99892bf7bececa1"
       }
     },
     "douyin_video_processing.preflight": {
@@ -935,7 +935,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -1824,13 +1824,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "49c410f9a46a9a3bd10473ce38ed2e011413fae92a8dba094d42fd67efe03d26",
+      "code_digest": "b0248af1d0a786c8e49aa3c3a6fe5e369ae34a0847a868f9f4f0825b76649bc2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "a0a2883739a2567c81f985e77038e21dade4183d3f7e38c6e36a4d897be02753",
-        "current_code_digest": "49c410f9a46a9a3bd10473ce38ed2e011413fae92a8dba094d42fd67efe03d26"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "49c410f9a46a9a3bd10473ce38ed2e011413fae92a8dba094d42fd67efe03d26",
+        "current_code_digest": "b0248af1d0a786c8e49aa3c3a6fe5e369ae34a0847a868f9f4f0825b76649bc2"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1867,7 +1867,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -2703,13 +2703,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "1464efe2ab9127fbad527126ce9031c26f8d12338ecf8acd5105f8bc2f42c934",
+      "code_digest": "60ba929208d77848a72f51a4de99c5ffe5cc4f3d303ebf94fc00d51608930ae2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "9ba12958ba4b7e30f76b90ecda6a867b6df64b0d2ef23790d44bd7fb1bb0900c",
-        "current_code_digest": "1464efe2ab9127fbad527126ce9031c26f8d12338ecf8acd5105f8bc2f42c934"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "1464efe2ab9127fbad527126ce9031c26f8d12338ecf8acd5105f8bc2f42c934",
+        "current_code_digest": "60ba929208d77848a72f51a4de99c5ffe5cc4f3d303ebf94fc00d51608930ae2"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2746,7 +2746,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -3666,13 +3666,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "b14d24eb42b2e0fde50241ad53c84e3383d3ec620e959668794eaf4358a27b1c",
+      "code_digest": "d37974dfc69f81045fc8c28d2d64e5a141af0f812a5b8909a515c5d978c2105e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "6a2172b6c569ae8d5886c52488ad98b9cb6bc2b7c41f0de4ea6634b412167c5c",
-        "current_code_digest": "b14d24eb42b2e0fde50241ad53c84e3383d3ec620e959668794eaf4358a27b1c"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "b14d24eb42b2e0fde50241ad53c84e3383d3ec620e959668794eaf4358a27b1c",
+        "current_code_digest": "d37974dfc69f81045fc8c28d2d64e5a141af0f812a5b8909a515c5d978c2105e"
       }
     },
     "douyin_video_processing.collection": {
@@ -3709,7 +3709,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -4567,13 +4567,13 @@
           "sha256": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192"
         }
       ],
-      "code_digest": "8ef594b948be9b7accdb2f44df99d5b5571b6163cd8c20ba1844c887ac8f89fc",
+      "code_digest": "c8ad8701e6d41d655089aa7c6fa5d670649b3603bf624ff43a4d51becb137805",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "f5146f9bebe27eddb7256055990e87c4372776153aceee4023185d77459f6ad7",
-        "current_code_digest": "8ef594b948be9b7accdb2f44df99d5b5571b6163cd8c20ba1844c887ac8f89fc"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "8ef594b948be9b7accdb2f44df99d5b5571b6163cd8c20ba1844c887ac8f89fc",
+        "current_code_digest": "c8ad8701e6d41d655089aa7c6fa5d670649b3603bf624ff43a4d51becb137805"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4610,7 +4610,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -5477,13 +5477,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bcf714c2411691341dadc6a6e6b69e8bd8a4d72ea4180dde3db5a1861313e111",
+      "code_digest": "635fc9e1af9e35fef9633f21fef08822bba8d5486312dd155a8ebc790456b11d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "4a89a68b0476516efb1c9071e6ba0a2abeadf3dd687fd36289c28ecc7e54313f",
-        "current_code_digest": "bcf714c2411691341dadc6a6e6b69e8bd8a4d72ea4180dde3db5a1861313e111"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "bcf714c2411691341dadc6a6e6b69e8bd8a4d72ea4180dde3db5a1861313e111",
+        "current_code_digest": "635fc9e1af9e35fef9633f21fef08822bba8d5486312dd155a8ebc790456b11d"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5520,7 +5520,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -6370,13 +6370,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "734a7f5404519b4880943c21c437fa2889c9bea5d7e4a37b638a9f1d9f622498",
+      "code_digest": "ca5bc4942156f5cb26cc3636293daa2bac2ef9ff030ae88950e6f865187b24f7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "e6c37065d34d7bf595b3087ecc6f6d7bdaa3d8abcfebc9eed1c994316f75c6dd",
-        "current_code_digest": "734a7f5404519b4880943c21c437fa2889c9bea5d7e4a37b638a9f1d9f622498"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "734a7f5404519b4880943c21c437fa2889c9bea5d7e4a37b638a9f1d9f622498",
+        "current_code_digest": "ca5bc4942156f5cb26cc3636293daa2bac2ef9ff030ae88950e6f865187b24f7"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6413,7 +6413,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -7305,13 +7305,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "1fcd64c6dcb08c9d8c98119bf77e8cd0edfc9043827e4fdedc654c7c11a3d4bb",
+      "code_digest": "9042877d3f3bf5aee81869b1f174aa71f8f5261f386bbc26f00e204d1d12dc8f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "2300e126d0592a1fe8abefbba9642c2e4df6b8c00bb64bcb6b4b15055c452353",
-        "current_code_digest": "1fcd64c6dcb08c9d8c98119bf77e8cd0edfc9043827e4fdedc654c7c11a3d4bb"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "1fcd64c6dcb08c9d8c98119bf77e8cd0edfc9043827e4fdedc654c7c11a3d4bb",
+        "current_code_digest": "9042877d3f3bf5aee81869b1f174aa71f8f5261f386bbc26f00e204d1d12dc8f"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7344,7 +7344,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -8170,13 +8170,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f02241c4b07398e82519acae2a0d5c80cba059e909483ebdd936f6ac69a4d2e5",
+      "code_digest": "5e263ad92ecaefb67954950eab2b0bb766cf70790b30f5d098db712917542ed9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "aec4700aedd7ef50c0cb6402f47c0daa018e6b247815fc2d4d1d4731707a2f16",
-        "current_code_digest": "f02241c4b07398e82519acae2a0d5c80cba059e909483ebdd936f6ac69a4d2e5"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "f02241c4b07398e82519acae2a0d5c80cba059e909483ebdd936f6ac69a4d2e5",
+        "current_code_digest": "5e263ad92ecaefb67954950eab2b0bb766cf70790b30f5d098db712917542ed9"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8209,7 +8209,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -9010,13 +9010,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "71aac274acdb101bec2224ec42466c7c0227f4dba9e73eb85b6e0dfcafd18dad",
+      "code_digest": "6d48fa1c42269ff1e27dfa3dffa6c6218101237c0ecd9e407806c4d4d4bcd2f2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "c89eb8720c6c5ff6fd3486c73938848d23a838d2b2592ca4279e609df07c4b8e",
-        "current_code_digest": "71aac274acdb101bec2224ec42466c7c0227f4dba9e73eb85b6e0dfcafd18dad"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "71aac274acdb101bec2224ec42466c7c0227f4dba9e73eb85b6e0dfcafd18dad",
+        "current_code_digest": "6d48fa1c42269ff1e27dfa3dffa6c6218101237c0ecd9e407806c4d4d4bcd2f2"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9049,7 +9049,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -9843,13 +9843,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "dae2055b1d003802a2db71a9c7e3dfd4d0da5846669c9fdfcbde9d6280e5e30c",
+      "code_digest": "73ca739d468bba808aee40a8c28fc5ee86cb2b86f0ed47e627f62942fbbe9cad",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "17b8687c69de8a9a536a1e898d82610a8e347d2958b74da626745f1c83734466",
-        "current_code_digest": "dae2055b1d003802a2db71a9c7e3dfd4d0da5846669c9fdfcbde9d6280e5e30c"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "dae2055b1d003802a2db71a9c7e3dfd4d0da5846669c9fdfcbde9d6280e5e30c",
+        "current_code_digest": "73ca739d468bba808aee40a8c28fc5ee86cb2b86f0ed47e627f62942fbbe9cad"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9882,7 +9882,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -10686,13 +10686,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "04b5bbaf14ebbd60617d360f90f89abebb119a8daf6195f1fa79640df70ed6fb",
+      "code_digest": "5662823378e40217fcef9a5f8833977e5682066be20f9bf32651d1fc45f7f13d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Controlled M4 USB admission now reads unique frozen host/source review configuration and exact SDK, preserving real claims, leases, source closure, operation whitelist, deadlines, unknown handling and original Activity/Skill contracts. SDK36 ROM source audit is independent; physical business acceptance remains unverified.",
-        "reviewed_by": "/root/m4_peer_finish; source_audit=/root/physical_candidate_readiness",
-        "previous_code_digest": "1ecf533a325bdde260930244968401552f17e619e9f66f8a026960a87eddcf98",
-        "current_code_digest": "04b5bbaf14ebbd60617d360f90f89abebb119a8daf6195f1fa79640df70ed6fb"
+        "reason": "仅在受认证且不可变的release边界内，用绑定release_id与manifest_sha256的权威gate替代完整正文读取；其余source、Task、claim、观测、设备锁和期限检查保留，业务合同及Skill政策正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "04b5bbaf14ebbd60617d360f90f89abebb119a8daf6195f1fa79640df70ed6fb",
+        "current_code_digest": "5662823378e40217fcef9a5f8833977e5682066be20f9bf32651d1fc45f7f13d"
       }
     }
   },
