@@ -11701,6 +11701,14 @@ tests:
     product: AI员工
     note: "固定SSH源与私密环境隔离；真实本地假进程，不连接M4"
 
+  - id: official-phone-peer-wire
+    path: services/phone-adb-controller/__tests__/official-phone-peer-wire.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "有界首帧编解码与正式transport/Host边界回归；隔离本地流，不代表真实手机业务通过"
+
   - id: official-phone-peer-transport
     path: services/phone-adb-controller/__tests__/official-phone-peer-transport.test.mjs
     type: integration

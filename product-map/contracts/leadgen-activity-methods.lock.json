@@ -33,7 +33,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -61,7 +61,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -635,7 +635,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "9e5b5cf74347cb0edc57a8f5a88f646b76ba858446eacdd6fb5b00ff7c650aea",
+      "code_digest": "ea4f697ad4615842fdce062aa7f5415ce209bc9f3c771607a18f3c1377b71e61",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "b2f16aba33ea000068c2238961b82b49664a6ee3e0bee82129d9f0016a0e70c0",
-        "current_code_digest": "9e5b5cf74347cb0edc57a8f5a88f646b76ba858446eacdd6fb5b00ff7c650aea"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "9e5b5cf74347cb0edc57a8f5a88f646b76ba858446eacdd6fb5b00ff7c650aea",
+        "current_code_digest": "ea4f697ad4615842fdce062aa7f5415ce209bc9f3c771607a18f3c1377b71e61"
       }
     },
     "douyin_video_processing.preflight": {
@@ -924,7 +924,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -952,7 +952,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -1575,7 +1575,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3f44492e7e6d2bbb30c3ee59b4c95e536dfe282f7a0fb94c04007088175a2a24",
+      "code_digest": "2564e12c83bc1f445bbefccb07d1577a3fd8c4d68e57829d6f84f9b82d15a09a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "df7b5cc1c04f24422f5fc5540d7263e051a9f28e39778e9596c5c31587b08a4c",
-        "current_code_digest": "3f44492e7e6d2bbb30c3ee59b4c95e536dfe282f7a0fb94c04007088175a2a24"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "3f44492e7e6d2bbb30c3ee59b4c95e536dfe282f7a0fb94c04007088175a2a24",
+        "current_code_digest": "2564e12c83bc1f445bbefccb07d1577a3fd8c4d68e57829d6f84f9b82d15a09a"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1847,7 +1847,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -1875,7 +1875,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -2442,7 +2442,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "a104700a0f7afb8a3d28d7636154d3e1d1e1d6ff1c74c093663580fe42554379",
+      "code_digest": "6c0ce70c5e620224a02c26a846179cea3af5f7f543bf9205591198f4a85138d9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "7730e3482e7e152943265c02b6c475c410cff601ffd7b9abe8ce13a0cb50eec4",
-        "current_code_digest": "a104700a0f7afb8a3d28d7636154d3e1d1e1d6ff1c74c093663580fe42554379"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "a104700a0f7afb8a3d28d7636154d3e1d1e1d6ff1c74c093663580fe42554379",
+        "current_code_digest": "6c0ce70c5e620224a02c26a846179cea3af5f7f543bf9205591198f4a85138d9"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2729,7 +2729,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -2757,7 +2757,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -3359,7 +3359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "ea65183c62e9a8b070a23a84c30ee42642ed50b398651eec6ce200e273cb853e",
+      "code_digest": "a931006530786bfa201f60eaadcb372aec9e2d06016811f8cb0f93288a637e37",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "763505b6a07cf916809ab434288c482ed41c3145da19eec27a288a3f86ae8a97",
-        "current_code_digest": "ea65183c62e9a8b070a23a84c30ee42642ed50b398651eec6ce200e273cb853e"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "ea65183c62e9a8b070a23a84c30ee42642ed50b398651eec6ce200e273cb853e",
+        "current_code_digest": "a931006530786bfa201f60eaadcb372aec9e2d06016811f8cb0f93288a637e37"
       }
     },
     "douyin_video_processing.collection": {
@@ -3690,7 +3690,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -3718,7 +3718,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -4285,7 +4285,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -4541,7 +4541,14 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "01310fa7280529f912129645a2c16ece05ebca1e8b4fce4437f340953574d986"
+      "code_digest": "2b6ac6d3b7c6957aa369a5c5c885d93b5347e14a7b8291ce81e360da38a17df8",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "01310fa7280529f912129645a2c16ece05ebca1e8b4fce4437f340953574d986",
+        "current_code_digest": "2b6ac6d3b7c6957aa369a5c5c885d93b5347e14a7b8291ce81e360da38a17df8"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.3.0",
@@ -4575,7 +4582,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -4603,7 +4610,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -5205,7 +5212,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -5435,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a0f6b99c58c36abf5e2d82dd3b8582d6776e8b6b12269f19909ce0649769b3b3",
+      "code_digest": "a9bf27d292f2592c6b6ef91c66e6586d57f9f231d60dcfb8dd6162e0ee11c188",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "05d7c26212d01453e564501aee36578ec09a47b749b039bb8845286eee925e93",
-        "current_code_digest": "a0f6b99c58c36abf5e2d82dd3b8582d6776e8b6b12269f19909ce0649769b3b3"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "a0f6b99c58c36abf5e2d82dd3b8582d6776e8b6b12269f19909ce0649769b3b3",
+        "current_code_digest": "a9bf27d292f2592c6b6ef91c66e6586d57f9f231d60dcfb8dd6162e0ee11c188"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5481,7 +5488,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -5509,7 +5516,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -6083,7 +6090,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -6345,7 +6352,14 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "21eb43d41a20888c9b8530e39d8abe195fc33334c280686227bd42cda03b5ce1"
+      "code_digest": "a36296caab756272f92b6a79e2f0249e1167da8803efb56b487eed0fdf9b27b6",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "21eb43d41a20888c9b8530e39d8abe195fc33334c280686227bd42cda03b5ce1",
+        "current_code_digest": "a36296caab756272f92b6a79e2f0249e1167da8803efb56b487eed0fdf9b27b6"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.9.0",
@@ -6384,7 +6398,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -6412,7 +6426,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -6993,7 +7007,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -7276,7 +7290,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "0eb51d9a47f0800f83ad4b0765d0c283eedd2232ca9b0ed692ce981d4e720588"
+      "code_digest": "5689c19150685aeddb031e09309df0162a2fc3fc90f9e005256a9f51ff60def9",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "0eb51d9a47f0800f83ad4b0765d0c283eedd2232ca9b0ed692ce981d4e720588",
+        "current_code_digest": "5689c19150685aeddb031e09309df0162a2fc3fc90f9e005256a9f51ff60def9"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.1",
@@ -7310,7 +7331,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -7338,7 +7359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -7863,7 +7884,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -8129,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "344ffcd0de2403bafda83437f8ac8bc60fb6153db03f607c98e56dbacf75ef63",
+      "code_digest": "d1ee9ad01e1d59a07e77b25aeab538fe9a688d1bdbda74ae085f0288e73379d9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "c30cf216af81d3336420b88596ab4a8f5aac366ba77eec6eca8d7e1e7ad9c04a",
-        "current_code_digest": "344ffcd0de2403bafda83437f8ac8bc60fb6153db03f607c98e56dbacf75ef63"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "344ffcd0de2403bafda83437f8ac8bc60fb6153db03f607c98e56dbacf75ef63",
+        "current_code_digest": "d1ee9ad01e1d59a07e77b25aeab538fe9a688d1bdbda74ae085f0288e73379d9"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8170,7 +8191,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -8198,7 +8219,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -8723,7 +8744,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -8964,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a9d5e338eb6ba38f66b0550952ea4502935fcee9a5e620409a625726807d0c7a",
+      "code_digest": "0cd5f552d1985e9c8757e695b4161b211353a199c3743c187a68b3d924c757f6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "548b99a3fcb31992b5ce317264c989486e638cbd15efdc0d966927a9b6f6892e",
-        "current_code_digest": "a9d5e338eb6ba38f66b0550952ea4502935fcee9a5e620409a625726807d0c7a"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "a9d5e338eb6ba38f66b0550952ea4502935fcee9a5e620409a625726807d0c7a",
+        "current_code_digest": "0cd5f552d1985e9c8757e695b4161b211353a199c3743c187a68b3d924c757f6"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9005,7 +9026,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -9033,7 +9054,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -9558,7 +9579,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -9792,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3db499bd441f9e4bf5ff52e4f7b1e8624f756f57e3aec872fc82b57658ff8f25",
+      "code_digest": "5328ee3561bbaac5e3c772e7e23a1e83a89764691329b222bbc583a91d52d60e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "6ec8014b3249cad585bdba93b2680b4264b75f0d8a4e4d4411a30863e34e62e3",
-        "current_code_digest": "3db499bd441f9e4bf5ff52e4f7b1e8624f756f57e3aec872fc82b57658ff8f25"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "3db499bd441f9e4bf5ff52e4f7b1e8624f756f57e3aec872fc82b57658ff8f25",
+        "current_code_digest": "5328ee3561bbaac5e3c772e7e23a1e83a89764691329b222bbc583a91d52d60e"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9833,7 +9854,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-host.mjs",
           "revision": "contract",
-          "sha256": "57207bde43bbf66df660a0d20be77f6cf2aadb0be6057fede8197028a298cf86"
+          "sha256": "99ce60826ff998cba876dc4866b31735ab029bbd088a6f755cd4f4831dac02e7"
         },
         {
           "kind": "code",
@@ -9861,7 +9882,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-transport.mjs",
           "revision": "contract",
-          "sha256": "db1bd77da44367bbebb61289d1782c9329ea89c44bb6a6e2a1a49669253e55fb"
+          "sha256": "a48f7508d3b4643693b1ee7779cc3d22b28e9b079909ce90db24b92bd4419cc2"
         },
         {
           "kind": "code",
@@ -10386,7 +10407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "e8845c608d6af8edb7b961733e00cb6bd796f404eb313b1773460da986a5df35"
         },
         {
           "kind": "code",
@@ -10630,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4040a7474fe648c13462dea5437c6ba24432f47a0e7fa9b804d243c2049385d0",
+      "code_digest": "e2455b966304c4c1049479fa7f0b2225163b144ae0f37907fa3a545c1003ca1a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "显式ID普通API认证评论交接与冻结业务字段引用兼容；默认队列/正式采样/单次评分和发送授权不变。119恢复+141评分交接+28RPC回归与实际PG只读冻结引用验证，未冒称真机通过。",
-        "reviewed_by": "codex:fix_committed_comment_handoff",
-        "previous_code_digest": "fd5aea462c8e6947a35632a7150dea0a7329a02f31e30a46742192ca51f498e0",
-        "current_code_digest": "4040a7474fe648c13462dea5437c6ba24432f47a0e7fa9b804d243c2049385d0"
+        "reason": "仅将已签名bootstrap作有界无损Brotli传输并限制Host累计帧输入，显式RPC/部署清单补齐codec；原内层HMAC、Task/gate、资源及deadline授权保持。49项peer回归通过，真机验收由独立流程执行。",
+        "reviewed_by": "codex-pstack-peer-wire",
+        "previous_code_digest": "4040a7474fe648c13462dea5437c6ba24432f47a0e7fa9b804d243c2049385d0",
+        "current_code_digest": "e2455b966304c4c1049479fa7f0b2225163b144ae0f37907fa3a545c1003ca1a"
       }
     }
   },
