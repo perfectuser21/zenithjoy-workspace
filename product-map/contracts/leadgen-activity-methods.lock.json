@@ -5397,7 +5397,7 @@
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.8.0",
-      "contract_digest": "58a29f34ce280865143edb79de1b1c7df494a336010c9eef9086f9640f8926f3",
+      "contract_digest": "fa558658110266d1767bb212e220c70ec6691361a66c81c9b4c73544a838af57",
       "method_version": "0.16.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-scoring",

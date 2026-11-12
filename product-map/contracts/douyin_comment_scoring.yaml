@@ -80,7 +80,7 @@ activities:
       - 模型不可达、HTTP/网络异常、证据非法或评分输出无效留待重试，不伪造C级成功，不转人工评分
     postconditions:
       - probe: scores_readback
-        asserts: 认领评论ID的relevance、intent_grade、原文依据、唯一评分响应身份及冻结公司版本在PG原子保存并读回；评分后不追加模型审核，标记直接消费原评分
+        asserts: 认领评论ID的relevance、intent_grade、原文依据、唯一评分响应身份及冻结公司版本在PG原子保存并读回；评分后不追加模型审核；本活动只交评分、不创建线索或outbox，标记直接消费原评分
       - probe: exclusion_readback
         asserts: 新评分为不相关时保存relevance=不相关且intent_grade为空，不创建Lead/outbox；技术失败不写成排除。历史已排除记录保留原审计并可只读恢复，无需新增模型复核
     execution:
