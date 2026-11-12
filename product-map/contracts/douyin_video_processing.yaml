@@ -1396,6 +1396,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-committed-partial.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/qualification-quarantine-recovery-102n.js
         revision: contract
       - kind: code
@@ -1833,6 +1837,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-committed-partial.js
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
