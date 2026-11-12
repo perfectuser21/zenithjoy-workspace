@@ -35,7 +35,7 @@ function validateFrozenPolicyEvidence({grade,proof,rules,comment,video,requireQu
  if(typeof proof.reason!=='string'||!proof.reason.trim()||proof.reason.length>500)return 'reason_invalid';
  if(typeof comment==='string'&&comment.length>=8&&proof.reason.includes(comment))return 'reason_contains_comment';
  if(requireQuotes&&(!quoted(proof.comment_signal,comment)
-   ||proof.video_signal!==undefined&&!quoted(proof.video_signal,video)
+   ||proof.video_signal!=null&&!quoted(proof.video_signal,video)
    ||grade==='A'&&!quoted(proof.video_signal,video)))return 'policy_evidence_missing';
  return null;
 }

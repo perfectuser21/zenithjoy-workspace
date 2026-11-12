@@ -71,7 +71,7 @@ test('single-pass schema constrains original short quotations and prompt require
 
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 test('private optional audit retains rejected response without leaking it through error',async()=>{
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'score-private-'));fs.chmodSync(dir,0o700);
+ const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'score-private-')));fs.chmodSync(dir,0o700);
  try{let calls=0;let error;try{await judge.judgeCommentOnce(body,video,'profile',{apiKey:'fixture-secret',scoringRules:rules,env:{LEADGEN_SCORE_AUDIT_DIR:dir},httpPost:async()=>{calls++;return {id:'private-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:'private-invalid-body'}}]};}});}catch(e){error=e;}
  assert.equal(calls,1);assert.equal(error.message,'COMMANDER_EVIDENCE_INVALID');assert.ok(!JSON.stringify(error).includes('private-invalid-body'));const files=fs.readdirSync(dir);assert.equal(files.length,1);const file=path.join(dir,files[0]);assert.equal(fs.statSync(file).mode&0o777,0o600);const a=JSON.parse(fs.readFileSync(file));assert.equal(a.response_id,'private-response');assert.equal(a.model,judge.COMMANDER_MODEL);assert.equal(a.raw,'private-invalid-body');assert.equal(a.validation,'json_invalid');assert.ok(!JSON.stringify(a).includes('fixture-secret'));
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
@@ -79,4 +79,11 @@ test('private optional audit retains rejected response without leaking it throug
 test('unsafe audit directory fails before any HTTP',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'score-unsafe-'));fs.chmodSync(dir,0o755);let calls=0;
  try{await assert.rejects(judge.judgeCommentOnce(body,video,'profile',{apiKey:'fixture',scoringRules:rules,env:{LEADGEN_SCORE_AUDIT_DIR:dir},httpPost:async()=>{calls++;}}),/SCORE_AUDIT_PATH_INVALID/);assert.equal(calls,0);}finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('successful private audit records one response and absence of opt-in writes nothing',async()=>{
+ const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'score-success-')));fs.chmodSync(dir,0o700);
+ try{let calls=0;const opts={apiKey:'fixture',scoringRules:rules,env:{LEADGEN_SCORE_AUDIT_DIR:dir},httpPost:async()=>{calls++;return {id:'private-ok',model:judge.COMMANDER_MODEL,choices:[{message:{content:JSON.stringify({grade:'B',policy_evidence:{...proof(),video_signal:null}})}}]};}};
+ assert.equal((await judge.judgeCommentOnce(body,video,'profile',opts)).grade,'B');assert.equal(calls,1);let files=fs.readdirSync(dir);assert.equal(files.length,1);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,files[0]))).validation,'pass');
+ await judge.judgeCommentOnce(body,video,'profile',{...opts,env:{}});assert.equal(calls,2);assert.deepEqual(fs.readdirSync(dir),files);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
