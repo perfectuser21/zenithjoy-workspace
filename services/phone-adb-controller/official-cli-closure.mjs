@@ -122,7 +122,7 @@ const REVIEWED=Object.freeze({
  "clipboard-widget-cancel.py": "9a1fd636f1600acec3179c6d61955f6c290a6678ff54902a4407bcd36d350980",
  "comment-count-evidence.py": "0c1d643574c39ee242ec551144513c18ee5921d42e22ad8e31f7041ddfc985e8",
  "queued-comment-history.js": "18ae229e033fb18245d45fc2ff15e866cd05434ac757b020bf61b2c15522b202",
- "queued-recipient-evidence.js": "ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192",
+ "queued-recipient-evidence.js": ["ebef5429095a34d5a15b7629fe34585fa28c0c695a7c763fd224bfa456d20192", "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"],
  "nickname-match-lib.js": "3306d98086e144838470070c74437206a8f82ba4e729bf2a0c876dbca7bbe4a7",
  "line-routes.js": "417a41a1b6ad29837b1ae8499278b608f86aa37642da903b3d0756b092d9ac01",
  "lead-fields-lib.js": "22d9c8d15e9e024e4110ede58e7c134762b873c14db3a08c6031ab16e1499f5a",
