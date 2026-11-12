@@ -65,6 +65,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const f=rows[0],p=f?.snapshot;const verified=rows.length===1&&f.tenant_id===d.tenant_id&&f.version===d.company_config_version&&p?.company_id===d.company_id&&p.tenant_id===d.tenant_id&&p.version===d.company_config_version&&p.policy_id===d.policy_id;
     return {verified,...(verified?{company_id:f.company_id,tenant_id:f.tenant_id,version:f.version,run_id:f.run_id,policy_id:p.policy_id}:{})};
   }
+  if(op==='score_response_recover')return require('./leadgen-response-recovery.js').recover(pool,input,{sourceCommit:deps.sourceCommit,execution:deps.execution});
   const sourceRun=input.source_run??null;
   if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');

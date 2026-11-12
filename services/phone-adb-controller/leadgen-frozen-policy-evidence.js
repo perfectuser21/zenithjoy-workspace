@@ -12,9 +12,21 @@ function frozenPolicyReferences(rules){
    exclusion_signals:text(a.fields?.['排除信号'])?[a.fields['排除信号']]:[]})),
    unrelated_criterion:text(rules?.criteria?.['不相关'])};
 }
+function normalizeFrozenPolicyEvidence(proof,rules){
+ if(!proof||typeof proof!=='object'||!bounded(proof.matched_rule))return {proof,normalization:null};
+ const audiences=frozenPolicyReferences(rules).audiences.filter(a=>a.id===proof.audience_id);
+ if(audiences.length!==1)return {proof,normalization:null};
+ const fields=Object.entries(audiences[0].business_fields);
+ if(fields.some(([,v])=>v.includes(proof.matched_rule)))return {proof,normalization:null};
+ const candidates=fields.filter(([,v])=>v.trim().length>=8&&proof.matched_rule.includes(v)).sort((a,b)=>b[1].length-a[1].length);
+ if(!candidates.length)return {proof,normalization:null};
+ const [field,value]=candidates[0];
+ return {proof:{...proof,matched_rule:value},normalization:{mode:'complete-frozen-field-extraction-v1',field,original_matched_rule:proof.matched_rule,canonical_matched_rule:value}};
+}
 function validateFrozenPolicyEvidence({grade,proof,rules,comment,video,requireQuotes=false}){
  if(!['A','B','C','不相关'].includes(grade))return 'grade_invalid';
  if(!proof||typeof proof!=='object'||Array.isArray(proof))return 'policy_evidence_missing';
+ proof=normalizeFrozenPolicyEvidence(proof,rules).proof;
  if(!Object.hasOwn(proof,'exclusion_rule'))return 'missing_exclusion_rule';
  const refs=frozenPolicyReferences(rules),matches=refs.audiences.filter(a=>a.id===proof.audience_id),audience=matches.length===1?matches[0]:null;
  const nullAudience=grade==='不相关'&&proof.audience_id===null&&proof.matched_rule===null;
@@ -39,4 +51,4 @@ function validateFrozenPolicyEvidence({grade,proof,rules,comment,video,requireQu
    ||grade==='A'&&!quoted(proof.video_signal,video)))return 'policy_evidence_missing';
  return null;
 }
-module.exports={REFERENCE_MODE,BUSINESS_FIELDS,frozenPolicyReferences,validateFrozenPolicyEvidence};
+module.exports={normalizeFrozenPolicyEvidence,REFERENCE_MODE,BUSINESS_FIELDS,frozenPolicyReferences,validateFrozenPolicyEvidence};

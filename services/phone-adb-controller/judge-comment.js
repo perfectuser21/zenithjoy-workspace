@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const {REFERENCE_MODE,frozenPolicyReferences,validateFrozenPolicyEvidence}=require('./leadgen-frozen-policy-evidence.js');
+const {normalizeFrozenPolicyEvidence,REFERENCE_MODE,frozenPolicyReferences,validateFrozenPolicyEvidence}=require('./leadgen-frozen-policy-evidence.js');
 // 0929: API 故障判别与 judge-jev.js 同一套(错误类型+调用口),复用不另写一份。
 const { JudgeApiError, callOpenRouter, defaultHttpPost } = require("./judge-jev.js");
 
@@ -146,7 +146,8 @@ ${singlePass?"请直接根据上述公司规则和原文给出等级及依据。
     answer=JSON.parse(body);
     if(!answer||typeof answer!=='object'||Array.isArray(answer))throw Error();
   } catch { throw invalidCommanderEvidence('json_invalid'); }
-  const p=answer?.policy_evidence;
+  const normalized=normalizeFrozenPolicyEvidence(answer?.policy_evidence,rules);
+  const p=normalized.proof;
   if(!p||typeof p!=='object'||Array.isArray(p))throw invalidCommanderEvidence('policy_evidence_missing');
   if(!Object.hasOwn(p,'exclusion_rule'))throw invalidCommanderEvidence('missing_exclusion_rule');
   if(!resp.id||!resp.model||resp.model!==COMMANDER_MODEL)throw invalidCommanderEvidence('response_identity_invalid');
@@ -154,7 +155,7 @@ ${singlePass?"请直接根据上述公司规则和原文给出等级及依据。
   if(check)throw invalidCommanderEvidence(check);
   validation='pass';
   return {grade:answer.grade,reason:`commander:${answer.grade}`,audit:{model:resp.model,response_id:resp.id,
-    confidence:Number.isFinite(answer.confidence)&&answer.confidence>=0&&answer.confidence<=1?answer.confidence:null,policy_evidence:p,...(singlePass?{policy_reference_mode:REFERENCE_MODE}:{})}};
+    confidence:Number.isFinite(answer.confidence)&&answer.confidence>=0&&answer.confidence<=1?answer.confidence:null,policy_evidence:p,...(normalized.normalization?{evidence_normalization:normalized.normalization}:{}),...(singlePass?{policy_reference_mode:REFERENCE_MODE}:{})}};
   }catch(error){validation=safeCommanderEvidenceCheck(error.evidence_check)||'transport_failure';throw error;}
   finally {if(finishAudit)finishAudit({response_id:typeof resp?.id==='string'?resp.id:null,model:typeof resp?.model==='string'?resp.model:null,raw:raw??null,usage:resp?.usage??null,validation});}
 }
