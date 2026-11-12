@@ -26,7 +26,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -883,7 +883,14 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "d72a5d6974b292479aca32dba060159b3cd7655047fdbbb887eec43eb701050e"
+      "code_digest": "b2f16aba33ea000068c2238961b82b49664a6ee3e0bee82129d9f0016a0e70c0",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "d72a5d6974b292479aca32dba060159b3cd7655047fdbbb887eec43eb701050e",
+        "current_code_digest": "b2f16aba33ea000068c2238961b82b49664a6ee3e0bee82129d9f0016a0e70c0"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.3.0",
@@ -910,7 +917,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -1799,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1",
+      "code_digest": "df7b5cc1c04f24422f5fc5540d7263e051a9f28e39778e9596c5c31587b08a4c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "逐文件比对该Activity前后代码闭包，仅101/102生成steps.json的contract_sha256随Workflow兼容说明版本更新；两份步骤JSON去掉该摘要后完全相同。Activity合同、方法正文与版本、步骤/探针/预算/权限及业务JS和Python均未变，不增加发送或恢复权。",
-        "reviewed_by": "/root/leadgen_async_contract_audit",
-        "previous_code_digest": "6019413158650fe4bf4408940084c454353167667d319f11aa78691be70d69ff",
-        "current_code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1"
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "a20f6aa20f5db4078547d14ae8b3df13cc3776e5733e664d1f0185adbc7661a1",
+        "current_code_digest": "df7b5cc1c04f24422f5fc5540d7263e051a9f28e39778e9596c5c31587b08a4c"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1833,7 +1840,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -2669,7 +2676,14 @@
           "sha256": "9e264cafde5b96b7d53ed82a759e39630dd5818518166eecb76a91f6a205aa54"
         }
       ],
-      "code_digest": "466198b9fa0e487f48c10b3e51c708c7da3165bebc68c7d0a544604a65216005"
+      "code_digest": "7730e3482e7e152943265c02b6c475c410cff601ffd7b9abe8ce13a0cb50eec4",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "466198b9fa0e487f48c10b3e51c708c7da3165bebc68c7d0a544604a65216005",
+        "current_code_digest": "7730e3482e7e152943265c02b6c475c410cff601ffd7b9abe8ce13a0cb50eec4"
+      }
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.4.2",
@@ -2701,7 +2715,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -3621,7 +3635,14 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "17772ce845c3688b9a5fa83974c15cd51fc225cf836f7dad9e622498e35e241c"
+      "code_digest": "763505b6a07cf916809ab434288c482ed41c3145da19eec27a288a3f86ae8a97",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "17772ce845c3688b9a5fa83974c15cd51fc225cf836f7dad9e622498e35e241c",
+        "current_code_digest": "763505b6a07cf916809ab434288c482ed41c3145da19eec27a288a3f86ae8a97"
+      }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.7.2",
@@ -3648,7 +3669,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -4506,13 +4527,13 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "d02408369412306b339c1de71d37258d359765031eeff228d8a7e8cce151dfe9",
+      "code_digest": "edf5af3e4d9c7b3c5deac3bab8f86e22acd569c897327a705f0e02f1e0627fb0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅增加实屏ezx/fmu/jn+/kh4精确同面板布局，既有包、UID、昵称、全文、唯一行及跨布局拒绝不变；174项回归及本次完整原件只读验证通过，业务合同和Skill方法未变。",
-        "reviewed_by": "codex-live-layout-fix (Task 6e1b212f-cf02-42e4-9eef-61a193931de4)",
-        "previous_code_digest": "63f88f4531f43505d3683e939dede1527e82f2fc9c649bf212c290c064f64ef5",
-        "current_code_digest": "d02408369412306b339c1de71d37258d359765031eeff228d8a7e8cce151dfe9"
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "d02408369412306b339c1de71d37258d359765031eeff228d8a7e8cce151dfe9",
+        "current_code_digest": "edf5af3e4d9c7b3c5deac3bab8f86e22acd569c897327a705f0e02f1e0627fb0"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4540,7 +4561,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -5407,13 +5428,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031",
+      "code_digest": "05d7c26212d01453e564501aee36578ec09a47b749b039bb8845286eee925e93",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "逐文件比对该Activity前后代码闭包，仅101/102生成steps.json的contract_sha256随Workflow兼容说明版本更新；两份步骤JSON去掉该摘要后完全相同。Activity合同、方法正文与版本、步骤/探针/预算/权限及业务JS和Python均未变，不增加发送或恢复权。",
-        "reviewed_by": "/root/leadgen_async_contract_audit",
-        "previous_code_digest": "6dc901a26e11faa2bad1fad68466631116ed4b49d08b90852756a3e6582dae5e",
-        "current_code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031"
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "7463146041d222e1746cc364d73ee9d0d9cf739f66be717bf059570622382031",
+        "current_code_digest": "05d7c26212d01453e564501aee36578ec09a47b749b039bb8845286eee925e93"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5446,7 +5467,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -6296,7 +6317,14 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "6fa7ad1eb1ccb5e471bf5e87a935de273bac4aad3d78b6962c428a59bd076a96"
+      "code_digest": "86d8283f00818f4475864efc6df81dc60f35012044f9bd548fc69ea7f54079cd",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "6fa7ad1eb1ccb5e471bf5e87a935de273bac4aad3d78b6962c428a59bd076a96",
+        "current_code_digest": "86d8283f00818f4475864efc6df81dc60f35012044f9bd548fc69ea7f54079cd"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.9.0",
@@ -6328,7 +6356,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -7220,13 +7248,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d596ce7e6905b49ba4cbeb7f0fad63ae8e5f336a95784d5ee44783e2e218fbbf",
+      "code_digest": "b32074575d358a20fb9e31ff432aa4e5085efdeaa2b9cd0423ecd9b4d113aa29",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅增加实屏ezx/fmu/jn+/kh4精确同面板布局，既有包、UID、昵称、全文、唯一行及跨布局拒绝不变；174项回归及本次完整原件只读验证通过，业务合同和Skill方法未变。",
-        "reviewed_by": "codex-live-layout-fix (Task 6e1b212f-cf02-42e4-9eef-61a193931de4)",
-        "previous_code_digest": "a91c387d36fb565c8339a05dc2a852d313251c789f883846c3bb6e609194aa17",
-        "current_code_digest": "d596ce7e6905b49ba4cbeb7f0fad63ae8e5f336a95784d5ee44783e2e218fbbf"
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "d596ce7e6905b49ba4cbeb7f0fad63ae8e5f336a95784d5ee44783e2e218fbbf",
+        "current_code_digest": "b32074575d358a20fb9e31ff432aa4e5085efdeaa2b9cd0423ecd9b4d113aa29"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7254,7 +7282,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -8080,7 +8108,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb"
+      "code_digest": "c30cf216af81d3336420b88596ab4a8f5aac366ba77eec6eca8d7e1e7ad9c04a",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "3be10492c0e28d087ced97cdf679f016a094fabd047bddead5a35a20537054cb",
+        "current_code_digest": "c30cf216af81d3336420b88596ab4a8f5aac366ba77eec6eca8d7e1e7ad9c04a"
+      }
     },
     "douyin_lead_outreach.send_dm": {
       "activity_version": "6.0.2",
@@ -8107,7 +8142,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -8908,7 +8943,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2"
+      "code_digest": "548b99a3fcb31992b5ce317264c989486e638cbd15efdc0d966927a9b6f6892e",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "2db920e7dea8326ee1f31b372fb8b7fb267e800b131e42659c631afcc0ec98b2",
+        "current_code_digest": "548b99a3fcb31992b5ce317264c989486e638cbd15efdc0d966927a9b6f6892e"
+      }
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "4.0.1",
@@ -8935,7 +8977,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -9729,7 +9771,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475"
+      "code_digest": "6ec8014b3249cad585bdba93b2680b4264b75f0d8a4e4d4411a30863e34e62e3",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "0fcfb7c3e0d26deac0f81a0cf53ae64ed267a1157e9a3bd012ca489150e35475",
+        "current_code_digest": "6ec8014b3249cad585bdba93b2680b4264b75f0d8a4e4d4411a30863e34e62e3"
+      }
     },
     "douyin_lead_outreach.cleanup": {
       "activity_version": "3.2.1",
@@ -9756,7 +9805,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/official-phone-peer-authority.mjs",
           "revision": "contract",
-          "sha256": "c3daba8213b5a42f5f3d0204e13eaffca06c2836a6cb3c8bc1f2cde0dd99cb35"
+          "sha256": "a8dd4e7ac007ea63cad6fe149fdf3fba97011fd1cfbeb86a6996a1af21695fc9"
         },
         {
           "kind": "code",
@@ -10560,7 +10609,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6"
+      "code_digest": "fd5aea462c8e6947a35632a7150dea0a7329a02f31e30a46742192ca51f498e0",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅在受认证且不可变的release边界内，以绑定release_id和manifest_sha256的权威gate替代完整正文；所有source、Task、claim、观测、锁和期限校验保留；相对fbd70c新main的Skill及业务合同正文不变。",
+        "reviewed_by": "codex-pstack-commander",
+        "previous_code_digest": "33195ccf9d255a1e0d00a03df835137326850e6715460054d037d1c32f79b3f6",
+        "current_code_digest": "fd5aea462c8e6947a35632a7150dea0a7329a02f31e30a46742192ca51f498e0"
+      }
     }
   },
   "workflows": {
