@@ -212,7 +212,10 @@ async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){
       if(frozen.length!==1||frozen[0].run_id!==binding.run||!mark||mark.company_id!==original.company_id
         ||mark.tenant_id!==original.tenant_id||Number(mark.version)!==Number(original.version)||mark.policy_id!==original.policy_id)return unknown;
     }
-    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id]},deps);
+    const committed=binding.committed_partial_ids;
+    if(committed!==undefined&&(!Array.isArray(committed)||committed.length!==1||committed[0]!==id))return unknown;
+    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,
+      source_run:committed?null:binding.source_run,ids:[id],...(committed?{committed_partial_ids:committed,sources:{[id]:rows[0].harvest_batch}}:{})},deps);
     return review.rows[0]||unknown;
   }catch{return unknown;}
 }

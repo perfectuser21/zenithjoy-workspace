@@ -23,7 +23,7 @@ function fixture(){
   if(sql.includes('company_config_runs'))return {rows:[args[0]===batch?state.source:state.target]};
   if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:sql.includes("process_status='评论已采'")?[]:[state.video]};
   if(sql.includes('FROM zenithjoy.leadgen_comments')){
-   if(sql.includes('FOR UPDATE SKIP LOCKED')&&(sql.includes('relevance IS NULL')?state.row.relevance!==null:state.row.relevance===null))return {rows:[]};
+   if(sql.includes('FOR UPDATE SKIP LOCKED')&&((Array.isArray(args[2])&&args[2].includes(id))||(sql.includes('relevance IS NULL')?state.row.relevance!==null:state.row.relevance===null)))return {rows:[]};
    return {rows:[structuredClone(state.row)]};
   }
   if(sql.includes('UPDATE zenithjoy.leadgen_comments')){
@@ -33,8 +33,8 @@ function fixture(){
    else if(sql.includes("SET process_status = '已分拣'"))state.row.process_status='已分拣';
    return {rowCount:1,rows:[structuredClone(state.row)]};
   }
-  if(sql.includes('INSERT INTO zenithjoy.leadgen_leads'))return {rows:[{id:leadId,created:true}]};
-  if(sql.includes('FROM zenithjoy.leadgen_leads'))return {rows:[{id:leadId,line_key:line,douyin_id:state.row.douyin_id}]};
+  if(sql.includes('INSERT INTO zenithjoy.leadgen_leads')){state.leadCreated=true;return {rows:[{id:leadId,created:true}]};}
+  if(sql.includes('FROM zenithjoy.leadgen_leads'))return {rows:state.leadCreated?[{id:leadId,line_key:line,douyin_id:state.row.douyin_id,dup_hit_count:0}]:[]};
   if(sql.includes('INSERT INTO zenithjoy.leadgen_bridge_outbox')){state.outbox.push({id:'fixture-outbox',line_key:args[0],comment_id:args[1],lead_id:args[2],run_tag:args[3],source_run:args[4],payload:JSON.parse(args[5]),payload_sha256:args[6],qualification_status:args[7]});return {rowCount:1,rows:[]};}
   if(sql.includes('FROM zenithjoy.leadgen_bridge_outbox'))return {rows:state.outbox};
   return {rows:[]};
@@ -98,3 +98,31 @@ for(const [name,change] of [
  ['未持有视频',f=>f.video.process_status='待判定'],
  ['错公司',f=>f.source.snapshot.company_id='other-company'],
 ])test('certification never overwrites '+name,async()=>{const f=fixture(),proof=structuredClone(f.row.recipient_evidence);f.row.recipient_evidence={status:'unknown'};f.video.process_status=`处理中:${batch}`;const comment={nickname:f.row.nickname,douyinId:f.row.douyin_id,commentBody:f.row.comment_body,profileUrl:f.row.profile_url,sourceVideo:f.row.source_video,sourceVideoUrl:url,recipientEvidence:proof};change(f);await assert.rejects(queueRequest(f.pool,{op:'certify_collected_comment',line,run:batch,video_id:vid,video_url:url,comment_id:id,comment}),/COMMITTED_PARTIAL|RECIPIENT_|COMPANY_COLLECTION/);assert.equal(f.updates.length,0);});
+
+test('certification is idempotent and never replaces an already verified receipt',async()=>{
+ const f=fixture();f.video.process_status=`处理中:${batch}`;
+ const comment={nickname:f.row.nickname,douyinId:f.row.douyin_id,commentBody:f.row.comment_body,profileUrl:f.row.profile_url,sourceVideo:f.row.source_video,sourceVideoUrl:url,recipientEvidence:structuredClone(f.row.recipient_evidence)};
+ const input={op:'certify_collected_comment',line,run:batch,video_id:vid,video_url:url,comment_id:id,comment};
+ assert.equal((await queueRequest(f.pool,input)).already_certified,true);assert.equal(f.updates.length,0);
+ comment.recipientEvidence.receipt_id='00000000-0000-4000-8000-000000000224';await assert.rejects(queueRequest(f.pool,input),/ALREADY_CERTIFIED/);assert.equal(f.updates.length,0);
+});
+for(const [name,change] of [
+ ['body',c=>c.commentBody='wrong'],['UID',c=>c.douyinId='other'],['nickname',c=>c.nickname='other'],
+ ['profile URL',c=>c.profileUrl='https://v.douyin.com/other/'],['video URL',c=>c.sourceVideoUrl=url+'1'],['video title',c=>c.sourceVideo='other'],
+ ['unknown new proof',c=>c.recipientEvidence.status='unknown'],['wrong native UID',c=>{c.recipientEvidence.raw.profile=c.recipientEvidence.raw.profile.replace('fixture-account-102','other-native-account');c.recipientEvidence.sha256.profile=native.hash(c.recipientEvidence.raw.profile);}],
+])test('certification rejects changed input '+name,async()=>{
+ const f=fixture(),proof=structuredClone(f.row.recipient_evidence);f.row.recipient_evidence={status:'unknown'};f.video.process_status=`处理中:${batch}`;
+ const comment={nickname:f.row.nickname,douyinId:f.row.douyin_id,commentBody:f.row.comment_body,profileUrl:f.row.profile_url,sourceVideo:f.row.source_video,sourceVideoUrl:url,recipientEvidence:proof};change(comment);
+ await assert.rejects(queueRequest(f.pool,{op:'certify_collected_comment',line,run:batch,video_id:vid,video_url:url,comment_id:id,comment}),/COMMITTED_PARTIAL|RECIPIENT_/);assert.equal(f.updates.length,0);
+});
+test('changing certified identity after a score blocks policy, mark and readback without another model',async()=>{
+ const f=fixture();await queueRequest(f.pool,f.input('score'),f.deps);f.row.douyin_id='changed';
+ for(const op of ['policy_review','mark_leads','score_readback','mark_readback','score_recovery'])await assert.rejects(queueRequest(f.pool,{...f.input(op),claim:run},f.deps),/COMMITTED_PARTIAL|RECIPIENT_/);
+ assert.equal(f.modelCalls,1);assert.equal(f.outbox.length,0);
+});
+test('persisted bridge review propagates ordinary exact partial scope and rechecks original proof',async()=>{
+ const f=fixture();await queueRequest(f.pool,f.input('score'),f.deps);await queueRequest(f.pool,f.input('mark_leads'),f.deps);
+ const payload=f.outbox[0].payload,binding={run:payload.run,scoring_run:payload.scoring_run,source_run:payload.comment_run,source_video:payload.source_video,source_video_url:payload.source_video_url,committed_partial_ids:payload.committed_partial_ids};
+ const review=require('../leadgen-queue.js').reviewBoundComment;assert.equal((await review(f.pool,line,id,binding)).status,'pass');assert.equal(f.modelCalls,1);
+ f.row.recipient_evidence.status='unknown';assert.equal((await review(f.pool,line,id,binding)).status,'unknown');assert.equal(f.modelCalls,1);
+});

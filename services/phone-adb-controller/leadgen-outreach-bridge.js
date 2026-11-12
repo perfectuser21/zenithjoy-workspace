@@ -5,7 +5,7 @@ async function collectionBinding(pool,lineKey,run,recipient){
  if(recipient?.company_binding===undefined)return undefined;
  return require('./company-config-lib.js').readCollectionAccountBinding(pool,{lineKey,run,sourceRun:recipient.scope?.source_run});
 }
-async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},deps={}){
+async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config,committed_partial_ids},deps={}){
  if(!lead?.id||!comment?.id||comment.line_key!==lineKey)throw Error('BRIDGE_IDENTITY_INVALID');
  const mapped=(await client.query('SELECT id,line_key,douyin_id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND id=$2',[lineKey,lead.id])).rows;
  const leadIdentity=mapped.length===1?mapped[0]:null;
@@ -15,7 +15,8 @@ async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},
    :await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipientFromScore)(comment,config,{companyBinding});
  if(!['passed','excluded','unknown'].includes(qualification?.status))throw Error('BRIDGE_QUALIFICATION_INVALID');
  if(qualification.status==='passed'&&(!leadIdentity||leadIdentity.id!==lead.id||leadIdentity.line_key!==lineKey||leadIdentity.douyin_id!==comment.douyin_id))qualification={...qualification,status:'unknown',reason:'lead_identity_mapping_unverified'};
- const intent={version:1,line_key:lineKey,run,scoring_run:comment.judgment_config?.run_id,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
+ if(committed_partial_ids!==undefined&&(!Array.isArray(committed_partial_ids)||committed_partial_ids.length!==1||committed_partial_ids[0]!==comment.id))throw Error('BRIDGE_COMMITTED_SCOPE_INVALID');
+ const intent={...(committed_partial_ids?{committed_partial_ids}:{}),version:1,line_key:lineKey,run,scoring_run:comment.judgment_config?.run_id,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
    target_douyin_id:comment.douyin_id,nickname:comment.nickname,comment_body:comment.comment_body,
    profile_url:comment.profile_url,source_video:comment.source_video,source_video_url:comment.source_video_url,
    collected_at:comment.collected_at,intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
@@ -80,7 +81,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,review
    }
    const p=row.payload;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p?.comment_id,
-     {run:p?.run,scoring_run:p?.scoring_run,source_run:p?.comment_run,source_video:p?.source_video,source_video_url:p?.source_video_url});
+     {run:p?.run,scoring_run:p?.scoring_run,source_run:p?.comment_run,source_video:p?.source_video,source_video_url:p?.source_video_url,...(p?.committed_partial_ids?{committed_partial_ids:p.committed_partial_ids}:{})});
    if(policy.status!=='pass'){result.unknown++;result.verified=false;continue;}
    let companyBinding;
    try{companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);const p=nativeIntent(row,{companyBinding,verifyRecipient});if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
@@ -128,7 +129,7 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPo
    const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
    const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
-     {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
+     {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url,...(p.committed_partial_ids?{committed_partial_ids:p.committed_partial_ids}:{})});
    if(policy.status!=='pass')continue;
    if(!row.fields||digest(row.fields)!==row.fields_sha256)continue;
    const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
@@ -153,7 +154,7 @@ async function reviewPreparedOrder(route,record,{pool,run,scope,freezeCompanyCon
   if(txt(record.fields?.['抖音号']).toLowerCase()!==String(p.target_douyin_id).toLowerCase()
     ||txt(record.fields?.['主页链接'])!==p.profile_url)return false;
   const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
-    {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
+    {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url,...(p.committed_partial_ids?{committed_partial_ids:p.committed_partial_ids}:{})});
   return policy.status==='pass';
  }catch{return false;}
 }
