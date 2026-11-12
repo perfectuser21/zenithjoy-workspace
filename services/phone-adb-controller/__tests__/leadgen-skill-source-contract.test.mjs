@@ -40,7 +40,9 @@ test('101共享102预检/收尾，接手文档明确Activity范围与原部署�
   assert.equal(discovery.activities.at(-1).ref,sharedOwner+'.cleanup');
   for(const flow of flows){
     const text=readFileSync(root+'services/phone-adb-controller/skills/douyin-leadgen-'+numbers[flow]+'/SKILL.md','utf8');
-    assert.ok(text.includes('mode=activity'),'不能把整流程调用冒作单Activity接手');
+    const header=parse(text.match(/^---\n([\s\S]*?)\n---/)[1]);
+    if(Number(numbers[flow])===104)assert.ok(text.includes('mode=activity'));
+    else assert.equal(header.metadata.document_role,'workflow-index','Workflow目录组织Activity，不替代独立方法');
     const map=JSON.parse(readFileSync(root+'services/phone-adb-controller/skills/douyin-leadgen-'+numbers[flow]+'/references/runtime-calls.json','utf8'));
     assert.equal(map.workflow_key,flow);
     assert.equal(map.full_flow_entry,'leadgen-run.sh');
@@ -60,7 +62,7 @@ test('Skill和引用文件进入设备及MMV的实际发布清单，103不要求
   const source=readFileSync(path,'utf8');
   const prefix=source.slice(0,source.indexOf('# 在任何SSH前核验部署源字节'));
   const names=execFileSync('/bin/bash',['-c',prefix+'\nprintf "%s\\n" "${DEVICE_RPC_PROBE_FILES[@]}" "${MMV_RUNTIME_FILES[@]}"',path],{encoding:'utf8',env}).trim().split('\n');
-  for(const number of Object.values(numbers))for(const suffix of ['SKILL.md','references/reuse-map.json','references/runtime-calls.json']){
+  for(const number of Object.values(numbers))for(const suffix of ['SKILL.md','references/runtime-calls.json',...(Number(number)===104?['references/reuse-map.json']:[])]){
     const name='skills/douyin-leadgen-'+number+'/'+suffix;
     assert.equal(names.filter(x=>x===name).length,2,'设备与MMV必须各自发布 '+name);
     assert.ok(readFileSync(root+'services/phone-adb-controller/'+name).length);

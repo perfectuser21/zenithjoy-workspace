@@ -53,7 +53,9 @@ export function collectMethods(root,{read=reader(root)}={}){
       const s=skill(read,path,name);version(a.version);
       if(s.front.metadata?.activity_ref!==ref||s.front.metadata?.activity_version!==a.version)fail('ACTIVITY_METHOD_CONTRACT_MISMATCH',ref);
       if(b.version!==s.record.version)fail('ACTIVITY_METHOD_VERSION_MISMATCH',ref);
-      if(!Array.isArray(s.front.metadata?.support_files)||!s.front.metadata.support_files.includes(prefix+'skills/leadgen-activity-execution.md'))fail('ACTIVITY_SHARED_POLICY_MISSING',ref);
+      if(s.front.metadata?.instruction_dependencies==='self-contained'){
+        if(s.front.metadata.method_role!=='single-activity'||!['执行上下文与工具边界','输入与交付','操作','成功条件','副作用','结果与验收'].every(h=>s.text.includes('## '+h+'\n')))fail('ACTIVITY_SELF_CONTAINED_METHOD_INVALID',ref);
+      }else if(!Array.isArray(s.front.metadata?.support_files)||!s.front.metadata.support_files.includes(prefix+'skills/leadgen-activity-execution.md'))fail('ACTIVITY_SHARED_POLICY_MISSING',ref);
       const code=bindings.filter(b=>b.kind==='code').map(b=>{if(b.repo!==repository||b.revision!=='contract')fail('CODE_BINDING_SOURCE_INVALID',ref);return {...b,sha256:digest(read(safePath(b.path)))};});
       if(!code.length)fail('CODE_BINDING_MISSING',ref);
       const contract={...a};delete contract.implementation_bindings;
