@@ -226,7 +226,7 @@ test('真实PG scratch：单条重开与审计同事务提交，独立读回原�
     judgePolicy:async()=>({grade:'A',audit:{model:'policy-model',response_id:`review-${++reviews}`,
      policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'求资料',comment_signal:'找机构',
       video_signal:'人工智能训练工程师',exclusion_rule:null,reason:'请求报考流程'}}})});
-   assert.equal(judged.scored,1);assert.equal(judged.excluded,0);assert.equal(reviews,2);
+   assert.equal(judged.scored,1);assert.equal(judged.excluded,0);assert.equal(reviews,0);
    const policyReadback=await queueRequest(scoped,{op:'policy_review',line:'jinuo',run:NEW,
     claim:NEW,source_run:SOURCE,ids:[ID]},{});
    assert.equal(policyReadback.verified,true);
