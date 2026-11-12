@@ -65,7 +65,7 @@ test('103 独立政策复核确实识别这五条抽样评论，不把视频误�
  const review=await queueRequest(f.pool,{op:'policy_review',line:'jinuo',run:'new103',claim:'new103',
   source_run:SOURCE,ids,require_dual_review:true},{sourceCommit:NEW_SHA,
    sampledAdmission:{readProof:async()=>f.proof,verifyRecipient:()=>true}});
- assert.deepEqual(review.rows.map(r=>r.reason),Array(5).fill('policy_evidence_invalid'));
+ assert.deepEqual(review.rows.map(r=>r.reason),Array(5).fill('stored_score_unverified'));
 });
 test('正式 Brain 定义、绑定、31 条 span 和采样输入须同一 run',async()=>{
  const {readRunProof}=require('../leadgen-sampled-admission.js');
@@ -244,7 +244,7 @@ test('正式102跨机回执精确接纳多个视频及旧批次历史评论',asy
  const review=await queueRequest(pool,{op:'policy_review',line:'jinuo',run,source_run:source,claim:run,
   ids:comments.map(c=>c.id),require_dual_review:true},{sourceCommit:NEW_SHA,
    sampledAdmission:{readProof:async()=>proof,verifyRecipient:()=>true}});
- assert.deepEqual(review.rows.map(r=>r.reason),Array(4).fill('policy_evidence_invalid'));
+ assert.deepEqual(review.rows.map(r=>r.reason),Array(4).fill('stored_score_unverified'));
  // 标记阶段必须再次用同一精确回执核历史行，原harvest_batch保持不动。
  const originalQuery=pool.query.bind(pool);let selected=false,marked=false;
  comments[3].relevance='不相关';comments[3].judgment_config={run_id:run};comments[3].dedup_key='history-dedup';

@@ -1,3 +1,4 @@
+import {digest} from '../runtime-definition.mjs';
 import {test} from 'node:test';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
@@ -157,34 +158,24 @@ test('两个runtime摘要同时缺失不能以undefined相等通过完整Skill�
 
 
 // 使用已由固定中央源安装器核验的真实四份原文，禁止只测自造的合规文本。
-test('真实固定四份业务Skill均可提取完整验收规范，102保留v2范围',async()=>{
- const {readFileSync}=await import('node:fs');
- const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+test('固定Workflow索引验收逐Activity正文及支持文件，不把目录冒充完整方法',async()=>{
+ const {readFileSync}=await import('node:fs');const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));
  for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103,douyin_lead_outreach:104})){
-  const bytes=readFileSync(new URL(`../skills/douyin-leadgen-${n}/SKILL.md`,import.meta.url));
-  const d=skillAcceptanceDefinition(key,()=>bytes);
-  assert.equal(d.workflow_key,key);assert.ok(d.checks.length>0);
-  assert.equal(d.skill.sha256,createHash('sha256').update(bytes).digest('hex'));
-  if(n===102)assert.ok(d.checks.some(c=>c.text.includes('7689863996204591985')),'固定v2授权范围必须进入真实验收定义');
+  const d=skillAcceptanceDefinition(key,read);assert.equal(d.workflow_key,key);assert.ok(d.checks.length>0);
+  if(n!==104){assert.equal(d.skill.activities.length,n===101?3:n===102?5:2);assert.ok(d.skill.activities.every(a=>a.sha256.length===64));assert.ok(d.checks.some(c=>c.section.endsWith('/成功条件')));}
  }
 });
-test('真实102规范块混入子标题仍由严格发布解析器拒绝',async()=>{
- const {readFileSync}=await import('node:fs');
- const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
- const original=readFileSync(new URL('../skills/douyin-leadgen-102/SKILL.md',import.meta.url),'utf8');
- const bad=original.replace('## 冻结来源绑定\n','## 冻结来源绑定\n\n### 未声明子标题\n');
- assert.notEqual(bad,original);assert.throws(()=>skillAcceptanceDefinition('douyin_video_processing',()=>Buffer.from(bad)),/规范段落为空或结构未知/);
-});
-
-// 新协议节属于完整验收规则，必须被抽取；不能以新增标题为由忽略规则。
-test('纯Skill执行选择精确规范节进入完整验收，近似未声明标题仍拒',async()=>{
- const {readFileSync}=await import('node:fs');
- const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
- for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103})){
-  const text=readFileSync(new URL(`../skills/douyin-leadgen-${n}/SKILL.md`,import.meta.url),'utf8');
-  assert.ok(text.includes('## 纯 Skill 执行选择\n'));
-  const d=skillAcceptanceDefinition(key,()=>Buffer.from(text));
-  assert.ok(d.checks.some(c=>c.section==='纯 Skill 执行选择'&&c.text.includes('LEADGEN_EXECUTION_MODE=agent')));
-  assert.throws(()=>skillAcceptanceDefinition(key,()=>Buffer.from(text.replace('## 纯 Skill 执行选择\n','## 纯 Skill 自行跳过验收\n'))),/未知或重复规范段落/);
- }
+test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，真实方法变更改变验收摘要',async()=>{
+ const {readFileSync}=await import('node:fs');const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const key='douyin_comment_scoring',base='services/phone-adb-controller/skills/',method=base+'douyin-leadgen-activity-103-scoring/SKILL.md';
+ const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));const original=skillAcceptanceDefinition(key,read);
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace('## 成功条件\n','## 未声明验收\n')):read(path)),/未知或重复/);
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace(/^  version: \S+$/m,'  version: 9.9.9')):read(path)),/版本不符/);
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>{if(path===method)throw Error('fixed source missing');return read(path);}),/fixed source missing/);
+ const manifest='services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json';
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>{if(path!==manifest)return read(path);const m=JSON.parse(read(path));m.activities.pop();return Buffer.from(JSON.stringify(m));}),/范围不一致/);
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>{if(path!==manifest)return read(path);const m=JSON.parse(read(path));m.activities[0].activity_ref='douyin_video_processing.scoring';return Buffer.from(JSON.stringify(m));}),/所属Workflow不符/);
+ const changed=skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace('## 成功条件\n','## 成功条件\n\n新增可观察要求。\n')):read(path));
+ assert.notEqual(digest(changed),digest(original));assert.notEqual(changed.skill.activities[0].sha256,original.skill.activities[0].sha256);
 });

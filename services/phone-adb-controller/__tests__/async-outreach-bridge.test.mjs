@@ -76,7 +76,7 @@ test('QA 沙箱经真实 RPC 完成旧 score → 新 mark → bridge → 独立 
   profile_url:p.profile_url,comment_body:p.comment_body,source_video:p.source_video,source_video_url:p.source_video_url,
   harvest_batch:'source102',collected_at:p.collected_at,process_status:'待分拣',relevance:null,intent_grade:null,
   recipient_evidence:p.recipient_evidence,response:{primary_grade:'A',policy_grade:'A',recipient_choice:'passed',
-   policy_evidence:{audience_id:'test-audience',matched_rule:'报名',exclusion_rule:null,reason:'报名咨询'}}};
+   policy_evidence:{audience_id:'test-audience',matched_rule:'报名',comment_signal:p.comment_body,video_signal:p.source_video,exclusion_rule:null,reason:'报名咨询'}}};
  writeFileSync(fixture,JSON.stringify({snapshot,rows:[row],line:'jinuo',run:'score103',mark_run:'mark103-new',contact_run:'contact104',
   source_run:'source102',limit:1,profile:'legacy',sender_douyin_id:'sender987',video:{video_id:p.recipient_evidence.scope.video_id,
    video_url:p.source_video_url,title:p.source_video}}));
@@ -84,7 +84,7 @@ test('QA 沙箱经真实 RPC 完成旧 score → 新 mark → bridge → 独立 
  for(const mode of ['score','score_readback','policy_review','mark_leads','mark_readback','bridge_outreach','bridge_readback','claim_outreach','prepare_outreach']){
   const result=spawnSync(process.execPath,[cli,mode,'--fixture',fixture,'--output',output],{encoding:'utf8'});
   assert.equal(result.status,0,`${mode}: ${result.stdout}${result.stderr}`);
-  const body=JSON.parse(result.stdout);if(mode==='score')assert.equal(body.rows[0].judgment_config.run_id,'score103');
+  const body=JSON.parse(result.stdout);if(mode==='score'){assert.equal(body.rows[0].judgment_config.run_id,'score103');assert.equal(body.rows[0].judgment_config.scoring_mode,'single-evaluation-v1');}
   if(mode==='mark_leads')assert.equal(body.outbox[0]?.payload.scoring_run,'score103');
   if(['score_readback','policy_review','mark_readback','bridge_readback'].includes(mode))assert.equal(body.result.verified,true,`${mode}: ${result.stdout}`);
   if(mode==='prepare_outreach')assert.equal(body.result.prepared,true);

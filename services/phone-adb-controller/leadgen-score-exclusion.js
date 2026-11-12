@@ -247,7 +247,7 @@ async function scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources,samp
  const snapshot=frozen[0].snapshot;
  const historicalIds=[...sampledIds];
  const rows=(await pool.query(`SELECT id,harvest_batch,line_key,process_status,relevance,intent_grade,
-   comment_body,source_video,source_video_url,judgment_config FROM zenithjoy.leadgen_comments
+   comment_body,source_video,source_video_url,judgment_reason,judgment_config FROM zenithjoy.leadgen_comments
    WHERE line_key=$1 AND ${historicalIds.length?"($2::text IS NULL OR harvest_batch=$2 OR id=ANY($4::uuid[]))":"($2::text IS NULL OR harvest_batch=$2)"} AND id=ANY($3::uuid[])`,
    historicalIds.length?[lineKey,sourceRun,ids,historicalIds]:[lineKey,sourceRun,ids])).rows;
  if(rows.length!==ids.length||new Set(rows.map(r=>r.id)).size!==ids.length)throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
@@ -276,6 +276,10 @@ async function scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources,samp
      ||reviews[0].evidence_sha256===reviews[1].evidence_sha256
      ||reviews[0].original_sha256!==reviews[1].original_sha256)throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
    excluded.push(row.id);excludedReasons.push({id:row.id,reason:c.exclusion_reason});continue;
+  }
+  if(c.scoring_mode==='single-evaluation-v1'){
+   if(require('./leadgen-policy-review.js').verifyStoredScore(row,snapshot).status!=='pass')throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
+   committed.push(row.id);continue;
   }
   if(c.company_id!==snapshot.company_id||c.tenant_id!==snapshot.tenant_id||c.policy_id!==snapshot.policy_id||Number(c.version)!==Number(snapshot.version)
     ||!c.policy_audit||c.policy_audit.status!=='pass'||!c.policy_audit.response_id

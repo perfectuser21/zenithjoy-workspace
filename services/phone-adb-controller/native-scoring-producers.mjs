@@ -129,7 +129,7 @@ export async function startNativeScoringProducers({root,source,scope,directory,p
   let clientPromise;
   const originalClient=()=>clientPromise??=orders.orderClient(route,{fetcher,read:()=>JSON.stringify(feishuCredentials),env:{HOME:directory},deadlineAt:deadlineMs});
   const client=Object.fromEntries(['all','fields','post','get'].map(method=>[method,async(...args)=>(await originalClient())[method](...args)]));
-  const deps={judgeComment:(...args)=>model.judgeComment(...args.slice(0,3),{...args[3],apiKey,httpPost}),judgePolicy:(comment,video,profile,reason,options)=>model.judgeCommander(comment,video,profile,reason,{...options,apiKey,httpPost}),qualifyRecipient:(comment,config,options)=>recipient.qualifyRecipient(comment,config,{...options,apiKey,httpPost,verifyRecipient}),verifyRecipient,client,lock:(line,fn)=>withOrderLock(line,fn,{directory:orderDirectory}),stageRows};
+  const deps={judgeComment:(...args)=>model.judgeCommentOnce(...args.slice(0,3),{...args[3],apiKey,httpPost}),judgePolicy:(comment,video,profile,reason,options)=>model.judgeCommander(comment,video,profile,reason,{...options,apiKey,httpPost}),qualifyRecipient:(comment,config,options)=>recipient.qualifyRecipientFromScore(comment,config,{...options,apiKey,httpPost,verifyRecipient}),verifyRecipient,client,lock:(line,fn)=>withOrderLock(line,fn,{directory:orderDirectory}),stageRows};
   deps.reviewPolicy=(...args)=>require('./leadgen-queue.js').reviewBoundComment(...args,deps);
   deps.sampledAdmission={verifyRecipient,readProof:async sourceRun=>{
    check();if(typeof sourceRun!=='string'||sourceRun!==fixed.source_run||!/^[-A-Za-z0-9_]{1,120}$/.test(sourceRun))throw fail('SOURCE_PROOF_SCOPE');
