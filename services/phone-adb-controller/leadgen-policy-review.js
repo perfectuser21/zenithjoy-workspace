@@ -164,6 +164,37 @@ async function verifyStoredPolicy(row,snapshot){
     evidence_sha256:sha(reviews.map(v=>v.evidence_sha256)),review_count:2};
 }
 
+// 保存一次评分的原件绑定；只做结构、身份和内容完整性检查，不再评判档位。
+const SINGLE_SCORE_MODE='single-evaluation-v1';
+const SINGLE_SCORE_DECISION='8331c673-1113-4a04-a5dd-54ec76a916fe';
+function scoreDigest(row,snapshot,config){
+  return sha({id:row.id,line_key:row.line_key,harvest_batch:row.harvest_batch,
+    comment_body:row.comment_body,source_video:row.source_video,source_video_url:row.source_video_url,
+    relevance:row.relevance,intent_grade:row.intent_grade,judgment_reason:row.judgment_reason,
+    run_id:config.run_id,company_id:config.company_id,tenant_id:config.tenant_id,
+    version:config.version,policy_id:config.policy_id,model_audit:config.model_audit,
+    scoring_rules:snapshot.runtime_config.comment_scoring});
+}
+function makeSingleScoreAudit(row,snapshot,verdict,evidence){
+  const config={...evidence,scoring_mode:SINGLE_SCORE_MODE,scoring_decision_id:SINGLE_SCORE_DECISION,model_audit:verdict.audit};
+  const scored={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,judgment_reason:verdict.reason};
+  config.score_sha256=scoreDigest(scored,snapshot,config);return config;
+}
+function verifyStoredScore(row,snapshot){
+  const c=row?.judgment_config,base={id:row?.id,status:'unknown',reason:'stored_score_unverified',model_call_count:0};
+  if(!c||c.scoring_mode!==SINGLE_SCORE_MODE||c.scoring_decision_id!==SINGLE_SCORE_DECISION
+    ||!c.run_id||c.company_id!==snapshot?.company_id||c.tenant_id!==snapshot.tenant_id
+    ||Number(c.version)!==Number(snapshot.version)||c.policy_id!==snapshot.policy_id
+    ||!row.id||!row.comment_body||!row.source_video||!row.source_video_url
+    ||!c.model_audit?.model||!c.model_audit?.response_id
+    ||!['相关','不相关'].includes(row.relevance)
+    ||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade)
+    ||row.relevance==='不相关'&&row.intent_grade!==null
+    ||!snapshot.runtime_config?.comment_scoring||c.score_sha256!==scoreDigest(row,snapshot,c))return base;
+  return {id:row.id,status:'pass',reason:'stored_score_match',model_call_count:0,review_count:0,
+    model:c.model_audit.model,response_id:c.model_audit.response_id,evidence_sha256:c.score_sha256};
+}
+
 async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){
   const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const unknown={id,status:'unknown',reason:'comment_outbox_binding_invalid'};
@@ -181,9 +212,9 @@ async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){
       if(frozen.length!==1||frozen[0].run_id!==binding.run||!mark||mark.company_id!==original.company_id
         ||mark.tenant_id!==original.tenant_id||Number(mark.version)!==Number(original.version)||mark.policy_id!==original.policy_id)return unknown;
     }
-    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id],require_dual_review:true},deps);
+    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id]},deps);
     return review.rows[0]||unknown;
   }catch{return unknown;}
 }
 
-module.exports={evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment};
+module.exports={evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment,makeSingleScoreAudit,verifyStoredScore};

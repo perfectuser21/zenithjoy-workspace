@@ -12,7 +12,7 @@ async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},
  let companyBinding,sourceUnknown=false;
  try{companyBinding=await collectionBinding(client,lineKey,comment.harvest_batch,comment.recipient_evidence);}catch{sourceUnknown=true;}
  let qualification=sourceUnknown?{status:'unknown',reason:'frozen_collection_binding_missing_or_invalid',model_call_count:0}
-   :await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config,{companyBinding});
+   :await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipientFromScore)(comment,config,{companyBinding});
  if(!['passed','excluded','unknown'].includes(qualification?.status))throw Error('BRIDGE_QUALIFICATION_INVALID');
  if(qualification.status==='passed'&&(!leadIdentity||leadIdentity.id!==lead.id||leadIdentity.line_key!==lineKey||leadIdentity.douyin_id!==comment.douyin_id))qualification={...qualification,status:'unknown',reason:'lead_identity_mapping_unverified'};
  const intent={version:1,line_key:lineKey,run,scoring_run:comment.judgment_config?.run_id,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,

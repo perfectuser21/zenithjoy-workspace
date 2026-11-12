@@ -3,9 +3,9 @@
 const db = require('./leadgen-db-lib.js');
 const { resolveLine, configEvidence } = require('./judge-video.js');
 const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
-const { judgeComment, scoreFailureReceipt, safeCommanderEvidenceCheck } = require('./judge-comment.js');
+const { judgeCommentOnce: judgeComment, scoreFailureReceipt, safeCommanderEvidenceCheck } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment}=require('./leadgen-policy-review.js');
+const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment,makeSingleScoreAudit,verifyStoredScore}=require('./leadgen-policy-review.js');
 const commentAdmission=require('./leadgen-comment-admission.js');
 const sampledAdmission=require('./leadgen-sampled-admission.js');
 async function transaction(pool, fn) {
@@ -97,8 +97,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun||sampled.some(a=>a.id===id):row.harvest_batch===input.sources[id])
         &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1||sampled.some(a=>a.id===id))
         &&row.judgment_config?.run_id===run
-        ?row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot)
-          :input.require_dual_review?{id,status:'unknown',reason:'policy_evidence_invalid'}:await evaluatePolicy(row,snapshot,deps)
+        ?row.judgment_config?.scoring_mode==='single-evaluation-v1'?verifyStoredScore(row,snapshot)
+          :row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot):{id,status:'unknown',reason:'stored_score_unverified',model_call_count:0}
           :{id,status:'unknown',reason:'row_or_video_scope_unverified'});
     }
     return {verified:reviewed.every(r=>r.status==='pass'),rows:reviewed,ids,scope:{line:lineKey,run,claim:input.claim,source_run:sourceRun}};
@@ -411,20 +411,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;}
         const boundEvidence={...evidence,...(row.judgment_config?.recovery_prior
           ?{recovery_prior:row.judgment_config.recovery_prior}:{})};
-        const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
-          judgment_reason:verdict.reason,judgment_config:boundEvidence};
-        const semantic=await dualPolicyReview(judged,snapshot,deps);
-        if(semantic.status==='exclude')return require('./leadgen-score-exclusion.js').commitExclusion(client,
-          {row,verdict,semantic,evidence:boundEvidence,lineKey,nextCursor});
-        if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);
-          if(reason)error.score_failure={code:error.message,policy_review_reason:reason,
-            ...(['jev','commander'].includes(semantic.model_stage)?{policy_review_stage:semantic.model_stage}:{}),
-            ...(Number.isInteger(semantic.http_status)&&semantic.http_status>=400&&semantic.http_status<=599?{policy_review_http_status:semantic.http_status}:{}),
-            ...(safeCommanderEvidenceCheck(semantic.evidence_check)?{policy_review_evidence_check:semantic.evidence_check}:{}),
-            ...(Number.isSafeInteger(semantic.model_call_count)&&semantic.model_call_count>=0&&semantic.model_call_count<=2
-              ?{policy_review_model_calls:semantic.model_call_count}:{})};throw error;}
-        const audit={...boundEvidence,
-          model_audit:verdict.audit||null,policy_audit:semantic.reviews[0],policy_reviews:semantic.reviews};
+        const audit=makeSingleScoreAudit(row,snapshot,verdict,boundEvidence);
         // 保留待分拣，交下一活动标记人；模型异常回滚，下一轮仍可重判。
         await client.query(`UPDATE zenithjoy.leadgen_comments SET relevance=$2,intent_grade=$3,
           judgment_reason=$4,judgment_config=$5::jsonb,updated_at=now() WHERE id=$1`, [row.id, verdict.relevance,

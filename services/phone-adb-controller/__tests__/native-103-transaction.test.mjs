@@ -76,7 +76,7 @@ test('没有同Source发行的模型/parser/订单域时score首IO拒；不能�
  r.seal();
 });
 
-test('两Activity完整业务fixture：原评分双审/原生parser/标人事务/原订单锁/同marker Feishu读回',async t=>{
+test('两Activity完整业务fixture：单次评分/原生parser/标人事务/原订单锁/同marker Feishu读回',async t=>{
  assert.equal(typeof producerModule.startNativeScoringProducers,'function','缺父owned模型/Python/订单producer，不能启用普通103');
  const f=await fixture(t);await f.seedNative();
  const orders=[],requests=[];let review=0;
@@ -112,6 +112,8 @@ test('两Activity完整业务fixture：原评分双审/原生parser/标人事务
  assert.equal(nativeClosed.execution_stopped,true);assert.equal(r.snapshot().execution_stopped,true);
  const pg=await f.readRows();assert.equal(pg.comments[0].process_status,'已分拣');assert.equal(pg.comments[0].intent_grade,'A');assert.equal(pg.leads.length,1);assert.equal(pg.outbox[0].state,'confirmed');
  assert.equal(orders.length,1);assert.equal(orders[0].fields['状态'],'待触达');assert.equal(orders[0].fields['发送状态'],'未发送');
+ assert.equal(requests.filter(q=>q.path==='/api/v1/chat/completions').length,1,'一次评分后读回、标记及桥接不得再调模型');
+ assert.equal(requests.filter(q=>q.path==='/api/alpha/decisions').length,0,'不得追加Jev受众复核');
  assert.equal(requests.filter(q=>q.method==='POST'&&q.path.endsWith('/records')).length,1);
  assert.equal(requests.some(q=>q.path.includes('im/v1/messages')),false,'103是CRM配送，不能发聊天或运行104');
 });
