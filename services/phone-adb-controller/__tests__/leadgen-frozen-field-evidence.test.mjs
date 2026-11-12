@@ -56,3 +56,27 @@ test('legacy deterministic saved-policy evaluation uses the same v26 business-re
  assert.equal((await policy.evaluatePolicy(row,snapshot,{judgePolicy:async()=>verdict})).status,'pass');
  verdict.audit.policy_evidence.matched_rule='管理专属待复核';assert.equal((await policy.evaluatePolicy(row,snapshot,{judgePolicy:async()=>verdict})).status,'unknown');
 });
+
+for(const grade of ['B','C','不相关'])test('optional null video is absent for '+grade,async()=>{
+ const p={...proof(),video_signal:null};if(grade==='不相关'){p.audience_id=null;p.matched_rule=null;p.exclusion_rule='跑题';}
+ assert.equal((await score({grade,policy_evidence:p})).result.grade,grade);
+});
+test('A null video stays rejected',async()=>{await assert.rejects(score({grade:'A',policy_evidence:{...proof(),video_signal:null}}),/COMMANDER_EVIDENCE_INVALID/);});
+
+test('single-pass schema constrains original short quotations and prompt requires every comment quote',async()=>{
+ let req;await score(undefined,r=>req=r);assert.equal(req.response_format.type,'json_schema');assert.equal(req.response_format.json_schema.strict,true);assert.equal(req.provider.require_parameters,true);
+ const p=req.response_format.json_schema.schema.properties.policy_evidence.properties;
+ assert.deepEqual(p.comment_signal.enum,[body]);assert.deepEqual(p.video_signal.enum,[null,video]);assert.ok(req.messages[0].content.includes('每个等级都必须提供comment_signal'));
+});
+
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+test('private optional audit retains rejected response without leaking it through error',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'score-private-'));fs.chmodSync(dir,0o700);
+ try{let calls=0;let error;try{await judge.judgeCommentOnce(body,video,'profile',{apiKey:'fixture-secret',scoringRules:rules,env:{LEADGEN_SCORE_AUDIT_DIR:dir},httpPost:async()=>{calls++;return {id:'private-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:'private-invalid-body'}}]};}});}catch(e){error=e;}
+ assert.equal(calls,1);assert.equal(error.message,'COMMANDER_EVIDENCE_INVALID');assert.ok(!JSON.stringify(error).includes('private-invalid-body'));const files=fs.readdirSync(dir);assert.equal(files.length,1);const file=path.join(dir,files[0]);assert.equal(fs.statSync(file).mode&0o777,0o600);const a=JSON.parse(fs.readFileSync(file));assert.equal(a.response_id,'private-response');assert.equal(a.model,judge.COMMANDER_MODEL);assert.equal(a.raw,'private-invalid-body');assert.equal(a.validation,'json_invalid');assert.ok(!JSON.stringify(a).includes('fixture-secret'));
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('unsafe audit directory fails before any HTTP',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'score-unsafe-'));fs.chmodSync(dir,0o755);let calls=0;
+ try{await assert.rejects(judge.judgeCommentOnce(body,video,'profile',{apiKey:'fixture',scoringRules:rules,env:{LEADGEN_SCORE_AUDIT_DIR:dir},httpPost:async()=>{calls++;}}),/SCORE_AUDIT_PATH_INVALID/);assert.equal(calls,0);}finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
