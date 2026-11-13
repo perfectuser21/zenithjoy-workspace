@@ -26,6 +26,8 @@ async function run(command,args,env,timeoutMs,onStart=()=>{},beforeSpawn=()=>{})
   p.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(force);if(startError){reject(startError);return;}resolve({code,signal,tainted,stdout:Buffer.concat(chunks[0]),stderr:Buffer.concat(chunks[1])});});
  });
 }
+const prelaunchExpired=new WeakSet();
+export const isPrelaunchExpired=error=>prelaunchExpired.has(error);
 export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env,assertAdmission}){
  const fenced=policy?.schema_version===2;
  if(fenced&&typeof assertAdmission!=='function')throw Error('COLLECTION_FENCED_ADMISSION_REQUIRED');
@@ -33,7 +35,8 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  launchActive();
  const binary=pinnedClient(policy);
  if(process.platform!=='darwin')throw Error('COLLECTION_NOFORK_UNSUPPORTED');
- if(!/^[A-Za-z0-9_.:-]{1,200}$/.test(serial||'')||!Number.isSafeInteger(deadlineMs)||deadlineMs<=Date.now())throw Error('COLLECTION_LEAF_SCOPE_INVALID');
+ if(!/^[A-Za-z0-9_.:-]{1,200}$/.test(serial||'')||!Number.isSafeInteger(deadlineMs))throw Error('COLLECTION_LEAF_SCOPE_INVALID');
+ if(deadlineMs<=Date.now()){const error=Error('COLLECTION_LEAF_DEADLINE_BEFORE_LAUNCH');prelaunchExpired.add(error);throw error;}
  const endpoint=policy.endpoint?.match(/^tcp:127\.0\.0\.1:([0-9]{1,5})$/);
  if(!endpoint||Number(endpoint[1])<1||Number(endpoint[1])>65535)throw Error('COLLECTION_LEAF_ROUTE_INVALID');
  const clean=fenced?Object.fromEntries(Object.entries(env).filter(([key])=>['HOME','PATH','LANG','TMPDIR','TZ'].includes(key)||/^LC_[A-Z_]+$/.test(key))):{...env};for(const key of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(key))delete clean[key];
