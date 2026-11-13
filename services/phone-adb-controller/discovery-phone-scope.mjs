@@ -7,7 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {readFrozen} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
-import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
+import {startCollectionLeafProducer,isPrelaunchExpired} from './collection-leaf-producer.mjs';
 const records=new WeakMap(),epochs=new WeakMap();
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const fail=reason=>{throw Error('DISCOVERY_PHONE_'+reason);};
@@ -130,14 +130,20 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  const scopeRoot=join(env.WFR_RUN_DIR,'discovery-phone-scopes');mkdirSync(scopeRoot,{recursive:true,mode:0o700});
  const directory=join(scopeRoot,purpose==='collect'?'collect':randomUUID());mkdirSync(directory,{mode:0o700});
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(spec.policy),{flag:'wx',mode:0o600});const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});for(const [n,p] of [['python3',python],['node',node],['zsh',zsh]])symlinkSync(p,join(bin,n));
- const deadline=purpose==='collect'?identity.work_deadline_ms:globalDeadline,producer=await startCollectionLeafProducer({directory,policy:spec.policy,serial:env.SERIAL,deadlineMs:deadline,env,assertAdmission:phoneScopeAdmission({root,env,frozen,state,deadlineMs:deadline,operationAdmission})});
+ const deadline=purpose==='collect'?identity.work_deadline_ms:globalDeadline;
+ let producer,emptyBeforeLaunch=false;
+ try{producer=await startCollectionLeafProducer({directory,policy:spec.policy,serial:env.SERIAL,deadlineMs:deadline,env,assertAdmission:phoneScopeAdmission({root,env,frozen,state,deadlineMs:deadline,operationAdmission})});}
+ catch(error){
+  if(purpose!=='collect'||!isPrelaunchExpired(error))throw error;
+  emptyBeforeLaunch=true;producer={env:{},isReturnUnknown:()=>false,seal:async()=>({empty_requests_returned:true}),close:async()=>{}};
+ }
  let sealing;const seal=()=>sealing??=producer.seal();const timer=setTimeout(()=>{seal().catch(()=>{});},Math.max(1,deadline-Date.now()));
  const r={identity:{...identity,epoch:epochs.get(state)},epoch:epochs.get(state),state,env,originalEnv:{...env},root,spec,frozen,layout:paths,ownerFile,ownerIdentity:owner,consumed:false};
  const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:spec.policy.schema_version===2?spec.policy_binding.policy_path:policyFile,DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_TMP_ROOT:paths.phoneRoot,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
  // A nonzero ADB business probe may still have a verified nofork child close.
  // 101 cleanup needs every native request returned, never a success exit code.
  const returned=s=>s.requests_returned||s.empty_requests_returned;
- return {env:scopedEnv,zsh,assert:()=>{if(producer.isReturnUnknown())fail('LEAF_RETURN_UNKNOWN');if(!unchanged(r))fail('SCOPE_CHANGED');},seal:async()=>{const s=await seal();if(!returned(s)||!unchanged(r))fail('DRAIN_UNVERIFIED');return s;},close:async()=>{clearTimeout(timer);await producer.close();},finish:async result=>{
+ return {env:scopedEnv,zsh,emptyBeforeLaunch,assert:()=>{if(emptyBeforeLaunch)fail('COLLECT_CLOSED');if(producer.isReturnUnknown())fail('LEAF_RETURN_UNKNOWN');if(!unchanged(r))fail('SCOPE_CHANGED');},seal:async()=>{const s=await seal();if(!returned(s)||!unchanged(r))fail('DRAIN_UNVERIFIED');return s;},close:async()=>{clearTimeout(timer);await producer.close();},finish:async result=>{
   try{const s=await seal();if(!returned(s)||!unchanged(r))return result;
    const proof=Object.freeze({protocol:'discovery-cleanup-only-v1',purpose:'cleanup_only',scope_id:randomUUID()});r.resultDigest=digest(result);records.set(proof,r);return {...result,cleanup_phone_scope:proof};
   }finally{clearTimeout(timer);await producer.close();}

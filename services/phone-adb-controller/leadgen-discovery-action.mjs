@@ -22,9 +22,14 @@ export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,
   };
   const collect=async()=>{
       if(isClosed())throw Error('DISCOVERY_PHONE_COLLECT_CLOSED');
-      fixedInput();
+      const frozenInput=fixedInput();
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')scope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:isLocked(),verifyPhoneAssociation});setScope?.(scope);
-      try{const discovery=await getDiscovery();const result=scope&&state.budgetDeadline-Date.now()<discoveryCaptureBudgetMs?discovery.stopForBudget():await discovery.collect_videos();
+      try{
+      if(scope?.emptyBeforeLaunch){
+        const outcome={status:'partial',stop_reason:'budget_exhausted',filter_invocations:0,counts:{sources:Array.isArray(frozenInput?.sources)?frozenInput.sources.length:null,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0,relocation_skipped:0,zero_comments:0},videos:[],captures:[],zero_comment_candidates:[],pending_capture:null,failures:[],known_gaps:[],relocation_reveals:[],identity_enrichments:[],all_results_scanned:false,persisted:0,candidates:0,videos_pushed:0,video_manifest_readback_failures:null,manifest_verified:0,manifest_readback_performed:false};
+        const finished=await scope.finish(outcome);state.discoveryCleanupEvidence=finished;return finished;
+      }
+      const discovery=await getDiscovery();const result=scope&&state.budgetDeadline-Date.now()<discoveryCaptureBudgetMs?discovery.stopForBudget():await discovery.collect_videos();
       // A PG manifest readback can fail after every native leaf has returned.
       // Keep the business evidence unverified, then seal the live phone scope
       // so only its original cleanup may run. A failed scope seal still throws.
