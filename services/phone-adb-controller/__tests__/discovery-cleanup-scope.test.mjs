@@ -275,6 +275,85 @@ test('原截止在派发前已过时空scope可仅清理，不能冒称真实叶
  }finally{await scope?.close();rmSync(f.d,{recursive:true,force:true});}
 });
 
+test('采集截止跨越生产者准入前，只允许原任务清理且不得启动叶子',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true}),{startDiscoveryPhoneScope,discoveryCleanupEvidence}=await f.load('discovery-phone-scope.mjs');let scope;
+ try{
+  const now=Date.now.bind(Date);f.h.state.budgetDeadline=now()+15000;
+  t.mock.method(Date,'now',()=>new Error().stack.includes('startCollectionLeafProducer')?f.h.state.budgetDeadline+1:now());
+  scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:'a'.repeat(40),taskId:'scope-task',lockHeld:true});
+  const result=await scope.finish({status:'partial',stop_reason:'budget_exhausted',persisted:0});
+  assert.ok(discoveryCleanupEvidence(result,f.context));
+  assert.equal(discoveryCleanupEvidence(result,{...f.context,task_id:'other'}),null);
+  assert.deepEqual(f.scopeLedgers(),[],'截止前没有启动任何叶子');
+  assert.equal(existsSync(f.ownerFile),true,'保留原 owner 的设备锁');
+ }finally{t.mock.restoreAll();await scope?.close();rmSync(f.d,{recursive:true,force:true});}
+});
+
+test('采集准入前到期不触发手机操作且可进入原任务清理',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true,attemptLimit:1});
+ try{
+  const {invokeNativeActivity}=await f.load('leadgen-workflow.mjs'),{discoveryCleanupEvidence}=await f.load('discovery-phone-scope.mjs');
+  const now=Date.now.bind(Date),priorRpc=f.rpcCalls.length;f.h.state.budgetDeadline=now()+15000;
+  t.mock.method(Date,'now',()=>new Error().stack.includes('startCollectionLeafProducer')?f.h.state.budgetDeadline+1:now());
+  const result=await invokeNativeActivity(()=>f.h.collect_videos(),f.h.state);
+  assert.ok(discoveryCleanupEvidence(result,f.context));
+  assert.equal(result.stop_reason,'budget_exhausted');
+  assert.equal(result.counts.sources,1,'已冻结来源数量须真实保留');
+  assert.equal(result.video_manifest_readback_failures,null,'没有读回应明确未知');
+  assert.equal(f.rpcCalls.length,priorRpc,'截止后不得再读取或冻结业务配置');
+  assert.deepEqual(f.scopeLedgers(),[]);
+  assert.equal(existsSync(f.ownerFile),true);
+ }finally{t.mock.restoreAll();rmSync(f.d,{recursive:true,force:true});}
+});
+
+test('空 scope 后出现未知操作不得签发清理能力',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true}),{startDiscoveryPhoneScope,discoveryCleanupEvidence}=await f.load('discovery-phone-scope.mjs');let scope;
+ try{
+  const now=Date.now.bind(Date);f.h.state.budgetDeadline=now()+15000;
+  t.mock.method(Date,'now',()=>new Error().stack.includes('startCollectionLeafProducer')?f.h.state.budgetDeadline+1:now());
+  scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:'a'.repeat(40),taskId:'scope-task',lockHeld:true});
+  f.h.state.executionUnknown=true;
+  const result=await scope.finish({status:'partial',stop_reason:'budget_exhausted',persisted:0});
+  assert.equal(discoveryCleanupEvidence(result,f.context),null);
+  assert.equal(existsSync(f.ownerFile),true);
+ }finally{t.mock.restoreAll();await scope?.close();rmSync(f.d,{recursive:true,force:true});}
+});
+
+for(const fixed of [true,false])test(`截止后未派发通过 Runner 仅清理且保持部分完成（冻结输入 ${fixed}）`,{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true,...(fixed?{attemptLimit:1}:{})});
+ try{
+  const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');
+  const now=Date.now.bind(Date),priorRpc=f.rpcCalls.length;f.h.state.budgetDeadline=now()+15000;
+  let afterCollectRpc;
+  const out=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:f.context,handlers:{collect_videos:async()=>{
+   t.mock.method(Date,'now',()=>new Error().stack.includes('startCollectionLeafProducer')?f.h.state.budgetDeadline+1:now());
+   try{return await invokeNativeActivity(()=>f.h.collect_videos(),f.h.state);}finally{afterCollectRpc=f.rpcCalls.length;t.mock.restoreAll();}
+  },cleanup:async()=>{f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},commander:async()=>({action:'retry'}),recover:async()=>{throw Error('不得重试采集');},record:async()=>{},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+  assert.equal(afterCollectRpc,priorRpc);assert.equal(out.status,'partial');
+  const saved=JSON.parse(JSON.stringify(out));assert.equal(saved.results[0].result.video_manifest_readback_failures,null);
+  assert.equal(saved.results[0].result.counts.sources,fixed?1:null);assert.equal(saved.results.at(-1).result.lock_released,1);
+  assert.deepEqual(f.scopeLedgers(),[]);assert.equal(f.stored.length,0);
+ }finally{t.mock.restoreAll();rmSync(f.d,{recursive:true,force:true});}
+});
+
+test('同名伪造错误不代表叶子未启动',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true});
+ try{
+  const {isPrelaunchExpired,startCollectionLeafProducer}=await f.load('collection-leaf-producer.mjs');
+  assert.equal(isPrelaunchExpired(new Error('COLLECTION_LEAF_DEADLINE_BEFORE_LAUNCH')),false);
+  assert.equal(isPrelaunchExpired({message:'COLLECTION_LEAF_DEADLINE_BEFORE_LAUNCH'}),false);
+  await assert.rejects(startCollectionLeafProducer({directory:f.d,policy:f.frozen.discovery_phone_scope.policy,serial:'invalid serial',deadlineMs:Date.now()+5000}),error=>error.message==='COLLECTION_LEAF_SCOPE_INVALID'&&!isPrelaunchExpired(error));
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
+
+test('沙箱探针开始后的错误不能伪装未启动',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{empty:true});
+ try{
+  const {isPrelaunchExpired,startCollectionLeafProducer}=await f.load('collection-leaf-producer.mjs');
+  await assert.rejects(startCollectionLeafProducer({directory:'/dev/null/child',policy:f.frozen.discovery_phone_scope.policy,serial:'NO-DEVICE',deadlineMs:Date.now()+60000}),error=>error.code==='ENOTDIR'&&!isPrelaunchExpired(error));
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
+
 test('cleanup_only可过采集截止但不得过原global截止，过期保原锁',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{empty:true});try{
   const {invokeNativeActivity}=await f.load('leadgen-workflow.mjs');
