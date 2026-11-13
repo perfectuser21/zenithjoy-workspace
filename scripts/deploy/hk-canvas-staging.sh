@@ -13,6 +13,151 @@ ENVFILE="$BASE/.env"
 SERVICE=creative-canvas-staging
 CONTAINER=zenithjoy-creative-canvas-staging-1
 PROJECT=zenithjoy-creative-canvas-staging
+# BEGIN CANVAS ARCHIVE RESTORE
+restore_canvas_image_if_needed() {
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then return 0; fi
+  local archive_root=/opt/zenithjoy-backups/canvas-archives
+  local archive="$archive_root/$SHA/image.archive.tar"
+  local manifest="$archive_root/$SHA/image.archive.json"
+  local receipt="$RELEASES/$SHA/receipt.json"
+  local docker_root free containerd_config
+  [[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] || { echo 'Rollback requires the local Docker daemon' >&2; return 1; }
+  [[ $(docker context inspect --format '{{.Endpoints.docker.Host}}') == unix:///var/run/docker.sock ]] || { echo 'Rollback requires the local Docker socket' >&2; return 1; }
+  docker_root=$(docker info --format '{{.DockerRootDir}}')
+  [[ "$docker_root" == /var/lib/docker && -d /var/lib/containerd ]] || { echo 'Unknown Docker storage layout; refusing archive load' >&2; return 1; }
+  [[ $(docker info --format '{{.Driver}}') == overlayfs ]] || { echo 'Unknown Docker storage driver; refusing archive load' >&2; return 1; }
+  containerd_config=$(containerd config dump 2>/dev/null)
+  [[ $(printf '%s\n' "$containerd_config" | awk '/^root = / {gsub(/\047|\042/, "", $3); print $3}') == /var/lib/containerd ]] || { echo 'Unknown containerd root; refusing archive load' >&2; return 1; }
+  if printf '%s\n' "$containerd_config" | grep -E '^[[:space:]]*(root_path|temp) = ' | grep -vE "= (''|\"\")$" >/dev/null; then
+    echo 'Custom containerd storage or temporary path requires separate budgeting' >&2; return 1
+  fi
+  free=$(df -PB1 --output=avail /var/lib/containerd | tail -n 1 | tr -d '[:space:]')
+  python3 - "$manifest" "$archive" "$receipt" "$free" "$IMAGE" "$archive_root" "$docker_root" <<'PY'
+import gzip, hashlib, json, os, posixpath, re, stat, sys, tarfile
+manifest_path, archive_path, receipt_path, free, image, archive_root, docker_root = sys.argv[1:]
+# Archive path must be rooted in a trusted directory chain. A root-owned sticky
+# directory (such as /tmp in the isolated tests) protects its owned children.
+path = os.path.dirname(archive_path)
+while True:
+    info = os.lstat(path)
+    sticky_root = bool(info.st_mode & stat.S_ISVTX) and info.st_uid == 0
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.geteuid())
+        or info.st_mode & 0o022 and not sticky_root):
+        raise SystemExit('Rollback archive directory chain is not trusted')
+    parent = os.path.dirname(path)
+    if parent == path: break
+    path = parent
+if not os.path.commonpath([archive_path, archive_root]) == archive_root:
+    raise SystemExit('Rollback archive escaped its protected root')
+for path in (manifest_path, archive_path, receipt_path):
+    info = os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+        raise SystemExit('Rollback archive and receipt must be private, owner-controlled regular files')
+stores = [docker_root, docker_root + '/tmp', '/var/lib/containerd',
+          '/var/lib/containerd/io.containerd.content.v1.content',
+          '/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs', '/tmp', '/var/tmp']
+if len({os.stat(path).st_dev for path in stores}) != 1:
+    raise SystemExit('Docker, containerd or temporary storage uses separate filesystems; budget each before restoring')
+with open(manifest_path, encoding='utf-8') as f: manifest = json.load(f)
+with open(receipt_path, encoding='utf-8') as f: receipt = json.load(f)
+if (set(manifest) != {'version', 'sha256', 'image_id', 'required_free_bytes'}
+    or type(manifest['version']) is not int or manifest['version'] != 1
+    or not isinstance(manifest['sha256'], str) or not re.fullmatch(r'[0-9a-f]{64}', manifest['sha256'])
+    or not isinstance(manifest['image_id'], str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', manifest['image_id'])
+    or manifest['image_id'] != receipt.get('image_id')
+    or type(manifest['required_free_bytes']) is not int or manifest['required_free_bytes'] <= 0):
+    raise SystemExit('Rollback archive manifest does not match the verified receipt')
+digest = hashlib.sha256()
+with open(archive_path, 'rb') as f:
+    for block in iter(lambda: f.read(1024 * 1024), b''): digest.update(block)
+if digest.hexdigest() != manifest['sha256']:
+    raise SystemExit('Rollback archive checksum mismatch')
+with tarfile.open(archive_path, 'r:') as archive:
+    entries = {}
+    for entry in archive:
+        name = entry.name.rstrip('/')
+        if not name or name.startswith('/') or posixpath.normpath(name) != name or name in entries:
+            raise SystemExit('Rollback archive has unsafe or duplicate paths')
+        if not entry.isfile() and not entry.isdir():
+            raise SystemExit('Rollback archive contains a link or unsupported entry')
+        if entry.isfile() and name not in ('index.json', 'manifest.json', 'oci-layout') and not re.fullmatch(r'blobs/sha256/[0-9a-f]{64}', name):
+            raise SystemExit('Rollback archive contains an unexpected file')
+        entries[name] = entry
+    def metadata(name):
+        e = entries.get(name)
+        if not e or not e.isfile() or e.size > 4 * 1024 * 1024:
+            raise SystemExit('Rollback archive metadata is invalid')
+        return json.load(archive.extractfile(e))
+    index, legacy = metadata('index.json'), metadata('manifest.json')
+    descriptors = index.get('manifests', []) if isinstance(index, dict) else []
+    canonical = image if '/' in image else 'docker.io/library/' + image
+    if (len(descriptors) != 1 or descriptors[0].get('digest') != manifest['image_id']
+        or descriptors[0].get('annotations', {}).get('io.containerd.image.name') != canonical
+        or not isinstance(legacy, list) or len(legacy) != 1 or legacy[0].get('RepoTags') != [image]):
+        raise SystemExit('Rollback archive must contain only the receipt image and expected tag')
+    seen, descriptors_seen, matches, expanded, largest = set(), {}, False, 0, 0
+    def check(desc):
+        global matches, expanded, largest
+        digest = desc.get('digest', '')
+        if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+            raise SystemExit('Invalid OCI blob digest')
+        name = 'blobs/sha256/' + digest[7:]
+        e = entries.get(name)
+        if not e or not e.isfile() or type(desc.get('size')) is not int or e.size != desc['size']:
+            raise SystemExit('Missing or incorrectly sized OCI blob')
+        kind = desc.get('mediaType', '')
+        signature = (desc['size'], kind)
+        if name in seen:
+            if descriptors_seen[name] != signature: raise SystemExit('OCI blob has conflicting descriptors')
+            return
+        descriptors_seen[name] = signature
+        seen.add(name); largest = max(largest, e.size)
+        h = hashlib.sha256(); stream = archive.extractfile(e)
+        for b in iter(lambda: stream.read(1024 * 1024), b''): h.update(b)
+        if h.hexdigest() != digest[7:]: raise SystemExit('OCI blob checksum mismatch')
+        if 'image.index' in kind or 'manifest.list' in kind or 'image.manifest' in kind or 'manifest.v2' in kind:
+            if e.size > 4 * 1024 * 1024: raise SystemExit('OCI metadata is too large')
+            data = json.load(archive.extractfile(e))
+            if 'manifests' in data:
+                for child in data['manifests']: check(child)
+            elif 'config' in data and 'layers' in data:
+                if (legacy[0].get('Config') == 'blobs/sha256/' + data['config'].get('digest', '')[7:]
+                    and legacy[0].get('Layers') == ['blobs/sha256/' + item.get('digest', '')[7:] for item in data['layers']]): matches = True
+                check(data['config'])
+                for child in data['layers']: check(child)
+            else: raise SystemExit('Invalid OCI manifest')
+        elif 'image.layer' in kind or 'rootfs.diff' in kind:
+            if kind.endswith('+gzip') or kind.endswith('.gzip'):
+                layer = gzip.GzipFile(fileobj=archive.extractfile(e))
+            elif kind.endswith('.tar'): layer = archive.extractfile(e)
+            else: raise SystemExit('Unsupported OCI layer compression')
+            count = 0
+            with layer, tarfile.open(fileobj=layer, mode='r|') as unpacked:
+                for item in unpacked:
+                    count += 1
+                    if item.sparse is not None or any(k.startswith('GNU.sparse') for k in item.pax_headers):
+                        raise SystemExit('Sparse OCI layers cannot be budgeted safely')
+                    expanded += 16384 + ((item.size + 4095) // 4096 * 4096 if item.isfile() else 0)
+                    if count > 2000000 or expanded > 64 * 1024**3:
+                        raise SystemExit('OCI layer size or entry count exceeds safety cap')
+    check(descriptors[0])
+    if not matches: raise SystemExit('Docker manifest does not match an OCI image manifest')
+    if {name for name, item in entries.items() if item.isfile() and name.startswith('blobs/sha256/')} != seen:
+        raise SystemExit('Rollback archive contains unreferenced OCI blobs')
+    # Compressed content, a temporary copy of the largest blob, unpacked layer
+    # bytes plus 20% for filesystem metadata, and 512 MiB remain on the host.
+    computed = sum(entries[name].size for name in seen) + largest + (expanded * 6 + 4) // 5
+    required = max(manifest['required_free_bytes'], computed) + 512 * 1024 * 1024
+    if not free.isdecimal() or int(free) < required:
+        raise SystemExit('Insufficient free space to restore the rollback image safely')
+PY
+  docker load --input "$archive"
+  local loaded expected
+  loaded=$(docker image inspect "$IMAGE" --format '{{.Id}}')
+  expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$receipt")
+  [[ "$loaded" == "$expected" ]] || { echo 'Restored image identity differs from verified receipt' >&2; return 1; }
+}
+# END CANVAS ARCHIVE RESTORE
 mkdir -p "$RELEASES"
 exec 9>"$BASE/deploy.lock"
 flock -n 9 || { echo 'Another canvas staging deployment holds the lock' >&2; exit 1; }
@@ -74,6 +219,7 @@ import json, sys
 r=json.load(open(sys.argv[1])); assert r['environment_hash']==sys.argv[2], 'Private environment changed; cannot restore this receipt safely'
 PY
 fi
+if [[ "$ACTION" == rollback ]]; then restore_canvas_image_if_needed; fi
 IMAGE_ID=$(docker image inspect "$IMAGE" --format '{{.Id}}')
 if [[ -f "$RELEASES/$SHA/receipt.json" ]]; then
   python3 - "$RELEASES/$SHA/receipt.json" "$IMAGE_ID" <<'PY'
