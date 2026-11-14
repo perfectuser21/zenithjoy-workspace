@@ -91,3 +91,21 @@ test('actual registration shell keeps topic approved until the Worker claims the
  const premature=run(t,queued,{pipeline:'pending',topic:'研究中',shell});
  assert.notEqual(premature.status,0,'topic-worker must not advance the topic before a Worker claim');
 });
+
+test('L4 starts on main PR and merge queue with runner state initialized only at step scope',t=>{
+ assert.ok(workflow.on.pull_request.branches.includes('main'));
+ assert.ok(Object.hasOwn(workflow.on,'merge_group'));
+ for(const [key,value] of Object.entries(worker.env))assert.doesNotMatch(String(value),/\$\{\{\s*runner\./,key);
+ const gate=workflow.jobs['l4-e2e-passed'];
+ assert.equal(gate.name,'L4 E2E Gate Passed');assert.equal(gate.if,'always()');
+ assert.ok(gate.needs.includes('smoke-e2e-worker'));
+ assert.match(gate.steps[0].run,/needs\.smoke-e2e-worker\.result/);
+ const init=step('Initialize isolated worker state');assert.ok(init);
+ assert.equal(init.env,undefined);assert.match(init.run,/XDG_STATE_HOME="\$RUNNER_TEMP\/content-worker-state"/);
+ assert.ok(worker.steps.indexOf(init)<worker.steps.indexOf(step('Run topic-worker --apply with Brain registration')));
+ const root=mkdtempSync(join(tmpdir(),'content-worker-state-init-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const envFile=join(root,'github-env'),stateDir=join(root,'content-worker-state');writeFileSync(envFile,'');
+ const result=spawnSync('bash',['-euo','pipefail','-c',init.run],{encoding:'utf8',env:{...process.env,GITHUB_ENV:envFile,RUNNER_TEMP:root}});
+ assert.equal(result.status,0,result.stderr);
+ assert.equal(readFileSync(envFile,'utf8'),`XDG_STATE_HOME=${stateDir}\n`);
+});

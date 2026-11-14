@@ -1,12 +1,13 @@
+import { simpleRateLimit, ipKeyFn } from '../../middleware/simple-rate-limit';
 import {beforeEach,expect,it,vi} from 'vitest';import express from 'express';import request from 'supertest';
 const m=vi.hoisted(()=>({query:vi.fn(),connect:vi.fn()}));vi.mock('../../db/connection',()=>({default:m}));
 import {PipelineController} from '../pipeline.controller';
 const TOPIC='11111111-1111-4111-8111-111111111111',RUN='22222222-2222-4222-8222-222222222222',TASK='33333333-3333-4333-8333-333333333333';
-function app(){const a=express();a.use(express.json());a.post('/trigger',new PipelineController().trigger);return a;}
+function app(){const a=express();a.use(express.json());a.use(simpleRateLimit({windowMs:60000,max:240,keyFn:ipKeyFn}));a.post('/trigger',new PipelineController().trigger);return a;}
 beforeEach(()=>{vi.restoreAllMocks();m.query.mockReset();m.connect.mockReset();});
 it('同topic完全丢失HTTP回执后重发仍恢复同run，先提交本地意图才访问Brain',async()=>{
  let existing:Record<string,unknown>|null=null;const order:string[]=[];let inserted=0;
- const query=vi.fn(async(sql:string,args?:unknown[])=>{order.push(sql);if(sql.includes('FROM zenithjoy.topics'))return {rows:[{id:TOPIC,notebook_id:'book'}]};if(sql.includes('FROM zenithjoy.pipeline_runs'))return {rows:existing?[existing]:[]};if(sql.startsWith('INSERT')){inserted++;existing={id:RUN,topic_id:TOPIC,status:'pending',content_type:'solo-company-case'};return {rows:[existing]};}return {rows:[]};});
+ const query=vi.fn(async(sql:string)=>{order.push(sql);if(sql.includes('FROM zenithjoy.topics'))return {rows:[{id:TOPIC,notebook_id:'book'}]};if(sql.includes('FROM zenithjoy.pipeline_runs'))return {rows:existing?[existing]:[]};if(sql.startsWith('INSERT')){inserted++;existing={id:RUN,topic_id:TOPIC,status:'pending',content_type:'solo-company-case'};return {rows:[existing]};}return {rows:[]};});
  m.connect.mockResolvedValue({query,release:vi.fn()});m.query.mockResolvedValue({rows:[]});
  const fetch=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>{expect(order.at(-1)).toBe('COMMIT');throw new Error('response lost');});
  const body={content_type:'solo-company-case',topic_id:TOPIC};

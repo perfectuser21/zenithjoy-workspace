@@ -42,7 +42,7 @@ jobs:
     name: Playwright — Line02 LeadsTable 统一（ubuntu chromium）
     needs: changes
     if: needs.changes.outputs.lead == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     services:

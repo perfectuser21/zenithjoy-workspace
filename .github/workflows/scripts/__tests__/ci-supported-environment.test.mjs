@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -16,6 +16,21 @@ test('trusted APT and Chromium consumers use a supported reviewed Ubuntu release
   ['e2e-knowledge-hub-path2',['linux-guards-and-db']],
   ['db-backup',['backup-and-drill']],
  ]) for(const id of ids) assert.equal(wf(name).jobs[id]['runs-on'],'ubuntu-24.04',`${name}/${id}`);
+});
+test('all current Ubuntu Chromium, trusted APT and PostgreSQL drill consumers stay on the supported image',()=>{
+ const directory=new URL('../../',import.meta.url);
+ const consumers=[];
+ for(const file of readdirSync(directory).filter(name=>/\.ya?ml$/.test(name))){
+  const workflow=parse(readFileSync(new URL(file,directory),'utf8'));
+  for(const [id,job] of Object.entries(workflow.jobs||{})){
+   const commands=(job.steps||[]).map(step=>step.run||'').join('\n');
+   if(!String(job['runs-on']).includes('ubuntu'))continue;
+   if(!/playwright\s+install|prepare-(?:ubuntu-archive|api-media-tools|agent-media-tools|smoke-os-packages|openclaw-os-packages)|backup\/(?:documents-)?restore-drill\.sh|\bpg_dump\b|\bpg_restore\b/.test(commands))continue;
+   consumers.push(`${file}/${id}`);
+   assert.equal(job['runs-on'],'ubuntu-24.04',`${file}/${id} requires supported Ubuntu browser, trusted packages or PostgreSQL clients`);
+  }
+ }
+ assert.ok(consumers.length>=12,'must discover browser, APT and all three PostgreSQL drill consumers');
 });
 test('both current document restore consumers invoke the maintained drill',()=>{
  for(const [name,id] of [['db-backup','backup-and-drill'],['e2e-knowledge-hub-path2','linux-guards-and-db']]){
@@ -65,4 +80,16 @@ test('maintained document drill and selector changes trigger the real PostgreSQL
   '.github/workflows/scripts/backup/documents-restore-drill.sh',
   '.github/workflows/scripts/backup/select-pg-dump.sh',
  ]) assert.ok(paths.includes(path),`pull_request misses ${path}`);
+});
+
+test('all live PostgreSQL drill workflows trigger for their maintained script dependencies',()=>{
+ const base='.github/workflows/scripts/backup/';
+ for(const [name,scripts] of [
+  ['db-backup',['restore-drill.sh','documents-restore-drill.sh','select-pg-dump.sh']],
+  ['e2e-knowledge-hub-path2',['documents-restore-drill.sh','select-pg-dump.sh']],
+  ['e2e-knowledge-hub-path3',['restore-drill.sh','select-pg-dump.sh']],
+ ])for(const script of scripts){
+  const paths=wf(name).on.pull_request.paths;
+  assert.ok(paths.includes(base+script)||paths.includes(base+'**'),`${name} must trigger for ${script}`);
+ }
 });

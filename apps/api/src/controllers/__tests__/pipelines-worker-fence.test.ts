@@ -1,3 +1,4 @@
+import { simpleRateLimit, ipKeyFn } from '../../middleware/simple-rate-limit';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import express from 'express';import request from 'supertest';
 const m=vi.hoisted(()=>({query:vi.fn(),connect:vi.fn()}));vi.mock('../../db/connection',()=>({default:m}));
@@ -5,7 +6,7 @@ import {PipelinesWorkerController} from '../pipelines-worker.controller';
 import {resultDigest} from '../../services/pipeline-brain-tasks';
 const id='11111111-1111-4111-8111-111111111111', task='22222222-2222-4222-8222-222222222222';
 const identity={brain_task_id:task,claimer:'zj:worker:1',claim_epoch:'2026-11-14 01:00:00.123456+00'};
-const a=()=>{const a=express();a.use(express.json());const c=new PipelinesWorkerController();if(c.claim)a.post('/:id/claim',c.claim);a.post('/:id/stage-complete',c.stageComplete);a.post('/:id/fail',c.fail);return a;};
+const a=()=>{const a=express();a.use(express.json());a.use(simpleRateLimit({windowMs:60000,max:600,keyFn:ipKeyFn}));const c=new PipelinesWorkerController();if(c.claim)a.post('/:id/claim',c.claim);a.post('/:id/stage-complete',c.stageComplete);a.post('/:id/fail',c.fail);return a;};
 let queries:unknown[][];let row:Record<string,unknown>;
 beforeEach(()=>{vi.restoreAllMocks();m.query.mockReset();m.connect.mockReset();queries=[];row={id,status:'pending',cecelia_task_id:task,output_manifest:null};const query=vi.fn(async(s:string,p?:unknown[])=>{queries.push([s,p]);return s.startsWith('SELECT')?{rows:[row]}:{rows:[{...row,status:'running'}]};});m.connect.mockResolvedValue({query,release:vi.fn()});});
 describe('Worker本地业务回执受Brain租约和当前工作单约束',()=>{

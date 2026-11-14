@@ -25,20 +25,6 @@ function makeReq(body: Record<string, unknown> = {}, headers: Record<string, str
   return { body, headers, params: {} } as unknown as import('express').Request;
 }
 
-const PIPELINE_RUN_ROW = {
-  id: 'run-uuid-1',
-  content_type: 'solo-company-case',
-  topic: null,
-  topic_id: null,
-  status: 'pending',
-  output_dir: '/tmp/output',
-  triggered_by: 'manual',
-  notebook_id: null,
-  cecelia_task_id: null,
-  created_at: new Date(),
-  updated_at: new Date(),
-};
-
 describe('PipelineController.trigger — input validation', () => {
   beforeEach(() => {
     mockQuery.mockReset();

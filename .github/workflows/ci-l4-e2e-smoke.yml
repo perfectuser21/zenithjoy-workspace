@@ -205,7 +205,7 @@ jobs:
             echo "FAIL: 未拿到 topic id"
             exit 1
           fi
-          echo "topic_id=$TOPIC_ID" >> $GITHUB_OUTPUT
+          echo "topic_id=$TOPIC_ID" >> "$GITHUB_OUTPUT"
 
       - name: Smoke — GET /api/pacing-config
         run: |
@@ -692,10 +692,15 @@ jobs:
       CONTENT_OUTPUT_DIR: /tmp/ci-content-output
       DEFAULT_NOTEBOOK_ID: ''
       E2E_FAKE_EXECUTORS: 'true'
-      XDG_STATE_HOME: ${{ runner.temp }}/content-worker-state
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Initialize isolated worker state
+        run: |
+          XDG_STATE_HOME="$RUNNER_TEMP/content-worker-state"
+          mkdir -p "$XDG_STATE_HOME"
+          printf 'XDG_STATE_HOME=%s\n' "$XDG_STATE_HOME" >> "$GITHUB_ENV"
 
       - name: Restore pinned skill sources
         if: hashFiles('.skills-source.json') != ''
@@ -739,7 +744,7 @@ jobs:
           npm run build
           node dist/index.js > /tmp/apps-api.log 2>&1 &
           echo $! > /tmp/apps-api.pid
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fs http://localhost:5200/health >/dev/null 2>&1; then break; fi
             sleep 1
           done
@@ -753,7 +758,7 @@ jobs:
             -d '{"title":"E2E 冒烟主题","priority":1,"status":"已通过"}')
           echo "$RESP"
           TOPIC_ID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
-          echo "topic_id=$TOPIC_ID" >> $GITHUB_OUTPUT
+          echo "topic_id=$TOPIC_ID" >> "$GITHUB_OUTPUT"
 
       - name: Run topic-worker --apply with Brain registration
         env:

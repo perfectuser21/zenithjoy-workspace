@@ -23,7 +23,7 @@ jobs:
   # PR CI job: ubuntu-latest + Vite dev server，无需 DB secrets
   e2e:
     name: Playwright — Line02 绑定机器列（ubuntu chromium）
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     defaults:
