@@ -6,6 +6,12 @@ set -euo pipefail
 API="${API_BASE:-http://localhost:5200}"
 INT_TOKEN="${ZENITHJOY_INTERNAL_TOKEN:-}"
 PASS=0; FAIL=0
+# This write-capable contract owns only the job's isolated API and Brain fixture.
+[[ "${SMOKE_SCRATCH_API:-}" == 1 ]] || { echo "FAIL: isolated scratch API required"; exit 1; }
+case "$API" in http://localhost:*|http://127.0.0.1:*) ;; *) echo "FAIL: loopback API required"; exit 1;; esac
+BRAIN="${BRAIN_URL:?isolated Brain protocol fixture required}"
+case "$BRAIN" in http://127.0.0.1:*) ;; *) echo "FAIL: loopback Brain fixture required"; exit 1;; esac
+curl --fail --silent "$BRAIN/health" | jq -e '.ok == true and .fixture == true' >/dev/null
 
 ok()   { echo "  ✅ $1"; ((PASS++)) || true; }
 fail() { echo "  ❌ $1"; ((FAIL++)) || true; }
@@ -23,15 +29,21 @@ echo "$r" | jq -e 'if type == "array" then true else .data != null end' >/dev/nu
   || fail "GET /pipeline 响应异常 ($r)"
 
 echo "── pipeline-trigger ──"
-# 用 X-Manual-Override 绕过 topic_id 强校验，测试路由+创建链路
-r=$(curl -s -X POST "$API/api/pipeline/trigger" \
-    -H "X-Internal-Token: $INT_TOKEN" \
-    -H "X-Manual-Override: true" \
-    -H "Content-Type: application/json" \
-    -d '{"content_type":"video","topic":"smoke-test-topic"}')
-echo "$r" | jq -e '.success == true and .data.id != null' >/dev/null 2>&1 \
-  && ok "POST /pipeline/trigger 创建成功，返回 pipeline id" \
-  || fail "POST /pipeline/trigger 失败 ($r)"
+TOPIC_RESP=$(curl --fail --silent -X POST "$API/api/topics" \
+  -H "X-Internal-Token: $INT_TOKEN" -H "Content-Type: application/json" \
+  -d '{"title":"隔离内容挂号冒烟","priority":1,"status":"已通过"}')
+TOPIC_ID=$(printf '%s' "$TOPIC_RESP" | jq -er '.data.id')
+r=$(curl --fail --silent -X POST "$API/api/pipeline/trigger" \
+    -H "X-Internal-Token: $INT_TOKEN" -H "Content-Type: application/json" \
+    -d "$(jq -n --arg id "$TOPIC_ID" '{content_type:"solo-company-case",topic:"smoke-test-topic",topic_id:$id}')")
+printf '%s' "$r" | jq -e '.success == true and .data.id != null and .data.status == "pending" and (.data.cecelia_task_id | type == "string")' >/dev/null \
+  && ok "POST /pipeline/trigger 登记工作单，等待Brain认领，未伪装running" \
+  || fail "POST /pipeline/trigger 缺工作单或等待态回执 ($r)"
+BRAIN_TASK_ID=$(printf '%s' "$r" | jq -er '.data.cecelia_task_id')
+TASK=$(curl --fail --silent "$BRAIN/api/brain/tasks/$BRAIN_TASK_ID")
+printf '%s' "$TASK" | jq -e --arg id "$BRAIN_TASK_ID" '.id == $id and .status == "queued" and .claimed_by == null and .payload.business_owner == "zenithjoy"' >/dev/null \
+  && ok "Brain独立读回同一queued任务，尚未认领" \
+  || fail "Brain任务身份或状态不一致 ($TASK)"
 
 PIPELINE_ID=$(echo "$r" | jq -r '.data.id // empty')
 

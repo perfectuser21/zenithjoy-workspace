@@ -5,7 +5,7 @@
 - list_topics 被调用：status=已通过，limit 合理
 - scheduled_date 本地过滤
 - dry-run 不发起 PATCH / trigger
-- apply 成功：trigger_pipeline + patch_topic 被调用，status='研究中' + pipeline_id
+- apply 成功：只记录 pending 工作单，不提前修改 topic 状态
 - apply 失败：topic 保持'已通过'，结果标 error
 - 401/403：抛 ZenithJoyAPIError，run 层不吞
 
@@ -36,6 +36,11 @@ assert spec and spec.loader
 topic_worker = importlib.util.module_from_spec(spec)
 sys.modules["topic_worker"] = topic_worker
 spec.loader.exec_module(topic_worker)
+
+
+@pytest.fixture(autouse=True)
+def isolated_state(monkeypatch, tmp_path):
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path))
 
 
 # ──────────────────────────────────────────────────────────────────── helpers
@@ -193,7 +198,7 @@ def test_scheduled_date_local_filter(monkeypatch):
     assert titles == ["过去", "无日期", "今日"]
 
 
-def test_apply_dispatches_and_marks_in_progress(monkeypatch):
+def test_apply_dispatches_registered_pending_without_patching(monkeypatch):
     monkeypatch.setenv("TOPIC_DAILY_LIMIT", "1")
     events: list[dict[str, Any]] = []
 
@@ -209,7 +214,7 @@ def test_apply_dispatches_and_marks_in_progress(monkeypatch):
         if path == "/api/pipeline/trigger":
             return httpx.Response(200, json={
                 "success": True,
-                "data": {"id": "pipe-001"},
+                "data": {"id": "pipe-001", "status": "pending", "cecelia_task_id": "task-1"},
                 "error": None,
                 "timestamp": "x",
             })
@@ -233,11 +238,7 @@ def test_apply_dispatches_and_marks_in_progress(monkeypatch):
     assert trigger_event["body"]["topic_id"] == "t1"
     assert trigger_event["body"]["triggered_by"] == "topic-worker"
 
-    # patch 收到 status + pipeline_id
-    patch_event = next(
-        e for e in events if e["method"] == "PATCH" and e["path"] == "/api/topics/t1"
-    )
-    assert patch_event["body"] == {"status": "研究中", "pipeline_id": "pipe-001"}
+    assert not any(e['method'] == 'PATCH' for e in events)
 
 
 def test_apply_dispatch_failure_does_not_patch(monkeypatch):
@@ -327,3 +328,88 @@ def test_limit_zero_short_circuits(monkeypatch):
     assert summary["selected"] == 0
     # 0 limit 不该发 topics 请求
     assert all("/api/topics" not in p for p in touched)
+
+
+def test_unknown_registration_retries_same_run_without_new_trigger(monkeypatch,tmp_path):
+    monkeypatch.setenv('TOPIC_DAILY_LIMIT','1')
+    monkeypatch.setenv('XDG_STATE_HOME',str(tmp_path))
+    events=[]
+    def handler(req):
+        events.append((req.method,req.url.path))
+        if req.url.path=='/api/topics':
+            return httpx.Response(200,json=_ok({'items':[{'id':'topic-unknown','title':'same'}]}))
+        if req.url.path=='/api/pipeline/trigger':
+            status,body=_err('BRAIN_TASK_UNAVAILABLE','unknown',503)
+            body['error']['details']={'pipeline_run_id':'run-existing','registration_status':'unknown'}
+            return httpx.Response(status,json=body)
+        if req.url.path=='/api/pipeline/run-existing/register':
+            return httpx.Response(200,json=_ok({'id':'run-existing','status':'pending','cecelia_task_id':'a11a11a1-1111-4111-8111-111111111111'}))
+        raise AssertionError(f'禁止新触发或提前改状态：{req.method} {req.url.path}')
+    client=make_client(handler)
+    first=topic_worker.run(apply=True,client=client)
+    second=topic_worker.run(apply=True,client=client)
+    assert not first['results'][0]['dispatched']
+    assert first['results'][0]['pipeline_id']=='run-existing'
+    assert second['results'][0]['dispatched']
+    mutations=[p for method,p in events if method!='GET']
+    assert mutations==['/api/pipeline/trigger','/api/pipeline/run-existing/register']
+    assert len(list(tmp_path.rglob('*.json')))==1
+
+
+def test_trigger_timeout_preserves_intent_for_server_idempotent_retry(monkeypatch,tmp_path):
+    monkeypatch.setenv('TOPIC_DAILY_LIMIT','1');monkeypatch.setenv('XDG_STATE_HOME',str(tmp_path))
+    mutations=[]
+    def handler(req):
+        if req.url.path=='/api/topics':return httpx.Response(200,json=_ok({'items':[{'id':'timeout','title':'same'}]}))
+        mutations.append(req.url.path)
+        raise httpx.ReadTimeout('request may have committed')
+    client=make_client(handler)
+    first=topic_worker.run(apply=True,client=client)
+    second=topic_worker.run(apply=True,client=client)
+    assert not first['results'][0]['dispatched'] and not second['results'][0]['dispatched']
+    assert mutations==['/api/pipeline/trigger','/api/pipeline/trigger']
+    assert len(list(tmp_path.rglob('*.json')))==1
+
+
+def test_success_only_records_pending_work_order_without_patching_topic(monkeypatch,tmp_path):
+    monkeypatch.setenv('TOPIC_DAILY_LIMIT','1');monkeypatch.setenv('XDG_STATE_HOME',str(tmp_path))
+    events=[]
+    def handler(req):
+        events.append((req.method,req.url.path))
+        if req.url.path=='/api/topics':return httpx.Response(200,json=_ok({'items':[{'id':'pending','title':'same'}]}))
+        if req.url.path=='/api/pipeline/trigger':return httpx.Response(201,json=_ok({'id':'new-run','status':'pending','cecelia_task_id':'a11a11a1-1111-4111-8111-111111111111'}))
+        raise AssertionError('成功挂号不可提前把topic标研究中')
+    result=topic_worker.run(apply=True,client=make_client(handler))
+    assert result['results'][0]['dispatched']
+    assert all(method!='PATCH' for method,_ in events)
+
+
+@pytest.mark.parametrize('status', ['running', 'completed', 'failed'])
+def test_existing_registered_run_keeps_real_status_without_new_trigger(monkeypatch, status):
+    monkeypatch.setenv('TOPIC_DAILY_LIMIT', '1')
+    posts = []
+    def handler(req):
+        if req.method == 'GET':
+            return httpx.Response(200, json=_ok({'items': [{'id': 'existing', 'title': 'same'}]}))
+        posts.append(req.url.path)
+        return httpx.Response(200, json=_ok({'id': 'same-run', 'status': status, 'cecelia_task_id': 'task-1'}))
+    client = make_client(handler)
+    first = topic_worker.run(apply=True, client=client)
+    second = topic_worker.run(apply=True, client=client)
+    assert first['results'][0]['status'] == second['results'][0]['status'] == status
+    assert posts == ['/api/pipeline/trigger']
+
+
+def test_definitive_rejection_does_not_retry_forever(monkeypatch):
+    monkeypatch.setenv('TOPIC_DAILY_LIMIT', '1')
+    posts = []
+    def handler(req):
+        if req.method == 'GET':
+            return httpx.Response(200, json=_ok({'items': [{'id': 'rejected', 'title': 'same'}]}))
+        posts.append(req.url.path)
+        status, body = _err('INVALID_TOPIC', 'rejected', 400)
+        return httpx.Response(status, json=body)
+    client = make_client(handler)
+    assert not topic_worker.run(apply=True, client=client)['results'][0]['dispatched']
+    assert not topic_worker.run(apply=True, client=client)['results'][0]['dispatched']
+    assert posts == ['/api/pipeline/trigger']

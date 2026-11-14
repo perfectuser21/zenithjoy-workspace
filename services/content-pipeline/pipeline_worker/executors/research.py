@@ -12,13 +12,10 @@ import re
 import subprocess
 from datetime import date
 from pathlib import Path
+from ..artifact_paths import owned_directory, owned_file, guard
 
 logger = logging.getLogger("pipeline-worker.research")
 
-OUTPUT_BASE = os.environ.get(
-    "CONTENT_OUTPUT_DIR",
-    str(Path.home() / "content-output"),
-)
 
 
 def _slug(text: str) -> str:
@@ -109,32 +106,42 @@ def execute_research(run_data: dict) -> dict:
         }
 
     today_str = date.today().isoformat()
-    out_dir = Path(OUTPUT_BASE) / "research" / f"{content_type}-{_slug(keyword)}-{today_str}"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        guard(run_data)
+        out_dir = owned_directory(run_data, create=True)
+        fp = owned_file(run_data, 'findings.json')
+    except ValueError as error:
+        return {'success': False, 'error': str(error)}
+
+    def run(command, timeout=60):
+        guard(run_data)
+        output = _run(command, timeout=timeout)
+        guard(run_data)
+        return output
 
     # 选择 notebook
-    _run(f'notebooklm use {notebook_id} 2>&1')
+    run(f'notebooklm use {notebook_id} 2>&1')
 
     # 清空旧 sources
-    _run('notebooklm source clear 2>&1', timeout=30)
+    run('notebooklm source clear 2>&1', timeout=30)
 
     # web 搜索
     logger.info("[research] 开始 web 搜索: %s", keyword)
-    _run(f'notebooklm source add-research "{keyword}" --mode deep --no-wait 2>&1', timeout=30)
+    run(f'notebooklm source add-research "{keyword}" --mode deep --no-wait 2>&1', timeout=30)
 
     # 等待研究完成
-    wait_result = _run('notebooklm research wait --timeout 300 --import-all 2>&1', timeout=330)
+    wait_result = run('notebooklm research wait --timeout 300 --import-all 2>&1', timeout=330)
     logger.info("[research] 研究完成: %s", (wait_result or "(无输出)")[:200])
 
     # 提问获取 findings
     prompt = f"从所有源中，找出能证明'个人也能拥有过去只有公司才有的能力'的证据。关于{keyword}，每条带具体数据和来源。至少8条。"
-    raw = _run(f'notebooklm ask "{prompt}" --json 2>&1', timeout=120)
+    raw = run(f'notebooklm ask "{prompt}" --json 2>&1', timeout=120)
 
     findings = _parse_findings(raw, keyword)
     if not findings:
         return {"success": False, "error": "NotebookLM 返回空内容或解析失败"}
 
-    fp = out_dir / "findings.json"
+    fp = owned_file(run_data, "findings.json")
     data = {
         "keyword": keyword,
         "series": content_type,
@@ -146,7 +153,7 @@ def execute_research(run_data: dict) -> dict:
     fp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 清空 sources
-    _run('notebooklm source clear 2>&1', timeout=30)
+    run('notebooklm source clear 2>&1', timeout=30)
 
     logger.info("[research] 完成: %d findings → %s", len(findings), fp)
-    return {"success": True, "findings_path": str(fp), "findings_count": len(findings)}
+    return {"success": True, "findings_path": str(fp), "findings_count": len(findings), "output_dir": str(out_dir)}

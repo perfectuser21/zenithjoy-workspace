@@ -139,7 +139,7 @@ def _call_vision(
     }
 
 
-def review_images(image_paths: list[Path]) -> dict[str, Any]:
+def review_images(image_paths: list[Path], *, execution_guard=None) -> dict[str, Any]:
     """对一批 PNG 做 vision 审查，聚合结果。
 
     Args:
@@ -176,7 +176,11 @@ def review_images(image_paths: list[Path]) -> dict[str, Any]:
             continue
 
         item: dict[str, Any] = {"image": p.name}
+        if execution_guard:
+            execution_guard()
         resp = _call_vision(p)
+        if execution_guard:
+            execution_guard()
         if resp is None:
             result["skipped"] += 1
             item["status"] = "skipped"

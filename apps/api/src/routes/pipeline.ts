@@ -10,6 +10,8 @@ router.post('/trigger', controller.trigger);
 // POST /api/pipeline/callback  ← cecelia 回调
 router.post('/callback', controller.callback);
 
+router.get('/capabilities', controller.capabilities);
+
 // GET /api/pipeline/dashboard-stats
 router.get('/dashboard-stats', controller.dashboardStats);
 
@@ -21,6 +23,7 @@ router.get('/:id/stages', controller.getStages);
 
 // POST /api/pipeline/:id/rerun  ← cecelia 透传
 router.post('/:id/rerun', controller.rerun);
+router.post('/:id/register', controller.register);
 
 // GET /api/pipeline/:id
 router.get('/:id', controller.getOne);

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import TopicPoolTab from '../TopicPoolTab'
 import * as topicsApi from '../../../api/topics.api'
@@ -42,6 +42,7 @@ const T2 = {
 }
 
 describe('TopicPoolTab', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(topicsApi.listTopics).mockResolvedValue({
@@ -123,8 +124,8 @@ describe('TopicPoolTab', () => {
     })
   })
 
-  it('publish-now triggers dispatch and status update', async () => {
-    vi.mocked(topicsApi.publishTopicNow).mockResolvedValue({ id: 'pipeline-1' })
+  it('registers the task and waits for worker claim without marking topic researching', async () => {
+    vi.mocked(topicsApi.publishTopicNow).mockResolvedValue({ id: 'pipeline-1', status: 'pending', cecelia_task_id: 'brain-task-1' })
     vi.mocked(topicsApi.updateTopic).mockResolvedValue({ ...T1, status: '研究中' })
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -140,11 +141,74 @@ describe('TopicPoolTab', () => {
         expect.objectContaining({ id: 't1' })
       )
     })
-    expect(topicsApi.updateTopic).toHaveBeenCalledWith(
-      't1',
-      expect.objectContaining({ status: '研究中' })
-    )
+    expect(topicsApi.updateTopic).not.toHaveBeenCalled()
+    expect(await screen.findByText('已登记任务，等待 Worker 认领')).toBeInTheDocument()
 
+    confirmSpy.mockRestore()
+  })
+
+  it('keeps topic unchanged when task registration fails', async () => {
+    vi.mocked(topicsApi.publishTopicNow).mockRejectedValue(new Error('Brain 任务登记失败'))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TopicPoolTab />)
+    await screen.findByText('一人公司案例')
+    fireEvent.click(screen.getAllByLabelText('立即发布')[0])
+    expect(await screen.findByText('Brain 任务登记失败')).toBeInTheDocument()
+    expect(topicsApi.updateTopic).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
+  it('retries an unknown registration through the same topic button with the original run ID', async () => {
+    const actual = await vi.importActual<typeof import('../../../api/topics.api')>('../../../api/topics.api')
+    vi.mocked(topicsApi.publishTopicNow).mockImplementation(actual.publishTopicNow)
+    const runId = '11111111-1111-4111-8111-111111111111'
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+      calls.push(path)
+      return path.endsWith('/trigger')
+        ? {ok:false,json:async()=>({success:false,error:{message:'Brain 登记结果未知',details:{pipeline_run_id:runId,registration_status:'unknown'}}})}
+        : {ok:true,json:async()=>({success:true,data:{id:runId,status:'pending',cecelia_task_id:'brain-task'}})}
+    }))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TopicPoolTab />)
+    await screen.findByText('一人公司案例')
+    fireEvent.click(screen.getAllByLabelText('立即发布')[0])
+    await screen.findByText(/Brain 登记结果未知/)
+    fireEvent.click(screen.getByRole('button', {name:'重试挂号'}))
+    expect(await screen.findByText('已登记任务，等待 Worker 认领')).toBeInTheDocument()
+    expect(calls).toEqual(['/api/pipeline/trigger', `/api/pipeline/${runId}/register`])
+    expect(topicsApi.updateTopic).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
+  it('does not attach a rejected registration to another topic or retry it as unknown', async () => {
+    const actual = await vi.importActual<typeof import('../../../api/topics.api')>('../../../api/topics.api')
+    vi.mocked(topicsApi.publishTopicNow).mockImplementation(actual.publishTopicNow)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ok:false,json:async()=>({success:false,error:{message:'Brain 拒绝任务',details:{pipeline_run_id:'11111111-1111-4111-8111-111111111111',registration_status:'rejected'}}})})))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TopicPoolTab />)
+    await screen.findByText('一人公司案例')
+    fireEvent.click(screen.getAllByLabelText('立即发布')[0])
+    expect(await screen.findByText(/登记已拒绝/)).toHaveTextContent('Brain 拒绝任务')
+    expect(screen.queryByRole('button', {name:'重试挂号'})).not.toBeInTheDocument()
+    expect(topicsApi.updateTopic).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
+  it.each([
+    ['running','已有任务正在执行'],
+    ['completed','已有任务已完成，请在生产看板查看产出'],
+    ['failed','已有任务失败，请在生产看板重跑'],
+  ] as const)('shows an existing %s task with its actual status', async (status,message) => {
+    vi.mocked(topicsApi.publishTopicNow).mockResolvedValue({id:'p1',status,cecelia_task_id:'brain-task'})
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TopicPoolTab />)
+    await screen.findByText('一人公司案例')
+    fireEvent.click(screen.getAllByLabelText('立即发布')[0])
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.queryByText('已登记任务，等待 Worker 认领')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', {name:'已登记待认领'})).not.toBeInTheDocument()
+    expect(topicsApi.updateTopic).not.toHaveBeenCalled()
     confirmSpy.mockRestore()
   })
 

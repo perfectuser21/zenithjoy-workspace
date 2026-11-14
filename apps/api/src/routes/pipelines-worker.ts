@@ -19,6 +19,7 @@ const controller = new PipelinesWorkerController();
 router.use(internalAuth);
 
 router.get('/running', controller.running);
+router.post('/:id/claim', controller.claim);
 router.post('/:id/stage-complete', controller.stageComplete);
 router.post('/:id/fail', controller.fail);
 

@@ -168,6 +168,9 @@ jobs:
           done
           curl -fs http://localhost:3099/healthz || (cat /tmp/fake-feishu.log && exit 1)
 
+      - name: Start isolated Brain task protocol fixture
+        run: bash .github/workflows/scripts/start-content-brain-fixture.sh start
+
       - name: Start apps/api
         working-directory: apps/api
         run: |
@@ -633,6 +636,10 @@ jobs:
             kill "$(cat /tmp/fake-feishu.pid)" 2>/dev/null || true
           fi
 
+      - name: Stop isolated Brain fixture
+        if: always()
+        run: bash .github/workflows/scripts/start-content-brain-fixture.sh stop
+
       - name: Stop apps/api
         if: always()
         run: |
@@ -682,11 +689,10 @@ jobs:
       SMOKE_SCRATCH_API: '1'
       APPS_API_BASE: http://localhost:5200
       CREATOR_PIPELINE_API: http://localhost:5200
-      BRAIN_URL: ${{ secrets.BRAIN_URL || '' }}
-      CECELIA_BRAIN_URL: ${{ secrets.BRAIN_URL || '' }}
       CONTENT_OUTPUT_DIR: /tmp/ci-content-output
       DEFAULT_NOTEBOOK_ID: ''
       E2E_FAKE_EXECUTORS: 'true'
+      XDG_STATE_HOME: ${{ runner.temp }}/content-worker-state
 
     steps:
       - uses: actions/checkout@v4
@@ -724,6 +730,9 @@ jobs:
             psql -h localhost -U cecelia -d cecelia -f "$f"
           done
 
+      - name: Start isolated Brain task protocol fixture
+        run: bash .github/workflows/scripts/start-content-brain-fixture.sh start
+
       - name: Build + start apps/api
         run: |
           cd apps/api
@@ -746,28 +755,33 @@ jobs:
           TOPIC_ID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
           echo "topic_id=$TOPIC_ID" >> $GITHUB_OUTPUT
 
-      - name: Run topic-worker --apply
+      - name: Run topic-worker --apply with Brain registration
         env:
           TOPIC_DAILY_LIMIT: '5'
         run: |
-          # topic-worker 会调 /api/pipeline/trigger，它内部调 cecelia Brain。
-          # Brain 指向一个不存在的端口，trigger 会 502；但本测试目的是验证 topic-worker
-          # 的 HTTP 路径是否通：即使 trigger 失败，topic-worker 也应正常退出（记录错误）。
-          python3 services/content-pipeline/scripts/topic-worker.py --apply || true
-          echo "─── 验证 topic-worker 确实调用了 /api/pipeline/trigger ───"
-          grep -c 'POST /api/pipeline/trigger' /tmp/apps-api.log || true
+          set -euo pipefail
+          python3 services/content-pipeline/scripts/topic-worker.py --apply
 
-      - name: Manually INSERT a running pipeline_run for worker to pick up
+      - name: Assert registered work remains pending before Worker claim
         env:
           PGPASSWORD: cecelia
           TOPIC_ID: ${{ steps.create_topic.outputs.topic_id }}
         run: |
-          # 绕过 Brain 依赖，直接 INSERT 一条 running 记录让 pipeline-worker 处理
-          psql -h localhost -U cecelia -d cecelia -c "
-            INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by)
-            VALUES ('post', 'E2E 冒烟主题', '${TOPIC_ID}'::uuid, 'running', '/tmp/ci-content-output', 'e2e-smoke')
-            RETURNING id;
-          "
+          set -euo pipefail
+          STATUS=$(psql -h localhost -U cecelia -d cecelia -tA -c \
+            "SELECT status FROM zenithjoy.pipeline_runs WHERE topic_id = '${TOPIC_ID}'::uuid ORDER BY created_at DESC LIMIT 1")
+          test "$STATUS" = pending
+          TOPIC_STATUS=$(psql -h localhost -U cecelia -d cecelia -tA -c \
+            "SELECT status FROM zenithjoy.topics WHERE id = '${TOPIC_ID}'::uuid")
+          test "$TOPIC_STATUS" = 已通过
+          python3 - <<'PYBRAIN'
+          import json, os
+          state = json.load(open(os.environ['BRAIN_STATE_FILE']))
+          assert len(state['tasks']) == 1, state
+          task = next(iter(state['tasks'].values()))
+          assert task['status'] == 'queued' and task['claimed_by'] is None, task
+          assert [event['action'] for event in state['events']] == ['register'], state
+          PYBRAIN
 
       - name: Run pipeline-worker --apply (fake executors)
         run: |
@@ -782,8 +796,8 @@ jobs:
           PIPELINE_STATUS=$(psql -h localhost -U cecelia -d cecelia -tA -c \
             "SELECT status FROM zenithjoy.pipeline_runs WHERE topic_id = '${TOPIC_ID}'::uuid ORDER BY created_at DESC LIMIT 1")
           echo "pipeline status=$PIPELINE_STATUS"
-          if [ "$PIPELINE_STATUS" != "completed" ] && [ "$PIPELINE_STATUS" != "failed" ]; then
-            echo "FAIL: 期望 pipeline 进入终态（completed/failed），实际=$PIPELINE_STATUS"
+          if [ "$PIPELINE_STATUS" != "completed" ]; then
+            echo "FAIL: 期望完整固定六阶段完成，实际=$PIPELINE_STATUS"
             exit 1
           fi
           TOPIC_STATUS=$(psql -h localhost -U cecelia -d cecelia -tA -c \
@@ -794,6 +808,20 @@ jobs:
             echo "FAIL: pipeline=completed 时 topic 应该 '待发布'，实际 $TOPIC_STATUS"
             exit 1
           fi
+          python3 - <<'PYBRAIN'
+          import json, os
+          state = json.load(open(os.environ['BRAIN_STATE_FILE']))
+          assert len(state['tasks']) == 1, state
+          task = next(iter(state['tasks'].values()))
+          assert task['status'] == 'completed' and task['released'] is True, task
+          receipt = task['result']['lease_receipt']
+          assert receipt['status'] == 'completed' and receipt['claim_epoch'] == task['claim_epoch'], receipt
+          assert receipt['claimer'] and len(receipt['result_sha256']) == 64, receipt
+          actions = [event['action'] for event in state['events']]
+          assert actions[0:2] == ['register', 'claim'], actions
+          assert actions.count('claim') == 1 and actions.count('finish') == 1, actions
+          assert 'heartbeat' in actions and actions[-1] == 'finish-replay', actions
+          PYBRAIN
 
       # ─── Android onboarding（Line02 自助装机绑定）smoke：无 session → 401；
       # 有 seeded TEST_SESSION_COOKIE 时额外校验 200 + apk_url/deeplink schema ──
@@ -803,6 +831,10 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/android-onboarding-smoke.sh
           bash .github/workflows/scripts/smoke/android-onboarding-smoke.sh
+
+      - name: Stop isolated Brain fixture
+        if: always()
+        run: bash .github/workflows/scripts/start-content-brain-fixture.sh stop
 
       - name: Stop apps/api
         if: always()

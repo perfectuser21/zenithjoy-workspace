@@ -117,7 +117,7 @@ def _run_tar_over_ssh(local_dir: str, ssh_alias: str, remote_dir: str) -> tuple[
         return False, f"tar over ssh 异常: {e}"
 
 
-def upload_to_nas(local_dir: str, pipeline_id: str, ssh_alias: str | None = None) -> dict:
+def upload_to_nas(local_dir: str, pipeline_id: str, ssh_alias: str | None = None, *, execution_guard=None) -> dict:
     """将 local_dir 同步到 NAS/{pipeline_id}/（tar over ssh）。
 
     Args:
@@ -138,12 +138,20 @@ def upload_to_nas(local_dir: str, pipeline_id: str, ssh_alias: str | None = None
             attempt, MAX_RETRIES + 1, local_dir, alias, nas_path,
         )
 
+        if execution_guard:
+            execution_guard()
         ok, err = _run_mkdir(alias, nas_path)
+        if execution_guard:
+            execution_guard()
         if not ok:
             last_error = f"mkdir 失败: {err}"
             logger.warning("NAS mkdir 失败 attempt %d: %s", attempt, err)
         else:
+            if execution_guard:
+                execution_guard()
             ok, err = _run_tar_over_ssh(local_dir, alias, nas_path)
+            if execution_guard:
+                execution_guard()
             if ok:
                 logger.info("NAS 上传成功: %s", nas_path)
                 return {"success": True, "nas_path": nas_path, "error": None}

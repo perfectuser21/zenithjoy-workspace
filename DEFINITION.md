@@ -1,5 +1,7 @@
 # ZenithJoy System Definition
 
+内容业务归位：内容工厂使用本地真实能力与现有选题Notebook配置；Brain只负责外部任务挂号、有限租约认领和终态回执。内容运行不得在未认领、失约或回执未知时自行重执行业务，重跑保留旧记录并使用独立产物目录。退出对Brain旧内容流水线和动态内容配置API的依赖。此次源码合并不代表生产部署或真实内容生成验收。
+
 ## 产品分类 SSOT
 
 **App / Line / Golden Path 的分类事实存放在 `product-map/product-map.yaml`，不在本文件中。**

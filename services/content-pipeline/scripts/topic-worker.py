@@ -12,8 +12,8 @@ PR-c 起：本脚本不再直连 SQLite，全部改走 apps/api HTTP 端点。
 
 行为：
 - 默认 dry-run（只打印挑选结果），加 --apply 才真正派发
-- 派发成功 → PATCH /api/topics/{id} 将 status 置 '研究中' + 写入 pipeline_id
-- 派发失败 → topic 保持 '已通过'，下轮再试
+- 挂号成功只记录工作单；实际执行状态由领取工作单的 Worker 推进
+- 挂号未知持久化恢复信息，下轮复用同一 run；明确拒绝不自动重试
 
 环境变量：
     APPS_API_BASE               apps/api 地址（默认 http://localhost:5200；兼容 CREATOR_PIPELINE_API）
@@ -27,6 +27,8 @@ Brain Task: fff07775-ce14-45cd-b4ee-2be074353267
 from __future__ import annotations
 
 import argparse
+import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -41,6 +43,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from lib.http_client import ZenithJoyAPIError, ZenithJoyClient  # noqa: E402
+from pipeline_worker.terminal_checkpoint import save_checkpoint  # noqa: E402
 
 logger = logging.getLogger("topic-worker")
 
@@ -82,6 +85,63 @@ def _filter_by_schedule(
         if not sched or str(sched) <= today:
             out.append(t)
     return out
+
+
+def _register_topic(client, topic, content_type):
+    """本机串行化请求意图；服务端 topic 行锁负责跨进程/机器的 run 幂等。"""
+    key = hashlib.sha256(f'{client.base_url}:{topic["id"]}'.encode()).hexdigest()
+    state_root = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state')))
+    path = state_root / 'zenithjoy/topic-worker' / (key + '.json')
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with path.with_suffix('.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        record = json.loads(path.read_text()) if path.exists() else {
+            'topic_id': topic['id'], 'phase': 'intent', 'request': {
+                'content_type': content_type, 'topic': topic.get('title'),
+                'topic_id': topic['id'], 'triggered_by': 'topic-worker',
+            },
+        }
+        if record['topic_id'] != topic['id']:
+            raise ValueError('topic checkpoint identity mismatch')
+        if record['phase'] == 'registered':
+            return {'dispatched': True, 'pipeline_id': record['pipeline_id'],
+                    'status': record['status'], 'cecelia_task_id': record['cecelia_task_id']}
+        if record['phase'] == 'rejected':
+            return {'dispatched': False, 'pipeline_id': record.get('pipeline_id'),
+                    'error': record.get('error', '挂号已拒绝，不自动重试')}
+        save_checkpoint(path, record)  # 在可能提交的 HTTP 请求前保存意图
+        try:
+            if record.get('pipeline_id'):
+                response = client.register_pipeline(record['pipeline_id'])
+            else:
+                # 服务端同 topic_id 行锁读回原意图，超时重发不会新造 run。
+                response = client.trigger_pipeline(record['request'])
+            data = response.get('data', response)
+            if isinstance(data, dict) and data.get('id'):
+                record['pipeline_id'] = data['id']
+            if (not isinstance(data, dict) or not data.get('cecelia_task_id')
+                    or data.get('status') not in ('pending', 'running', 'completed', 'failed')):
+                record.update(phase='unknown', error='挂号响应缺少工作单身份或状态')
+                save_checkpoint(path, record)
+                return {'dispatched': False, 'pipeline_id': record.get('pipeline_id'), 'error': record['error']}
+            record.update(phase='registered', status=data['status'], cecelia_task_id=data['cecelia_task_id'])
+            save_checkpoint(path, record)
+            return {'dispatched': True, 'pipeline_id': record['pipeline_id'],
+                    'status': record['status'], 'cecelia_task_id': record['cecelia_task_id']}
+        except ZenithJoyAPIError as error:
+            payload = error.response_json or {}
+            details = (payload.get('error') or {}).get('details') or {}
+            if details.get('pipeline_run_id'):
+                record['pipeline_id'] = details['pipeline_run_id']
+            rejected = details.get('registration_status') == 'rejected' or (
+                error.status_code is not None and 400 <= error.status_code < 500
+                and error.status_code not in (408, 429) and details.get('registration_status') != 'unknown')
+            record.update(phase='rejected' if rejected else 'unknown',
+                          error=str(error))
+            save_checkpoint(path, record)
+            if error.status_code in (401, 403):
+                raise
+            return {'dispatched': False, 'pipeline_id': record.get('pipeline_id'), 'error': str(error)}
 
 
 def run(
@@ -137,42 +197,7 @@ def run(
                 results.append(entry)
                 continue
 
-            try:
-                resp = client.trigger_pipeline({
-                    "content_type": content_type,
-                    "topic": t.get("title"),
-                    "topic_id": t.get("id"),
-                    "triggered_by": "topic-worker",
-                })
-                data = resp.get("data") if isinstance(resp, dict) else None
-                pipeline_id = None
-                if isinstance(resp, dict):
-                    pipeline_id = (
-                        resp.get("id")
-                        or resp.get("pipeline_id")
-                        or (data or {}).get("id")
-                        or (data or {}).get("pipeline_id")
-                    )
-
-                patch_body: dict[str, Any] = {"status": "研究中"}
-                if pipeline_id:
-                    patch_body["pipeline_id"] = pipeline_id
-                try:
-                    client.patch_topic(t["id"], patch_body)
-                except ZenithJoyAPIError as patch_err:
-                    logger.warning(
-                        "PATCH /api/topics/%s 失败（pipeline 已触发 id=%s）：%s",
-                        t.get("id"), pipeline_id, patch_err,
-                    )
-                    entry["patch_error"] = str(patch_err)
-
-                entry["dispatched"] = True
-                entry["pipeline_id"] = pipeline_id
-            except ZenithJoyAPIError as e:
-                if e.status_code in (401, 403):
-                    raise
-                entry["dispatched"] = False
-                entry["error"] = str(e)
+            entry.update(_register_topic(client, t, content_type))
 
             results.append(entry)
 

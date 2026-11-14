@@ -18,9 +18,6 @@ def is_fake_mode() -> bool:
 
 def fake_output_dir(run_data: dict, stage: str) -> str:
     """fake 模式下的统一产出目录：不做真文件写入，只返回一个可预测的路径。"""
-    base = os.environ.get("CONTENT_OUTPUT_DIR", "/tmp/ci-content-output")
-    keyword_raw = run_data.get("keyword") or "fake"
-    keyword = str(keyword_raw).replace("/", "-")[:40]
-    path = Path(base) / "e2e-fake" / f"{stage}-{keyword}"
-    path.mkdir(parents=True, exist_ok=True)
-    return str(path)
+    from ..artifact_paths import owned_directory, guard
+    guard(run_data)
+    return str(owned_directory(run_data, create=True))

@@ -94,6 +94,7 @@ def _make_node(
     client: Any,
     dry_run: bool,
     can_run_fn: Callable[[str], dict],
+    execution_guard: Optional[Callable[[], None]] = None,
 ):
     """工厂：根据 stage 元信息构造一个 graph node。
 
@@ -116,6 +117,9 @@ def _make_node(
             logger.info("[graph][dry-run] %s 跳过执行", stage_name)
             return {"completed_stages": completed + [stage_name]}
 
+        if execution_guard is not None:
+            execution_guard()
+
         # ── can_run 守卫
         if resource_type:
             cr = can_run_fn(resource_type)
@@ -129,6 +133,8 @@ def _make_node(
 
         # ── 执行 executor
         run_data = _state_to_run_data(state)
+        if execution_guard is not None:
+            run_data["execution_guard"] = execution_guard
         try:
             result = executor(run_data)
         except Exception as e:  # noqa: BLE001 - 等价 worker.py 原行为
@@ -138,6 +144,9 @@ def _make_node(
                 "error": f"阶段 {stage_name} 异常: {e}",
                 "failed_stage": stage_name,
             }
+
+        if execution_guard is not None:
+            execution_guard()
 
         if not result.get("success", False):
             err = result.get("error", f"阶段 {stage_name} 失败")
@@ -226,6 +235,7 @@ def build_graph(
     dry_run: bool = False,
     can_run_fn: Optional[Callable[[str], dict]] = None,
     stage_defs: Optional[list[tuple[str, Optional[str], Callable[[dict], dict]]]] = None,
+    execution_guard: Optional[Callable[[], None]] = None,
 ):
     """构建并编译 LangGraph app。
 
@@ -260,6 +270,7 @@ def build_graph(
                 client=client,
                 dry_run=dry_run,
                 can_run_fn=can_run_fn,
+                execution_guard=execution_guard,
             ),
         )
 

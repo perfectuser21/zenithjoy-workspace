@@ -32,6 +32,8 @@ import json
 import logging
 import os
 import sys
+import socket
+from uuid import uuid4
 import traceback
 from pathlib import Path
 
@@ -40,6 +42,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.http_client import ZenithJoyAPIError, ZenithJoyClient  # noqa: E402
 from pipeline_worker.cecelia_client import can_run  # noqa: E402
+from pipeline_worker.brain_tasks import BrainTaskClient, CoordinationUnknown, LeaseHeartbeat  # noqa: E402
+from pipeline_worker.polling import state_directory, poll_page, recover_terminals  # noqa: E402
+from pipeline_worker.terminal_checkpoint import (checkpoint_path, load_checkpoint,
+    save_checkpoint, settle_checkpoint)  # noqa: E402
 from pipeline_worker.executors.copy_review import execute_copy_review  # noqa: E402
 from pipeline_worker.executors.copywriting import execute_copywriting  # noqa: E402
 from pipeline_worker.executors.export import execute_export  # noqa: E402
@@ -74,98 +80,104 @@ def _stage_defs_from_module():
     return list(STAGES)
 
 
-def process_pipeline(
-    client: ZenithJoyClient,
-    pipeline: dict,
-    dry_run: bool = True,
-) -> bool:
-    """处理单个 pipeline，6 阶段由 LangGraph 编排。
+class BoundPipelineClient:
+    """阶段写入携带同一租约；最终副作用交 worker 在 Brain 回执后提交。"""
+    def __init__(self, client, identity, lease):
+        self.client = client
+        self.identity = identity
+        self.lease = lease
+        self.final = None
 
-    Returns:
-        True if completed, False if failed.
-    """
-    pid = pipeline["id"]
-    # PR-e/5: apps/api /api/pipelines/running 已经 COALESCE(topic.title, pr.topic) 返回 keyword
-    # 这里优先用 topic_title（真选题 SoT），退回 keyword（来自 SQL coalesce），再退回 'unknown'
-    keyword = (
-        pipeline.get("topic_title")
-        or pipeline.get("keyword")
-        or pipeline.get("topic")
-        or "unknown"
-    )
-    topic_id = pipeline.get("topic_id")
-    current_stage = pipeline.get("current_stage") or ""
+    def stage_complete(self, pipeline_id, stage, *, output=None, is_final=False):
+        self.lease.check()
+        if is_final:
+            self.final = {'stage': stage, 'output': output or {}}
+            return {}
+        try:
+            return self.client.stage_complete(pipeline_id, stage, output=output,
+                is_final=False, identity=self.identity)
+        except ZenithJoyAPIError as error:
+            if error.status_code in (401, 403):
+                raise
+            raise CoordinationUnknown('ZJ 阶段回执未确认，禁止推进') from error
 
-    logger.info(
-        "处理 pipeline %s: keyword=%s, current_stage=%s",
-        str(pid)[:8], keyword, current_stage or "(起始)",
-    )
 
+def process_pipeline(client: ZenithJoyClient, pipeline: dict, dry_run: bool = True,
+                     *, brain_client=None, checkpoint_dir=None, heartbeat_interval=30) -> bool:
+    """先领取 Brain 有限租约，再执行业务；未知回执仅重放终态、不重跑阶段。"""
+    pid = pipeline['id']
     if dry_run:
-        logger.info("[dry-run] 跳过执行: %s", keyword)
+        logger.info('[dry-run] pipeline %s 跳过执行', str(pid)[:8])
         return True
-
-    # 构建初始 state（与原 run_data 字段同义）
-    # 阶段 A+：notebook_id 来自 apps/api /running 端点（COALESCE pr.notebook_id, t.notebook_id）。
-    # 若 API 未下发，研究 executor 内部再 fallback env CREATOR_DEFAULT_NOTEBOOK_ID（兼容老 DEFAULT_NOTEBOOK_ID）。
-    initial_state: dict = {
-        "pipeline_id": pid,
-        "keyword": keyword,
-        "topic_id": topic_id,
-        "content_type": pipeline.get("content_type") or "solo-company-case",
-        "notebook_id": pipeline.get("notebook_id")
-        or os.environ.get("CREATOR_DEFAULT_NOTEBOOK_ID")
-        or os.environ.get("DEFAULT_NOTEBOOK_ID"),
-        "completed_stages": [],
-    }
-    if pipeline.get("output_dir"):
-        initial_state["output_dir"] = pipeline["output_dir"]
-
-    # Resume：根据 current_stage 把已完成 stage 写入 completed_stages，
-    # graph node 内部据此跳过（保持幂等）。
-    stage_names = [s[0] for s in _stage_defs_from_module()]
-    if current_stage in stage_names:
-        idx = stage_names.index(current_stage)
-        initial_state["completed_stages"] = stage_names[: idx + 1]
-
-    # 构建 graph 并执行（client/can_run 闭包注入；测试可 patch worker.can_run / worker.STAGES）
-    graph = build_graph(
-        client,
-        dry_run=False,
-        can_run_fn=can_run,
-        stage_defs=_stage_defs_from_module(),
-    )
-
+    task_id = pipeline.get('cecelia_task_id')
+    if not task_id:
+        logger.warning('pipeline %s 缺 Brain 工作单，禁止执行', str(pid)[:8])
+        return False
+    brain = brain_client or BrainTaskClient()
+    lease = None
     try:
-        final_state: dict = graph.invoke(
-            initial_state,
-            config={"configurable": {"thread_id": str(pid)}},
-        )
-    except ZenithJoyAPIError as e:
-        # 401/403 由 graph node 直接 raise，让上层 main() 转 exit 3
-        if e.status_code in (401, 403):
+        path = checkpoint_path(task_id, checkpoint_dir if checkpoint_dir is not None else state_directory(client, brain))
+        if path.exists():
+            return settle_checkpoint(brain, client, path, load_checkpoint(path, pipeline))
+        # 有旧 claim 但无终态材料：不能接管一个可能仍在运行的执行者。
+        if (pipeline.get('output_manifest') or {}).get('brain_claim'):
+            logger.warning('pipeline %s 已有认领但无终态恢复材料，不重复执行', str(pid)[:8])
+            return False
+        claimer = f'zj-content:{socket.gethostname()}:{os.getpid()}:{uuid4().hex}'
+        identity = brain.claim(task_id, claimer, 300)
+        lease = LeaseHeartbeat(brain, identity, seconds=300, interval=heartbeat_interval)
+        lease.start()
+        client.claim_pipeline(pid, identity)
+        bound = BoundPipelineClient(client, identity, lease)
+        names = [stage[0] for stage in _stage_defs_from_module()]
+        current = pipeline.get('current_stage') or ''
+        state = {
+            'pipeline_id': pid,
+            'keyword': pipeline.get('topic_title') or pipeline.get('keyword') or pipeline.get('topic') or 'unknown',
+            'topic_id': pipeline.get('topic_id'),
+            'content_type': pipeline.get('content_type') or 'solo-company-case',
+            'notebook_id': pipeline.get('notebook_id') or os.environ.get('CREATOR_DEFAULT_NOTEBOOK_ID') or os.environ.get('DEFAULT_NOTEBOOK_ID'),
+            'completed_stages': names[:names.index(current) + 1] if current in names else [],
+        }
+        if pipeline.get('output_dir'):
+            state['output_dir'] = pipeline['output_dir']
+        graph = build_graph(bound, dry_run=False, can_run_fn=can_run,
+            stage_defs=_stage_defs_from_module(), execution_guard=lease.check)
+        final = graph.invoke(state, config={'configurable': {'thread_id': str(pid)}})
+        lease.check(refresh=True)
+        lease.stop()
+        lease = None
+        error = final.get('error')
+        record = {'pipeline_id': pid, 'identity': identity}
+        if error:
+            stage = final.get('failed_stage')
+            result = {'pipeline_id': pid, 'error': error, 'stage': stage}
+            record.update(status='failed', error=error, stage=stage, result=result)
+        else:
+            if bound.final is None:
+                raise CoordinationUnknown('缺少最终产物回执，不自动标为成功')
+            output = bound.final['output']
+            result = {'pipeline_id': pid, 'output_manifest': output}
+            record.update(status='completed', stage=bound.final['stage'], output=output, result=result)
+        save_checkpoint(path, record)
+        return settle_checkpoint(brain, client, path, record)
+    except ZenithJoyAPIError as error:
+        logger.error('pipeline %s 协同未确认：%s', str(pid)[:8], error)
+        if error.status_code in (401, 403):
             raise
-        logger.error("graph 执行抛出 APIError：%s", e)
-        _safe_fail(client, pid, f"graph 执行异常: {e}")
         return False
-    except Exception as e:  # noqa: BLE001
-        tb = traceback.format_exc()
-        logger.error("graph 执行未捕获异常：%s\n%s", e, tb)
-        _safe_fail(client, pid, f"graph 执行未捕获异常: {e}")
+    except Exception as error:
+        # 网络/租约未知不可转成内容失败，也不可再执行业务或覆盖终态。
+        logger.error('pipeline %s 停止推进：%s', str(pid)[:8], error)
         return False
-
-    # 失败终态：在 graph 内只标记 error，由 worker 调 fail_pipeline 上报
-    if final_state.get("error"):
-        _safe_fail(
-            client,
-            pid,
-            final_state.get("error", "未知错误"),
-            stage=final_state.get("failed_stage"),
-        )
-        return False
-
-    logger.info("pipeline %s 全部阶段完成", str(pid)[:8])
-    return True
+    finally:
+        if lease is not None:
+            try:
+                lease.stop()
+            except CoordinationUnknown as error:
+                logger.warning('续约停止未确认：%s', error)
+        if brain_client is None:
+            brain.close()
 
 
 def _read_manifest(output_dir: object) -> dict | None:
@@ -179,22 +191,6 @@ def _read_manifest(output_dir: object) -> dict | None:
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("读 manifest.json 失败：%s", e)
         return None
-
-
-def _safe_fail(
-    client: ZenithJoyClient,
-    pipeline_id: str,
-    error: str,
-    *,
-    stage: str | None = None,
-) -> None:
-    """调 /fail；网络错误不再冒泡（失败转 warning）。"""
-    try:
-        client.fail_pipeline(pipeline_id, error, stage=stage)
-    except ZenithJoyAPIError as e:
-        logger.error("fail_pipeline 上报失败：%s（原始错误：%s）", e, error)
-        if e.status_code in (401, 403):
-            raise
 
 
 def main() -> int:
@@ -218,8 +214,10 @@ def main() -> int:
         client = ZenithJoyClient.from_env()
 
     try:
+        if not dry_run:
+            recover_terminals(client)
         try:
-            pipelines = client.list_running_pipelines()
+            pipelines = poll_page(client)
         except ZenithJoyAPIError as e:
             if e.status_code in (401, 403):
                 logger.error(

@@ -41,7 +41,7 @@ class TestNotebookIdFallback(unittest.TestCase):
                 mock_run.return_value = json.dumps(
                     {"answer": "**1. 龙虾市场蓬勃\n示例内容"}
                 )
-                return execute_research(run_data)
+                return execute_research({"pipeline_id": "fallback-test", **run_data})
 
     def test_run_data_has_notebook_id_uses_it(self) -> None:
         """run_data 传入 notebook_id 时直接使用，不读 env。"""
