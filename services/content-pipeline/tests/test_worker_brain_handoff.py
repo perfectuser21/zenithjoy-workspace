@@ -212,3 +212,66 @@ def test_candidate_pages_rotate_between_worker_invocations(tmp_path,monkeypatch)
     assert poll_page(Client(),limit=1)[0]['id']=='new-pending'
     assert poll_page(Client(),limit=1)[0]['id']=='old-claimed'
     assert offsets==[0,1,0]
+
+
+def test_real_six_fake_executors_complete_owned_artifacts_and_lease_receipt(tmp_path, monkeypatch):
+    """执行真实六阶段函数和文件写入，仅HTTP对端隔离；不替换STAGES/executor。"""
+    import httpx
+    from lib.http_client import ZenithJoyClient
+    from pipeline_worker.brain_tasks import BrainTaskClient
+
+    monkeypatch.setenv('E2E_FAKE_EXECUTORS', 'true')
+    monkeypatch.setenv('CONTENT_OUTPUT_DIR', str(tmp_path / 'artifacts'))
+    events = []
+    identity = {}
+    terminal = {}
+    output_dir = tmp_path / 'artifacts/runs/p1'
+
+    def handler(request):
+        body = json.loads(request.content)
+        path = request.url.path
+        events.append((path, body))
+        expiry = (datetime.now(timezone.utc) + timedelta(seconds=300)).isoformat()
+        if path.endswith('/claim') and '/brain/' in path:
+            identity.update(brain_task_id=TASK, claimer=body['claimer'], claim_epoch=EPOCH)
+            assert body['start'] is True and body['on_lease_expire'] == 'fail'
+            return httpx.Response(200, json={'id': TASK, 'claimed_by': body['claimer'],
+                'claim_epoch': EPOCH, 'status': 'in_progress', 'lease_until': expiry})
+        if path.endswith('/heartbeat'):
+            assert body['claimer'] == identity['claimer'] and body['claim_epoch'] == EPOCH
+            return httpx.Response(200, json={'ok': True, 'lease_until': expiry})
+        if path.endswith('/lease/finish'):
+            assert body['status'] == 'completed', body
+            assert (output_dir / 'manifest.json').is_file()
+            terminal.update(body)
+            return httpx.Response(200, json={'ok': True, 'task_id': TASK, 'status': 'completed'})
+        assert all(body.get(k) == value for k, value in identity.items())
+        if path.endswith('/stage-complete'):
+            if body.get('is_final'):
+                assert terminal and body['brain_result'] == terminal['result']
+            else:
+                assert not terminal
+        else:
+            assert path == '/api/pipelines/p1/claim', path
+        return httpx.Response(200, json={'success': True, 'data': {}})
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(base_url='http://zj.invalid', transport=transport) as http:
+        brain = BrainTaskClient('http://brain.invalid', client=http)
+        local = ZenithJoyClient('http://zj.invalid', client=http)
+        # Fake业务不得调用任何模型/Notebook/图片/NAS外部服务。
+        with patch.object(worker, 'can_run', return_value={'approved': True}), \
+                patch('urllib.request.urlopen', side_effect=AssertionError('fake executor external HTTP')), \
+                patch('subprocess.run', side_effect=AssertionError('fake executor external process')):
+            assert worker.process_pipeline(local, pipeline(output_dir=str(output_dir)), dry_run=False,
+                brain_client=brain, checkpoint_dir=tmp_path / 'receipts') is True
+    stages = [body['stage'] for path, body in events if path.endswith('/stage-complete')]
+    assert stages == ['research', 'copywriting', 'copy_review', 'generate', 'image_review', 'export']
+    assert json.loads((output_dir / 'findings.json').read_text())['fake'] is True
+    assert '(fake copywriting output for e2e CI)' in (output_dir / 'content.md').read_text()
+    manifest = json.loads((output_dir / 'manifest.json').read_text())
+    assert manifest['pipeline_id'] == 'p1' and manifest['fake'] is True
+    result = terminal['result']
+    assert result['pipeline_id'] == 'p1' and result['output_manifest']['pipeline_id'] == 'p1'
+    assert result['output_manifest']['output_dir'] == str(output_dir)
+    assert not list((tmp_path / 'receipts').glob('*.json'))

@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import subprocess
+from pathlib import Path
 from ..artifact_paths import owned_directory, owned_file, load_findings, guard
 
 logger = logging.getLogger("pipeline-worker.copywriting")
