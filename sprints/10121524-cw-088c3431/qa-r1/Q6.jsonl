@@ -1,0 +1,74 @@
+{"baseline":"efaa9152a621cbdb7a8e2dfbc269cc9743f0fd15","sha256":"ba535372fd4a906bd059387b8366341a3cfb65a6f60dfe7e400c3985f5f3f555","node":"/opt/homebrew/Cellar/node/26.8.2/bin/node","version":"v26.8.2"}
+{"label":"baseline mjs import client from 'openai';","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs const client = require('openai');","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs import client from \"openai\";","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs const client = require(\"openai\");","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs import client from 'anthropic';","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs const client = require('anthropic');","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs import client from \"anthropic\";","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs const client = require(\"anthropic\");","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs import client from '@anthropic-ai/sdk';","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs const client = require('@anthropic-ai/sdk');","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs import client from \"@anthropic-ai/sdk\";","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline mjs const client = require(\"@anthropic-ai/sdk\");","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs import client from 'openai';","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs const client = require('openai');","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs import client from \"openai\";","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs const client = require(\"openai\");","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs import client from 'anthropic';","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs const client = require('anthropic');","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs import client from \"anthropic\";","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs const client = require(\"anthropic\");","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs import client from '@anthropic-ai/sdk';","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs const client = require('@anthropic-ai/sdk');","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs import client from \"@anthropic-ai/sdk\";","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"baseline cjs const client = require(\"@anthropic-ai/sdk\");","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"PR mjs import client from 'openai';","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-NMPxhN/apps/staff-hub/src/sample.mjs: openai\n"}
+{"label":"PR mjs const client = require('openai');","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-lE7VuS/apps/staff-hub/src/sample.mjs: openai\n"}
+{"label":"PR mjs import client from \"openai\";","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-IQynno/apps/staff-hub/src/sample.mjs: openai\n"}
+{"label":"PR mjs const client = require(\"openai\");","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-O9NRjP/apps/staff-hub/src/sample.mjs: openai\n"}
+{"label":"PR mjs import client from 'anthropic';","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-e9BgjN/apps/staff-hub/src/sample.mjs: anthropic\n"}
+{"label":"PR mjs const client = require('anthropic');","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-kLAufd/apps/staff-hub/src/sample.mjs: anthropic\n"}
+{"label":"PR mjs import client from \"anthropic\";","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-EAkT7H/apps/staff-hub/src/sample.mjs: anthropic\n"}
+{"label":"PR mjs const client = require(\"anthropic\");","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-AzwKZr/apps/staff-hub/src/sample.mjs: anthropic\n"}
+{"label":"PR mjs import client from '@anthropic-ai/sdk';","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-KlLaLO/apps/staff-hub/src/sample.mjs: @anthropic-ai/sdk\n"}
+{"label":"PR mjs const client = require('@anthropic-ai/sdk');","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-XQIDgk/apps/staff-hub/src/sample.mjs: @anthropic-ai/sdk\n"}
+{"label":"PR mjs import client from \"@anthropic-ai/sdk\";","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-CRjtHD/apps/staff-hub/src/sample.mjs: @anthropic-ai/sdk\n"}
+{"label":"PR mjs const client = require(\"@anthropic-ai/sdk\");","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-EZkaoE/apps/staff-hub/src/sample.mjs: @anthropic-ai/sdk\n"}
+{"label":"PR cjs import client from 'openai';","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-mzmoZo/apps/staff-hub/src/sample.cjs: openai\n"}
+{"label":"PR cjs const client = require('openai');","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-H2HA4M/apps/staff-hub/src/sample.cjs: openai\n"}
+{"label":"PR cjs import client from \"openai\";","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-h8Ue2o/apps/staff-hub/src/sample.cjs: openai\n"}
+{"label":"PR cjs const client = require(\"openai\");","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-XGawVU/apps/staff-hub/src/sample.cjs: openai\n"}
+{"label":"PR cjs import client from 'anthropic';","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-LoflWi/apps/staff-hub/src/sample.cjs: anthropic\n"}
+{"label":"PR cjs const client = require('anthropic');","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-JmQO25/apps/staff-hub/src/sample.cjs: anthropic\n"}
+{"label":"PR cjs import client from \"anthropic\";","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-QPtAjI/apps/staff-hub/src/sample.cjs: anthropic\n"}
+{"label":"PR cjs const client = require(\"anthropic\");","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-0VyX1K/apps/staff-hub/src/sample.cjs: anthropic\n"}
+{"label":"PR cjs import client from '@anthropic-ai/sdk';","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-KXIiuD/apps/staff-hub/src/sample.cjs: @anthropic-ai/sdk\n"}
+{"label":"PR cjs const client = require('@anthropic-ai/sdk');","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-1LwboL/apps/staff-hub/src/sample.cjs: @anthropic-ai/sdk\n"}
+{"label":"PR cjs import client from \"@anthropic-ai/sdk\";","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-z8SPER/apps/staff-hub/src/sample.cjs: @anthropic-ai/sdk\n"}
+{"label":"PR cjs const client = require(\"@anthropic-ai/sdk\");","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q1-9k5MVn/apps/staff-hub/src/sample.cjs: @anthropic-ai/sdk\n"}
+{"label":"js banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-WcdPku/apps/staff-hub/sample.js: openai\n"}
+{"label":"js corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"ts banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-zxT2om/apps/staff-hub/sample.ts: openai\n"}
+{"label":"ts corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"tsx banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-O30iUU/apps/staff-hub/sample.tsx: openai\n"}
+{"label":"tsx corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"jsx banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-iiPrZA/apps/staff-hub/sample.jsx: openai\n"}
+{"label":"jsx corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"all six allowed","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"js banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-6j5WvG/apps/staff-hub/sample.js: openai\n"}
+{"label":"js corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"ts banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-mKykbW/apps/staff-hub/sample.ts: openai\n"}
+{"label":"ts corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"tsx banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-H95hTT/apps/staff-hub/sample.tsx: openai\n"}
+{"label":"tsx corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"jsx banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-zYlZR5/apps/staff-hub/sample.jsx: openai\n"}
+{"label":"jsx corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"all six allowed","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"excluded only","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"visible new extensions","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"visible old extension control","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q3-WItX3R/apps/staff-hub/src/visible.js: openai\n"}
+{"label":"excluded only","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"visible new extensions","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q3-pMNRzc/apps/staff-hub/src/visible.cjs: anthropic\n/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q3-pMNRzc/apps/staff-hub/src/visible.mjs: openai\n"}
+{"label":"visible old extension control","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q3-pMNRzc/apps/staff-hub/src/visible.cjs: anthropic\n/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q3-pMNRzc/apps/staff-hub/src/visible.js: openai\n/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q3-pMNRzc/apps/staff-hub/src/visible.mjs: openai\n"}
+{"test":".github/workflows/scripts/__tests__/check-staff-hub-llm-imports.test.mjs","bytes":5399,"ciCommand":"run: node --test scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs","globMatched":true}
