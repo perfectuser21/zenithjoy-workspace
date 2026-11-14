@@ -11945,3 +11945,11 @@ tests:
     status: active
     product: 内容生产
     note: "真实HTTP未知回执重发同run及同topic并发幂等"
+
+  - id: ci-supported-environment
+    path: .github/workflows/scripts/__tests__/ci-supported-environment.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: CI治理
+    note: "OpenClaw required L3 通配收集；约束真实APT/Chromium runner并隔离验证pg_dump主版本选择及现役演练入口"

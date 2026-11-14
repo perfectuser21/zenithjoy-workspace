@@ -237,7 +237,7 @@ jobs:
   # 读取真实契约需安装已锁定根依赖），不按变更路径过滤。
   openclaw-scripts-test:
     name: OpenClaw Scripts Test (${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # 两片主集合实测494秒，加准备79秒及Durable core36秒已超10分钟。
     # 三片覆盖完整同一文件集合，不筛用例、不延长job或生产deadline。
     timeout-minutes: 10

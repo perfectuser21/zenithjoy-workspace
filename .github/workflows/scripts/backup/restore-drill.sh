@@ -26,7 +26,7 @@ cd "$REPO_ROOT"
 fail() { echo "❌ FAIL: $*"; exit 1; }
 ok()   { echo "  ✅ $*"; }
 
-for bin in psql pg_dump pg_restore createdb dropdb python3; do
+for bin in psql createdb dropdb python3; do
   command -v "$bin" >/dev/null 2>&1 || fail "缺少必需命令：$bin"
 done
 
@@ -37,6 +37,10 @@ elif [ -n "${DATABASE_URL:-}" ]; then
 else
   fail "未设 E2E_DATABASE_URL / DATABASE_URL —— 拒绝落默认库跑成假绿"
 fi
+
+source "$(dirname "${BASH_SOURCE[0]}")/select-pg-dump.sh"
+select_pg_dump "$SRC_URL" || fail "缺少匹配源库版本的 pg_dump"
+select_pg_restore || fail "缺少匹配源库版本的 pg_restore"
 
 psql "$SRC_URL" -v ON_ERROR_STOP=1 -q -c "SELECT 1" >/dev/null 2>&1 \
   || fail "源库连不上（来源=${SRC_FROM}）"
@@ -125,7 +129,7 @@ echo "== 3/5 真 pg_dump =="
 # MUTATION-ANCHOR:A5-schema-only —— 变异把下一行改成 (--schema-only)，
 # 备份里就只剩表结构没有数据，第③层逐行比对必须当场报红。
 DUMP_MODE_ARGS=()
-pg_dump "$SRC_URL" --format=custom --schema=zenithjoy "${DUMP_MODE_ARGS[@]+"${DUMP_MODE_ARGS[@]}"}" --file="$DUMP_FILE" \
+"$PG_DUMP" "$SRC_URL" --format=custom --schema=zenithjoy "${DUMP_MODE_ARGS[@]+"${DUMP_MODE_ARGS[@]}"}" --file="$DUMP_FILE" \
   || fail "pg_dump 失败"
 [ -s "$DUMP_FILE" ] || fail "备份产物为空文件"
 ok "备份产物 $(wc -c < "$DUMP_FILE" | tr -d ' ') 字节"
@@ -134,7 +138,7 @@ echo "== 4/5 真还原到临时库 $DRILL_DB =="
 createdb "$DRILL_DB" 2>/dev/null || psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE \"$DRILL_DB\"" \
   || fail "临时库建不出来"
 # pg_restore 对已存在对象会报 warning，非致命；真正的判据在下一段的逐行比对。
-pg_restore --dbname="$TMP_URL" --no-owner --no-privileges "$DUMP_FILE" >/dev/null 2>&1
+"$PG_RESTORE" --dbname="$TMP_URL" --no-owner --no-privileges "$DUMP_FILE" >/dev/null 2>&1
 psql "$TMP_URL" -v ON_ERROR_STOP=1 -q -c "SELECT 1" >/dev/null 2>&1 || fail "临时库还原后连不上"
 
 echo "== 5/5 第②③层：逐表 count 全等 + 关键字段 md5 全等 + 标记行逐字相同 =="

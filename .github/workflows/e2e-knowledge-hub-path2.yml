@@ -14,6 +14,8 @@ on:
       - 'apps/staff-hub/e2e/collab-notes-crdt.spec.ts'
       - '.github/workflows/e2e-knowledge-hub-path2.yml'
       - '.github/workflows/scripts/smoke/collab-notes-smoke.sh'
+      - '.github/workflows/scripts/backup/documents-restore-drill.sh'
+      - '.github/workflows/scripts/backup/select-pg-dump.sh'
       - 'sprints/08221200-line11-path2-collab-notes/**'
   workflow_dispatch:
 
@@ -27,7 +29,7 @@ permissions:
 jobs:
   # 段1+段2：Linux 上跑静态守卫 + 真 Postgres 全链（真浏览器在下面的 windows job）
   linux-guards-and-db:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -62,7 +64,7 @@ jobs:
       - name: 段2 合同测试真被 vitest 收集执行（5 文件 / 33 用例 / 真 Postgres + 真 collab-ws）
         run: npm run test:collab-notes --workspace apps/api
       - name: 段2b G2 备份恢复演练（真 pg_dump + 真还原 + 七字段逐条全等）
-        run: bash sprints/08221200-line11-path2-collab-notes/backup-restore-drill.sh
+        run: bash .github/workflows/scripts/backup/documents-restore-drill.sh
 
   # 段3：windows-latest 干净 VM 真浏览器双 context CRDT。**不许加 job 级 if** —— 那正是要堵的孤儿 spec 形态。
   windows-real-browser:
