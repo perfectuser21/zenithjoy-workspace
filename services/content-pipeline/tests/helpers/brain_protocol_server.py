@@ -17,6 +17,8 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 
+DIGEST_TIMEOUT_SECONDS = 5
+
 def digest(value):
     # Same JavaScript JSON number and UTF-16 key ordering as the real provider.
     program = """const fs=require('node:fs'),crypto=require('node:crypto');
@@ -24,7 +26,7 @@ const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'
 ?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
 process.stdout.write(crypto.createHash('sha256').update(JSON.stringify(canonical(JSON.parse(fs.readFileSync(0,'utf8'))))).digest('hex'));"""
     return subprocess.check_output(['node', '-e', program],
-        input=json.dumps(value, ensure_ascii=False).encode(), timeout=5).decode()
+        input=json.dumps(value, ensure_ascii=False).encode(), timeout=DIGEST_TIMEOUT_SECONDS).decode()
 
 
 class ProtocolState:
@@ -109,8 +111,16 @@ class ProtocolState:
                 status, result = body.get('status'), body.get('result')
                 if status not in ('completed', 'failed') or not isinstance(result, dict):
                     return 400, {'error': 'invalid_terminal_contract'}
-                wanted = {'claimer': owner, 'claim_epoch': epoch, 'status': status, 'result_sha256': digest(result)}
                 existing = task.get('result', {}).get('lease_receipt')
+                if existing:
+                    if any(existing.get(key) != value for key, value in
+                           (('claimer', owner), ('claim_epoch', epoch), ('status', status))):
+                        return 409, {'error': 'lease_receipt_conflict'}
+                elif (task['status'] != 'in_progress' or task['claimed_by'] != owner
+                        or task.get('claim_epoch') != epoch or task.get('released')
+                        or task.get('lease_deadline', 0) <= time.time()):
+                    return 409, {'error': 'lease_lost'}
+                wanted = {'claimer': owner, 'claim_epoch': epoch, 'status': status, 'result_sha256': digest(result)}
                 if existing:
                     if existing != wanted:
                         return 409, {'error': 'lease_receipt_conflict'}
