@@ -22,6 +22,8 @@ on:
       - 'apps/api/vitest.workbench-rollup.config.ts'
       - '.github/workflows/e2e-knowledge-hub-path3.yml'
       - '.github/workflows/scripts/smoke/structured-workbench-smoke.sh'
+      - '.github/workflows/scripts/backup/restore-drill.sh'
+      - '.github/workflows/scripts/backup/select-pg-dump.sh'
       - 'sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/**'
       - 'sprints/08201850-workbench-sprintB-rows/**'
       - 'sprints/08210012-workbench-sprintC-views/**'
@@ -40,7 +42,7 @@ permissions:
 jobs:
   # 段1+段2：Linux 上跑静态守卫 + 真 Postgres 全链（真浏览器在下面的 windows job）
   linux-guards-and-db:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -143,7 +145,6 @@ jobs:
   windows-real-browser:
     runs-on: windows-latest
     needs: linux-guards-and-db
-    services: {}
     env:
       E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
     steps:

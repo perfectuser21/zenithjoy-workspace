@@ -7,13 +7,6 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import app from '../src/app';
 import pool from '../src/db/connection';
-import { fetchLangGraphEvents } from '../src/services/langgraph-adapter';
-
-vi.mock('../src/services/langgraph-adapter', async importOriginal => {
-  const actual = await importOriginal<typeof import('../src/services/langgraph-adapter')>();
-  return { ...actual, fetchLangGraphEvents: vi.fn() };
-});
-
 vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn() },
 }));
@@ -48,7 +41,6 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mockQuery.mockReset();
-  vi.mocked(fetchLangGraphEvents).mockReset().mockResolvedValue([]);
 });
 
 describe('GET /api/content-images/:pipelineId/:filename', () => {
@@ -88,7 +80,6 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
     const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/any.png`);
 
     expect(response.status).toBe(404);
-    expect(fetchLangGraphEvents).toHaveBeenCalledWith(PIPELINE_ID);
     expect(mockQuery).toHaveBeenCalledOnce();
   });
 
@@ -98,7 +89,6 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
     const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/does-not-exist.png`);
 
     expect(response.status).toBe(404);
-    expect(fetchLangGraphEvents).toHaveBeenCalledWith(PIPELINE_ID);
     expect(mockQuery).toHaveBeenCalledOnce();
   });
 
@@ -108,25 +98,11 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
     const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/anything.png`);
 
     expect(response.status).toBe(404);
-    expect(fetchLangGraphEvents).toHaveBeenCalledWith(PIPELINE_ID);
     expect(mockQuery).toHaveBeenCalledOnce();
   });
-  it('real resolveTaskDir locates image through the isolated Brain event fallback', async () => {
-    const taskId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
-    mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: null, cecelia_task_id: taskId }] });
-    vi.mocked(fetchLangGraphEvents).mockResolvedValueOnce([
-      { id: 1, created_at: '2026-11-04T00:00:00Z', payload: { node: 'generate', step_index: 1, cards_dir: join(tmpRoot, 'cards') } },
-    ]);
-    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/${encodeURIComponent(IMAGE_NAME)}`);
-    expect(response.status).toBe(200);
-    expect(Buffer.compare(response.body, PNG_BYTES)).toBe(0);
-    expect(fetchLangGraphEvents).toHaveBeenCalledWith(taskId);
-    expect(mockQuery).toHaveBeenCalledOnce();
-  });
-  it('real UUID validation skips Brain fallback for an unknown non-UUID pipeline', async () => {
+  it('unknown non-UUID pipeline has no local output and returns 404', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
     expect((await request(server).get('/api/content-images/not-a-uuid/any.png')).status).toBe(404);
-    expect(fetchLangGraphEvents).not.toHaveBeenCalled();
   });
 
 });

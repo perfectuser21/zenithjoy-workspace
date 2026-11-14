@@ -11841,3 +11841,115 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition；私有既有模型响应原件与Brain父子双claim精确授权守卫；匿名夹具，非真实模型或生产写入"
+
+  - id: content-worker-e2e-contract
+    path: .github/workflows/scripts/__tests__/content-worker-e2e-contract.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "Brain挂号/有限租约/终态实际E2E shell的失败传播；通过content-brain-handoff-smoke显式消费"
+
+  - id: pipeline-brain-handoff
+    path: apps/api/src/controllers/__tests__/pipeline-brain-handoff.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "内容启动/重跑使用公共Brain工作单，失败不伪造运行成功"
+
+  - id: pipelines-worker-fence
+    path: apps/api/src/controllers/__tests__/pipelines-worker-fence.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "Worker回执受同Brain工作单、认领owner和epoch保护"
+
+  - id: pipeline-brain-tasks
+    path: apps/api/src/services/pipeline-brain-tasks.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容生产
+    note: "公共Brain协议调用和结果摘要校验"
+
+  - id: dashboard-pipeline-api
+    path: apps/dashboard/src/api/__tests__/pipeline.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容生产
+    note: "ZJ内容API错误及能力contract"
+
+  - id: dashboard-content-factory-page
+    path: apps/dashboard/src/pages/ContentFactoryPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 内容生产
+    note: "本地固定六阶段能力、历史类型和真实挂号状态展示"
+
+  - id: dashboard-content-type-config-page
+    path: apps/dashboard/src/pages/ContentTypeConfigPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 内容生产
+    note: "已退役配置工具不再调用Brain业务接口"
+
+  - id: content-brain-protocol-fixture
+    path: services/content-pipeline/tests/test_brain_protocol_server.py
+    type: integration
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "隔离loopback消费协议fixture自身必须拒绝旧owner/epoch/过期及冲突回执"
+
+  - id: content-brain-task-client
+    path: services/content-pipeline/tests/test_brain_task_client.py
+    type: unit
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "公共认领、续约及终态HTTP协议"
+
+  - id: content-run-artifact-isolation
+    path: services/content-pipeline/tests/test_run_artifact_isolation.py
+    type: integration
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "单run产物身份隔离"
+
+  - id: content-worker-brain-handoff
+    path: services/content-pipeline/tests/test_worker_brain_handoff.py
+    type: integration
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "先认领再业务；丢约停后续；终态未知只重放回执"
+
+  - id: content-brain-handoff-smoke
+    path: .github/workflows/scripts/smoke/content-brain-handoff-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "现有Smoke Glob基线必绿：运行Brain挂号/Worker fence/API协议和正式E2E shell合同；不调用生产Brain"
+
+  - id: api-pipeline-topic-intent
+    path: apps/api/src/controllers/__tests__/pipeline-topic-intent.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 内容生产
+    note: "真实HTTP未知回执重发同run及同topic并发幂等"
+
+  - id: ci-supported-environment
+    path: .github/workflows/scripts/__tests__/ci-supported-environment.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: CI治理
+    note: "OpenClaw required L3 通配收集；约束真实APT/Chromium runner并隔离验证pg_dump主版本选择及现役演练入口"

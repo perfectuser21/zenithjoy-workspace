@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { createReadStream, existsSync, statSync } from 'fs';
 import { resolve, extname, sep } from 'path';
 import pool from '../db/connection';
-import { fetchLangGraphEvents, isUuid, resolveTaskDir } from '../services/langgraph-adapter';
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -55,9 +54,6 @@ export class ContentImagesController {
         [pipelineId]
       );
       const outputDir = rows[0]?.output_dir || null;
-      const ceceliaTaskId: string | null =
-        rows[0]?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
-
       const findInDir = (baseDir: string): string | null => {
         for (const rel of [`cards/${decoded}`, `images/${decoded}`, decoded]) {
           const full = resolveSafe(baseDir, rel);
@@ -66,19 +62,10 @@ export class ContentImagesController {
         return null;
       };
 
-      let found: string | null = outputDir ? findInDir(outputDir) : null;
-
-      // outputDir 没找到 → 尝试从 cecelia_events 解析 LangGraph 任务目录兜底
-      if (!found && ceceliaTaskId) {
-        const events = await fetchLangGraphEvents(ceceliaTaskId);
-        const langGraphTaskDir = resolveTaskDir(events);
-        if (langGraphTaskDir && langGraphTaskDir !== outputDir) {
-          found = findInDir(langGraphTaskDir);
-        }
-      }
+      const found: string | null = outputDir ? findInDir(outputDir) : null;
 
       if (!found) {
-        // outputDir 缺失且无 LangGraph 事件 → 404 pipeline
+        // 本地历史产物目录缺失 → 404 pipeline
         if (!outputDir) {
           res.status(404).json({ error: 'pipeline not found' });
           return;

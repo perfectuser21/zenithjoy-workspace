@@ -50,7 +50,8 @@ class TestParseFindings(unittest.TestCase):
 
 class TestExecuteResearch(unittest.TestCase):
     def test_no_notebook_id(self):
-        result = execute_research({"keyword": "test"})
+        with patch.dict(os.environ, {"CREATOR_DEFAULT_NOTEBOOK_ID": "", "DEFAULT_NOTEBOOK_ID": ""}):
+            result = execute_research({"pipeline_id": "research-test", "keyword": "test"})
         self.assertFalse(result["success"])
         self.assertIn("notebook_id", result["error"])
 
@@ -64,6 +65,7 @@ class TestExecuteResearch(unittest.TestCase):
                     "answer": "**1. AI 让个人拥有企业级能力\n具体数据..."
                 })
                 result = execute_research({
+                    "pipeline_id": "research-test",
                     "keyword": "AI 一人公司",
                     "notebook_id": "test-nb-id",
                     "content_type": "solo-company-case",

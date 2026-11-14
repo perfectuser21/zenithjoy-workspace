@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import sys
 from pathlib import Path
 from typing import Callable
@@ -53,6 +54,22 @@ def make_client(handler: Callable[[httpx.Request], httpx.Response]) -> ZenithJoy
     return ZenithJoyClient(base_url="http://stub", token="T", client=http)
 
 
+@pytest.fixture(autouse=True)
+def brain_protocol_fixture(monkeypatch, tmp_path):
+    """原有阶段HTTP用例继续验证业务；Brain协议在独立wire/租约smoke中检验。"""
+    class Brain:
+        def claim(self, task_id, claimer, lease_seconds):
+            return {'brain_task_id': task_id, 'claimer': claimer, 'claim_epoch': '2026-11-14 04:00:00.123456+00'}
+        def heartbeat(self, identity, lease_seconds):
+            return {'ok': True, 'lease_until': (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat()}
+        def finish(self, identity, status, result):
+            return {'ok': True, 'task_id': identity['brain_task_id'], 'status': status}
+        def close(self):
+            pass
+    monkeypatch.setattr(worker_module, 'BrainTaskClient', Brain)
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path))
+
+
 # ──────────────────────────────────────────────────────────────────── process_pipeline
 
 
@@ -89,7 +106,7 @@ def test_process_pipeline_all_stages_succeed(monkeypatch):
             "path": req.url.path,
             "body": payload,
         })
-        if "/stage-complete" in req.url.path:
+        if "/stage-complete" in req.url.path or req.url.path.endswith("/claim"):
             return httpx.Response(200, json=_ok({"id": "p1", "status": "running"}))
         return httpx.Response(404)
 
@@ -114,7 +131,7 @@ def test_process_pipeline_all_stages_succeed(monkeypatch):
          patch.object(worker_module, "can_run", return_value={"approved": True}):
         ok = worker_module.process_pipeline(
             client,
-            {"id": "p1", "topic_id": "t1", "keyword": "AI"},
+            {"id": "p1", "topic_id": "t1", "keyword": "AI", "cecelia_task_id": "12b816a0-a42a-4adf-a190-f1a0cf9600a9"},
             dry_run=False,
         )
     client.close()
@@ -157,7 +174,7 @@ def test_process_pipeline_executor_failure_triggers_fail():
          patch.object(worker_module, "can_run", return_value={"approved": True}):
         ok = worker_module.process_pipeline(
             client,
-            {"id": "p1", "topic_id": "t1", "keyword": "AI"},
+            {"id": "p1", "topic_id": "t1", "keyword": "AI", "cecelia_task_id": "12b816a0-a42a-4adf-a190-f1a0cf9600a9"},
             dry_run=False,
         )
     client.close()
@@ -200,7 +217,7 @@ def test_process_pipeline_review_failure_triggers_fail():
          patch.object(worker_module, "can_run", return_value={"approved": True}):
         ok = worker_module.process_pipeline(
             client,
-            {"id": "p1", "topic_id": "t1", "keyword": "AI"},
+            {"id": "p1", "topic_id": "t1", "keyword": "AI", "cecelia_task_id": "12b816a0-a42a-4adf-a190-f1a0cf9600a9"},
             dry_run=False,
         )
     client.close()
@@ -231,7 +248,7 @@ def test_process_pipeline_can_run_denied_triggers_fail():
     with patch.object(worker_module, "can_run", side_effect=deny):
         ok = worker_module.process_pipeline(
             client,
-            {"id": "p1", "topic_id": "t1", "keyword": "AI"},
+            {"id": "p1", "topic_id": "t1", "keyword": "AI", "cecelia_task_id": "12b816a0-a42a-4adf-a190-f1a0cf9600a9"},
             dry_run=False,
         )
     client.close()
@@ -263,7 +280,7 @@ def test_process_pipeline_auth_failure_bubbles():
         with pytest.raises(ZenithJoyAPIError) as exc:
             worker_module.process_pipeline(
                 client,
-                {"id": "p1", "topic_id": "t1", "keyword": "AI"},
+                {"id": "p1", "topic_id": "t1", "keyword": "AI", "cecelia_task_id": "12b816a0-a42a-4adf-a190-f1a0cf9600a9"},
                 dry_run=False,
             )
     client.close()

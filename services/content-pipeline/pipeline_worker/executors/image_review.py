@@ -8,24 +8,16 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 from pathlib import Path
+from ..artifact_paths import owned_directory, owned_file, guard
+from ..brain_tasks import CoordinationUnknown
 
 logger = logging.getLogger("pipeline-worker.image_review")
 
 # person-data.json 里不允许出现的占位关键词（会直接 FAIL）
 PERSON_DATA_PLACEHOLDERS = ("待补充", "暂无数据", "待产出")
 
-OUTPUT_BASE = os.environ.get(
-    "CONTENT_OUTPUT_DIR",
-    str(Path.home() / "content-output"),
-)
 
-IMAGES_DIR = Path(os.environ.get("HOME", "/Users/administrator")) / "claude-output" / "images"
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff-]", "-", text))[:40]
 
 
 def _check_person_data_placeholders(out_dir: Path) -> list[str]:
@@ -62,18 +54,6 @@ def _check_person_data_placeholders(out_dir: Path) -> list[str]:
     return hits
 
 
-def _find_output_dir(keyword: str) -> Path | None:
-    # 动态读 env，方便测试 patch
-    base = Path(os.environ.get("CONTENT_OUTPUT_DIR", OUTPUT_BASE))
-    if not base.exists():
-        return None
-    s = _slug(keyword)
-    for d in sorted(base.iterdir(), reverse=True):
-        if d.is_dir() and s in d.name and not d.name.startswith("research"):
-            return d
-    return None
-
-
 def execute_image_review(run_data: dict) -> dict:
     """执行图片审查。
 
@@ -98,8 +78,14 @@ def execute_image_review(run_data: dict) -> dict:
 
     logger.info("[image-review] 开始: %s", keyword)
 
-    out_dir = _find_output_dir(keyword)
-    if not out_dir:
+    try:
+        guard(run_data)
+        out_dir = owned_directory(run_data)
+        for name in ('cards/copy.md', 'article/article.md', 'cards/llm-card-content.json', 'cards/person-data.json'):
+            owned_file(run_data, name)
+    except ValueError as error:
+        return {'success': False, 'error': str(error)}
+    if not out_dir.is_dir():
         return {
             "success": True,
             "review_passed": False,
@@ -130,7 +116,6 @@ def execute_image_review(run_data: dict) -> dict:
         issues.extend(person_data_issues)
 
     # 检查图片文件
-    topic_slug = _slug(keyword)
     card_count = 0
     card_paths: list[Path] = []
 
@@ -141,12 +126,8 @@ def execute_image_review(run_data: dict) -> dict:
             f for f in cards_dir.iterdir() if f.suffix == ".png"
         )
 
-    # 2. 兜底看 IMAGES_DIR
-    if not card_paths and IMAGES_DIR.exists():
-        card_paths = sorted(
-            f for f in IMAGES_DIR.iterdir()
-            if f.name.startswith(topic_slug) and f.suffix == ".png"
-        )
+    for file in card_paths:
+        owned_file(run_data, 'cards/' + file.name)
 
     card_count = len(card_paths)
     if card_count > max_images:
@@ -158,10 +139,12 @@ def execute_image_review(run_data: dict) -> dict:
     if card_paths and os.environ.get("SKIP_VISION_REVIEW") != "1":
         try:
             from ..image_vision_review import review_images
-            vision_report = review_images(card_paths)
+            vision_report = review_images(card_paths, execution_guard=run_data.get("execution_guard"))
             vision_severity = vision_report.get("severity", "ok")
             for v_issue in vision_report.get("issues", []):
                 issues.append(f"vision: {v_issue}")
+        except CoordinationUnknown:
+            raise
         except Exception as e:
             # vision 模块异常也不阻塞（保守策略）
             logger.warning("[image-review] vision 模块异常，跳过视觉检查: %s", e)

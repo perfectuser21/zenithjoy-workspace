@@ -17,7 +17,6 @@ company-wiki-config-smoke.sh
 creative-canvas-fullscreen-smoke.sh
 cross-line-seam-smoke.sh
 customer-workspace-http-smoke.sh
-dao1e-langgraph-brain-api-smoke.sh
 deploy-version-selfcheck-smoke.sh
 device-readiness-smoke.sh
 device-type-ui-gate-smoke.sh
@@ -72,3 +71,4 @@ wechat-rpa-real-agent-smoke.sh
 worker-activity-smoke.sh
 phone-account-patrol-smoke.sh
 simple-video-workflow-smoke.sh
+content-brain-handoff-smoke.sh

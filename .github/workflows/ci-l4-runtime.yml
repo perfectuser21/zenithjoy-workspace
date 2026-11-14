@@ -79,7 +79,7 @@ jobs:
     name: API Test
     needs: changes
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -129,7 +129,7 @@ jobs:
     name: Agent Test
     needs: changes
     if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

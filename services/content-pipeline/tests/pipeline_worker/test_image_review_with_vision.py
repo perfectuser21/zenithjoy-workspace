@@ -26,7 +26,7 @@ def _setup_minimal_content(base: Path, slug: str, person_data: dict | None = Non
         person_data: 若提供，会写入 cards/person-data.json
     """
     from datetime import date
-    out_dir = base / f"{date.today().isoformat()}-{slug}"
+    out_dir = base / "runs" / slug
     (out_dir / "cards").mkdir(parents=True, exist_ok=True)
     (out_dir / "article").mkdir(parents=True, exist_ok=True)
     # 必需文件
@@ -71,6 +71,7 @@ class TestImageReviewWithVision(unittest.TestCase):
                     }
                     result = image_review.execute_image_review({
                         "keyword": slug,
+                        "pipeline_id": slug,
                         "image_count": 9,
                     })
 
@@ -103,6 +104,7 @@ class TestImageReviewWithVision(unittest.TestCase):
                     }
                     result = image_review.execute_image_review({
                         "keyword": slug,
+                        "pipeline_id": slug,
                         "image_count": 9,
                     })
 
@@ -126,6 +128,7 @@ class TestImageReviewWithVision(unittest.TestCase):
                 ) as mock_review:
                     result = image_review.execute_image_review({
                         "keyword": slug,
+                        "pipeline_id": slug,
                         "image_count": 9,
                     })
                     mock_review.assert_not_called()
@@ -151,6 +154,7 @@ class TestImageReviewWithVision(unittest.TestCase):
                 ):
                     result = image_review.execute_image_review({
                         "keyword": slug,
+                        "pipeline_id": slug,
                         "image_count": 9,
                     })
 
@@ -188,6 +192,7 @@ class TestImageReviewPersonDataPlaceholder(unittest.TestCase):
                 from pipeline_worker.executors import image_review
                 result = image_review.execute_image_review({
                     "keyword": slug,
+                        "pipeline_id": slug,
                     "image_count": 9,
                 })
 
@@ -225,6 +230,7 @@ class TestImageReviewPersonDataPlaceholder(unittest.TestCase):
                 from pipeline_worker.executors import image_review
                 result = image_review.execute_image_review({
                     "keyword": slug,
+                        "pipeline_id": slug,
                     "image_count": 9,
                 })
 

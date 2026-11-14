@@ -2,17 +2,10 @@ import { Request, Response } from 'express';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve, sep } from 'path';
 import pool from '../db/connection';
-import {
-  buildOutputFromEvents,
-  buildStagesFromEvents,
-  existsLangGraphTask,
-  fetchLangGraphEvents,
-  isUuid,
-  listLangGraphOnlyRuns,
-  overallStatusFromEvents,
-} from '../services/langgraph-adapter';
-
-const CECELIA_BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
+import { randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
+import { extractArticlePath, extractCopyPath, extractImageFiles } from '../services/langgraph-adapter';
+import { BrainTaskError, PIPELINE_CAPABILITIES, registerPipelineTask } from '../services/pipeline-brain-tasks';
 
 // 安全地把 baseDir + relPath 拼成绝对路径，并确保结果仍在 baseDir 内。
 // 失败返回 null。
@@ -82,144 +75,97 @@ export class PipelineController {
         return;
       }
 
-      // 选题池 v1：拒绝无 topic_id 的请求；除非 X-Manual-Override: true
-      const manualOverride = (req.headers['x-manual-override'] || '').toString().toLowerCase() === 'true';
-      if (!topic_id && !manualOverride) {
-        res.status(400).json(
-          fail(
-            'TOPIC_ID_REQUIRED',
-            'topic_id 为必填（选题池 v1 强校验）。如确需手动创建，请加 header X-Manual-Override: true'
-          )
-        );
-        return;
+      if (!['solo-company-case', 'post'].includes(content_type)) {
+        res.status(400).json(fail('CONTENT_TYPE_UNSUPPORTED', '当前仅支持案例内容流程')); return;
       }
 
-      const outputDir = process.env.CONTENT_OUTPUT_DIR || `${process.env.HOME}/content-output`;
-
-      // 阶段 A+：从 topic 复制 notebook_id 到 pipeline_runs，方便 pipeline-worker 直接读
-      let notebookId: string | null = null;
-      if (topic_id) {
-        try {
-          const { rows: topicRows } = await pool.query<{ notebook_id: string | null }>(
-            'SELECT notebook_id FROM zenithjoy.topics WHERE id = $1 AND deleted_at IS NULL',
-            [topic_id]
-          );
-          notebookId = topicRows[0]?.notebook_id ?? null;
-        } catch (lookupErr) {
-          // 查询失败不阻断 pipeline 创建（worker 会 fallback 到 env），仅记录
-          console.warn('[pipeline] trigger 查 topic.notebook_id 失败（忽略，继续）:', lookupErr);
-        }
+      if (typeof topic_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topic_id)) {
+        res.status(400).json(fail('TOPIC_ID_REQUIRED','有效topic_id为必填')); return;
       }
-
-      // 在 zenithjoy DB 创建 pipeline_run 记录
-      const { rows } = await pool.query(
-        `INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by, notebook_id)
-         VALUES ($1, $2, $3, 'pending', $4, $5, $6) RETURNING *`,
-        [content_type, topic || null, topic_id || null, outputDir, triggered_by, notebookId]
-      );
-      const pipelineRun = rows[0];
-
-      // 调 cecelia Brain 创建 task（Brain 不可用时优雅降级：run 保持 pending 状态，稍后调度）
-      let ceceliaTaskId: string | null = null;
+      const client = await pool.connect();
+      let pipelineRun: Record<string, unknown>;
       try {
-        const ceceliaRes = await fetch(`${CECELIA_BRAIN_URL}/api/brain/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: `Content Pipeline: ${content_type}${topic ? ' - ' + topic : ''}`,
-            task_type: 'content-pipeline',
-            priority: 'P2',
-            payload: {
-              content_type,
-              topic,
-              output_dir: outputDir,
-              zenithjoy_pipeline_run_id: pipelineRun.id,
-              callback_url: `${process.env.ZENITHJOY_API_URL || 'http://localhost:5200'}/api/pipeline/callback`,
-            },
-          }),
-        });
-
-        if (ceceliaRes.ok) {
-          const ceceliaTask = (await ceceliaRes.json()) as { id: string };
-          ceceliaTaskId = ceceliaTask.id;
-          await pool.query(
-            `UPDATE zenithjoy.pipeline_runs SET cecelia_task_id = $1, status = 'running', updated_at = NOW() WHERE id = $2`,
-            [ceceliaTaskId, pipelineRun.id]
-          );
-        } else {
-          console.warn('[pipeline] Brain 返回非 2xx，run 保持 pending:', await ceceliaRes.text());
+        await client.query('BEGIN');
+        // 只锁Topic，读取已有run不反向锁它，避免与Worker的run→Topic锁序相撞。
+        const locked = await client.query('SELECT id,notebook_id FROM zenithjoy.topics WHERE id=$1 AND deleted_at IS NULL FOR UPDATE',[topic_id]);
+        if (!locked.rows.length) { await client.query('ROLLBACK');res.status(404).json(fail('TOPIC_NOT_FOUND','选题不存在'));return; }
+        const existing = await client.query('SELECT * FROM zenithjoy.pipeline_runs WHERE topic_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1',[topic_id]);
+        if (existing.rows.length) pipelineRun=existing.rows[0];
+        else {
+          const pipelineId=randomUUID();
+          const outputDir=resolve(process.env.CONTENT_OUTPUT_DIR || `${process.env.HOME}/content-output`,'runs',pipelineId);
+          pipelineRun=(await client.query(`INSERT INTO zenithjoy.pipeline_runs
+            (id,content_type,topic,topic_id,status,output_dir,triggered_by,notebook_id)
+            VALUES ($7,$1,$2,$3,'pending',$4,$5,$6) RETURNING *`,
+            [content_type,topic || null,topic_id,outputDir,triggered_by,locked.rows[0].notebook_id ?? null,pipelineId])).rows[0];
         }
-      } catch (fetchErr) {
-        // Brain 不可用（如 CI 环境）— run 保持 pending，不阻断 API 响应
-        console.warn('[pipeline] Brain 不可达，run 保持 pending:', String(fetchErr));
+        await client.query('COMMIT');
+      } catch (error) { await client.query('ROLLBACK');throw error; }
+      finally { client.release(); }
+      if (pipelineRun.cecelia_task_id) { res.status(200).json(ok(pipelineRun));return; }
+      if (!['pending','failed'].includes(String(pipelineRun.status))) {
+        res.status(409).json(fail('EXISTING_PIPELINE','选题已有工作单，请显式重跑',{pipeline_run_id:pipelineRun.id}));return;
       }
-
-      const finalStatus = ceceliaTaskId ? 'running' : 'pending';
-      res.status(201).json(ok({ ...pipelineRun, cecelia_task_id: ceceliaTaskId, status: finalStatus }));
+      await this.registerAndReply(pipelineRun,res,201);
     } catch (err) {
       console.error('[pipeline] trigger error:', err);
       res.status(500).json(fail('INTERNAL_ERROR', String(err)));
     }
   };
 
-  // GET /api/pipeline/:id  支持 :id = pipeline_runs.id 或 cecelia_task_id（LangGraph-only）
+  private registerAndReply = async (run: Record<string, unknown>, res: Response, status: number): Promise<void> => {
+    try {
+      const taskId = await registerPipelineTask(run);
+      const updated = await pool.query(`UPDATE zenithjoy.pipeline_runs SET cecelia_task_id=$1,status='pending',
+        output_manifest=COALESCE(output_manifest,'{}'::jsonb)||jsonb_build_object('brain_dispatch','registered'),updated_at=NOW()
+        WHERE id=$2 AND cecelia_task_id IS NULL AND status IN ('pending','failed') RETURNING *`, [taskId,run.id]);
+      if (!updated.rows.length) {
+        const current = await pool.query('SELECT * FROM zenithjoy.pipeline_runs WHERE id=$1', [run.id]);
+        if (current.rows[0]?.cecelia_task_id !== taskId) throw new BrainTaskError('工作单绑定已变化',409);
+        res.status(status).json(ok(current.rows[0])); return;
+      }
+      res.status(status).json(ok({ ...run,...updated.rows[0],cecelia_task_id:taskId,status:'pending' }));
+    } catch (error) {
+      const registrationStatus = error instanceof BrainTaskError ? error.registrationStatus : 'unknown';
+      await pool.query(`UPDATE zenithjoy.pipeline_runs SET status=$1,
+        output_manifest=COALESCE(output_manifest,'{}'::jsonb)||jsonb_build_object('brain_dispatch',$2::text),updated_at=NOW()
+        WHERE id=$3 AND cecelia_task_id IS NULL`, [registrationStatus === 'unknown' ? 'pending' : 'failed',registrationStatus,run.id]);
+      res.status(error instanceof BrainTaskError ? error.status : 502).json(fail('BRAIN_TASK_UNAVAILABLE','内容工作单挂号未确认',
+        {pipeline_run_id:run.id,registration_status:registrationStatus}));
+    }
+  };
+
+  register = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { rows } = await pool.query('SELECT * FROM zenithjoy.pipeline_runs WHERE id=$1', [req.params.id]);
+      const run = rows[0];
+      if (!run) { res.status(404).json(fail('NOT_FOUND','工作单不存在')); return; }
+      if (run.cecelia_task_id) { res.status(200).json(ok(run)); return; }
+      if (!['pending','failed'].includes(run.status)) { res.status(409).json(fail('PIPELINE_ACTIVE','工作单不可重新挂号')); return; }
+      await this.registerAndReply(run,res,201);
+    } catch { res.status(500).json(fail('INTERNAL_ERROR','无法读取工作单')); }
+  };
+
+  capabilities = (_req: Request, res: Response): void => { res.json(PIPELINE_CAPABILITIES); };
+
   getOne = async (req: Request, res: Response): Promise<void> => {
     try {
-      const pipelineId = req.params.id;
-      const { rows } = await pool.query(
-        'SELECT * FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [pipelineId]
-      );
-      if (rows.length) { res.json(rows[0]); return; }
-
-      // 兜底：:id 当 cecelia_task_id 从 LangGraph-only 列表里找
-      if (isUuid(pipelineId)) {
-        const langGraph = await listLangGraphOnlyRuns(500);
-        const hit = langGraph.find((r) => r.id === pipelineId);
-        if (hit) { res.json(hit); return; }
-      }
-      res.status(404).json({ error: 'Not found' });
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
-    }
+      const { rows } = await pool.query('SELECT * FROM zenithjoy.pipeline_runs WHERE id = $1', [req.params.id]);
+      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+      res.json(rows[0]);
+    } catch { res.status(500).json(fail('INTERNAL_ERROR', '无法读取内容工作单')); }
   };
 
-  // GET /api/pipeline (list, recent 50 — union zenithjoy.pipeline_runs + LangGraph-only tasks)
   list = async (_req: Request, res: Response): Promise<void> => {
     try {
-      const [{ rows: zenRuns }, langGraphRuns] = await Promise.all([
-        pool.query(
-          'SELECT * FROM zenithjoy.pipeline_runs ORDER BY created_at DESC LIMIT 50'
-        ),
-        listLangGraphOnlyRuns(50),
-      ]);
-      const merged = [...zenRuns.map((r) => ({ ...r, source: 'zenithjoy' })), ...langGraphRuns]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 50);
-      res.json(merged);
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
-    }
+      const { rows } = await pool.query('SELECT * FROM zenithjoy.pipeline_runs ORDER BY created_at DESC LIMIT 50');
+      res.json(rows.map(row => ({ ...row, source: 'zenithjoy' })));
+    } catch { res.status(500).json(fail('INTERNAL_ERROR', '无法读取内容工作单')); }
   };
 
-  // POST /api/pipeline/callback  ← cecelia 回调
-  callback = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { zenithjoy_pipeline_run_id, cecelia_task_id, status, output_manifest } = req.body;
-      const runId = zenithjoy_pipeline_run_id;
-      if (!runId) { res.status(400).json({ error: 'zenithjoy_pipeline_run_id 为必填' }); return; }
-
-      const dbStatus = status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : 'running';
-      await pool.query(
-        `UPDATE zenithjoy.pipeline_runs
-         SET status = $1, output_manifest = $2, cecelia_task_id = COALESCE($3, cecelia_task_id), updated_at = NOW()
-         WHERE id = $4`,
-        [dbStatus, output_manifest ? JSON.stringify(output_manifest) : null, cecelia_task_id || null, runId]
-      );
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
-    }
+  // 旧Brain业务回调已退出；终态只能由持有有效公共租约的Worker提交。
+  callback = (_req: Request, res: Response): void => {
+    res.status(410).json(fail('LEGACY_CALLBACK_RETIRED', '请使用公共任务认领与Worker回执'));
   };
 
   // GET /api/pipeline/:id/output  ← 本地读 pipeline_runs.output_manifest + 文件系统
@@ -233,44 +179,8 @@ export class PipelineController {
       );
       const row = rows[0] || null;
 
-      const ceceliaTaskId: string | null =
-        row?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
-
-      // 若 pipeline_runs 无 manifest，但有 cecelia_task_id → 查 LangGraph cecelia_events 兜底
-      const manifest: PipelineManifest | null = row?.output_manifest || null;
-      if (!manifest && ceceliaTaskId) {
-        const events = await fetchLangGraphEvents(ceceliaTaskId);
-        if (events.length > 0) {
-          const output = buildOutputFromEvents(
-            row?.id || pipelineId,
-            events,
-            pipelineId,
-            row?.topic
-          );
-          res.json({ output });
-          return;
-        }
-      }
-
-      if (!row) {
-        if (ceceliaTaskId && (await existsLangGraphTask(ceceliaTaskId))) {
-          res.json({
-            output: {
-              pipeline_id: ceceliaTaskId,
-              keyword: '',
-              status: 'pending',
-              article_text: null,
-              cards_text: null,
-              image_urls: [],
-              export_path: null,
-              images: null,
-            },
-          });
-          return;
-        }
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
+      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+      const manifest: PipelineManifest | null = row.output_manifest || null;
 
       const outputDir: string | null = row.output_dir || null;
 
@@ -293,13 +203,13 @@ export class PipelineController {
 
       // 读正文
       const articleText = outputDir
-        ? readFileIfExists(outputDir, manifest.article?.path)
+        ? readFileIfExists(outputDir, extractArticlePath(manifest))
         : null;
       const cardsText = outputDir
-        ? readFileIfExists(outputDir, manifest.copy?.path)
+        ? readFileIfExists(outputDir, extractCopyPath(manifest))
         : null;
 
-      const files = manifest.image_set?.files || [];
+      const files = extractImageFiles(manifest);
       // v=updated_at 作为 cache buster，绕开 Cloudflare 对旧 404 的 4h cache
       const cacheBuster = row.updated_at ? new Date(row.updated_at).getTime() : Date.now();
       const imageUrls = files.map((f) => ({
@@ -334,37 +244,10 @@ export class PipelineController {
         [pipelineId]
       );
       const row = rows[0] || null;
-      const ceceliaTaskId: string | null =
-        row?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
-
-      if (ceceliaTaskId) {
-        const events = await fetchLangGraphEvents(ceceliaTaskId);
-        if (events.length > 0) {
-          res.json({
-            stages: buildStagesFromEvents(events),
-            overall_status: overallStatusFromEvents(events),
-            events: events.map((e) => ({
-              id: e.id,
-              created_at: e.created_at,
-              payload: e.payload,
-            })),
-          });
-          return;
-        }
-      }
-
-      if (!row) {
-        if (ceceliaTaskId && (await existsLangGraphTask(ceceliaTaskId))) {
-          res.json({ stages: {}, overall_status: 'pending', events: [] });
-          return;
-        }
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
+      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
       const manifest: PipelineManifest | null = row.output_manifest || null;
       res.json({
-        stages: {},
+        stages: (manifest as PipelineManifest & { stages?: unknown })?.stages || {},
         overall_status: manifest?.status || row.status || 'pending',
         events: [],
       });
@@ -374,26 +257,34 @@ export class PipelineController {
     }
   };
 
-  // POST /api/pipeline/:id/rerun  ← 透传到 cecelia（支持 :id = zenithjoy pipeline_run.id 或 cecelia_task_id）
+  // 重跑创建新的本地工作单和Brain任务，不复用旧尝试或旧产物目录。
   rerun = async (req: Request, res: Response): Promise<void> => {
+    let client: PoolClient | undefined;
+    let run: Record<string, unknown>;
     try {
-      const pipelineId = req.params.id;
-      const { rows } = await pool.query(
-        'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [pipelineId]
-      );
-      const ceceliaTaskId: string | null =
-        rows[0]?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
-      if (!ceceliaTaskId) {
-        res.status(404).json({ error: 'Not found' });
-        return;
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT * FROM zenithjoy.pipeline_runs WHERE id=$1 FOR UPDATE',[req.params.id]);
+      const previous=rows[0];
+      if (!previous) { await client.query('ROLLBACK');res.status(404).json(fail('NOT_FOUND','工作单不存在'));return; }
+      if (!['completed','failed'].includes(previous.status)) { await client.query('ROLLBACK');res.status(409).json(fail('PIPELINE_ACTIVE','工作单仍在等待或执行'));return; }
+      const prior=await client.query(`SELECT * FROM zenithjoy.pipeline_runs WHERE triggered_by=$1
+        AND (status IN ('pending','running') OR cecelia_task_id IS NULL) ORDER BY created_at DESC LIMIT 1`,[`rerun:${previous.id}`]);
+      if (prior.rows[0]?.cecelia_task_id) { await client.query('ROLLBACK');res.status(409).json(fail('RERUN_ACTIVE','重跑已登记'));return; }
+      if (prior.rows[0]) run=prior.rows[0];
+      else {
+        const id=randomUUID();
+        const outputDir=resolve(process.env.CONTENT_OUTPUT_DIR || `${process.env.HOME}/content-output`,'runs',id);
+        run=(await client.query(`INSERT INTO zenithjoy.pipeline_runs
+          (id,content_type,topic,topic_id,status,output_dir,triggered_by,notebook_id)
+          VALUES ($1,$2,$3,$4,'pending',$5,$6,$7) RETURNING *`,
+          [id,previous.content_type,previous.topic,previous.topic_id,outputDir,`rerun:${previous.id}`,previous.notebook_id])).rows[0];
       }
-      const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/run`, { method: 'POST' });
-      if (!upstream.ok) { res.status(upstream.status).json({ error: 'upstream error' }); return; }
-      res.json(await upstream.json());
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
-    }
+      await client.query('COMMIT');
+    } catch { if (client) await client.query('ROLLBACK');res.status(500).json(fail('RERUN_UNAVAILABLE','重跑意图未登记'));return; }
+    finally { client?.release(); }
+    // 先持久保存本地意图，再调用远端；网络未知可以重试同一个run而不丢失身份。
+    await this.registerAndReply(run,res,202);
   };
 
   // GET /api/pipeline/dashboard-stats

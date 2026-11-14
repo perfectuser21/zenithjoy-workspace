@@ -1,3 +1,4 @@
+import type { PipelineRegistration } from './pipeline.api'
 /**
  * 选题池（topics）API 客户端 — 选题池 v1
  *
@@ -199,22 +200,13 @@ export async function updatePacingConfig(
 
 // ─── 立即发布（调 apps/api pipeline/trigger）──────────────────────
 
-export async function publishTopicNow(topic: Topic): Promise<{ id?: string }> {
-  // 经由 apps/api /api/pipeline/trigger，带 topic_id
+export async function publishTopicNow(topic: Topic): Promise<PipelineRegistration> {
   const res = await fetch('/api/pipeline/trigger', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      content_type: 'post',
-      topic: topic.title,
-      topic_id: topic.id,
-      triggered_by: 'dashboard-topic-pool',
-    }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({content_type:'solo-company-case', topic:topic.title, topic_id:topic.id, triggered_by:'dashboard-topic-pool'}),
   })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `立即发布失败：${res.status}`)
-  }
-  const data = await res.json()
-  return { id: data?.id }
+  const { readPipelineResponse } = await import('./pipeline.api')
+  const run = await readPipelineResponse<PipelineRegistration>(res, '内容任务登记失败')
+  if (!run?.id || !['pending','running','completed','failed'].includes(run.status) || !run.cecelia_task_id) throw new Error('未取得 Brain 任务登记回执')
+  return run
 }

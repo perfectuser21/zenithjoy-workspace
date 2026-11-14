@@ -8,35 +8,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 from datetime import datetime
 from pathlib import Path
+from ..artifact_paths import owned_directory, owned_file, guard
 
 from ..nas_uploader import upload_to_nas
 
 logger = logging.getLogger("pipeline-worker.export")
 
-OUTPUT_BASE = os.environ.get(
-    "CONTENT_OUTPUT_DIR",
-    str(Path.home() / "content-output"),
-)
 
-IMAGES_DIR = Path(os.environ.get("HOME", "/Users/administrator")) / "claude-output" / "images"
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff-]", "-", text))[:40]
-
-
-def _find_output_dir(keyword: str) -> Path | None:
-    base = Path(OUTPUT_BASE)
-    if not base.exists():
-        return None
-    s = _slug(keyword)
-    for d in sorted(base.iterdir(), reverse=True):
-        if d.is_dir() and s in d.name and not d.name.startswith("research"):
-            return d
-    return None
 
 
 def execute_export(run_data: dict) -> dict:
@@ -79,18 +59,24 @@ def execute_export(run_data: dict) -> dict:
 
     logger.info("[export] 开始: %s", keyword)
 
-    out_dir = _find_output_dir(keyword)
-    if not out_dir:
+    try:
+        guard(run_data)
+        out_dir = owned_directory(run_data)
+        manifest_path = owned_file(run_data, 'manifest.json')
+    except ValueError as error:
+        return {'success': False, 'error': str(error)}
+    if not out_dir.is_dir():
         return {"success": False, "error": "找不到产出目录"}
 
-    # 收集卡片文件
-    topic_slug = _slug(keyword)
-    card_files: list[str] = []
-    if IMAGES_DIR.exists():
-        card_files = sorted([
-            f.name for f in IMAGES_DIR.iterdir()
-            if f.name.startswith(topic_slug) and f.suffix == ".png"
-        ])
+    # 只收集本 run 目录中的产物，拒绝借用同主题历史图片。
+    card_files = []
+    cards_dir = owned_file(run_data, 'cards')
+    if cards_dir.is_dir():
+        for file in sorted(cards_dir.glob('*.png')):
+            owned_file(run_data, 'cards/' + file.name)
+            card_files.append(file.name)
+    owned_file(run_data, 'article/article.md')
+    owned_file(run_data, 'cards/copy.md')
 
     # 生成 manifest.json
     manifest = {
@@ -119,13 +105,15 @@ def execute_export(run_data: dict) -> dict:
         },
     }
 
-    manifest_path = out_dir / "manifest.json"
+    manifest_path = owned_file(run_data, "manifest.json")
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # NAS 上传
     export_path = None
     if pipeline_id:
-        nas_result = upload_to_nas(str(out_dir), pipeline_id)
+        guard(run_data)
+        nas_result = upload_to_nas(str(out_dir), pipeline_id, execution_guard=run_data.get("execution_guard"))
+        guard(run_data)
         if nas_result["success"]:
             export_path = nas_result["nas_path"]
         else:

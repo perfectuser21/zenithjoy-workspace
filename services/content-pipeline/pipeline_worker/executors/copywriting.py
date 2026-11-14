@@ -10,44 +10,14 @@ import logging
 import os
 import re
 import subprocess
-from datetime import date
 from pathlib import Path
+from ..artifact_paths import owned_directory, owned_file, load_findings, guard
 
 logger = logging.getLogger("pipeline-worker.copywriting")
 
-OUTPUT_BASE = os.environ.get(
-    "CONTENT_OUTPUT_DIR",
-    str(Path.home() / "content-output"),
-)
 
 MIN_SOCIAL_COPY_LEN = 200
 MIN_ARTICLE_LEN = 500
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff-]", "-", text))[:40]
-
-
-def _load_findings(keyword: str) -> list[dict]:
-    """从 research 目录加载 findings。"""
-    research_dir = Path(OUTPUT_BASE) / "research"
-    if not research_dir.exists():
-        return []
-
-    s = _slug(keyword)
-    best_findings: list[dict] = []
-    for cand in research_dir.iterdir():
-        if s in cand.name:
-            fp = cand / "findings.json"
-            if fp.exists():
-                try:
-                    data = json.loads(fp.read_text("utf-8"))
-                    f = data.get("findings", [])
-                    if len(f) > len(best_findings):
-                        best_findings = f
-                except (json.JSONDecodeError, OSError):
-                    pass
-    return best_findings
 
 
 def _filter_top(findings: list[dict]) -> list[dict]:
@@ -57,7 +27,7 @@ def _filter_top(findings: list[dict]) -> list[dict]:
     return top
 
 
-def _call_llm(prompt: str, max_tokens: int = 8192, timeout: int = 180) -> str | None:
+def _call_llm(prompt: str, max_tokens: int = 8192, timeout: int = 180, execution_guard=None) -> str | None:
     """调用 LLM（通过 Cecelia llm-caller 或直接 anthropic CLI）。"""
     # 使用 anthropic 命令行或 curl 调用 LLM
     # 先尝试 Cecelia brain 的 llm 接口
@@ -77,6 +47,8 @@ def _call_llm(prompt: str, max_tokens: int = 8192, timeout: int = 180) -> str | 
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    if execution_guard:
+        execution_guard()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -86,7 +58,10 @@ def _call_llm(prompt: str, max_tokens: int = 8192, timeout: int = 180) -> str | 
     except Exception as e:
         logger.warning("LLM via Cecelia 失败: %s", e)
 
-    # fallback: 直接调用 anthropic CLI
+    # fallback 前重新确认租约，不能在请求未知后无授权发起第二次调用。
+    if execution_guard:
+        execution_guard()
+
     try:
         result = subprocess.run(
             ["claude", "-p", prompt, "--output-format", "text"],
@@ -124,7 +99,12 @@ def execute_copywriting(run_data: dict) -> dict:
 
     logger.info("[copywriting] 开始: %s", keyword)
 
-    findings = _load_findings(keyword)
+    try:
+        guard(run_data)
+        out_dir = owned_directory(run_data, create=True)
+        findings = load_findings(run_data)
+    except (ValueError, OSError) as error:
+        return {'success': False, 'error': str(error)}
     top = _filter_top(findings)
     logger.info("[copywriting] 找到 %d 条 findings，筛选 %d 条", len(findings), len(top))
 
@@ -160,7 +140,8 @@ def execute_copywriting(run_data: dict) -> dict:
 
 **绝对禁止**：不要询问用户问题，不要说"需要更多信息"，不要输出选项让用户选择。必须直接输出完整文案。"""
 
-    text = _call_llm(prompt)
+    text = _call_llm(prompt, execution_guard=run_data.get("execution_guard"))
+    guard(run_data)
     if not text:
         return {"success": False, "error": "LLM 调用失败，无返回内容"}
 
@@ -176,15 +157,13 @@ def execute_copywriting(run_data: dict) -> dict:
             "error": f"LLM 输出不符格式要求（社交 {len(social_copy)}字/{MIN_SOCIAL_COPY_LEN}，长文 {len(article_copy)}字/{MIN_ARTICLE_LEN}）",
         }
 
-    today_str = date.today().isoformat()
-    out_dir = Path(OUTPUT_BASE) / f"{today_str}-{_slug(keyword)}"
     (out_dir / "cards").mkdir(parents=True, exist_ok=True)
     (out_dir / "article").mkdir(parents=True, exist_ok=True)
 
-    (out_dir / "cards" / "copy.md").write_text(
+    owned_file(run_data, "cards/copy.md").write_text(
         f"# {keyword}：社交媒体文案\n\n{social_copy}\n", encoding="utf-8",
     )
-    (out_dir / "article" / "article.md").write_text(
+    owned_file(run_data, "article/article.md").write_text(
         f"# {keyword}：深度分析\n\n{article_copy}\n", encoding="utf-8",
     )
 

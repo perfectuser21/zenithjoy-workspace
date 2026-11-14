@@ -1,222 +1,112 @@
-/**
- * Pipelines Worker Controller — 专供 pipeline-worker (Python) 调用
- *
- * 对应端点：
- *   GET  /api/pipelines/running                      列出所有 running pipeline + topic 关联
- *   POST /api/pipelines/:id/stage-complete           阶段完成上报（含 is_final 终态处理）
- *   POST /api/pipelines/:id/fail                     整个 pipeline 失败上报
- *
- * 响应格式：{ success, data, error, timestamp }
- *
- * 核心 SQL 参考：/tmp/pipeline-migration-plan/02-api-contract.md § 8/9/10
- */
-
+/** 内容Worker只执行已由Brain认领的工作单；本地状态保存业务产物，不替代Brain租约。 */
 import { Request, Response } from 'express';
+import type { PoolClient } from 'pg';
+import { resolve } from 'node:path';
 import pool from '../db/connection';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const VALID_STAGES = [
-  'research',
-  'copywriting',
-  'copy_review',
-  'generate',
-  'image_review',
-  'export',
-] as const;
-type Stage = (typeof VALID_STAGES)[number];
-
-function ok<T>(data: T) {
-  return {
-    success: true,
-    data,
-    error: null,
-    timestamp: new Date().toISOString(),
-  };
+import { BrainTaskError, PIPELINE_STAGES, UUID_RE, readBrainClaim, sameBrainClaim, validateBrainLease, confirmBrainFinish, resultDigest, BrainClaim } from '../services/pipeline-brain-tasks';
+const ok = (data: unknown) => ({ success: true, data, error: null, timestamp: new Date().toISOString() });
+const err = (code: string, message: string) => ({ success: false, data: null, error: { code, message }, timestamp: new Date().toISOString() });
+const conflict = () => new BrainTaskError('工作单或认领身份已变化', 409);
+function identityOf(req: Request): BrainClaim {
+  const identity = readBrainClaim(req.body);
+  if (!UUID_RE.test(req.params.id) || !identity) throw new BrainTaskError('有效工作单和Brain认领身份必填', 400);
+  return identity;
 }
-
-function err(code: string, message: string, details?: unknown) {
-  return {
-    success: false,
-    data: null,
-    error: { code, message, details: details ?? {} },
-    timestamp: new Date().toISOString(),
-  };
+function handleError(res: Response, error: unknown): void {
+  res.status(error instanceof BrainTaskError ? error.status : 500).json(err('PIPELINE_HANDOFF_REJECTED', error instanceof BrainTaskError ? error.message : '内容工作单更新失败'));
 }
-
 export class PipelinesWorkerController {
-  // GET /api/pipelines/running
   running = async (req: Request, res: Response): Promise<void> => {
     try {
-      let limit = parseInt((req.query.limit as string) || '50', 10);
-      if (isNaN(limit) || limit < 1) limit = 50;
-      if (limit > 500) limit = 500;
-
-      // PR-e/5: topic_id 已是 UUID + FK，直接 JOIN。
-      // 额外回填 topic_title / topic_platforms 供 worker 作为 keyword 使用。
-      // 阶段 A+: 返回 notebook_id（pr 上的快照，为空则 fallback 到 topic.notebook_id）。
-      const { rows } = await pool.query(
-        `SELECT pr.id, pr.topic_id, pr.status,
-                pr.created_at, pr.updated_at,
-                pr.content_type, pr.topic, pr.output_dir, pr.triggered_by,
-                pr.output_manifest,
-                pr.cecelia_task_id,
-                t.title  AS topic_title,
-                t.angle  AS topic_angle,
-                t.status AS topic_status,
-                t.target_platforms AS topic_platforms,
-                -- worker 侧 keyword 优先序：topic.title > pr.topic > 'unknown'
-                COALESCE(t.title, pr.topic) AS keyword,
-                -- notebook_id 优先序：pr.notebook_id（trigger 时快照）> t.notebook_id（当前值）
-                COALESCE(pr.notebook_id, t.notebook_id) AS notebook_id
-         FROM zenithjoy.pipeline_runs pr
-         LEFT JOIN zenithjoy.topics t ON pr.topic_id = t.id
-         WHERE pr.status = 'running'
-         ORDER BY pr.created_at ASC
-         LIMIT $1`,
-        [limit]
-      );
-      res.json(ok({ items: rows, total: rows.length }));
-    } catch (e) {
-      console.error('[pipelines-worker] running error:', e);
-      res.status(500).json(err('INTERNAL_ERROR', String(e)));
-    }
+      const limit = Math.max(1, Math.min(500, Number.parseInt(String(req.query.limit || '50'), 10) || 50));
+      const offset = Math.max(0, Math.min(1_000_000, Number.parseInt(String(req.query.offset || '0'),10) || 0));
+      const { rows } = await pool.query(`SELECT pr.id, pr.topic_id, pr.status, pr.created_at, pr.updated_at,
+        pr.content_type, pr.topic, pr.output_dir, pr.triggered_by, pr.output_manifest, pr.cecelia_task_id,
+        t.title AS topic_title, t.angle AS topic_angle, t.status AS topic_status,
+        t.target_platforms AS topic_platforms, COALESCE(t.title,pr.topic) AS keyword,
+        COALESCE(pr.notebook_id,t.notebook_id) AS notebook_id
+        FROM zenithjoy.pipeline_runs pr LEFT JOIN zenithjoy.topics t ON pr.topic_id=t.id
+        WHERE pr.status IN ('pending','running') AND pr.cecelia_task_id IS NOT NULL
+        ORDER BY CASE WHEN pr.status='pending' THEN 0 ELSE 1 END,pr.created_at ASC,pr.id ASC LIMIT $1 OFFSET $2`, [limit,offset]);
+      res.json(ok({ items: rows, total: rows.length, next_offset: rows.length === limit ? offset + limit : null }));
+    } catch (error) { handleError(res, error); }
   };
 
-  // POST /api/pipelines/:id/stage-complete
+  claim = async (req: Request, res: Response): Promise<void> => {
+    let client: PoolClient | undefined;
+    try {
+      const identity = identityOf(req);
+      await validateBrainLease(identity);
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT * FROM zenithjoy.pipeline_runs WHERE id=$1 FOR UPDATE', [req.params.id]);
+      const row = rows[0];
+      if (!row || row.cecelia_task_id !== identity.brain_task_id || !['pending', 'running'].includes(row.status)) throw conflict();
+      const prior = row.output_manifest?.brain_claim;
+      if (prior && !sameBrainClaim(prior, identity)) throw conflict();
+      const manifest = { ...(row.output_manifest || {}), brain_claim: identity };
+      await client.query(`UPDATE zenithjoy.pipeline_runs SET status='running',output_manifest=$1::jsonb,updated_at=NOW()
+        WHERE id=$2 AND cecelia_task_id=$3`, [JSON.stringify(manifest), row.id, identity.brain_task_id]);
+      if (row.topic_id) await client.query(`UPDATE zenithjoy.topics SET status='研究中',pipeline_id=$1
+        WHERE id=$2 AND deleted_at IS NULL`, [row.id, row.topic_id]);
+      await client.query('COMMIT');
+      res.json(ok({ id: row.id, status: 'running', brain_claim: identity }));
+    } catch (error) { if (client) await client.query('ROLLBACK'); handleError(res, error); }
+    finally { client?.release(); }
+  };
+
   stageComplete = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
-      if (!UUID_REGEX.test(id)) {
-        res.status(400).json(err('INVALID_ID', 'id 必须是 UUID'));
-        return;
+      const identity = identityOf(req);
+      const { stage, output, is_final: isFinal } = req.body || {};
+      if (!PIPELINE_STAGES.includes(stage) || (isFinal && stage !== 'export')) throw new BrainTaskError('阶段无效', 400);
+      if (isFinal) {
+        const result = { pipeline_id: req.params.id, output_manifest: output ?? null };
+        if (req.body.brain_result === undefined || resultDigest(req.body.brain_result) !== resultDigest(result)) throw new BrainTaskError('终态结果不匹配', 400);
+        await confirmBrainFinish(identity, 'completed', result);
+        await this.writeResult(req, res, identity, 'completed', stage, output);
+      } else {
+        await validateBrainLease(identity);
+        await this.writeResult(req, res, identity, 'running', stage, output);
       }
-
-      const { stage, output, is_final } = req.body || {};
-
-      if (!stage) {
-        res.status(400).json(err('STAGE_REQUIRED', 'stage 为必填字段'));
-        return;
-      }
-      if (!VALID_STAGES.includes(stage as Stage)) {
-        res.status(400).json(err('STAGE_INVALID', `stage 必须是 ${VALID_STAGES.join('/')} 之一`));
-        return;
-      }
-
-      const isFinal = Boolean(is_final) && stage === 'export';
-
-      // 从 output 里提 output_dir（worker 在 generate 阶段完成时会带上真实的日期-slug 路径）
-      // Why: 触发时 DB 只存了根路径 /Users/.../content-output，前端 content-images
-      // HTTP 路由会在 root/cards/ 找图 404。generate 后必须更新到真实路径。
-      const nextOutputDir: string | null =
-        output && typeof output === 'object' && typeof (output as { output_dir?: unknown }).output_dir === 'string'
-          ? ((output as { output_dir: string }).output_dir)
-          : null;
-
-      // 查当前 pipeline 存在性
-      const cur = await pool.query(
-        'SELECT id, status, topic_id FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [id]
-      );
-      if (!cur.rows.length) {
-        res.status(404).json(err('NOT_FOUND', `pipeline ${id} 不存在`));
-        return;
-      }
-
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-
-        if (isFinal) {
-          const { rows } = await client.query(
-            `UPDATE zenithjoy.pipeline_runs
-             SET status = 'completed',
-                 output_manifest = COALESCE($1::jsonb, output_manifest),
-                 output_dir = COALESCE($3, output_dir),
-                 updated_at = NOW()
-             WHERE id = $2
-             RETURNING *`,
-            [output ? JSON.stringify(output) : null, id, nextOutputDir]
-          );
-
-          // 若 topic_id 指向合法 topic，同步置为 '待发布'
-          const topicId = rows[0]?.topic_id;
-          if (topicId && UUID_REGEX.test(String(topicId))) {
-            await client.query(
-              `UPDATE zenithjoy.topics
-               SET status = '待发布'
-               WHERE id = $1::uuid AND deleted_at IS NULL`,
-              [topicId]
-            );
-          }
-
-          await client.query('COMMIT');
-          res.json(ok({ id: rows[0].id, status: 'completed', topic_id: topicId ?? null }));
-          return;
-        }
-
-        // 非终态：touch updated_at + 若 output 带了 output_dir 则 update
-        const { rows } = await client.query(
-          `UPDATE zenithjoy.pipeline_runs
-           SET updated_at = NOW(),
-               status = CASE WHEN status = 'pending' THEN 'running' ELSE status END,
-               output_dir = COALESCE($2, output_dir)
-           WHERE id = $1
-           RETURNING id, status`,
-          [id, nextOutputDir]
-        );
-        await client.query('COMMIT');
-        res.json(ok({ id: rows[0].id, status: rows[0].status, stage }));
-      } catch (txErr) {
-        await client.query('ROLLBACK');
-        throw txErr;
-      } finally {
-        client.release();
-      }
-    } catch (e) {
-      console.error('[pipelines-worker] stageComplete error:', e);
-      res.status(500).json(err('INTERNAL_ERROR', String(e)));
-    }
+    } catch (error) { handleError(res, error); }
   };
 
-  // POST /api/pipelines/:id/fail
   fail = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
-      if (!UUID_REGEX.test(id)) {
-        res.status(400).json(err('INVALID_ID', 'id 必须是 UUID'));
-        return;
-      }
+      const identity = identityOf(req);
+      const { error: message, stage = null } = req.body || {};
+      if (typeof message !== 'string' || !message || (stage !== null && !PIPELINE_STAGES.includes(stage))) throw new BrainTaskError('错误及阶段无效', 400);
+      const result = { pipeline_id: req.params.id, error: message, stage };
+      if (req.body.brain_result === undefined || resultDigest(req.body.brain_result) !== resultDigest(result)) throw new BrainTaskError('终态结果不匹配', 400);
+      await confirmBrainFinish(identity, 'failed', result);
+      await this.writeResult(req, res, identity, 'failed', stage, { error: message, failed_stage: stage });
+    } catch (error) { handleError(res, error); }
+  };
 
-      const { error: errorMessage, stage } = req.body || {};
-      if (!errorMessage || typeof errorMessage !== 'string') {
-        res.status(400).json(err('ERROR_REQUIRED', 'error 字段必填（字符串）'));
-        return;
-      }
-      if (stage !== undefined && !VALID_STAGES.includes(stage as Stage)) {
-        res.status(400).json(err('STAGE_INVALID', `stage 必须是 ${VALID_STAGES.join('/')} 之一`));
-        return;
-      }
-
-      // 把 error 写入 output_manifest.error（pipeline_runs 目前没有 error_message 列）
-      const { rows } = await pool.query(
-        `UPDATE zenithjoy.pipeline_runs
-         SET status = 'failed',
-             output_manifest = COALESCE(output_manifest, '{}'::jsonb) ||
-                               jsonb_build_object('error', $1::text, 'failed_stage', $2::text),
-             updated_at = NOW()
-         WHERE id = $3
-         RETURNING id, status, output_manifest`,
-        [errorMessage, stage || null, id]
-      );
-      if (!rows.length) {
-        res.status(404).json(err('NOT_FOUND', `pipeline ${id} 不存在`));
-        return;
-      }
-      res.json(ok({ id: rows[0].id, status: rows[0].status, error: errorMessage, stage: stage || null }));
-    } catch (e) {
-      console.error('[pipelines-worker] fail error:', e);
-      res.status(500).json(err('INTERNAL_ERROR', String(e)));
-    }
+  private writeResult = async (req: Request, res: Response, identity: BrainClaim, status: string, stage: string | null, output: unknown): Promise<void> => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT * FROM zenithjoy.pipeline_runs WHERE id=$1 FOR UPDATE', [req.params.id]);
+      const row = rows[0];
+      if (!row || row.cecelia_task_id !== identity.brain_task_id || !sameBrainClaim(row.output_manifest?.brain_claim, identity)) throw conflict();
+      if (row.status !== 'running' && row.status !== status) throw conflict();
+      const old = row.output_manifest || {};
+      const details = output && typeof output === 'object' && !Array.isArray(output) ? output as Record<string, unknown> : {};
+      const manifest = status === 'running'
+        ? { ...old, stages: { ...old.stages, [String(stage)]: { status: 'completed', output } } }
+        : { ...old, ...details, status, brain_claim: identity };
+      const nextDir = typeof details.output_dir === 'string' ? details.output_dir : null;
+      if (nextDir && (!row.output_dir || resolve(nextDir) !== resolve(row.output_dir))) throw new BrainTaskError('产物目录不能离开本工作单',400);
+      await client.query(`UPDATE zenithjoy.pipeline_runs SET status=$1,output_manifest=$2::jsonb,
+        output_dir=COALESCE($3,output_dir),updated_at=NOW() WHERE id=$4 AND cecelia_task_id=$5`,
+        [status, JSON.stringify(manifest), nextDir, row.id, identity.brain_task_id]);
+      if (status === 'completed' && row.topic_id) await client.query(`UPDATE zenithjoy.topics SET status='待发布'
+        WHERE id=$1 AND pipeline_id=$2 AND deleted_at IS NULL`, [row.topic_id,row.id]);
+      await client.query('COMMIT');
+      res.json(ok({ id: row.id, status, stage }));
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   };
 }

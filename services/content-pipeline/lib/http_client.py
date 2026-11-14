@@ -205,16 +205,25 @@ class ZenithJoyClient:
         payload = self._request("POST", "/api/pipeline/trigger", json_body=body)
         return payload
 
+    def register_pipeline(self, pipeline_id: str) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request("POST", f"/api/pipeline/{quote(str(pipeline_id), safe='')}/register")
+
     # ------------------------------------------------------------------ worker 专用
 
-    def list_running_pipelines(self, limit: int = 50) -> list[dict[str, Any]]:
-        params = {"limit": limit}
-        payload = self._request("GET", "/api/pipelines/running", params=params)
+    def list_running_pipeline_page(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+        payload = self._request("GET", "/api/pipelines/running", params={"limit": limit, "offset": offset})
         data = self._data(payload) or {}
-        items = data.get("items")
-        if not isinstance(items, list):
-            return []
-        return items
+        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+            raise ZenithJoyAPIError("running 页响应格式无效")
+        return data
+
+    def list_running_pipelines(self, limit: int = 50) -> list[dict[str, Any]]:
+        return self.list_running_pipeline_page(limit=limit)["items"]
+
+    def claim_pipeline(self, pipeline_id: str, identity: dict[str, str]) -> dict[str, Any]:
+        payload = self._request("POST", f"/api/pipelines/{pipeline_id}/claim", json_body=identity)
+        return self._data(payload) or {}
 
     def stage_complete(
         self,
@@ -223,9 +232,13 @@ class ZenithJoyClient:
         *,
         output: Optional[dict[str, Any]] = None,
         is_final: bool = False,
+        identity: Optional[dict[str, str]] = None,
+        brain_result: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        body: dict[str, Any] = {"stage": stage}
-        if output:
+        body: dict[str, Any] = {"stage": stage, **(identity or {})}
+        if brain_result is not None:
+            body["brain_result"] = brain_result
+        if output is not None:
             body["output"] = output
         if is_final:
             body["is_final"] = True
@@ -242,8 +255,12 @@ class ZenithJoyClient:
         error: str,
         *,
         stage: Optional[str] = None,
+        identity: Optional[dict[str, str]] = None,
+        brain_result: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        body: dict[str, Any] = {"error": error}
+        body: dict[str, Any] = {"error": error, **(identity or {})}
+        if brain_result is not None:
+            body["brain_result"] = brain_result
         if stage:
             body["stage"] = stage
         payload = self._request(

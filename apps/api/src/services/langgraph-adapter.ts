@@ -1,13 +1,9 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { dirname, resolve, sep } from 'path';
-import pool from '../db/connection';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DOCKER_ROOT = '/home/cecelia/content-output';
 const HOST_ROOT = `${process.env.HOME}/content-output`;
-
-// 复用 pipeline.controller.ts 同款环境变量（同一个 Brain 地址，不新起变量名）
-const BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
 
 export function isUuid(s: string | null | undefined): boolean {
   return !!s && UUID_RE.test(s);
@@ -65,79 +61,6 @@ export interface PipelineEvent {
   id: number;
   payload: EventPayload;
   created_at: string;
-}
-
-export async function fetchLangGraphEvents(ceceliaTaskId: string): Promise<PipelineEvent[]> {
-  try {
-    const res = await fetch(`${BRAIN_URL}/api/brain/pipelines/${encodeURIComponent(ceceliaTaskId)}/events`);
-    if (!res.ok) return [];
-    return res.json() as Promise<PipelineEvent[]>;
-  } catch {
-    return [];
-  }
-}
-
-export async function existsLangGraphTask(taskId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${BRAIN_URL}/api/brain/pipelines/${encodeURIComponent(taskId)}`, {
-      method: 'HEAD',
-    });
-    return res.status === 200;
-  } catch {
-    return false;
-  }
-}
-
-export interface LangGraphListRow {
-  id: string;
-  cecelia_task_id: string;
-  topic: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  content_type: 'content-pipeline';
-  output_dir: null;
-  output_manifest: null;
-  triggered_by: 'langgraph';
-  topic_id: null;
-  notebook_id: null;
-  created_at: string;
-  updated_at: string;
-  source: 'langgraph';
-}
-
-export async function listLangGraphOnlyRuns(limit = 50): Promise<LangGraphListRow[]> {
-  try {
-    const res = await fetch(`${BRAIN_URL}/api/brain/pipelines?with_last_event=1&limit=${limit}`);
-    if (!res.ok) return [];
-    const rows = await res.json() as Array<{
-      id: string;
-      title: string | null;
-      created_at: string;
-      updated_at: string;
-      last_node: string | null;
-      last_error: string | null;
-    }>;
-    return rows.map((r) => ({
-      id: r.id,
-      cecelia_task_id: r.id,
-      topic: (r.title || '').replace(/^\[.*?\]\s*/, ''),
-      status: r.last_error
-        ? 'failed'
-        : r.last_node === 'export'
-        ? 'completed'
-        : 'running',
-      content_type: 'content-pipeline',
-      output_dir: null,
-      output_manifest: null,
-      triggered_by: 'langgraph',
-      topic_id: null,
-      notebook_id: null,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-      source: 'langgraph',
-    }));
-  } catch {
-    return [];
-  }
 }
 
 const NODE_TO_STAGE: Record<string, string> = {
@@ -403,17 +326,4 @@ export function buildOutputFromEvents(
     images: manifest?.image_set || (imageFiles.length > 0 ? { files: imageFiles } : null),
     nas_url: exportEvt?.payload.nas_url || null,
   };
-}
-
-export async function resolveTaskDirByPipelineId(
-  pipelineId: string
-): Promise<{ taskDir: string | null; ceceliaTaskId: string | null }> {
-  const { rows } = await pool.query<{ cecelia_task_id: string | null }>(
-    `SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1`,
-    [pipelineId]
-  );
-  const ceceliaTaskId = rows[0]?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
-  if (!ceceliaTaskId) return { taskDir: null, ceceliaTaskId: null };
-  const events = await fetchLangGraphEvents(ceceliaTaskId);
-  return { taskDir: resolveTaskDir(events), ceceliaTaskId };
 }

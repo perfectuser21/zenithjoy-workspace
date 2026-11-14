@@ -1,8 +1,10 @@
 # 验收
 
-- [ ] [BEHAVIOR] actual attempt4在正式恢复授权及独立当前system/config观察齐全时可归属新服务；无ref及所有漂移仍BLOCK。
-  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-adb-recovery.test.mjs
-- [ ] [BEHAVIOR] 既有domain/authority/effects保护保持，其他晚启动root不可利用ADB例外。
-  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-domain.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-authority.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-effects.test.mjs
-- [ ] [BEHAVIOR] 正常PR完整CI、RPA独审、真实双机隔离候选交付；不代维护或102/103成功。
-  Test: manual:node --test services/phone-adb-controller/__tests__/deployment-write-set.test.mjs
+- [x] [BEHAVIOR] 内容业务由ZenithJoy本地接口和固定六阶段Worker拥有，不调用Brain旧内容业务API。
+  Test: manual:npm test --workspace=apps/api -- --run src/controllers/__tests__/pipeline-brain-handoff.test.ts
+- [x] [BEHAVIOR] Brain挂号、原生epoch认领、续租和幂等回执控制Worker起跑及终态，未知结果不重执行业务。
+  Test: manual:python -m pytest services/content-pipeline/tests/test_worker_brain_handoff.py services/content-pipeline/tests/test_brain_task_client.py
+- [x] [BEHAVIOR] 本地内容工厂展示真实能力和挂号状态，旧配置工具退出；历史产物保留且重跑使用独立目录。
+  Test: manual:npm test --workspace=apps/dashboard -- --run
+- [ ] [BEHAVIOR] 原有CI全部必需检查通过后合并；本轮不晋级生产。
+  Test: manual:bash -c 'gh pr checks --repo perfectuser21/zenithjoy-workspace'
