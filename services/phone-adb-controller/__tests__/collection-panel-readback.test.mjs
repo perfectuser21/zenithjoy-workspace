@@ -49,3 +49,5 @@ test('actual collect-comments emits deterministic Compose rows, avatar tap and U
  assert.deepEqual(rows[0].split('\t'),['土豆丝','想问下本地部署隐私会不会好很多','1天前','内蒙古','','tap=51 539','b64='+Buffer.from('土豆丝').toString('base64')]);
  assert.ok(!rows.some(x=>x.startsWith('飞*\t')));assert.match(r.stdout,/exhausted=[01]\nevidence=/);
 });
+
+test('actual collect-comments accepts real changed input label without treating wording as identity',async t=>{const f=await fixture(t,{width:720,height:1280});writeFileSync(join(f.d,'tree.xml'),readFileSync(new URL('./fixtures/compose-comments/cloud-v34-dynamic-input.xml',import.meta.url)));const r=await f.run();assert.equal(r.status,0,r.stderr);const rows=r.stdout.split('\n').filter(x=>x.includes('\tb64='));assert.equal(rows.length,4,r.stdout);assert.equal(rows[0].split('\t')[0],'土豆丝');});
