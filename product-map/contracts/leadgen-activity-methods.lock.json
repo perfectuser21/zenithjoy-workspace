@@ -740,7 +740,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "680128cbc3d0575c40cfa7a4b85defdab172c32456772b0e5b6d11978ec368c0",
+      "code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "bb6779d8d1cdb175b1b7855daedf1324c0b3ed8ac0b01eb419a6d9a9d6a3bd19",
-        "current_code_digest": "680128cbc3d0575c40cfa7a4b85defdab172c32456772b0e5b6d11978ec368c0"
+        "previous_code_digest": "680128cbc3d0575c40cfa7a4b85defdab172c32456772b0e5b6d11978ec368c0",
+        "current_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1681,7 +1681,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -1712,7 +1712,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "59c0f6a119aaf07d3907b30354486644f4702391ef31184b37b71eeceff30312",
+      "code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "b8edf65a54aa585ef258de8f8752a0da9c6d51866957c30b6f72d392562ed177",
-        "current_code_digest": "59c0f6a119aaf07d3907b30354486644f4702391ef31184b37b71eeceff30312"
+        "previous_code_digest": "59c0f6a119aaf07d3907b30354486644f4702391ef31184b37b71eeceff30312",
+        "current_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2547,7 +2547,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "c38169b4ee3cd1fca97f2c8ce117af457e026a55f8e829838f4243c47eb060cb",
+      "code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "8078c47edee988508a14f13e83588208bdb99260645bf08de341f0c4ae20b64d",
-        "current_code_digest": "c38169b4ee3cd1fca97f2c8ce117af457e026a55f8e829838f4243c47eb060cb"
+        "previous_code_digest": "c38169b4ee3cd1fca97f2c8ce117af457e026a55f8e829838f4243c47eb060cb",
+        "current_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3464,7 +3464,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -3632,30 +3632,30 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/runtime-policy-sdk33.json",
           "revision": "contract",
-          "sha256": "564880b3185cb9466849cf3e69e89751d5554ad286a6bff8f97e2ab7060bd916"
+          "sha256": "81be35283ed7f862bff20a86cc501de987fdf276d41643f8e40d4c94702c9fb3"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/build-scrcpy-runtime.py",
           "revision": "contract",
-          "sha256": "1cd74d9e69ce5a020aaf7d465b8955003f8c1d44f2782a4b7bc76e003ae7dc84"
+          "sha256": "f0237bce82d481985d97326eb19c688fc679c9e1c74f620b42142817c9c534cc"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/scrcpy-v3.3.4-log-flush.patch",
           "revision": "contract",
-          "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
+          "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "e4f780821bbbda5f92c86a6ff912d2ac11daacbeb2be4ce7118fb5ed201dd21b",
+      "code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "c756a0fffd5ffbdd98f226a63ae812c2762f0a97c71d86ae3eef64f3fbb03441",
-        "current_code_digest": "e4f780821bbbda5f92c86a6ff912d2ac11daacbeb2be4ce7118fb5ed201dd21b"
+        "previous_code_digest": "e4f780821bbbda5f92c86a6ff912d2ac11daacbeb2be4ce7118fb5ed201dd21b",
+        "current_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8"
       }
     },
     "douyin_video_processing.collection": {
@@ -4412,7 +4412,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -4541,13 +4541,13 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "ef5f5e069fe7b9cf3a4d7ed9347bf3c64d954f749dace9aa03ce786a5432a527",
+      "code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "93fe08034f3a89cece144e5fe931a1edee80f5267d561ac5c900daaa268b39b0",
-        "current_code_digest": "ef5f5e069fe7b9cf3a4d7ed9347bf3c64d954f749dace9aa03ce786a5432a527"
+        "previous_code_digest": "ef5f5e069fe7b9cf3a4d7ed9347bf3c64d954f749dace9aa03ce786a5432a527",
+        "current_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -5318,7 +5318,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5e56e57b392644247384eaab146d78cd4449f19f5554a36676a1d80aad120689",
+      "code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "27c0fe9386c7bcdbdaa801c0d7e12b3a575d60046b3864ccee1e3d24f6711914",
-        "current_code_digest": "5e56e57b392644247384eaab146d78cd4449f19f5554a36676a1d80aad120689"
+        "previous_code_digest": "5e56e57b392644247384eaab146d78cd4449f19f5554a36676a1d80aad120689",
+        "current_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5684,7 +5684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -6352,13 +6352,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "a24d83b1ee520dcc3a99504000ef68964a4f1245b646c62269b8190b58c4c6b5",
+      "code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "6cf8bf2bc65559c281880ab56763b4f6fcc5926827e59ef96c59e4b94acb7ae6",
-        "current_code_digest": "a24d83b1ee520dcc3a99504000ef68964a4f1245b646c62269b8190b58c4c6b5"
+        "previous_code_digest": "a24d83b1ee520dcc3a99504000ef68964a4f1245b646c62269b8190b58c4c6b5",
+        "current_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6594,7 +6594,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -7290,13 +7290,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "adbde842075752212ff1f2f80a055453d66b49cb9d24c1fca2acdee36ea79a90",
+      "code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "8e41d77436f781790904d94ad7141b7b7465eeb042c708b58f0d232b6d56ead4",
-        "current_code_digest": "adbde842075752212ff1f2f80a055453d66b49cb9d24c1fca2acdee36ea79a90"
+        "previous_code_digest": "adbde842075752212ff1f2f80a055453d66b49cb9d24c1fca2acdee36ea79a90",
+        "current_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7997,7 +7997,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -8028,7 +8028,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "5505b587147cde25fccc41fa51a35370de0d94511fc12aafabd494b75d591e5a",
+      "code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "fd27f2a706db50492ab7f71e9b88097a838b7dd66b612e01402b7a69f43370d1",
-        "current_code_digest": "5505b587147cde25fccc41fa51a35370de0d94511fc12aafabd494b75d591e5a"
+        "previous_code_digest": "5505b587147cde25fccc41fa51a35370de0d94511fc12aafabd494b75d591e5a",
+        "current_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8856,7 +8856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1a8fcdeae575954bf9dfe53fd6f555b93a73b29b6cd9fb02b1843221a65639fc",
+      "code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "4566b1e2e5588874208c6446ff0cc074c9c64e2c62ca44972d4c65a8188cd0d6",
-        "current_code_digest": "1a8fcdeae575954bf9dfe53fd6f555b93a73b29b6cd9fb02b1843221a65639fc"
+        "previous_code_digest": "1a8fcdeae575954bf9dfe53fd6f555b93a73b29b6cd9fb02b1843221a65639fc",
+        "current_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9691,7 +9691,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ce98aaf441d77587c793df67d4791b2f85231970a94de9e69be6c1b786526c2a",
+      "code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "f839b348d326e31154e039413e2c1b775217dd90f7ad7935e7e91f8a38342616",
-        "current_code_digest": "ce98aaf441d77587c793df67d4791b2f85231970a94de9e69be6c1b786526c2a"
+        "previous_code_digest": "ce98aaf441d77587c793df67d4791b2f85231970a94de9e69be6c1b786526c2a",
+        "current_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10520,7 +10520,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d"
+          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "705c1342c5d4d5f7e84aabe82170bd4c000f194031bde46721b250aaecad5040",
+      "code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅修复SDK34受控ADBKeyboard nonce及精确复制引导恢复，固定SDK33 client/server与同ABI私有依赖末端装载；合同、Skill与验收政策未变；受审源码仅按确切SHA登记。代码审查和本机启动证明不代表录制或102全链成功。",
+        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "9a3dea43ff8b667392032f9efa9215b4b992ef975c50a09446a38fd6c351b47b",
-        "current_code_digest": "705c1342c5d4d5f7e84aabe82170bd4c000f194031bde46721b250aaecad5040"
+        "previous_code_digest": "705c1342c5d4d5f7e84aabe82170bd4c000f194031bde46721b250aaecad5040",
+        "current_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257"
       }
     }
   },

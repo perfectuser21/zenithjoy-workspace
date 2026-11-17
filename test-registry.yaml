@@ -12003,3 +12003,12 @@ tests:
     note: "私有固定ABI依赖闭包、失败关闭、末端DYLD与启动自检；不访问手机"
 
   - {"id":"asr-private-cos-single-attempt","path":"services/phone-adb-controller/__tests__/asr-private-cos.test.mjs","type":"unit","ci":"L3","status":"active","product":"line02"}
+
+  - id: sdk33-recorder-live-header-native
+    path: services/phone-adb-controller/runtime/tests/recorder_header_regression.py
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / public-code-phone-darwin-test explicitly runs with real FFmpeg development libraries; SDK33 candidate builder repeats against selected ABI"
+    note: "实际补丁函数、live容器头、AVIO EIO拒绝与真PCM ffprobe；不访问手机"
