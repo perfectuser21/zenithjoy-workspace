@@ -33,7 +33,10 @@ while :; do sleep .05; done
  writeFileSync(join(d,'ffprobe'),'#!/bin/sh\ncase "$*" in *format=duration*) echo 5.1;; *"-select_streams a"*) echo audio;; *"-select_streams v"*) echo video;; esac\n',{mode:0o755});
  writeFileSync(join(d,'ffmpeg'),'#!/bin/sh\necho "mean_volume: -35 dB" >&2\n',{mode:0o755});
  const env={...process.env,...phoneLockFixtureEnv(join(d,'registry'),join(d,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(join(d,'adb')),DOUYIN_SCRCPY_BIN:join(d,'scrcpy'),DOUYIN_FFPROBE_BIN:join(d,'ffprobe'),DOUYIN_FFMPEG_BIN:join(d,'ffmpeg'),DOUYIN_PYTHON_BIN:'/usr/bin/python3'};
- Object.assign(env,pinnedRecordingRuntimeFixture(d,new URL('../runtime/scrcpy-runtime.py',import.meta.url).pathname));
+ Object.assign(env,pinnedRecordingRuntimeFixture(d,new URL('../runtime/scrcpy-runtime.py',import.meta.url).pathname,env.DOUYIN_ADB_BIN));
+ assert.equal(env.ZJ_ADB_HOST_CONFIG,join(d,'adb-host.fixture.json'));
+ assert.equal(JSON.parse(readFileSync(env.ZJ_ADB_HOST_CONFIG,'utf8')).endpoint,env.ADB_SERVER_SOCKET);
+ assert.equal(JSON.parse(readFileSync(env.ZJ_ADB_HOST_CONFIG,'utf8')).adb_bin,env.DOUYIN_ADB_BIN);
  const run=(...args)=>spawnSync('zsh',[ctl,'--profile','p1',...args],{env,encoding:'utf8',timeout:15000});
  try{
   assert.equal(run('lock-acquire',owner).status,0);

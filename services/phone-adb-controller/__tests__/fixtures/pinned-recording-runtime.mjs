@@ -2,7 +2,7 @@
 // 真实guard、Popen、PID/argv/UID/readiness及停止逻辑全部仍执行生产代码。
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-export function pinnedRecordingRuntimeFixture(directory, runtimeHelper) {
+export function pinnedRecordingRuntimeFixture(directory, runtimeHelper, adbBin) {
  const root=directory,python=join(directory,'python-runtime-fixture');
  mkdirSync(root,{recursive:true});
  writeFileSync(join(root,'scrcpy-server'),'test fixture server; no device upload');
@@ -50,7 +50,9 @@ if len(sys.argv)>1 and sys.argv[1]=='-':
  exec(compile(code,'<recording-runtime-fixture>','exec'),{'__name__':'__main__'});sys.exit(0)
 os.execv('/usr/bin/python3',['/usr/bin/python3',*sys.argv[1:]])
 `,{mode:0o755});
- return {DOUYIN_PYTHON_BIN:python,DOUYIN_SDK33_RUNTIME_ROOT:root,
+ const hostConfig=join(directory,'adb-host.fixture.json');
+ writeFileSync(hostConfig,JSON.stringify({schema_version:1,host_id:'mmv',transport:'tcp',endpoint:process.env.ADB_SERVER_SOCKET,forbidden_ports:[],adb_bin:adbBin}),{mode:0o600});
+ return {ZJ_ADB_HOST_CONFIG:hostConfig,DOUYIN_PYTHON_BIN:python,DOUYIN_SDK33_RUNTIME_ROOT:root,
   RECORDING_FIXTURE_RUNTIME_HELPER:runtimeHelper,RECORDING_FIXTURE_RUNTIME_ROOT:root,
   RECORDING_FIXTURE_SCRCPY:join(directory,'scrcpy'),RECORDING_FIXTURE_RUNTIME_LOG:join(directory,'runtime-calls.jsonl')};
 }
