@@ -424,6 +424,17 @@ jobs:
       - name: Run both private loopback native regression files on Darwin
         run: node --test --test-concurrency=1 services/phone-adb-controller/__tests__/public-code-preflight.test.mjs services/phone-adb-controller/__tests__/phone-epoch-producer.test.mjs
 
+      - name: Verify actual recorder header visibility and AVIO failure handling
+        run: |
+          command -v cc >/dev/null
+          command -v pkg-config >/dev/null || brew install pkgconf
+          if ! pkg-config --exists libavformat libavcodec libavutil || ! command -v ffprobe >/dev/null; then
+            brew install ffmpeg
+          fi
+          pkg-config --exists libavformat libavcodec libavutil
+          command -v ffprobe >/dev/null
+          python3 services/phone-adb-controller/runtime/tests/recorder_header_regression.py
+
       - name: Run official child native lifecycle without platform skips
         run: |
           command -v ffmpeg >/dev/null || brew install ffmpeg
