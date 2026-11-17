@@ -1,0 +1,15 @@
+{
+  "runtime_source": "32585e7930fc2ccea26b3e774957177ea5d89bca",
+  "protocol_sha256": "17b0b3030428da971f667e4a9310fa9ac6e2367d02938db7a7f1eb6402c66f97",
+  "decision_sha256": "c6b4844fdf17edeb059e7b9de06be4b9d2b45d77fc0c31c6e56840e5edd70a59",
+  "contract_sha256": "37d8b6a9b73b9825126da25974291db125feb2380b3e1cf4b45afe7e266ab6c5",
+  "adapter_sha256": "358b3d71b60ba6b1bcc7519b56549ccfd086e582766020e3b3b63202bed1b33f",
+  "actual_predicate": "return {verdict:phase==='start'||sameIdentity(verified.output,result?.outputs)?'pass':'fail',evidence:verified.checks};",
+  "fixtures": {
+    "commander-canonical.mjs": "d1a9f2a42699fdf61548c0aa2f3b58a206c12f818a6bb946c12ea172696a75f3",
+    "skill-protocol.mjs": "0f4930a52f4f419556cd5508495ed55db24bbede255e05522d71eca4f8041e89",
+    "adapter-output-predicate.mjs": "67b97bfee70a700ce9028d334861ad60e9045aa700c2dc0cf05eefc1853609f9",
+    "p7-double-read.json": "16c4d66c7435cb90c911767de6049bed6d81b3e948ca60f31cd0b84749440ab9",
+    "p7-host-proof.json": "732a0a2c72701ab503c776ec14c9aa861f94ff02648a729f4173d58c85ef8828"
+  }
+}
