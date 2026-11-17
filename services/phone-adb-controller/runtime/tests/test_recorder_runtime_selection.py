@@ -38,7 +38,7 @@ class RecorderRuntimeSelection(unittest.TestCase):
 
     def test_sdk33_defaults_to_new_immutable_recorder_package(self):
         selected, home = self.select()
-        self.assertEqual(selected, home + '/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-recorder-init-952ee084')
+        self.assertEqual(selected, home + '/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-header-flush-62cacd64')
 
     def test_explicit_runtime_still_requires_verify_and_never_falls_back(self):
         selected, _ = self.select('/owned-explicit-invalid-package')

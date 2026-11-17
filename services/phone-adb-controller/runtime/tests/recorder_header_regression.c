@@ -71,5 +71,7 @@ int main(int argc,char **argv) {
         }
         assert(av_write_trailer(r.ctx)==0);assert(avio_closep(&r.ctx->pb)==0);
     }
+    printf("{\"header_version\":%u,\"runtime_version\":%u,\"case\":\"%s\"}\n",
+           LIBAVFORMAT_VERSION_INT,avformat_version(),argv[1]);
     avformat_free_context(r.ctx);return 0;
 }

@@ -2,7 +2,7 @@
   "schema": "scrcpy-private-dylibs-v1",
   "platform": "darwin",
   "architecture": "arm64",
-  "client_sha256": "952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d",
+  "client_sha256": "62cacd647be07a5b7f5d2ba7380c4daea9a6ec1b2dccd9fb5fe148b2bf7a852a",
   "client_dependencies": [
     "libSDL2-2.0.0.dylib",
     "libavcodec.62.dylib",
