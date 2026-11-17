@@ -30,7 +30,9 @@ export async function verifyQualificationArtifacts(input,{env,pythonBin='/usr/bi
  const device_binding=verifyQualificationDeviceBinding(input,env),program=fileURLToPath(new URL('./qualification-artifacts.py',import.meta.url));
  pinned(program,input.context.verification.qualification_sha256?.['qualification-artifacts.py']);
  pinned(fileURLToPath(import.meta.url),input.context.verification.qualification_sha256?.['qualification-artifacts.mjs']);
- if(typeof pythonBin!=='string'||!path.isAbsolute(pythonBin))fail('QUALIFICATION_PYTHON_UNBOUND');
+ const checker=input.context.verification.artifact_checker;
+ if(!Array.isArray(checker?.command)||checker.command.length!==2||typeof pythonBin!=='string'||!path.isAbsolute(pythonBin)||pythonBin!==checker.command[0])fail('QUALIFICATION_PYTHON_UNBOUND');
+ pinned(pythonBin,checker.sha256?.[pythonBin]);
  const result=await new Promise((resolve,reject)=>{
   const child=spawn(pythonBin,[program],{env,stdio:['pipe','pipe','pipe']});let output='',done=false;
   const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);error?reject(error):resolve(value);};
