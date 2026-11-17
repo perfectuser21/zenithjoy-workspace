@@ -68,8 +68,8 @@ if(args[0]==='image'&&args[1]==='inspect'){
 if(args[0]==='tag'){ s.images[args[2]]=s.images[args[1]]; save(); process.exit(0); }
 if(args[0]==='run'){
  if(service==='zenithjoy-api-prod'&&args.includes('/repo/apps/api')){s.dbChecks=(s.dbChecks||0)+1;save();
- const prelude='const M=require("module"),load=M._load;M._load=function(name,...rest){if(name==="pg")return {Pool:class{async query(){return {rows:[{db:process.env.FAKE_ACTUAL_DB||"zenithjoy",usr:"zenithjoy",port:5432}]}}async end(){}}};return load.call(this,name,...rest)};';
- const result=require('child_process').spawnSync(process.execPath,['-e',prelude+args.at(-1)],{encoding:'utf8',env:{...process.env,DATABASE_HOST:'zenithjoy-db-postgres',DATABASE_NAME:process.env.FAIL_MODE==='db-runtime'?'zenithjoy_staging':'zenithjoy',DATABASE_USER:'zenithjoy',DATABASE_PORT:'5432',DATABASE_URL:process.env.FAIL_MODE==='db-url'?'postgres://zenithjoy@zenithjoy-db-postgres/zenithjoy_staging':'',FAKE_ACTUAL_DB:process.env.FAIL_MODE==='db-identity'?'zenithjoy_staging':'zenithjoy'}});
+ const prelude='const M=require("module"),load=M._load;M._load=function(name,...rest){if(name==="pg")return {Pool:class{constructor(config){if(process.env.FAIL_MODE==="db-timeouts-check"&&(config.connectionTimeoutMillis!==10000||config.query_timeout!==10000))throw Error("database timeouts missing");}async query(){return {rows:[{db:process.env.FAKE_ACTUAL_DB||"zenithjoy",usr:"zenithjoy",port:5432}]}}async end(){}}};return load.call(this,name,...rest)};';
+ const result=require('child_process').spawnSync(process.execPath,['-e',prelude+args.at(-1)],{encoding:'utf8',env:{...process.env,DATABASE_HOST:'zenithjoy-db-postgres',DATABASE_NAME:process.env.FAIL_MODE==='db-runtime'?'zenithjoy_staging':'zenithjoy',DATABASE_USER:'zenithjoy',DATABASE_PORT:'5432',DATABASE_URL:process.env.FAIL_MODE==='db-url'?'postgres://zenithjoy@zenithjoy-db-postgres/zenithjoy_staging':process.env.FAIL_MODE==='db-timeouts-check'?'postgres://zenithjoy@zenithjoy-db-postgres/zenithjoy':'',FAKE_ACTUAL_DB:process.env.FAIL_MODE==='db-identity'?'zenithjoy_staging':'zenithjoy'}});
  process.stderr.write(result.stderr||'');process.exit(result.status??1);}
  const expected=service==='zenithjoy-api-staging'?'/opt/zenithjoy/staging-api/.env':'/opt/zenithjoy/prod-api/.env';
  if(args[args.indexOf('--env-file')+1]!==expected)throw Error('wrong database environment');
@@ -327,6 +327,7 @@ test('提交账本后清理journal时收到TERM不会回退容器造成账实不
   const f = fixture(t);
   writeFileSync(join(f.env.PATH.split(':')[0], 'rm'), `#!${process.execPath} --
 const fs=require('node:fs');
+if(process.argv[2]==='-rf'&&process.argv[3].includes('/migration-source.')){fs.rmSync(process.argv[3],{recursive:true,force:true});process.exit(0);}
 const file=process.argv[2];
 if(!file.endsWith('/activation.json'))throw Error('unexpected removal '+file);
 fs.unlinkSync(file);
@@ -361,4 +362,26 @@ test('生产晋级与staging发布互斥，不能边换候选边晋级',t=>{
  const f=fixture(t);const result=spawnSync('flock',['-n',f.env.ZJ_STAGING_LOCK,'bash',script,'promote',f.next],{env:f.env,encoding:'utf8'});
  assert.notEqual(result.status,0);assert.match(result.stderr,/staging.*lock/i);
  assert.equal(f.state().builds,0);assert.equal(f.state().migrations||0,0);assert.deepEqual(f.state().ups,[]);
+});
+
+test('生产晋级覆盖旧失败候选记录并保留原current与previous恢复能力',t=>{
+ const f=fixture(t);assert.equal(f.run(['promote',f.old]).status,0);
+ const dir=join(f.env.ZJ_HK_RELEASES,f.next);mkdirSync(dir,{recursive:true});
+ writeFileSync(join(dir,'release.json'),JSON.stringify({sha:f.next,image:'sha256:failed-rebuild',project:'repo',verified:false}));
+ const result=f.run(['promote',f.next]);assert.equal(result.status,0,result.stderr);
+ const manifest=JSON.parse(readFileSync(join(dir,'release.json')));assert.equal(manifest.image,f.state().migrationImage);assert.equal(manifest.verified,true);
+ assert.equal(readFileSync(join(f.env.ZJ_HK_RELEASES,'previous'),'utf8').trim(),f.old);
+ assert.equal(f.run(['rollback']).status,0);assert.equal(f.state().images[f.state().active],f.old);
+});
+test('生产迁移忽略旧source中的未跟踪依赖，失败清理本次归档且不触碰旧服务',t=>{
+ const f=fixture(t),source=join(f.env.ZJ_HK_RELEASES,f.next,'source');mkdirSync(source,{recursive:true});
+ const archive=spawnSync('git',['-C',f.env.ZJ_HK_REPO,'archive',f.next]);assert.equal(archive.status,0);assert.equal(spawnSync('tar',['-x','-C',source],{input:archive.stdout}).status,0);
+ const poison=join(source,'apps/api/db/migrations/node_modules');mkdirSync(poison,{recursive:true});writeFileSync(join(poison,'untrusted'),'bad');
+ const result=f.run(['promote',f.next],{FAIL_MODE:'migration'});assert.notEqual(result.status,0);assert.equal(f.state().migrations,1);assert.deepEqual(f.state().ups,[]);
+ assert.throws(()=>readFileSync(join(f.state().migrationSource,'tsconfig.base.json')),/ENOENT/);assert.equal(readFileSync(join(poison,'untrusted'),'utf8'),'bad');
+});
+
+test('生产数据库身份检查对runtime与URL连接都设置10秒连接和查询超时',t=>{
+ const f=fixture(t),result=f.run(['promote',f.next],{FAIL_MODE:'db-timeouts-check'});
+ assert.equal(result.status,0,result.stderr);assert.equal(f.state().dbChecks,1);assert.equal(f.state().migrations,1);
 });
