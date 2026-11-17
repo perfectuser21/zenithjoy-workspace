@@ -4932,6 +4932,22 @@ tests:
     product: 智能获客
     note: "负责人真实session登记disabled账号，精确租户/版本CAS/幂等/全局冲突/审计且不启用政策"
 
+  - id: api-route-company-account-device-replacement
+    path: apps/api/src/routes/company-account-device-replacement.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "同租户原账号换机保留身份及政策，独立核验、历史请求防复用、设备冲突、CAS回滚和普通PUT保护"
+
+  - id: api-route-company-account-request-history
+    path: apps/api/src/routes/company-account-request-history.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "账号登记历史请求匹配与无匹配，查询失败上抛且不得误判为未使用"
+
   - id: api-route-company-account-verification
     path: apps/api/src/routes/company-account-verification.test.ts
     type: unit
