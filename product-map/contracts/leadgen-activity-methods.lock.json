@@ -635,7 +635,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -740,7 +740,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
+      "code_digest": "6af6ef02e784c2c8e4f7fbfb89d4f826e14ec5e9556005bc7ea58e05b23e6709",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "680128cbc3d0575c40cfa7a4b85defdab172c32456772b0e5b6d11978ec368c0",
-        "current_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8"
+        "previous_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
+        "current_code_digest": "6af6ef02e784c2c8e4f7fbfb89d4f826e14ec5e9556005bc7ea58e05b23e6709"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1575,7 +1575,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -1681,7 +1681,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -1712,7 +1712,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
+      "code_digest": "dabb8bf6a1cdf7fab9dc8528f313e09d33fa535cbc6cf29a9bdc920f1e5b8edf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "59c0f6a119aaf07d3907b30354486644f4702391ef31184b37b71eeceff30312",
-        "current_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434"
+        "previous_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
+        "current_code_digest": "dabb8bf6a1cdf7fab9dc8528f313e09d33fa535cbc6cf29a9bdc920f1e5b8edf"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2442,7 +2442,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -2547,7 +2547,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
+      "code_digest": "57593f2a7a6ce8e572786b4b7ec61d096391d1a48cc35e82b2e95ff465614693",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "c38169b4ee3cd1fca97f2c8ce117af457e026a55f8e829838f4243c47eb060cb",
-        "current_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e"
+        "previous_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
+        "current_code_digest": "57593f2a7a6ce8e572786b4b7ec61d096391d1a48cc35e82b2e95ff465614693"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3359,7 +3359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -3464,7 +3464,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
+      "code_digest": "6fb3e0d2f7a3d3f2ca96eba2ee0721675954a6f1a0a4a343d97c04469229b4d9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "e4f780821bbbda5f92c86a6ff912d2ac11daacbeb2be4ce7118fb5ed201dd21b",
-        "current_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8"
+        "previous_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
+        "current_code_digest": "6fb3e0d2f7a3d3f2ca96eba2ee0721675954a6f1a0a4a343d97c04469229b4d9"
       }
     },
     "douyin_video_processing.collection": {
@@ -4285,7 +4285,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -4412,7 +4412,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -4538,16 +4538,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
+          "sha256": "8f83603d750baf3ab313279f48c8a58560f8db61767036daec11f580d3119297"
         }
       ],
-      "code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
+      "code_digest": "c8ac9cb9fff6de15f4bc7e2888a36709aa6c6ea8fb85f15c4e3cf8e0da0bd468",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "ef5f5e069fe7b9cf3a4d7ed9347bf3c64d954f749dace9aa03ce786a5432a527",
-        "current_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c"
+        "previous_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
+        "current_code_digest": "c8ac9cb9fff6de15f4bc7e2888a36709aa6c6ea8fb85f15c4e3cf8e0da0bd468"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -5212,7 +5212,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -5318,7 +5318,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
+      "code_digest": "f6f26d0a4aa00da1e3ac14bc5e1e12ec1e2a0519a4aa0f676ffbe247aff9241d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "5e56e57b392644247384eaab146d78cd4449f19f5554a36676a1d80aad120689",
-        "current_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7"
+        "previous_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
+        "current_code_digest": "f6f26d0a4aa00da1e3ac14bc5e1e12ec1e2a0519a4aa0f676ffbe247aff9241d"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5684,7 +5684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -6090,7 +6090,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -6352,13 +6352,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
+      "code_digest": "f1a2497ce6325f71025ea7c7e7bf5af3d4307192f9483a9379041dcb8604092f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "a24d83b1ee520dcc3a99504000ef68964a4f1245b646c62269b8190b58c4c6b5",
-        "current_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5"
+        "previous_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
+        "current_code_digest": "f1a2497ce6325f71025ea7c7e7bf5af3d4307192f9483a9379041dcb8604092f"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6594,7 +6594,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -7007,7 +7007,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -7245,7 +7245,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
+          "sha256": "8f83603d750baf3ab313279f48c8a58560f8db61767036daec11f580d3119297"
         },
         {
           "kind": "code",
@@ -7290,13 +7290,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
+      "code_digest": "8a864fc530050525798a683afc071660228303fd6a114503101cd0954e6acf3a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "adbde842075752212ff1f2f80a055453d66b49cb9d24c1fca2acdee36ea79a90",
-        "current_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e"
+        "previous_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
+        "current_code_digest": "8a864fc530050525798a683afc071660228303fd6a114503101cd0954e6acf3a"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7884,7 +7884,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -7997,7 +7997,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -8028,7 +8028,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
+      "code_digest": "191fc96d44ec9f5c54e526a32bbcb945239ecdb5892134b1d82344e764f4cc3b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "5505b587147cde25fccc41fa51a35370de0d94511fc12aafabd494b75d591e5a",
-        "current_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a"
+        "previous_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
+        "current_code_digest": "191fc96d44ec9f5c54e526a32bbcb945239ecdb5892134b1d82344e764f4cc3b"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8744,7 +8744,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -8856,7 +8856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
+      "code_digest": "9fe2298a86fff1d55a9d6072be07a49c7bcff37e1d7a06f7a84d1d12433171ca",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "1a8fcdeae575954bf9dfe53fd6f555b93a73b29b6cd9fb02b1843221a65639fc",
-        "current_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe"
+        "previous_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
+        "current_code_digest": "9fe2298a86fff1d55a9d6072be07a49c7bcff37e1d7a06f7a84d1d12433171ca"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9579,7 +9579,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -9691,7 +9691,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
+      "code_digest": "9126ab705828ae841e60ccf8f8195823f0f71d200f72dbbda894142f332bbda3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "ce98aaf441d77587c793df67d4791b2f85231970a94de9e69be6c1b786526c2a",
-        "current_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1"
+        "previous_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
+        "current_code_digest": "9126ab705828ae841e60ccf8f8195823f0f71d200f72dbbda894142f332bbda3"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10407,7 +10407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "332a98e21862400ff7b27c54e405104eb4a7a78364ad538505d1313919258e41"
+          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
         },
         {
           "kind": "code",
@@ -10520,7 +10520,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d"
+          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
+      "code_digest": "900d7a8fea324018b98a1c86af23bad22dbb1b892bb362e7b5b66a98e9d58a58",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
+        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "705c1342c5d4d5f7e84aabe82170bd4c000f194031bde46721b250aaecad5040",
-        "current_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257"
+        "previous_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
+        "current_code_digest": "900d7a8fea324018b98a1c86af23bad22dbb1b892bb362e7b5b66a98e9d58a58"
       }
     }
   },
