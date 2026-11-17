@@ -62,7 +62,7 @@ def plan(path):
  result=[]
  for line in pathlib.Path(path).read_text().splitlines():
   if not line.startswith(('Inst','Remv')):continue
-  m=re.fullmatch(r'Inst ([a-z0-9][a-z0-9+.:\-]*) (?:\[[^\]\r\n]+\] )?\(([^\s()]+) [^\r\n]*\)',line)
+  m=re.fullmatch(r'Inst ([a-z0-9][a-z0-9+.:\-]*) (?:\[[^\]\r\n]+\] )?\(([^\s()]+) [^\r\n]*\)(?: \[\])?',line)
   if m:result.append(('Inst',*m.groups()));continue
   m=re.fullmatch(r'Remv ([a-z0-9][a-z0-9+.:\-]*)(?: \[([^\]\r\n]+)\])?',line)
   if m:result.append(('Remv',*m.groups()));continue
