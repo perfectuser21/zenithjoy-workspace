@@ -5,6 +5,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from '../auth';
 import type { Pool, PoolClient } from 'pg';
 import { companyObject, companyRecord, type CompanyJsonRecord } from './company-profile-validation';
+import { accountRequestWasUsed } from './company-account-request-history';
 
 type Helpers = {
   pool: Pick<Pool, 'connect'>;
@@ -101,6 +102,9 @@ export function companyAccountRegistration({ pool, profile, snapshot }: Helpers)
           }
           await client.query('COMMIT'); transaction = false; reply(account, old, true); return;
         }
+      }
+      if (await accountRequestWasUsed(client, input.requestId)) {
+        await client.query('ROLLBACK'); transaction = false; fail(res, 409, 'REGISTRATION_REQUEST_CONFLICT', '请求ID已存在历史登记，不能复用于新账号'); return;
       }
       const audit = async (next: CompanyJsonRecord, conflict: CompanyJsonRecord = {}) => {
         await client!.query("INSERT INTO zenithjoy.company_config_changes (company_id,version,actor,source,old_snapshot,new_snapshot,conflict) VALUES ($1,$2,$3,'account_registration',$4::jsonb,$5::jsonb,$6::jsonb)", [old.company_id, next.config_version, req.feishuUserId, JSON.stringify(snapshot(old)), JSON.stringify(snapshot(next)), JSON.stringify(conflict)]);
