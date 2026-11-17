@@ -12156,3 +12156,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
     note: "真实guard构造argv后仅完整card默认/上限360，其他280；外层420，实际父子超时终止/unknown及owner保持"
+
+  - id: single-score-audience-rule-binding
+    path: services/phone-adb-controller/__tests__/single-score-audience-binding.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "真实单次请求schema绑定画像与本画像原依据；原r2错pair拒绝、长原文与emoji完整覆盖、原validator继续拒错且HTTP一次"
