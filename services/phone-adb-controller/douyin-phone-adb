@@ -637,10 +637,20 @@ try:
     nodes=list(root.iter('node'))
     if not nodes or any(n.get('package') not in (None,'',pkg) for n in nodes): sys.exit(1)
     if any(n.get('content-desc','').startswith('分享') for n in nodes): sys.exit(1)
-    markers={'zs0':'链接已复制成功，去粘贴分享：','zsx':'可以通过分享的链接找到我'}
-    for key,text in markers.items():
-        hits=[n for n in nodes if n.get('resource-id') == pkg+':id/'+key]
-        if len(hits)!=1 or hits[0].get('package')!=pkg or hits[0].get('text')!=text: sys.exit(1)
+    # 两份真实原树的完整ID pair；文案相同但未知/混搭ID不能授权BACK。
+    texts=('链接已复制成功，去粘贴分享：','可以通过分享的链接找到我')
+    matched=False
+    for ids in (('zs0','zsx'),('zxa','zw-')):
+        valid=True
+        for key,text in zip(ids,texts):
+            hits=[n for n in nodes if n.get('resource-id') == pkg+':id/'+key]
+            if len(hits)!=1 or hits[0].get('package')!=pkg or hits[0].get('text')!=text:
+                valid=False
+                break
+        if valid:
+            matched=True
+            break
+    if not matched:sys.exit(1)
 except (ET.ParseError,OSError):
     sys.exit(1)
 PYGUIDE
