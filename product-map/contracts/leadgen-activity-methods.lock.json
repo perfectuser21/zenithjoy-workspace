@@ -761,7 +761,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "7c9cda629a397f3363fc89d72319e68ea3c2df72db0d2ea5bf9f80ecdc0ac746",
+      "code_digest": "462552c67f79820c7f6b4fb52416fbcc880012baed7dd15334a6b1b34369f2e2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
-        "current_code_digest": "7c9cda629a397f3363fc89d72319e68ea3c2df72db0d2ea5bf9f80ecdc0ac746"
+        "current_code_digest": "462552c67f79820c7f6b4fb52416fbcc880012baed7dd15334a6b1b34369f2e2"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1704,7 +1704,7 @@
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "620ec6eae40bc509cb22ee4ac84697dbbe117c4895b65d29674b1d1bad07ec97",
+      "code_digest": "e8c73ebb92956f778f463c2ffdd305fba8cbe4f66f7005cf7dd46692bcbb0129",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
-        "current_code_digest": "620ec6eae40bc509cb22ee4ac84697dbbe117c4895b65d29674b1d1bad07ec97"
+        "current_code_digest": "e8c73ebb92956f778f463c2ffdd305fba8cbe4f66f7005cf7dd46692bcbb0129"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2568,7 +2568,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "e5efc8eb69f0dd4d9d90cae307e29d976c403a36b22ed357125c04668789de41",
+      "code_digest": "15b0cf6f8aa96bd70599106ea7c5540935c040bf8f81222727e8e92d40440661",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
-        "current_code_digest": "e5efc8eb69f0dd4d9d90cae307e29d976c403a36b22ed357125c04668789de41"
+        "current_code_digest": "15b0cf6f8aa96bd70599106ea7c5540935c040bf8f81222727e8e92d40440661"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3485,7 +3485,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "e69526642d83a31ff5ec06ed4d1a5d8ffb5c6014fc7e6b5292ae6559021ed058",
+      "code_digest": "71b78efb3f6f12914dc9ab010bc4305b731aa2bab1202b89e59c22c034e70816",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
-        "current_code_digest": "e69526642d83a31ff5ec06ed4d1a5d8ffb5c6014fc7e6b5292ae6559021ed058"
+        "current_code_digest": "71b78efb3f6f12914dc9ab010bc4305b731aa2bab1202b89e59c22c034e70816"
       }
     },
     "douyin_video_processing.collection": {
@@ -4397,7 +4397,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -4541,13 +4541,13 @@
           "sha256": "8f83603d750baf3ab313279f48c8a58560f8db61767036daec11f580d3119297"
         }
       ],
-      "code_digest": "8a54eec7559902304fe99d5ee8ed08c4ab2aa1de12a7524e3232e1a941fe9807",
+      "code_digest": "a5e9af8dbb7cec91c76564b1fa7f169cc0d83d1d09f1f7043d48715969ada181",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
-        "current_code_digest": "8a54eec7559902304fe99d5ee8ed08c4ab2aa1de12a7524e3232e1a941fe9807"
+        "current_code_digest": "a5e9af8dbb7cec91c76564b1fa7f169cc0d83d1d09f1f7043d48715969ada181"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -5341,7 +5341,7 @@
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "86d8d173dc4a049945fac4871a754cf2ac53b22171b5dc45e5f1ef721af9a0e3",
+      "code_digest": "c5b1b0b207d05e5b942a7ace0b29abd3bd0e97d653a5a2a900a55d0522234cda",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
-        "current_code_digest": "86d8d173dc4a049945fac4871a754cf2ac53b22171b5dc45e5f1ef721af9a0e3"
+        "current_code_digest": "c5b1b0b207d05e5b942a7ace0b29abd3bd0e97d653a5a2a900a55d0522234cda"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -6355,7 +6355,7 @@
       "code_digest": "0e813b7230c25b3ef9820a5c10de8cca71f769163214f7606c63a8da321cdcf5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
         "current_code_digest": "0e813b7230c25b3ef9820a5c10de8cca71f769163214f7606c63a8da321cdcf5"
@@ -7293,7 +7293,7 @@
       "code_digest": "04389af6a63a35733afe48247e5a49a4292ce0686aa795891c09ee9617cb95f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
         "current_code_digest": "04389af6a63a35733afe48247e5a49a4292ce0686aa795891c09ee9617cb95f3"
@@ -8020,7 +8020,7 @@
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f1853fedbb516bd69ac0f53abe0364f3df100a78e67b88cea3310805f49cdd7f",
+      "code_digest": "220f4edc2ebbc14e9a625a9c900c1ab62e6ccc7c14775834f7a340f61e23c09d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
-        "current_code_digest": "f1853fedbb516bd69ac0f53abe0364f3df100a78e67b88cea3310805f49cdd7f"
+        "current_code_digest": "220f4edc2ebbc14e9a625a9c900c1ab62e6ccc7c14775834f7a340f61e23c09d"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8877,7 +8877,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f3e7328cca3a8f83749c1a16364dc16aa29985d2a7c5f844953ea6db46ab2622",
+      "code_digest": "ee41c2731b746474d1b3e5284f041b555cfd27fe7620e58f56d0feb82fdf8d07",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
-        "current_code_digest": "f3e7328cca3a8f83749c1a16364dc16aa29985d2a7c5f844953ea6db46ab2622"
+        "current_code_digest": "ee41c2731b746474d1b3e5284f041b555cfd27fe7620e58f56d0feb82fdf8d07"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9712,7 +9712,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c40b9a854f6bcbd62dadaf22596b4b9cbe043f874b0d33a0e9b1b8ff7b83a4ec",
+      "code_digest": "f2bb384f633e31f2b72f358182283604f779f6ee90a2c11eb2fbdea83ef3839e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
-        "current_code_digest": "c40b9a854f6bcbd62dadaf22596b4b9cbe043f874b0d33a0e9b1b8ff7b83a4ec"
+        "current_code_digest": "f2bb384f633e31f2b72f358182283604f779f6ee90a2c11eb2fbdea83ef3839e"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10543,7 +10543,7 @@
           "path": "services/phone-adb-controller/phone-lock-helper.py",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6"
+          "sha256": "fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "21be7f52f2fe00c9cd28e2d897db9226422a3fa66c8600867300f721687fcaeb",
+      "code_digest": "ff95fee9bae76f677904210edd967fb6f2fe9d173c2435e778e7c6664f596976",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
+        "reason": "同PR已核资格/Compose/原评论元数据及宿主显式准入修复；此次只为原本未进入官方方法允许集的完整本地commenter-profile-card-link设置360秒有界预算，其他命令仍280，outer420、原租约/killpg/unknown保持，默认验收绑定新helper字节。不改Skill或合同，不宣称取链或102/103实际成功。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
-        "current_code_digest": "21be7f52f2fe00c9cd28e2d897db9226422a3fa66c8600867300f721687fcaeb"
+        "current_code_digest": "ff95fee9bae76f677904210edd967fb6f2fe9d173c2435e778e7c6664f596976"
       }
     }
   },
