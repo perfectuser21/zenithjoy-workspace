@@ -21,6 +21,26 @@ flock -n 9 || fail 'another HK API release owns the host lock'
 
 json_field() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2"; }
 health_sha() { curl --max-time 10 -fsS "$HEALTH_URL" | python3 -c "import json,sys; print(json.load(sys.stdin).get('build',{}).get('sha',''))"; }
+check_space() {
+  local extra=${1:-0} docker_root available required
+  docker_root=$(docker info --format '{{.DockerRootDir}}')
+  [[ $(df -P "$RELEASES" | awk 'NR==2 {print $1}') == "$(df -P "$docker_root" | awk 'NR==2 {print $1}')" ]] || fail 'Docker and releases are on different filesystems'
+  available=$(df -Pk "$RELEASES" | awk 'NR==2 {print $4}')
+  required=$(((extra + 536870912 + 1023) / 1024))
+  [[ "$available" =~ ^[0-9]+$ && "$available" -ge "$required" ]] || fail 'insufficient production disk space for source and 512 MiB reserve'
+}
+staging_image() {
+  local image tagged status actual
+  status=$(docker inspect zenithjoy-api-staging --format '{{.State.Health.Status}}') || fail 'staging container unavailable'
+  actual=$(curl --max-time 10 -fsS http://127.0.0.1:5201/health | python3 -c "import json,sys; print(json.load(sys.stdin).get('build',{}).get('sha',''))") || fail 'staging health unavailable'
+  [[ "$status" == healthy && "$actual" == "$TARGET" ]] || fail 'staging health or SHA mismatch'
+  image=$(docker inspect zenithjoy-api-staging --format '{{.Image}}') || fail 'staging image unavailable'
+  tagged=$(docker image inspect "zenithjoy-api-staging:$TARGET" --format '{{.Id}}') || fail 'staging SHA image missing'
+  [[ "$image" =~ ^sha256:[0-9a-f]{64}$ && "$image" == "$tagged" ]] || fail 'staging running image differs from SHA image'
+  [[ $(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || fail 'staging image platform mismatch'
+  [[ $(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$TARGET" ]] || fail 'staging image revision mismatch'
+  printf '%s\n' "$image"
+}
 source_for() {
   local sha=$1 dir="$RELEASES/$1/source"
   if [[ ! -f "$dir/deploy/docker-compose.prod-api.yml" ]]; then
@@ -35,6 +55,7 @@ source_for() {
     mkdir -p "$RELEASES/$sha"
     mv "$tmp" "$dir"
   fi
+  git -C "$REPO" show "$sha:deploy/docker-compose.prod-api.yml" | cmp - "$dir/deploy/docker-compose.prod-api.yml" || fail 'cached production compose differs from candidate'
 }
 override() {
   # An ordinary API update preserves the already-enabled private capability.
@@ -168,6 +189,20 @@ fi
 CURRENT=$(health_sha 2>/dev/null || true)
 if [[ "$ACTION" == rollback && -f "$RELEASES/current" ]]; then CURRENT=$(cat "$RELEASES/current"); fi
 sha_ok "$CURRENT" || fail 'running production does not expose a full build SHA'
+# Hold the staging publisher's existing lock until activation finishes. A SHA
+# tag alone is not evidence: pin the healthy running staging container's ID.
+if [[ "$ACTION" == promote && "$TARGET" != "$CURRENT" ]]; then
+  STAGING_LOCK=${ZJ_STAGING_LOCK:-/opt/zenithjoy/staging-api/deploy.lock}
+  mkdir -p "$(dirname "$STAGING_LOCK")"
+  exec 8>"$STAGING_LOCK"
+  flock -n 8 || fail 'another staging deployment owns the staging lock'
+  IMAGE=$(staging_image)
+  git -C "$REPO" cat-file -e "$TARGET^{commit}" 2>/dev/null || \
+    flock "$REPO/.git/hk-source-fetch.lock" git -C "$REPO" fetch origin main
+  SOURCE_BYTES=$(git -C "$REPO" archive "$TARGET" | wc -c | tr -d '[:space:]')
+  [[ "$SOURCE_BYTES" =~ ^[0-9]+$ ]] || fail 'candidate source size unavailable'
+  check_space "$SOURCE_BYTES"
+fi
 if [[ ! -f "$RELEASES/$CURRENT/release.json" ]]; then
   verify "$CURRENT" || fail 'cannot bootstrap an unverified running release'
   source_for "$CURRENT"
@@ -202,19 +237,38 @@ else
     fail 'verified release already retained; use rollback to restore its exact image'
   fi
   source_for "$TARGET"
-  IMAGE="zenithjoy-api-prod:candidate-$TARGET"
   override "$TARGET" "$IMAGE"
   if [[ -f "$RELEASES/$TARGET/canvas-plan.json" ]]; then
     node "$RELEASES/$TARGET/source/scripts/deploy/video-tools-release.mjs" verify-instances "$RELEASES/$TARGET/canvas-plan.json" || fail 'private employee canvases are not ready'
   fi
-  BUILD_SHA="$TARGET" compose "$TARGET" build "$SERVICE"
-  IMAGE=$(docker image inspect "$IMAGE" --format '{{.Id}}')
-  override "$TARGET" "$IMAGE"
   record "$TARGET" "$IMAGE" false
-  # Build before migrating, and do not touch the current container on migration failure.
+  check_space
+  # Reuse the accepted image's locked dependencies with a clean fixed archive.
+  # Never install a second dependency tree on the production filesystem.
+  MIGRATION_SOURCE=$(mktemp -d "$RELEASES/migration-source.XXXXXX")
+  trap 'rm -rf "$MIGRATION_SOURCE"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  git -C "$REPO" archive "$TARGET" apps/api/db/migrations apps/api/tsconfig.json tsconfig.base.json | tar -x -C "$MIGRATION_SOURCE"
+  if find "$MIGRATION_SOURCE" -name node_modules -print -quit | grep -q .; then fail 'unexpected node_modules in migration archive'; fi
   docker run --rm --network zenithjoy-net --env-file /opt/zenithjoy/prod-api/.env \
-    -e TS_NODE_TRANSPILE_ONLY=1 -v "$RELEASES/$TARGET/source:/repo" -w /repo \
-    node:20-bookworm-slim sh -c 'npm ci --include=dev --workspace=apps/api --silent && cd apps/api && npx ts-node db/migrations/run-migration.ts'
+    -e NODE_PATH=/repo/node_modules -w /repo/apps/api "$IMAGE" node -e '
+  const { Pool } = require("pg");
+  const raw=process.env.DATABASE_URL;
+  if(process.env.DATABASE_HOST!=="zenithjoy-db-postgres"||process.env.DATABASE_NAME!=="zenithjoy"||process.env.DATABASE_USER!=="zenithjoy"||(process.env.DATABASE_PORT&&process.env.DATABASE_PORT!=="5432"))throw Error("production runtime database configuration mismatch");
+  const runtime={host:process.env.DATABASE_HOST,database:process.env.DATABASE_NAME,user:process.env.DATABASE_USER,password:process.env.DATABASE_PASSWORD,port:5432,connectionTimeoutMillis:10000,query_timeout:10000};
+  const connections=[runtime];
+  if(raw){let u=new URL(raw);if(!["postgres:","postgresql:"].includes(u.protocol)||u.hostname!=="zenithjoy-db-postgres"||(u.port&&u.port!=="5432")||decodeURIComponent(u.pathname.slice(1))!=="zenithjoy"||decodeURIComponent(u.username)!=="zenithjoy")throw Error("production migration database configuration mismatch");const migration={connectionString:raw,connectionTimeoutMillis:10000,query_timeout:10000}; connections.push(migration);}
+  (async()=>{for(const config of connections){const p=new Pool(config);try {const r=await p.query("SELECT current_database() AS db, current_user AS usr, inet_server_port() AS port");const x=r.rows[0];if(x.db!=="zenithjoy"||x.usr!=="zenithjoy"||x.port!==5432)throw Error("production database identity mismatch");} finally {await p.end();}}})().catch(()=>{process.stderr.write("production database identity check failed\n");process.exitCode=1;});'
+  # Execute the actual candidate's locked ts-node and dependencies with that
+  # clean read-only archive: no second npm ci or host-side dependency tree.
+  docker run --rm --network zenithjoy-net --env-file /opt/zenithjoy/prod-api/.env \
+    -e NODE_PATH=/repo/node_modules -e TS_NODE_PROJECT=/source/apps/api/tsconfig.json \
+    -e TS_NODE_TRANSPILE_ONLY=1 -v "$MIGRATION_SOURCE:/source:ro" -w /source/apps/api "$IMAGE" \
+    node -r /repo/node_modules/ts-node/register/transpile-only /source/apps/api/db/migrations/run-migration.ts
+  rm -rf "$MIGRATION_SOURCE"
+  trap - EXIT INT TERM
+
 fi
 
 SWITCHED=false
