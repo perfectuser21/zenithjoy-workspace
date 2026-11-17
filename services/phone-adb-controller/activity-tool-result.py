@@ -86,3 +86,85 @@ def emit_pre_dispatch_rejection(error, *, action, binding, started_at, persist):
     persist(action, receipt)
     print(json.dumps(receipt, ensure_ascii=False))
     return 2
+
+
+def admit_tool_request(c, activity, kind, args):
+    """Only syntax/scope checks: no files, credentials, resource calls or dispatch."""
+    known = {'phone', 'business', 'brain', 'proof', 'fetch-native', 'metrics', 'qualify',
+             'native-readback', 'collection-readback', 'collection-evidence',
+             'outreach', 'outreach-phone', 'outreach-proof'}
+    def reject(code):
+        error = scope_rejection(code)
+        if code == 'QUALIFICATION_RECOVERY_READ_ONLY':
+            error.details['tool_hint'] = 'qualify是转写/模型执行，不是只读验收命令；恢复资格仅用proof发布冻结qualification_evidence，随后交提案，由宿主checker验收并传动态qualification_receipt。'
+        elif code == 'TOOL_KIND':
+            error.details['allowed_kinds'] = sorted(known)
+        raise error
+    if kind not in known:
+        reject('TOOL_KIND')
+    if not isinstance(args, list) or any(not isinstance(x, str) for x in args):
+        reject('TOOL_ARGS')
+    stage = c['assigned_workflow']
+    prepared = {}
+    def object_arg():
+        try:
+            value = json.loads(args[0]) if len(args) == 1 else None
+        except (ValueError, TypeError):
+            value = None
+        if not isinstance(value, dict):
+            reject('TOOL_JSON_OBJECT_REQUIRED')
+        return value
+    if kind == 'brain':
+        if len(args) not in (1, 2):
+            reject('BRAIN_INPUT_SCOPE')
+        body = None
+        if len(args) == 2:
+            try:
+                body = json.loads(args[1])
+            except (ValueError, TypeError):
+                reject('BRAIN_INPUT_SCOPE')
+            if not isinstance(body, dict):
+                reject('BRAIN_INPUT_SCOPE')
+            allowed = ((activity == 'preflight' and args[0] == 'device-locks/acquire')
+                       or (activity == 'cleanup' and args[0] == 'device-locks/release'))
+            if not allowed or body.get('device_name') != c['serial'] or body.get('locked_by') != c['central_owner']:
+                raise PreDispatchRejected()
+        elif args[0] != 'device-locks':
+            reject('BRAIN_READ_SCOPE')
+        prepared['brain'] = (args[0], body)
+    elif kind == 'proof':
+        if activity not in ('collect_videos', 'qualification'):
+            reject('PROOF_ACTIVITY_SCOPE')
+        value = object_arg()
+        expected = 'filter_evidence' if activity == 'collect_videos' else 'qualification_evidence'
+        if set(value) != {expected}:
+            reject('PROOF_FIELDS')
+        prepared['proof'] = value
+    elif kind == 'qualify':
+        if c.get('recovery', {}).get('mode') == 'qualification-readonly-v1':
+            reject('QUALIFICATION_RECOVERY_READ_ONLY')
+        if activity != 'qualification' or len(args) != 2 or args[0] not in c['verification'].get('102', {}).get('video_ids', []):
+            reject('QUALIFICATION_SCOPE')
+    elif kind == 'metrics':
+        if activity != 'collect_videos' or len(args) != 1:
+            reject('METRICS_ACTIVITY_SCOPE')
+        prepared['metrics'] = object_arg()
+    elif kind == 'fetch-native':
+        import re
+        run = c['tasks'][stage]['run_tag']
+        if len(args) != 1 or not (re.fullmatch(re.escape(run)+r'-[A-Za-z0-9_.-]+', args[0])
+                or (stage == '104' and args[0] == c['local_owner']+'-outward-ledger.jsonl')):
+            reject('NATIVE_FILE_SCOPE')
+    elif kind == 'native-readback':
+        if args:
+            reject('NATIVE_READBACK_TAKES_NO_ARGS')
+    elif kind == 'collection-readback':
+        if stage != '102' or activity != 'collection' or args:
+            reject('COLLECTION_READBACK_SCOPE')
+    elif kind == 'collection-evidence':
+        if stage != '102' or activity != 'collection' or len(args) != 1:
+            reject('COLLECTION_EVIDENCE_SCOPE')
+        prepared['collection-evidence'] = object_arg()
+    elif kind.startswith('outreach') and stage != '104':
+        reject('OUTREACH_WORKFLOW_SCOPE')
+    return prepared

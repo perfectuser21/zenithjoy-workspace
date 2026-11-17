@@ -184,7 +184,7 @@ def canonical_digest(value):
 
 
 
-def metadata_recovery_action(c, activity, kind, args):
+def metadata_recovery_action(c, activity, kind, args, *, reject=ValueError):
     r = c['recovery']; target = r['collection']; run = c['tasks']['102']['run_tag']
     eid_prefix = target.get('evidence_prefix', '')
     before = target.get('before_snapshot', {})
@@ -202,44 +202,44 @@ def metadata_recovery_action(c, activity, kind, args):
         return False
     if kind == 'business':
         if len(args) != 1:
-            raise ValueError('METADATA_RECOVERY_BUSINESS_SCOPE')
+            raise reject('METADATA_RECOVERY_BUSINESS_SCOPE')
         value = json.loads(args[0])
         if (value.get('op') not in ['complete_collected_comment_metadata', 'complete_collected_comment_metadata_readback']
                 or value.get('comment_id') != target['existing_comment_id']
                 or value.get('video_id') != target['video_id']
                 or value.get('video_url') != 'https://www.douyin.com/video/'+target['video_id']):
-            raise ValueError('METADATA_RECOVERY_BUSINESS_SCOPE')
+            raise reject('METADATA_RECOVERY_BUSINESS_SCOPE')
         if 'before_snapshot' in value and value['before_snapshot'] != before:
-            raise ValueError('METADATA_RECOVERY_BEFORE_CHANGED')
+            raise reject('METADATA_RECOVERY_BEFORE_CHANGED')
         if 'before_sha256' in value and value['before_sha256'] != target['before_sha256']:
-            raise ValueError('METADATA_RECOVERY_BEFORE_CHANGED')
+            raise reject('METADATA_RECOVERY_BEFORE_CHANGED')
         return True
     if kind == 'phone':
         if not args or args[0] not in ['preflight','status','foreground','window','lock-status','runtime-contract','record-status','snapshot-evidence','ui-evidence','evidence-bundle','open-video','current-video-link','back-evidence','commenter-profile-card-link','lock-refresh']:
-            raise ValueError('METADATA_RECOVERY_PHONE_SCOPE')
+            raise reject('METADATA_RECOVERY_PHONE_SCOPE')
         if args[0] == 'commenter-profile-card-link':
             if len(args) != 6 or args[1:5] != [target['video_id'],target['expected_douyin_id'],target['expected_nickname_b64'],target['comment_body_sha256']]:
-                raise ValueError('METADATA_RECOVERY_PHONE_SCOPE')
+                raise reject('METADATA_RECOVERY_PHONE_SCOPE')
         positions = {'snapshot-evidence':1,'ui-evidence':1,'evidence-bundle':1,'open-video':2,'current-video-link':1,'back-evidence':1,'commenter-profile-card-link':5}
         if args[0] in positions:
             at = positions[args[0]]
             if len(args) <= at or not args[at].startswith(eid_prefix+'-'):
-                raise ValueError('METADATA_RECOVERY_NATIVE_SCOPE')
+                raise reject('METADATA_RECOVERY_NATIVE_SCOPE')
             if any(Path(c['native_root']).glob(args[at]+'*')):
                 raise ValueError('METADATA_RECOVERY_NATIVE_EXISTS')
         return True
     if kind == 'fetch-native':
         if len(args) != 1 or not re.fullmatch(re.escape(eid_prefix)+r'-[A-Za-z0-9_.-]+', args[0]):
-            raise ValueError('METADATA_RECOVERY_FETCH_SCOPE')
+            raise reject('METADATA_RECOVERY_FETCH_SCOPE')
         output = Path(r['output_root'])/args[0]
         if output.exists() or output.is_symlink():
             raise ValueError('METADATA_RECOVERY_OUTPUT_EXISTS')
         return True
     if kind in ['collection-readback','native-readback'] and not args:
         return True
-    raise ValueError('METADATA_RECOVERY_KIND_SCOPE')
+    raise reject('METADATA_RECOVERY_KIND_SCOPE')
 
-def assert_recovery_action(c, activity, kind, args):
+def assert_recovery_action(c, activity, kind, args, *, reject=ValueError):
     r = c.get('recovery', {})
     if r.get('mode') != 'qualification-readonly-v1':
         raise ValueError('QUALIFICATION_RECOVERY_MODE_REQUIRED')
@@ -257,8 +257,8 @@ def assert_recovery_action(c, activity, kind, args):
             return
         if kind == 'business' and len(args) == 1 and json.loads(args[0]).get('op') == 'inspect_videos':
             return
-        raise ValueError('QUALIFICATION_RECOVERY_READ_ONLY')
-    if r.get('collection', {}).get('existing_comment_id') and metadata_recovery_action(c, activity, kind, args):
+        raise reject('QUALIFICATION_RECOVERY_READ_ONLY')
+    if r.get('collection', {}).get('existing_comment_id') and metadata_recovery_action(c, activity, kind, args, reject=reject):
         return
     run = current['run_tag']
     collection = r['collection']
@@ -279,7 +279,7 @@ def assert_recovery_action(c, activity, kind, args):
                 or bool(re.fullmatch(pattern + suffix, value)))
     if kind == 'fetch-native':
         if len(args) != 1 or not admitted(args[0], True):
-            raise ValueError('QUALIFICATION_RECOVERY_FETCH_SCOPE')
+            raise reject('QUALIFICATION_RECOVERY_FETCH_SCOPE')
         target = Path(r['output_root']) / args[0]
         if target.exists() or target.is_symlink():
             raise ValueError('QUALIFICATION_RECOVERY_OUTPUT_EXISTS')
@@ -295,7 +295,7 @@ def assert_recovery_action(c, activity, kind, args):
         if command in positions:
             at = positions[command]
             if len(args) <= at or not admitted(args[at]):
-                raise ValueError('QUALIFICATION_RECOVERY_NATIVE_SCOPE')
+                raise reject('QUALIFICATION_RECOVERY_NATIVE_SCOPE')
             if command != 'record-status' and any(Path(c['native_root']).glob(args[at] + '*')):
                 raise ValueError('QUALIFICATION_RECOVERY_NATIVE_EXISTS')
 
