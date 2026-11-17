@@ -635,7 +635,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -740,7 +740,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "6af6ef02e784c2c8e4f7fbfb89d4f826e14ec5e9556005bc7ea58e05b23e6709",
+      "code_digest": "7c9cda629a397f3363fc89d72319e68ea3c2df72db0d2ea5bf9f80ecdc0ac746",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
-        "current_code_digest": "6af6ef02e784c2c8e4f7fbfb89d4f826e14ec5e9556005bc7ea58e05b23e6709"
+        "current_code_digest": "7c9cda629a397f3363fc89d72319e68ea3c2df72db0d2ea5bf9f80ecdc0ac746"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1575,7 +1575,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -1681,7 +1681,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -1712,7 +1712,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "dabb8bf6a1cdf7fab9dc8528f313e09d33fa535cbc6cf29a9bdc920f1e5b8edf",
+      "code_digest": "620ec6eae40bc509cb22ee4ac84697dbbe117c4895b65d29674b1d1bad07ec97",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
-        "current_code_digest": "dabb8bf6a1cdf7fab9dc8528f313e09d33fa535cbc6cf29a9bdc920f1e5b8edf"
+        "current_code_digest": "620ec6eae40bc509cb22ee4ac84697dbbe117c4895b65d29674b1d1bad07ec97"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2442,7 +2442,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -2547,7 +2547,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -2652,14 +2652,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "b698602158a3f5e4fe49fb929ee332cabf4cc69228ff1aa0e678afe46b79fa68"
+          "sha256": "306f39af5330f205a290165ce24377e03db49d4b8146f9a03e92e77b221b6c7c"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-committed-partial.js",
           "revision": "contract",
-          "sha256": "c2f2408811c5f5b740a31d49a44ad6812fb214022bc90618ece80f0db1e33ab9"
+          "sha256": "42c6590027ec836a84b24c7030a0420b8cbb357fb6c2638725da321595e8dbeb"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "57593f2a7a6ce8e572786b4b7ec61d096391d1a48cc35e82b2e95ff465614693",
+      "code_digest": "e5efc8eb69f0dd4d9d90cae307e29d976c403a36b22ed357125c04668789de41",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
-        "current_code_digest": "57593f2a7a6ce8e572786b4b7ec61d096391d1a48cc35e82b2e95ff465614693"
+        "current_code_digest": "e5efc8eb69f0dd4d9d90cae307e29d976c403a36b22ed357125c04668789de41"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3163,14 +3163,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "b698602158a3f5e4fe49fb929ee332cabf4cc69228ff1aa0e678afe46b79fa68"
+          "sha256": "306f39af5330f205a290165ce24377e03db49d4b8146f9a03e92e77b221b6c7c"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-committed-partial.js",
           "revision": "contract",
-          "sha256": "c2f2408811c5f5b740a31d49a44ad6812fb214022bc90618ece80f0db1e33ab9"
+          "sha256": "42c6590027ec836a84b24c7030a0420b8cbb357fb6c2638725da321595e8dbeb"
         },
         {
           "kind": "code",
@@ -3359,7 +3359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -3464,7 +3464,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "6fb3e0d2f7a3d3f2ca96eba2ee0721675954a6f1a0a4a343d97c04469229b4d9",
+      "code_digest": "e69526642d83a31ff5ec06ed4d1a5d8ffb5c6014fc7e6b5292ae6559021ed058",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
-        "current_code_digest": "6fb3e0d2f7a3d3f2ca96eba2ee0721675954a6f1a0a4a343d97c04469229b4d9"
+        "current_code_digest": "e69526642d83a31ff5ec06ed4d1a5d8ffb5c6014fc7e6b5292ae6559021ed058"
       }
     },
     "douyin_video_processing.collection": {
@@ -4285,7 +4285,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -4412,7 +4412,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -4541,13 +4541,13 @@
           "sha256": "8f83603d750baf3ab313279f48c8a58560f8db61767036daec11f580d3119297"
         }
       ],
-      "code_digest": "c8ac9cb9fff6de15f4bc7e2888a36709aa6c6ea8fb85f15c4e3cf8e0da0bd468",
+      "code_digest": "8a54eec7559902304fe99d5ee8ed08c4ab2aa1de12a7524e3232e1a941fe9807",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
-        "current_code_digest": "c8ac9cb9fff6de15f4bc7e2888a36709aa6c6ea8fb85f15c4e3cf8e0da0bd468"
+        "current_code_digest": "8a54eec7559902304fe99d5ee8ed08c4ab2aa1de12a7524e3232e1a941fe9807"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -5212,7 +5212,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -5318,7 +5318,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f6f26d0a4aa00da1e3ac14bc5e1e12ec1e2a0519a4aa0f676ffbe247aff9241d",
+      "code_digest": "86d8d173dc4a049945fac4871a754cf2ac53b22171b5dc45e5f1ef721af9a0e3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
-        "current_code_digest": "f6f26d0a4aa00da1e3ac14bc5e1e12ec1e2a0519a4aa0f676ffbe247aff9241d"
+        "current_code_digest": "86d8d173dc4a049945fac4871a754cf2ac53b22171b5dc45e5f1ef721af9a0e3"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5684,7 +5684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -6090,7 +6090,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -6272,14 +6272,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "b698602158a3f5e4fe49fb929ee332cabf4cc69228ff1aa0e678afe46b79fa68"
+          "sha256": "306f39af5330f205a290165ce24377e03db49d4b8146f9a03e92e77b221b6c7c"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-committed-partial.js",
           "revision": "contract",
-          "sha256": "c2f2408811c5f5b740a31d49a44ad6812fb214022bc90618ece80f0db1e33ab9"
+          "sha256": "42c6590027ec836a84b24c7030a0420b8cbb357fb6c2638725da321595e8dbeb"
         },
         {
           "kind": "code",
@@ -6352,13 +6352,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "f1a2497ce6325f71025ea7c7e7bf5af3d4307192f9483a9379041dcb8604092f",
+      "code_digest": "0e813b7230c25b3ef9820a5c10de8cca71f769163214f7606c63a8da321cdcf5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
-        "current_code_digest": "f1a2497ce6325f71025ea7c7e7bf5af3d4307192f9483a9379041dcb8604092f"
+        "current_code_digest": "0e813b7230c25b3ef9820a5c10de8cca71f769163214f7606c63a8da321cdcf5"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6594,7 +6594,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -7007,7 +7007,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -7189,14 +7189,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "b698602158a3f5e4fe49fb929ee332cabf4cc69228ff1aa0e678afe46b79fa68"
+          "sha256": "306f39af5330f205a290165ce24377e03db49d4b8146f9a03e92e77b221b6c7c"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-committed-partial.js",
           "revision": "contract",
-          "sha256": "c2f2408811c5f5b740a31d49a44ad6812fb214022bc90618ece80f0db1e33ab9"
+          "sha256": "42c6590027ec836a84b24c7030a0420b8cbb357fb6c2638725da321595e8dbeb"
         },
         {
           "kind": "code",
@@ -7290,13 +7290,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8a864fc530050525798a683afc071660228303fd6a114503101cd0954e6acf3a",
+      "code_digest": "04389af6a63a35733afe48247e5a49a4292ce0686aa795891c09ee9617cb95f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
-        "current_code_digest": "8a864fc530050525798a683afc071660228303fd6a114503101cd0954e6acf3a"
+        "current_code_digest": "04389af6a63a35733afe48247e5a49a4292ce0686aa795891c09ee9617cb95f3"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7884,7 +7884,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -7997,7 +7997,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -8028,7 +8028,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "191fc96d44ec9f5c54e526a32bbcb945239ecdb5892134b1d82344e764f4cc3b",
+      "code_digest": "f1853fedbb516bd69ac0f53abe0364f3df100a78e67b88cea3310805f49cdd7f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
-        "current_code_digest": "191fc96d44ec9f5c54e526a32bbcb945239ecdb5892134b1d82344e764f4cc3b"
+        "current_code_digest": "f1853fedbb516bd69ac0f53abe0364f3df100a78e67b88cea3310805f49cdd7f"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8744,7 +8744,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -8856,7 +8856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9fe2298a86fff1d55a9d6072be07a49c7bcff37e1d7a06f7a84d1d12433171ca",
+      "code_digest": "f3e7328cca3a8f83749c1a16364dc16aa29985d2a7c5f844953ea6db46ab2622",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
-        "current_code_digest": "9fe2298a86fff1d55a9d6072be07a49c7bcff37e1d7a06f7a84d1d12433171ca"
+        "current_code_digest": "f3e7328cca3a8f83749c1a16364dc16aa29985d2a7c5f844953ea6db46ab2622"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9579,7 +9579,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -9691,7 +9691,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9126ab705828ae841e60ccf8f8195823f0f71d200f72dbbda894142f332bbda3",
+      "code_digest": "c40b9a854f6bcbd62dadaf22596b4b9cbe043f874b0d33a0e9b1b8ff7b83a4ec",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
-        "current_code_digest": "9126ab705828ae841e60ccf8f8195823f0f71d200f72dbbda894142f332bbda3"
+        "current_code_digest": "c40b9a854f6bcbd62dadaf22596b4b9cbe043f874b0d33a0e9b1b8ff7b83a4ec"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10407,7 +10407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "44e369c6d999b7e8c42de9753d1c5d58765df7446c62f0b4f90f59ed51be478f"
+          "sha256": "a61b1e9cce330ed6a9bc12cf08fe2a8a01334b981b15009bc0b9b0aad72fa318"
         },
         {
           "kind": "code",
@@ -10520,7 +10520,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6"
+          "sha256": "d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "900d7a8fea324018b98a1c86af23bad22dbb1b892bb362e7b5b66a98e9d58a58",
+      "code_digest": "21be7f52f2fe00c9cd28e2d897db9226422a3fa66c8600867300f721687fcaeb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "修复普通云机同批次既存verified评论的NULL元数据交接：精确原ID/UID/正文/证据及公司租约CAS，仅补原件可验证字段；新增实际UI取链及exactURL重开同UID、独立读回，保留原资格稳定交接、Skill/合同/配额与安全门禁。不宣称正常102新采集已全接通。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
-        "current_code_digest": "900d7a8fea324018b98a1c86af23bad22dbb1b892bb362e7b5b66a98e9d58a58"
+        "current_code_digest": "21be7f52f2fe00c9cd28e2d897db9226422a3fa66c8600867300f721687fcaeb"
       }
     }
   },

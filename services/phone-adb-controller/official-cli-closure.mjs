@@ -120,8 +120,6 @@ const REVIEWED=Object.freeze({
  "search-video-tab.py": "7a6a56ebe141dcdaa675735a196004df5e4728534f4f33801fce3b7250c89e04",
  "locate-element.py": ["b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0", "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"],
  "clipboard-widget-cancel.py": "9a1fd636f1600acec3179c6d61955f6c290a6678ff54902a4407bcd36d350980",
- "profile-card-link.py": "416173c731a258b3e842eb2ad3d0cfde6b10b7eb2033b99b28cf763987b4d84e",
- "profile-card-link.sh": "255eaab0fe10f8bfdd5e4202962ea2af1fb90aa8c0abcbcc45161c0b3f973af9",
  "comment-compose-rows.py": "1cb511938cdf63b9288b73825175ce4e650491ead3a8a22b9da8fd301b6182a8",
  "comment-count-evidence.py": "0c1d643574c39ee242ec551144513c18ee5921d42e22ad8e31f7041ddfc985e8",
  "queued-comment-history.js": "18ae229e033fb18245d45fc2ff15e866cd05434ac757b020bf61b2c15522b202",
