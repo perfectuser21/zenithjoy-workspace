@@ -9,7 +9,7 @@ import {join} from 'node:path';
 
 const controller=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
 const fn=name=>controller.match(new RegExp(name+'\\(\\) \\{[\\s\\S]*?\\n\\}'))?.[0] || '';
-function run(flags={}) {
+function run(flags={},sdk='31') {
  const dir=mkdtempSync(join(tmpdir(),'nonce-sdk31-')),adb=join(dir,'adb');
  writeFileSync(join(dir,'state.json'),JSON.stringify({field:'',clip:'https://v.douyin.com/Old/',ime:'google/.LatinIME',menu:false,selected:false,events:[]}));
  writeFileSync(adb,`#!/usr/bin/python3
@@ -23,12 +23,17 @@ if args[:1]==['test-ui']:
  E.SubElement(r,'node',{'text':v or hint,'resource-id':'com.ss.android.ugc.aweme:id/et_search_kw','package':'com.ss.android.ugc.aweme','class':'android.widget.EditText','focused':'true','enabled':'true','clickable':'true','password':'false','bounds':'[70,40][721,90]' if f.get('outOfBoundsX') else '[70,40][557,1281]' if f.get('outOfBoundsY') else '[70,40][557,90]' if v else '[70,40][551,90]'})
  E.ElementTree(r).write(args[1],encoding='unicode')
 elif args==['shell','settings','get','secure','default_input_method']:print(s['ime'])
-elif args[:3]==['shell','ime','enable']:print('Input method already enabled')
+elif args[:3]==['shell','ime','enable']:
+ if f.get('enableFail'):p.write_text(json.dumps(s));sys.exit(1)
+ print('unverified response' if f.get('enableUnknown') else 'Input method already enabled')
 elif args[:3]==['shell','ime','set']:
- if not (f.get('restoreFail') and args[3]=='google/.LatinIME'):s['ime']=args[3]
+ if not (f.get('restoreFail') and args[3]=='google/.LatinIME') and not (f.get('setFail') and args[3]!='google/.LatinIME'):s['ime']=args[3]
 elif args[:4]==['shell','am','broadcast','-a']:
  if args[4]=='ADB_CLEAR_TEXT' and not f.get('inputFail'):s['field']=''
  if args[4]=='ADB_INPUT_B64' and not f.get('inputFail'):s['field']=base64.b64decode(args[-1]).decode()
+ if args[4]=='ADB_INPUT_B64' and f.get('interrupt'):
+  import signal
+  p.write_text(json.dumps(s));os.kill(os.getppid(),signal.SIGTERM);sys.exit(0)
 elif args[:3]==['shell','input','keycombination']:
  s['field']+='a' # Android12真实语义：命令成功，却没有Ctrl+A。
 elif args[:3]==['shell','input','text']:s['field']='谷歌输入法转换后的中文'
@@ -60,12 +65,13 @@ ${helpers}
 proof="$(seed_clipboard_nonce fixture)" || exit 2
 [[ "$proof" == clipnonce* ]] || exit 3
 print OK`;
- const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),DEVICE_SDK:'31',LOCK_OWNER:flags.noOwner?'':'nonce-test',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',ADBKEYBOARD_IME:'com.android.adbkeyboard/.AdbIME',EVIDENCE_ROOT:dir,LEAVE_FAIL:flags.leaveFail?'1':'0',SCREEN_W:'720',SCREEN_H:'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',WRONG_FOREGROUND:flags.wrongForeground?'1':'0'}});
+ const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),DEVICE_SDK:sdk,LOCK_OWNER:flags.noOwner?'':'nonce-test',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',ADBKEYBOARD_IME:'com.android.adbkeyboard/.AdbIME',EVIDENCE_ROOT:dir,LEAVE_FAIL:flags.leaveFail?'1':'0',SCREEN_W:'720',SCREEN_H:'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',WRONG_FOREGROUND:flags.wrongForeground?'1':'0'}});
  return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'),'utf8')),dir};
 }
 
-test('SDK31精确输入、原生复制、清空再粘贴；IME还原，字段bounds可因文字微变',()=>{
- const r=run();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OK/);
+for(const sdk of ['31','34']) {
+test(`SDK${sdk}精确输入、原生复制、清空再粘贴；IME还原，字段bounds可因文字微变`,()=>{
+ const r=run({},sdk);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OK/);
  assert.equal(r.state.ime,'google/.LatinIME');
  assert.equal(r.state.field,r.state.clip);assert.match(r.state.field,/^clipnonce[a-f0-9]{32}$/);
  assert.ok(r.state.events.some(x=>x.includes('ADB_INPUT_B64')));
@@ -74,19 +80,19 @@ test('SDK31精确输入、原生复制、清空再粘贴；IME还原，字段bou
  assert.match(xmls[0],/clipnonce/);assert.doesNotMatch(xmls[1],/clipnonce/);assert.match(xmls[2],/clipnonce/);
  assert.match(readFileSync(join(r.dir,'fixture-seed-empty-proof.txt'),'utf8'),/verified_by_exact_nonce_append/);
 });
-for(const [name,flags] of Object.entries({缺owner:{noOwner:true},字段横向越界:{outOfBoundsX:true},字段纵向越界:{outOfBoundsY:true},复制前台切换:{wrongForeground:true},长按未选中:{longpressNoSelection:true},部分复制:{partialCopy:true},复制未生效:{copyFail:true},粘贴旧值:{pasteOld:true},清空失败:{clearFail:true},其他残留文本:{otherResidual:true},前缀残留与后缀复制组合:{prefixResidual:true},输入失败:{inputFail:true},还原输入法失败:{restoreFail:true},回原详情失败:{leaveFail:true}})) {
- test('SDK31'+name+'必须拒绝',()=>{
-  const r=run(flags);assert.notEqual(r.status,0,r.stdout);assert.match(r.stderr,/CLIPBOARD_NONCE/);assert.doesNotMatch(r.stdout,/OK/);
+for(const [name,flags] of Object.entries({缺owner:{noOwner:true},启用失败:{enableFail:true},启用未证明:{enableUnknown:true},切换不生效:{setFail:true},输入中断:{interrupt:true},字段横向越界:{outOfBoundsX:true},字段纵向越界:{outOfBoundsY:true},复制前台切换:{wrongForeground:true},长按未选中:{longpressNoSelection:true},部分复制:{partialCopy:true},复制未生效:{copyFail:true},粘贴旧值:{pasteOld:true},清空失败:{clearFail:true},其他残留文本:{otherResidual:true},前缀残留与后缀复制组合:{prefixResidual:true},输入失败:{inputFail:true},还原输入法失败:{restoreFail:true},回原详情失败:{leaveFail:true}})) {
+ test(`SDK${sdk}`+name+'必须拒绝',()=>{
+  const r=run(flags,sdk);assert.notEqual(r.status,0,r.stdout);if(!flags.interrupt)assert.match(r.stderr,/CLIPBOARD_NONCE/);assert.doesNotMatch(r.stdout,/OK/);
   if(flags.noOwner)assert.equal(r.state.events.length,0,'缺owner不得开始设备动作');
-  const reason=flags.noOwner?'LOCK_OWNER_REQUIRED':flags.outOfBoundsX||flags.outOfBoundsY?'FOCUS_UNVERIFIED':flags.wrongForeground?'WRONG_FOREGROUND':flags.restoreFail?'IME_RESTORE_FAILED':(flags.clearFail||flags.prefixResidual)?'CLEAR_UNVERIFIED':flags.inputFail?'READBACK_MISMATCH:input':flags.leaveFail?'ORIGINAL_DETAIL_UNVERIFIED':'READBACK_MISMATCH:pasted';
-  assert.ok(r.stderr.includes('CLIPBOARD_NONCE_'+reason),r.stderr);
+  const reason=flags.noOwner?'LOCK_OWNER_REQUIRED':flags.enableFail?'IME_ENABLE_FAILED':flags.enableUnknown?'IME_ENABLE_UNVERIFIED':flags.setFail?'IME_SET_UNVERIFIED':flags.interrupt?'INPUT_FAILED':flags.outOfBoundsX||flags.outOfBoundsY?'FOCUS_UNVERIFIED':flags.wrongForeground?'WRONG_FOREGROUND':flags.restoreFail?'IME_RESTORE_FAILED':(flags.clearFail||flags.prefixResidual)?'CLEAR_UNVERIFIED':flags.inputFail?'READBACK_MISMATCH:input':flags.leaveFail?'ORIGINAL_DETAIL_UNVERIFIED':'READBACK_MISMATCH:pasted';
+  if(!flags.interrupt)assert.ok(r.stderr.includes('CLIPBOARD_NONCE_'+reason),r.stderr);
   if(!flags.restoreFail)assert.equal(r.state.ime,'google/.LatinIME');
  });
 }
 
-for(const condition of ['no-owner','other','expired','free']) test(`SDK31真实CLI取链拒绝${condition}锁且零ADB动作`,()=>{
+for(const condition of ['no-owner','other','expired','free']) test(`SDK${sdk}真实CLI取链拒绝${condition}锁且零ADB动作`,()=>{
  const dir=mkdtempSync(join(tmpdir(),'nonce-sdk31-lock-')),adb=join(dir,'adb'),reg=join(dir,'registry.tsv'),lock=join(dir,'tmp','locks','FAKE.lock');
- writeFileSync(reg,'#schema=v2\nprofile\tserial\tmodel\twidth\theight\tdensity\tsdk\ncloud\tFAKE\tMODEL\t720\t1280\t240\t31\n');
+ writeFileSync(reg,'#schema=v2\nprofile\tserial\tmodel\twidth\theight\tdensity\tsdk\ncloud\tFAKE\tMODEL\t720\t1280\t240\t'+sdk+'\n');
  writeFileSync(adb,'#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_DIR/adb.log"\nexit 1\n',{mode:0o755});
  const owner='qiumi-a1234567-1791427263848';
  if(condition==='other'||condition==='expired'){
@@ -98,3 +104,5 @@ for(const condition of ['no-owner','other','expired','free']) test(`SDK31真实C
  assert.notEqual(r.status,0);assert.match(r.stderr,condition==='no-owner'?/CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED/:/required lock owner|lock lease budget/);
  assert.ok(!existsSync(join(dir,'adb.log')),'拒绝锁必须发生在所有ADB动作之前');
 });
+
+}

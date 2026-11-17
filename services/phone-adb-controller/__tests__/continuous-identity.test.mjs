@@ -15,7 +15,7 @@ const vid='7646309328911907195';
 // 单元测试控制器回执为fake；实机录音验收另核原始audio/UID SHA。
 function fakeBoundaryNativeFields(eid,phase){const prefix=eid+'-playback-'+phase;return ' capture_runtime_client_sha256=952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d capture_runtime_server_sha256=8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+('e'.repeat(64))+' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state=started native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');}
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
-function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false,guideDismissIdle=false}={}){
+function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false,guideDismissIdle=false,guideFixture='real-copy-success-guide-13.xml'}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
  let runner=controller;
  if(controlledWait){
@@ -37,7 +37,7 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
  // 合成面板遵循真机功能容器合同；不放宽生产selector或nonce核验。
  const panel=head+'<node text="分享给" package="com.ss.android.ugc.aweme" enabled="true" bounds="[40,1900][300,1960]"/><node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/function_container" enabled="true" bounds="[0,2200][1200,2450]"><node text="分享链接" package="com.ss.android.ugc.aweme" enabled="true" clickable="true" bounds="[40,2300][300,2360]"/></node></node></hierarchy>';
  writeFileSync(join(d,'registry'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
- const guide=readFileSync(join(fixtures,'real-copy-success-guide-13.xml'),'utf8');
+ const guide=readFileSync(join(fixtures,guideFixture),'utf8');
  writeFileSync(join(d,'guide.xml'),guideWrongMarker?guide.replace('可以通过分享的链接找到我','其他引导'):guide);
  writeFileSync(join(d,'guide-detail.xml'),readFileSync(join(fixtures,'real-copy-guide-restored-detail-41.xml')));
  writeFileSync(join(d,'results.xml'),readFileSync(join(fixtures,'real-search-results-grid.xml')));
@@ -344,3 +344,29 @@ test('视频tab机会性策略接受完整新鲜树，不额外dump或toggle',()
  assert.equal(r.status,0,r.stderr);assert.equal(r.state.dumps,1);assert.deepEqual(r.state.keys,[]);assert.match(r.xml,/<hierarchy/);
 });
 
+
+
+test('SDK34真实guide精确pair仅允许一次BACK且必须新树详情通过',()=>{
+ const r=phone({copyGuide:true,controlledWait:true,guideFixture:'real-sdk34-copy-success-guide.xml'});
+ assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
+ assert.equal(r.state.guideDismisses,1);assert.equal(r.state.play,'playing');assert.match(r.stdout,/IDENTITY/);
+ assert.match(r.dumps,/guide:paused\ndetail:paused/);
+ const stuck=phone({copyGuide:true,controlledWait:true,guideFixture:'real-sdk34-copy-success-guide.xml',guideDismissStuck:true,finalSkeleton:true});
+ assert.equal(stuck.error,undefined);assert.notEqual(stuck.status,0);assert.equal(stuck.state.guideDismisses,1);
+ assert.doesNotMatch(stuck.stdout,/IDENTITY/);assert.equal(stuck.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,0);
+});
+test('SDK34真实guide原件及错误包/混搭ID/重复标记/未知pair/分享树/截断边界',()=>{
+ const raw=readFileSync(controller,'utf8'),fn=raw.match(/^_is_copy_success_guide_xml\(\) \{[\s\S]*?^\}/m)?.[0];assert.ok(fn);
+ const guide=readFileSync(join(fixtures,'real-sdk34-copy-success-guide.xml'),'utf8');
+ const d=mkdtempSync(join(tmpdir(),'sdk34-guide-'));
+ try{for(const [name,xml,expected] of [
+  ['actual',guide,0],['wrong-package',guide.replaceAll('com.ss.android.ugc.aweme','wrong.package'),1],
+  ['mixed',guide.replace(':id/zw-',':id/zsx'),1],['unknown-pair',guide.replace(':id/zxa',':id/not-approved'),1],
+  ['duplicate',guide.replace('</hierarchy>','<node text="可以通过分享的链接找到我" resource-id="com.ss.android.ugc.aweme:id/zw-" package="com.ss.android.ugc.aweme"/></hierarchy>'),1],
+  ['share-present',guide.replace('</hierarchy>','<node content-desc="分享2，按钮" package="com.ss.android.ugc.aweme" clickable="true"/></hierarchy>'),1],
+  ['wrong-text',guide.replace('可以通过分享的链接找到我','其他引导'),1],['partial',guide.slice(0,-20),1]]){
+  const xmlPath=join(d,name+'.xml');writeFileSync(xmlPath,xml);
+  const r=spawnSync('zsh',['-c',`PYTHON_BIN=/usr/bin/python3;DOUYIN_PACKAGE=com.ss.android.ugc.aweme;${fn}\n_is_copy_success_guide_xml "$1"`,'zsh',xmlPath],{encoding:'utf8'});
+  assert.equal(r.status,expected,name+': '+r.stderr);
+ }}finally{rmSync(d,{recursive:true,force:true});}
+});

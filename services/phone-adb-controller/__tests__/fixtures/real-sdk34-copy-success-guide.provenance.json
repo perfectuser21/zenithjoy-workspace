@@ -1,0 +1,12 @@
+{
+  "source_path": "/private/tmp/openclaw-phone/evidence/wuying_android14/cloudnonce-20261117-1f6cf59c-link-t1-leave-b3w1.xml",
+  "sha256": "8710a65532c38c7e58351fc5899ee18d20e58c5556caba48a73791c99aa267dc",
+  "bytes": 4834,
+  "profile": "wuying_android14",
+  "sdk": 34,
+  "observed_markers": [
+    "zxa",
+    "zw-"
+  ],
+  "observation": "current-video-link nonce passed, restoration overlay unrecognized before 280-second guard"
+}

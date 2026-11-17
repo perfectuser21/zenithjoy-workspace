@@ -637,10 +637,20 @@ try:
     nodes=list(root.iter('node'))
     if not nodes or any(n.get('package') not in (None,'',pkg) for n in nodes): sys.exit(1)
     if any(n.get('content-desc','').startswith('分享') for n in nodes): sys.exit(1)
-    markers={'zs0':'链接已复制成功，去粘贴分享：','zsx':'可以通过分享的链接找到我'}
-    for key,text in markers.items():
-        hits=[n for n in nodes if n.get('resource-id') == pkg+':id/'+key]
-        if len(hits)!=1 or hits[0].get('package')!=pkg or hits[0].get('text')!=text: sys.exit(1)
+    # 两份真实原树的完整ID pair；文案相同但未知/混搭ID不能授权BACK。
+    texts=('链接已复制成功，去粘贴分享：','可以通过分享的链接找到我')
+    matched=False
+    for ids in (('zs0','zsx'),('zxa','zw-')):
+        valid=True
+        for key,text in zip(ids,texts):
+            hits=[n for n in nodes if n.get('resource-id') == pkg+':id/'+key]
+            if len(hits)!=1 or hits[0].get('package')!=pkg or hits[0].get('text')!=text:
+                valid=False
+                break
+        if valid:
+            matched=True
+            break
+    if not matched:sys.exit(1)
 except (ET.ParseError,OSError):
     sys.exit(1)
 PYGUIDE
@@ -837,8 +847,8 @@ nonce_sdk31_input() {
 
 nonce_native_copy() {
   local eid="$1" nonce="$2" center x y i phase
-  # 保持既有入口权限：SDK31或显式owner必须验锁；其余旧入口不新增owner前置。
-  if [[ "${DEVICE_SDK:-}" == 31 || -n "${LOCK_OWNER:-}" ]]; then
+  # 保持既有入口权限：SDK31/34或显式owner必须验锁；其余旧入口不新增owner前置。
+  if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) || -n "${LOCK_OWNER:-}" ]]; then
     require_held_lock clipboard_nonce
   fi
   require_target_for clipboard_nonce
@@ -868,7 +878,7 @@ nonce_native_copy() {
 seed_clipboard_nonce_once() {
   local eid="$1" leave_mode="${2:-detail}" nonce xml line text hint center x y phase
   case "$leave_mode" in detail|detail-paused) ;; *) die "CLIPBOARD_NONCE_RETURN_MODE_INVALID" ;; esac
-  if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+  if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
     [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
     require_held_lock clipboard_nonce
   fi
@@ -883,7 +893,7 @@ seed_clipboard_nonce_once() {
   center="$(node_center "$line")" || die "CLIPBOARD_NONCE_FIELD_BOUNDS"
   read x y <<< "$center"
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_FAILED"
-  if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+  if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
     nonce_sdk31_input "$nonce" "$eid" || die "CLIPBOARD_NONCE_INPUT_FAILED"
   else
     # SDK33+原有路径保留；退出成功仍必须有下面的精确UI读回。
@@ -901,7 +911,7 @@ seed_clipboard_nonce_once() {
       return 2
     fi
     text="$(print -r -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
-    if [[ "${DEVICE_SDK:-}" == 31 || ( ( -z "${DEVICE_SDK:-}" || "${DEVICE_SDK:-}" == 33 ) && "$phase" != typed ) ]]; then
+    if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) || ( ( -z "${DEVICE_SDK:-}" || "${DEVICE_SDK:-}" == 33 ) && "$phase" != typed ) ]]; then
       nonce_sdk31_field "$xml" >/dev/null || die "CLIPBOARD_NONCE_FIELD_UNVERIFIED:$phase"
     fi
     if [[ "$phase" == empty ]]; then
@@ -910,7 +920,7 @@ seed_clipboard_nonce_once() {
       if [[ "$line" == *' hint="'* ]]; then
         hint="$(print -r -- "$line" | /usr/bin/sed -E 's/.* hint="([^"]*)".*/\1/')"
       fi
-      if [[ -z "${DEVICE_SDK:-}" || "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 33 ]]; then
+      if [[ -z "${DEVICE_SDK:-}" || ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) || "${DEVICE_SDK:-}" == 33 ]]; then
         # SDK元数据可缺省；仅按已核原生字段和追加后验保留候选，不猜系统版本。
         # 非空nonce前缀必须拒绝：否则残留前缀+部分复制的后缀可拼回nonce。
         [[ -z "$text" || "$nonce" != "$text"* ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
@@ -923,7 +933,7 @@ seed_clipboard_nonce_once() {
       "$ADB" -s "$SERIAL" shell input keyevent 279 >/dev/null || die "CLIPBOARD_NONCE_PASTE_FAILED"
     else
       [[ "$text" == "$nonce" ]] || die "CLIPBOARD_NONCE_READBACK_MISMATCH:$phase"
-      if [[ "$phase" == pasted && ( -z "${DEVICE_SDK:-}" || "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 33 ) ]]; then
+      if [[ "$phase" == pasted && ( -z "${DEVICE_SDK:-}" || ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) || "${DEVICE_SDK:-}" == 33 ) ]]; then
         print -- 'empty_proof=verified_by_exact_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
       fi
       if [[ "$phase" == typed ]]; then
@@ -3038,7 +3048,9 @@ record_sdk31_runtime() {
   [[ -n "$LOCK_OWNER" ]] || die "RECORD_CAPTURE_STRATEGY_UNVERIFIED explicit_owner_required"
   [[ "$root" == /* && ! -e "$proof" && ! -L "$proof" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   local helper="$PHONE_CONTROLLER_DIR/runtime/scrcpy-runtime.py"
-  verified="$("$PYTHON_BIN" "$helper" verify --runtime-kind "$kind" --runtime-root "$root")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  local -a startup_args=()
+  if [[ "$kind" == sdk33 ]]; then startup_args=(--startup); fi
+  verified="$("$PYTHON_BIN" "$helper" verify --runtime-kind "$kind" --runtime-root "$root" "${startup_args[@]}")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   local stage_rc=0
   staged="$("$PYTHON_BIN" "$helper" stage-server --runtime-kind "$kind" --runtime-root "$root" --adb-bin "$ADB" --adb-port "$port" --serial "$SERIAL" --owner "$LOCK_OWNER" --lock-dir "$LOCK_DIR" --evidence-root "$EVIDENCE_ROOT" --evidence-id "$eid" --timeout 30)" || stage_rc=$?
   if (( stage_rc != 0 )); then
@@ -3227,6 +3239,12 @@ try:
  try:
   env=os.environ.copy()
   for key in ['DOUYIN_LOCK_GUARD_FD','DOUYIN_LOCK_GUARDED']:env.pop(key,None)
+  if env.get('ZJ_SCRCPY_RUNTIME_KIND')=='sdk33':
+   import runpy
+   root=env['ZJ_SCRCPY_RUNTIME_ROOT']
+   if os.path.abspath(argv[0])!=os.path.join(root,'scrcpy'):raise ValueError('fixed scrcpy client path mismatch')
+   helper=runpy.run_path(os.path.join(os.path.dirname(observer),'runtime','scrcpy-private-runtime.py'))
+   env=helper['runtime_environment'](root,'sdk33',env)
   if os.environ.get('ZJ_OFFICIAL_RECORDING_INTENT'):
    import runpy
    launcher=runpy.run_path(observer)['owned_popen']
@@ -4595,8 +4613,8 @@ if [[ "$command" == close-app && -z "$LOCK_OWNER" ]]; then
   ! lock_requires_review || die 'standalone lock requires explicit owner cleanup'
 fi
 
-# SDK31取链的原锁前置保持在任何ADB客户端调用之前。
-if [[ "$command" == current-video-link && "${DEVICE_SDK:-}" == 31 ]]; then
+# SDK31/34取链的原锁前置保持在任何ADB客户端调用之前。
+if [[ "$command" == current-video-link && ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
   [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
   require_held_lock clipboard_nonce
 fi
