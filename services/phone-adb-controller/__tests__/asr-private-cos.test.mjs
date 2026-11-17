@@ -22,19 +22,19 @@ async function fixture(t,options={}){
    const body=JSON.parse(q.body);assert.equal(body.model,legacyAsr.MODEL);assert.equal(body.parameters.format,'wav');assert.equal(body.input.messages[0].content[0].type,'input_audio');assert.ok(body.input.messages[0].content[0].input_audio.data.startsWith('https://'));
    if(options.asrUnknown)throw Error('network SECRET_SIGNATURE');
    if(options.badJson)return {status:200,headers:{},body:Buffer.from('{')};
-   const payload={output:{output:{sentence:{text:'已确认转写'}}},...(options.echo?{echo:body.input.messages[0].content[0].input_audio.data}: {})};
+   const payload={output:{output:{sentence:{text:options.echoAsTranscript?body.input.messages[0].content[0].input_audio.data:'已确认转写'}}},...(options.echo?{echo:body.input.messages[0].content[0].input_audio.data,secret_echo:'fixture-key'}: {})};
    return {status:200,headers:{'x-request-id':'fixture-request'},body:Buffer.from(JSON.stringify(payload))};
   }
   if(q.method==='PUT'){if(options.putUnknown)throw Error('PUT SECRET_SIGNATURE');object=Buffer.from(q.body);return {status:200,headers:{'x-cos-version-id':version},body:Buffer.alloc(0)};}
-  if(q.method==='DELETE'){if(options.deleteUnknown)throw Error('delete SECRET_SIGNATURE');object=null;return {status:204,headers:{},body:Buffer.alloc(0)};}
+  if(q.method==='DELETE'){if(options.deleteUnknown)throw Error('delete SECRET_SIGNATURE');object=null;if(options.deleteLostResponse)throw Error('delete lost');return {status:204,headers:{},body:Buffer.alloc(0)};}
   if(u.searchParams.has('acl'))return {status:200,headers:{},body:Buffer.from(privateAcl?'private':'public')};
   if(!q.headers?.Authorization)return {status:403,headers:{},body:Buffer.alloc(0)};
   if(q.method==='HEAD')return {status:object?200:404,headers:{'x-cos-version-id':version},body:Buffer.alloc(0)};
-  return {status:200,headers:{'x-cos-version-id':options.wrongVersion?'foreign':version},body:options.badDigest?Buffer.from('bad'):object};
+  return {status:200,headers:{'x-cos-meta-owner':options.wrongObjectOwner?'foreign':sha(JSON.stringify(Object.fromEntries(Object.entries(scope).sort(([a],[b])=>a.localeCompare(b))))),'x-cos-meta-sha256':scope.audio_sha256,'x-cos-version-id':options.wrongVersion?'foreign':version},body:options.badDigest?Buffer.from('bad'):object};
  };
  const config={...PRIVATE_COS_CONFIG},journalPath=join(dir,'source.json');
  const source=()=>createPrivateCosSource({config,scope,journalPath,deadlineMs:clock+120000,credentials:{SecretId:'fixture-id',SecretKey:'fixture-secret'},request,now:()=>clock,signer:()=>`q-sign-algorithm=sha1&q-ak=fixture-id&q-sign-time=${Math.floor(clock/1000)};${Math.floor(clock/1000)+180}&q-key-time=${Math.floor(clock/1000)};${Math.floor(clock/1000)+180}&q-header-list=host&q-url-param-list=&q-signature=SECRET_SIGNATURE`,parseAcl:b=>b.toString()==='private'});
- const run=()=>transcribeCompatible(audio,{legacyAsr,source:source(),apiKey:'fixture-key',audit:r=>{audits.push(r);fs.writeFileSync(join(dir,'response.json'),JSON.stringify(r));}});
+ const run=async()=>transcribeCompatible(audio,{legacyAsr,source:source(),apiKey:'fixture-key',audit:r=>{audits.push(r);fs.writeFileSync(join(dir,'response.json'),JSON.stringify(r));}});
  return {audio,bytes,scope,config,journalPath,calls,audits,run,source,clock:v=>clock=v,privateAcl:v=>privateAcl=v,transcribeCompatible,dir};
 }
 test('private COS preserves legacy contract and sends only verified URL once',async t=>{
@@ -48,7 +48,7 @@ for(const [name,option] of [['upload unknown','putUnknown'],['ASR unknown','asrU
  const f=await fixture(t,{[option]:true});await assert.rejects(f.run);const before=f.calls.length;await assert.rejects(f.run);assert.equal(f.calls.length,before);assert.equal(f.calls.filter(x=>x.method==='DELETE').length,0);
  assert.ok(!fs.readFileSync(f.journalPath,'utf8').includes('SECRET_SIGNATURE'));
 });
-for(const option of ['badDigest','wrongVersion'])test(option+' blocks ASR before dispatch',async t=>{
+for(const option of ['badDigest','wrongVersion','wrongObjectOwner'])test(option+' blocks ASR before dispatch',async t=>{
  const f=await fixture(t,{[option]:true});await assert.rejects(f.run);assert.equal(f.calls.filter(x=>new URL(x.url).hostname==='dashscope.aliyuncs.com').length,0);
 });
 test('nonprivate ACL blocks ASR',async t=>{const f=await fixture(t);f.privateAcl(false);await assert.rejects(f.run);assert.ok(!f.calls.some(x=>new URL(x.url).hostname==='dashscope.aliyuncs.com'));});
@@ -59,7 +59,7 @@ test('confirmed transcript is durable before cleanup and survives cleanup failur
  const f=await fixture(t,{deleteUnknown:true});assert.equal(await f.run(),'已确认转写');const j=JSON.parse(fs.readFileSync(f.journalPath));assert.equal(j.cleanup,'unknown');assert.equal(j.text,'已确认转写');assert.equal(await f.run(),'已确认转写');assert.equal(f.calls.filter(x=>x.method==='PUT').length,1);
 });
 test('provider URL echoes and SDK errors never persist signatures or keys',async t=>{
- const f=await fixture(t,{echo:true});await f.run();for(const n of ['source.json','response.json']){const s=fs.readFileSync(join(f.dir,n),'utf8');assert.ok(!s.includes('SECRET_SIGNATURE'));assert.ok(!s.includes('fixture-secret'));assert.ok(!s.includes('q-sign-algorithm'));}
+ const f=await fixture(t,{echo:true});await f.run();for(const n of ['source.json','response.json']){const s=fs.readFileSync(join(f.dir,n),'utf8');assert.ok(!s.includes('SECRET_SIGNATURE'));assert.ok(!s.includes('fixture-secret'));assert.ok(!s.includes('fixture-key'));assert.ok(!s.includes('q-sign-algorithm'));}
 });
 test('expired deadline and changed frozen configuration refuse before upload',async t=>{
  const f=await fixture(t);f.clock(1700000120001);const s=f.source();f.clock(1700000241002);await assert.rejects(()=>f.transcribeCompatible(f.audio,{legacyAsr,source:s,apiKey:'fixture',audit:()=>{}}));assert.equal(f.calls.length,0);
@@ -67,4 +67,23 @@ test('expired deadline and changed frozen configuration refuse before upload',as
 });
 test('deployment declares the actual source and protocol modules',()=>{
  const src=fs.readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');assert.match(src,/asr-private-cos\.mjs/);assert.match(src,/asr-protocol\.mjs/);
+});
+
+test('isolated SDK refuses absent dependency closure instead of global resolution',async t=>{
+ const {verifyAsrCosSdk}=await import('../asr-cos-dependencies.mjs');const d=fs.mkdtempSync(join(tmpdir(),'asr-sdk-missing-'));t.after(()=>fs.rmSync(d,{recursive:true,force:true}));assert.throws(()=>verifyAsrCosSdk({directory:d}),/ASR_COS_DEPENDENCY/);
+});
+
+test('expired unknown source has cleanup-only budget after original business deadline',async t=>{
+ const f=await fixture(t,{asrUnknown:true}),original=f.source();await assert.rejects(()=>f.transcribeCompatible(f.audio,{legacyAsr,source:original,apiKey:'fixture-key',audit:()=>{}}));const j=JSON.parse(fs.readFileSync(f.journalPath));f.clock(j.retain_until+1);const before=f.calls.length;const result=await original.cleanupExpired({deadlineMs:j.retain_until+20001});assert.equal(result.verified,true);assert.ok(f.calls.slice(before).every(x=>['GET','DELETE','HEAD'].includes(x.method)));await assert.rejects(f.run);assert.equal(f.calls.filter(x=>new URL(x.url).hostname==='dashscope.aliyuncs.com').length,1);
+});
+test('foreign scope and version cannot clean retained object',async t=>{
+ const options={asrUnknown:true},f=await fixture(t,options);await assert.rejects(f.run);const j=JSON.parse(fs.readFileSync(f.journalPath));f.clock(j.retain_until+1);f.scope.owner='foreign';await assert.rejects(()=>f.source().cleanupExpired({deadlineMs:j.retain_until+20001}));assert.equal(f.calls.filter(x=>x.method==='DELETE').length,0);f.scope.owner='fixture-owner';options.wrongVersion=true;assert.equal((await f.source().cleanupExpired({deadlineMs:j.retain_until+20001})).verified,false);assert.equal(f.calls.filter(x=>x.method==='DELETE').length,0);
+});
+
+test('signature echoed as main transcript is never treated as valid text',async t=>{const f=await fixture(t,{echoAsTranscript:true});await assert.rejects(f.run);const j=JSON.parse(fs.readFileSync(f.journalPath));assert.ok(!j.text);assert.ok(!fs.readFileSync(f.journalPath,'utf8').includes('SECRET_SIGNATURE'));});
+test('lost delete response is resolved by exact HEAD without a second delete or ASR',async t=>{
+ const f=await fixture(t,{deleteLostResponse:true});assert.equal(await f.run(),'已确认转写');const j=JSON.parse(fs.readFileSync(f.journalPath));f.clock(j.retain_until+1);assert.equal((await f.source().cleanupExpired({deadlineMs:j.retain_until+20001})).verified,true);assert.equal(f.calls.filter(x=>x.method==='DELETE').length,1);assert.equal(f.calls.filter(x=>new URL(x.url).hostname==='dashscope.aliyuncs.com').length,1);
+});
+for(const url of ['https://evil.invalid/audio.wav','https://localhost/audio.wav'])test('source itself rejects arbitrary audio URL '+url,async t=>{
+ const f=await fixture(t);await assert.rejects(()=>f.source().run(f.audio,{audit:()=>{},recover:()=>'',perform:p=>p.post(legacyAsr.ENDPOINT,{model:legacyAsr.MODEL,input:{messages:[{role:'user',content:[{type:'input_audio',input_audio:{data:url}}]}]},parameters:{format:'wav'}},'fixture-key')}));assert.equal(f.calls.filter(x=>new URL(x.url).hostname==='dashscope.aliyuncs.com').length,0);
 });
