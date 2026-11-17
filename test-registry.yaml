@@ -12075,3 +12075,57 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test discovers P7 dual originals through exact Commander sameIdentity and adapter predicate source fixtures"
     note: "nonce保留外层逐请求审计，不入稳定业务receipt；两读相等，VID/SHA/检查事实篡改仍由原深等闸拒绝"
+
+  - id: comment-metadata-completion
+    path: services/phone-adb-controller/__tests__/comment-metadata-completion.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "原verified评论精确NULL补齐与普通写前完整性，身份CAS及独立读回"
+
+  - id: metadata-host-wiring
+    path: services/phone-adb-controller/__tests__/metadata-host-wiring.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "实际宿主invoke权限与冻结before/env注入"
+
+  - id: metadata-recovery-guard
+    path: services/phone-adb-controller/__tests__/metadata-recovery-guard.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "仅冻结原ID和新原件命名域，禁止新采集和捕获"
+
+  - id: profile-card-link-native-selectors
+    path: services/phone-adb-controller/__tests__/profile-card-link.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "真实SDK34分享UI和受控搜索字段解析"
+
+  - id: profile-card-link-host-flow
+    path: services/phone-adb-controller/__tests__/profile-card-link-host.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "真实CLI及sh/Python流水与默认宿主原件验证器"
+
+  - id: business-pre-dispatch-terminal
+    path: services/phone-adb-controller/__tests__/business-pre-dispatch.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "真实main纯入参拒绝终态后新进程正确GET，派发与未知不洗白"
