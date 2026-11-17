@@ -3609,11 +3609,13 @@ comment_count_label_from_xml() {
 # 只认语义化 content-desc，绝不用 resource-id（沿用 0909 昵称 tqn→ttw 漂移教训）。
 # 输出每行：昵称<TAB>正文<TAB>日期<TAB>地区（后两列取不到时为空）。
 comments_from_xml() {
+  setopt localoptions pipefail
   local xml="$1" width="$2" line desc nick rest body date region author
   [[ -r "$xml" ]] || return 1
   [[ "$width" == <-> ]] || return 1
   (( width > 0 )) || return 1
-  /usr/bin/grep -oE "<node[^>]*text=\"\"[^>]*content-desc=\"[^\"]*,[^\"]*\"[^>]*bounds=\"\\[0,[0-9]+\\]\\[${width},[0-9]+\\]\"" "$xml" \
+  local legacy_output="" legacy_rc=0
+  legacy_output="$(/usr/bin/grep -oE "<node[^>]*text=\"\"[^>]*content-desc=\"[^\"]*,[^\"]*\"[^>]*bounds=\"\\[0,[0-9]+\\]\\[${width},[0-9]+\\]\"" "$xml" \
   | while IFS= read -r line; do
       desc="$(print -- "$line" | /usr/bin/sed -E 's/.*content-desc="([^"]*)".*/\1/')"
       [[ -n "$desc" ]] || continue
@@ -3646,7 +3648,10 @@ comments_from_xml() {
       fi
       nick_b64="$(print -n -- "$nick" | /usr/bin/base64 | tr -d '\n')"
       print -- "$nick\t$body\t${date:-}\t${region:-}\t${author:-}\ttap=${tap_x:-} ${tap_y:-}\tb64=$nick_b64"
-    done
+    done)" || legacy_rc=$?
+  (( legacy_rc <= 1 )) || return "$legacy_rc"
+  if [[ -n "$legacy_output" ]]; then print -r -- "$legacy_output"; return 0; fi
+  "$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/comment-compose-rows.py" "$xml" "$width"
 }
 
 # 评论区是否已翻到底（纯逻辑，可单测）。
