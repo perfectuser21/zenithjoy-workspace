@@ -47,7 +47,9 @@ beforeEach(() => {
       h.conflict?.request_id === args[0] || [h.old_snapshot, h.new_snapshot].some(s => s?.runtime_config?.platform_accounts?.some((a: Row) => a.source?.registration_request_id === args[0]))) };
     if (sql.startsWith('UPDATE zenithjoy.tenant_company_profiles')) {
       if (failCas) return { rows: [], rowCount: 0 };
-      row.runtime_config = JSON.parse(String(args[0])); row.config_version = Number(args[1]); return { rows: [structuredClone(row)], rowCount: 1 };
+      row.runtime_config = JSON.parse(String(args[Number(sql.match(/runtime_config\s*=\s*\$(\d+)/)![1]) - 1]));
+      row.config_version = Number(args[Number(sql.match(/config_version\s*=\s*\$(\d+)/)![1]) - 1]);
+      return { rows: [structuredClone(row)], rowCount: 1 };
     }
     if (sql.includes('INSERT INTO zenithjoy.company_config_versions') && failSnapshot) throw Error('snapshot failed');
     if (sql.includes('INSERT INTO zenithjoy.company_config_changes')) history.push({ company_id: args[0], version: args[1], actor: args[2],
@@ -139,5 +141,14 @@ describe('同租户原账号换机登记HTTP回归', () => {
     const changed = structuredClone(row.runtime_config); changed.platform_accounts[0].device_serial = 'bypass';
     expect((await request(app).put('/profile').set('x-test-tenant', 'tenant-a').send({ expected_version: 29, runtime_config: changed })).status).toBe(400);
     expect(updates()).toHaveLength(0);
+  });
+  it.each(['device_host', 'device_instance_id'])('普通PUT不能改现役顶层设备字段 %s', async key => {
+    row.source_evidence = []; account().device_instance_id = 'physical-serial';
+    const before = structuredClone(row), changed = structuredClone(row.runtime_config);
+    changed.platform_accounts[0][key] = 'foreign-device';
+    const response = await request(app).put('/profile').set('x-test-tenant', 'tenant-a')
+      .send({ expected_version: 29, runtime_config: changed });
+    expect(response.status).toBe(400); expect(response.body.error.code).toBe('IMMUTABLE_COMPANY_BINDING');
+    expect(row).toEqual(before); expect(updates()).toHaveLength(0);
   });
 });
