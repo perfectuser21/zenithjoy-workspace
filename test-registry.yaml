@@ -12129,3 +12129,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
     note: "真实main纯入参拒绝终态后新进程正确GET，派发与未知不洗白"
+
+  - id: resource-and-scope-pre-dispatch-terminal
+    path: services/phone-adb-controller/__tests__/resource-pre-dispatch.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "完整资源观察拒绝和纯参数拒绝终态，不抢他人锁；顺序取得双锁后快照可续，坏观察与派发错误仍unknown"

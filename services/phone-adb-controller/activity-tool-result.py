@@ -11,6 +11,29 @@ class PreDispatchRejected(ValueError):
         self.details = {'expected_fields': ['device_name', 'locked_by']}
 
 
+def scope_rejection(code):
+    """Called explicitly only by trusted pure parameter validators."""
+    error = PreDispatchRejected()
+    error.code = code
+    error.args = (code,)
+    error.details = {'tool_hint': '按冻结工具参数合同修正；原错误action只读回，修正需新action名。'}
+    return error
+
+
+def resource_rejection(central, local, *, central_owner, local_owner):
+    """Only complete successful read-only observations can reach this branch."""
+    error = scope_rejection('RESOURCE_AUTHORITY')
+    error.details = {
+        'read_only_resource_observation': True,
+        'next_actions': ['brain device-locks/acquire', 'phone lock-acquire-new'] if central['locked_by'] is None and local['lock'] == 'free' else ['stop_without_reclaim'],
+        'required': {'central_locked_by': central_owner, 'local_owner': local_owner},
+        'observed': {
+            'central': {k: central.get(k) for k in ['device_name', 'locked_by', 'expires_at', 'lease_version']},
+            'local': {k: local[k] for k in ['lock', 'owner', 'stale', 'reclaimable', 'reason'] if k in local}},
+        'tool_hint': 'company_config会建立本run快照，必须先取得本人中央与本地双锁；Task/冻结company-before资料由宿主提供。若锁属他人或preserved，停止，不抢锁。'}
+    return error
+
+
 def read_business_input(args, *, activity, allowed_operations):
     """Parse once and reject only pure argument/op errors before any dispatch."""
     allowed = sorted(allowed_operations)
