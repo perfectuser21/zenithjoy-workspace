@@ -183,6 +183,62 @@ def canonical_digest(value):
                                     separators=(',', ':')).encode()).hexdigest()
 
 
+
+def metadata_recovery_action(c, activity, kind, args):
+    r = c['recovery']; target = r['collection']; run = c['tasks']['102']['run_tag']
+    eid_prefix = target.get('evidence_prefix', '')
+    before = target.get('before_snapshot', {})
+    valid = (re.fullmatch(r'[a-f0-9-]{36}', target.get('existing_comment_id', ''))
+             and c.get('max_new_comments') == 0 and eid_prefix.startswith(run+'-resume1-')
+             and before.get('id') == target['existing_comment_id']
+             and before.get('douyin_id') == target.get('expected_douyin_id')
+             and __import__('base64').b64encode(before.get('nickname', '').encode()).decode() == target.get('expected_nickname_b64')
+             and hashlib.sha256(before.get('comment_body', '').encode()).hexdigest() == target.get('comment_body_sha256')
+             and canonical_digest(before.get('recipient_evidence')) == target.get('recipient_evidence_sha256')
+             and canonical_digest(before) == target.get('before_sha256'))
+    if not valid:
+        raise ValueError('METADATA_RECOVERY_BINDING_INVALID')
+    if activity != 'collection':
+        return False
+    if kind == 'business':
+        if len(args) != 1:
+            raise ValueError('METADATA_RECOVERY_BUSINESS_SCOPE')
+        value = json.loads(args[0])
+        if (value.get('op') not in ['complete_collected_comment_metadata', 'complete_collected_comment_metadata_readback']
+                or value.get('comment_id') != target['existing_comment_id']
+                or value.get('video_id') != target['video_id']
+                or value.get('video_url') != 'https://www.douyin.com/video/'+target['video_id']):
+            raise ValueError('METADATA_RECOVERY_BUSINESS_SCOPE')
+        if 'before_snapshot' in value and value['before_snapshot'] != before:
+            raise ValueError('METADATA_RECOVERY_BEFORE_CHANGED')
+        if 'before_sha256' in value and value['before_sha256'] != target['before_sha256']:
+            raise ValueError('METADATA_RECOVERY_BEFORE_CHANGED')
+        return True
+    if kind == 'phone':
+        if not args or args[0] not in ['preflight','status','foreground','window','lock-status','runtime-contract','record-status','snapshot-evidence','ui-evidence','evidence-bundle','open-video','current-video-link','back-evidence','commenter-profile-card-link','lock-refresh']:
+            raise ValueError('METADATA_RECOVERY_PHONE_SCOPE')
+        if args[0] == 'commenter-profile-card-link':
+            if len(args) != 6 or args[1:5] != [target['video_id'],target['expected_douyin_id'],target['expected_nickname_b64'],target['comment_body_sha256']]:
+                raise ValueError('METADATA_RECOVERY_PHONE_SCOPE')
+        positions = {'snapshot-evidence':1,'ui-evidence':1,'evidence-bundle':1,'open-video':2,'current-video-link':1,'back-evidence':1,'commenter-profile-card-link':5}
+        if args[0] in positions:
+            at = positions[args[0]]
+            if len(args) <= at or not args[at].startswith(eid_prefix+'-'):
+                raise ValueError('METADATA_RECOVERY_NATIVE_SCOPE')
+            if any(Path(c['native_root']).glob(args[at]+'*')):
+                raise ValueError('METADATA_RECOVERY_NATIVE_EXISTS')
+        return True
+    if kind == 'fetch-native':
+        if len(args) != 1 or not re.fullmatch(re.escape(eid_prefix)+r'-[A-Za-z0-9_.-]+', args[0]):
+            raise ValueError('METADATA_RECOVERY_FETCH_SCOPE')
+        output = Path(r['output_root'])/args[0]
+        if output.exists() or output.is_symlink():
+            raise ValueError('METADATA_RECOVERY_OUTPUT_EXISTS')
+        return True
+    if kind in ['collection-readback','native-readback'] and not args:
+        return True
+    raise ValueError('METADATA_RECOVERY_KIND_SCOPE')
+
 def assert_recovery_action(c, activity, kind, args):
     r = c.get('recovery', {})
     if r.get('mode') != 'qualification-readonly-v1':
@@ -202,6 +258,8 @@ def assert_recovery_action(c, activity, kind, args):
         if kind == 'business' and len(args) == 1 and json.loads(args[0]).get('op') == 'inspect_videos':
             return
         raise ValueError('QUALIFICATION_RECOVERY_READ_ONLY')
+    if r.get('collection', {}).get('existing_comment_id') and metadata_recovery_action(c, activity, kind, args):
+        return
     run = current['run_tag']
     collection = r['collection']
     if (collection.get('video_id') not in c['verification']['102']['video_ids']
