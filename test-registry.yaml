@@ -12012,3 +12012,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / public-code-phone-darwin-test explicitly runs with real FFmpeg development libraries; SDK33 candidate builder repeats against selected ABI"
     note: "实际补丁函数、live容器头、AVIO EIO拒绝与真PCM ffprobe；不访问手机"
+
+  - id: qualification-native-artifact-binding-recovery
+    path: services/phone-adb-controller/__tests__/qualification-artifacts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test discovers the permanent Node test and executes the real stdlib Python verifier"
+    note: "物理/ADB冻结绑定、原四参VID/严格原生取链与受控只读恢复；无真实手机或模型调用"

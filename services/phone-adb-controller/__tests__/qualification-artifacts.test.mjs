@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {verifyQualificationArtifacts} from '../qualification-artifacts.mjs';
-const python='/usr/bin/python3',sha=b=>createHash('sha256').update(b).digest('hex');
+const python=realpathSync('/usr/bin/python3'),sha=b=>createHash('sha256').update(b).digest('hex');
 const program=new URL('../qualification-artifacts.py',import.meta.url).pathname;
 const vid='7707600173446204723',run='producer-run',owner='owned-lease';
 function fixture(){
