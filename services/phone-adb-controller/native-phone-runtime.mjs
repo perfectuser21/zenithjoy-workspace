@@ -52,8 +52,11 @@ export function createNativePhoneRuntime(options={}){
  const nativeMetrics=Object.freeze({parseDescriptions(xml){const v=cache.get(hash(xml));if(!v)throw fail('METRICS_UNPRIMED');return structuredClone(v);}});
  function verify(){
   if(!prepared||realpathSync(root)!==dirname(fileURLToPath(import.meta.url))||realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||readFrozen(env.WFR_RUN_DIR).snapshot_sha256!==frozen.snapshot_sha256)throw fail('SOURCE');
-  assertAgentInput(frozen,env);assertFrozenNativeTaskLease(frozen);assertPreflightProfile({env,frozen});verifyRpcSource(source,{base:root});
-  for(const f of source.files){const path=join(root,f.path),s=lstatSync(path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||hash(readFileSync(path))!==f.sha256)throw fail('SOURCE');}
+  assertAgentInput(frozen,env);assertFrozenNativeTaskLease(frozen);assertPreflightProfile({env,frozen});
+  verifyRpcSource(source,{base:root,read:(path,encoding)=>{
+   const s=lstatSync(path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022))throw fail('SOURCE');
+   return readFileSync(path,encoding);
+  }});
  }
  async function prepare(){
   if(prepared)return;
