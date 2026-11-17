@@ -11,11 +11,11 @@ function pinned(file,expected){
  const bytes=fs.readFileSync(file);if(digest(bytes)!==expected)fail('QUALIFICATION_SOURCE_CHANGED');return bytes;
 }
 export function verifyQualificationDeviceBinding({context:c,spec,videoId,originRun,platformAccounts},env){
- if(spec.video_id!==videoId||spec.expected_run!==originRun||spec.serial!==c.serial)fail('QUALIFICATION_ARTIFACT_SCOPE_MISMATCH');
+ if(spec.video_id!==videoId||spec.expected_run!==originRun)fail('QUALIFICATION_ARTIFACT_SCOPE_MISMATCH');
  if(!env||env.ZJ_ADB_HOST_CONFIG!==c.adb_host_config||env.DOUYIN_PHONE_REGISTRY!==c.phone_registry)fail('QUALIFICATION_TRANSPORT_ENV_UNBOUND');
  for(const key of ['phone_controller','adb_host_config','phone_registry'])pinned(c[key],c[key+'_sha256']);
  const root=fs.realpathSync(c.runtime_root);if(!fs.realpathSync(c.phone_controller).startsWith(root+path.sep))fail('QUALIFICATION_CONTROLLER_SCOPE');
- const policy=JSON.parse(fs.readFileSync(c.adb_host_config));if(![1,2].includes(policy.schema_version)||!['mmv','xian-m4'].includes(policy.host_id)||!/^tcp:127\.0\.0\.1:\d{1,5}$/.test(policy.endpoint||''))fail('QUALIFICATION_HOST_POLICY');
+ const policy=JSON.parse(fs.readFileSync(c.adb_host_config));if(c.transport!=='local'||c.host!=='mmv'||policy.host_id!==c.host||![1,2].includes(policy.schema_version)||!/^tcp:127\.0\.0\.1:\d{1,5}$/.test(policy.endpoint||''))fail('QUALIFICATION_HOST_POLICY');
  const lines=fs.readFileSync(c.phone_registry,'utf8').split(/\r?\n/).filter(x=>x&&!x.startsWith('#')),header=lines.shift()?.split('\t');
  if(!header||!['profile','serial','enabled'].every(x=>header.includes(x)))fail('QUALIFICATION_REGISTRY_SCHEMA');
  const rows=lines.map(x=>Object.fromEntries(x.split('\t').map((v,i)=>[header[i],v]))).filter(x=>x.profile===c.profile);

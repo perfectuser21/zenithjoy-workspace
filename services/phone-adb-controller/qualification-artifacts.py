@@ -96,10 +96,18 @@ def recording(spec):
         start = fields(start_receipt)
         stop = fields(stop_receipt)
         eid = spec['evidence_id']
-        if not eid.startswith(spec['expected_run'] + '-') or ('-v' + spec['video_id'] + '-') not in eid:
+        if not eid.startswith(spec['expected_run'] + '-'):
             raise ValueError('RECORDING_SCOPE_MISMATCH')
-        if start_receipt.get('args', [])[:2] != ['record-start', eid] or stop_receipt.get('args') != ['record-stop', eid]:
+        args = start_receipt.get('args', [])
+        if (len(args) != 4 or args[:2] != ['record-start', eid]
+                or args[3] != spec['video_id'] or not isinstance(args[2], str)
+                or not re.fullmatch(r'[1-9]\d{0,2}', args[2]) or int(args[2]) > 300
+                or stop_receipt.get('args') != ['record-stop', eid]):
             raise ValueError('RECORDING_NATIVE_REQUEST_MISMATCH')
+        # VID comes from the actual four-argument request and strict native
+        # identity original. A filename alone cannot establish video identity.
+        if not native_video_identity(spec):
+            raise ValueError('NATIVE_VIDEO_IDENTITY_UNVERIFIED')
         if any(Path(r.get('path', '')).name != eid + '.rec.mkv' for r in [start, stop]):
             raise ValueError('RECORDING_FILE_IDENTITY_MISMATCH')
         sidecars = spec['sidecars']
@@ -207,7 +215,7 @@ def assert_recovery_action(c, activity, kind, args):
             return False
         if value in r.get('protected_basenames', []):
             return False
-        suffix = r'(?:[.][A-Za-z0-9_.-]+)?' if file else ''
+        suffix = r'(?:[-.][A-Za-z0-9_.-]+)?' if file else ''
         return (value.startswith(run + '-resume1-')
                 or bool(re.fullmatch(pattern + suffix, value)))
     if kind == 'fetch-native':
