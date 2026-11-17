@@ -38,7 +38,7 @@ export function attachQualificationReceipt(request,result,{proofManifest}={}){
   const raw=fs.readFileSync(proofManifest.path);need(sha(raw)===proofManifest.sha256);
   const manifest=JSON.parse(raw);need(manifest.schema==='activity-evidence/v1'&&['task_id','run_id','run_tag','workflow'].every(k=>manifest.identity?.[k]===request[k]));
   const index=matched.map(video_id=>{const spec=manifest.qualification_evidence?.[video_id];need(spec?.video_id===video_id&&typeof spec.expected_run==='string'&&spec.expected_run&&typeof spec.evidence_id==='string'&&spec.evidence_id);return {video_id,producer_run_tag:spec.expected_run,evidence_id:spec.evidence_id,assets:originals(spec)};});
-  out.output.qualification_receipt={schema:'qualification-acceptance/v1',status:'passed',identity:structuredClone(result.identity),nonce:result.nonce,target_video_ids:[...target],matched_video_ids:matched,checks:structuredClone(result.checks),proof_manifest:{path:proofManifest.path,sha256:proofManifest.sha256},originals:index};
+  out.output.qualification_receipt={schema:'qualification-acceptance/v1',status:'passed',identity:structuredClone(result.identity),target_video_ids:[...target],matched_video_ids:matched,checks:structuredClone(result.checks),proof_manifest:{path:proofManifest.path,sha256:proofManifest.sha256},originals:index};
  }catch{/* Invalid, failed or missing facts never create a passing handoff. */}
  return out;
 }
