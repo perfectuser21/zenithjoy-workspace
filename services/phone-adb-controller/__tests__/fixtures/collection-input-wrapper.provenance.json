@@ -1,0 +1,6 @@
+{
+  "producer_sha256": "3270b67d0fcaa2adcece7d6ea5acd265c8b55222064ae2c86519f3787fbd8141",
+  "producer_source": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery4/collection-evidence/wrapper.mjs",
+  "source_range": "imports and validateInput through before function write; only createDeps import excluded as build-only",
+  "fixture_sha256": "9f5bf837c8ad2fe33a22507d82a6aa50c31e4b204fc353200d8fbb17986298d4"
+}
