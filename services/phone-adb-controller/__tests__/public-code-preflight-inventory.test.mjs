@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {cpSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,relative} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
 test('actual account-preflight fixture inventory remains within the unchanged native source limit',t=>{
  const directory=mkdtempSync(join(tmpdir(),'preflight-inventory-')),root=join(directory,'runtime');
@@ -18,5 +20,6 @@ test('actual account-preflight fixture inventory remains within the unchanged na
  const files=[];function walk(base,prefix=''){for(const e of readdirSync(base,{withFileTypes:true})){const path=prefix+e.name;e.isDirectory()?walk(join(base,e.name),path+'/'):files.push(path);}}walk(root);
  assert.ok(files.includes('config/native-phone-reviews/fixture-public-code.md'));
  assert.ok(files.includes('comment-compose-rows.py'),'queued recipient import requires the shared parser');
- assert.ok(files.length<=512,JSON.stringify({files:files.length,synthetic_review:1,qualification:files.filter(x=>x.startsWith('qualification-artifacts.'))}));
+ const tracked=new Set(execFileSync('git',['ls-files','--','services/phone-adb-controller'],{cwd:fileURLToPath(new URL('../../../',import.meta.url)),encoding:'utf8'}).trim().split('\n').map(p=>p.replace(/^services\/phone-adb-controller\//,'')));
+ assert.ok(files.length<=512,JSON.stringify({files:files.length,synthetic_review:1,qualification:files.filter(x=>x.startsWith('qualification-artifacts.')),extra_source_paths:files.filter(p=>p!=='config/native-phone-reviews/fixture-public-code.md'&&!tracked.has(p)).sort()}));
 });
