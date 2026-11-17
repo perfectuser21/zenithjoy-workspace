@@ -2,9 +2,11 @@
   "producer_record_sha256": "c9f5c76d60133e102f86b52169be1146d1ccf62caba2622d73726a0d399d3e94",
   "producer_readback_sha256": "361da2f16828ca872f963d02674cd0937ab2d1ba3673fe4a77b8377e4889573f",
   "producer_host_proof_sha256": "1b4d89b9e216a88414da87384ea1b5f40684ff760d1740aa801834221b1a4bbd",
-  "fixture_sha256": "2a3c3eec0969aaa146b613e0e85f8dd46ca5a7f04561ef59caa2d515550fad80",
+  "fixture_sha256": "7ab10d343bdc8368716e1faf36bced5be6d5495ee37bc807f644ea468334ec24",
   "source_ranges": [
     "function evidenceFor through before export main",
     "result.checks finalization through return result"
-  ]
+  ],
+  "candidate_adapter_sha256": "ce23a1b20e1fde5cf56dbf1e1ea37f14fce0af9ac9397337d4c2e70d7c31dba9",
+  "candidate_adapter": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/qualification-binding-recovery/development/qualification-handoff-candidate/production-readback-local.mjs"
 }

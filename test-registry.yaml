@@ -12057,3 +12057,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test discovers real wrapper input validation with the source-pinned recovery component"
     note: "单一冻结新证据槽与评论配额分离，原producer/VID/严格pair验证，普通非恢复配额边界保持"
+
+  - id: qualification-checker-dynamic-handoff
+    path: services/phone-adb-controller/__tests__/qualification-handoff.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test discovers P6 real facts and exact adapter extraction bound to the formal host helper"
+    note: "六项实读检查及身份nonce与原件SHA齐全才交matched子集；冻结coverage不改，失败与未知不交passing receipt"
