@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {join} from 'node:path';import {tmpdir} from 'node:os';
+import test from 'node:test';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';import {readFileSync,mkdtempSync,writeFileSync,rmSync,existsSync} from 'node:fs';import {join} from 'node:path';import {tmpdir} from 'node:os';
 const helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,ctl=new URL('../douyin-phone-adb',import.meta.url).pathname;
 const argv=['/bin/zsh',ctl,'--profile','wuying_android14','--lock-owner','fixture-owner','commenter-profile-card-link','7707600173446204723','56755237968','54O954Gr5L2z5Lq6','a'.repeat(64),'fixture-card'];
 function simulated(args,override){const program=String.raw`import sys,os,json,importlib.util,subprocess
@@ -24,6 +24,19 @@ s=importlib.util.spec_from_file_location('helper',sys.argv[1]);m=importlib.util.
 fd=os.open(sys.argv[2],os.O_RDONLY)
 try:m._bounded_command(json.loads(sys.argv[3]),fd,sys.argv[2],'fixture-owner')
 except SystemExit as e:print(json.dumps({'code':e.code}))
-`;const args=[...argv];args[1]=script;const r=spawnSync('/usr/bin/python3',['-c',program,helper,owner,JSON.stringify(args)],{encoding:'utf8',env:{...process.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1',WFR_NATIVE_UNKNOWN_FILE:unknown},timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout.trim().split('\n').at(-1)).code,124);assert.match(readFileSync(unknown,'utf8'),/guard_canceled_or_timeout/);assert.equal(readFileSync(owner,'utf8'),'fixture-owner\n');const ids=JSON.parse(readFileSync(pids));for(const pid of ids){const p=spawnSync('/bin/ps',['-p',String(pid),'-o','stat='],{encoding:'utf8'});assert.ok(p.status!==0||p.stdout.trim().startsWith('Z'),'live process '+pid);}
+`;const args=[...argv];args[1]=script;const r=spawnSync('/usr/bin/python3',['-c',program,helper,owner,JSON.stringify(args)],{encoding:'utf8',env:{...process.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1',WFR_NATIVE_UNKNOWN_FILE:unknown},timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout.trim().split('\n').at(-1)).code,124);assert.match(readFileSync(unknown,'utf8'),/guard_canceled_or_timeout/);assert.equal(readFileSync(owner,'utf8'),'fixture-owner\n');assert.equal(existsSync(late),false);const ids=JSON.parse(readFileSync(pids));for(const pid of ids){const p=spawnSync('/bin/ps',['-p',String(pid),'-o','stat='],{encoding:'utf8'});assert.ok(p.status!==0||p.stdout.trim().startsWith('Z'),'live process '+pid);}
  }finally{rmSync(root,{recursive:true,force:true});}});
 test('frozen actual host phone subprocess timeout leaves at least60s above the new command cap',()=>{const f=JSON.parse(readFileSync(new URL('./fixtures/tool-admission-wiring.json',import.meta.url))),source=f['tools.py'].source;assert.match(source,/return subprocess\.run\(ssh\(c,approved\),capture_output=True,text=True,timeout=420\)/);assert.equal(420-360,60);});
+
+test('real guarded entry selects default budgets for complete card and all unmatched layouts',()=>{const root=mkdtempSync(join(tmpdir(),'card-entry-budget-'));try{const program=String.raw`import sys,json,importlib.util,os
+s=importlib.util.spec_from_file_location('helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+values=json.loads(sys.argv[2]);guard=sys.argv[3];owner=values[5]
+def capture(argv,fd,owner_path,expected_owner):
+ assert os.fstat(fd).st_ino==os.stat(guard).st_ino
+ print(json.dumps({'argv':argv,'budget':m.guarded_command_budget(argv),'owner':expected_owner,'owner_path':owner_path}))
+m.bounded_command=capture
+sys.argv=[sys.argv[1],'guard',guard,'SER1','--lock-owner',values[1],values[3],owner]+values[6:]
+m.guarded()
+`;const env={...process.env};delete env.DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS;
+ for(const [args,cap]of [[argv,360],[[...argv.slice(0,6),'close-app'],280],[argv.slice(0,-1),280],[[...argv,'extra'],280],[argv.map((v,i)=>i===5?'':v),280]]){const r=spawnSync('/usr/bin/python3',['-c',program,helper,JSON.stringify(args),join(root,'SER1.guard')],{encoding:'utf8',timeout:10000,env});assert.equal(r.status,0,r.stderr);const x=JSON.parse(r.stdout);assert.deepEqual(x.argv,args);assert.equal(x.budget,cap);assert.equal(x.owner,args[5]);assert.equal(x.owner_path,join(root,'SER1.lock/owner'));}
+ }finally{rmSync(root,{recursive:true,force:true});}});

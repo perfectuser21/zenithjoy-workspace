@@ -14,6 +14,7 @@ import time
 import subprocess
 import sys
 import stat
+import re
 from pathlib import Path
 
 
@@ -89,11 +90,27 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
         raise
 
 
-def _bounded_command(argv, fd, owner_path=None, expected_owner=None):
-    budget = int(os.environ.get('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS', '280'))
-    if not 1 <= budget <= 280:
-        print('guarded command budget must be 1..280 seconds', file=sys.stderr)
+def guarded_command_budget(argv):
+    # This selects a bound, not authority; the original guard/owner checks remain.
+    card = (len(argv) == 12 and all(isinstance(v, str) and v for v in argv)
+            and argv[0] == '/bin/zsh' and os.path.isabs(argv[1])
+            and os.path.basename(argv[1]) == 'douyin-phone-adb'
+            and argv[2] == '--profile' and argv[4] == '--lock-owner'
+            and argv[6] == 'commenter-profile-card-link'
+            and re.fullmatch(r'[0-9]{16,24}', argv[7])
+            and re.fullmatch(r'[A-Za-z0-9+/]+={0,2}', argv[9])
+            and re.fullmatch(r'[a-f0-9]{64}', argv[10])
+            and re.fullmatch(r'[A-Za-z0-9_.-]+', argv[11]))
+    cap = 360 if card else 280
+    budget = int(os.environ.get('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS', str(cap)))
+    if not 1 <= budget <= cap:
+        print(f'guarded command budget must be 1..{cap} seconds', file=sys.stderr)
         sys.exit(2)
+    return budget
+
+
+def _bounded_command(argv, fd, owner_path=None, expected_owner=None):
+    budget = guarded_command_budget(argv)
     canceled = [0]
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda signum, frame: canceled.__setitem__(0, 128 + signum))

@@ -24,7 +24,7 @@ function verifyProfileCardLink(ref,expected,{root=process.env.LEADGEN_METADATA_R
  need(fields.profile_link_evidence_sha256===ref.sha256&&path.basename(fields.profile_link_evidence||'')===path.basename(ref.path)&&fields.profile_url===proof.profile_url);
  need(proof.controller_sha256===hash(fs.readFileSync(path.join(__dirname,'douyin-phone-adb')))&&proof.controller_sha256===c.phone_controller_sha256);
  need(proof.helper_sha256===hash(fs.readFileSync(path.join(__dirname,'profile-card-link.py')))&&proof.helper_sha256===c.verification?.runtime_sha256?.['profile-card-link.py']);
- for(const name of ['profile-card-link.py','profile-card-link.sh','profile-card-link-evidence.js','comment-compose-rows.py','adb-managed-client.py'])need(hash(fs.readFileSync(path.join(__dirname,name)))===c.verification?.runtime_sha256?.[name]);
+ for(const name of ['profile-card-link.py','profile-card-link.sh','profile-card-link-evidence.js','comment-compose-rows.py','adb-managed-client.py','phone-lock-helper.py'])need(hash(fs.readFileSync(path.join(__dirname,name)))===c.verification?.runtime_sha256?.[name]);
  need(hash(fs.readFileSync(c.adb_host_config))===c.adb_host_config_sha256);
  const action=proof.reopen_action;need(action?.serial===c.adb_serial&&action.argv?.[0]===path.join(__dirname,'adb-managed-client.py'));need(Number.isFinite(receipt.started_at)&&Number.isFinite(receipt.ended_at)&&action?.started_ns>=Math.floor(receipt.started_at*1e9)-1e9&&action.ended_ns<=Math.ceil(receipt.ended_at*1e9)+1e9);
  const python=c.verification?.artifact_checker?.command?.[0];need(typeof python==='string'&&path.isAbsolute(python)&&hash(fs.readFileSync(python))===c.verification.artifact_checker.sha256?.[python]);
