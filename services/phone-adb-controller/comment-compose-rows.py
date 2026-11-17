@@ -81,6 +81,57 @@ def compose_row(row, slot, viewport):
             'nickname_b64': base64.b64encode(nickname.encode()).decode()}
 
 
+def compose_input(view, viewport, comment_list):
+    candidates = []
+    parents = {n: p for p in view.iter() for n in p}
+    for group in view.iter('node'):
+        children = list(group)
+        if (len(children) != 4 or group.get('enabled') != 'true'
+                or group.get('clickable') != 'false' or group.get('text') or group.get('content-desc')):
+            continue
+        ancestor = parents.get(group)
+        owned = True
+        while ancestor is not None and ancestor is not view:
+            if (ancestor is comment_list or ancestor.get('enabled') == 'false'
+                    or not compose_inside(compose_bounds(group), compose_bounds(ancestor))):
+                owned = False
+                break
+            ancestor = parents.get(ancestor)
+        if not owned:
+            continue
+        if any(n.get('class') != 'android.view.View' or n.get('clickable') != 'true'
+               or n.get('enabled') != 'true' or n.get('text') or n.get('content-desc') for n in children):
+            continue
+        field, *icons = children
+        descendants = list(field.iter('node'))[1:]
+        labels = [n for n in descendants if n.get('class') == 'android.widget.TextView' and n.get('text')]
+        if (len(labels) != 1 or any(n.get('clickable') != 'false' or n.get('enabled') != 'true'
+                or n.get('content-desc') or not compose_inside(compose_bounds(n), compose_bounds(field))
+                or (n is not labels[0] and n.get('text')) for n in descendants)):
+            continue
+        if any(len(n) != 1 for n in icons):
+            continue
+        if [n[0].get('content-desc') for n in icons] != ['image', 'at', 'emoji']:
+            continue
+        if any(n[0].get('class') != 'android.view.View' or n[0].get('clickable') != 'false'
+               or n[0].get('enabled') != 'true' or len(n[0]) != 0 for n in icons):
+            continue
+        gb = compose_bounds(group)
+        boxes = [compose_bounds(n) for n in children]
+        if (not compose_inside(gb, compose_bounds(view)) or gb[1] < viewport[3]
+                or any(not compose_inside(b, gb) for b in boxes)
+                or any(not compose_inside(compose_bounds(n[0]), b) for n, b in zip(icons, boxes[1:]))):
+            continue
+        if (any(b[1] != gb[1] or b[3] != gb[3] for b in boxes)
+                or boxes[0][0] != gb[0] or boxes[-1][2] != gb[2]
+                or any(a[2] != b[0] for a, b in zip(boxes, boxes[1:]))):
+            continue
+        candidates.append(field)
+    if len(candidates) != 1:
+        raise ValueError('COMPOSE_INPUT_REGION')
+    return candidates[0]
+
+
 def compose_panel(xml, width=None):
     if len(xml.encode()) > 4 * 1024 * 1024:
         raise ValueError('COMPOSE_XML_TOO_LARGE')
@@ -100,11 +151,10 @@ def compose_panel(xml, width=None):
     lists = [n for n in vn if n.get('class') == 'android.view.View' and n.get('scrollable') == 'true']
     headers = [n for n in vn if n.get('class') == 'android.widget.TextView'
                and re.fullmatch(r'[0-9万.]+条评论', n.get('text', ''))]
-    hints = [n for n in vn if n.get('class') == 'android.widget.TextView' and n.get('text') == '期待你的评论']
     controls = [[n for n in nodes if n.get('class') == 'android.widget.ImageView'
                  and n.get('content-desc') == desc and n.get('clickable') == 'true']
                 for desc in ('关闭', '放大评论区')]
-    if (len(lists) != 1 or len(headers) != 1 or len(hints) != 1 or any(len(a) != 1 for a in controls)
+    if (len(lists) != 1 or len(headers) != 1 or any(len(a) != 1 for a in controls)
             or any(n.get('class') == 'android.widget.EditText' for n in vn)):
         raise ValueError('COMPOSE_PANEL_ANCHORS')
     viewport, vb = compose_bounds(lists[0]), compose_bounds(view)
@@ -114,10 +164,9 @@ def compose_panel(xml, width=None):
             or viewport[0] != 0 or viewport[2] != expected_width
             or viewport[2]-viewport[0] < 100 or viewport[3]-viewport[1] < 200
             or not compose_inside(compose_bounds(headers[0]), vb)
-            or compose_bounds(headers[0])[3] > viewport[1]
-            or not compose_inside(compose_bounds(hints[0]), vb)
-            or compose_bounds(hints[0])[1] < viewport[3]):
+            or compose_bounds(headers[0])[3] > viewport[1]):
         raise ValueError('COMPOSE_PANEL_BOUNDS')
+    compose_input(view, viewport, lists[0])
     parents = {n: parent for parent in root.iter() for n in parent}
     def ancestors(n):
         out = []

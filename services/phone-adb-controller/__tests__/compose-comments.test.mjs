@@ -44,3 +44,24 @@ test('native XML entities decode exactly once with UTF8 nickname base64 and retu
 test('DOCTYPE and entity declarations never become native panel evidence',()=>{const xml=raw.replace('<hierarchy','<!DOCTYPE hierarchy [<!ENTITY injected "body">]><hierarchy');assert.throws(()=>parseNativeCommentXml(xml),/RECIPIENT_COMMENT_PANEL/);assert.throws(()=>parseNative(profile,xml,{nickname,douyinId:'person123',commentBody:body}),/RECIPIENT_NATIVE/);});
 
 test('real dynamic input placeholder uses owned toolbar structure for enumeration and complete identity replay',()=>{const xml=readFileSync(new URL('./fixtures/compose-comments/cloud-v34-dynamic-input.xml',import.meta.url),'utf8'),p=JSON.parse(readFileSync(new URL('./fixtures/compose-comments/cloud-v34-dynamic-input.provenance.json',import.meta.url)));assert.equal(hash(xml),p.sha256);assert.equal(Buffer.byteLength(xml),p.bytes);assert.equal(parseNativeCommentXml(xml).rows.length,4);const f=recipient();f.e.raw.returned=xml;f.e.sha256.returned=hash(xml);const {validateEvidence}=require('../queued-recipient-evidence.js');assert.equal(validateEvidence(f.e,{...f.scope,comment_body:body},{companyBinding:f.company}).returned_comment_verified,true);});
+function toolbarChanged(code){return transformed("parents={n:p for p in r.iter() for n in p};icon=next(n for n in cv.iter('node') if n.get('content-desc')=='image');group=parents[parents[icon]];field=group[0];label=field[0]\n"+code);}
+const invalidToolbars={
+ 'missing icon':"group.remove(group[2])",
+ 'duplicate icon':"group[2][0].set('content-desc','image')",
+ 'foreign icon parent':"group.remove(group[2]);cv.append(icon)",
+ 'nonclickable input':"field.set('clickable','false')",
+ 'multiple inputs':"group.append(copy.deepcopy(field))",
+ 'cropped input':"field.set('bounds','[12,1135][510,1300]')",
+ 'disabled group':"group.set('enabled','false')",
+ 'ambiguous label':"field.append(copy.deepcopy(label))",
+ 'label outside input':"label.set('bounds','[0,0][100,100]')",
+ 'interactive input descendant':"label.set('clickable','true')",
+ 'unexpected field description':"field.set('content-desc','unrelated action')",
+ 'forged toolbar inside list':"parents[group].remove(group);lst.append(group)",
+ 'body text cannot be input capability':"group.remove(field);row[2][0].set('text','期待你的评论')",
+ 'actual editing state':"E.SubElement(cv,'node',{'package':'com.ss.android.ugc.aweme','class':'android.widget.EditText','text':'typing','bounds':'[12,1135][510,1202]'})",
+};
+for(const[name,code]of Object.entries(invalidToolbars))test('input region rejects '+name,()=>{const xml=toolbarChanged(code);assert.throws(()=>parseNativeCommentXml(xml),/RECIPIENT_COMMENT_PANEL/);assert.throws(()=>parseNative(profile,xml,{nickname,douyinId:'person123',commentBody:body}),/RECIPIENT_NATIVE/);});
+test('arbitrary placeholder text is not used as an identity anchor',()=>{const xml=toolbarChanged("label.set('text','动态文本随时改变')");assert.equal(parseNativeCommentXml(xml).rows.length,4);assert.equal(parseNative(profile,xml,{nickname,douyinId:'person123',commentBody:body}).returned_comment_verified,true);});
+
+test('noninteractive input wrappers preserve the unique visible label',()=>{const xml=toolbarChanged("field.remove(label);wrapper=E.SubElement(field,'node',{'package':'com.ss.android.ugc.aweme','class':'android.view.View','enabled':'true','clickable':'false','bounds':field.get('bounds')});wrapper.append(label)");assert.equal(parseNativeCommentXml(xml).rows.length,4);assert.equal(parseNative(profile,xml,{nickname,douyinId:'person123',commentBody:body}).returned_comment_verified,true);});
