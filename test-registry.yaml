@@ -12002,4 +12002,4 @@ tests:
     execution: "ci-l3-code.yml / openclaw-scripts-test / sdk31-runtime.test.mjs invokes stdlib unittest discover"
     note: "私有固定ABI依赖闭包、失败关闭、末端DYLD与启动自检；不访问手机"
 
-  - {"id":"asr-private-cos-single-attempt","path":"services/phone-adb-controller/__tests__/asr-private-cos.test.mjs","type":"unit","ci":"openclaw-scripts","status":"active","product":"line02"}
+  - {"id":"asr-private-cos-single-attempt","path":"services/phone-adb-controller/__tests__/asr-private-cos.test.mjs","type":"unit","ci":"L3","status":"active","product":"line02"}
