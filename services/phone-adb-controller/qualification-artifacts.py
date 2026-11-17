@@ -189,12 +189,11 @@ def assert_recovery_action(c, activity, kind, args):
         raise ValueError('QUALIFICATION_RECOVERY_MODE_REQUIRED')
     producer = r['producer']
     current = c['tasks']['102']
-    original = json_asset(r['producer_manifest'])['run']
-    bound = original['input']['tasks']['102']
-    if (producer.get('run_tag') != current['run_tag']
-            or any(producer.get(k) != original.get(k) or bound.get(k) != producer.get(k)
-                   for k in ['task_id', 'run_id'])
-            or bound.get('run_tag') != current['run_tag']
+    original = json_asset(r['producer_manifest'])
+    bound = original.get('identity', {})
+    if (original.get('schema') != 'activity-evidence/v1' or bound.get('workflow') != '102'
+            or producer.get('run_tag') != current['run_tag']
+            or any(bound.get(k) != producer.get(k) for k in ['task_id', 'run_id', 'run_tag'])
             or any(producer.get(k) == current.get(k) for k in ['task_id', 'run_id'])):
         raise ValueError('QUALIFICATION_RECOVERY_PRODUCER_MISMATCH')
     if activity == 'qualification':
