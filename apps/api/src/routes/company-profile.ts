@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { companyAccountVerification } from './company-account-verification';
+import { companyAccountDeviceReplacement } from './company-account-device-replacement';
 import { companyAccountRegistration, companyAccountRegistrationSession } from './company-account-registration';
 import { companyRoutingNormalization, companyRoutingNormalizationReadback } from './company-routing-normalization';
 import { validateCompanyIdentity, validateEnabledCompany, companyRecord, companyObject, type CompanyJsonRecord } from './company-profile-validation';
@@ -144,6 +145,8 @@ companyProfileRouter.put('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn
 companyProfileRouter.post('/platform-account-registrations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountRegistration({ pool, profile, snapshot }));
 
 companyProfileRouter.post('/platform-account-verifications', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountVerification({ pool, profile, snapshot }));
+
+companyProfileRouter.post('/platform-account-device-replacements', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountDeviceReplacement({ pool, profile, snapshot }));
 
 companyProfileRouter.post('/routing-profile-normalizations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalization({ pool, snapshot }));
 companyProfileRouter.get('/routing-profile-normalizations/:requestId', simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalizationReadback({ pool, snapshot }));
