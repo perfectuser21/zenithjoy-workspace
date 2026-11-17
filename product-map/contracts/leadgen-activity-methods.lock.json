@@ -96,7 +96,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "00720989fd5e9e7e965da3d1f64c4d16b478c8b8790ba073cae391be113497f0",
+      "code_digest": "bb6779d8d1cdb175b1b7855daedf1324c0b3ed8ac0b01eb419a6d9a9d6a3bd19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "9e5b5cf74347cb0edc57a8f5a88f646b76ba858446eacdd6fb5b00ff7c650aea",
-        "current_code_digest": "00720989fd5e9e7e965da3d1f64c4d16b478c8b8790ba073cae391be113497f0"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "00720989fd5e9e7e965da3d1f64c4d16b478c8b8790ba073cae391be113497f0",
+        "current_code_digest": "bb6779d8d1cdb175b1b7855daedf1324c0b3ed8ac0b01eb419a6d9a9d6a3bd19"
       }
     },
     "douyin_video_processing.preflight": {
@@ -994,7 +994,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "886b56d59b19d3a9523d8ae0ca85472680bbe68c1dc9f2d73bc54b05e3193d91",
+      "code_digest": "b8edf65a54aa585ef258de8f8752a0da9c6d51866957c30b6f72d392562ed177",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "3f44492e7e6d2bbb30c3ee59b4c95e536dfe282f7a0fb94c04007088175a2a24",
-        "current_code_digest": "886b56d59b19d3a9523d8ae0ca85472680bbe68c1dc9f2d73bc54b05e3193d91"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "886b56d59b19d3a9523d8ae0ca85472680bbe68c1dc9f2d73bc54b05e3193d91",
+        "current_code_digest": "b8edf65a54aa585ef258de8f8752a0da9c6d51866957c30b6f72d392562ed177"
       }
     },
     "douyin_video_processing.dedup": {
@@ -1910,7 +1910,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "127c742878a05e4cf47b8d407a969df405b4d47286cf3d7bd56d104320b7455e",
+      "code_digest": "8078c47edee988508a14f13e83588208bdb99260645bf08de341f0c4ae20b64d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "a104700a0f7afb8a3d28d7636154d3e1d1e1d6ff1c74c093663580fe42554379",
-        "current_code_digest": "127c742878a05e4cf47b8d407a969df405b4d47286cf3d7bd56d104320b7455e"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "127c742878a05e4cf47b8d407a969df405b4d47286cf3d7bd56d104320b7455e",
+        "current_code_digest": "8078c47edee988508a14f13e83588208bdb99260645bf08de341f0c4ae20b64d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -2792,7 +2792,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "9b2197d3662609424c2f18c78a0f13b0018901ed87a4b8a2e1a7baed2ab9fe6b",
+      "code_digest": "c756a0fffd5ffbdd98f226a63ae812c2762f0a97c71d86ae3eef64f3fbb03441",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "ea65183c62e9a8b070a23a84c30ee42642ed50b398651eec6ce200e273cb853e",
-        "current_code_digest": "9b2197d3662609424c2f18c78a0f13b0018901ed87a4b8a2e1a7baed2ab9fe6b"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "9b2197d3662609424c2f18c78a0f13b0018901ed87a4b8a2e1a7baed2ab9fe6b",
+        "current_code_digest": "c756a0fffd5ffbdd98f226a63ae812c2762f0a97c71d86ae3eef64f3fbb03441"
       }
     },
     "douyin_video_processing.collection": {
@@ -3753,7 +3753,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -4541,13 +4541,13 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "5b2f584fd4ceb31441c75898cc27b5eb32a332f0c24cb3fa5c0cd6df32f4bfcd",
+      "code_digest": "93fe08034f3a89cece144e5fe931a1edee80f5267d561ac5c900daaa268b39b0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "01310fa7280529f912129645a2c16ece05ebca1e8b4fce4437f340953574d986",
-        "current_code_digest": "5b2f584fd4ceb31441c75898cc27b5eb32a332f0c24cb3fa5c0cd6df32f4bfcd"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "5b2f584fd4ceb31441c75898cc27b5eb32a332f0c24cb3fa5c0cd6df32f4bfcd",
+        "current_code_digest": "93fe08034f3a89cece144e5fe931a1edee80f5267d561ac5c900daaa268b39b0"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4645,7 +4645,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ffb0b74aceeb29787c0f24883d3713f1ddc452ddf0e51686165aea7cad7d7520",
+      "code_digest": "27c0fe9386c7bcdbdaa801c0d7e12b3a575d60046b3864ccee1e3d24f6711914",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "a0f6b99c58c36abf5e2d82dd3b8582d6776e8b6b12269f19909ce0649769b3b3",
-        "current_code_digest": "ffb0b74aceeb29787c0f24883d3713f1ddc452ddf0e51686165aea7cad7d7520"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "ffb0b74aceeb29787c0f24883d3713f1ddc452ddf0e51686165aea7cad7d7520",
+        "current_code_digest": "27c0fe9386c7bcdbdaa801c0d7e12b3a575d60046b3864ccee1e3d24f6711914"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5551,7 +5551,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -6352,13 +6352,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "72d13536ac18d62eea389bd88f52dd80846ada974c6629c4c0252af9223ab83e",
+      "code_digest": "6cf8bf2bc65559c281880ab56763b4f6fcc5926827e59ef96c59e4b94acb7ae6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "21eb43d41a20888c9b8530e39d8abe195fc33334c280686227bd42cda03b5ce1",
-        "current_code_digest": "72d13536ac18d62eea389bd88f52dd80846ada974c6629c4c0252af9223ab83e"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "72d13536ac18d62eea389bd88f52dd80846ada974c6629c4c0252af9223ab83e",
+        "current_code_digest": "6cf8bf2bc65559c281880ab56763b4f6fcc5926827e59ef96c59e4b94acb7ae6"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6461,7 +6461,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -7290,13 +7290,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c0cb21319ab39ebc6209aa5ae6ed3fee3ed7c1fa52d71946ca69dbaf6ee0c8df",
+      "code_digest": "8e41d77436f781790904d94ad7141b7b7465eeb042c708b58f0d232b6d56ead4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "0eb51d9a47f0800f83ad4b0765d0c283eedd2232ca9b0ed692ce981d4e720588",
-        "current_code_digest": "c0cb21319ab39ebc6209aa5ae6ed3fee3ed7c1fa52d71946ca69dbaf6ee0c8df"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "c0cb21319ab39ebc6209aa5ae6ed3fee3ed7c1fa52d71946ca69dbaf6ee0c8df",
+        "current_code_digest": "8e41d77436f781790904d94ad7141b7b7465eeb042c708b58f0d232b6d56ead4"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7394,7 +7394,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d7a4552553d240c91833d010e193213c823e200b1c9136e4e84e7df140841195",
+      "code_digest": "fd27f2a706db50492ab7f71e9b88097a838b7dd66b612e01402b7a69f43370d1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "344ffcd0de2403bafda83437f8ac8bc60fb6153db03f607c98e56dbacf75ef63",
-        "current_code_digest": "d7a4552553d240c91833d010e193213c823e200b1c9136e4e84e7df140841195"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "d7a4552553d240c91833d010e193213c823e200b1c9136e4e84e7df140841195",
+        "current_code_digest": "fd27f2a706db50492ab7f71e9b88097a838b7dd66b612e01402b7a69f43370d1"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8254,7 +8254,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2de1b0c485426f4715ad762048be766c5862e682fc3d8910fa5d1a3a81716727",
+      "code_digest": "4566b1e2e5588874208c6446ff0cc074c9c64e2c62ca44972d4c65a8188cd0d6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "a9d5e338eb6ba38f66b0550952ea4502935fcee9a5e620409a625726807d0c7a",
-        "current_code_digest": "2de1b0c485426f4715ad762048be766c5862e682fc3d8910fa5d1a3a81716727"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "2de1b0c485426f4715ad762048be766c5862e682fc3d8910fa5d1a3a81716727",
+        "current_code_digest": "4566b1e2e5588874208c6446ff0cc074c9c64e2c62ca44972d4c65a8188cd0d6"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9089,7 +9089,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a9748dd839462e7c311c11680eb7370c55ba29e8452c2a46fecc7f30bcc524b6",
+      "code_digest": "f839b348d326e31154e039413e2c1b775217dd90f7ad7935e7e91f8a38342616",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "3db499bd441f9e4bf5ff52e4f7b1e8624f756f57e3aec872fc82b57658ff8f25",
-        "current_code_digest": "a9748dd839462e7c311c11680eb7370c55ba29e8452c2a46fecc7f30bcc524b6"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "a9748dd839462e7c311c11680eb7370c55ba29e8452c2a46fecc7f30bcc524b6",
+        "current_code_digest": "f839b348d326e31154e039413e2c1b775217dd90f7ad7935e7e91f8a38342616"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -9917,7 +9917,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-phone-runtime.mjs",
           "revision": "contract",
-          "sha256": "87d2ee305cb696648bb966dd5ab3451af2b7591b5cf87ed674e213f954e80527"
+          "sha256": "439f5c0d6303c99819889c34080dd9f8777a5b1d345fc054cf987f4182337e8b"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e59e173156540e8fa6b18e105482c22ec3764c28a52598e9f0948d2621f23a7e",
+      "code_digest": "9a3dea43ff8b667392032f9efa9215b4b992ef975c50a09446a38fd6c351b47b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集叶子启动前到期时提前返回部分完成并保持原任务清理；共享生产者对已到期请求仍拒绝启动，其余流程及活动合同不变。",
-        "reviewed_by": "codex",
-        "previous_code_digest": "4040a7474fe648c13462dea5437c6ba24432f47a0e7fa9b804d243c2049385d0",
-        "current_code_digest": "e59e173156540e8fa6b18e105482c22ec3764c28a52598e9f0948d2621f23a7e"
+        "reason": "仅把既有RPC源码新鲜读取与文件权限检查合并，删除同次准入重复哈希；独立快照、Task校验、七次授权、合同和方法未变。76项源码与授权回归、12项完整隔离场景已通过；不表示真实手机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "e59e173156540e8fa6b18e105482c22ec3764c28a52598e9f0948d2621f23a7e",
+        "current_code_digest": "9a3dea43ff8b667392032f9efa9215b4b992ef975c50a09446a38fd6c351b47b"
       }
     }
   },
