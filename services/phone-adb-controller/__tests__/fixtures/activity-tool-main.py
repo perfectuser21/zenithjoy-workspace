@@ -25,8 +25,8 @@ def main():
   if kind!='fetch-native':raise
   result={'exit_code':74,'error':'READ_ONLY_DOWNLOAD_IO_ERROR','artifact_usable':False,'error_type':type(e).__name__}
  except Exception as e:
-  # A policy error before launching an operation has no external operation in flight.
-  if isinstance(e,ValueError):atomic(action,{'binding':bind,'state':'terminal','started_at':started_at,'result':{'exit_code':2,'error':str(e)},'ended_at':time.time()})
+  if type(e) is PreDispatchRejected:
+   return emit_pre_dispatch_rejection(e,action=action,binding=bind,started_at=started_at,persist=atomic)
   raise
  out={'binding':bind,'state':'terminal','started_at':started_at,'result':result,'ended_at':time.time()};atomic(action,out)
  encoded=json.dumps(out,ensure_ascii=False)

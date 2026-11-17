@@ -12039,3 +12039,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test discovers the actual fixture copy and synthetic ROM review inventory"
     note: "账号预检夹具精确闭包不超过现有512守卫；保留真实Compose依赖，不改生产边界"
+
+  - id: activity-host-tool-local-rejection-result
+    path: services/phone-adb-controller/__tests__/activity-tool-result.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test discovers exact real adapter main and Brain admission fixtures with the formal result module"
+    note: "显式纯本地拒绝终态stdout；同文案普通错误、派发后异常、网络与落盘失败保持unknown；同动作回读不重派"

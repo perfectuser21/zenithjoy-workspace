@@ -3,5 +3,10 @@
   "source_range": "def main(): through EOF",
   "producer_main_sha256": "601423e4304cef8193fb33fa73acb7d2973ab6622078ad7e98b00c08a9c123ec",
   "producer_path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery3/tools.py",
-  "fixture_sha256": "601423e4304cef8193fb33fa73acb7d2973ab6622078ad7e98b00c08a9c123ec"
+  "fixture_sha256": "7b1868d3ae31077154f32238e2ca316b8595cedd716c25634729e12b434e59e8",
+  "candidate_tools_sha256": "d5053e4711b6d6b8dacf1d64c0e21ded8008bc6a059672202c9b01e27d356a0d",
+  "candidate_main_sha256": "7b1868d3ae31077154f32238e2ca316b8595cedd716c25634729e12b434e59e8",
+  "candidate_path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/qualification-binding-recovery/development/host-tools-result-candidate/tools.py",
+  "candidate_brain_block_sha256": "4798bc5a8da3846df39df12d9857a605902dc910640048228302ce47716d6bee",
+  "brain_fixture_sha256": "42d8898bc7f7006d9915d864eeb67681208d2885264a8ab0309cb6010e2727ea"
 }
