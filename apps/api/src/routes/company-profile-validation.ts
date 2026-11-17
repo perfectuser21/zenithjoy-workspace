@@ -42,7 +42,7 @@ export function validateCompanyIdentity(next: CompanyJsonRecord, old: CompanyJso
         // 身份、设备与Profile绑定由登记与核验流程维护。
         const identity = (entry: CompanyJsonRecord) => {
           const fields = companyRecord(entry.fields);
-          return [entry.account_id, entry.douyin_id, entry.company_id, entry.tenant_id, entry.profile, entry.profile_name, entry.device_id, entry.device_serial, entry.machine_id, entry.source, entry.verification_status, entry.verification_source, fields.手机Profile, fields.抖音号, fields.抖音账号, fields.ADB序列号, fields.绑定机器, fields.业务线, fields.切换标识, fields.最近核验时间, fields.设备];
+          return [entry.account_id, entry.douyin_id, entry.company_id, entry.tenant_id, entry.profile, entry.profile_name, entry.device_id, entry.device_serial, entry.device_host, entry.device_instance_id, entry.machine_id, entry.source, entry.verification_status, entry.verification_source, fields.手机Profile, fields.抖音号, fields.抖音账号, fields.ADB序列号, fields.绑定机器, fields.业务线, fields.切换标识, fields.最近核验时间, fields.设备];
         };
         if (!same(identity(original), identity(account))) return '账号身份、Profile或设备绑定不得借用其他公司';
       }
