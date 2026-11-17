@@ -44,3 +44,19 @@ export async function verifyQualificationArtifacts(input,{env,pythonBin='/usr/bi
  });
  return {...result,device_binding};
 }
+
+
+export function verifiedRecoveryCollectionIndex(c,videoId){
+ pinned(fileURLToPath(import.meta.url),c.verification?.qualification_sha256?.['qualification-artifacts.mjs']);
+ const r=c.recovery,current=c.tasks?.['102'],producer=r?.producer;
+ if(r?.mode!=='qualification-readonly-v1'||c.assigned_workflow!=='102'||!current||!producer)fail('QUALIFICATION_RECOVERY_MODE_REQUIRED');
+ const original=JSON.parse(pinned(r.producer_manifest?.path,r.producer_manifest?.sha256)),bound=original.identity;
+ if(original.schema!=='activity-evidence/v1'||bound?.workflow!=='102'
+    ||producer.run_tag!==current.run_tag
+    ||['task_id','run_id','run_tag'].some(k=>typeof producer[k]!=='string'||!producer[k]||bound[k]!==producer[k]||typeof current[k]!=='string'||!current[k])
+    ||['task_id','run_id'].some(k=>producer[k]===current[k]))fail('QUALIFICATION_RECOVERY_PRODUCER_MISMATCH');
+ const slot=r.collection;
+ if(slot?.video_id!==videoId||!c.verification?.['102']?.video_ids?.includes(videoId)
+    ||!Number.isSafeInteger(slot?.person_index)||slot.person_index<1)fail('QUALIFICATION_RECOVERY_COLLECTION_SCOPE');
+ return slot.person_index;
+}

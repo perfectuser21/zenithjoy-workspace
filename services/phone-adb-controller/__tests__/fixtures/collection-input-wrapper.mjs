@@ -1,4 +1,5 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
+import {verifiedRecoveryCollectionIndex} from '../../qualification-artifacts.mjs';
 export const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const need=(x,c)=>{if(!x)throw Error(c);};
 const keys=['video_id','nickname','douyin_id','comment_body','profile_eid','video_eid','started_at_epoch_seconds','profile','returned','profile_receipt','video_identity'];
@@ -10,7 +11,7 @@ export function validateInput(root,c,i){
  need(c.assigned_workflow==='102'&&c.tasks?.['102']&&c.verification?.['102']?.video_ids?.includes(i.video_id)&&/^\d{16,24}$/.test(i.video_id),'VIDEO_SCOPE');
  for(const k of ['nickname','douyin_id','comment_body'])need(typeof i[k]==='string'&&i[k].trim().length>0,'COMMENT_IDENTITY');
  need(/^[A-Za-z0-9_.-]+$/.test(i.douyin_id),'DOUYIN_ID');const run=c.tasks['102'].run_tag,prefix=run+'-v'+i.video_id+'-collection';
- const row=i.profile_eid.startsWith(prefix+'-person')?i.profile_eid.slice((prefix+'-person').length).match(/^([1-9][0-9]*)-t[123]$/):null;need(row&&Number(row[1])<=c.comment_limit&&i.video_eid===prefix+'-after-card'+row[1],'EID_PAIR');
+ const row=i.profile_eid.startsWith(prefix+'-person')?i.profile_eid.slice((prefix+'-person').length).match(/^([1-9][0-9]*)-t[123]$/):null;const slot=c.recovery?verifiedRecoveryCollectionIndex(c,i.video_id):null;need(row&&(c.recovery?Number(row[1])===slot:Number(row[1])<=c.comment_limit)&&i.video_eid===prefix+'-after-card'+row[1],'EID_PAIR');
  const pr=receipt(root,i.profile_receipt,c,'commenter-identity'),vr=receipt(root,i.video_identity,c,'current-video-link');
  need(pr.result?.exit_code===0&&pr.binding.args.length===5&&pr.binding.args[4]===i.profile_eid&&pr.binding.args[3]===Buffer.from(i.nickname).toString('base64'),'PROFILE_REQUEST');
  need(vr.binding.args.length===2&&vr.binding.args[1]===i.video_eid&&vr.started_at>=pr.ended_at,'VIDEO_REQUEST');

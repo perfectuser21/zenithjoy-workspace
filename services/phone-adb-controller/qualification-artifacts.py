@@ -205,10 +205,12 @@ def assert_recovery_action(c, activity, kind, args):
     run = current['run_tag']
     collection = r['collection']
     if (collection.get('video_id') not in c['verification']['102']['video_ids']
-            or collection.get('person_index') != 1):
+            or type(collection.get('person_index')) is not int
+            or not 1 <= collection['person_index'] <= 9007199254740991):
         raise ValueError('QUALIFICATION_RECOVERY_COLLECTION_SCOPE')
     canonical = run + '-v' + collection['video_id'] + '-collection-'
-    pattern = re.escape(canonical) + r'(?:person1-t[123]|after-card1)'
+    index = str(collection['person_index'])
+    pattern = re.escape(canonical) + r'(?:person' + index + r'-t[123]|after-card' + index + r')'
     def admitted(value, file=False):
         if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+', value):
             return False
