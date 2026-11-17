@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 const script=fileURLToPath(new URL('../prepare-openclaw-os-packages.sh',import.meta.url));
 test('既有OS步骤仅用一个300秒边界调用真实隔离脚本',()=>{const text=readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8');assert.match(text,/timeout 300s bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh/);});
 const source='Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates noble-backports\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n\nTypes: deb\nURIs: https://security.ubuntu.com/ubuntu/\nSuites: noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n';
-function invoke(t,{fail='',drift=false,untrusted=false,badPlan=false,badKey=false,actualSource=false,sourceText,mesaSuffix}={}){
+function invoke(t,{fail='',drift=false,untrusted=false,badPlan=false,badKey=false,actualSource=false,sourceText,mesaSuffix,staleCache=false}={}){
  const top=mkdtempSync(join(tmpdir(),'official-apt-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const bin=join(top,'bin'),tmp=join(top,'tmp'),src=join(top,'ubuntu.sources'),mirrors=join(top,'apt-mirrors.txt'),trace=join(top,'trace');mkdirSync(bin);mkdirSync(tmp);
  writeFileSync(src,sourceText??(actualSource?readFileSync(new URL('./fixtures/ubuntu24-20261012.334.sources',import.meta.url),'utf8'):badKey?source.replaceAll('/usr/share/keyrings/ubuntu-archive-keyring.gpg','/tmp/unknown.gpg'):untrusted?source.replace('mirror+file:/etc/apt/apt-mirrors.txt','https://evil.example/ubuntu/'):source));writeFileSync(mirrors,'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\n');
@@ -16,22 +16,22 @@ function invoke(t,{fail='',drift=false,untrusted=false,badPlan=false,badKey=fals
  writeFileSync(join(bin,'sudo'),'#!/bin/sh\nexec "$@"\n',{mode:0o755});
  writeFileSync(join(bin,'apt-get'),`#!/bin/sh
 printf 'apt %s\\n' "$*" >> "$APT_TEST_TRACE"
-isolated=0; sources=''
-for arg in "$@"; do case "$arg" in Dir::Etc::sourcelist=*) isolated=1; sources="\${arg#*=}";; esac; done
-if [ "$isolated" = 1 ]; then /bin/cat "$sources" >> "$APT_TEST_TRACE"; fi
+isolated=cached; sources=''
+for arg in "$@"; do case "$arg" in Dir::Etc::sourcelist=*) sources="\${arg#*=}"; case "$sources" in */original.sources) isolated=original;; *) isolated=official;; esac;; esac; done
+if [ "$isolated" != cached ]; then /bin/cat "$sources" >> "$APT_TEST_TRACE"; fi
 case " $* " in
  *' --simulate '*)
   [ "$APT_TEST_FAIL" != simulate ] || exit 41
   if [ "$APT_TEST_BAD_PLAN" = 1 ]; then printf 'Inst unexpected-format\\n'; exit 0; fi
   if [ "$APT_TEST_MESA" = 1 ]; then printf '%s%s\\n' 'Inst libgl1-mesa-dri [25.2.8-0ubuntu0.24.04.4] (25.2.8-0ubuntu0.24.04.5 Ubuntu:24.04/noble-updates [amd64])' "$APT_TEST_MESA_SUFFIX"; fi
-  version=1.0; [ "$isolated:$APT_TEST_DRIFT" != 1:1 ] || version=2.0
+  version=1.0; if [ "$APT_TEST_STALE_CACHE" = 1 ] && [ "$isolated" != cached ]; then version=1.1; fi; [ "$isolated:$APT_TEST_DRIFT" != official:1 ] || version=2.0
   printf 'Inst zsh (%s Ubuntu:24.04/noble [amd64])\\nInst libxml2-utils (2.0 Ubuntu:24.04/noble [amd64])\\nInst ffmpeg (6.1 Ubuntu:24.04/noble [amd64])\\n' "$version";;
- *' update '*) [ "$APT_TEST_FAIL" != update ] || exit 42;;
+ *' update '*) [ "$APT_TEST_FAIL" != update ] || exit 42; [ "$APT_TEST_FAIL" != "$isolated-update" ] || exit 42;;
  *' install '*) [ "$APT_TEST_FAIL" != install ] || exit 43; printf 'INSTALLED\\n' >> "$APT_TEST_TRACE";;
  *) exit 99;;
 esac
 `,{mode:0o755});
- const r=spawnSync('/bin/bash',[script,tmp,src,mirrors,'zsh','libxml2-utils','ffmpeg'],{encoding:'utf8',timeout:5000,env:{...process.env,PATH:bin+':'+process.env.PATH,APT_TEST_TRACE:trace,APT_TEST_FAIL:fail,APT_TEST_DRIFT:drift?'1':'0',APT_TEST_BAD_PLAN:badPlan?'1':'0',APT_TEST_MESA:mesaSuffix===undefined?'0':'1',APT_TEST_MESA_SUFFIX:mesaSuffix||''}});
+ const r=spawnSync('/bin/bash',[script,tmp,src,mirrors,'zsh','libxml2-utils','ffmpeg'],{encoding:'utf8',timeout:5000,env:{...process.env,PATH:bin+':'+process.env.PATH,APT_TEST_TRACE:trace,APT_TEST_FAIL:fail,APT_TEST_DRIFT:drift?'1':'0',APT_TEST_BAD_PLAN:badPlan?'1':'0',APT_TEST_MESA:mesaSuffix===undefined?'0':'1',APT_TEST_MESA_SUFFIX:mesaSuffix||'',APT_TEST_STALE_CACHE:staleCache?'1':'0'}});
  let log='';try{log=readFileSync(trace,'utf8');}catch{}
  return {...r,log,sourceUnchanged:readFileSync(src,'utf8')===before};
 }
@@ -72,3 +72,9 @@ test('空[]兼容仍拒绝两源候选版本变化',t=>{const r=invoke(t,{mesaSu
 for(const suffix of [' [broken-package]',' [ ]',' [] trailing',' [] []',' garbage'])test('非空破损列表或未知附注仍拒绝 '+suffix,t=>{
  const r=invoke(t,{mesaSuffix:suffix});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_PLAN_UNRECOGNIZED/);assert.doesNotMatch(r.log,/INSTALLED/);
 });
+
+test('两来源各自独立临时索引刷新，不以旧缓存判定新官方计划',t=>{
+ const r=invoke(t,{staleCache:true});assert.equal(r.status,0,r.stderr);const updates=r.log.split('\n').filter(x=>x.startsWith('apt ')&&/ update$/.test(x));assert.equal(updates.length,2);assert.ok(updates.some(x=>x.includes('/original.sources')&&x.includes('/original-lists')));assert.ok(updates.some(x=>x.includes('/ubuntu.sources')&&x.includes('/lists')));assert.ok(updates.every(x=>x.includes('Dir::Etc::sourceparts=-')&&x.includes('Dir::State::lists=')));assert.match(r.log,/URIs: mirror\+file:\/etc\/apt\/apt-mirrors.txt/);assert.equal(r.sourceUnchanged,true);assert.match(r.log,/INSTALLED/);
+});
+for(const fail of ['original-update','official-update'])test('独立来源刷新失败不得安装 '+fail,t=>{const r=invoke(t,{fail});assert.equal(r.status,42,r.stderr);assert.doesNotMatch(r.log,/INSTALLED/);assert.equal(r.sourceUnchanged,true);});
+test('两份fresh索引实际版本漂移仍拒绝，不复制official给原来源',t=>{const r=invoke(t,{staleCache:true,drift:true});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_PLAN_CHANGED/);assert.doesNotMatch(r.log,/INSTALLED/);});
