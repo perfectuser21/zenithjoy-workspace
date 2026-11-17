@@ -1,0 +1,7 @@
+{
+  "producer_source_sha256": "af9af5f39dbc0936c18df1a3b9a7f80f395a39059db8ab3fd96a46a8ac624fe1",
+  "source_range": "def main(): through EOF",
+  "producer_main_sha256": "601423e4304cef8193fb33fa73acb7d2973ab6622078ad7e98b00c08a9c123ec",
+  "producer_path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery3/tools.py",
+  "fixture_sha256": "601423e4304cef8193fb33fa73acb7d2973ab6622078ad7e98b00c08a9c123ec"
+}
