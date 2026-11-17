@@ -1,10 +1,13 @@
 import importlib.util
+import io
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+from contextlib import redirect_stderr
+from types import SimpleNamespace
 from urllib.error import HTTPError
 
 spec = importlib.util.spec_from_file_location('delivery', Path(__file__).parents[1] / 'staging-cos-delivery.py')
@@ -39,7 +42,7 @@ class FakeCos:
         if self.failure == 'delete': raise RuntimeError('SECRET_URL')
         self.present = False
 
-def denied(*args, **kw): raise HTTPError(args[0], 403, 'Forbidden', {}, None)
+def denied(*args, **kw): raise HTTPError(args[0], 403, 'Forbidden', {}, io.BytesIO())
 
 class DeliveryTest(unittest.TestCase):
     def setUp(self):
@@ -71,7 +74,7 @@ class DeliveryTest(unittest.TestCase):
         with self.assertRaises(Exception): self.execute(Mock())
         self.run.assert_not_called(); self.assertFalse(self.cos.present)
     def test_anonymous_404_does_not_prove_private(self):
-        def missing(*args,**kw): raise HTTPError(args[0],404,'Missing',{},None)
+        def missing(*args,**kw): raise HTTPError(args[0],404,'Missing',{},io.BytesIO())
         with self.assertRaises(Exception): self.execute(missing)
         self.run.assert_not_called(); self.assertFalse(self.cos.present)
     def test_versioned_bucket_refused_before_upload(self):
@@ -90,6 +93,17 @@ class DeliveryTest(unittest.TestCase):
     def test_cleanup_failure_fails_closed(self):
         self.cos.failure='delete'
         with self.assertRaisesRegex(Exception,'CLEANUP'): self.execute()
+    def test_delete_without_actual_removal_fails(self):
+        self.cos.delete_object=Mock()
+        with self.assertRaisesRegex(Exception,'CLEANUP'): self.execute()
+        self.assertTrue(self.cos.present)
+    def test_wrong_upload_length_never_deploys(self):
+        original=self.cos.head_object
+        def wrong(**kw):
+            result=original(**kw); result['Content-Length']='1'; return result
+        self.cos.head_object=wrong
+        with self.assertRaisesRegex(Exception,'SIZE_MISMATCH'): self.execute()
+        self.run.assert_not_called(); self.assertFalse(self.cos.present)
     def test_invalid_identity_never_uploads(self):
         self.env['GITHUB_RUN_ID']='1; echo BAD'
         with self.assertRaises(Exception): self.execute()
@@ -99,6 +113,13 @@ class DeliveryTest(unittest.TestCase):
             self.cos.get_presigned_download_url=Mock(return_value=url)
             with self.assertRaises(Exception): self.execute()
             self.run.assert_not_called(); self.assertFalse(self.cos.present)
+    def test_main_reports_safe_upload_phase_without_sdk_message(self):
+        self.cos.failure='upload'
+        sdk=SimpleNamespace(CosConfig=Mock(),CosS3Client=Mock(return_value=self.cos))
+        output=io.StringIO()
+        with patch.dict('sys.modules',{'qcloud_cos':sdk}), patch.dict(os.environ,{**self.env,'COS_SECRET_ID':'fixture','COS_SECRET_KEY':'SECRET_URL'}), patch.object(delivery.sys,'argv',['delivery',str(self.archive),'bash /tmp/fixed','--','ssh','root@hk']), redirect_stderr(output):
+            self.assertEqual(delivery.main(),1)
+        self.assertIn('COS_UPLOAD_FAILED',output.getvalue()); self.assertNotIn('SECRET_URL',output.getvalue())
     def test_remote_complete_download_before_original_gate(self):
         root=Path(self.tmp.name); bin_dir=root/'bin';bin_dir.mkdir()
         curl=bin_dir/'curl'
@@ -113,5 +134,17 @@ class DeliveryTest(unittest.TestCase):
             self.assertNotIn('SECRET_URL',(root/'args').read_text()+r.stderr+r.stdout)
             self.assertEqual(output.exists(),fail=='0')
         self.assertEqual(output.read_bytes(),b'original-gzip')
+        original.write_text('#!/bin/bash\nexit 47\n')
+        result=subprocess.run(['bash','-c',command],input='url = "https://private.invalid/?SECRET_URL"\n',text=True,capture_output=True,env=env)
+        self.assertEqual(result.returncode,44)
+    def test_workflow_wires_cos_and_preserves_original_admission_arguments(self):
+        workflow=(Path(__file__).parents[3]/'.github/workflows/deploy-staging-hk.yml').read_text()
+        self.assertIn("- 'scripts/deploy/staging-cos-delivery.py'",workflow)
+        self.assertIn('cos-python-sdk-v5==1.9.44',workflow)
+        self.assertIn('${{ secrets.COS_SECRET_ID }}',workflow)
+        self.assertIn('${{ secrets.COS_SECRET_KEY }}',workflow)
+        self.assertIn('"$REMOTE_SCRIPT" "$DEPLOY_SHA" "$DIGEST" "$CONFIG_ID" "$ARCHIVE_BYTES" "$UNPACKED_BYTES" "$LAYERS_HASH"',workflow)
+        self.assertIn('"$RUNNER_TEMP/staging-image.tar.gz" "$REMOTE_CMD" -- ssh',workflow)
+        self.assertNotIn('gzip -c "$RUNNER_TEMP/staging-image.tar" | ssh',workflow)
 
 if __name__ == '__main__': unittest.main()

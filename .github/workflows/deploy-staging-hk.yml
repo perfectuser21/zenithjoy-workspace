@@ -18,6 +18,7 @@ on:
       - 'apps/api/**'
       - 'deploy/docker-compose.staging-api.yml'
       - 'scripts/deploy/hk-api-staging.sh'
+      - 'scripts/deploy/staging-cos-delivery.py'
       - '.github/workflows/deploy-staging-hk.yml'
       - '.github/workflows/scripts/payment-public-check.mjs'
       - '.github/workflows/scripts/smoke/payment-smoke.sh'
@@ -90,11 +91,20 @@ jobs:
           ssh "${OPTS[@]}" "root@${SSH_HOST}" bash -s -- deploy "$DEPLOY_SHA" < scripts/deploy/hk-canvas-staging.sh
           ssh "${OPTS[@]}" "root@${SSH_HOST}" bash -s -- prepare-staging "$DEPLOY_SHA" < scripts/deploy/hk-canvas-production.sh
 
-      - name: Stream candidate to HK staging and run migrations
+      - name: Install pinned official COS transfer SDK
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cos-transfer-venv"
+          "$RUNNER_TEMP/cos-transfer-venv/bin/pip" install cos-python-sdk-v5==1.9.44
+
+      - name: Transfer private candidate through COS to HK staging and run migrations
         env:
           SSH_KEY: ${{ secrets.CREATIVE_CANVAS_HK_SSH_KEY }}
           SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
           DEPLOY_SHA: ${{ github.sha }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+          COS_BUCKET: zenithjoy-static-hk-1333590468
+          COS_REGION: ap-hongkong
         timeout-minutes: 30
         run: |
           set -euo pipefail
@@ -119,7 +129,9 @@ jobs:
           printf -v REMOTE_CMD '%q ' bash "$REMOTE_SCRIPT" "$DEPLOY_SHA" "$DIGEST" "$CONFIG_ID" "$ARCHIVE_BYTES" "$UNPACKED_BYTES" "$LAYERS_HASH"
           # Values are format-validated and shell-quoted locally by printf %q.
           # shellcheck disable=SC2029
-          gzip -c "$RUNNER_TEMP/staging-image.tar" | ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" "$REMOTE_CMD"
+          gzip -c "$RUNNER_TEMP/staging-image.tar" > "$RUNNER_TEMP/staging-image.tar.gz"
+          "$RUNNER_TEMP/cos-transfer-venv/bin/python" scripts/deploy/staging-cos-delivery.py \
+            "$RUNNER_TEMP/staging-image.tar.gz" "$REMOTE_CMD" -- ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}"
 
       # Public identity must match this deployment before the unsigned callback check.
       # Providers are optional: unregistered is explicitly not_verified, independently

@@ -11977,3 +11977,18 @@ tests:
     status: active
     product: CI治理
     note: "OpenClaw required L3 通配收集；约束真实APT/Chromium runner并隔离验证pg_dump主版本选择及现役演练入口"
+
+  - id: staging-cos-delivery
+    path: scripts/deploy/__tests__/staging-cos-delivery.test.mjs
+    type: integration
+    ci: L1
+    status: active
+    product: CI治理
+    note: "固定候选私有COS传输、失败关闭与对象清理"
+  - id: staging-cos-delivery-python
+    path: scripts/deploy/__tests__/staging-cos-delivery.test.py
+    type: integration
+    ci: L1
+    status: active
+    product: CI治理
+    note: "由同名Node测试调用；真实shell下载入口与COS接口边界"
