@@ -886,7 +886,7 @@
       "code_digest": "6af6ef02e784c2c8e4f7fbfb89d4f826e14ec5e9556005bc7ea58e05b23e6709",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
         "current_code_digest": "6af6ef02e784c2c8e4f7fbfb89d4f826e14ec5e9556005bc7ea58e05b23e6709"
@@ -1809,7 +1809,7 @@
       "code_digest": "dabb8bf6a1cdf7fab9dc8528f313e09d33fa535cbc6cf29a9bdc920f1e5b8edf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
         "current_code_digest": "dabb8bf6a1cdf7fab9dc8528f313e09d33fa535cbc6cf29a9bdc920f1e5b8edf"
@@ -2686,7 +2686,7 @@
       "code_digest": "57593f2a7a6ce8e572786b4b7ec61d096391d1a48cc35e82b2e95ff465614693",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
         "current_code_digest": "57593f2a7a6ce8e572786b4b7ec61d096391d1a48cc35e82b2e95ff465614693"
@@ -3652,7 +3652,7 @@
       "code_digest": "6fb3e0d2f7a3d3f2ca96eba2ee0721675954a6f1a0a4a343d97c04469229b4d9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
         "current_code_digest": "6fb3e0d2f7a3d3f2ca96eba2ee0721675954a6f1a0a4a343d97c04469229b4d9"
@@ -4544,7 +4544,7 @@
       "code_digest": "c8ac9cb9fff6de15f4bc7e2888a36709aa6c6ea8fb85f15c4e3cf8e0da0bd468",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
         "current_code_digest": "c8ac9cb9fff6de15f4bc7e2888a36709aa6c6ea8fb85f15c4e3cf8e0da0bd468"
@@ -5445,7 +5445,7 @@
       "code_digest": "f6f26d0a4aa00da1e3ac14bc5e1e12ec1e2a0519a4aa0f676ffbe247aff9241d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
         "current_code_digest": "f6f26d0a4aa00da1e3ac14bc5e1e12ec1e2a0519a4aa0f676ffbe247aff9241d"
@@ -6355,7 +6355,7 @@
       "code_digest": "f1a2497ce6325f71025ea7c7e7bf5af3d4307192f9483a9379041dcb8604092f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
         "current_code_digest": "f1a2497ce6325f71025ea7c7e7bf5af3d4307192f9483a9379041dcb8604092f"
@@ -7293,7 +7293,7 @@
       "code_digest": "8a864fc530050525798a683afc071660228303fd6a114503101cd0954e6acf3a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
         "current_code_digest": "8a864fc530050525798a683afc071660228303fd6a114503101cd0954e6acf3a"
@@ -8153,7 +8153,7 @@
       "code_digest": "191fc96d44ec9f5c54e526a32bbcb945239ecdb5892134b1d82344e764f4cc3b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
         "current_code_digest": "191fc96d44ec9f5c54e526a32bbcb945239ecdb5892134b1d82344e764f4cc3b"
@@ -8988,7 +8988,7 @@
       "code_digest": "9fe2298a86fff1d55a9d6072be07a49c7bcff37e1d7a06f7a84d1d12433171ca",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
         "current_code_digest": "9fe2298a86fff1d55a9d6072be07a49c7bcff37e1d7a06f7a84d1d12433171ca"
@@ -9816,7 +9816,7 @@
       "code_digest": "9126ab705828ae841e60ccf8f8195823f0f71d200f72dbbda894142f332bbda3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
         "current_code_digest": "9126ab705828ae841e60ccf8f8195823f0f71d200f72dbbda894142f332bbda3"
@@ -10654,7 +10654,7 @@
       "code_digest": "900d7a8fea324018b98a1c86af23bad22dbb1b892bb362e7b5b66a98e9d58a58",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅兼容已核云机Compose评论原件：共享完整同行头像和元数据解析、唯一昵称正文精确重放及实际依赖闭包；保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
+        "reason": "仅兼容已核云机Compose评论原件及动态底部输入提示：以唯一同父输入和图标结构、完整边界和非列表归属识别底栏，保留旧TSV、UID/VID/SHA/company/source/batch与资格恢复边界，不改Skill或合同。",
         "reviewed_by": "/root/checker_feedback_adapter",
         "previous_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
         "current_code_digest": "900d7a8fea324018b98a1c86af23bad22dbb1b892bb362e7b5b66a98e9d58a58"

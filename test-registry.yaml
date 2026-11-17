@@ -12030,3 +12030,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test discovers shared Compose enumeration and complete native recipient validation; collection-panel-readback.test.mjs exercises the real CLI"
     note: "真实XML完整同行头像/旧TSV/实体与作者裁切排除，UID/VID/SHA/source原件重放不放宽"
+
+  - id: public-code-preflight-source-inventory
+    path: services/phone-adb-controller/__tests__/public-code-preflight-inventory.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test discovers the actual fixture copy and synthetic ROM review inventory"
+    note: "账号预检夹具精确闭包不超过现有512守卫；保留真实Compose依赖，不改生产边界"
