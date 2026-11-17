@@ -25,12 +25,23 @@ def resource_rejection(central, local, *, central_owner, local_owner):
     error = scope_rejection('RESOURCE_AUTHORITY')
     error.details = {
         'read_only_resource_observation': True,
-        'next_actions': ['brain device-locks/acquire', 'phone lock-acquire-new'] if central['locked_by'] is None and local['lock'] == 'free' else ['stop_without_reclaim'],
+        'next_actions': (['brain device-locks/acquire', 'phone lock-acquire-new'] if central['locked_by'] is None and local['lock'] == 'free' else ['phone lock-acquire-new'] if central['locked_by'] == central_owner and local['lock'] == 'free' else ['stop_without_reclaim']),
         'required': {'central_locked_by': central_owner, 'local_owner': local_owner},
         'observed': {
             'central': {k: central.get(k) for k in ['device_name', 'locked_by', 'expires_at', 'lease_version']},
             'local': {k: local[k] for k in ['lock', 'owner', 'stale', 'reclaimable', 'reason'] if k in local}},
         'tool_hint': 'company_config会建立本run快照，必须先取得本人中央与本地双锁；Task/冻结company-before资料由宿主提供。若锁属他人或preserved，停止，不抢锁。'}
+    return error
+
+
+def central_owner_rejection(central, *, required_owner):
+    error = scope_rejection('CENTRAL_OWNER_REQUIRED')
+    error.details = {
+        'read_only_central_observation': True,
+        'required': {'central_locked_by': required_owner},
+        'observed': {'central': {k: central.get(k) for k in ['device_name', 'locked_by', 'expires_at', 'lease_version']}},
+        'next_actions': ['brain device-locks/acquire'] if central['locked_by'] is None else ['stop_without_reclaim'],
+        'tool_hint': '先取得本人中央锁，再请求本地锁；他人锁不抢占，未执行phone lock-acquire。'}
     return error
 
 

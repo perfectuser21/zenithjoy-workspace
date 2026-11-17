@@ -5,6 +5,7 @@ const program=String.raw`import os,sys,json,pathlib,re,time,fcntl,subprocess,imp
 packet=json.load(sys.stdin);P=pathlib.Path(sys.argv[1]);mode=sys.argv[2];action=sys.argv[3];spec=importlib.util.spec_from_file_location('result',sys.argv[4]);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 PreDispatchRejected=module.PreDispatchRejected;emit_pre_dispatch_rejection=module.emit_pre_dispatch_rejection;read_business_input=module.read_business_input
 if hasattr(module,'scope_rejection'):scope_rejection=module.scope_rejection;resource_rejection=module.resource_rejection
+if hasattr(module,'central_owner_rejection'):central_owner_rejection=module.central_owner_rejection
 exec(packet['tool_scope.py']['source'],globals());exec(packet['tools.py']['source'],globals())
 calls={'resource_reads':0,'guard':0,'credentials':0,'business':0,'phone':0,'brain_write':0}
 def read(p):return json.loads(p.read_text())
