@@ -153,6 +153,8 @@ def rebuild_candidate(source, build_dir, server, meson, ninja, pkg_config, runti
     subprocess.run([str(meson), 'test', '-C', str(build_dir), '--print-errorlogs'],
                    env=env, check=True)
     if runtime_kind == 'sdk33':
+        subprocess.run([sys.executable, str(Path(__file__).parent / 'tests/recorder_header_regression.py'),
+                        '--source', str(source), '--pkg-config', str(pkg_config)], env=env, check=True)
         subprocess.run([sys.executable, str(Path(__file__).parent / 'tests/test_recorder_media.py'),
                         '--source', str(source), '--build-dir', str(build_dir),
                         '--pkg-config', str(pkg_config)], env=env, check=True)
