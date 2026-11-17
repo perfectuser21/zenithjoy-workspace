@@ -15,9 +15,9 @@ echo 'PREFLIGHT_APT_CONFIG original-public-sources'
 work=$(/usr/bin/mktemp -d "$temp_root/openclaw-apt.XXXXXX")
 [[ "$work" == "$temp_root"/openclaw-apt.* ]] || exit 1
 trap 'status=$?; sudo /bin/rm -rf -- "$work" || { echo APT_TEMP_CLEANUP_FAILED >&2; [ "$status" -ne 0 ] || status=1; }; exit "$status"' EXIT
-/bin/mkdir -p "$work/lists/partial"
-/bin/chmod 0755 "$work" "$work/lists"
-python3 - "$source_file" "$work/ubuntu.sources" <<'PY'
+/bin/mkdir -p "$work/lists/partial" "$work/original-lists/partial"
+/bin/chmod 0755 "$work" "$work/lists" "$work/original-lists"
+python3 - "$source_file" "$work/ubuntu.sources" "$work/original.sources" <<'PY'
 import pathlib,re,sys
 text=pathlib.Path(sys.argv[1]).read_text()
 allowed={'mirror+file:/etc/apt/apt-mirrors.txt':'https://archive.ubuntu.com/ubuntu/',
@@ -29,7 +29,7 @@ allowed={'mirror+file:/etc/apt/apt-mirrors.txt':'https://archive.ubuntu.com/ubun
 # Only add the slash-free aliases; do not normalize hosts, paths, ports or queries.
 allowed.update({uri[:-1]:target for uri,target in tuple(allowed.items())
  if uri.startswith(('http://','https://')) and uri.endswith('/')})
-blocks=[]
+blocks=[]; original=[]
 for block in re.split(r'\n\s*\n',text.strip()):
  fields={}
  for line in block.splitlines():
@@ -44,28 +44,39 @@ for block in re.split(r'\n\s*\n',text.strip()):
  uris=fields.get('URIs','').split()
  if not uris or any(u not in allowed for u in uris):raise SystemExit('APT_SOURCE_UNTRUSTED')
  if not fields.get('Suites') or any(s not in ('noble','noble-updates','noble-backports','noble-security') for s in fields['Suites'].split()):raise SystemExit('APT_SOURCE_UNTRUSTED')
+ original.append(block)
  blocks.append('\n'.join('URIs: '+' '.join(dict.fromkeys(allowed[u] for u in uris)) if l.startswith('URIs:') else l for l in block.splitlines()))
 if not blocks:raise SystemExit('APT_SOURCE_UNTRUSTED')
 pathlib.Path(sys.argv[2]).write_text('\n\n'.join(blocks)+'\n')
+pathlib.Path(sys.argv[3]).write_text('\n\n'.join(original)+'\n')
 PY
-/bin/chmod 0644 "$work/ubuntu.sources"
+/bin/chmod 0644 "$work/ubuntu.sources" "$work/original.sources"
 echo 'PREFLIGHT_APT_CONFIG selected-official-sources'
 /bin/cat "$work/ubuntu.sources"
 opts=(-o DPkg::Lock::Timeout=20 -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
 isolated=(-o "Dir::Etc::sourcelist=$work/ubuntu.sources" -o Dir::Etc::sourceparts=- -o "Dir::State::lists=$work/lists")
-stage original-plan sudo env LC_ALL=C apt-get --simulate "${opts[@]}" install "$@" > "$work/original.plan"
+original_isolated=(-o "Dir::Etc::sourcelist=$work/original.sources" -o Dir::Etc::sourceparts=- -o "Dir::State::lists=$work/original-lists")
+# Keep the image cache as diagnosis, never compare it with a freshly fetched index.
+stage cached-plan sudo env LC_ALL=C apt-get --simulate "${opts[@]}" install "$@" > "$work/cached.plan"
+echo 'PREFLIGHT_APT_CACHED_PLAN_BEGIN'
+/bin/cat "$work/cached.plan"
+echo 'PREFLIGHT_APT_CACHED_PLAN_END'
+# Two independent signed index sets, retaining original URIs and mirror preferences.
+stage original-index sudo env LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" -o APT::Update::Error-Mode=any update
+stage original-plan sudo env LC_ALL=C apt-get --simulate "${original_isolated[@]}" "${opts[@]}" install "$@" > "$work/original.plan"
 stage official-index sudo env LC_ALL=C apt-get "${isolated[@]}" "${opts[@]}" -o APT::Update::Error-Mode=any update
 stage official-plan sudo env LC_ALL=C apt-get --simulate "${isolated[@]}" "${opts[@]}" install "$@" > "$work/official.plan"
 python3 - "$work/original.plan" "$work/official.plan" <<'PY'
-import pathlib,re,sys
+import json,pathlib,re,sys
 def plan(path):
  result=[]
  for line in pathlib.Path(path).read_text().splitlines():
   if not line.startswith(('Inst','Remv')):continue
-  m=re.fullmatch(r'Inst ([a-z0-9][a-z0-9+.:\-]*) (?:\[[^\]\r\n]+\] )?\(([^\s()]+) [^\r\n]*\)',line)
+  m=re.fullmatch(r'Inst ([a-z0-9][a-z0-9+.:\-]*) (?:\[[^\]\r\n]+\] )?\(([^\s()]+) [^\r\n]*\)(?: \[\])?',line)
   if m:result.append(('Inst',*m.groups()));continue
   m=re.fullmatch(r'Remv ([a-z0-9][a-z0-9+.:\-]*)(?: \[([^\]\r\n]+)\])?',line)
   if m:result.append(('Remv',*m.groups()));continue
+  print('APT_PLAN_REJECTED '+json.dumps({'plan':pathlib.Path(path).name,'line':line},ensure_ascii=True),file=sys.stderr)
   raise SystemExit('APT_PLAN_UNRECOGNIZED')
  return sorted(result,key=str)
 a,b=plan(sys.argv[1]),plan(sys.argv[2])

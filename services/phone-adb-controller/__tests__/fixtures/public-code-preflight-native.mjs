@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {cpSync,mkdirSync,mkdtempSync,readFileSync,writeFileSync,readdirSync,realpathSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,relative} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -13,7 +13,10 @@ const hash=b=>createHash('sha256').update(b).digest('hex');
 export async function publicCodeNativeFixture(t,{workflow='douyin_video_discovery',slowDump=false,deviceProfile='fixture',deviceSerial='192.0.2.31:10001',expectedAccount='expected',onDump=()=>{},sourceTransform=()=>{}}={}){
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'public-code-native-'))),root=join(directory,'runtime'),home=join(directory,'home'),evidence=join(directory,'evidence');
  t.after(()=>rmSync(directory,{recursive:true,force:true}));mkdirSync(home,{mode:0o700});mkdirSync(evidence,{mode:0o700});
- cpSync(new URL('../../',import.meta.url),root,{recursive:true,filter:p=>!p.split('/').some(x=>['__tests__','node_modules','__pycache__','_dependencies'].includes(x))});
+ // Account preflight does not import the independent ASR transport. Keep its
+ // fixture source bounded; production's 512-file admission guard stays unchanged.
+ const sourceRoot=new URL('../../',import.meta.url),asrOnly=new Set(['asr-protocol.mjs','asr-private-cos.mjs','asr-cos-http.mjs','asr-cos-dependencies.mjs','asr-cos-sdk-lock.json']);
+ cpSync(sourceRoot,root,{recursive:true,filter:p=>!asrOnly.has(relative(sourceRoot.pathname,p))&&!p.split('/').some(x=>['__tests__','node_modules','__pycache__','_dependencies'].includes(x))});
  // The fixed Python leaf retains its original production root validation;
  // the fixture substitutes ONLY the home-root selector before freezing bytes.
  const lockSource=join(root,'phone-lock-root.py');let text=readFileSync(lockSource,'utf8');text=text.replace('home = Path(pwd.getpwuid(os.geteuid()).pw_dir)',`home = Path(${JSON.stringify(home)})`);text=text.replace("record['legacy_root'] == '/private/tmp/openclaw-phone/locks'",`record['legacy_root'] == ${JSON.stringify(join(home,'legacy'))}`);writeFileSync(lockSource,text);
