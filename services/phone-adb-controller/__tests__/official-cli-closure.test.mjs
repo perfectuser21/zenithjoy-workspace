@@ -120,3 +120,10 @@ test('合法M4 USB边界经原作用域准入后可构造，JSON克隆不能代�
  const facade=createOfficialCliClosure({...context,operationAdmission:admission});
  assert.equal((await facade.close()).execution_stopped,true);
 });
+
+test('legacy official operations do not require helpers reachable only from the separate local metadata command',async t=>{
+ const clone=realpathSync(mkdtempSync(join(tmpdir(),'cli-local-metadata-')));t.after(()=>rmSync(clone,{recursive:true,force:true}));cpSync(root,clone,{recursive:true,filter:p=>!p.split('/').some(n=>['__tests__','node_modules','_dependencies'].includes(n))});
+ for(const n of ['profile-card-link.py','profile-card-link.sh'])unlinkSync(join(clone,n));symlinkSync(realpathSync(join(root,'../../node_modules')),join(clone,'node_modules'));
+ const createFacade=(await import(pathToFileURL(join(clone,'official-cli-closure.mjs')).href)).createOfficialCliClosure,r=rig(t,{runtimeRoot:clone,createFacade});
+ assert.equal(await r.facade.prepare(),true);assert.throws(()=>describeOfficialCliInvocation({root:clone,command:join(clone,'douyin-phone-adb'),args:['--profile','fixture','--lock-owner','run','commenter-profile-card-link','7707600173446204723','123','bmFtZQ==','a'.repeat(64),'eid'],executables,profile:'fixture',owner:'run',serial:'serial'}),/UNREVIEWED_OPERATION/);await r.facade.close();
+});
