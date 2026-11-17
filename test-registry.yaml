@@ -11992,3 +11992,12 @@ tests:
     status: active
     product: CI治理
     note: "由同名Node测试调用；真实shell下载入口与COS接口边界"
+
+  - id: sdk33-private-runtime-dependencies
+    path: services/phone-adb-controller/runtime/tests/test_private_runtime.py
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test / sdk31-runtime.test.mjs invokes stdlib unittest discover"
+    note: "私有固定ABI依赖闭包、失败关闭、末端DYLD与启动自检；不访问手机"
