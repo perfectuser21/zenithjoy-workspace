@@ -57,7 +57,7 @@ stage original-plan sudo env LC_ALL=C apt-get --simulate "${opts[@]}" install "$
 stage official-index sudo env LC_ALL=C apt-get "${isolated[@]}" "${opts[@]}" -o APT::Update::Error-Mode=any update
 stage official-plan sudo env LC_ALL=C apt-get --simulate "${isolated[@]}" "${opts[@]}" install "$@" > "$work/official.plan"
 python3 - "$work/original.plan" "$work/official.plan" <<'PY'
-import pathlib,re,sys
+import json,pathlib,re,sys
 def plan(path):
  result=[]
  for line in pathlib.Path(path).read_text().splitlines():
@@ -66,6 +66,7 @@ def plan(path):
   if m:result.append(('Inst',*m.groups()));continue
   m=re.fullmatch(r'Remv ([a-z0-9][a-z0-9+.:\-]*)(?: \[([^\]\r\n]+)\])?',line)
   if m:result.append(('Remv',*m.groups()));continue
+  print('APT_PLAN_REJECTED '+json.dumps({'plan':pathlib.Path(path).name,'line':line},ensure_ascii=True),file=sys.stderr)
   raise SystemExit('APT_PLAN_UNRECOGNIZED')
  return sorted(result,key=str)
 a,b=plan(sys.argv[1]),plan(sys.argv[2])

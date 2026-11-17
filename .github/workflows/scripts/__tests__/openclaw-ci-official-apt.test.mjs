@@ -38,7 +38,7 @@ test('实际bash仅进程隔离官方Ubuntu源，计划相同才安装，原sour
 test('签名索引选择的pkg/version计划漂移即拒绝，不安装',t=>{const r=invoke(t,{drift:true});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_PLAN_CHANGED/);assert.doesNotMatch(r.log,/INSTALLED/);assert.equal(r.sourceUnchanged,true);});
 test('未知源拒绝而不是授予Ubuntu签名信任',t=>{const r=invoke(t,{untrusted:true});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_SOURCE_UNTRUSTED/);assert.doesNotMatch(r.log,/INSTALLED/);assert.equal(r.sourceUnchanged,true);});
 test('未知签名key拒绝且不安装',t=>{const r=invoke(t,{badKey:true});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_SOURCE_SIGNATURE_REQUIRED/);assert.doesNotMatch(r.log,/INSTALLED/);});
-test('两边都有无法解析的Inst也不能被过滤成相同空计划',t=>{const r=invoke(t,{badPlan:true});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_PLAN_UNRECOGNIZED/);assert.doesNotMatch(r.log,/INSTALLED/);});
+test('两边都有无法解析的Inst也不能被过滤成相同空计划',t=>{const r=invoke(t,{badPlan:true});assert.notEqual(r.status,0);assert.match(r.stderr,/APT_PLAN_UNRECOGNIZED/);assert.match(r.stderr,/APT_PLAN_REJECTED.*"plan": "original.plan".*"line": "Inst unexpected-format"/);assert.doesNotMatch(r.log,/INSTALLED/);});
 for(const [phase,code] of [['simulate',41],['update',42],['install',43]])test('真实bash失败保留'+phase+'阶段且不报告完成',t=>{const r=invoke(t,{fail:phase});assert.equal(r.status,code,r.stderr);assert.doesNotMatch(r.stdout,/PREFLIGHT_APT_DONE/);assert.equal(r.sourceUnchanged,true);});
 
 test('真实runner完整source含纯注释分段，仍逐段验证真实源后安装',t=>{const r=invoke(t,{actualSource:true});assert.equal(r.status,0,r.stderr);assert.equal(r.sourceUnchanged,true);assert.match(r.log,/INSTALLED/);});
