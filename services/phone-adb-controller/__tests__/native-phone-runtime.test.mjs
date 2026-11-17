@@ -11,9 +11,20 @@ import {freezePublicPhoneDefinition} from './fixtures/native-phone-public-defini
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 
+// This fixture owns its private connection inputs, not the CI scratch service.
+function isolatePrivatePgEnvironment(t){
+ const saved=Object.fromEntries(Object.entries(process.env).filter(([key])=>/^PG[A-Z_]*$/.test(key)));
+ for(const key of Object.keys(saved))delete process.env[key];
+ t.after(()=>{
+  for(const key of Object.keys(process.env))if(/^PG[A-Z_]*$/.test(key))delete process.env[key];
+  Object.assign(process.env,saved);
+ });
+}
+
 // Prepare the actual runtime and its branded preflight provider. Only the lease
 // fixture uses loopback HTTP; no phone, model, PG pool or worker is launched.
 async function prepared(t,check){
+ isolatePrivatePgEnvironment(t);
  return usingNativePhonePublic(t,async f=>{
   const load=name=>import(pathToFileURL(join(f.runtimeRoot,name))),scope=await load('preflight-control-scope.mjs');
   const user=os.userInfo();t.mock.method(os,'userInfo',()=>({...user,homedir:f.env.HOME}));syncBuiltinESMExports();
