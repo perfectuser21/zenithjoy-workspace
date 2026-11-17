@@ -13,6 +13,8 @@ from test_runtime import load
 class PrivateRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.module = load(self, 'scrcpy-private-runtime.py')
+        host = patch.object(self.module, 'host_platform', return_value=('darwin', 'arm64'))
+        host.start(); self.addCleanup(host.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
@@ -98,15 +100,30 @@ class PrivateRuntimeTests(unittest.TestCase):
             with self.subTest(code=code, stdout=stdout), patch.object(self.module.subprocess, 'run', return_value=subprocess.CompletedProcess([], code, stdout, 'dyld: missing library')):
                 with self.assertRaises(ValueError): self.module.startup_check(self.root)
 
+    def test_startup_rejects_other_host_platform_before_launch(self):
+        with patch.object(self.module, 'host_platform', return_value=('linux', 'x86_64')), patch.object(self.module.subprocess, 'run') as run:
+            with self.assertRaises(ValueError): self.module.startup_check(self.root)
+        run.assert_not_called()
+
+    def test_existing_cli_exposes_explicit_startup_without_changing_byte_pins(self):
+        import contextlib
+        import io
+        runtime = load(self, 'scrcpy-runtime.py')
+        output = io.StringIO()
+        with patch.object(runtime, '__file__', str(self.base / 'scrcpy-runtime.py')), patch.object(runtime, 'private_runtime', return_value=vars(self.module)), patch.object(self.module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'scrcpy 3.3.4\n', '')), contextlib.redirect_stdout(output):
+            code = runtime.main(['verify', '--runtime-kind', 'sdk33', '--runtime-root', str(self.root), '--startup'])
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(output.getvalue())['startup_verified'])
+
     def test_builder_copies_only_frozen_dependencies_and_self_checks_before_publication(self):
         builder = load(self, 'build-scrcpy-runtime.py')
         target = self.base / 'adopted'
-        with patch.object(builder, '__file__', str(self.base / 'build-scrcpy-runtime.py')), patch.object(self.module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'scrcpy 3.3.4\n', '')):
+        with patch.object(builder, '__file__', str(self.base / 'build-scrcpy-runtime.py')), patch.object(builder, 'private_runtime', return_value=vars(self.module)), patch.object(self.module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'scrcpy 3.3.4\n', '')):
             result = builder.adopt_runtime(self.root / 'scrcpy', self.root / 'scrcpy-server', target, runtime_kind='sdk33', dependencies_dir=self.root / 'lib')
         self.assertTrue(result['startup_verified'])
         self.assertEqual((target / 'lib/libavformat.62.dylib').read_bytes(), (self.root / 'lib/libavformat.62.dylib').read_bytes())
         failed = self.base / 'failed-startup'
-        with patch.object(builder, '__file__', str(self.base / 'build-scrcpy-runtime.py')), patch.object(self.module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'dyld missing library')):
+        with patch.object(builder, '__file__', str(self.base / 'build-scrcpy-runtime.py')), patch.object(builder, 'private_runtime', return_value=vars(self.module)), patch.object(self.module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'dyld missing library')):
             with self.assertRaises(ValueError):
                 builder.adopt_runtime(self.root / 'scrcpy', self.root / 'scrcpy-server', failed, runtime_kind='sdk33', dependencies_dir=self.root / 'lib')
         self.assertFalse(failed.exists())

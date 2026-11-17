@@ -58,7 +58,12 @@ def publish_exclusive(source, destination):
         raise OSError(error, os.strerror(error), str(destination))
 
 
-def adopt_runtime(client, server, runtime_root, runtime_kind='sdk31'):
+def private_runtime():
+    import runpy
+    return runpy.run_path(str(Path(__file__).with_name('scrcpy-private-runtime.py')))
+
+
+def adopt_runtime(client, server, runtime_root, runtime_kind='sdk31', dependencies_dir=None):
     policy = runtime_policy(runtime_kind)
     client, server, root = map(Path, (client, server, runtime_root))
     if not root.is_absolute() or not root.parent.is_dir():
@@ -77,6 +82,22 @@ def adopt_runtime(client, server, runtime_root, runtime_kind='sdk31'):
         result = dict(policy, verified=True, client_path=str(root / 'scrcpy'),
                       server_path=str(root / 'scrcpy-server'), runtime_root=str(root),
                       installation='isolated immutable package; no global installation')
+        if dependencies_dir is not None:
+            if runtime_kind != 'sdk33': raise ValueError('private dependencies are only approved for sdk33')
+            helper = private_runtime(); raw, lock = helper['dependency_lock']()
+            libs = temporary / 'lib'; libs.mkdir()
+            for row in lock['libraries']:
+                source = Path(dependencies_dir) / row['name']
+                if digest(source) != row['sha256']: raise ValueError('private dependency source hash mismatch')
+                shutil.copyfile(source, libs / row['name']); os.chmod(libs / row['name'], 0o444)
+            (temporary / 'private-dependencies.json').write_bytes(raw)
+            os.chmod(temporary / 'private-dependencies.json', 0o444)
+            # 客户端先变为可执行，真实--version失败则原子发布根本不会发生。
+            os.chmod(temporary / 'scrcpy', 0o555)
+            startup = helper['startup_check'](temporary)
+            result.update({key: value for key, value in startup.items() if key != 'library_directory'})
+            result['library_directory'] = str(root / 'lib')
+            os.chmod(libs, 0o555)
         (temporary / 'runtime-manifest.json').write_text(json.dumps(result, indent=2) + '\n')
         os.chmod(temporary / 'scrcpy', 0o555)
         os.chmod(temporary / 'scrcpy-server', 0o444)
@@ -87,6 +108,7 @@ def adopt_runtime(client, server, runtime_root, runtime_kind='sdk31'):
     finally:
         if temporary.exists():
             temporary.chmod(0o755)
+            if (temporary / 'lib').is_dir(): (temporary / 'lib').chmod(0o755)
             shutil.rmtree(temporary)
 
 
@@ -149,6 +171,7 @@ def main(argv=None):
     adopt = sub.add_parser('adopt')
     for key in ('client', 'server', 'runtime-root'):
         adopt.add_argument('--' + key, required=True)
+    adopt.add_argument('--dependencies-dir')
     rebuild = sub.add_parser('rebuild')
     for key in ('source', 'build-dir', 'server', 'meson', 'ninja', 'pkg-config'):
         rebuild.add_argument('--' + key, required=True)

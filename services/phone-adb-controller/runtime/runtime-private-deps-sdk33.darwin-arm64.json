@@ -1,0 +1,156 @@
+{
+  "schema": "scrcpy-private-dylibs-v1",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "client_sha256": "952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d",
+  "client_dependencies": [
+    "libSDL2-2.0.0.dylib",
+    "libavcodec.62.dylib",
+    "libavformat.62.dylib",
+    "libavutil.60.dylib",
+    "libswresample.6.dylib",
+    "libusb-1.0.0.dylib"
+  ],
+  "libraries": [
+    {
+      "name": "libSDL2-2.0.0.dylib",
+      "source_path": "/opt/homebrew/Cellar/sdl2/2.32.10/lib/libSDL2-2.0.0.dylib",
+      "sha256": "a9df87aebac1333a765cee5c2382bf593cd7ffbf21625c94937173852581f763",
+      "bytes": 1513888,
+      "dependencies": []
+    },
+    {
+      "name": "libSvtAv1Enc.4.dylib",
+      "source_path": "/opt/homebrew/Cellar/svt-av1/4.0.1/lib/libSvtAv1Enc.4.0.1.dylib",
+      "sha256": "1e89ab6c8106c0572a71011739074f66522e1b850572a80d12e62378714759a7",
+      "bytes": 2868752,
+      "dependencies": []
+    },
+    {
+      "name": "libavcodec.62.dylib",
+      "source_path": "/opt/homebrew/Cellar/ffmpeg/8.0.1_4/lib/libavcodec.62.11.100.dylib",
+      "sha256": "6bbb65894823f71f51f1d25046ab8e8b670233d12550b6dd11cd2dfbfb170340",
+      "bytes": 9715792,
+      "dependencies": [
+        "libSvtAv1Enc.4.dylib",
+        "libavutil.60.dylib",
+        "libcrypto.3.dylib",
+        "libdav1d.7.dylib",
+        "libmp3lame.0.dylib",
+        "libopus.0.dylib",
+        "libssl.3.dylib",
+        "libswresample.6.dylib",
+        "libvpx.12.dylib",
+        "libx264.165.dylib",
+        "libx265.215.dylib"
+      ]
+    },
+    {
+      "name": "libavformat.62.dylib",
+      "source_path": "/opt/homebrew/Cellar/ffmpeg/8.0.1_4/lib/libavformat.62.3.100.dylib",
+      "sha256": "22449992e2320174b1743a56c4ebc9a107f485e5e9432a9b478a9765933826d0",
+      "bytes": 2339280,
+      "dependencies": [
+        "libSvtAv1Enc.4.dylib",
+        "libavcodec.62.dylib",
+        "libavutil.60.dylib",
+        "libcrypto.3.dylib",
+        "libdav1d.7.dylib",
+        "libmp3lame.0.dylib",
+        "libopus.0.dylib",
+        "libssl.3.dylib",
+        "libswresample.6.dylib",
+        "libvpx.12.dylib",
+        "libx264.165.dylib",
+        "libx265.215.dylib"
+      ]
+    },
+    {
+      "name": "libavutil.60.dylib",
+      "source_path": "/opt/homebrew/Cellar/ffmpeg/8.0.1_4/lib/libavutil.60.8.100.dylib",
+      "sha256": "a88e76c24e19c173103d27a64bd8700d27d3dd6326d37b4506135fecea401e49",
+      "bytes": 661104,
+      "dependencies": [
+        "libcrypto.3.dylib",
+        "libssl.3.dylib"
+      ]
+    },
+    {
+      "name": "libcrypto.3.dylib",
+      "source_path": "/opt/homebrew/Cellar/openssl@3/3.6.4/lib/libcrypto.3.dylib",
+      "sha256": "48c160c3aaa46cb69e5874370d820c2bc8be0712f6ee690fa10581ad966474a7",
+      "bytes": 4870816,
+      "dependencies": []
+    },
+    {
+      "name": "libdav1d.7.dylib",
+      "source_path": "/opt/homebrew/Cellar/dav1d/1.5.3/lib/libdav1d.7.dylib",
+      "sha256": "23cae26b6574e03c720d8f1445abe1f6e6a54de0bc089c8c64191114edb05a1b",
+      "bytes": 798624,
+      "dependencies": []
+    },
+    {
+      "name": "libmp3lame.0.dylib",
+      "source_path": "/opt/homebrew/Cellar/lame/3.100/lib/libmp3lame.0.dylib",
+      "sha256": "f4d0cccf6d3f482c76eba7134189b79047ca24981fd6013c191ddd3c96303fe4",
+      "bytes": 304944,
+      "dependencies": []
+    },
+    {
+      "name": "libopus.0.dylib",
+      "source_path": "/opt/homebrew/Cellar/opus/1.6.1/lib/libopus.0.dylib",
+      "sha256": "d67df1a91ad4c8b9bc5b0490930d074231587bae46063165ceb8b86d7e13f5e6",
+      "bytes": 375824,
+      "dependencies": []
+    },
+    {
+      "name": "libssl.3.dylib",
+      "source_path": "/opt/homebrew/Cellar/openssl@3/3.6.4/lib/libssl.3.dylib",
+      "sha256": "a53b324db78c1146ff9ce68700f952e3997f4a1965ee6c6a802f6d3bdcd625ad",
+      "bytes": 888320,
+      "dependencies": [
+        "libcrypto.3.dylib"
+      ]
+    },
+    {
+      "name": "libswresample.6.dylib",
+      "source_path": "/opt/homebrew/Cellar/ffmpeg/8.0.1_4/lib/libswresample.6.1.100.dylib",
+      "sha256": "dd90933f39b99c2d0d4ae941f1c534670cf2644f3a544e459e493674cebd44c0",
+      "bytes": 105088,
+      "dependencies": [
+        "libavutil.60.dylib",
+        "libcrypto.3.dylib",
+        "libssl.3.dylib"
+      ]
+    },
+    {
+      "name": "libusb-1.0.0.dylib",
+      "source_path": "/opt/homebrew/Cellar/libusb/1.0.29/lib/libusb-1.0.0.dylib",
+      "sha256": "4208007b9d5658447a812ee0a3d8a76ddec473da29acd1ef0836382ce69933bb",
+      "bytes": 179408,
+      "dependencies": []
+    },
+    {
+      "name": "libvpx.12.dylib",
+      "source_path": "/opt/homebrew/Cellar/libvpx/1.16.0/lib/libvpx.12.dylib",
+      "sha256": "09c24c608c25669e665e790168f2888719019bbd96579715e588120c9da8c77c",
+      "bytes": 1764656,
+      "dependencies": []
+    },
+    {
+      "name": "libx264.165.dylib",
+      "source_path": "/opt/homebrew/Cellar/x264/r3222/lib/libx264.165.dylib",
+      "sha256": "4e91cf8ccca2b56cf75244da2fcf618680476956ae87488794bdd5791f47231d",
+      "bytes": 1281664,
+      "dependencies": []
+    },
+    {
+      "name": "libx265.215.dylib",
+      "source_path": "/opt/homebrew/Cellar/x265/4.1/lib/libx265.215.dylib",
+      "sha256": "d8e1449cdcee84641865e8c59ec6bb76e3cad6fb059bae32eea73861ebc237d2",
+      "bytes": 5494208,
+      "dependencies": []
+    }
+  ],
+  "source": "xian-m4 read-only otool/hash snapshot"
+}

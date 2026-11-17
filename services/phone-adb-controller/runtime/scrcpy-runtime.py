@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """固定客户端/JAR校验及有界、无覆盖的Android JAR传输；不领取或释放锁。"""
-import argparse
 import hashlib
 import json
 import os
@@ -24,6 +23,12 @@ def capture_popen(argv, **kwargs):
 
 
 POLICY = json.loads(Path(__file__).with_name('runtime-policy.json').read_text())
+CLI_PATH = Path(__file__).with_name('scrcpy-runtime-cli.py')
+
+
+def private_runtime():
+    import runpy
+    return runpy.run_path(str(Path(__file__).with_name('scrcpy-private-runtime.py')))
 
 
 class RuntimeFailure(Exception):
@@ -79,6 +84,10 @@ def verify_runtime(runtime_root, client_sha256=None, runtime_kind='sdk31'):
             raise RuntimeFailure('runtime client is not executable')
         result[kind + '_path'] = str(path)
         result[kind + '_sha256'] = digest
+    if (root / 'private-dependencies.json').exists() or (root / 'private-dependencies.json').is_symlink():
+        if runtime_kind != 'sdk33': raise RuntimeFailure('private dependencies are not approved for this runtime kind')
+        try: result.update(private_runtime()['verify_dependencies'](root))
+        except ValueError as error: raise RuntimeFailure('private runtime dependencies refused: ' + str(error)) from error
     return result
 
 
@@ -468,34 +477,8 @@ def adb_shim(argv):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['verify', 'stage-server'])
-    parser.add_argument('--runtime-root', required=True)
-    parser.add_argument('--runtime-kind', choices=['sdk31', 'sdk33'], default='sdk31')
-    parser.add_argument('--client-sha256')
-    parser.add_argument('--adb-bin')
-    parser.add_argument('--adb-port', type=int)
-    parser.add_argument('--serial')
-    parser.add_argument('--owner')
-    parser.add_argument('--lock-dir')
-    parser.add_argument('--evidence-root')
-    parser.add_argument('--evidence-id')
-    parser.add_argument('--timeout', type=float, default=45)
-    args = parser.parse_args(argv)
-    try:
-        if args.command == 'verify':
-            result = verify_runtime(args.runtime_root, args.client_sha256, args.runtime_kind)
-        else:
-            for field in ('adb_bin', 'adb_port', 'serial', 'owner', 'lock_dir', 'evidence_root', 'evidence_id'):
-                if getattr(args, field) is None:
-                    parser.error('--' + field.replace('_', '-') + ' is required for staging')
-            values = vars(args).copy()
-            del values['command']
-            result = stage_server(**values)
-    except RuntimeFailure as error:
-        result = {'verified': False, 'error': str(error), 'execution_stop_unknown': error.unknown}
-    print(json.dumps(result, ensure_ascii=False))
-    return 0 if result['verified'] else (75 if result.get('execution_stop_unknown') else 64)
+    import runpy
+    return runpy.run_path(str(CLI_PATH))['main'](globals(), argv)
 
 
 if __name__ == '__main__':

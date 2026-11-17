@@ -3038,7 +3038,9 @@ record_sdk31_runtime() {
   [[ -n "$LOCK_OWNER" ]] || die "RECORD_CAPTURE_STRATEGY_UNVERIFIED explicit_owner_required"
   [[ "$root" == /* && ! -e "$proof" && ! -L "$proof" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   local helper="$PHONE_CONTROLLER_DIR/runtime/scrcpy-runtime.py"
-  verified="$("$PYTHON_BIN" "$helper" verify --runtime-kind "$kind" --runtime-root "$root")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  local -a startup_args=()
+  if [[ "$kind" == sdk33 ]]; then startup_args=(--startup); fi
+  verified="$("$PYTHON_BIN" "$helper" verify --runtime-kind "$kind" --runtime-root "$root" "${startup_args[@]}")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   local stage_rc=0
   staged="$("$PYTHON_BIN" "$helper" stage-server --runtime-kind "$kind" --runtime-root "$root" --adb-bin "$ADB" --adb-port "$port" --serial "$SERIAL" --owner "$LOCK_OWNER" --lock-dir "$LOCK_DIR" --evidence-root "$EVIDENCE_ROOT" --evidence-id "$eid" --timeout 30)" || stage_rc=$?
   if (( stage_rc != 0 )); then
@@ -3227,6 +3229,12 @@ try:
  try:
   env=os.environ.copy()
   for key in ['DOUYIN_LOCK_GUARD_FD','DOUYIN_LOCK_GUARDED']:env.pop(key,None)
+  if env.get('ZJ_SCRCPY_RUNTIME_KIND')=='sdk33':
+   import runpy
+   root=env['ZJ_SCRCPY_RUNTIME_ROOT']
+   if os.path.abspath(argv[0])!=os.path.join(root,'scrcpy'):raise ValueError('fixed scrcpy client path mismatch')
+   helper=runpy.run_path(os.path.join(os.path.dirname(observer),'runtime','scrcpy-private-runtime.py'))
+   env=helper['runtime_environment'](root,'sdk33',env)
   if os.environ.get('ZJ_OFFICIAL_RECORDING_INTENT'):
    import runpy
    launcher=runpy.run_path(observer)['owned_popen']
