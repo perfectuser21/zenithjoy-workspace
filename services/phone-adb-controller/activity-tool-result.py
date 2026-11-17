@@ -45,6 +45,16 @@ def central_owner_rejection(central, *, required_owner):
     return error
 
 
+def lease_cas_rejection(version):
+    error = scope_rejection('LEASE_CAS_REQUIRED')
+    error.details = {'read_only_central_observation': True,
+                     'observed_lease_version': version,
+                     'expected_fields': ['device_name', 'locked_by', 'expected_lease_version'],
+                     'next_actions': ['brain GET device-locks'],
+                     'tool_hint': '先fresh读取本人中央锁版本，再用新action名和精确expected_lease_version释放；未调用release API。'}
+    return error
+
+
 def read_business_input(args, *, activity, allowed_operations):
     """Parse once and reject only pure argument/op errors before any dispatch."""
     allowed = sorted(allowed_operations)
