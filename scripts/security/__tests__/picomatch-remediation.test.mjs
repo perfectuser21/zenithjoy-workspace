@@ -68,3 +68,9 @@ test('API容器的真实COPY安装上下文包含根锁引用的全部补丁包'
   assert.equal('sha512-'+createHash('sha512').update(bytes).digest('base64'),entry.integrity);
  }
 });
+
+test('distribution preserves merged main 4.0.7 upgrades and retires superseded patch versions',()=>{
+ const manifest=JSON.parse(readFileSync(join(root,folder,'manifest.json')));
+ assert.deepEqual(manifest.patched_packages.map(x=>x.version).sort(),['2.3.2','4.0.7']);
+ for(const path of ['package-lock.json','apps/dashboard/package-lock.json']){const lock=JSON.parse(readFileSync(join(root,path)));for(const [site,pkg]of Object.entries(lock.packages))if(site.endsWith('/picomatch'))assert.ok(['2.3.2','4.0.7'].includes(pkg.version),site+' must retain main upgrade');}
+});
