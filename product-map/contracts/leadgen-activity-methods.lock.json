@@ -1811,7 +1811,7 @@
         "kind": "internal_compatible",
         "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。",
         "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring",
-        "previous_code_digest": "1d97b65b5a7d21f83682c10059a9e4227a71fd9f314065c6b681ad19b960e6bf",
+        "previous_code_digest": "3fbc0b6a03c8a81c45bfc5c76473f1bac7d9f4b7f172766399b1cf21588637c8",
         "current_code_digest": "bdf59ceb6b5aaafa47c72750e6f9215348f02af6358d313f0f0162070a0a5862"
       }
     },
@@ -5447,7 +5447,7 @@
         "kind": "internal_compatible",
         "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。",
         "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring",
-        "previous_code_digest": "3b9ebec3ee9b174b70a13e8fb792f258c3c9f880677b4abc96a6eb5e54434f5c",
+        "previous_code_digest": "423d74275fa1886d9f4db2a6b341c12b3833fa54451788955bec276cbd6412e4",
         "current_code_digest": "5ae722adf6bb626d3e2295ccda2e544c14e856afb2120cde21669ceb3e5254c4"
       }
     },
