@@ -1,4 +1,5 @@
 import './helpers/native-103-fixture-error-ownership.mjs';
+import './helpers/preflight-local-pool-error-regression.mjs';
 import{native103PgFixture as fixture}from'./fixtures/native-103-pg-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
