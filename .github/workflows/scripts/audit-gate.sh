@@ -124,7 +124,7 @@ if ! ALLOW_JSON=$(printf '%s\n' "${ALLOWLIST[@]}" | jq -R . | jq -s .); then
   echo "❌ 无法解析 npm audit allowlist" >&2
   exit 1
 fi
-if ! VERIFIED_PATCHES=$(printf '%s\n' "$AUDIT_JSON" | node "$SCRIPT_DIR/audit-verified-picomatch.mjs" "$ALLOW_JSON"); then
+if ! VERIFIED_PATCHES=$(printf '%s\n' "$AUDIT_JSON" | node "$SCRIPT_DIR/audit-verified-picomatch.mjs"); then
   echo "❌ 无法核对已修补的依赖" >&2
   exit 1
 fi

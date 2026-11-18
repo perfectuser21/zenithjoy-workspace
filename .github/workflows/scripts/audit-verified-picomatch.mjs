@@ -28,20 +28,21 @@ function verifiedArchives(report) {
   });
 }
 
-function exemptedMetavulnerabilities(report, allowed) {
+function exemptedMetavulnerabilities(report) {
   if (!verifiedArchives(report)) return [];
   const mitigated = new Set(['picomatch']);
   // An npm metavulnerability is reportable if any active cause remains. Only
   // propagate mitigation through packages for which at least one cause is this
-  // patched advisory and all others have already been accepted by the gate.
+  // patched advisory and all other causes are mitigated or below high severity.
   let changed;
   do {
     changed = false;
     for (const [name, entry] of Object.entries(report)) {
       if (mitigated.has(name) || !Array.isArray(entry.via)) continue;
       if (entry.via.some(cause => mitigated.has(cause)) &&
-          entry.via.every(cause => mitigated.has(cause) || allowed.has(cause) ||
-            ['info', 'low', 'moderate'].includes(cause?.severity))) {
+          entry.via.every(cause => mitigated.has(cause) ||
+            ['info', 'low', 'moderate'].includes(
+              typeof cause === 'string' ? report[cause]?.severity : cause?.severity))) {
         mitigated.add(name);
         changed = true;
       }
@@ -50,6 +51,5 @@ function exemptedMetavulnerabilities(report, allowed) {
   return [...mitigated];
 }
 
-const allowlist = new Set(JSON.parse(process.argv[2]));
 const report = JSON.parse(readFileSync(0, 'utf8'));
-console.log(JSON.stringify(exemptedMetavulnerabilities(report.vulnerabilities, allowlist)));
+console.log(JSON.stringify(exemptedMetavulnerabilities(report.vulnerabilities)));
