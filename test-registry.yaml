@@ -12248,3 +12248,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "真实tools.main权限/101缺metrics执行前拒绝、原action重放、纠正与unknown保护；102/103按冻结输入装配，外部派发为计数替身"
+
+  - id: recording-media-progress
+    path: services/phone-adb-controller/__tests__/recording-progress.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "实际record-status有界只读视频/音频PTS、录制身份与超时未知；不把音频或墙钟当完整覆盖"

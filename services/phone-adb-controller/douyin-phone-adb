@@ -3378,14 +3378,10 @@ PYCAPTUREREADY
 }
 
 record_status() {
-  local eid pidf out state size
+  local eid out
   eid="$1"; require_evidence_id "$eid"
-  pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
-  state=stopped
-  if [[ -f "$pidf" ]] && kill -0 "$(cat "$pidf")" 2>/dev/null; then state=recording; fi
-  size=0
-  [[ -f "$out" ]] && size="$(/usr/bin/stat -f %z "$out")"
-  print -- "state=$state bytes=$size path=$out"
+  out="$(record_out_file "$eid")"
+  "$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/recording-progress.py" "$out" "$EVIDENCE_ROOT/$eid.capture-startup.json" "$FFPROBE"
 }
 
 record_stop() {

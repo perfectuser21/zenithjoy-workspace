@@ -134,7 +134,7 @@ MMV_PROBE_FILES=(
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(profile-card-link.py profile-card-link.sh comment-compose-rows.py
   phone-lock-lib.sh phone-lock-helper.py phone-lock-root.py adb-existing-route.py adb-managed-client.py adb-host-service.py adb-host-maintenance.py adb-mmv-policy-install.py adb-process-observation.py maintenance-task-authority.py locate-element.py douyin-phone-adb clipboard-widget-cancel.py search-video-tab.py text-input-focus.py input-runtime-release.py
-  decode-recording.py runtime/scrcpy-runtime.py runtime/scrcpy-runtime-cli.py runtime/scrcpy-private-runtime.py runtime/runtime-private-deps-sdk33.darwin-arm64.json runtime/scrcpy-adb-shim.py runtime/runtime-policy.json runtime/runtime-policy-sdk33.json
+  decode-recording.py recording-progress.py runtime/scrcpy-runtime.py runtime/scrcpy-runtime-cli.py runtime/scrcpy-private-runtime.py runtime/runtime-private-deps-sdk33.darwin-arm64.json runtime/scrcpy-adb-shim.py runtime/runtime-policy.json runtime/runtime-policy-sdk33.json
   bypass-report.sh
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
