@@ -15,6 +15,20 @@ if args == ['version']:
 with open(os.environ['FAKE_ADB_LOG'], 'a') as log:
     log.write(json.dumps(args) + '\n')
 assert args[:6] == ['-H', '127.0.0.1', '-P', '5041', '-s', '47.100.213.173:10001'], args
+if args[6:7] == ['forward']:
+    mapping = root / 'forward.json'
+    rows = json.loads(mapping.read_text()) if mapping.exists() else {}
+    rest = args[7:]
+    protected = rest[:1] == ['--no-rebind']
+    if protected:
+        rest = rest[1:]
+    local, remote = rest
+    if protected and local in rows:
+        sys.stderr.write('cannot rebind existing socket\n')
+        raise SystemExit(1)
+    rows[local] = remote
+    mapping.write_text(json.dumps(rows))
+    raise SystemExit(0)
 assert args[6:8] == ['shell', '-T'], args
 script = args[8].replace('/data/local/tmp/', str(root) + '/')
 mode = os.environ.get('FAKE_ADB_MODE')
