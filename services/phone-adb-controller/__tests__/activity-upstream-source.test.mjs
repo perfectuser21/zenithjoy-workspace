@@ -52,3 +52,15 @@ test('producer manifest identities and known workflow must agree independently',
 test('readback wiring rejects source drift and double application, retaining original PG source pin',()=>{
  assert.ok(implementation);const out=implementation.wireProducerReadback(pg);assert.match(out,/activity-upstream-source/);assert.throws(()=>implementation.wireProducerReadback(pg+'\n'),/UPSTREAM_SOURCE_BASE/);assert.throws(()=>implementation.wireProducerReadback(out),/UPSTREAM_SOURCE_BASE/);assert.equal(hash(original),fixture.files['production-readback-local.mjs'].sha256);
 });
+test('formal producer uses separately frozen expanded context bound to manifest identity',t=>{
+ const f=setup(t);f.descriptor.run_tag=f.producer.run=f.descriptor.run_id;
+ const context=structuredClone(f.input);context.run_tag=context.tasks['101'].run_tag=f.descriptor.run_id;
+ f.manifest.run.contract.workflow='douyin_video_discovery';f.manifest.run.input={binding_key:'approved-office',business:{keyword:'fixture'},run_tag:f.descriptor.run_id};f.writeManifest();
+ const contextPath=path.join(f.root,'expanded-context.json');fs.writeFileSync(contextPath,JSON.stringify(context));Object.assign(f.descriptor,{context_path:contextPath,context_sha256:hash(fs.readFileSync(contextPath))});
+ assert.deepEqual(implementation.resolveProducerIdentity(f.c,'dedup',f.producer),{source_commit:'a'.repeat(40),profile:'producer-phone'});
+ const pristine=structuredClone(f.c);
+ for(const mutate of [c=>delete c.input_provenance.producer.context_path,c=>c.input_provenance.producer.context_sha256='0'.repeat(64)]){
+  const c=structuredClone(pristine);mutate(c);assert.throws(()=>implementation.resolveProducerIdentity(c,'dedup',f.producer),/UPSTREAM_SOURCE_/);
+ }
+ context.tasks['101'].run_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc';fs.writeFileSync(contextPath,JSON.stringify(context));f.descriptor.context_sha256=hash(fs.readFileSync(contextPath));assert.throws(()=>implementation.resolveProducerIdentity(f.c,'dedup',f.producer),/UPSTREAM_SOURCE_IDENTITY/);
+});
