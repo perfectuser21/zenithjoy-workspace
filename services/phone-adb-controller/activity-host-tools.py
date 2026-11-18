@@ -128,6 +128,8 @@ def render102(original, method):
         f'唯一一次capture上限{m["capture_max_seconds"]}秒，单次ASR和单次主判。所有准备在record-start前完成；ready后以同EID record-status确认，再连贯执行唯一向左全轨swipe-evidence，时长<=1500ms，无补滑或二次capture。',
         '录制前不归零；录制期间不调用有no_active_capture守卫的native-audio-evidence，不打开分享页；完成上文唯一归零操作后不再操作手机或改变播放。不得以STOPPED position=0或tap/swipe成功代替原录制零点证据。',
         f'必须在本次原视频中找到真实00:00或可独立核验的原生等价零点及媒体PTS，并证明完整结束/同首帧循环；连续播放路线须真实1x无暂停跳播且覆盖本轮{m["duration_seconds"]}秒完整视频，另满足qualification_input.completion_anchor要求。墙钟等待和容器总时长不能证明覆盖，证据充分即正常stop，不必耗尽上限。',
+        f'同一次录制内，归零后继续通过原record-status读media_progress：capture_state、progress_status、video.last_pts_seconds与audio.last_pts_seconds分别核对；墙钟或音频增加不能替代视频进展。可只读提取本次MKV已写入原帧定位真实零点PTS；零点未证或video进展不足本轮{m["duration_seconds"]}秒及completion_anchor余量时不因固定sleep结束就stop。',
+        f'在原{m["capture_max_seconds"]}秒单次上限内继续观察；progress unknown只是缺读回，不是通过，也不重发record-start。确认完整周期或已证零点后的所需媒体区间后正常stop；达到原上限仍不足或无法证明则准确unknown并按原cleanup收尾，不得换EID或追加录制。停止后的最终原帧/PTS核验保持原标准，media_progress.coverage_verified=false不是资格结论。',
         '原record-stop支持录制自行停止：沿同EID核状态、结束音轨并验证原件，auto time-limit不是另起capture理由。停止和extract后核真实MKV/WAV，分别ffprobe视频/音频轨、PCM非静音、原生音轨/SDK/固定scrcpy摘要及当前VID。',
         '按实际视频PTS先每2或5秒联系图定位内容，在本次归零附近抽全部帧并用showinfo保存实际PTS及原尺寸零点/开头/结尾/循环帧；粗抽可能漏短暂零点。两个PTS下同intro且中间完整内容顺序可核才能证明循环。不得用旧帧或固定诊断时间戳。',
         '覆盖不能证明就保持unknown，不调用ASR。合法音频仅交既有qualification助手；固定私有COS负责上传、SHA读回、私有性、单次ASR及清理，Agent不自行上传/调用模型或重试未知。',
