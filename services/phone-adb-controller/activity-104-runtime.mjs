@@ -44,7 +44,7 @@ export function observe104Runtime(c,{now=Date.now(),orders=[]}={}){
   if(!sameSender(field(o.fields?.['实际分发号']))||!/^\[104 (?:prepared|unknown):/.test(mark))return false;
   return !(o.record_id===c.verification['104'].record_id&&['prepared','unknown'].some(k=>mark.startsWith('[104 '+k+ownSuffix)));
  }).length;
- if(r.unresolved_attempt_reservations){r.today_dm_attempts+=r.unresolved_attempt_reservations;r.missing_sources.push('unresolved_prepared_or_unknown');}
+ if(r.unresolved_attempt_reservations)r.today_dm_attempts+=r.unresolved_attempt_reservations;
  r.local_sources_complete=r.missing_sources.length===0&&r.unparsed_ledger_rows===0;r.verified=r.local_sources_complete&&r.account_day_coverage_complete;
  return r;
 }
