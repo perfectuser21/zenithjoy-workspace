@@ -90,11 +90,17 @@ export function writePrepared(root,rosterPath,plan){
   immutableWrite(join(directory,'video-tools.json'),plan.apiOverlay);
   immutableWrite(join(directory,'video-tools-prepared.json'),{schema_version:1,source_commit:plan.source_commit,api_source_commit:plan.source_commit,plan_sha256:digest(plan),overlay_sha256:digest(plan.apiOverlay)});
 }
-export function inheritPrepared(root,current,target){
+export function inheritPrepared(root,current,target,environment='production'){
   need(/^[a-f0-9]{40}$/.test(current)&&/^[a-f0-9]{40}$/.test(target)&&current!==target,'invalid inheritance source');
   const source=join(resolve(root),current),destination=join(resolve(root),target);
-  const release=JSON.parse(readPrivate(join(source,'release.json'))),plan=readPlan(join(source,'canvas-plan.json'));
-  need(release.verified===true&&release.sha===current&&release.video_tools_sha256===digest(plan.apiOverlay),'current private configuration is not a retained verified release');
+  const plan=readPlan(join(source,'canvas-plan.json'));
+  need(plan.environment===environment,'private configuration environment differs');
+  if(environment==='staging'){
+    inspectRuntime(plan);
+  }else{
+    const release=JSON.parse(readPrivate(join(source,'release.json')));
+    need(release.verified===true&&release.sha===current&&release.video_tools_sha256===digest(plan.apiOverlay),'current private configuration is not a retained verified release');
+  }
   need(!existsSync(join(destination,'release.json')),'target is already retained');
   mkdirSync(destination,{recursive:true,mode:0o700});
   immutableWrite(join(destination,'canvas-plan.json'),plan);
@@ -142,7 +148,7 @@ export function inspectRuntime(plan,requireApi=true,exec=execFileSync){
 export function mergeImage(root,sha,image,service){
   need(/^[a-f0-9]{40}$/.test(sha)&&/^sha256:[a-f0-9]{64}$/.test(image),'invalid fixed API image');
   const plan=readPlan(join(resolve(root),sha,'canvas-plan.json'));
-  need(plan.source_commit===sha&&plan.api_service===service,'API overlay target differs');
+  need(plan.environment==='staging'&&plan.api_service===service&&service==='zenithjoy-api-staging','API overlay target differs');
   const output=structuredClone(plan.apiOverlay);output.services[service].image=image;
   const file=join(resolve(root),sha,'image.json');
   // Only the image selector is mutable during staging image loading. The private
@@ -161,7 +167,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
     }else if(action==='merge-image'){
       mergeImage(...args);
     }else if(action==='inherit'){
-      inheritPrepared(...args);
+      inheritPrepared(...args.slice(0,3));
+    }else if(action==='inherit-staging'){
+      inheritPrepared(...args.slice(0,3),'staging');
     }else throw Error('usage: prepare ROOT ROSTER SHA IMAGE | verify PLAN | verify-instances PLAN');
   }catch(error){console.error(error.message);process.exitCode=1;}
 }
