@@ -37,7 +37,23 @@
               }
             },
             "upstream": {
-              "type": "object"
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 1,
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "run"
+                ],
+                "properties": {
+                  "run": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "description": "只选择已批准来源run_tag；内部run_id由宿主从受控producer推导。"
+              }
             },
             "qualification_input": {
               "type": "object"
