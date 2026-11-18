@@ -50,7 +50,7 @@ def dispatch(*args,**kw):
  return {'exit_code':0,'data':{'fixture':True}}
 m.resource_authority=resource;m.environment=environment;m.subprocess.run=dispatch
 if mode=='same-text':m.invoke=lambda *args:(_ for _ in ()).throw(ValueError('BUSINESS_ACTIVITY_SCOPE'))
-if mode=='persist-failure':
+if mode in ['persist-failure','fetch-persist-failure']:
  original=m.atomic
  def atomic(path,value):
   if value.get('state')=='terminal':raise OSError('disk')
@@ -80,6 +80,12 @@ if mode.startswith('fetch-'):
   if mode=='fetch-after-copy':src.write_text('changed after local write')
  m.shutil.copy2=copying
  if mode=='fetch-untyped':m.invoke=lambda *a:(_ for _ in ()).throw(ValueError('NATIVE_LOCAL_SOURCE'))
+ if mode=='fetch-stat-error':
+  original_lstat=pathlib.Path.lstat
+  def lstat(self,*args,**kw):
+   if self==source:raise PermissionError('fixture read failure')
+   return original_lstat(self,*args,**kw)
+  pathlib.Path.lstat=lstat
  if mode=='fetch-timeout':m.invoke=lambda *a:(_ for _ in ()).throw(m.subprocess.TimeoutExpired('read-only download',1))
  def fetch(name,filename):
   sys.argv=['tools','fetch-native',name,filename];out=io.StringIO();error=None;rc=None
@@ -234,10 +240,25 @@ for(const [mode,reason] of [['fetch-missing','not_found'],['fetch-symlink','syml
  assert.equal(r.second.rc,0,r.second.error);assert.equal(r.after.copy,1);assert.equal(r.after.dispatch,0);assert.equal(r.cleanup.rc,0,r.cleanup.error);assert.equal(r.calls.dispatch,1);
  assert.equal(r.native_target_exists,false);assert.equal(r.partial_exists,false);
 });
-for(const mode of ['fetch-after-copy','fetch-untyped'])test(`${mode} remains unknown; matching error text cannot grant deterministic rejection`,()=>{
+for(const mode of ['fetch-after-copy','fetch-untyped','fetch-persist-failure'])test(`${mode} remains unknown; matching error text cannot grant deterministic rejection`,()=>{
  const r=probe(mode,'102');assert.equal(r.first.stdout,'');assert.equal(r.first.receipt.state,'unknown');assert.match(r.replay.error,/ACTION_UNKNOWN_NO_REPLAY/);assert.match(r.cleanup.error,/PRIOR_ACTION_UNKNOWN/);
  if(mode==='fetch-after-copy'){assert.equal(r.before.copy,1);assert.equal(r.partial_exists,true);}
 });
 test('existing read-only downloader timeout terminal semantics remain unchanged',()=>{
  const r=probe('fetch-timeout','102');assert.equal(r.first.rc,124);assert.equal(r.first.receipt.state,'terminal');assert.equal(r.first.receipt.result.error,'READ_ONLY_DOWNLOAD_TIMEOUT');assert.equal(r.first.receipt.result.artifact_usable,false);
+});
+
+test('source observation I/O error retains existing downloader error and is not relabeled missing',()=>{
+ const r=probe('fetch-stat-error','102');assert.equal(r.first.rc,74);assert.equal(r.first.receipt.result.error,'READ_ONLY_DOWNLOAD_IO_ERROR');assert.equal(r.first.receipt.result.error_type,'PermissionError');assert.equal(r.first.receipt.result.data,undefined);assert.equal(r.before.copy,0);
+});
+test('local native source validator rejects an existing file outside the approved root without copying',()=>{
+ const script=String.raw`import importlib.util,pathlib,tempfile,sys
+s=importlib.util.spec_from_file_location('host',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as d:
+ root=pathlib.Path(d);outside=root/'other';outside.write_text('original');approved=root/'approved';approved.mkdir()
+ try:m.require_local_native_source(outside,approved.resolve())
+ except m.PreDispatchRejected as e:assert e.details['reason']=='outside_native_root';assert e.details['source_path']==str(outside)
+ else:raise AssertionError('outside source accepted')
+ assert outside.read_text()=='original';assert list(approved.iterdir())==[]`;
+ const r=spawnSync('/usr/bin/python3',['-c',script,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });
