@@ -9,6 +9,7 @@
 set -uo pipefail
 
 DIR="${1:-.}"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 1
 # astro / @astrojs/mdx：修复需升 astro 7.x（semver major，涉及站点构建验证），
 # 已另立 sprint 跟踪；升级合并后删除这两行。
 # sharp/miniflare/wrangler/undici：同一根因，都是 astro 传递依赖链带进来的（astro→miniflare→
@@ -75,7 +76,14 @@ fi
 # npm audit exit 1 normally means vulnerabilities were found. Other failures must
 # not become an empty vulnerability set or a successful security decision.
 AUDIT_STATUS=0
-AUDIT_JSON=$(npm audit --json) || AUDIT_STATUS=$?
+# npm otherwise auto-selects the parent workspace when the requested standalone
+# lock lives in a workspace directory.
+REPO_DIR=$(cd -- "$SCRIPT_DIR/../../.." && pwd) || exit 1
+if [[ "$PWD" == "$REPO_DIR" ]]; then
+  AUDIT_JSON=$(npm audit --json) || AUDIT_STATUS=$?
+else
+  AUDIT_JSON=$(npm audit --prefix "$PWD" --workspaces=false --json) || AUDIT_STATUS=$?
+fi
 if [ "$AUDIT_STATUS" -ne 0 ] && [ "$AUDIT_STATUS" -ne 1 ]; then
   echo "❌ npm audit 执行失败（exit $AUDIT_STATUS）" >&2
   exit 1
@@ -116,10 +124,14 @@ if ! ALLOW_JSON=$(printf '%s\n' "${ALLOWLIST[@]}" | jq -R . | jq -s .); then
   echo "❌ 无法解析 npm audit allowlist" >&2
   exit 1
 fi
-if ! VIOLATIONS=$(printf '%s\n' "$AUDIT_JSON" | jq -r --argjson allow "$ALLOW_JSON" '
+if ! VERIFIED_PATCHES=$(printf '%s\n' "$AUDIT_JSON" | node "$SCRIPT_DIR/audit-verified-picomatch.mjs" "$ALLOW_JSON"); then
+  echo "❌ 无法核对已修补的依赖" >&2
+  exit 1
+fi
+if ! VIOLATIONS=$(printf '%s\n' "$AUDIT_JSON" | jq -r --argjson allow "$ALLOW_JSON" --argjson patched "$VERIFIED_PATCHES" '
   .vulnerabilities | to_entries[]
   | select(.value.severity == "high" or .value.severity == "critical")
-  | select((.key as $k | $allow | index($k)) | not)
+  | select((.key as $k | ($allow + $patched) | index($k)) | not)
   | "\(.key): \(.value.severity)"'); then
   echo "❌ 无法解析 npm audit 漏洞列表" >&2
   exit 1
@@ -129,6 +141,10 @@ echo "== npm audit gate（目录: ${DIR}，含 dev deps）=="
 if ! printf '%s\n' "$AUDIT_JSON" | jq -r '.metadata.vulnerabilities | "总计: low=\(.low) moderate=\(.moderate) high=\(.high) critical=\(.critical)"'; then
   echo "❌ 无法解析 npm audit 汇总" >&2
   exit 1
+fi
+
+if [ "$VERIFIED_PATCHES" != "[]" ]; then
+  echo "已核对 GHSA-fc5q-39xc-vjpf 补丁及其受影响的传递依赖"
 fi
 
 if [ -n "$VIOLATIONS" ]; then

@@ -49,6 +49,8 @@
     "yaml": "^2.9.0"
   },
   "overrides": {
+    "picomatch@2": "file:apps/dashboard/vendor/picomatch-security/picomatch-2.3.2.tgz",
+    "picomatch@4": "file:apps/dashboard/vendor/picomatch-security/picomatch-4.0.7.tgz",
     "vite": "^7.3.2",
     "defu": "^6.1.6",
     "esbuild": "^0.28.1",
