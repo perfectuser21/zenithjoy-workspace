@@ -176,8 +176,40 @@ scope_rejection=_host.scope_rejection''')
     return tools, scope
 
 
+
+def verify_proof_manifest(context, root):
+    raw = context.get('verification', {}).get('proof_manifest_path')
+    if raw is None:
+        return
+    if not isinstance(raw, str) or not pathlib.Path(raw).is_absolute():
+        raise ValueError('ACTIVITY_HOST_PROOF_REQUIRED')
+    file, host = pathlib.Path(raw), pathlib.Path(root).resolve()
+    resolved = file.resolve()
+    if resolved == host or host in resolved.parents or file.is_symlink():
+        raise ValueError('ACTIVITY_HOST_PROOF_PATH')
+    if not file.is_file():
+        raise ValueError('ACTIVITY_HOST_PROOF_MISSING')
+    if file.stat().st_mode & 0o022:
+        raise ValueError('ACTIVITY_HOST_PROOF_PATH')
+    workflow = context.get('assigned_workflow')
+    task = context.get('tasks', {}).get(workflow, {})
+    expected = {key: task.get(key) for key in ['task_id', 'run_id', 'run_tag']}
+    expected['workflow'] = workflow
+    if any(not isinstance(v, str) or not v for v in expected.values()):
+        raise ValueError('ACTIVITY_HOST_PROOF_SCOPE')
+    try:
+        proof = json.loads(file.read_text())
+    except (ValueError, OSError):
+        raise ValueError('ACTIVITY_HOST_PROOF_INVALID') from None
+    if not isinstance(proof, dict) or proof.get('schema') != 'activity-evidence/v1' or proof.get('identity') != expected:
+        raise ValueError('ACTIVITY_HOST_PROOF_SCOPE')
+    # This only checks the host-owned container. Empty fields never constitute business evidence.
+
+
 def verify_host(root, ops):
     root = pathlib.Path(root)
+    if (root/'context.json').exists():
+        verify_proof_manifest(json.loads((root/'context.json').read_text()), root)
     manifest = json.loads((root/'activity-host-tools.json').read_text())
     names = {'tools.py', 'tool_scope.py', 'activity-tool-result.py', 'activity-host-tools.py', 'TOOLS.txt', 'TOOLS-base.txt'}
     if root.is_symlink() or manifest.get('schema') != 'activity-host-tools/v1' or set(manifest.get('sha256', {})) != names:
@@ -215,6 +247,8 @@ def assemble(base, target, *, workflow='101', context=None):
         if p.is_symlink() or digest(p.read_bytes()) != expected:
             raise ValueError('ACTIVITY_HOST_BASE_SOURCE_CHANGED')
         raw[name] = p.read_text()
+    if context is not None:
+        verify_proof_manifest(context, target)
     tools, scope = patch_sources(raw['tools.py'], raw['tool_scope.py'])
     ops = business_ops(scope)
     files = {'tools.py': tools, 'tool_scope.py': scope, 'TOOLS.txt': instructions(ops, raw['TOOLS.txt'], method), 'TOOLS-base.txt': raw['TOOLS.txt'],
