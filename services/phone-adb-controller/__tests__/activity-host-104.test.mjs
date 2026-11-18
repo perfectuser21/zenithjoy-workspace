@@ -4,7 +4,11 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {createHash} from 'node:crypto';import {pathToFileURL} from 'node:url';import {spawnSync} from 'node:child_process';
 const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/activity-host-104.json',import.meta.url)));
 const implementation=new URL('../activity-host-104.mjs',import.meta.url),hash=x=>createHash('sha256').update(x).digest('hex');
-const roots=[];const python=fs.realpathSync(spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).stdout.trim());
+const roots=[];const toolchain=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'activity104-tools-')));roots.push(toolchain);
+// CI toolcache may share writable or hardlinked interpreters. Own immutable copies for admission fixtures.
+const sources={node:fs.realpathSync(process.execPath),python:fs.realpathSync(spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).stdout.trim())};
+for(const [name,source]of Object.entries(sources)){fs.copyFileSync(source,path.join(toolchain,name));fs.chmodSync(path.join(toolchain,name),0o700);}
+const node=path.join(toolchain,'node'),python=path.join(toolchain,'python');
 function setup(){
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'activity104-')));roots.push(root);
  const baseRoot=path.join(root,'base'),localBaseRoot=path.join(root,'local'),runtime=path.join(root,'runtime');
@@ -12,7 +16,7 @@ function setup(){
  fs.mkdirSync(runtime,{mode:0o700});for(const n of ['controller','registry','adb-policy','state','evidence'])fs.writeFileSync(path.join(runtime,n),'fixture-'+n,{mode:0o600});
  const auth={schema:'run-send-authorization/v1',root_task_id:'root-task',decision_id:'decision',message:'测试正文',message_sha256:hash('测试正文'),max_new_recipients:1,max_send_attempts:1,test_execution_daily_cap:100,company_policy_changed:false,requires_current_pause_and_daily_count_readback:true};
  const authPath=path.join(root,'auth.json');fs.writeFileSync(authPath,JSON.stringify(auth),{mode:0o600});
- const context={assigned_workflow:'104',root_task_id:'root-task',actor:'fixture',source_commit:'a'.repeat(40),runtime_root:runtime,transport:'local',host:'fixture-host',profile:'fixture-phone',serial:'hardware-1',adb_serial:'127.0.0.1:15555',company_id:'company-1',tenant_id:'tenant-1',line:'fixture-line',account:'sender-1',sender_id:'sender-1',local_owner:'local-1',central_owner:'task-1',tasks:{'104':{task_id:'task-1',run_id:'run-1',run_tag:'tag-1'}},business_deadline_ms:Date.now()+3600000,cleanup_deadline_ms:Date.now()+4200000,node:fs.realpathSync(process.execPath),node_sha256:hash(fs.readFileSync(process.execPath)),python,python_sha256:hash(fs.readFileSync(python)),native_root:path.join(runtime,'evidence'),credentials:{database:path.join(root,'db.json'),feishu:path.join(root,'feishu.json'),brain:path.join(root,'brain.env'),provider_env_files:[]},authorization_asset:{path:authPath,sha256:hash(fs.readFileSync(authPath))},verification:{policy_id:'policy',policy_version:1,pg:{deployment:{source_commit:'a'.repeat(40)}},runtime_sha256:{},'104':{record_id:'record',comment_id:'comment',lead_id:'lead',target_douyin_id:'target',profile_url:'https://v.douyin.com/fixture/',source_102_run:'new102',source_103_run:'new103'}},outreach_runtime:{state_directory:path.join(root,'state'),evidence_base:path.join(root,'evidence'),lock_root:path.join(root,'locks'),account_bindings:[{host:'fixture-host',profile:'fixture-phone',serial:'127.0.0.1:15555'}],history_assets:[]}};
+ const context={assigned_workflow:'104',root_task_id:'root-task',actor:'fixture',source_commit:'a'.repeat(40),runtime_root:runtime,transport:'local',host:'fixture-host',profile:'fixture-phone',serial:'hardware-1',adb_serial:'127.0.0.1:15555',company_id:'company-1',tenant_id:'tenant-1',line:'fixture-line',account:'sender-1',sender_id:'sender-1',local_owner:'local-1',central_owner:'task-1',tasks:{'104':{task_id:'task-1',run_id:'run-1',run_tag:'tag-1'}},business_deadline_ms:Date.now()+3600000,cleanup_deadline_ms:Date.now()+4200000,node,node_sha256:hash(fs.readFileSync(node)),python,python_sha256:hash(fs.readFileSync(python)),native_root:path.join(runtime,'evidence'),credentials:{database:path.join(root,'db.json'),feishu:path.join(root,'feishu.json'),brain:path.join(root,'brain.env'),provider_env_files:[]},authorization_asset:{path:authPath,sha256:hash(fs.readFileSync(authPath))},verification:{policy_id:'policy',policy_version:1,pg:{deployment:{source_commit:'a'.repeat(40)}},runtime_sha256:{},'104':{record_id:'record',comment_id:'comment',lead_id:'lead',target_douyin_id:'target',profile_url:'https://v.douyin.com/fixture/',source_102_run:'new102',source_103_run:'new103'}},outreach_runtime:{state_directory:path.join(root,'state'),evidence_base:path.join(root,'evidence'),lock_root:path.join(root,'locks'),account_bindings:[{host:'fixture-host',profile:'fixture-phone',serial:'127.0.0.1:15555'}],history_assets:[]}};
  for(const [k,n]of Object.entries({phone_controller:'controller',phone_registry:'registry',adb_host_config:'adb-policy'})){context[k]=path.join(runtime,n);context[k+'_sha256']=hash(fs.readFileSync(context[k]));}
  const pgHost=new URL('../activity-host-pg.mjs',import.meta.url);const pgHelper={path:pgHost.pathname,sha256:hash(fs.readFileSync(pgHost))};
  return {root,baseRoot,localBaseRoot,context,pgHelper,targetRoot:path.join(root,'candidate')};
@@ -142,4 +146,11 @@ test('original order adapter keeps same-UID prohibition and daily 100 limit with
  prior=[makeOther(0)];assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(puts,1);
  prior=Array.from({length:100},(_,i)=>makeOther(i));await assert.rejects(request({...args,op:'prepare'},deps),/CURRENT_RUNTIME_BLOCKED/);assert.equal(puts,1);
  prior=Array.from({length:99},(_,i)=>makeOther(i));assert.equal((await request({...args,op:'prepare'},deps)).status,'prepared');assert.equal(puts,2);
+});
+
+test('unsafe writable or hardlinked toolchain assets still reject before host creation',async()=>{
+ for(const mode of ['writable','hardlink']){
+  const f=setup(),file=path.join(f.root,'unsafe-node');fs.copyFileSync(node,file);fs.chmodSync(file,mode==='writable'?0o775:0o700);if(mode==='hardlink')fs.linkSync(file,file+'-alias');f.context.node=file;f.context.node_sha256=hash(fs.readFileSync(file));
+  await assert.rejects(candidate(f),/ACTIVITY_104_SOURCE_FILE/);assert.equal(fs.existsSync(f.targetRoot),false);
+ }
 });
