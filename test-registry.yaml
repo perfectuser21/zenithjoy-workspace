@@ -12238,7 +12238,7 @@ tests:
     status: active
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
-    note: "冻结Agent宿主四入口初始化语句清env加载同一受验PG闭包；坏来源在DB使用前拒绝"
+    note: "冻结Agent宿主四入口与102两wrapper初始化语句清env加载受验PG闭包；坏来源在DB使用前拒绝"
 
   - id: activity-host-tools
     path: services/phone-adb-controller/__tests__/activity-host-tools.test.mjs
@@ -12247,4 +12247,4 @@ tests:
     status: active
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
-    note: "真实冻结tools.main执行前拒绝回执、原action重放、纠正操作及未知结果保护；外部派发为计数替身"
+    note: "真实tools.main权限/101缺metrics执行前拒绝、原action重放、纠正与unknown保护；102按冻结输入渲染，外部派发为计数替身"
