@@ -8,6 +8,7 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);
   assert.equal(fs.existsSync(path.join(a.profile.cwd,'receipts')),false);assert.equal(fs.existsSync(path.join(a.profile.cwd,'outreach-receipts')),false);
   const contextFile=path.join(a.profile.cwd,'context.json'),bytes=fs.readFileSync(contextFile),mtime=fs.statSync(contextFile).mtimeMs;
+  const {canonical}=await import('../leadgen-foundation/context.mjs');f.run.input=JSON.parse(canonical(f.run.input));
   const b=await prepareLeadgenHost(f);assert.equal(b.receipt.recovered,true);assert.equal(b.receipt.assembled_at_ms,a.receipt.assembled_at_ms);assert.equal(fs.statSync(contextFile).mtimeMs,mtime);assert.deepEqual(fs.readFileSync(contextFile),bytes);
   const proof=JSON.parse(fs.readFileSync(a.context.verification.proof_manifest_path));assert.deepEqual(proof.fields,{});assert.equal(proof.identity.run_id,f.run.run_id);
   if(workflow==='104'){
@@ -98,7 +99,7 @@ test('104 intent rejects a state directory beside the bundle inside the official
 test('foundation recovery survives the official host normalization of equivalent input object keys',async()=>{
  const f=await foundationFixture('102');try{
   const first=await prepareLeadgenHost(f),bytes=fs.readFileSync(path.join(first.profile.cwd,'context.json'));
-  const {canonical}=await import('../leadgen-foundation/context.mjs');f.run.input=JSON.parse(canonical(f.run.input));
+  const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/foundation-normalized-input.json',import.meta.url)));assert.deepEqual(f.run.input,fixture.input);assert.match(fixture.source.sha256,/^[a-f0-9]{64}$/);f.run.input=fixture.normalized_input;
   const recovered=await prepareLeadgenHost(f);assert.equal(recovered.receipt.recovered,true);assert.deepEqual(fs.readFileSync(path.join(recovered.profile.cwd,'context.json')),bytes);
  }finally{f.close();}
 });

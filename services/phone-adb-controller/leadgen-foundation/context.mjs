@@ -1,3 +1,4 @@
+import {bindAuthorizationIntent} from '../leadgen-authorization-intent.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -17,7 +18,7 @@ const BUSINESS={
  '103':['scope'],
  '104':['scope'],
 };
-const FORBIDDEN=new Set(['task_id','tasks','actor','root_task_id','runtime_root','runtimeRoot','credentials','source_commit','context','verification','phone_controller','node','python','command','env','environment','authorization_asset','cleanup_owner','central_owner','local_owner']);
+const FORBIDDEN=new Set(['task_id','tasks','actor','root_task_id','runtime_root','runtimeRoot','credentials','source_commit','context','verification','phone_controller','node','python','command','env','environment','authorization_asset','authorization_intent','authorization_state_root','authorization_message_sha256','cleanup_owner','central_owner','local_owner']);
 function safeBusiness(x){
  if(!object(x)&&!Array.isArray(x))return;
  for(const [k,v]of Object.entries(x)){need(!FORBIDDEN.has(k),'INPUT_AUTHORITY');safeBusiness(v);}
@@ -29,7 +30,7 @@ export function readHostConfiguration(environment){
  need(/^[a-zA-Z0-9_.-]{1,100}$/.test(config.machine_id??'')&&config.machine_id===environment.LEADGEN_MACHINE_ID,'MACHINE_MISMATCH');
  return {config,configuration_sha256:hash(bytes)};
 }
-export function buildContext({workflow,run,environment=process.env,hostRoot}){
+export function buildContext({workflow,run,environment=process.env,hostRoot,runRoot=hostRoot}){
  need(Object.hasOwn(BUSINESS,workflow)&&UUID.test(run?.task_id??'')&&UUID.test(run?.run_id??'')&&run.input?.run_tag===run.run_id,'RUN_IDENTITY');
  need(Number.isSafeInteger(run.deadline_ms)&&Number.isSafeInteger(run.cleanup_deadline_ms)&&run.cleanup_deadline_ms>run.deadline_ms,'RUN_DEADLINE');
  const input=run.input;need(object(input)&&Object.keys(input).every(k=>['run_tag','binding_key','business'].includes(k)),'INPUT_FIELDS');
@@ -38,7 +39,7 @@ export function buildContext({workflow,run,environment=process.env,hostRoot}){
  const {config,configuration_sha256}=readHostConfiguration(environment),binding=config.bindings[input.binding_key];
  need(object(binding)&&binding.allowed_workflows?.includes(workflow)&&object(binding.context),'BINDING_MISSING');
  const c=structuredClone(binding.context);
- need(!Object.keys(c).some(k=>['tasks','task_id','run_id','run_tag','root_task_id','actor','local_owner','central_owner','business_deadline_ms','cleanup_deadline_ms','assigned_workflow','skills_root'].includes(k)),'BINDING_OLD_IDENTITY');
+ need(!Object.keys(c).some(k=>['tasks','task_id','run_id','run_tag','root_task_id','actor','local_owner','central_owner','business_deadline_ms','cleanup_deadline_ms','assigned_workflow','skills_root','run_start_ts'].includes(k)),'BINDING_OLD_IDENTITY');
  need(object(c.verification)&&!Object.keys(c.verification).some(k=>['101','102','103','104','proof_manifest_path','artifact_checker'].includes(k)),'BINDING_OLD_SCOPE');
  need(!c.verification.native?.cleanup_owner,'BINDING_OLD_IDENTITY');
  need(path.isAbsolute(hostRoot),'HOST_PATH');
@@ -71,9 +72,17 @@ export function buildContext({workflow,run,environment=process.env,hostRoot}){
   }
  }
  if(workflow==='104'){
+  need(!(c.authorization_asset&&binding.authorization_intent),'AUTHORIZATION_AMBIGUOUS');
+  if(binding.authorization_intent){
+   const stateRoot=binding.authorization_state_root;
+   need(typeof stateRoot==='string'&&path.isAbsolute(stateRoot)&&path.isAbsolute(runRoot)&&stateRoot!==runRoot&&!stateRoot.startsWith(runRoot+path.sep),'AUTHORIZATION_STATE_ROOT');
+   const expectedScope=Object.fromEntries(['company_id','tenant_id','line','account','host','profile','serial','adb_serial'].map(k=>[k,c[k]]));
+   Object.assign(expectedScope,{sender_id:c.sender_id??c.account,policy_id:c.verification.policy_id,policy_version:c.verification.policy_version,scope:c.verification['104'],message_sha256:binding.authorization_message_sha256});
+   c.authorization_asset=bindAuthorizationIntent({intentAsset:binding.authorization_intent,stateRoot,machineId:config.machine_id,taskId:run.task_id,runId:run.run_id,expectedScope}).authorization_asset;
+  }
   const asset=c.authorization_asset;need(asset&&/^[a-f0-9]{64}$/.test(asset.sha256??''),'AUTHORIZATION_REQUIRED');
   const bytes=protectedBytes(asset.path);need(hash(bytes)===asset.sha256,'AUTHORIZATION_DIGEST');
   const approval=JSON.parse(bytes);need(approval.schema==='run-send-authorization/v1'&&approval.root_task_id===run.task_id,'AUTHORIZATION_TASK');
  }
- return {context:c,configuration_sha256,binding_sha256:hash(canonical(binding)),input_sha256:hash(canonical(input)),machine_id:config.machine_id};
+ return {context:JSON.parse(canonical(c)),configuration_sha256,binding_sha256:hash(canonical(binding)),input_sha256:hash(canonical(input)),machine_id:config.machine_id};
 }

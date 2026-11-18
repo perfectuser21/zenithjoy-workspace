@@ -25,7 +25,7 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  const state=path.join(profile.cwd,'.leadgen-run');
  if(!fs.existsSync(state))fs.mkdirSync(state,{mode:0o700});
  need(fs.realpathSync(state)===state&&!(fs.statSync(state).mode&0o022),'STATE_DIRECTORY');
- const hostRoot=path.join(state,'host'),built=buildContext({workflow,run,environment,hostRoot});
+ const hostRoot=path.join(state,'host'),built=buildContext({workflow,run,environment,hostRoot,runRoot:path.basename(path.dirname(profile.cwd))===run.run_id?path.dirname(profile.cwd):profile.cwd});
  const identity={task_id:run.task_id,run_id:run.run_id,workflow,configuration_sha256:built.configuration_sha256,binding_sha256:built.binding_sha256,
   input_sha256:built.input_sha256,profile_sha256:hash(canonical(profile.files))};
  let receipt,context=built.context,expectedFiles;verifyRuntime(context);

@@ -1,0 +1,67 @@
+{
+  "schema": "commander-normalized-input-fixture/v1",
+  "source": {
+    "repo": "perfectuser21/cecelia",
+    "revision": "76a50a3c5fbccaa2f207f3ad8bbf5c5fa6b6239c",
+    "path": "packages/brain/src/orchestrator/commander-decision.js",
+    "sha256": "c6b4844fdf17edeb059e7b9de06be4b9d2b45d77fc0c31c6e56840e5edd70a59"
+  },
+  "input": {
+    "run_tag": "22222222-2222-4222-8222-222222222222",
+    "binding_key": "customer",
+    "business": {
+      "producer_key": "approved",
+      "comment_limit": 1,
+      "scope": {
+        "video_ids": [
+          "7711111111111111111"
+        ],
+        "upstream": {
+          "7711111111111111111": {
+            "run": "upstream"
+          }
+        },
+        "qualification_input": {
+          "video_id": "7711111111111111111",
+          "coverage": {
+            "kind": "full_video",
+            "source_duration_display_seconds": 35,
+            "capture_max_seconds": 120,
+            "max_capture_sessions": 1,
+            "max_asr_calls": 1,
+            "max_judge_primary_calls": 1
+          }
+        }
+      }
+    }
+  },
+  "normalized_input": {
+    "binding_key": "customer",
+    "business": {
+      "comment_limit": 1,
+      "producer_key": "approved",
+      "scope": {
+        "qualification_input": {
+          "coverage": {
+            "capture_max_seconds": 120,
+            "kind": "full_video",
+            "max_asr_calls": 1,
+            "max_capture_sessions": 1,
+            "max_judge_primary_calls": 1,
+            "source_duration_display_seconds": 35
+          },
+          "video_id": "7711111111111111111"
+        },
+        "upstream": {
+          "7711111111111111111": {
+            "run": "upstream"
+          }
+        },
+        "video_ids": [
+          "7711111111111111111"
+        ]
+      }
+    },
+    "run_tag": "22222222-2222-4222-8222-222222222222"
+  }
+}
