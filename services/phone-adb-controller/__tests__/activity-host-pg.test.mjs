@@ -103,3 +103,11 @@ test('readiness uses only read-only queries and does not require or create a run
  Pool.prototype.connect=async()=>({release(){},async query(sql){queries.push(sql);if(sql.includes('current_database'))return {rows:[{name:'zenithjoy',read_only:'on'}]};if(sql.includes('tenant_company_profiles'))return {rows:[{company_id:context.company_id,tenant_id:context.tenant_id,config_status:'enabled',config_version:34,runtime_config:{policy_id:'fixture-policy'}}]};return {rows:[]};}});
  try{assert.equal((await api.checkActivityHostPgReady(context,{})).status,'ready');assert.equal(queries[0],'BEGIN READ ONLY');assert.equal(queries.at(-1),'ROLLBACK');assert.equal(queries.length,5);assert.ok(queries.every(q=>!q.includes('company_config_runs')));}finally{Pool.prototype.connect=original;}
 });
+
+test('103 explicit PG assembly reuses all four original host entries without 102 wrappers',async()=>{
+ const targetRoot=join(f.root,'explicit-103');
+ const r=await (await import(implementation)).assembleActivityPgHost({baseRoot:f.base,targetRoot,runtimeRoot:f.runtime,sourceCommit:f.sourceCommit,expectedSource:f.expectedSource,expectedDeployment:f.expectedDeployment,workflow:'103'});
+ assert.deepEqual(Object.keys(r.receipt.base_sha256).sort(),Object.keys(fixture.files).sort());
+ for(const name of Object.keys(fixture.files)){assert.equal(r.receipt.base_sha256[name],fixture.files[name].sha256);assert.match(readFileSync(join(targetRoot,name),'utf8'),/loadActivityHostPg/);}
+ assert.equal(existsSync(join(targetRoot,'qualification')),false);
+});
