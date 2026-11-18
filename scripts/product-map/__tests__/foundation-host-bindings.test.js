@@ -28,3 +28,14 @@ test('host label cannot swallow the business Skill or execute different Skill co
  f.put(f.business[0].path,'different business method');assert.throws(()=>call(f.document),/FOUNDATION_HOST_EXECUTED_SKILL/);f.put(f.business[0].path,'one fixed method');
  const lock=JSON.parse(f.read('.skills-source.json'));lock.revision='f'.repeat(40);f.put('.skills-source.json',JSON.stringify(lock));assert.throws(()=>call(f.document),/FOUNDATION_HOST_SKILL_ORIGIN/);
 });
+test('OpenClaw fixed profile validation has ancestry available and refuses missing shallow source',async t=>{
+ const {parse}=await import('yaml'),workflow=parse(fs.readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const checkout=workflow.jobs['openclaw-scripts-test'].steps.find(s=>s.uses==='actions/checkout@v4');
+ assert.equal(checkout.with?.['fetch-depth'],0,'tests calling collectMethods must load the fixed profile ancestor');
+ const f=fixture(t),{partitionFoundationBindings}=await import(helper),revision=f.document.runtime.profile_ref.revision;
+ f.put('later.txt','definition commit follows product');execFileSync('git',['-C',f.root,'add','.']);execFileSync('git',['-C',f.root,'-c','core.hooksPath=/dev/null','-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','test: later definition']);
+ const shallow=f.root+'-shallow';t.after(()=>fs.rmSync(shallow,{recursive:true,force:true}));execFileSync('git',['clone','--quiet','--depth=1','file://'+f.root,shallow],{stdio:'pipe'});
+ const check=()=>partitionFoundationBindings({document:f.document,repoRoot:shallow,read:p=>fs.readFileSync(path.join(shallow,p),'utf8')});
+ assert.throws(check,/FOUNDATION_HOST_FIXED_SOURCE/);
+ execFileSync('git',['-C',shallow,'fetch','--quiet','--unshallow'],{stdio:'pipe'});assert.deepEqual(check().get('work'),f.business);assert.equal(execFileSync('git',['-C',shallow,'rev-parse',revision],{encoding:'utf8'}).trim(),revision);
+});
