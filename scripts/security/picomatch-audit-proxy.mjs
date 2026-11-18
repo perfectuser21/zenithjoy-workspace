@@ -1,6 +1,7 @@
 // This does not accept risk: callers must first verify the patched distributions.
 // npm computes both reports against one immutable registry response snapshot.
 import { createServer } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 
@@ -44,17 +45,39 @@ async function readBounded(stream) {
   return Buffer.concat(chunks);
 }
 
-async function publicRegistry({ method, path, body, accept }) {
-  const response = await fetch('https://registry.npmjs.org' + path, {
-    method, redirect: 'error', signal: AbortSignal.timeout(45000),
-    headers: { accept, ...(method === 'POST' ? { 'content-type': 'application/json' } : {}) },
-    ...(method === 'POST' ? { body } : {}),
-  });
-  if (!response.ok) throw error('REGISTRY_' + response.status);
-  return JSON.parse((await readBounded(response.body)).toString('utf8'));
+function validateEndpoint(method, path) {
+  if (typeof path !== 'string') throw error('ENDPOINT');
+  if (method === 'POST' && path === bulkPath) return;
+  if (method !== 'GET' || !/^\/(?:@[a-zA-Z0-9._~-]+\/)?[a-zA-Z0-9._~-]+$/.test(decodeURIComponent(path))
+      || decodeURIComponent(path).split('/').some(part => part === '.' || part === '..')) throw error('ENDPOINT');
 }
 
-export async function startAuditSnapshot({ versions, upstream = publicRegistry }) {
+export async function readRegistryJson({ method, path, body, accept }, transport = httpsRequest) {
+  validateEndpoint(method, path);
+  if (typeof accept !== 'string' || accept.length > 256 || /[\r\n]/.test(accept)) throw error('ACCEPT');
+  // Host/protocol/port are separate constants, never parsed from inbound input.
+  // https.request does not follow redirects; every non-2xx response fails closed.
+  return new Promise((resolve, reject) => {
+    let timer;
+    const finish = (cause, value) => { clearTimeout(timer); cause ? reject(cause) : resolve(value); };
+    const request = transport({ protocol: 'https:', hostname: 'registry.npmjs.org', port: 443,
+      method, path, timeout: 45000,
+      headers: { accept, 'accept-encoding': 'identity', ...(method === 'POST' ? { 'content-type': 'application/json' } : {}) },
+    }, async response => {
+      try {
+        if (response.statusCode < 200 || response.statusCode >= 300) throw error('REGISTRY_' + response.statusCode);
+        if (response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity') throw error('REGISTRY_ENCODING');
+        finish(null, JSON.parse((await readBounded(response)).toString('utf8')));
+      } catch (cause) { response.destroy(); finish(cause); }
+    });
+    request.on('error', cause => finish(cause));
+    request.on('timeout', () => request.destroy(error('REGISTRY_TIMEOUT')));
+    timer = setTimeout(() => request.destroy(error('REGISTRY_TIMEOUT')), 45000);
+    request.end(method === 'POST' ? body : undefined);
+  });
+}
+
+export async function startAuditSnapshot({ versions, upstream = readRegistryJson }) {
   if (!Array.isArray(versions) || !versions.length || versions.some(v => !/^\d+\.\d+\.\d+$/.test(v))) throw error('SCOPE');
   const expected = [...new Set(versions)].sort();
   const snapshot = new Map(), pending = new Map(), failures = [];
@@ -67,10 +90,7 @@ export async function startAuditSnapshot({ versions, upstream = publicRegistry }
       const match = /^\/(original|remediated)(\/[^?#]*)$/.exec(request.url || '');
       if (!match || match[1] !== requestPhase) throw error('PHASE');
       const path = match[2], method = request.method;
-      if (method !== 'POST' && method !== 'GET') throw error('METHOD');
-      if (method === 'POST' && path !== bulkPath) throw error('ENDPOINT');
-      if (method === 'GET' && !/^\/(?:@[a-zA-Z0-9._~-]+\/)?[a-zA-Z0-9._~-]+$/.test(decodeURIComponent(path))) throw error('ENDPOINT');
-      if (decodeURIComponent(path).split('/').some(part => part === '.' || part === '..')) throw error('ENDPOINT');
+      validateEndpoint(method, path);
       let bytes = await readBounded(request);
       if (request.headers['content-encoding'] === 'gzip') bytes = gunzipSync(bytes, { maxOutputLength: maxBytes });
       else if (request.headers['content-encoding']) throw error('ENCODING');
