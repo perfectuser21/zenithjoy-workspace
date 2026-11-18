@@ -7,7 +7,7 @@ name: RPA Reset Stage (逻辑层单测 + 复位台闸)
 
 on:
   push:
-    branches: [main, 'cp-*']
+    branches: [main]
     paths:
       - 'services/agent/wechat-rpa/**'
       - '.github/workflows/e2e-rpa-reset-stage.yml'
