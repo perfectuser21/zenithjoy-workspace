@@ -32,6 +32,7 @@ COPY apps/dashboard/package.json ./apps/dashboard/
 COPY apps/geoai/package.json ./apps/geoai/
 COPY apps/realtime-voice-mvp/package.json ./apps/realtime-voice-mvp/
 COPY apps/staff-hub/package.json ./apps/staff-hub/
+COPY scripts/security/picomatch-remediation/packages/*.patched.tgz ./scripts/security/picomatch-remediation/packages/
 
 RUN npm ci --workspace=apps/api
 
