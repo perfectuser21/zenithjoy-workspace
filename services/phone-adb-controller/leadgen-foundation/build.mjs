@@ -16,8 +16,8 @@ export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot}){
  const revision=git(repoRoot,['rev-parse','HEAD']).toString().trim();need(/^[a-f0-9]{40}$/.test(revision),'BUILD_REVISION');
  need(path.isAbsolute(outputRoot)&&!fs.existsSync(outputRoot),'BUILD_TARGET');
  const files=new Map(),origins={},workflows=[],revisions=new Set([revision]);
- const add=(sourceRevision,name,bytes,origin)=>{relative(name);need(bytes.length<=1024*1024,'BUILD_FILE_SIZE');const key=sourceRevision+':'+name;
-  if(files.has(key))need(files.get(key).bytes.equals(bytes),'BUILD_COLLISION');else files.set(key,{revision:sourceRevision,name,bytes});origins[key]=origin;};
+ const add=(sourceRevision,name,bytes,origin,kind=name.endsWith('/SKILL.md')?'skill':'code')=>{relative(name);need(bytes.length<=1024*1024,'BUILD_FILE_SIZE');const key=sourceRevision+':'+name;
+  if(files.has(key))need(files.get(key).bytes.equals(bytes)&&files.get(key).kind===kind,'BUILD_COLLISION');else files.set(key,{revision:sourceRevision,name,bytes,kind});origins[key]=origin;};
  for(const [workflow,key]of Object.entries(WORKFLOWS)){
   const contractPath=`product-map/contracts/${key}.yaml`,contract=parse(read(repoRoot,revision,contractPath).toString()),runtime=contract.runtime,ref=runtime?.profile_ref;
   const profilePath=`${PREFIX}/profiles/${workflow}.json`;
@@ -41,12 +41,47 @@ export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot}){
   const implementation_bindings=[{kind:'code',repo:REPO,path:profilePath,revision:profileRevision,digest:ref.digest},...entries.map(([name,digest])=>({kind:name.startsWith(SKILL_PREFIX)?'skill':'code',repo:REPO,path:name,revision:profileRevision,digest:'sha256:'+digest}))];
   workflows.push({workflow,key,implementation_bindings,contract_source:{repo:REPO,path:contractPath,revision},runtime});
  }
+ // The existing publisher checks every definition binding, including business files at B.
+ // Resolve only the four fixed contract documents and their explicit shared Activity refs.
+ const documents=new Map(workflows.map(w=>[w.key,parse(read(repoRoot,revision,w.contract_source.path).toString())]));
+ const resolveActivity=(owner,activity,trail=[])=>{
+  if(!activity.ref)return activity;
+  need(typeof activity.ref==='string'&&/^[\w-]+\.[\w-]+$/.test(activity.ref)&&!trail.includes(activity.ref),'BUILD_ACTIVITY_REF');
+  const [key,slot]=activity.ref.split('.'),matches=documents.get(key)?.activities?.filter(a=>(a.key??a.ref?.split('.')[1])===slot)??[];
+  need(matches.length===1,'BUILD_ACTIVITY_REF');return resolveActivity(key,matches[0],[...trail,activity.ref]);
+ };
+ const bindingCache=new Map();
+ const installBinding=b=>{
+  need(b&&['code','skill'].includes(b.kind)&&b.repo===REPO,'BUILD_BINDING');
+  const sourceRevision=b.revision==='contract'?revision:b.revision;need(/^[a-f0-9]{40}$/.test(sourceRevision??''),'BUILD_BINDING_REVISION');relative(b.path);
+  const id=[b.kind,sourceRevision,b.path].join(':');let item=bindingCache.get(id);
+  if(!item){
+   let sourcePath=b.path,resolvedRevision=sourceRevision,sourceRepo=REPO;
+   if(b.kind==='skill'){
+    const lock=JSON.parse(read(repoRoot,sourceRevision,'.skills-source.json'));need(lock.version===1&&lock.repository===SKILLS&&lock.profile==='zenithjoy'&&/^[a-f0-9]{40}$/.test(lock.revision),'BUILD_SKILL_LOCK');
+    const catalog=JSON.parse(read(skillsRepo,lock.revision,'distribution/catalog.json')),matches=catalog.profiles?.zenithjoy?.files?.filter(x=>x.path===b.path)??[];
+    need(matches.length===1,'BUILD_SKILL_ALIAS');sourcePath=matches[0].source;resolvedRevision=lock.revision;sourceRepo=SKILLS;
+    const bytes=read(skillsRepo,resolvedRevision,sourcePath);need(hash(bytes)===matches[0].sha256,'BUILD_SOURCE_DRIFT');
+    item={bytes,sourcePath,resolvedRevision,sourceRepo};
+   }else item={bytes:read(repoRoot,sourceRevision,sourcePath),sourcePath,resolvedRevision,sourceRepo};
+   bindingCache.set(id,item);
+  }
+  const digest='sha256:'+hash(item.bytes);need((b.digest===undefined||b.digest===digest)&&(b.sha256===undefined||b.sha256===digest.slice(7)),'BUILD_BINDING_DIGEST');
+  revisions.add(sourceRevision);add(sourceRevision,b.path,item.bytes,{repo:item.sourceRepo,revision:item.resolvedRevision,path:item.sourcePath,digest},b.kind);
+  return {kind:b.kind,repo:REPO,revision:sourceRevision,path:b.path,digest};
+ };
+ const visit=value=>[...(value.implementation_bindings??[]),...(value.runtime?.kind?[value.runtime]:[]),...(value.implementation?.kind?[value.implementation]:[]),...(value.steps??[]).flatMap(visit)];
+ for(const w of workflows){
+  const declared=(documents.get(w.key).activities??[]).flatMap(a=>visit(resolveActivity(w.key,a)));
+  w.definition_bindings=declared.map(installBinding);
+ }
+ need([...files.values()].reduce((n,f)=>n+f.bytes.length,0)<=64*1024*1024,'BUILD_PUBLISH_BYTES_LIMIT');
  // Validate every declared source before writing. This does not register, activate or publish anything.
  fs.mkdirSync(outputRoot,{mode:0o700});
  for(const {name,bytes,revision:sourceRevision}of files.values()){
   const file=path.join(outputRoot,REPO,sourceRevision,name);fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});fs.writeFileSync(file,bytes,{flag:'wx',mode:0o600});
  }
- const components=[...[...revisions].map(revision=>({kind:'repo',repo:REPO,revision})),...[...files.values()].map(({name,bytes,revision})=>({kind:name.startsWith(SKILL_PREFIX)?'skill':'code',repo:REPO,revision,path:name,digest:'sha256:'+hash(bytes)}))];
+ const components=[...[...revisions].map(revision=>({kind:'repo',repo:REPO,revision})),...[...files.values()].map(({name,bytes,revision,kind})=>({kind,repo:REPO,revision,path:name,digest:'sha256:'+hash(bytes)}))];
  const receipt={schema:'leadgen-foundation-bundle/v1',status:'built_not_registered',repo:REPO,revision,workflows,components,source_origins:origins};
  fs.writeFileSync(path.join(outputRoot,'bundle.json'),JSON.stringify(receipt,null,2)+'\n',{flag:'wx',mode:0o600});return receipt;
 }

@@ -64,3 +64,13 @@ test('product-map foundation runtime rejects floating profiles and unknown autho
  const {parse}=await import('yaml'),runtime=parse(fs.readFileSync(path.join(repo,'product-map/contracts/douyin_video_discovery.yaml'),'utf8')).runtime,validate=new Ajv({strict:true}).compile(schema);
  assert.equal(validate(runtime),true);for(const change of [r=>r.profile_ref.revision='main',r=>delete r.profile_ref.digest,r=>r.profile_ref.path='../outside',r=>r.timeout_ms=0,r=>r.env={OVERRIDE:'yes'}]){const r=structuredClone(runtime);change(r);assert.equal(validate(r),false);}
 });
+test('publisher installation follows explicit shared Activity refs and rejects binding digest drift before writing',()=>{
+ const f=fixture();try{
+  const p='product-map/contracts/'+WORKFLOWS['101']+'.yaml',doc=JSON.parse(fs.readFileSync(path.join(f.code,p)));
+  doc.activities=[{ref:WORKFLOWS['102']+'.business'}];f.put(f.code,p,JSON.stringify(doc));f.commit(f.code);
+  const b=buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'shared')});
+  assert.equal(b.workflows[0].definition_bindings.length,2);assert.ok(b.workflows[0].definition_bindings.every(x=>x.revision===b.revision));
+  const q='product-map/contracts/'+WORKFLOWS['102']+'.yaml',other=JSON.parse(fs.readFileSync(path.join(f.code,q)));other.activities[0].implementation_bindings[0].digest='sha256:'+'0'.repeat(64);f.put(f.code,q,JSON.stringify(other));f.commit(f.code);
+  assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'bad-binding')}),/BUILD_BINDING_DIGEST/);assert.equal(fs.existsSync(path.join(f.root,'bad-binding')),false);
+ }finally{f.close();}
+});
