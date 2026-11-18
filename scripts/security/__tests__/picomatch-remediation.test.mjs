@@ -27,9 +27,15 @@ for(const mutation of ['missing-site','extra-site','wrong-version','registry-rep
  writeFileSync(p,JSON.stringify(lock));assert.throws(()=>api.verifyRemediation({repositoryRoot:dir,projectRoot:dir}),/PICOMATCH_REMEDIATION_/);
 });
 test('brand becomes invalid if the checked lock changes afterwards',t=>{assert.equal(typeof api.verifyRemediation,'function');const dir=fixture(t),scope={repositoryRoot:dir,projectRoot:dir},proof=api.verifyRemediation(scope);writeFileSync(join(dir,'package-lock.json'),readFileSync(join(dir,'package-lock.json'),'utf8')+' ');assert.equal(api.isVerifiedRemediation(proof,scope),false);});
-for(const mode of ['checksum','trailing-tar'])test('ambiguous tar is rejected even when manifest and lock hashes are updated: '+mode,t=>{
+for(const mode of ['checksum','trailing-tar','partial-block','single-eof','directory-conflict'])test('ambiguous tar is rejected even when manifest and lock hashes are updated: '+mode,t=>{
  const dir=fixture(t),manifestPath=join(dir,folder,'manifest.json'),manifest=JSON.parse(readFileSync(manifestPath)),item=manifest.patched_packages.find(x=>x.version==='4.0.5'),archivePath=join(dir,item.path);let raw=gunzipSync(readFileSync(archivePath));
- if(mode==='checksum')raw.write('000000\0 ',148,'ascii');else raw=Buffer.concat([raw,raw]);
+ if(mode==='checksum')raw.write('000000\0 ',148,'ascii');
+ else if(mode==='trailing-tar')raw=Buffer.concat([raw,raw]);
+ else if(mode==='partial-block')raw=Buffer.concat([raw,Buffer.from([0])]);
+ else {let end=0;while(!raw.subarray(end,end+512).every(x=>x===0)){const size=parseInt(raw.subarray(end+124,end+136).toString().replace(/\0.*$/s,'').trim(),8);end+=512+Math.ceil(size/512)*512;}
+ if(mode==='single-eof')raw=raw.subarray(0,end+512);
+ else {const header=Buffer.from(raw.subarray(0,512));header.fill(0,124,136);header.write('00000000000',124,'ascii');header[156]=53;header.fill(32,148,156);const sum=header.reduce((a,b)=>a+b,0);header.write(sum.toString(8).padStart(6,'0')+'\0 ',148,'ascii');raw=Buffer.concat([raw.subarray(0,end),header,raw.subarray(end)]);}}
+
  const bytes=gzipSync(raw);item.sha256=createHash('sha256').update(bytes).digest('hex');item.integrity='sha512-'+createHash('sha512').update(bytes).digest('base64');writeFileSync(archivePath,bytes);writeFileSync(manifestPath,JSON.stringify(manifest));const path=join(dir,'package-lock.json'),lock=JSON.parse(readFileSync(path));lock.packages['node_modules/picomatch'].integrity=item.integrity;writeFileSync(path,JSON.stringify(lock));
  assert.throws(()=>api.verifyRemediation({repositoryRoot:dir,projectRoot:dir}),/PICOMATCH_REMEDIATION_ARCHIVE/);
 });
