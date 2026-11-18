@@ -12277,3 +12277,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "真实主页函数及身份校验的缺可选作品数/错UID负例；ADB为离线替身，不代表发送"
+
+  - id: douyin-dm-cloud-layout
+    path: services/phone-adb-controller/__tests__/douyin-dm-cloud-layout.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "真实脱敏聊天XML完整布局签名及混搭/焦点/身份负例；不执行输入或发送"
