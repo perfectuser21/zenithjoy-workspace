@@ -17,6 +17,7 @@ for name,item in packet['files'].items():
  assert hashlib.sha256(item['source'].encode()).hexdigest()==item['sha256'];(base/name).parent.mkdir(parents=True,exist_ok=True);(base/name).write_text(item['source'])
 c={'assigned_workflow':workflow,'source_commit':'a'*40,'profile':'fixture-phone','node':'node','max_candidates':1,'comment_limit':1,'line':'fixture','tasks':{workflow:{'task_id':'task','run_id':'run','run_tag':'fixture-new-run'}},'verification':{'policy_version':35,'102':{'video_ids':['7711111111111111111'],'qualification_input':{'video_id':'7711111111111111111','coverage':{'kind':'full_video','source_duration_display_seconds':37,'capture_max_seconds':120,'max_capture_sessions':1,'max_asr_calls':1,'max_judge_primary_calls':1}}}},'business_deadline_ms':time.time()*1000+10000,'cleanup_deadline_ms':time.time()*1000+10000}
 if workflow=='103':c['verification']['103']={'input_mode':'committed_partial_ids','comment_ids':['11111111-1111-4111-8111-111111111111'],'sources':{'11111111-1111-4111-8111-111111111111':'fixture-source-102'}}
+proof=p/'host-proof.json';c['verification']['proof_manifest_path']=str(proof);proof.write_text(json.dumps({'schema':'activity-evidence/v1','identity':{**c['tasks'][workflow],'workflow':workflow}}));proof.chmod(0o600)
 target=p/'candidate'
 if helper.exists():
  spec=importlib.util.spec_from_file_location('assembler',helper);a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
@@ -33,6 +34,7 @@ def forbidden(*a):raise AssertionError('external transport is forbidden')
 transport.local_command=forbidden;transport.pinned_transport=forbidden;sys.modules['local_transport']=transport
 activity='mark_leads' if workflow=='103' else ('dedup' if workflow=='102' else 'collect_videos')
 (target/'context.json').write_text(json.dumps(c));(target/'input.json').write_text(json.dumps({'activity_key':activity,'identity':c['tasks'][workflow]}));os.environ['COMMANDER_ACTIVITY_INPUT_FILE']=str(target/'input.json');os.environ['COMMANDER_ACTIVITY_KEY']=activity
+if mode=='proof-removed':proof.unlink()
 if mode=='context-drift':
  if workflow=='103':c['verification']['103']['sources']['11111111-1111-4111-8111-111111111111']='changed-source'
  else:c['verification']['102']['qualification_input']['coverage']['source_duration_display_seconds']=38
@@ -162,5 +164,31 @@ for mode in ['source','recovery','mapping','multiple','same-run']:
  (base/'tools.py').write_text(packet['files']['tools.py']['source'])
 print('rejected')`;
  const r=spawnSync('/usr/bin/python3',['-c',script,helper,root],{input:JSON.stringify(fixture103),encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'rejected');
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('host launch verification rejects removed external proof before tool dispatch',()=>{
+ const r=probe('proof-removed');assert.equal(r.first.stdout,'');assert.match(r.first.error,/ACTIVITY_HOST_PROOF_MISSING/);assert.equal(r.calls.dispatch,0);
+});
+test('assembly requires an external identity proof container and preserves existing evidence',()=>{
+ const root=mkdtempSync(join(tmpdir(),'activity-host-proof-'));
+ try{
+ const script=String.raw`import importlib.util,json,sys,pathlib,copy
+s=importlib.util.spec_from_file_location('host',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+r=pathlib.Path(sys.argv[2]);base=r/'base';base.mkdir();packet=json.load(sys.stdin)
+for name,v in packet['files'].items():(base/name).write_text(v['source'])
+identity={'task_id':'real-test-task','run_id':'real-test-run','run_tag':'real-test-tag','workflow':'101'}
+proof=r/'proof.json';c={'assigned_workflow':'101','tasks':{'101':{k:v for k,v in identity.items() if k!='workflow'}},'verification':{'proof_manifest_path':str(proof)}}
+for mode in ['missing','mismatch']:
+ if mode=='mismatch':proof.write_text(json.dumps({'schema':'activity-evidence/v1','identity':{**identity,'run_id':'wrong'}}));proof.chmod(0o600)
+ target=r/mode
+ try:m.assemble(base,target,context=c)
+ except ValueError as e:assert 'ACTIVITY_HOST_PROOF_' in str(e)
+ else:raise AssertionError(mode+' proof accepted')
+ assert not target.exists()
+existing={'schema':'activity-evidence/v1','identity':identity,'qualification_evidence':{'opaque_original_reference':'preserved_not_claimed_passed'}}
+proof.write_text(json.dumps(existing));proof.chmod(0o600);before=proof.read_bytes();m.assemble(base,r/'valid',context=c);assert proof.read_bytes()==before
+print('verified_no_overwrite')`;
+ const r=spawnSync('/usr/bin/python3',['-c',script,helper,root],{input:JSON.stringify(fixture),encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'verified_no_overwrite');
  }finally{rmSync(root,{recursive:true,force:true});}
 });
