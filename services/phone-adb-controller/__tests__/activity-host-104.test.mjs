@@ -108,3 +108,14 @@ test('actual assembled runtime loads admitted PG closure; bad scope dispatches z
   const d=await api.createRuntimeDeps(f.context,f.context.verification['104']);await d.close();assert.deepEqual(globalThis.activity104Effects,{module:6,order:1,query:0});
  }finally{for(const[k,v]of Object.entries(env))if(v===undefined)delete process.env[k];else process.env[k]=v;delete globalThis.activity104Effects;}
 });
+
+test('same-account earlier prepared or unknown orders block a different recipient; own prepared is preserved',async()=>{
+ const f=setup(),cfg=f.context.outreach_runtime;fs.mkdirSync(cfg.state_directory);fs.mkdirSync(path.join(cfg.evidence_base,f.context.profile),{recursive:true});fs.mkdirSync(cfg.lock_root);await candidate(f);
+ const {observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));
+ assert.equal(observe104Runtime(f.context).verified,true);
+ for(const phase of ['prepared','unknown']){
+  const other={record_id:'other-recipient-order',fields:{'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 '+phase+':earlier:sha]'}};
+  const r=observe104Runtime(f.context,{orders:[other]});assert.equal(r.verified,false);assert.equal(r.unresolved_attempt_reservations,1);assert.equal(r.today_dm_attempts,1);
+  const own={...other,record_id:f.context.verification['104'].record_id};assert.equal(observe104Runtime(f.context,{orders:[own]}).unresolved_attempt_reservations,0);
+ }
+});
