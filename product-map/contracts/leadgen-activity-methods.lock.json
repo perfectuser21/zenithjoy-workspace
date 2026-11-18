@@ -3611,7 +3611,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/scrcpy-runtime.py",
           "revision": "contract",
-          "sha256": "11510290c0cc8a989b588623b2b627e6f546f454921e5c3e3d2a47d4828ada47"
+          "sha256": "e26a4b15427ba8a46a85699a9a7027f9ee6ce08829e07866a5eccc2ccec317cf"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "bb8d535f850292565dda7f579e19caefe233c7ab55be4c0b53f5481225b4e45a",
+      "code_digest": "53ce1fb31a3423f487c4a7091b8a5b6c6aae4882a04936ba5180ba44259b592a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。；本轮SDK时间竞争增量评审：仅Runner完整匹配自生成命令时在SDK验源后收紧相对timeout，原绝对截止、foreign命令严格检查及dispatch前收尾预留不变；97项隔离控制器测试与1项耗尽负例通过，不代表真实模型或生产业务验收。；本轮依赖补丁来源同步增量评审：仅root锁因picomatch精确补丁改变后，同步PG descriptor顶层root-lock摘要及其固定SHA；14个PG包完整锁节点、版本、来源、integrity与依赖边不变，校验逻辑/原冻结运行不改。；合入main857a36648后的增量评审：保留main的4.0.7升级、独立dashboard依赖/审计及发布修复；统一原名原版的重复extglob拒绝补丁与官方npm重算，不增加豁免。PG14包完整节点不变，只重算新的root锁/descriptor来源摘要；原已冻结运行不改。；本次候选仅为本地 PG Pool 的 leased/idle 客户端与 pool 错误建立所有权，错误标记保持 sticky 且阻止证明 execution_stopped；未改变方法合同、生产数据库身份或远程动作。本人隔离真实 PG 的正常关闭、leased/idle/查询期间断连验证通过；独立复审复跑隔离真实 PG 四项通过，product-map 及来源合同校验通过；SSH、真机和生产未验证。；本次录制进度增量：record-status增加有界只读video/audio packet PTS及同一startup进程身份观察；不改录制start/stop、码率、时基、单次上限或原帧覆盖验收。缺文件/损坏/超时/身份不明保持unknown；35项隔离回归与旧真实媒体只读验证，不代表新102业务通过。；同次Phone收口：open_user_profile的可选作品数字段缺失返回原unknown，不改变UID/页面资格判据；实际函数离线7/7独立通过，未声称真实发送。；同次104完整布局修复：仅接纳真实观察的新chat四控件完整签名，拒混搭并保身份/焦点/页面保护，离线242/242独立通过；官方CLI仅追加上述已审controller/focus精确摘要，静态来源与停止品牌判据不变，未宣称真实发送通过。",
-        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量); codex:/root/review_103_recovery (SDK截止增量); codex:/root/review_103_recovery (PG来源pin增量); codex:/root/review_103_recovery (main857整合增量); codex:/root/native_pg_fix (候选初审); codex:/root/native_pg_independent_review (本地 Pool 独立复审); codex:/root/review_103_recovery (record-status增量初审); codex:/root/fix_103_tool_wiring (record-status独立复审); codex:/root/prepare_104_live/review_plan (可选作品数独立复审); codex:/root/prepare_104_live/review_plan (完整chat签名独立复审)",
-        "previous_code_digest": "cbc8d10cd9c32536d39296b1f9484273f5ceedbcaccdb519584cdb2bc2ca7ce8",
-        "current_code_digest": "bb8d535f850292565dda7f579e19caefe233c7ab55be4c0b53f5481225b4e45a"
+        "previous_code_digest": "bb8d535f850292565dda7f579e19caefe233c7ab55be4c0b53f5481225b4e45a",
+        "current_code_digest": "53ce1fb31a3423f487c4a7091b8a5b6c6aae4882a04936ba5180ba44259b592a",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。；本轮SDK时间竞争增量评审：仅Runner完整匹配自生成命令时在SDK验源后收紧相对timeout，原绝对截止、foreign命令严格检查及dispatch前收尾预留不变；97项隔离控制器测试与1项耗尽负例通过，不代表真实模型或生产业务验收。；本轮依赖补丁来源同步增量评审：仅root锁因picomatch精确补丁改变后，同步PG descriptor顶层root-lock摘要及其固定SHA；14个PG包完整锁节点、版本、来源、integrity与依赖边不变，校验逻辑/原冻结运行不改。；合入main857a36648后的增量评审：保留main的4.0.7升级、独立dashboard依赖/审计及发布修复；统一原名原版的重复extglob拒绝补丁与官方npm重算，不增加豁免。PG14包完整节点不变，只重算新的root锁/descriptor来源摘要；原已冻结运行不改。；本次候选仅为本地 PG Pool 的 leased/idle 客户端与 pool 错误建立所有权，错误标记保持 sticky 且阻止证明 execution_stopped；未改变方法合同、生产数据库身份或远程动作。本人隔离真实 PG 的正常关闭、leased/idle/查询期间断连验证通过；独立复审复跑隔离真实 PG 四项通过，product-map 及来源合同校验通过；SSH、真机和生产未验证。；本次录制进度增量：record-status增加有界只读video/audio packet PTS及同一startup进程身份观察；不改录制start/stop、码率、时基、单次上限或原帧覆盖验收。缺文件/损坏/超时/身份不明保持unknown；35项隔离回归与旧真实媒体只读验证，不代表新102业务通过。；同次Phone收口：open_user_profile的可选作品数字段缺失返回原unknown，不改变UID/页面资格判据；实际函数离线7/7独立通过，未声称真实发送。；同次104完整布局修复：仅接纳真实观察的新chat四控件完整签名，拒混搭并保身份/焦点/页面保护，离线242/242独立通过；官方CLI仅追加上述已审controller/focus精确摘要，静态来源与停止品牌判据不变，未宣称真实发送通过。；本轮仅上传communicate返回后持久有界诊断，原owner/ACK/hash/unknown与超时不变；C独立4/4错误路径通过，不宣称16KiB原因已修。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量); codex:/root/review_103_recovery (SDK截止增量); codex:/root/review_103_recovery (PG来源pin增量); codex:/root/review_103_recovery (main857整合增量); codex:/root/native_pg_fix (候选初审); codex:/root/native_pg_independent_review (本地 Pool 独立复审); codex:/root/review_103_recovery (record-status增量初审); codex:/root/fix_103_tool_wiring (record-status独立复审); codex:/root/prepare_104_live/review_plan (可选作品数独立复审); codex:/root/prepare_104_live/review_plan (完整chat签名独立复审); codex:/root/review_103_recovery stage diagnostics review"
       }
     },
     "douyin_video_processing.collection": {
