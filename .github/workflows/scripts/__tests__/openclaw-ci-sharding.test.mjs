@@ -40,7 +40,7 @@ function validate(w) {
   const officialNative=['official-child-capture.integration.test.mjs','official-cli-closure.test.mjs','official-cli-quarantine.test.mjs','official-recording-producer.test.mjs'];
   const nativeJob=w.jobs['public-code-phone-darwin-test'];
   assert.equal(nativeJob['runs-on'],'macos-latest');
-  assert.equal(nativeJob['timeout-minutes'],10);
+  assert.equal(nativeJob['timeout-minutes'],15);
   assert.equal(nativeJob.if,undefined);assert.equal(nativeJob['continue-on-error'],undefined);
   assert.ok(w.jobs['l3-passed'].needs.includes('public-code-phone-darwin-test'));
   const nativeStep=nativeJob.steps.find(step=>step.name==='Run official child native lifecycle without platform skips');

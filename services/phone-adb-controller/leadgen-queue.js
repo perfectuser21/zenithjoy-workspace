@@ -73,6 +73,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   const partialIds=committedPartial.explicitIds(input,sourceRun);
   if(partialIds&&input.op!=='score_scope'&&input.ids===undefined)input={...input,ids:partialIds};
   const partial=partialIds?await committedPartial.admittedRows(pool,{lineKey,run,ids:partialIds}):[];
+  if(op==='complete_collected_comment_metadata')return transaction(pool,client=>committedPartial.completeMetadata(client,input,{lineKey,verifyProfileCardLink:deps.verifyProfileCardLink||require('./profile-card-link-evidence.js').verifyProfileCardLink}));
+  if(op==='complete_collected_comment_metadata_readback')return transaction(pool,client=>committedPartial.metadataReadback(client,input,{lineKey}));
   if(op==='certify_collected_comment')return transaction(pool,client=>committedPartial.certify(client,input,{lineKey}));
   if(op==='certify_collected_comment_readback')return committedPartial.certificationReadback(pool,input,{lineKey});
   if(op==='policy_review'){
@@ -304,7 +306,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   }
   if (op === 'collect' || op === 'collect_partial') {
     return transaction(pool, async client => {
-      const owned = await client.query(`SELECT video_id,judgment_status,video_url,
+      const owned = await client.query(`SELECT video_id,judgment_status,video_url,title,
         (SELECT count(*) FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=$4) AS url_bindings FROM zenithjoy.leadgen_videos
         WHERE line_key=$1 AND video_id=$2 AND process_status=$3 FOR UPDATE`, [lineKey, input.video_id, `处理中:${run}`,input.video_url||null]);
       if (owned.rows[0]?.judgment_status !== 'matched') throw Error('只许采集持有租约的合格视频');
@@ -316,8 +318,16 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         await validateHistoryRows(client,lineKey,input,old,deps);
       }
       const coverage=new Set([...old,...(input.comments||[])].map(r=>JSON.stringify([r.douyinId,r.commentBody]))).size;
+      const comments=[];
+      for(const comment of input.comments||[]){
+        if(sourceRun===null&&comment.recipientEvidence?.status==='verified'&&comment.recipientEvidence.company_binding){
+          committedPartial.validateNewCommentMetadata(comment,owned.rows[0]);
+          const binding=await require('./company-config-lib.js').readCollectionAccountBinding(client,{lineKey,run,sourceRun});
+          comments.push(await committedPartial.prepareNewCommentMetadata(comment,owned.rows[0],{lineKey,run,binding,verifyProfileCardLink:deps.verifyProfileCardLink||require('./profile-card-link-evidence.js').verifyProfileCardLink}));
+        }else comments.push(comment);
+      }
       let inserted = 0;
-      for (const comment of input.comments || []) {
+      for (const comment of comments) {
         if (!comment.nickname || !comment.commentBody) throw Error('评论身份或正文缺失');
         if(comment.recipientEvidence?.status==='verified'){
           const e=comment.recipientEvidence;

@@ -223,11 +223,25 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
       # audit-gate 含 devDependencies（旧 --omit=dev 藏住过 6 个 high，2026-07-05 repo-audit 抓出）
-      # npm audit 只读 lockfile，无需 npm ci
+      # 校验固定补丁包及原始/修复后双报告，无需安装全仓依赖。
+      - name: 安全门禁与补丁防失效回归
+        run: node --test .github/workflows/scripts/__tests__/audit-gate.test.mjs scripts/security/__tests__/*.test.mjs
       - name: 根目录依赖漏洞门禁（含 dev）
         run: bash .github/workflows/scripts/audit-gate.sh .
       - name: dashboard 依赖漏洞门禁（含 dev）
         run: bash .github/workflows/scripts/audit-gate.sh apps/dashboard
+      - name: 保存原始漏洞报告和已修补证明
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-remediation-evidence
+          path: |
+            /tmp/picomatch-remediation-audit-*/original.json
+            /tmp/picomatch-remediation-audit-*/remediated.json
+            /tmp/picomatch-remediation-audit-*/distribution-proof.json
+            /tmp/picomatch-remediation-audit-*/receipt.json
+            /tmp/picomatch-remediation-audit-*/snapshot.json
+            /tmp/picomatch-remediation-audit-*/*.stderr
 
   # ─── OpenClaw scripts ────────────────────────────────────────────────
   # phonectl（件3 信号桥薄壳）等 scripts/openclaw/ 下脚本的 Node 单测。这些是根级
@@ -392,7 +406,8 @@ jobs:
   public-code-phone-darwin-test:
     name: Public Code Phone Darwin Test
     runs-on: macos-latest
-    timeout-minutes: 10
+    # Serial native suites passed but exhausted 10m including setup/teardown; worker deadlines stay unchanged.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

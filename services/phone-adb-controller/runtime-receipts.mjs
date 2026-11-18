@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync,writeFileSync,realpathSync,lstatSync } from 'node:fs';
 import { resolve,join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput,outreachScopeInput,executionModeInput,frozenExecutionMode,agentInput,initializeAgentBudget } from './runtime-definition.mjs';
+import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput,outreachScopeInput,executionModeInput,frozenExecutionMode,agentInput,initializeAgentBudget,workflowRunMaxSeconds } from './runtime-definition.mjs';
 import { bindRun,readBinding } from './runtime-binding.mjs';
 import {readCollectionPhoneScopeInput,defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
 import {defaultDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
@@ -160,6 +160,10 @@ export function markActivityStart({dir,attempt,activity,n=1}) {
 export async function run(args){
   const [cmd,...rest]=args; const dir=e.WFR_RUN_DIR;
   const indexRoot=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'run-index');
+  if(cmd==='run-max-seconds'){
+    if(rest.length)throw Error('RUN_BUDGET_ARGUMENT_INVALID');
+    process.stdout.write(String(workflowRunMaxSeconds(e))+'\n');return;
+  }
   if(cmd==='agent-budget'){
     if(rest.length)throw Error('AGENT_INPUT_BUDGET_INIT_INVALID');
     const budget=initializeAgentBudget(e);
