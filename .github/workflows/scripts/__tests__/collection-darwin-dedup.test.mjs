@@ -47,14 +47,14 @@ function validate(w=workflow){
   assert.match(kernel.run,/^node -e "if\(process\.platform!=='darwin'\)process\.exit\(1\)"$/m);
   return {job,matrix,pre,kernel};
 }
-function execute(w=workflow,failed='',platform='darwin',withPreflight=true){
+function execute(w=workflow,failed='',platform='darwin',withPreflight=true,extraPreflight=[]){
  const {matrix,pre,kernel}=validate(w),root=mkdtempSync(join(tmpdir(),'darwin-ci-union-'));
  try{
   const bin=join(root,'bin');mkdirSync(bin);
   assert.ok(preflightFiles.length>=2);
-  if(withPreflight)for(const path of preflightFiles){
+  if(withPreflight)for(const path of [...preflightFiles,...extraPreflight]){
     const full=join(root,path);mkdirSync(join(full,'..'),{recursive:true});
-    writeFileSync(full,`import test from 'node:test'; import assert from 'node:assert/strict'; test('isolated fixture',()=>assert.notEqual(process.env.FAIL_TARGET,${JSON.stringify(path)}));`);
+    writeFileSync(full,`import test from 'node:test'; import assert from 'node:assert/strict'; import {relative} from 'node:path'; import {fileURLToPath} from 'node:url'; test('isolated fixture',()=>assert.notEqual(process.env.FAIL_TARGET,relative(process.cwd(),fileURLToPath(import.meta.url))));`);
   }
   writeFileSync(join(bin,'node'),`#!/bin/bash\nprintf '%s\\0' node "$@" __END__ >> "$TRACE"\nif [ "$1" = -e ]; then exec "$REAL_NODE" -e "Object.defineProperty(process,'platform',{value:'$TEST_PLATFORM'}); $2"; fi\ncase " $* " in *'/preflight-'*) exec "$REAL_NODE" "$@";; esac\ncase " $* " in *" $FAIL_TARGET "*) exit 41;; esac\n`,{mode:0o755});
   writeFileSync(join(bin,'python3'),`#!/bin/bash\nprintf '%s\\0' python3 "$@" __END__ >> "$TRACE"\ncase " $* " in *" $FAIL_TARGET "*) exit 41;; esac\n`,{mode:0o755});
@@ -101,6 +101,15 @@ test('公共 preflight、三项 Python 和两片专属套件失败均阻断 L3',
  for(const status of ['skipped','cancelled','missing'])assert.notEqual(codeGate(status),0);
  assert.notEqual(execute(workflow,'','darwin',false).statuses[0],0,'no glob match must fail with real Node');
  const invalid=execute(workflow,'','linux');assert.deepEqual(invalid.statuses,[1,1]);
+});
+test('含特殊字符的文件名作为数据处理，仍能逐文件触发失败',()=>{
+ const path='services/phone-adb-controller/__tests__/preflight-quote\'"`\n\u2028.test.mjs';
+ const good=execute(workflow,'','darwin',true,[path]);
+ assert.deepEqual(good.statuses,[0,0]);
+ assert.ok(good.callsByShard[0].some(c=>c.includes(path)));
+ const failed=execute(workflow,path,'darwin',true,[path]);
+ assert.notEqual(failed.statuses[0],0);
+ assert.equal(failed.statuses[1],0);
 });
 test('遗漏、重复、跳过、吞错或修改平台与门禁的变体都不能通过合同',()=>{
  const mutations=[
