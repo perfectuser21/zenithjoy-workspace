@@ -8,6 +8,7 @@ import {isDeepStrictEqual} from 'node:util';
 const self=fileURLToPath(import.meta.url),hash=x=>createHash('sha256').update(x).digest('hex');
 const need=(value,code)=>{if(!value)throw Error('ACTIVITY_HOST_PG_'+code);};
 const BASE={
+ 'cleanup-result.mjs':'d45fd56c90ed6ebe478dae555eda655a6cb2302f0b95055bfa1120d86a2489c7',
  'business.mjs':'5c2c6fa45b9f4c4bbe83b4e8560a9206485d4e2f5f0370603d8b87607a27ea2f',
  'checker.mjs':'a84b739035ba1336c498dcb7defae3b4df9230c465189f22e849c184c51d8d54',
  'production-readback-local.mjs':'3ef2c8d58d3f7d4ed196af657bf60df6a669016ae9883793ad641d3a908612bc',
@@ -44,6 +45,7 @@ export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,so
   "const require=createRequire(path.join(c.runtime_root,'package.json')),{Pool}=require('pg');",
   "const {Pool}=await loadActivityHostPg(c);").replace("import {createRequire} from 'node:module';\n",'');
  files['production-readback-local.mjs']=replaceOnce(files['production-readback-local.mjs'],"const {Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);");
+ files['cleanup-result.mjs']=replaceOnce(files['cleanup-result.mjs'],"const require=createRequire(c.runtime_root+'/package.json'),{Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);").replace("import {createRequire} from 'node:module';",'');
  for(const name of Object.keys(BASE))files[name]="import {loadActivityHostPg} from './activity-host-pg.mjs';\n"+files[name];
  files['activity-host-pg.mjs']=regular(self).toString();
  files['context-pg.json']=JSON.stringify({pg,runtime_sha256:Object.fromEntries(PG_SOURCE.map(n=>[n,expectedSource[n]]))},null,2)+'\n';
