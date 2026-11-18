@@ -82,3 +82,22 @@ test('102 selects only a controlled producer asset and rejects scope disagreemen
   f.run.input.business.producer_key='../untrusted';assert.throws(call,/LEADGEN_PRODUCER_KEY/);
  }finally{f.close();}
 });
+test('104 binds one approved intent after runtime identity arrives and restores only that same run',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const b=f.config.bindings.customer,c=b.context;
+  Object.assign(c,{host:'fixture-machine',serial:'hardware',adb_serial:'localhost:15555'});
+  const scope={record_id:'record',comment_id:'comment',lead_id:'lead',target_douyin_id:'target',profile_url:'https://v.douyin.com/fixture/',source_102_run:'102',source_103_run:'103'};
+  const message='已批准的单条正文',message_sha256=hash(message);
+  const expectedScope={company_id:c.company_id,tenant_id:c.tenant_id,line:c.line,account:c.account,sender_id:c.account,host:c.host,profile:c.profile,serial:c.serial,adb_serial:c.adb_serial,policy_id:c.verification.policy_id,policy_version:c.verification.policy_version,scope,message_sha256};
+  const intent={schema:'leadgen-send-authorization-intent/v1',machine_id:f.config.machine_id,decision_id:'decision',authorizing_root_task_id:'33333333-3333-4333-8333-333333333333',scope:expectedScope,message,message_sha256,max_new_recipients:1,max_send_attempts:1,test_execution_daily_cap:100,company_policy_changed:false,requires_current_pause_and_daily_count_readback:true};
+  const file=path.join(f.root,'intent.json'),state=path.join(f.root,'intent-state');fs.mkdirSync(state,{mode:0o700});fs.writeFileSync(file,JSON.stringify(intent),{mode:0o600});
+  Object.assign(b,{authorization_intent:{path:file,sha256:hash(fs.readFileSync(file))},authorization_state_root:state,authorization_message_sha256:message_sha256});
+  const save=()=>{fs.writeFileSync(f.configFile,JSON.stringify(f.config));f.environment.LEADGEN_HOST_CONFIG_SHA256=hash(fs.readFileSync(f.configFile));};save();f.run.input.business={scope};
+  const call=()=>buildContext({workflow:'104',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'run-host')});
+  const first=call(),asset=first.context.authorization_asset,bytes=fs.readFileSync(asset.path),mtime=fs.statSync(asset.path).mtimeMs;
+  assert.equal(hash(bytes),asset.sha256);assert.equal(JSON.parse(bytes).root_task_id,f.run.task_id);assert.equal(JSON.parse(bytes).message_sha256,message_sha256);
+  assert.deepEqual(call().context.authorization_asset,asset);assert.equal(fs.statSync(asset.path).mtimeMs,mtime);
+  f.run.run_id='44444444-4444-4444-8444-444444444444';f.run.input.run_tag=f.run.run_id;assert.throws(call,/AUTHORIZATION|INTENT/);
+  f.run.run_id=runId;f.run.input.run_tag=runId;b.context.authorization_asset=asset;save();assert.throws(call,/LEADGEN_AUTHORIZATION_AMBIGUOUS/);
+ }finally{f.close();}
+});
