@@ -109,13 +109,13 @@ test('actual assembled runtime loads admitted PG closure; bad scope dispatches z
  }finally{for(const[k,v]of Object.entries(env))if(v===undefined)delete process.env[k];else process.env[k]=v;delete globalThis.activity104Effects;}
 });
 
-test('same-account earlier prepared or unknown orders block a different recipient; own prepared is preserved',async()=>{
+test('same-account earlier prepared or unknown orders retain conservative budget without global account pause',async()=>{
  const f=setup(),cfg=f.context.outreach_runtime;fs.mkdirSync(cfg.state_directory);fs.mkdirSync(path.join(cfg.evidence_base,f.context.profile),{recursive:true});fs.mkdirSync(cfg.lock_root);await candidate(f);
  const {observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));
  assert.equal(observe104Runtime(f.context).verified,true);
  for(const phase of ['prepared','unknown']){
   const other={record_id:'other-recipient-order',fields:{'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 '+phase+':earlier:sha]'}};
-  const r=observe104Runtime(f.context,{orders:[other]});assert.equal(r.verified,false);assert.equal(r.unresolved_attempt_reservations,1);assert.equal(r.today_dm_attempts,1);
+  const r=observe104Runtime(f.context,{orders:[other]});assert.equal(r.verified,true);assert.equal(r.unresolved_attempt_reservations,1);assert.equal(r.today_dm_attempts,1);
   const own={...other,record_id:f.context.verification['104'].record_id,fields:{...other.fields,'回复结果':'[104 '+phase+':'+f.context.tasks['104'].run_tag+':'+f.context.source_commit+']'}};assert.equal(observe104Runtime(f.context,{orders:[own]}).unresolved_attempt_reservations,0);
  }
 });
@@ -127,4 +127,19 @@ test('invalid historical observation time or missing risk flags cannot attest co
   const p=path.join(f.root,'history.json');fs.writeFileSync(p,JSON.stringify(h),{mode:0o600});f.context.outreach_runtime.history_assets=[{path:p,sha256:hash(fs.readFileSync(p))}];await candidate(f);
   const {observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));assert.equal(observe104Runtime(f.context).account_day_coverage_complete,false);
  }
+});
+
+test('original order adapter keeps same-UID prohibition and daily 100 limit with conservative unknown reservations',async()=>{
+ const f=setup(),cfg=f.context.outreach_runtime;fs.mkdirSync(cfg.state_directory);fs.mkdirSync(path.join(cfg.evidence_base,f.context.profile),{recursive:true});fs.mkdirSync(cfg.lock_root);await candidate(f);
+ const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs'))),{observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));
+ const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),scope=f.context.verification['104'];let puts=0;
+ const own={record_id:scope.record_id,fields:{'抖音号':scope.target_douyin_id,'主页链接':scope.profile_url,'状态':'待触达','发送状态':'未发送'}};
+ const makeOther=i=>({record_id:'previous-order-'+i,fields:{'抖音号':'other-person-'+i,'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 unknown:old-run:old-source]','状态':'触达中'}});
+ let prior=[makeOther(0)],row=own;const args={context:f.context,scope,artifact_dir:path.join(f.root,'budget-orders'),evidence:{}};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0}),checkPreflight:async()=>({verified:true}),close:async()=>{}};
+ assert.equal((await request({...args,op:'inspect'},deps)).status,'ready');assert.equal(puts,0);
+ prior[0].fields['抖音号']=scope.target_douyin_id;await assert.rejects(request({...args,op:'claim'},deps),/RECIPIENT_RESERVED/);assert.equal(puts,0);
+ prior=[makeOther(0)];assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(puts,1);
+ prior=Array.from({length:100},(_,i)=>makeOther(i));await assert.rejects(request({...args,op:'prepare'},deps),/CURRENT_RUNTIME_BLOCKED/);assert.equal(puts,1);
+ prior=Array.from({length:99},(_,i)=>makeOther(i));assert.equal((await request({...args,op:'prepare'},deps)).status,'prepared');assert.equal(puts,2);
 });
