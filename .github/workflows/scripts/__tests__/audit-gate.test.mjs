@@ -158,7 +158,45 @@ test('rejects the advisory when the patched archive is missing or altered', () =
 
 test('blocks a different advisory on a package using the patched dependency', () => {
   const payload = picomatchReport();
-  payload.vulnerabilities['test-glob-consumer'].via.push({ url: 'https://example.invalid/advisory' });
+  payload.vulnerabilities['test-glob-consumer'].via.push({ url: 'https://example.invalid/advisory', severity: 'high' });
+  rejects({ payload, npmExit: 1, prepare: patchFixture });
+});
+
+test('blocks an unlisted high package when another high cause is allowlisted', () => {
+  const payload = picomatchReport();
+  payload.vulnerabilities.braces = { name: 'braces', severity: 'high', via: [{ url: 'https://example.invalid/braces' }] };
+  payload.vulnerabilities['test-glob-consumer'].via.push('braces');
+  payload.metadata.vulnerabilities.high++;
+  payload.metadata.vulnerabilities.total++;
+  rejects({ payload, npmExit: 1, prepare: patchFixture });
+});
+
+test('rejects an unverified project even when a patched cause reaches an allowlisted dependency', () => {
+  const payload = picomatchReport();
+  payload.vulnerabilities.braces = { name: 'braces', severity: 'high', via: ['picomatch'] };
+  payload.vulnerabilities['test-glob-consumer'].via.push('braces');
+  payload.metadata.vulnerabilities.high++;
+  payload.metadata.vulnerabilities.total++;
+  rejects({ payload, npmExit: 1, prepare: patchFixture });
+});
+
+test('rejects an unverified project with a named moderate or missing cause', () => {
+  const payload = picomatchReport();
+  payload.vulnerabilities.braces = { name: 'braces', severity: 'moderate', via: [{ url: 'https://example.invalid/braces' }] };
+  payload.vulnerabilities['test-glob-consumer'].via.push('braces');
+  payload.metadata.vulnerabilities.moderate++;
+  payload.metadata.vulnerabilities.total++;
+  rejects({ payload, npmExit: 1, prepare: patchFixture });
+  payload.vulnerabilities['test-glob-consumer'].via.push('missing-cause');
+  rejects({ payload, npmExit: 1, prepare: patchFixture });
+});
+
+test('does not exempt a cycle containing an unverified high cause', () => {
+  const payload = picomatchReport();
+  payload.vulnerabilities['other-consumer'] = { name: 'other-consumer', severity: 'high', via: ['test-glob-consumer'] };
+  payload.vulnerabilities['test-glob-consumer'].via.push('other-consumer');
+  payload.metadata.vulnerabilities.high++;
+  payload.metadata.vulnerabilities.total++;
   rejects({ payload, npmExit: 1, prepare: patchFixture });
 });
 

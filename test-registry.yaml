@@ -9669,6 +9669,24 @@ tests:
     execution: "ci-l1-process.yml / release-admission-regression / explicit Python 3.12 + PyYAML 6.0.3, isolated package/bootstrap/build-only contracts"
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
+  - id: ci-collection-darwin-dedup
+    path: .github/workflows/scripts/__tests__/collection-darwin-dedup.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: CI infrastructure
+    execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
+    note: Executes real matrix shell with isolated command shims and verifies required coverage plus failure propagation; does not simulate Darwin behavior.
+
+  - id: ci-line02-crawl-comments-smoke-path
+    path: .github/workflows/scripts/__tests__/line02-crawl-comments-smoke-path.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: CI infrastructure
+    execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
+    note: Isolated fake processes verify default repository path, explicit override, missing profile and fail-closed subprocess exit; no real account or network.
+
   - id: ci-review--github-workflows-scripts-tests-manual-e2e-inputs-test-mjs
     path: .github/workflows/scripts/__tests__/manual-e2e-inputs.test.mjs
     type: unit

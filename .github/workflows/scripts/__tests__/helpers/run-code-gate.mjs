@@ -2,10 +2,13 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 // Execute the real aggregate step, including its GitHub-provided JSON environment.
-export function runCodeGate(workflow, openclawResult) {
+export function runCodeGate(workflow, openclawResult, overrides = {}) {
   const needs=Object.fromEntries(workflow.jobs['l3-passed'].needs.map(job=>[job,{result:workflow.jobs[job]?.if?'skipped':'success'}]));
   needs.changes={result:'success',outputs:Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key=>[key,'false']))};
   needs['openclaw-scripts-test']={result:openclawResult};
+  for(const [job,result] of Object.entries(overrides)) {
+    if(result === null) delete needs[job]; else needs[job]={result};
+  }
   const step=workflow.jobs['l3-passed'].steps.find(step=>step.run);
   const render=value=>value.replace(/\$\{\{\s*([^}]+?)\s*\}\}/g,(_,expression)=>{
     if(expression==='toJSON(needs)')return JSON.stringify(needs);

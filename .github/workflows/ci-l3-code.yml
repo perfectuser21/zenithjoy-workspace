@@ -636,13 +636,25 @@ jobs:
           }
           NODE
       - name: Run preflight native lifecycle tests on Darwin
-        run: node --test --test-concurrency=1 services/phone-adb-controller/__tests__/preflight-*.test.mjs
+        if: matrix.shard == 0
+        run: |
+          shopt -s nullglob
+          preflight_tests=(services/phone-adb-controller/__tests__/preflight-*.test.mjs)
+          if ((${#preflight_tests[@]} == 0)); then
+            echo "::error::No preflight lifecycle tests found"
+            exit 1
+          fi
+          node --test --test-concurrency=1 "${preflight_tests[@]}"
       - name: Require real Darwin kernel tests
         run: |
           node -e "if(process.platform!=='darwin')process.exit(1)"
-          python3 services/phone-adb-controller/__tests__/collection-review-maintenance.test.py
-          python3 services/phone-adb-controller/__tests__/collection-review-gap.test.py
-          python3 services/phone-adb-controller/__tests__/collection-review-maintenance-claim.test.py
+          # These shared isolated contracts run once in shard 0. Both matrix
+          # legs still retain Darwin/Python/PG setup and their own native suites.
+          if [ '${{ matrix.shard }}' = '0' ]; then
+            python3 services/phone-adb-controller/__tests__/collection-review-maintenance.test.py
+            python3 services/phone-adb-controller/__tests__/collection-review-gap.test.py
+            python3 services/phone-adb-controller/__tests__/collection-review-maintenance-claim.test.py
+          fi
           # 文件级隔离冷启动/observer重夹具，避免并行文件消耗彼此真实300ms/.4s预算。
           # 不改生产deadline、单项断言或case内部fork/IPC/race并发；原有项与新增清场项仍全部实跑。
           node --test --test-concurrency=1 ${{ matrix.suites }}
