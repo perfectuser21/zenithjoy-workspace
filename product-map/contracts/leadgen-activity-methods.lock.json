@@ -418,7 +418,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -719,7 +719,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -775,7 +775,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -866,7 +866,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-discovery.mjs",
           "revision": "contract",
-          "sha256": "f74a1eebf401f9128af340432ebd94bb36f12713c4cf45362c5998459e0fc4f7"
+          "sha256": "cab9cf4114863ec61f9183f1bb0ccf049863afcf4b3e6430609916bf7cdd9157"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "462552c67f79820c7f6b4fb52416fbcc880012baed7dd15334a6b1b34369f2e2",
+      "code_digest": "21c371779eecaaa5090bbcefa6c8fe36e2a10b846b106c9d2a87ac3263f36dc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：用户决定 b424b03d：仅新101运行缺省总预算由1800改为2400秒，显式预算与旧Agent冻结恢复保留；方法与交付合同不变。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
-        "current_code_digest": "462552c67f79820c7f6b4fb52416fbcc880012baed7dd15334a6b1b34369f2e2"
+        "current_code_digest": "21c371779eecaaa5090bbcefa6c8fe36e2a10b846b106c9d2a87ac3263f36dc8"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1309,7 +1309,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -1659,7 +1659,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -1726,7 +1726,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e8c73ebb92956f778f463c2ffdd305fba8cbe4f66f7005cf7dd46692bcbb0129",
+      "code_digest": "aacf3aa88a96f24d58c0c6a9dd72d494bb84fe4423113e1cd8ec1d2bfc93200c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
-        "current_code_digest": "e8c73ebb92956f778f463c2ffdd305fba8cbe4f66f7005cf7dd46692bcbb0129"
+        "current_code_digest": "aacf3aa88a96f24d58c0c6a9dd72d494bb84fe4423113e1cd8ec1d2bfc93200c"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2218,7 +2218,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -2526,7 +2526,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -2582,7 +2582,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "15b0cf6f8aa96bd70599106ea7c5540935c040bf8f81222727e8e92d40440661",
+      "code_digest": "ee28359e35400b0b8debca75a483dd49b0b69691ffa8323174bccfd9e8a6b116",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
-        "current_code_digest": "15b0cf6f8aa96bd70599106ea7c5540935c040bf8f81222727e8e92d40440661"
+        "current_code_digest": "ee28359e35400b0b8debca75a483dd49b0b69691ffa8323174bccfd9e8a6b116"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3100,7 +3100,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -3443,7 +3443,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -3499,7 +3499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "71b78efb3f6f12914dc9ab010bc4305b731aa2bab1202b89e59c22c034e70816",
+      "code_digest": "aa8357b1f5d2f405394456aa58fad2fd9707ba8c942d5b1a38bf25e9fc0f28df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
-        "current_code_digest": "71b78efb3f6f12914dc9ab010bc4305b731aa2bab1202b89e59c22c034e70816"
+        "current_code_digest": "aa8357b1f5d2f405394456aa58fad2fd9707ba8c942d5b1a38bf25e9fc0f28df"
       }
     },
     "douyin_video_processing.collection": {
@@ -4110,7 +4110,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -4369,7 +4369,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -4433,7 +4433,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -4541,13 +4541,13 @@
           "sha256": "8f83603d750baf3ab313279f48c8a58560f8db61767036daec11f580d3119297"
         }
       ],
-      "code_digest": "a5e9af8dbb7cec91c76564b1fa7f169cc0d83d1d09f1f7043d48715969ada181",
+      "code_digest": "7b7d60d584eeb538d25d4008278e55939a2171270ad89fdd5bfa8a8d4b765246",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
-        "current_code_digest": "a5e9af8dbb7cec91c76564b1fa7f169cc0d83d1d09f1f7043d48715969ada181"
+        "current_code_digest": "7b7d60d584eeb538d25d4008278e55939a2171270ad89fdd5bfa8a8d4b765246"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4967,7 +4967,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -5296,7 +5296,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -5355,7 +5355,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c5b1b0b207d05e5b942a7ace0b29abd3bd0e97d653a5a2a900a55d0522234cda",
+      "code_digest": "b2904c5838f82184781bb4d1e54ecadab7ff7bb233455741d20376c6aba38b9d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
-        "current_code_digest": "c5b1b0b207d05e5b942a7ace0b29abd3bd0e97d653a5a2a900a55d0522234cda"
+        "current_code_digest": "b2904c5838f82184781bb4d1e54ecadab7ff7bb233455741d20376c6aba38b9d"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5873,7 +5873,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -6174,7 +6174,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -6202,7 +6202,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -6352,13 +6352,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "f84e6ab9fc4ec2acf579f3dda13e75177ebd54ac31880a4da056d078b77cdd8a",
+      "code_digest": "d9ea05323474f6b685145f70a9a74b33c0a4cbc8503c91b95e55e6bb85573ed1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
-        "current_code_digest": "f84e6ab9fc4ec2acf579f3dda13e75177ebd54ac31880a4da056d078b77cdd8a"
+        "current_code_digest": "d9ea05323474f6b685145f70a9a74b33c0a4cbc8503c91b95e55e6bb85573ed1"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6783,7 +6783,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -7091,7 +7091,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -7119,7 +7119,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -7290,13 +7290,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "04389af6a63a35733afe48247e5a49a4292ce0686aa795891c09ee9617cb95f3",
+      "code_digest": "f6990f6c3ea40fdbb17bb5467d14b54e5d1f99b4a817153a9ded9462d79673d7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
-        "current_code_digest": "04389af6a63a35733afe48247e5a49a4292ce0686aa795891c09ee9617cb95f3"
+        "current_code_digest": "f6990f6c3ea40fdbb17bb5467d14b54e5d1f99b4a817153a9ded9462d79673d7"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7807,7 +7807,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -7968,7 +7968,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -8042,7 +8042,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "220f4edc2ebbc14e9a625a9c900c1ab62e6ccc7c14775834f7a340f61e23c09d",
+      "code_digest": "5be394562910080b96f6a11630e49bdcdc42c6525f26d905f5f1e3ddb0fd1318",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
-        "current_code_digest": "220f4edc2ebbc14e9a625a9c900c1ab62e6ccc7c14775834f7a340f61e23c09d"
+        "current_code_digest": "5be394562910080b96f6a11630e49bdcdc42c6525f26d905f5f1e3ddb0fd1318"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8667,7 +8667,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -8828,7 +8828,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -8891,7 +8891,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ee41c2731b746474d1b3e5284f041b555cfd27fe7620e58f56d0feb82fdf8d07",
+      "code_digest": "4d54e5f5baba54667b7a9d329c6c85c84320a4ef03dbb9398a721480d40cac97",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
-        "current_code_digest": "ee41c2731b746474d1b3e5284f041b555cfd27fe7620e58f56d0feb82fdf8d07"
+        "current_code_digest": "4d54e5f5baba54667b7a9d329c6c85c84320a4ef03dbb9398a721480d40cac97"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9502,7 +9502,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -9663,7 +9663,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -9726,7 +9726,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f2bb384f633e31f2b72f358182283604f779f6ee90a2c11eb2fbdea83ef3839e",
+      "code_digest": "22f9fda56d27734566629de7d3c30a4a14b84d151092c06bd80f2acdbb1a15d8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
-        "current_code_digest": "f2bb384f633e31f2b72f358182283604f779f6ee90a2c11eb2fbdea83ef3839e"
+        "current_code_digest": "22f9fda56d27734566629de7d3c30a4a14b84d151092c06bd80f2acdbb1a15d8"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10330,7 +10330,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "22e69ff3c1a90af892dcc8e18774ff360ff4d5b29dc23332096ea5692edf162c"
+          "sha256": "fb9b520be36aff4054d945918d9984f7806e836b844b2f11f04b7ebc10717141"
         },
         {
           "kind": "code",
@@ -10491,7 +10491,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "392001aa77e9c0d0de9509614921cbecb80354f0c299a08e22c2db14b9741135"
+          "sha256": "a9023477ea9fa283bb8f3f3f4c94eb4fd2cc9a64b7bffdbeaf452d2078c49ab9"
         },
         {
           "kind": "code",
@@ -10557,7 +10557,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "9e63b7f399728692c6c502a91a0fa0aa3560f53fcc4a347c1e8652cc0b6034e7"
+          "sha256": "96c626ca93a06498f89742097e43d503a98a4ae71f39b8c07868de6841f5a0a9"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ff95fee9bae76f677904210edd967fb6f2fe9d173c2435e778e7c6664f596976",
+      "code_digest": "955b7172aec3f4cd9db8a5b57be704d229f89eb463b1d47248d1a1240c7baf20",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。",
-        "reviewed_by": "/root/checker_feedback_adapter",
+        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。",
+        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量)",
         "previous_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
-        "current_code_digest": "ff95fee9bae76f677904210edd967fb6f2fe9d173c2435e778e7c6664f596976"
+        "current_code_digest": "955b7172aec3f4cd9db8a5b57be704d229f89eb463b1d47248d1a1240c7baf20"
       }
     }
   },
