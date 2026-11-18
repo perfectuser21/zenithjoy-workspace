@@ -12230,4 +12230,4 @@ tests:
     status: active
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
-    note: "冻结Agent宿主三入口初始化语句清env加载同一受验PG闭包；坏来源在DB使用前拒绝"
+    note: "冻结Agent宿主四入口初始化语句清env加载同一受验PG闭包；坏来源在DB使用前拒绝"
