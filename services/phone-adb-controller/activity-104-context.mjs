@@ -2,7 +2,7 @@
 import fs from 'node:fs';import path from 'node:path';import {createHash} from 'node:crypto';
 export const hash=v=>createHash('sha256').update(v).digest('hex');
 export const need=(v,k)=>{if(!v)throw Error('ACTIVITY_104_'+k);};
-export const KEYS=['assigned_workflow','root_task_id','actor','source_commit','runtime_root','transport','host','profile','serial','adb_serial','company_id','tenant_id','line','account','sender_id','local_owner','central_owner','tasks','business_deadline_ms','cleanup_deadline_ms','python','native_root','credentials','authorization_asset','verification','outreach_runtime','phone_controller','phone_controller_sha256','phone_registry','phone_registry_sha256','adb_host_config','adb_host_config_sha256'];
+export const KEYS=['assigned_workflow','root_task_id','actor','source_commit','runtime_root','transport','host','profile','serial','adb_serial','company_id','tenant_id','line','account','sender_id','local_owner','central_owner','tasks','business_deadline_ms','cleanup_deadline_ms','node','node_sha256','python','python_sha256','native_root','credentials','authorization_asset','verification','outreach_runtime','phone_controller','phone_controller_sha256','phone_registry','phone_registry_sha256','adb_host_config','adb_host_config_sha256'];
 export const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
 export function regular(p){need(typeof p==='string'&&path.isAbsolute(p),'SOURCE_PATH');const st=fs.lstatSync(p);need(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&!(st.mode&0o022),'SOURCE_FILE');return fs.readFileSync(p);}
 export function asset(a){need(a&&/^[a-f0-9]{64}$/.test(a.sha256||''),'SOURCE_ASSET');const raw=regular(a.path);need(hash(raw)===a.sha256,'SOURCE_DIGEST');return raw;}
@@ -23,7 +23,7 @@ export function validateScope(c){
  const s=c.verification?.['104'];need(s&&['record_id','comment_id','lead_id','target_douyin_id','profile_url','source_102_run','source_103_run'].every(k=>typeof s[k]==='string'&&s[k]),'CONTEXT_SCOPE');
  need(c.verification.pg?.deployment?.source_commit===c.source_commit&&Number.isSafeInteger(c.verification.policy_version)&&c.verification.policy_id,'CONTEXT_PG');
  need(c.credentials&&['database','feishu','brain'].every(k=>typeof c.credentials[k]==='string'&&path.isAbsolute(c.credentials[k]))&&Array.isArray(c.credentials.provider_env_files)&&c.credentials.provider_env_files.every(p=>typeof p==='string'&&path.isAbsolute(p)),'CONTEXT_CREDENTIAL_PATHS');
- for(const k of ['phone_controller','phone_registry','adb_host_config'])asset({path:c[k],sha256:c[k+'_sha256']});
+ for(const k of ['node','python','phone_controller','phone_registry','adb_host_config'])asset({path:c[k],sha256:c[k+'_sha256']});
  need(fs.realpathSync(c.phone_controller).startsWith(c.runtime_root+path.sep),'SOURCE_CONTROLLER');
  const r=c.outreach_runtime;need(r&&['state_directory','evidence_base','lock_root'].every(k=>typeof r[k]==='string'&&path.isAbsolute(r[k]))&&Array.isArray(r.account_bindings)&&r.account_bindings.length>0&&Array.isArray(r.history_assets),'CONTEXT_RUNTIME');
  need(r.account_bindings.every(b=>b&&typeof b.host==='string'&&/^[A-Za-z0-9_-]{1,120}$/.test(b.profile)&&/^[A-Za-z0-9_.:-]{1,160}$/.test(b.serial))&&r.account_bindings.filter(b=>b.host===c.host&&b.profile===c.profile&&b.serial===c.adb_serial).length===1&&new Set(r.account_bindings.map(b=>canonical(b))).size===r.account_bindings.length,'CONTEXT_BINDINGS');

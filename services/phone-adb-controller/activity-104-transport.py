@@ -15,6 +15,9 @@ def verify_context(c):
  if (auth.get('root_task_id')!=c['root_task_id'] or auth.get('schema')!='run-send-authorization/v1'
      or auth.get('max_new_recipients')!=1 or auth.get('max_send_attempts')!=1
      or hashlib.sha256(auth['message'].encode()).hexdigest()!=auth.get('message_sha256')):raise ValueError('ACTIVITY_104_AUTHORIZATION_SCOPE')
+ for key in ['node','python']:
+  p=pathlib.Path(c[key])
+  if not p.is_absolute() or p.is_symlink() or hashlib.sha256(p.read_bytes()).hexdigest()!=c[key+'_sha256']:raise ValueError('ACTIVITY_104_SOURCE_TOOLCHAIN')
  pinned_transport(c)
  return frozen
 
