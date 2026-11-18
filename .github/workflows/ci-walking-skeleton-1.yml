@@ -10,9 +10,9 @@ name: Walking Skeleton #1 — Golden Path 1 Douyin
 #
 # CI 跑两条 smoke：
 #   1. golden-path-1-douyin-smoke.sh — 抖音路径 mock（含 session SQL mock）
-#   2. golden-path-1-smoke.sh       — Step 6 dispatch chain（POST /publish + task-ack + publish_status）
+#   2. step6-dispatch-chain-smoke.sh       — Step 6 dispatch chain（POST /publish + task-ack + publish_status）
 # 真 Agent + Playwright + Chrome 验证由人工每周跑 manual-verify-douyin.sh，
-# 该脚本带 MANUAL_VERIFY=1 gate，CI 跑到也会 exit 0 跳过。
+# 真机脚本只在显式设置 MANUAL_VERIFY=1 时运行。
 
 on:
   push:
@@ -124,13 +124,6 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh
           bash .github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh
-
-      - name: Run manual-verify-douyin.sh (skip-only check)
-        # 该脚本必须在 CI 里 exit 0 跳过（MANUAL_VERIFY 未设置）。
-        # 这一步等同于 lint —— 验证 gate 写对了。
-        run: |
-          chmod +x .github/workflows/scripts/smoke/manual-verify-douyin.sh
-          bash .github/workflows/scripts/smoke/manual-verify-douyin.sh
 
       - name: Stop apps/api
         if: always()

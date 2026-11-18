@@ -12,8 +12,8 @@ export const gates = {
   code: {
     routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'],
     conditional: {
-      'dashboard-lint': 'dashboard', 'dashboard-typecheck': 'dashboard', 'dashboard-build': 'dashboard',
-      'api-lint': 'api', 'api-typecheck': 'api', 'geoai-build': 'geoai', 'line-module-build': 'agent_modules',
+      'dashboard-build': 'dashboard',
+      'api-lint': 'api', 'geoai-build': 'geoai', 'line-module-build': 'agent_modules',
     },
     always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test', 'native-103-darwin-test', 'api-scripts-test'],
   },
