@@ -13,7 +13,7 @@ const task='11111111-1111-4111-8111-111111111111',run='22222222-2222-4222-8222-2
 const otherTask='33333333-3333-4333-8333-333333333333',otherRun='44444444-4444-4444-8444-444444444444';
 const canonical=x=>JSON.stringify(x,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v)+'\n';
 function fixture(t){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'authorization-intent-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'authorization-intent-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const stateRoot=path.join(root,'machine-authorizations');fs.mkdirSync(stateRoot,{mode:0o700});
  const message='明确标记的离线批准测试，不是真实外发授权。';
  const scope={company_id:'company-fixture',tenant_id:'tenant-fixture',line:'line-fixture',account:'sender-fixture',sender_id:'sender-fixture',host:'mmv',profile:'profile-fixture',serial:'hardware-fixture',adb_serial:'127.0.0.1:15555',policy_id:'policy-fixture',policy_version:34,message_sha256:hash(message),scope:{record_id:'record-fixture',comment_id:'comment-fixture',lead_id:'lead-fixture',target_douyin_id:'target-fixture',profile_url:'https://www.douyin.com/user/fixture',source_102_run:'source102-fixture',source_103_run:'source103-fixture'}};
@@ -73,4 +73,10 @@ test('占用目录及最终提交都持久化，receipt发布前auth已fsync',t=
  try{fs.openSync=(p,...args)=>{const fd=original.openSync(p,...args);paths.set(fd,String(p));return fd;};fs.fsyncSync=fd=>{events.push(['fsync',paths.get(fd)]);return original.fsyncSync(fd);};fs.linkSync=(a,b)=>{events.push(['publish',String(b)]);return original.linkSync(a,b);};
   const r=bind(f.args);const publish=events.findIndex(e=>e[0]==='publish');assert.ok(publish>0);assert.ok(events.slice(0,publish).some(e=>e[1]===f.stateRoot));assert.ok(events.slice(0,publish).some(e=>e[1]===r.authorization_asset.path));assert.ok(events.slice(publish+1).some(e=>e[0]==='fsync'&&e[1]===f.dir()));
  }finally{Object.assign(fs,original);}
+});
+
+for(const stage of ['before_publish','after_publish'])test('真实子进程中断后拒绝恢复且不补写 '+stage,async t=>{
+ const f=fixture(t);const code=`import fs from 'node:fs';import {bindAuthorizationIntent} from ${JSON.stringify(moduleUrl)};let body='';for await(const c of process.stdin)body+=c;const {args,stage}=JSON.parse(body);const link=fs.linkSync;fs.linkSync=(...v)=>{if(stage==='after_publish')link(...v);process.exit(27);};bindAuthorizationIntent(args);`;
+ const p=spawn(process.execPath,['--input-type=module','-e',code],{stdio:['pipe','ignore','pipe']});const done=new Promise((resolve,reject)=>{p.on('error',reject);p.on('close',resolve);});p.stdin.end(JSON.stringify({args:f.args,stage}));assert.equal(await done,27);
+ const before=fs.readdirSync(f.dir()).sort();assert.ok(before.includes('.binding-receipt.pending'));assert.throws(()=>bind(f.args));assert.deepEqual(fs.readdirSync(f.dir()).sort(),before);assert.throws(()=>bind({...f.args,taskId:otherTask,runId:otherRun}));
 });
