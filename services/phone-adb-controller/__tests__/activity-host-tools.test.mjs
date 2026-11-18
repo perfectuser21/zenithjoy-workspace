@@ -1,4 +1,6 @@
 import test from 'node:test';
+import vm from 'node:vm';
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
@@ -7,6 +9,8 @@ import {tmpdir} from 'node:os';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-tools.json',import.meta.url)));
 const fixture102=JSON.parse(readFileSync(new URL('./fixtures/activity-host-102.json',import.meta.url)));
 const fixture103=JSON.parse(readFileSync(new URL('./fixtures/activity-host-103.json',import.meta.url)));
+const diagnosticFixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-record-diagnostic.json',import.meta.url)));
+const profile102=JSON.parse(readFileSync(new URL('../leadgen-foundation/profiles/102.json',import.meta.url)));
 const helper=new URL('../activity-host-tools.py',import.meta.url).pathname;
 function probe(mode='normal',workflow='101'){
  const root=mkdtempSync(join(tmpdir(),'activity-host-tools-'));
@@ -17,6 +21,7 @@ for name,item in packet['files'].items():
  assert hashlib.sha256(item['source'].encode()).hexdigest()==item['sha256'];(base/name).parent.mkdir(parents=True,exist_ok=True);(base/name).write_text(item['source'])
 c={'assigned_workflow':workflow,'source_commit':'a'*40,'profile':'fixture-phone','node':'node','max_candidates':1,'comment_limit':1,'line':'fixture','tasks':{workflow:{'task_id':'task','run_id':'run','run_tag':'fixture-new-run'}},'verification':{'policy_version':35,'102':{'video_ids':['7711111111111111111'],'qualification_input':{'video_id':'7711111111111111111','coverage':{'kind':'full_video','source_duration_display_seconds':37,'capture_max_seconds':120,'max_capture_sessions':1,'max_asr_calls':1,'max_judge_primary_calls':1}}}},'business_deadline_ms':time.time()*1000+10000,'cleanup_deadline_ms':time.time()*1000+10000}
 if workflow=='103':c['verification']['103']={'input_mode':'committed_partial_ids','comment_ids':['11111111-1111-4111-8111-111111111111'],'sources':{'11111111-1111-4111-8111-111111111111':'fixture-source-102'}}
+if mode.startswith('diagnostic-'):c['tasks'][workflow]['run_tag']=packet['diagnostic']['receipt']['binding']['identity']['run_tag']
 proof=p/'host-proof.json';c['verification']['proof_manifest_path']=str(proof);proof.write_text(json.dumps({'schema':'activity-evidence/v1','identity':{**c['tasks'][workflow],'workflow':workflow}}));proof.chmod(0o600)
 target=p/'candidate'
 if helper.exists():
@@ -50,7 +55,7 @@ def dispatch(*args,**kw):
  return {'exit_code':0,'data':{'fixture':True}}
 m.resource_authority=resource;m.environment=environment;m.subprocess.run=dispatch
 if mode=='same-text':m.invoke=lambda *args:(_ for _ in ()).throw(ValueError('BUSINESS_ACTIVITY_SCOPE'))
-if mode=='persist-failure':
+if mode in ['persist-failure','fetch-persist-failure']:
  original=m.atomic
  def atomic(path,value):
   if value.get('state')=='terminal':raise OSError('disk')
@@ -67,13 +72,72 @@ def call(name,op):
  except Exception as e:error=type(e).__name__+':'+str(e)
  gc.collect();f=target/'receipts'/(name+'.json')
  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None}
+if mode.startswith('diagnostic-'):
+ raw=packet['diagnostic']['receipt'];original=raw['result'];args=list(raw['binding']['args']);c['tasks'][workflow]['run_tag']=raw['binding']['identity']['run_tag'];c['native_root']=packet['diagnostic']['native_root'];c['local_owner']='fixture-owner'
+ activity='qualification';kind='phone'
+ if mode=='diagnostic-wrong-activity':activity='cleanup'
+ if mode=='diagnostic-other-command':args=['close-app']
+ if mode=='diagnostic-wrong-run':args[1]='different-run-record'
+ result=dict(original)
+ if mode=='diagnostic-success':result['exit_code']=0
+ if mode=='diagnostic-cross-path':result['stderr']=result['stderr'].replace(c['tasks'][workflow]['run_tag'],'another-run')
+ if mode=='diagnostic-traversal':result['stderr']=result['stderr'].replace(c['native_root']+'/',c['native_root']+'/../')
+ if mode=='diagnostic-secret':result['stderr']+='SECRET_TOKEN=fixture-secret\n'
+ if mode=='diagnostic-unmatched':result['stderr']='private arbitrary stderr fixture-secret\n'
+ if mode=='diagnostic-large':result['stdout']='x'*14000
+ (target/'context.json').write_text(json.dumps(c));(target/'input.json').write_text(json.dumps({'activity_key':activity,'identity':c['tasks'][workflow]}));os.environ['COMMANDER_ACTIVITY_KEY']=activity
+ m.ssh=lambda *args:['fixture-dispatch']
+ def phone_dispatch(*a,**kw):calls['dispatch']+=1;return types.SimpleNamespace(returncode=result['exit_code'],stdout=result['stdout'],stderr=result['stderr'])
+ m.subprocess.run=phone_dispatch
+ if mode in ['diagnostic-existing-data','diagnostic-other-kind']:
+  if mode=='diagnostic-existing-data':result['data']={'original':'preserved'}
+  else:kind='business';args=[json.dumps({'op':'inspect_videos'})]
+  m.invoke=lambda *a:result
+ sys.argv=['tools',kind,'record-diagnostic',*args];out=io.StringIO();error=None;rc=None
+ try:
+  with contextlib.redirect_stdout(out):rc=m.main()
+ except Exception as e:error=type(e).__name__+':'+str(e)
+ gc.collect();f=target/'receipts/record-diagnostic.json'
+ print(json.dumps({'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None,'calls':calls}));sys.exit(0)
+if mode.startswith('fetch-'):
+ native=p/'native-source';native.mkdir();c.update(transport='local',native_root=str(native));(target/'context.json').write_text(json.dumps(c))
+ source=native/'fixture-new-run-wrong.json';correct=native/'fixture-new-run-correct.json';correct.write_text('original evidence')
+ if mode=='fetch-symlink':source.symlink_to(correct)
+ elif mode=='fetch-directory':source.mkdir()
+ elif mode in ['fetch-after-copy','fetch-untyped','fetch-timeout']:source.write_text('evidence')
+ calls['copy']=0;m.pinned_transport=lambda c:None
+ copy=m.shutil.copy2
+ def copying(src,dst):
+  calls['copy']+=1;copy(src,dst)
+  if mode=='fetch-after-copy':src.write_text('changed after local write')
+ m.shutil.copy2=copying
+ if mode=='fetch-untyped':m.invoke=lambda *a:(_ for _ in ()).throw(ValueError('NATIVE_LOCAL_SOURCE'))
+ if mode=='fetch-stat-error':
+  original_lstat=pathlib.Path.lstat
+  def lstat(self,*args,**kw):
+   if self==source:raise PermissionError('fixture read failure')
+   return original_lstat(self,*args,**kw)
+  pathlib.Path.lstat=lstat
+ if mode=='fetch-timeout':m.invoke=lambda *a:(_ for _ in ()).throw(m.subprocess.TimeoutExpired('read-only download',1))
+ def fetch(name,filename):
+  sys.argv=['tools','fetch-native',name,filename];out=io.StringIO();error=None;rc=None
+  try:
+   with contextlib.redirect_stdout(out):rc=m.main()
+  except Exception as e:error=type(e).__name__+':'+str(e)
+  gc.collect();receipt=target/'receipts'/(name+'.json')
+  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(receipt.read_text()) if receipt.exists() else None}
+ first=fetch('first',source.name);before=dict(calls);replay=fetch('first',source.name);conflict=fetch('first',correct.name)
+ second=fetch('corrected',correct.name);after=dict(calls)
+ os.environ['COMMANDER_ACTIVITY_KEY']='cleanup';(target/'input.json').write_text(json.dumps({'activity_key':'cleanup','identity':c['tasks'][workflow]}))
+ cleanup=call('cleanup','inspect_videos')
+ print(json.dumps({'first':first,'before':before,'replay':replay,'conflict':conflict,'second':second,'after':after,'cleanup':cleanup,'calls':calls,'source':str(source),'native_target_exists':(target/'native'/source.name).exists(),'partial_exists':(target/'download-incomplete'/(source.name+'.download-part')).exists()}));sys.exit(0)
 good='score_readback' if workflow=='103' else 'inspect_videos'
 first=call('first','company_config' if mode in ['normal','persist-failure'] else good);before=dict(calls)
 replay=call('first','company_config' if mode in ['normal','persist-failure'] else good)
 second=call('corrected',good)
 corrected_replay=call('corrected','inspect_videos') if mode.startswith('metrics-') else None
 print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,'corrected_replay':corrected_replay,'calls':calls,'instructions':(target/'TOOLS.txt').read_text() if (target/'TOOLS.txt').exists() else '', 'original':(target/'TOOLS-base.txt').read_text() if (target/'TOOLS-base.txt').exists() else '', 'tools':(target/'tools.py').read_text()}))`;
- const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify(workflow==='103'?fixture103:(workflow==='102'?fixture102:fixture)),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
+ const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify({... (workflow==='103'?fixture103:(workflow==='102'?fixture102:fixture)),diagnostic:diagnosticFixture}),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
  }finally{rmSync(root,{recursive:true,force:true});}
 }
 test('real assembled collect host emits typed company_config rejection and only dispatches corrected new action',()=>{
@@ -198,4 +262,56 @@ else:raise AssertionError('parent symlink into host accepted')
 print('verified_no_overwrite')`;
  const r=spawnSync('/usr/bin/python3',['-c',script,helper,root],{input:JSON.stringify(fixture),encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'verified_no_overwrite');
  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+for(const [mode,reason] of [['fetch-missing','not_found'],['fetch-symlink','symlink'],['fetch-directory','not_regular_file']])test(`local ${mode} rejects before copy with exact cause; replay immutable, correction new action and cleanup admitted`,()=>{
+ const r=probe(mode,'102');assert.equal(r.first.rc,2,r.first.error);const v=JSON.parse(r.first.stdout);
+ assert.equal(v.state,'terminal');assert.equal(v.result.error,'NATIVE_LOCAL_SOURCE');assert.equal(v.result.data.reason,reason);assert.equal(v.result.data.source_path,r.source);
+ assert.equal(v.result.data.dispatched,false);assert.equal(v.result.data.external_effect,'none');assert.match(v.result.data.tool_hint,/新action/);
+ assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0,copy:0});assert.equal(r.replay.stdout,r.first.stdout);assert.match(r.conflict.error,/ACTION_IDENTITY_CONFLICT/);
+ assert.equal(r.second.rc,0,r.second.error);assert.equal(r.after.copy,1);assert.equal(r.after.dispatch,0);assert.equal(r.cleanup.rc,0,r.cleanup.error);assert.equal(r.calls.dispatch,1);
+ assert.equal(r.native_target_exists,false);assert.equal(r.partial_exists,false);
+});
+for(const mode of ['fetch-after-copy','fetch-untyped','fetch-persist-failure'])test(`${mode} remains unknown; matching error text cannot grant deterministic rejection`,()=>{
+ const r=probe(mode,'102');assert.equal(r.first.stdout,'');assert.equal(r.first.receipt.state,'unknown');assert.match(r.replay.error,/ACTION_UNKNOWN_NO_REPLAY/);assert.match(r.cleanup.error,/PRIOR_ACTION_UNKNOWN/);
+ if(mode==='fetch-after-copy'){assert.equal(r.before.copy,1);assert.equal(r.partial_exists,true);}
+});
+test('existing read-only downloader timeout terminal semantics remain unchanged',()=>{
+ const r=probe('fetch-timeout','102');assert.equal(r.first.rc,124);assert.equal(r.first.receipt.state,'terminal');assert.equal(r.first.receipt.result.error,'READ_ONLY_DOWNLOAD_TIMEOUT');assert.equal(r.first.receipt.result.artifact_usable,false);
+});
+
+test('source observation I/O error retains existing downloader error and is not relabeled missing',()=>{
+ const r=probe('fetch-stat-error','102');assert.equal(r.first.rc,74);assert.equal(r.first.receipt.result.error,'READ_ONLY_DOWNLOAD_IO_ERROR');assert.equal(r.first.receipt.result.error_type,'PermissionError');assert.equal(r.first.receipt.result.data,undefined);assert.equal(r.before.copy,0);
+});
+test('local native source validator rejects an existing file outside the approved root without copying',()=>{
+ const script=String.raw`import importlib.util,pathlib,tempfile,sys
+s=importlib.util.spec_from_file_location('host',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as d:
+ root=pathlib.Path(d);outside=root/'other';outside.write_text('original');approved=root/'approved';approved.mkdir()
+ try:m.require_local_native_source(outside,approved.resolve())
+ except m.PreDispatchRejected as e:assert e.details['reason']=='outside_native_root';assert e.details['source_path']==str(outside)
+ else:raise AssertionError('outside source accepted')
+ assert outside.read_text()=='original';assert list(approved.iterdir())==[]`;
+ const r=spawnSync('/usr/bin/python3',['-c',script,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+function projectDiagnostic(value){
+ const source=diagnosticFixture.project_source;
+ assert.equal(createHash('sha256').update(source).digest('hex'),diagnosticFixture.provenance.project_sha256);
+ return vm.runInNewContext('const json=JSON.stringify;const fail=r=>{throw Error(r)};'+source+';project(value,paths)',{Buffer,value,paths:profile102.profile.skill_runtime.host_tools.response_paths});
+}
+for(const mode of ['diagnostic-normal','diagnostic-large'])test(`real P4 ${mode} keeps exact failure and exposes only bounded filenames through pinned MCP projection`,()=>{
+ const r=probe(mode,'102');assert.equal(r.rc,2,r.error);assert.equal(r.receipt.state,'terminal');assert.equal(r.receipt.result.exit_code,2);assert.equal(r.receipt.result.stderr,diagnosticFixture.receipt.result.stderr);
+ const projected=projectDiagnostic(JSON.parse(r.stdout)),data=projected['result.data'];
+ assert.equal(data.error_code,'RECORD_AUDIO_CAPTURE_UNAVAILABLE');
+ const eid=diagnosticFixture.receipt.binding.args[1];assert.equal(data.diagnostic_files.startup,eid+'.capture-startup.json');assert.equal(data.diagnostic_files.log,eid+'.rec.log');
+ assert.equal(data.execution_stopped,undefined);assert.equal(data.retry_allowed,undefined);assert.equal(projected['result.stderr'],undefined);assert.equal(projected.stderr,undefined);assert.ok(Buffer.byteLength(JSON.stringify(projected))<32768);assert.equal(r.calls.dispatch,1);
+ if(mode==='diagnostic-large')assert.equal(projected.large_result_saved,true);
+});
+for(const mode of ['diagnostic-wrong-activity','diagnostic-other-command','diagnostic-wrong-run','diagnostic-success','diagnostic-cross-path','diagnostic-traversal','diagnostic-secret','diagnostic-unmatched','diagnostic-other-kind','diagnostic-existing-data'])test(`${mode} does not create or leak native diagnostics`,()=>{
+ const r=probe(mode,'102');if(r.stdout){const projected=projectDiagnostic(JSON.parse(r.stdout));assert.equal(projected['result.data']?.error_code,undefined);assert.equal(projected['result.data']?.diagnostic_files,undefined);assert.doesNotMatch(JSON.stringify(projected),/fixture-secret/);assert.equal(projected['result.stderr'],undefined);}
+ if(mode==='diagnostic-existing-data')assert.deepEqual(r.receipt.result.data,{original:'preserved'});
+});
+test('different Workflow cannot acquire 102 native record diagnostic fields',()=>{
+ const r=probe('diagnostic-normal','101');assert.equal(r.receipt.result?.data?.diagnostic_files,undefined);
 });

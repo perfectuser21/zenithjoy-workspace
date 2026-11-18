@@ -1,0 +1,103 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+const moduleURL=new URL('../leadgen-foundation/context.mjs',import.meta.url);
+const hash=x=>createHash('sha256').update(x).digest('hex');
+const task='11111111-1111-4111-8111-111111111111',runId='22222222-2222-4222-8222-222222222222';
+function fixture(){
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'leadgen-foundation-')));
+ const config={schema:'leadgen-host-config/v1',machine_id:'fixture-machine',bindings:{customer:{
+  allowed_workflows:['101','102','103','104'],context:{company_id:'company',tenant_id:'tenant',line:'line',profile:'fixture-phone',account:'sender',
+   verification:{policy_version:1,policy_id:'fixture-policy',runtime_sha256:{}},credentials:{database:'/private/db',brain:'/private/brain',feishu:'/private/feishu',provider_env_files:[]}}
+ }}};
+ const configFile=path.join(root,'host-config.json');fs.writeFileSync(configFile,JSON.stringify(config),{mode:0o600});
+ const environment={LEADGEN_HOST_CONFIG:configFile,LEADGEN_HOST_CONFIG_SHA256:hash(fs.readFileSync(configFile)),LEADGEN_MACHINE_ID:'fixture-machine'};
+ const run={task_id:task,run_id:runId,deadline_ms:123000,cleanup_deadline_ms:130000,input:{run_tag:runId,binding_key:'customer',business:{keyword:'工作流',search_filters:{sort:'general'},max_candidates:1}}};
+ return {root,config,configFile,environment,run,close:()=>fs.rmSync(root,{recursive:true,force:true})};
+}
+test('foundation context derives fresh task/run authority and never shares identity between runs',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const a=buildContext({workflow:'101',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')});
+  const next=structuredClone(f.run);next.task_id='33333333-3333-4333-8333-333333333333';next.run_id='44444444-4444-4444-8444-444444444444';next.input.run_tag=next.run_id;
+  const b=buildContext({workflow:'101',run:next,environment:f.environment,hostRoot:path.join(f.root,'b')});
+  assert.deepEqual(a.context.tasks,{'101':{task_id:task,run_id:runId,run_tag:runId}});
+  assert.equal(a.context.root_task_id,task);assert.equal(a.context.actor,'foundation:fixture-machine');
+  assert.notEqual(a.context.local_owner,b.context.local_owner);assert.equal(b.context.central_owner,next.task_id);
+  assert.equal(a.context.business_deadline_ms,f.run.deadline_ms);assert.equal(a.context.keyword,'工作流');
+ }finally{f.close();}
+});
+for(const key of ['task_id','tasks','actor','root_task_id','runtime_root','credentials','source_commit','context'])test(`foundation rejects input authority override ${key}`,async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  f.run.input.business[key]='foreign';assert.throws(()=>buildContext({workflow:'101',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')}),/LEADGEN_INPUT/);
+ }finally{f.close();}
+});
+test('foundation rejects configuration drift, machine mismatch and arbitrary binding paths before effects',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const call=()=>buildContext({workflow:'101',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')});
+  f.run.input.binding_key='../other';assert.throws(call,/LEADGEN_BINDING/);f.run.input.binding_key='customer';
+  f.environment.LEADGEN_MACHINE_ID='other';assert.throws(call,/LEADGEN_MACHINE/);f.environment.LEADGEN_MACHINE_ID='fixture-machine';
+  fs.appendFileSync(f.configFile,' ');assert.throws(call,/LEADGEN_CONFIG_DIGEST/);
+ }finally{f.close();}
+});
+test('foundation cannot reuse an authorization asset for a different 104 Task',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const file=path.join(f.root,'approval.json');fs.writeFileSync(file,JSON.stringify({schema:'run-send-authorization/v1',root_task_id:'foreign-task'}),{mode:0o600});
+  f.config.bindings.customer.context.authorization_asset={path:file,sha256:hash(fs.readFileSync(file))};fs.writeFileSync(f.configFile,JSON.stringify(f.config));f.environment.LEADGEN_HOST_CONFIG_SHA256=hash(fs.readFileSync(f.configFile));
+  f.run.input.business={scope:{record_id:'order'}};
+  assert.throws(()=>buildContext({workflow:'104',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')}),/LEADGEN_AUTHORIZATION_TASK/);
+ }finally{f.close();}
+});
+test('foundation recovery preserves original source and rejects missing files or changed binding',async()=>{
+ const {freezeHost}=await import(new URL('../leadgen-foundation/freeze.mjs',import.meta.url));const f=fixture();try{
+  const directory=path.join(f.root,'host'),identity={task_id:task,run_id:runId,configuration_sha256:'a'.repeat(64),binding_sha256:'b'.repeat(64)};
+  const first=freezeHost({directory,identity,files:{'context.json':'{"task":"first"}\n','worker.mjs':'export {};\n'}});
+  const time=fs.statSync(path.join(directory,'context.json')).mtimeMs;
+  assert.equal(freezeHost({directory,identity,files:{'context.json':'{"task":"first"}\n','worker.mjs':'export {};\n'}}).recovered,true);
+  assert.equal(fs.statSync(path.join(directory,'context.json')).mtimeMs,time);assert.equal(first.recovered,false);
+  assert.throws(()=>freezeHost({directory,identity:{...identity,binding_sha256:'c'.repeat(64)},files:{}}),/LEADGEN_RECOVERY_IDENTITY/);
+  fs.unlinkSync(path.join(directory,'worker.mjs'));assert.throws(()=>freezeHost({directory,identity,files:{'worker.mjs':'replacement'}}),/LEADGEN_RECOVERY_SOURCE/);
+  assert.equal(fs.readFileSync(path.join(directory,'context.json'),'utf8'),'{"task":"first"}\n');
+ }finally{f.close();}
+});
+test('foundation cannot adopt a preexisting unreceipted directory or symlink source',async()=>{
+ const {freezeHost}=await import(new URL('../leadgen-foundation/freeze.mjs',import.meta.url));const f=fixture();try{
+  const directory=path.join(f.root,'host');fs.mkdirSync(directory,{mode:0o700});fs.writeFileSync(path.join(directory,'foreign'),'old');
+  assert.throws(()=>freezeHost({directory,identity:{},files:{'worker.mjs':'new'}}),/LEADGEN_RECOVERY_RECEIPT/);
+  assert.equal(fs.readFileSync(path.join(directory,'foreign'),'utf8'),'old');
+ }finally{f.close();}
+});
+test('102 selects only a controlled producer asset and rejects scope disagreement',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const producer={workflow:'101',task_id:'33333333-3333-4333-8333-333333333333',run_id:'44444444-4444-4444-8444-444444444444',run_tag:'producer-tag',source_commit:'a'.repeat(40),manifest_path:'/private/producer.json',manifest_sha256:'b'.repeat(64),result_path:'/private/result.json',result_sha256:'c'.repeat(64)};
+  f.config.bindings.customer.producers={approved:producer};fs.writeFileSync(f.configFile,JSON.stringify(f.config));f.environment.LEADGEN_HOST_CONFIG_SHA256=hash(fs.readFileSync(f.configFile));
+  f.run.input.business={producer_key:'approved',scope:{video_ids:['7711111111111111111'],upstream:{'7711111111111111111':{run:'producer-tag'}}},comment_limit:1};
+  const call=()=>buildContext({workflow:'102',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')});
+  assert.deepEqual(call().context.input_provenance.producer,producer);
+  assert.deepEqual(call().context.verification['102'].upstream['7711111111111111111'],{run:producer.run_tag,run_id:producer.run_id});
+  f.run.input.business.scope.upstream['7711111111111111111'].run_id='foreign';assert.throws(call,/LEADGEN_PRODUCER_SCOPE/);delete f.run.input.business.scope.upstream['7711111111111111111'].run_id;
+  f.run.input.business.scope.upstream['7711111111111111111'].run='foreign';assert.throws(call,/LEADGEN_PRODUCER_SCOPE/);
+  f.run.input.business.producer_key='../untrusted';assert.throws(call,/LEADGEN_PRODUCER_KEY/);
+ }finally{f.close();}
+});
+test('104 binds one approved intent after runtime identity arrives and restores only that same run',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const b=f.config.bindings.customer,c=b.context;
+  Object.assign(c,{host:'fixture-machine',serial:'hardware',adb_serial:'localhost:15555'});
+  const scope={record_id:'record',comment_id:'comment',lead_id:'lead',target_douyin_id:'target',profile_url:'https://v.douyin.com/fixture/',source_102_run:'102',source_103_run:'103'};
+  const message='已批准的单条正文',message_sha256=hash(message);
+  const expectedScope={company_id:c.company_id,tenant_id:c.tenant_id,line:c.line,account:c.account,sender_id:c.account,host:c.host,profile:c.profile,serial:c.serial,adb_serial:c.adb_serial,policy_id:c.verification.policy_id,policy_version:c.verification.policy_version,scope,message_sha256};
+  const intent={schema:'leadgen-send-authorization-intent/v1',machine_id:f.config.machine_id,decision_id:'decision',authorizing_root_task_id:'33333333-3333-4333-8333-333333333333',scope:expectedScope,message,message_sha256,max_new_recipients:1,max_send_attempts:1,test_execution_daily_cap:100,company_policy_changed:false,requires_current_pause_and_daily_count_readback:true};
+  const file=path.join(f.root,'intent.json'),state=path.join(f.root,'intent-state');fs.mkdirSync(state,{mode:0o700});fs.writeFileSync(file,JSON.stringify(intent),{mode:0o600});
+  Object.assign(b,{authorization_intent:{path:file,sha256:hash(fs.readFileSync(file))},authorization_state_root:state,authorization_message_sha256:message_sha256});
+  const save=()=>{fs.writeFileSync(f.configFile,JSON.stringify(f.config));f.environment.LEADGEN_HOST_CONFIG_SHA256=hash(fs.readFileSync(f.configFile));};save();f.run.input.business={scope};
+  const call=()=>buildContext({workflow:'104',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'run-host')});
+  const first=call(),asset=first.context.authorization_asset,bytes=fs.readFileSync(asset.path),mtime=fs.statSync(asset.path).mtimeMs;
+  assert.equal(hash(bytes),asset.sha256);assert.equal(JSON.parse(bytes).root_task_id,f.run.task_id);assert.equal(JSON.parse(bytes).message_sha256,message_sha256);
+  assert.deepEqual(call().context.authorization_asset,asset);assert.equal(fs.statSync(asset.path).mtimeMs,mtime);
+  f.run.run_id='44444444-4444-4444-8444-444444444444';f.run.input.run_tag=f.run.run_id;assert.throws(call,/AUTHORIZATION|INTENT/);
+  f.run.run_id=runId;f.run.input.run_tag=runId;b.context.authorization_asset=asset;save();assert.throws(call,/LEADGEN_AUTHORIZATION_AMBIGUOUS/);
+ }finally{f.close();}
+});

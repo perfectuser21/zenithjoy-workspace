@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "contract": {
+    "workflow": "douyin_video_discovery",
+    "goal": "按批准的本公司搜索范围交出持久化视频",
+    "activities": [
+      {
+        "key": "preflight",
+        "order": 1,
+        "budget": {
+          "max_duration_s": 900,
+          "heartbeat_s": 2
+        },
+        "acceptance": {
+          "description": "按冻结douyin_video_processing.preflight合同核验真实产物"
+        },
+        "failure": {
+          "empty_ok": [],
+          "retryable": [],
+          "fatal": [
+            "error"
+          ],
+          "needs_human": {
+            "cases": [
+              "unknown"
+            ]
+          }
+        },
+        "runtime": {
+          "phase": "source",
+          "protocol": "json-stdio-v1",
+          "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+          "executor_kind": "agent",
+          "on_status": {
+            "done": "next",
+            "empty": "stop",
+            "needs_review": "pause",
+            "failed": "stop",
+            "partial": "stop",
+            "retry": "pause"
+          }
+        }
+      },
+      {
+        "key": "collect_videos",
+        "order": 2,
+        "budget": {
+          "max_duration_s": 1800,
+          "heartbeat_s": 2
+        },
+        "acceptance": {
+          "description": "按冻结douyin_video_discovery.collect_videos合同核验真实产物"
+        },
+        "failure": {
+          "empty_ok": [],
+          "retryable": [],
+          "fatal": [
+            "error"
+          ],
+          "needs_human": {
+            "cases": [
+              "unknown"
+            ]
+          }
+        },
+        "runtime": {
+          "phase": "source",
+          "protocol": "json-stdio-v1",
+          "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+          "executor_kind": "agent",
+          "on_status": {
+            "done": "next",
+            "empty": "stop",
+            "needs_review": "pause",
+            "failed": "stop",
+            "partial": "stop",
+            "retry": "pause"
+          }
+        }
+      },
+      {
+        "key": "cleanup",
+        "order": 3,
+        "budget": {
+          "max_duration_s": 600,
+          "heartbeat_s": 2
+        },
+        "acceptance": {
+          "description": "按冻结douyin_video_processing.cleanup合同核验真实产物"
+        },
+        "failure": {
+          "empty_ok": [],
+          "retryable": [],
+          "fatal": [
+            "error"
+          ],
+          "needs_human": {
+            "cases": [
+              "unknown"
+            ]
+          }
+        },
+        "runtime": {
+          "phase": "finalize",
+          "protocol": "json-stdio-v1",
+          "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+          "executor_kind": "agent",
+          "on_status": {
+            "done": "next",
+            "empty": "stop",
+            "needs_review": "pause",
+            "failed": "stop",
+            "partial": "stop",
+            "retry": "pause"
+          }
+        }
+      }
+    ]
+  },
+  "profile": {
+    "adapter": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
+    "commander": {
+      "provider": "codex",
+      "model": "gpt-6.1-terra"
+    },
+    "leadgen": {
+      "workflow": "101",
+      "worker_entries": [
+        "services/phone-adb-controller/leadgen-foundation/worker.mjs"
+      ],
+      "method_repository": "perfectuser21/zenithjoy-skills",
+      "method_revision": "1e1c069c379ed16315da125122f32e87eb27ae75"
+    },
+    "skill_runtime": {
+      "control_dir": "control",
+      "tools": "TOOLS.txt",
+      "codex": {
+        "command": "@codex",
+        "args": [
+          "-c",
+          "model=\"gpt-6.1-terra\"",
+          "-c",
+          "approval_policy=\"never\""
+        ],
+        "env_keys": []
+      },
+      "host_tools": {
+        "command": "@node",
+        "entry": "invoke.mjs",
+        "kinds": [
+          "phone",
+          "brain",
+          "business",
+          "metrics",
+          "fetch-native",
+          "proof",
+          "native-readback"
+        ],
+        "timeout_ms": 420000,
+        "response_paths": [
+          "state",
+          "result.exit_code",
+          "result.error",
+          "result.data",
+          "result.stdout",
+          "exit_code",
+          "receipt",
+          "large_result_saved",
+          "stdout_preview"
+        ]
+      },
+      "activities": {
+        "preflight": {
+          "workflow": "101",
+          "activity": "preflight",
+          "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md",
+          "checker": {
+            "command": "@node",
+            "entry": "checker.mjs",
+            "args": [],
+            "start_checks": [
+              "task",
+              "policy",
+              "resources"
+            ],
+            "required_checks": [
+              "device_online",
+              "call_idle",
+              "company_account_binding",
+              "native_account_identity",
+              "resource_ownership",
+              "cleanup_responsibility"
+            ],
+            "timeout_ms": 120000
+          },
+          "allow_empty": false
+        },
+        "collect_videos": {
+          "workflow": "101",
+          "activity": "collect_videos",
+          "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md",
+          "checker": {
+            "command": "@node",
+            "entry": "checker.mjs",
+            "args": [],
+            "start_checks": [
+              "task",
+              "policy",
+              "resources"
+            ],
+            "required_checks": [
+              "native_search_filters",
+              "video_identity",
+              "same_video_metrics",
+              "persisted_sources",
+              "exact_output_scope"
+            ],
+            "timeout_ms": 120000
+          },
+          "allow_empty": false
+        },
+        "cleanup": {
+          "workflow": "101",
+          "activity": "cleanup",
+          "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md",
+          "checker": {
+            "command": "@node",
+            "entry": "checker.mjs",
+            "args": [],
+            "start_checks": [
+              "task",
+              "policy",
+              "resources"
+            ],
+            "required_checks": [
+              "native_operations_terminal",
+              "safe_desktop",
+              "video_leases_released",
+              "local_lock_released",
+              "central_lock_released"
+            ],
+            "timeout_ms": 120000
+          },
+          "allow_empty": false
+        }
+      }
+    },
+    "files": {
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "85eaad92ab2b25740e53a1044163cf2d259526f1a941d9bc8ddf2fc746fd6c6f",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "49d82c198deff99c2794cb4cf5256c1604ac3be41664d5d020e67fe8d7ec6dca",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "bfa727c5e003884f0210a0e2b01186f17844311cf8bbbb1ecf038165cfba7236",
+      "services/phone-adb-controller/leadgen-foundation/context.mjs": "7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8",
+      "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "c1e12d2834bd716a101dabc067cbd92a26f3dbc3844552eca807b5ceea1e42d4",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "1831bee8f5acd8dc58abcc926e93c4ca8f510ca606affeff092db05a9c54a9e0",
+      "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
+      "services/phone-adb-controller/leadgen-foundation/sources/103.json": "0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03",
+      "services/phone-adb-controller/leadgen-foundation/sources/102.json": "dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb",
+      "services/phone-adb-controller/leadgen-foundation/sources/104.json": "a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4",
+      "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "04128267f06ec4f5a85eeebc88c35cfaab492b21c8a7b89c56241c75d4adb25d",
+      "services/phone-adb-controller/leadgen-foundation/sources/101.json": "a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed",
+      "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
+      "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
+      "services/phone-adb-controller/leadgen-foundation/schemas/104.json": "b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd",
+      "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
+      "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
+      "services/phone-adb-controller/activity-upstream-source.mjs": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df",
+      "services/phone-adb-controller/activity-host-pg.mjs": "5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a",
+      "services/phone-adb-controller/activity-host-tools.py": "f554f633bf051eac8d93c4af229d8caced19f6f026883f971996881ed6b7e77b",
+      "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
+      "services/phone-adb-controller/activity-host-104.mjs": "97d8d9d30846e1d27f19bb74abdadcca8196f3971b5d2e1b54c520b10652120b",
+      "services/phone-adb-controller/activity-104-context.mjs": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a",
+      "services/phone-adb-controller/activity-104-runtime.mjs": "876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c",
+      "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
+      "services/phone-adb-controller/leadgen-outreach-scope.js": "c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7",
+      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "binding_key",
+    "business"
+  ],
+  "properties": {
+    "binding_key": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$"
+    },
+    "business": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keyword",
+        "search_filters",
+        "max_candidates"
+      ],
+      "properties": {
+        "keyword": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "search_filters": {
+          "type": "object"
+        },
+        "max_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
+  }
+}

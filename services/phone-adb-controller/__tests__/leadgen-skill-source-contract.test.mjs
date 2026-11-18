@@ -5,22 +5,28 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
 import {withDeploymentPrefixFixture} from './deployment-prefix-fixture.mjs';
+import {partitionFoundationBindings} from '../../../scripts/product-map/foundation-host-bindings.mjs';
 
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const flows=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'];
 const numbers={douyin_video_discovery:'101',douyin_video_processing:'102',douyin_comment_scoring:'103',douyin_lead_outreach:'104'};
 const sharedOwner='douyin_video_processing';
 function document(key){return parse(readFileSync(root+'product-map/contracts/'+key+'.yaml','utf8'));}
+function businessBindings(contract){
+  return partitionFoundationBindings({document:contract,repoRoot:root,read:path=>readFileSync(root+path),resolveActivity:ref=>{
+    const [owner,key]=ref.split('.');return document(owner).activities.find(a=>a.key===key);
+  }});
+}
 
 test('四首版Skill存在、身份可解析，原Activity及代码绑定保留',()=>{
   for(const flow of flows){
-    const current=document(flow);
+    const current=document(flow),methods=businessBindings(current);
     const entry='services/phone-adb-controller/skills/douyin-leadgen-'+numbers[flow]+'/SKILL.md';
     assert.ok(readFileSync(root+entry,'utf8').includes('name: douyin-leadgen-'+numbers[flow]));
     for(const activity of current.activities.filter(a=>!a.ref)){
-      const code=activity.implementation_bindings.filter(b=>b.kind==='code');
+      const code=methods.get(activity.key).filter(b=>b.kind==='code');
       assert.ok(code.some(b=>b.path==='services/phone-adb-controller/leadgen-workflow.mjs'),'配套Skill不能替掉正式代码执行入口');
-      const bindings=activity.implementation_bindings.filter(b=>b.kind==='skill');
+      const bindings=methods.get(activity.key).filter(b=>b.kind==='skill');
       assert.equal(bindings.length,1);
       const binding=bindings[0];
       assert.equal(binding.repo,'perfectuser21/zenithjoy-workspace');
@@ -76,11 +82,11 @@ test('Skill和引用文件进入设备及MMV的实际发布清单，103不要求
 test('每个独立Activity有独立方法Skill，四Workflow消费完整且精确的Activity方法版本',()=>{
   const unique=new Set();let references=0;
   for(const flow of flows){
-    const contract=document(flow);
+    const contract=document(flow),methods=businessBindings(contract);
     for(const activity of contract.activities){
       references++;
       if(activity.ref)continue;
-      const binding=activity.implementation_bindings.find(b=>b.kind==='skill');
+      const binding=methods.get(activity.key).find(b=>b.kind==='skill');
       const expected='douyin-leadgen-activity-'+numbers[flow]+'-'+activity.key.replaceAll('_','-');
       assert.equal(binding?.name,expected,'原整流程Skill不能冒作独立Activity方法：'+flow+'.'+activity.key);
       unique.add(binding.name);

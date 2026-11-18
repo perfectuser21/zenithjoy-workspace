@@ -1365,14 +1365,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "014c9e4395396930e954eaabd329c7b18ca0e3d508b3a9d396475e3cf4953766"
+          "sha256": "619ce443e29291465c30f29d63c7c9a1172b9288675fc730fcca658cc3fc6ba0"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "72edc0ed57963ab6dce7a8b096e15ecb16e29e7a5a1e6e7b056429b3c141e1c7"
+          "sha256": "7ffbb7483a6ba6139349a00da90294fccb1511462f70d92049135aa1f2299a50"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3fbc0b6a03c8a81c45bfc5c76473f1bac7d9f4b7f172766399b1cf21588637c8",
+      "code_digest": "bdf59ceb6b5aaafa47c72750e6f9215348f02af6358d313f0f0162070a0a5862",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。；本轮SDK时间竞争增量评审：仅Runner完整匹配自生成命令时在SDK验源后收紧相对timeout，原绝对截止、foreign命令严格检查及dispatch前收尾预留不变；97项隔离控制器测试与1项耗尽负例通过，不代表真实模型或生产业务验收。；本轮依赖补丁来源同步增量评审：仅root锁因picomatch精确补丁改变后，同步PG descriptor顶层root-lock摘要及其固定SHA；14个PG包完整锁节点、版本、来源、integrity与依赖边不变，校验逻辑/原冻结运行不改。；合入main857a36648后的增量评审：保留main的4.0.7升级、独立dashboard依赖/审计及发布修复；统一原名原版的重复extglob拒绝补丁与官方npm重算，不增加豁免。PG14包完整节点不变，只重算新的root锁/descriptor来源摘要；原已冻结运行不改。；本次候选仅为本地 PG Pool 的 leased/idle 客户端与 pool 错误建立所有权，错误标记保持 sticky 且阻止证明 execution_stopped；未改变方法合同、生产数据库身份或远程动作。本人隔离真实 PG 的正常关闭、leased/idle/查询期间断连验证通过；独立复审复跑隔离真实 PG 四项通过，product-map 及来源合同校验通过；SSH、真机和生产未验证。；本次录制进度增量：record-status增加有界只读video/audio packet PTS及同一startup进程身份观察；不改录制start/stop、码率、时基、单次上限或原帧覆盖验收。缺文件/损坏/超时/身份不明保持unknown；35项隔离回归与旧真实媒体只读验证，不代表新102业务通过。；同次Phone收口：open_user_profile的可选作品数字段缺失返回原unknown，不改变UID/页面资格判据；实际函数离线7/7独立通过，未声称真实发送。；同次104完整布局修复：仅接纳真实观察的新chat四控件完整签名，拒混搭并保身份/焦点/页面保护，离线242/242独立通过；官方CLI仅追加上述已审controller/focus精确摘要，静态来源与停止品牌判据不变，未宣称真实发送通过。",
-        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量); codex:/root/review_103_recovery (SDK截止增量); codex:/root/review_103_recovery (PG来源pin增量); codex:/root/review_103_recovery (main857整合增量); codex:/root/native_pg_fix (候选初审); codex:/root/native_pg_independent_review (本地 Pool 独立复审); codex:/root/review_103_recovery (record-status增量初审); codex:/root/fix_103_tool_wiring (record-status独立复审); codex:/root/prepare_104_live/review_plan (可选作品数独立复审); codex:/root/prepare_104_live/review_plan (完整chat签名独立复审)",
-        "previous_code_digest": "26e4139456925e85f79720e992fe64df83f2c97b9613f298f9ebed436b0b2fc6",
-        "current_code_digest": "3fbc0b6a03c8a81c45bfc5c76473f1bac7d9f4b7f172766399b1cf21588637c8"
+        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。",
+        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring",
+        "previous_code_digest": "3fbc0b6a03c8a81c45bfc5c76473f1bac7d9f4b7f172766399b1cf21588637c8",
+        "current_code_digest": "bdf59ceb6b5aaafa47c72750e6f9215348f02af6358d313f0f0162070a0a5862"
       }
     },
     "douyin_video_processing.dedup": {
@@ -5016,14 +5016,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "014c9e4395396930e954eaabd329c7b18ca0e3d508b3a9d396475e3cf4953766"
+          "sha256": "619ce443e29291465c30f29d63c7c9a1172b9288675fc730fcca658cc3fc6ba0"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "72edc0ed57963ab6dce7a8b096e15ecb16e29e7a5a1e6e7b056429b3c141e1c7"
+          "sha256": "7ffbb7483a6ba6139349a00da90294fccb1511462f70d92049135aa1f2299a50"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "423d74275fa1886d9f4db2a6b341c12b3833fa54451788955bec276cbd6412e4",
+      "code_digest": "5ae722adf6bb626d3e2295ccda2e544c14e856afb2120cde21669ceb3e5254c4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "沿用原评审(/root/checker_feedback_adapter)：同PR资格/Compose/原评论元数据与宿主显式准入修复保持；本次仅单次评分schema按冻结画像ID绑定其原业务依据及排除，长原文取连续不超300字符片段，模型/政策/validator/调用次数不变。P13原评论102恢复已独立验收，103新评分尚待真实验证，正常102新采集链接入口不在已验范围。；本轮增量评审：共享预算源码仅改变新101缺省为2400秒；本Activity所属非101流程保留原预算、显式值解析、方法与交付合同。103隔离沙盒仅证明前置拒绝返工与终态重放，不代表旧生产资格流程通过。；本轮SDK时间竞争增量评审：仅Runner完整匹配自生成命令时在SDK验源后收紧相对timeout，原绝对截止、foreign命令严格检查及dispatch前收尾预留不变；97项隔离控制器测试与1项耗尽负例通过，不代表真实模型或生产业务验收。；本轮依赖补丁来源同步增量评审：仅root锁因picomatch精确补丁改变后，同步PG descriptor顶层root-lock摘要及其固定SHA；14个PG包完整锁节点、版本、来源、integrity与依赖边不变，校验逻辑/原冻结运行不改。；合入main857a36648后的增量评审：保留main的4.0.7升级、独立dashboard依赖/审计及发布修复；统一原名原版的重复extglob拒绝补丁与官方npm重算，不增加豁免。PG14包完整节点不变，只重算新的root锁/descriptor来源摘要；原已冻结运行不改。；本次候选仅为本地 PG Pool 的 leased/idle 客户端与 pool 错误建立所有权，错误标记保持 sticky 且阻止证明 execution_stopped；未改变方法合同、生产数据库身份或远程动作。本人隔离真实 PG 的正常关闭、leased/idle/查询期间断连验证通过；独立复审复跑隔离真实 PG 四项通过，product-map 及来源合同校验通过；SSH、真机和生产未验证。；本次录制进度增量：record-status增加有界只读video/audio packet PTS及同一startup进程身份观察；不改录制start/stop、码率、时基、单次上限或原帧覆盖验收。缺文件/损坏/超时/身份不明保持unknown；35项隔离回归与旧真实媒体只读验证，不代表新102业务通过。；同次Phone收口：open_user_profile的可选作品数字段缺失返回原unknown，不改变UID/页面资格判据；实际函数离线7/7独立通过，未声称真实发送。；同次104完整布局修复：仅接纳真实观察的新chat四控件完整签名，拒混搭并保身份/焦点/页面保护，离线242/242独立通过；官方CLI仅追加上述已审controller/focus精确摘要，静态来源与停止品牌判据不变，未宣称真实发送通过。",
-        "reviewed_by": "/root/checker_feedback_adapter; codex:/root/review_103_recovery (101预算增量); codex:/root/review_103_recovery (SDK截止增量); codex:/root/review_103_recovery (PG来源pin增量); codex:/root/review_103_recovery (main857整合增量); codex:/root/native_pg_fix (候选初审); codex:/root/native_pg_independent_review (本地 Pool 独立复审); codex:/root/review_103_recovery (record-status增量初审); codex:/root/fix_103_tool_wiring (record-status独立复审); codex:/root/prepare_104_live/review_plan (可选作品数独立复审); codex:/root/prepare_104_live/review_plan (完整chat签名独立复审)",
-        "previous_code_digest": "255a08c5f5884c685a01450691772a02cbaa0adfaf59c061584743c1804b86ee",
-        "current_code_digest": "423d74275fa1886d9f4db2a6b341c12b3833fa54451788955bec276cbd6412e4"
+        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。",
+        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring",
+        "previous_code_digest": "423d74275fa1886d9f4db2a6b341c12b3833fa54451788955bec276cbd6412e4",
+        "current_code_digest": "5ae722adf6bb626d3e2295ccda2e544c14e856afb2120cde21669ceb3e5254c4"
       }
     },
     "douyin_comment_scoring.scoring": {
