@@ -31,6 +31,8 @@ def forbidden(*a):raise AssertionError('external transport is forbidden')
 transport.local_command=forbidden;transport.pinned_transport=forbidden;sys.modules['local_transport']=transport
 activity='dedup' if workflow=='102' else 'collect_videos'
 (target/'context.json').write_text(json.dumps(c));(target/'input.json').write_text(json.dumps({'activity_key':activity,'identity':c['tasks'][workflow]}));os.environ['COMMANDER_ACTIVITY_INPUT_FILE']=str(target/'input.json');os.environ['COMMANDER_ACTIVITY_KEY']=activity
+if mode=='context-drift':
+ c['verification']['102']['qualification_input']['coverage']['source_duration_display_seconds']=38;(target/'context.json').write_text(json.dumps(c))
 spec=importlib.util.spec_from_file_location('host',target/'tools.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 m.task_authority=lambda c:None;calls={'dispatch':0,'credentials':0,'resource':0}
 def resource(c):calls['resource']+=1
@@ -49,7 +51,11 @@ if mode=='persist-failure':
   original(path,value)
  m.atomic=atomic
 def call(name,op):
- sys.argv=['tools','business',name,json.dumps({'op':op})];out=io.StringIO();error=None;rc=None
+ value={'op':op}
+ if mode.startswith('metrics-'):
+  value={'op':mode[8:],'video':{'video_id':'7711111111111111111','video_url':'https://www.douyin.com/video/7711111111111111111'}}
+  if name=='corrected':value['video']['metrics']={'schema':'test-opaque-original','evidence':{'xml':'fixture original XML'},'digest':'a'*64}
+ sys.argv=['tools','business',name,json.dumps(value)];out=io.StringIO();error=None;rc=None
  try:
   with contextlib.redirect_stdout(out):rc=m.main()
  except Exception as e:error=type(e).__name__+':'+str(e)
@@ -58,7 +64,8 @@ def call(name,op):
 first=call('first','company_config' if mode in ['normal','persist-failure'] else 'inspect_videos');before=dict(calls)
 replay=call('first','company_config' if mode in ['normal','persist-failure'] else 'inspect_videos')
 second=call('corrected','inspect_videos')
-print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,'calls':calls,'instructions':(target/'TOOLS.txt').read_text() if (target/'TOOLS.txt').exists() else '', 'original':(target/'TOOLS-base.txt').read_text() if (target/'TOOLS-base.txt').exists() else '', 'tools':(target/'tools.py').read_text()}))`;
+corrected_replay=call('corrected','inspect_videos') if mode.startswith('metrics-') else None
+print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,'corrected_replay':corrected_replay,'calls':calls,'instructions':(target/'TOOLS.txt').read_text() if (target/'TOOLS.txt').exists() else '', 'original':(target/'TOOLS-base.txt').read_text() if (target/'TOOLS-base.txt').exists() else '', 'tools':(target/'tools.py').read_text()}))`;
  const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify(workflow==='102'?fixture102:fixture),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
  }finally{rmSync(root,{recursive:true,force:true});}
 }
@@ -68,6 +75,14 @@ test('real assembled collect host emits typed company_config rejection and only 
  assert.deepEqual(v.result.data.allowed_operations,['discover','discover_readback','inspect_videos']);assert.match(v.result.data.tool_hint,/当前Activity为collect_videos/);assert.doesNotMatch(v.result.data.tool_hint,/preflight从brain/);assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});
  assert.equal(r.replay.stdout,r.first.stdout);assert.equal(r.second.rc,0);assert.deepEqual(r.calls,{dispatch:1,credentials:1,resource:1});
  assert.ok(r.instructions.startsWith(fixture.files['TOOLS.txt'].source));assert.match(r.instructions,/collect_videos允许操作：discover, discover_readback, inspect_videos/);assert.match(r.instructions,/101.*company_config.*preflight/);
+});
+for(const op of ['discover','discover_readback'])test(`101 ${op} missing metrics is rejected before dispatch and exact supplied metrics correction dispatches once`,()=>{
+ const r=probe('metrics-'+op),v=JSON.parse(r.first.stdout);
+ assert.equal(r.first.rc,2);assert.equal(v.result.error,'METRICS_OBSERVATION_REQUIRED');assert.equal(v.result.data.dispatched,false);assert.equal(v.result.data.external_effect,'none');assert.deepEqual(v.result.data.required_fields,['video.metrics']);
+ assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});assert.equal(r.replay.stdout,r.first.stdout);
+ assert.equal(r.second.rc,0);assert.deepEqual(r.calls,{dispatch:1,credentials:1,resource:1});assert.equal(r.corrected_replay.stdout,r.second.stdout);
+ const corrected=JSON.parse(r.second.receipt.binding.args[0]);assert.equal(corrected.op,op);assert.deepEqual(corrected.video.metrics,{schema:'test-opaque-original',evidence:{xml:'fixture original XML'},digest:'a'.repeat(64)});
+ assert.match(r.instructions,/discover.*discover_readback.*video\.metrics/);
 });
 test('102 typed host retains COS and original methods while rendering current input without historical execution claims',()=>{
  const r=probe('normal','102');assert.notEqual(r.first.stdout,'',r.first.error);const v=JSON.parse(r.first.stdout);
@@ -81,6 +96,25 @@ test('102 typed host retains COS and original methods while rendering current in
 });
 for(const mode of ['same-text','after-dispatch','network','persist-failure'])test(`102 ${mode} remains unknown without dispatch replay`,()=>{
  const r=probe(mode,'102');assert.equal(r.first.stdout,'');assert.equal(r.first.receipt.state,'unknown');assert.deepEqual(r.calls,r.before);assert.match(r.second.error,/PRIOR_ACTION_UNKNOWN/);
+});
+test('102 runtime rejects changed rendered context before dispatch',()=>{
+ const r=probe('context-drift','102');assert.equal(r.first.stdout,'');assert.match(r.first.error,/ACTIVITY_HOST_METHOD_INPUT_CHANGED/);assert.equal(r.calls.dispatch,0);
+});
+test('102 rendering rejects recovery scopes, multiple videos and nonnumeric provider budgets',()=>{
+ const script=String.raw`import importlib.util,json,sys,copy
+s=importlib.util.spec_from_file_location('host',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+c={'assigned_workflow':'102','source_commit':'a'*40,'profile':'fixture','comment_limit':1,'tasks':{'102':{'run_tag':'fixture'}},'verification':{'policy_version':34,'102':{'video_ids':['7711111111111111111'],'qualification_input':{'video_id':'7711111111111111111','coverage':{'kind':'full_video','source_duration_display_seconds':37,'capture_max_seconds':120,'max_capture_sessions':1,'max_asr_calls':1,'max_judge_primary_calls':1}}}}}
+for mode in ['recovery','multiple','zero','bool']:
+ v=copy.deepcopy(c)
+ if mode=='recovery':v['recovery']={'mode':'qualification-readonly-v1'}
+ if mode=='multiple':v['verification']['102']['video_ids'].append('7722222222222222222')
+ if mode=='zero':v['verification']['102']['qualification_input']['coverage']['max_asr_calls']=0
+ if mode=='bool':v['verification']['102']['qualification_input']['coverage']['max_asr_calls']=True
+ try:m.method_input102(v)
+ except ValueError:continue
+ raise AssertionError(mode+' incorrectly accepted')
+print('rejected')`;
+ const r=spawnSync('/usr/bin/python3',['-c',script,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'rejected');
 });
 for(const mode of ['same-text','after-dispatch','network','persist-failure'])test(`real assembled ${mode} remains unknown`,()=>{
  const r=probe(mode);assert.equal(r.first.stdout,'');assert.ok(r.first.error);assert.equal(r.first.receipt.state,'unknown');
