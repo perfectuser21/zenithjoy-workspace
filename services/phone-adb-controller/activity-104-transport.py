@@ -7,7 +7,7 @@ KEYS=[] # ASSEMBLY_REPLACES_KEYS
 def verify_context(c):
  p=pathlib.Path(__file__).parent/'outreach-host-binding.json'
  if p.is_symlink() or hashlib.sha256(p.read_bytes()).hexdigest()!=EXPECTED_BINDING_SHA:raise ValueError('ACTIVITY_104_CONTEXT_FROZEN')
- frozen=json.loads(p.read_text());actual={k:c.get(k) for k in KEYS};actual['sender_id']=c.get('sender_id',c.get('account'))
+ frozen=json.loads(p.read_text());actual={k:c.get(k) for k in KEYS};actual['sender_id']=c.get('sender_id',c.get('account'));actual['marker_source']=c.get('marker_source',c.get('source_commit'))
  if actual!=frozen:raise ValueError('ACTIVITY_104_CONTEXT_CHANGED')
  a=c['authorization_asset'];p=pathlib.Path(a['path'])
  if p.is_symlink() or hashlib.sha256(p.read_bytes()).hexdigest()!=a['sha256']:raise ValueError('ACTIVITY_104_AUTHORIZATION_SOURCE')

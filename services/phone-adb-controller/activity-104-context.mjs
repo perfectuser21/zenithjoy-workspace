@@ -2,11 +2,11 @@
 import fs from 'node:fs';import path from 'node:path';import {createHash} from 'node:crypto';
 export const hash=v=>createHash('sha256').update(v).digest('hex');
 export const need=(v,k)=>{if(!v)throw Error('ACTIVITY_104_'+k);};
-export const KEYS=['assigned_workflow','root_task_id','actor','source_commit','runtime_root','transport','host','profile','serial','adb_serial','company_id','tenant_id','line','account','sender_id','local_owner','central_owner','tasks','business_deadline_ms','cleanup_deadline_ms','node','node_sha256','python','python_sha256','native_root','credentials','authorization_asset','verification','outreach_runtime','phone_controller','phone_controller_sha256','phone_registry','phone_registry_sha256','adb_host_config','adb_host_config_sha256'];
+export const KEYS=['assigned_workflow','root_task_id','actor','source_commit','marker_source','runtime_root','transport','host','profile','serial','adb_serial','company_id','tenant_id','line','account','sender_id','local_owner','central_owner','tasks','business_deadline_ms','cleanup_deadline_ms','node','node_sha256','python','python_sha256','native_root','credentials','authorization_asset','verification','outreach_runtime','phone_controller','phone_controller_sha256','phone_registry','phone_registry_sha256','adb_host_config','adb_host_config_sha256'];
 export const canonical=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
 export function regular(p){need(typeof p==='string'&&path.isAbsolute(p),'SOURCE_PATH');const st=fs.lstatSync(p);need(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&!(st.mode&0o022),'SOURCE_FILE');return fs.readFileSync(p);}
 export function asset(a){need(a&&/^[a-f0-9]{64}$/.test(a.sha256||''),'SOURCE_ASSET');const raw=regular(a.path);need(hash(raw)===a.sha256,'SOURCE_DIGEST');return raw;}
-export function scope(c){return Object.fromEntries(KEYS.map(k=>[k,k==='sender_id'?c.sender_id??c.account:c[k]]));}
+export function scope(c){return Object.fromEntries(KEYS.map(k=>[k,k==='sender_id'?c.sender_id??c.account:k==='marker_source'?c.marker_source??c.source_commit:c[k]]));}
 export function validateAuthorization(c){
  const a=JSON.parse(asset(c.authorization_asset));
  need(a.schema==='run-send-authorization/v1'&&typeof a.decision_id==='string'&&a.decision_id.length>0&&a.root_task_id===c.root_task_id,'AUTHORIZATION_SCOPE');
@@ -14,6 +14,7 @@ export function validateAuthorization(c){
  need(a.max_new_recipients===1&&a.max_send_attempts===1&&Number.isSafeInteger(a.test_execution_daily_cap)&&a.test_execution_daily_cap>0&&a.company_policy_changed===false&&a.requires_current_pause_and_daily_count_readback===true,'AUTHORIZATION_LIMIT');return a;
 }
 export function validateScope(c){
+ need((c.marker_source===undefined||c.marker_source===c.source_commit),'CONTEXT_MARKER_SOURCE');
  need(c?.assigned_workflow==='104'&&c.transport==='local'&&!c.recovery&&!c.recovery_of,'CONTEXT');
  for(const k of ['root_task_id','actor','host','profile','serial','adb_serial','company_id','tenant_id','line','account','local_owner','central_owner'])need(typeof c[k]==='string'&&c[k].length>0,'CONTEXT');
  need(/^[A-Za-z0-9_-]{1,120}$/.test(c.profile)&&/^[A-Za-z0-9_.:-]{1,160}$/.test(c.serial)&&/^[A-Za-z0-9_.:-]{1,160}$/.test(c.adb_serial),'CONTEXT_DEVICE');
