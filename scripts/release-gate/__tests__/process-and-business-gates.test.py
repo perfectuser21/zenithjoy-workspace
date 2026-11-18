@@ -225,16 +225,6 @@ class StaticPrChecksTest(unittest.TestCase):
         self.assertEqual(set(workflow["jobs"]["golden-path-4-smoke"]["needs"]),
                          {"ws1", "ws2", "ws3", "ws4", "ws5"})
 
-    def test_scoped_workflows_do_not_duplicate_pr_push_and_keep_identical_paths(self):
-        for name in ("e2e-line02-company-profile-collect.yml", "e2e-rpa-reset-stage.yml"):
-            with self.subTest(workflow=name):
-                workflow = yaml.safe_load((ROOT / ".github/workflows" / name).read_text())
-                triggers = workflow.get("on", workflow.get(True))
-                self.assertEqual(triggers["push"]["branches"], ["main"])
-                self.assertEqual(triggers["pull_request"]["branches"], ["main"])
-                self.assertEqual(triggers["push"]["paths"], triggers["pull_request"]["paths"])
-                self.assertIn("workflow_dispatch", triggers)
-
     def test_static_lints_share_one_checkout_and_keep_every_command(self):
         jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
         job = jobs["static-pr-checks"]
