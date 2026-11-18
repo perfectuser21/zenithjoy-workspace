@@ -11,6 +11,10 @@ on:
       acceptance_run_key:
         required: true
         type: string
+      video_tools_live:
+        required: false
+        type: boolean
+        default: false
     outputs:
       sha:
         value: ${{ jobs.admission.outputs.sha }}
@@ -45,11 +49,23 @@ jobs:
         run: |
           echo '::warning::Legacy Kotlin/browser nightly checks are retired; no Skill or Android physical acceptance is implied.'
           echo 'Legacy nightly is retired. Device acceptance is not established by this step; exact-version Brain business evidence remains required.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Read exact live video tools acceptance
+        if: inputs.video_tools_live
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.staging.outputs.sha }}
+          TARGETS: ${{ inputs.targets }}
+          RUN_KEY: ${{ inputs.acceptance_run_key }}
+        run: |
+          test "$TARGETS" = api
+          node scripts/release-gate/video-tools-evidence.mjs "$SHA" "$RUN_KEY"
       - uses: tailscale/github-action@v3
+        if: ${{ !inputs.video_tools_live }}
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: latest
       - name: Read frozen business acceptance from Brain
+        if: ${{ !inputs.video_tools_live }}
         env:
           SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
           SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}

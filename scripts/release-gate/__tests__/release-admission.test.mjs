@@ -51,3 +51,28 @@ test('retired Kotlin and Windows nightly lanes cannot serve as physical release 
   assert.throws(()=>validateAcceptance(x,options),/验收未通过/);
  }
 });
+
+test('video tools live admission binds the browser proof to the exact staging candidate', async () => {
+  const {verifyVideoToolsAcceptance} = await import('../video-tools-evidence.mjs');
+  const candidate = 'a'.repeat(40);
+  const run = {id: 52, repository: {full_name: 'perfectuser21/zenithjoy-workspace'}, head_sha: candidate,
+    head_branch: 'main', event: 'workflow_dispatch', path: '.github/workflows/video-tools-live-acceptance.yml',
+    status: 'completed', conclusion: 'success', run_started_at: '2026-11-18T04:00:00Z'};
+  const stage = {id: 51, repository:run.repository, head_branch:'main', head_sha:candidate,
+    path:'.github/workflows/deploy-staging-hk.yml', event:'workflow_dispatch', updated_at: '2026-11-18T03:56:00Z', status: 'completed', conclusion: 'success'};
+  const jobs = {jobs: [{name:'Live video tools acceptance', status:'completed', conclusion:'success',
+    steps:[{name:'Verify live private canvas upload',conclusion:'success'}, {name:'Store live upload evidence',conclusion:'success'}]}]};
+  const api = path => path.endsWith('/51') ? stage : path.endsWith('/52/jobs') ? jobs : run;
+  const proof = {sha: candidate, stagingRunId: '51', acceptanceRunId: '52', api};
+  assert.equal(verifyVideoToolsAcceptance(proof).run_id, 52);
+  assert.throws(() => verifyVideoToolsAcceptance({...proof, sha:'b'.repeat(40)}));
+  assert.throws(() => verifyVideoToolsAcceptance({...proof, acceptanceRunId:'Brain-key'}));
+  stage.updated_at = '2026-11-18T04:01:00Z';
+  assert.throws(() => verifyVideoToolsAcceptance(proof), /晚于/);
+  stage.updated_at = '2026-11-18T03:56:00Z';
+  for (const step of jobs.jobs[0].steps) {
+    step.conclusion = 'skipped';
+    assert.throws(() => verifyVideoToolsAcceptance(proof), /实传/);
+    step.conclusion = 'success';
+  }
+});
