@@ -6,11 +6,11 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 const wiring=JSON.parse(readFileSync(new URL('./fixtures/103-tool-host-wiring.json',import.meta.url)));
-const helper=new URL('../activity-tool-result.py',import.meta.url).pathname;
+const helper=new URL('../activity-103-tool-host.py',import.meta.url).pathname;
 function probe(activity,op,mode='normal',version='active'){
  const root=mkdtempSync(join(tmpdir(),'103-tool-host-'));
  try{
-  const program=String.raw`import pathlib,sys,json,time,fcntl,re,subprocess,importlib.util,contextlib,io
+  const program=String.raw`import pathlib,sys,json,time,fcntl,re,subprocess,importlib.util,contextlib,io,gc
 P=pathlib.Path(sys.argv[1]);spec=importlib.util.spec_from_file_location('typed',sys.argv[2]);typed=importlib.util.module_from_spec(spec);spec.loader.exec_module(typed)
 for name in ['PreDispatchRejected','emit_pre_dispatch_rejection','read_business_input','scope_rejection']:globals()[name]=getattr(typed,name)
 packet=json.load(sys.stdin);mode=packet['mode'];exec(packet['source']['tool_scope.py']['source'],globals());exec(packet['source']['tools.py']['source'],globals())
@@ -37,7 +37,8 @@ def call(name,op):
  try:
   with contextlib.redirect_stdout(out):rc=main()
  except Exception as e:error={'type':type(e).__name__,'message':str(e)}
- return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':read(P/'receipts'/(name+'.json'))}
+ gc.collect()
+ return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':read(P/'receipts'/(name+'.json')) if (P/'receipts'/(name+'.json')).exists() else None}
 first=call('wrong-call',packet['op']);before=dict(calls);second=None;replay=None
 if mode=='normal':
  replay=call('wrong-call',packet['op']);second=call('correct-readback','score_readback')

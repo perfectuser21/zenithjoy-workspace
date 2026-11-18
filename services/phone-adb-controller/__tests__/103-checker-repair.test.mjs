@@ -1,13 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 const modulePath=process.env.ACTIVITY103_CHECKER_REPAIR||new URL('../activity-103-checker-repair.mjs',import.meta.url);
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+test('new manifest config enables only one mark repair without changing acceptance or scoring',async()=>{
+ const {configure103CheckerRepair}=await import(modulePath);
+ const contract={workflow:'douyin-leadgen-103',activities:[{key:'scoring',runtime:{executor_kind:'agent'},acceptance:{required:['score']}},{key:'mark_leads',runtime:{executor_kind:'agent'},acceptance:{required:['lead','delivery']}}]};
+ const before=structuredClone(contract),after=configure103CheckerRepair(contract);assert.deepEqual(contract,before);
+ assert.deepEqual(after.activities[0],before.activities[0]);assert.deepEqual(after.activities[1].acceptance,before.activities[1].acceptance);
+ assert.deepEqual(after.activities[1].runtime.checker_repair,{max_attempts:2,retry_safe:true});
+ after.activities[1].runtime.checker_repair.max_attempts=3;assert.throws(()=>configure103CheckerRepair(after));
+});
 function fixture(){
- const root=mkdtempSync(join(tmpdir(),'103-repair-'));
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'103-repair-')));
  const identity={task_id:'task-103',run_id:'run-103',run_tag:'score-run',workflow:'103',activity:'mark_leads',attempt:1};
  const action_id='a'.repeat(64),scope=['comment-1'];
  const request={...identity,nonce:'checker-nonce',phase:'end',checks:['existing_score_readback','lead_identity_and_scope','persisted_leads','delivery_readback'],context:{action_id,verification:{'103':{comment_ids:scope}}}};
@@ -34,6 +42,15 @@ test('confirmed local rejection and independently absent output become actionabl
  assert.equal(r.checks.find(x=>x.id==='existing_score_readback').status,'passed');
  for(const c of r.checks.filter(x=>x.status==='failed')){assert.ok(c.reason);assert.ok(Object.hasOwn(c,'expected'));assert.ok(Object.hasOwn(c,'actual'));}
  assert.equal(r.checks.find(x=>x.id==='delivery_readback').actual,'not_created');assert.equal(f.observed.outcome,'blocked');
+ }finally{f.cleanup();}
+});
+for(const configured of [true,false])test(`scratch evidence requires frozen sandbox identity (${configured})`,async()=>{
+ const f=fixture();try{
+  f.observed.checks[3].evidence[0].source='scratch:delivery-disabled';
+  if(configured)Object.assign(f.request.context,{sandbox:true,sandbox_database:'cecelia_scratch'});
+  const {repair103Readback}=await import(modulePath);
+  const r=await repair103Readback(f.request,f.observed,{root:f.root,readbackSource:'scratch:delivery-disabled'});
+  assert.equal(r.outcome,configured?'failed':'blocked');
  }finally{f.cleanup();}
 });
 for(const mode of ['missing_receipts','unknown','wrong_identity','after_dispatch','unlisted_read','missing_stop','bad_stop_hash','stop_unknown','network_unknown','has_outbox','wrong_scope','score_unknown','scoring_phase','malformed'])test(`repair remains blocked for ${mode}`,async()=>{
