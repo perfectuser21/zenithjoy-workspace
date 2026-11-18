@@ -116,7 +116,7 @@ test('same-account earlier prepared or unknown orders block a different recipien
  for(const phase of ['prepared','unknown']){
   const other={record_id:'other-recipient-order',fields:{'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 '+phase+':earlier:sha]'}};
   const r=observe104Runtime(f.context,{orders:[other]});assert.equal(r.verified,false);assert.equal(r.unresolved_attempt_reservations,1);assert.equal(r.today_dm_attempts,1);
-  const own={...other,record_id:f.context.verification['104'].record_id};assert.equal(observe104Runtime(f.context,{orders:[own]}).unresolved_attempt_reservations,0);
+  const own={...other,record_id:f.context.verification['104'].record_id,fields:{...other.fields,'回复结果':'[104 '+phase+':'+f.context.tasks['104'].run_tag+':'+f.context.source_commit+']'}};assert.equal(observe104Runtime(f.context,{orders:[own]}).unresolved_attempt_reservations,0);
  }
 });
 

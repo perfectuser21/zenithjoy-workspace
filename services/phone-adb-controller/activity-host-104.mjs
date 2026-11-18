@@ -25,7 +25,7 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  r=replace(r," const pool=req('./leadgen-db-connect.js').getPool();let outbox;"," const {Pool}=await loadActivityHostPg(c);const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000,max:1});let outbox;");
  r=replace(r," const authAsset=c.authorization_asset||{path:AUTH,sha256:AUTH_SHA};need(authAsset.sha256===AUTH_SHA,'AUTHORIZATION_SOURCE_CHANGED');"," const authAsset=c.authorization_asset;");
  r=replace(r,'  const auth=jsonAsset(authAsset);','  verify104Context(c);const auth=jsonAsset(authAsset);');
- r=replace(r,'const raw=await sshRead(c),locks=', 'const raw=observe104Runtime(c),locks=');
+ r=replace(r,'const raw=await sshRead(c),locks=', 'const raw=observe104Runtime(c,{orders:all}),locks=');
  r=replace(r,'raw.verified=raw.today_ambiguous_sender_orders===0','raw.verified=raw.verified===true&&raw.today_ambiguous_sender_orders===0');
  r=replace(r,'checkPreflight:(e,scope)=>checkPreflight(e,scope)','checkPreflight:(e,scope)=>checkPreflight(e,scope,c)');
  files['outreach104/runtime-deps.mjs']="import {verify104Context,verify104Runtime,canonical} from '../activity-104-context.mjs';\nimport {observe104Runtime} from '../activity-104-runtime.mjs';\nimport {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+r;
