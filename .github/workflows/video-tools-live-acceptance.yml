@@ -11,7 +11,7 @@ jobs:
   live:
     name: Live video tools acceptance
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: creative-canvas-staging
     timeout-minutes: 15
     steps:
