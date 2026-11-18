@@ -5,6 +5,8 @@ import {resolve,join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import {spawnSync,execFileSync} from 'node:child_process';
+import {gunzipSync,gzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
 const api=await import('../verify-picomatch-remediation.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return {};throw e;});
 const folder='scripts/security/picomatch-remediation';
@@ -25,6 +27,12 @@ for(const mutation of ['missing-site','extra-site','wrong-version','registry-rep
  writeFileSync(p,JSON.stringify(lock));assert.throws(()=>api.verifyRemediation({repositoryRoot:dir,projectRoot:dir}),/PICOMATCH_REMEDIATION_/);
 });
 test('brand becomes invalid if the checked lock changes afterwards',t=>{assert.equal(typeof api.verifyRemediation,'function');const dir=fixture(t),scope={repositoryRoot:dir,projectRoot:dir},proof=api.verifyRemediation(scope);writeFileSync(join(dir,'package-lock.json'),readFileSync(join(dir,'package-lock.json'),'utf8')+' ');assert.equal(api.isVerifiedRemediation(proof,scope),false);});
+for(const mode of ['checksum','trailing-tar'])test('ambiguous tar is rejected even when manifest and lock hashes are updated: '+mode,t=>{
+ const dir=fixture(t),manifestPath=join(dir,folder,'manifest.json'),manifest=JSON.parse(readFileSync(manifestPath)),item=manifest.patched_packages.find(x=>x.version==='4.0.5'),archivePath=join(dir,item.path);let raw=gunzipSync(readFileSync(archivePath));
+ if(mode==='checksum')raw.write('000000\0 ',148,'ascii');else raw=Buffer.concat([raw,raw]);
+ const bytes=gzipSync(raw);item.sha256=createHash('sha256').update(bytes).digest('hex');item.integrity='sha512-'+createHash('sha512').update(bytes).digest('base64');writeFileSync(archivePath,bytes);writeFileSync(manifestPath,JSON.stringify(manifest));const path=join(dir,'package-lock.json'),lock=JSON.parse(readFileSync(path));lock.packages['node_modules/picomatch'].integrity=item.integrity;writeFileSync(path,JSON.stringify(lock));
+ assert.throws(()=>api.verifyRemediation({repositoryRoot:dir,projectRoot:dir}),/PICOMATCH_REMEDIATION_ARCHIVE/);
+});
 test('original packages reproduce the advisory; patched public parsing entries reject repeated extglobs',t=>{
  assert.equal(typeof api.verifyRemediation,'function');const proof=api.verifyRemediation({repositoryRoot:root,projectRoot:join(root,'apps/dashboard')}),manifest=JSON.parse(readFileSync(join(root,folder,'manifest.json')));
  for(const item of manifest.upstream_packages){const original=unpack(t,join(root,item.path));for(const [pattern,input]of [['+(*)','a'.repeat(33)+'/'],['+(*a)','a'.repeat(33)+'!']]){const r=spawnSync(process.execPath,['-e',"const p=require(process.argv[1]),f=p(process.argv[2]);process.stdout.write('compiled\\n');f(process.argv[3]);",original,pattern,input],{encoding:'utf8',timeout:1000});assert.match(r.stdout,/compiled/);assert.equal(r.error?.code,'ETIMEDOUT',item.version+' original must reproduce');}}
