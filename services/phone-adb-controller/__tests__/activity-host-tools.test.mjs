@@ -49,8 +49,8 @@ def call(name,op):
  gc.collect();f=target/'receipts'/(name+'.json')
  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None}
 first=call('first','company_config' if mode in ['normal','persist-failure'] else 'inspect_videos');before=dict(calls)
-replay=call('first','company_config') if mode=='normal' else None
-second=call('corrected','inspect_videos') if mode=='normal' else None
+replay=call('first','company_config' if mode in ['normal','persist-failure'] else 'inspect_videos')
+second=call('corrected','inspect_videos')
 print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,'calls':calls,'instructions':(target/'TOOLS.txt').read_text() if (target/'TOOLS.txt').exists() else ''}))`;
  const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode],{input:JSON.stringify(fixture),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
  }finally{rmSync(root,{recursive:true,force:true});}
@@ -58,11 +58,11 @@ print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,
 test('real assembled collect host emits typed company_config rejection and only dispatches corrected new action',()=>{
  const r=probe();assert.equal(r.first.rc,2,r.first.error);const v=JSON.parse(r.first.stdout);
  assert.equal(v.state,'terminal');assert.equal(v.result.error,'BUSINESS_ACTIVITY_SCOPE');assert.equal(v.result.data.dispatched,false);assert.equal(v.result.data.external_effect,'none');
- assert.deepEqual(v.result.data.allowed_operations,['discover','discover_readback','inspect_videos']);assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});
+ assert.deepEqual(v.result.data.allowed_operations,['discover','discover_readback','inspect_videos']);assert.match(v.result.data.tool_hint,/当前Activity为collect_videos/);assert.doesNotMatch(v.result.data.tool_hint,/preflight从brain/);assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});
  assert.equal(r.replay.stdout,r.first.stdout);assert.equal(r.second.rc,0);assert.deepEqual(r.calls,{dispatch:1,credentials:1,resource:1});
- assert.match(r.instructions,/collect_videos允许操作：discover, discover_readback, inspect_videos/);assert.match(r.instructions,/101.*company_config.*preflight/);
+ assert.ok(r.instructions.startsWith(fixture.files['TOOLS.txt'].source));assert.match(r.instructions,/collect_videos允许操作：discover, discover_readback, inspect_videos/);assert.match(r.instructions,/101.*company_config.*preflight/);
 });
 for(const mode of ['same-text','after-dispatch','network','persist-failure'])test(`real assembled ${mode} remains unknown`,()=>{
  const r=probe(mode);assert.equal(r.first.stdout,'');assert.ok(r.first.error);assert.equal(r.first.receipt.state,'unknown');
- if(['after-dispatch','network'].includes(mode))assert.equal(r.calls.dispatch,1);
+ if(['after-dispatch','network'].includes(mode))assert.equal(r.calls.dispatch,1);assert.deepEqual(r.calls,r.before);assert.match(r.replay.error,/ACTION_UNKNOWN_NO_REPLAY/);assert.match(r.second.error,/PRIOR_ACTION_UNKNOWN/);
 });
