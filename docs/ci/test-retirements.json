@@ -950,6 +950,33 @@
         ".github/workflows/ci-l4-integration.yml"
       ],
       "historical_obligation_evidence": "用户确认旧获客不用；历史读取与租户隔离迁入真实可执行合同，不将新 Skill 视为已上线。"
+    },
+    {
+      "path": "sprints/sprint-c-ws2-douyin-real-publish/tests/ws5/lead-acceptance-validator.test.ts",
+      "source_commit": "c52f59d8c80078b50250ffa92c974b3d2695cf4b",
+      "source_blob": "005e2d55e2fd9ff19ab8666edc8598620305a825",
+      "source_sha256": "aceb0d60f1b1a0ab557986f8f90bdf66c44628bb9b7ae90434d8bd66f95578bd",
+      "reason": "历史混合测试含4项格式校验与1项已失效旧脚本静态匹配；格式行为迁到现役L3测试，当前视频路由和派发行为由现役测试保护。",
+      "dimensions": {
+        "current_value": "4项按需格式校验迁至现役 L3 行为测试；保留真实底层手动校验器，不把格式通过当真机证据。",
+        "active_status": "旧 Sprint 路径虽标 active，现役 L3 与 Agent 测试 include 均不执行它；本地实际运行4通过1失败，不以登记替代执行证据。",
+        "real_effect": "旧测试检查 validator 存在、缺文件失败、合法 URL 加扫码成功、预置 cookie 失败；原视频断言引用已删除脚本且删除前正则不匹配。",
+        "test_and_blocking": "替代手动校验测试在必需 L3 Node glob 执行；现役 video dryrun/real 与 article 路由由 Agent Test 检验，隔离 API/PG 任务派发与回执由 Walking Skeleton 检验；不代表真机发布。",
+        "duplication_and_obsolescence": "历史 CI 包装器只检查四份 2026-05-09 后未修改的 Sprint 文档字符串；旧视频静态断言引用 PR #2406 已退役脚本。",
+        "runtime_and_maintenance_cost": "移除历史 workflow 的 1 个 Job 定义、专属包装器测试及失效 Sprint 测试；普通 PR 原不触发该 workflow，不声称因此少跑普通 PR Job 或节省耗时。",
+        "retirement_and_dependencies": "保留 scripts/check-lead-acceptance.sh 与现役视频路由/任务链；旧 Sprint 合同按固定 commit/blob/SHA256 和本记录整文件退役，历史原文保留在 Git。"
+      },
+      "replacement_test_paths": [
+        ".github/workflows/scripts/__tests__/lead-acceptance-manual.test.mjs",
+        "services/agent/src/handlers/__tests__/ws2-douyin-route.test.ts",
+        ".github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh"
+      ],
+      "evidence_paths": [
+        "scripts/check-lead-acceptance.sh",
+        "services/agent/src/handlers/douyin-publish.ts",
+        ".github/workflows/ci-walking-skeleton-1.yml"
+      ],
+      "historical_obligation_evidence": null
     }
   ]
 }
