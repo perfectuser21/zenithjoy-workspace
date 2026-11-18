@@ -44,6 +44,17 @@ for(const name of ['business.mjs','checker.mjs','production-readback-local.mjs']
  const r=child(`import path from 'node:path';import {createRequire} from 'node:module';${imports}\nconst c=${JSON.stringify(context)},root=c.runtime_root;${name==='production-readback-local.mjs'?"const require=createRequire(root+'/package.json');":''}\n${body}`,c.targetRoot);
  assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'function');
 });
+test('cleanup-result.mjs actual frozen PG initialization works with the host sanitized environment',async()=>{
+ const c=await candidate('cleanup-result');
+ const context={source_commit:f.sourceCommit,runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:c.pg}};
+ const file=join(c.targetRoot,'cleanup-result.mjs');
+ // If the assembler omits this entry, execute the original failing initialization, not a missing-file error.
+ const raw=existsSync(file)?readFileSync(file,'utf8'):fixture.files['cleanup-result.mjs'].source;
+ const init=raw.split('\n').find(l=>l.includes('{Pool}=')).split(';pool=new Pool')[0];
+ const imports=raw.includes("from './activity-host-pg.mjs'")?`import {loadActivityHostPg} from ${JSON.stringify(pathToFileURL(join(c.targetRoot,'activity-host-pg.mjs')).href)};`:'';
+ const r=child(`import {createRequire} from 'node:module';${imports}const c=${JSON.stringify(context)};${init};console.log(typeof new Pool().query);`,c.targetRoot);
+ assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'function');assert.equal(existsSync(file),true);
+});
 test('assembly preserves old host and refuses a changed baseline before creating output',async()=>{
  const api=await import(implementation),bad=join(f.root,'bad-base');cpSync(f.base,bad,{recursive:true});writeFileSync(join(bad,'checker.mjs'),'different');
  const targetRoot=join(f.root,'bad-output');await assert.rejects(api.assembleActivityPgHost({...f,baseRoot:bad,targetRoot,runtimeRoot:f.runtime}),/ACTIVITY_HOST_PG_BASE/);assert.equal(existsSync(targetRoot),false);
