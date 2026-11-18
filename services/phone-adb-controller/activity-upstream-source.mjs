@@ -20,7 +20,16 @@ export function resolveProducerIdentity(c,activity,producer){
  need(p&&p.workflow==='101'&&COMMIT.test(p.source_commit??'')&&UUID.test(p.task_id??'')&&UUID.test(p.run_id??'')
   &&typeof p.run_tag==='string'&&p.run_tag.length>0&&p.run_tag===producer?.run&&p.run_id===producer?.run_id,'SCOPE');
  const m=readPinned(p.manifest_path,p.manifest_sha256,'MANIFEST'),r=readPinned(p.result_path,p.result_sha256,'RESULT');
- const run=m?.run,input=run?.input,identity=input?.tasks?.['101'];
+ const run=m?.run;let input=run?.input;
+ if(input?.assigned_workflow===undefined){
+  need(run?.contract?.workflow==='douyin_video_discovery'&&input&&Object.keys(input).length===3
+   &&Object.keys(input).every(k=>['binding_key','business','run_tag'].includes(k))
+   &&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(input.binding_key??'')
+   &&input.business&&typeof input.business==='object'&&!Array.isArray(input.business)
+   &&input.run_tag===run.run_id&&p.run_tag===run.run_id,'MANIFEST');
+  input=readPinned(p.context_path,p.context_sha256,'CONTEXT');
+ }else need(p.context_path===undefined&&p.context_sha256===undefined,'CONTEXT');
+ const identity=input?.tasks?.['101'];
  need(run&&['douyin-leadgen-101','douyin_video_discovery'].includes(run.contract?.workflow)
   &&run.task_id===p.task_id&&run.run_id===p.run_id&&input?.assigned_workflow==='101'
   &&Object.keys(input.tasks).join()==='101'&&identity?.task_id===p.task_id&&identity?.run_id===p.run_id
