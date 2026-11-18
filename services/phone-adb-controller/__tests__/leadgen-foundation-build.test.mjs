@@ -27,18 +27,23 @@ function fixture(){
   put(code,prefix+'/profiles/'+id+'.json',JSON.stringify({schema_version:1,contract:{workflow:key},profile:{leadgen:{workflow:id,method_repository:'perfectuser21/zenithjoy-skills',method_revision:methodRevision},files:{'source.mjs':hash('export {};'),'services/phone-adb-controller/skills/method/SKILL.md':hash(skill)}}}));
   put(code,prefix+'/schemas/'+id+'.json','{"type":"object"}');
  }
- put(code,'source.mjs','export {};');const revision=commit(code);
- return {root,code,skills,revision,methodRevision,git,put,commit,close:()=>fs.rmSync(root,{recursive:true,force:true})};
+ put(code,'source.mjs','export {};');const profileRevision=commit(code);
+ for(const [id,key]of Object.entries(WORKFLOWS)){const profilePath=prefix+'/profiles/'+id+'.json';put(code,'product-map/contracts/'+key+'.yaml',JSON.stringify({runtime:{kind:'commander-foundation-v1',profile_ref:{repo:'perfectuser21/zenithjoy-workspace',path:profilePath,revision:profileRevision,digest:'sha256:'+hash(fs.readFileSync(path.join(code,profilePath)))},timeout_ms:2400000,input_schema:{type:'object'}}}));}
+ const revision=commit(code);
+ return {root,code,skills,revision,profileRevision,methodRevision,git,put,commit,close:()=>fs.rmSync(root,{recursive:true,force:true})};
 }
 test('offline bundle fixes actual revisions and verifies all sources before writing',()=>{
  const f=fixture();try{
   const output=path.join(f.root,'bundle'),b=buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:output});
-  assert.equal(b.status,'built_not_registered');assert.equal(b.revision,f.revision);assert.equal(b.workflows.length,4);
-  assert.equal(b.source_origins['services/phone-adb-controller/skills/method/SKILL.md'].revision,f.methodRevision);
+  assert.equal(b.status,'built_not_registered');assert.equal(b.revision,f.revision);assert.equal(b.workflows.length,4);assert.ok(b.workflows.every(w=>w.runtime.profile_ref.revision===f.profileRevision&&w.contract_source.revision===f.revision));
+  assert.equal(fs.existsSync(path.join(output,b.repo,f.revision)),false,'B must install the profile at the actual declared A directory');
+  assert.equal(b.source_origins[f.profileRevision+':services/phone-adb-controller/skills/method/SKILL.md'].revision,f.methodRevision);
   assert.ok(b.components.some(c=>c.kind==='repo'&&c.revision===f.revision));assert.ok(b.workflows.every(w=>w.implementation_bindings.length>0));
   for(const c of b.components.filter(c=>c.kind!=='repo'))assert.equal(hash(fs.readFileSync(path.join(output,c.repo,c.revision,c.path))),c.digest.slice(7));
   f.put(f.code,'source.mjs','foreign');assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'dirty')}),/BUILD_DIRTY/);assert.equal(fs.existsSync(path.join(f.root,'dirty')),false);
-  f.commit(f.code);assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'drift')}),/BUILD_SOURCE_DRIFT/);assert.equal(fs.existsSync(path.join(f.root,'drift')),false);
+  f.commit(f.code);const preserved=buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'pinned')});assert.equal(preserved.workflows[0].runtime.profile_ref.revision,f.profileRevision);
+  const contract='product-map/contracts/'+WORKFLOWS['101']+'.yaml',bad=JSON.parse(fs.readFileSync(path.join(f.code,contract)));bad.runtime.profile_ref.digest='sha256:'+'0'.repeat(64);f.put(f.code,contract,JSON.stringify(bad));f.commit(f.code);
+  assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'drift')}),/BUILD_PROFILE_DIGEST/);assert.equal(fs.existsSync(path.join(f.root,'drift')),false);
  }finally{f.close();}
 });
 test('four original product-map contracts pin executable profiles and every profile source binding',async()=>{
