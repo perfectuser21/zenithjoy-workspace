@@ -35,7 +35,7 @@ export async function loadActivityHostPg(context){
 }
 function replaceOnce(text,before,after){need(text.split(before).length===2,'BASE_WIRING');return text.replace(before,after);}
 export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,sourceCommit,expectedSource,expectedDeployment,workflow='101'}){
- need(['101','102'].includes(workflow),'WORKFLOW');
+ need(['101','102','103'].includes(workflow),'WORKFLOW');
  need(/^[a-f0-9]{40}$/.test(sourceCommit||''),'SOURCE');runtime(baseRoot);runtime(runtimeRoot);
  need(typeof targetRoot==='string'&&path.isAbsolute(targetRoot)&&!fs.existsSync(targetRoot),'TARGET');
  const base=workflow==='102'?{...BASE,...BASE102}:BASE;

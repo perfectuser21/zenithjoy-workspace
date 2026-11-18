@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -17,6 +18,7 @@ BASE_SHA102 = {
     'tools.py': 'eded963eea2d469182eb6367a679e8b01d14594a70cc91775e733d29d5850698',
     'tool_scope.py': BASE_SHA['tool_scope.py'],
 }
+BASE_SHA103 = {**BASE_SHA102, 'TOOLS.txt': 'eea676142e7e50920bc5631b1388425140b0c74a8d84c20c5e9a34c173d96d16'}
 spec = importlib.util.spec_from_file_location('activity_host_typed', ROOT/'activity-tool-result.py')
 typed = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(typed)
@@ -89,6 +91,29 @@ def method_input102(context):
     return result
 
 
+def method_input103(context):
+    c = context or {}
+    scope = c.get('verification', {}).get('103', {})
+    ids, sources = scope.get('comment_ids'), scope.get('sources')
+    task = c.get('tasks', {}).get('103', {})
+    source = c.get('source_commit', '')
+    if (c.get('assigned_workflow') != '103' or c.get('recovery')
+            or scope.get('input_mode') != 'committed_partial_ids'
+            or not isinstance(ids, list) or len(ids) != 1
+            or not isinstance(ids[0], str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', ids[0])
+            or not isinstance(sources, dict) or set(sources) != set(ids)
+            or any(not isinstance(v, str) or not v.strip() or v == task.get('run_tag') for v in sources.values())
+            or not isinstance(source, str) or not re.fullmatch(r'[a-f0-9]{40}', source)
+            or type(c.get('comment_limit')) is not int or c['comment_limit'] != 1
+            or type(c.get('max_candidates')) is not int or c['max_candidates'] != 1
+            or any(not isinstance(task.get(k), str) or not task[k].strip() for k in ['task_id', 'run_id', 'run_tag'])
+            or type(c.get('verification', {}).get('policy_version')) is not int or c['verification']['policy_version'] < 1):
+        raise ValueError('ACTIVITY_HOST_103_INPUT_INVALID')
+    return {'workflow': '103', 'comment_ids': ids, 'sources': sources,
+            'source_commit': source, 'task': task, 'policy_version': c['verification']['policy_version'],
+            'input_mode': 'committed_partial_ids', 'source_run': None, 'limit': 1, 'budget_max': 1}
+
+
 def render102(original, method):
     # Keep the complete historical source separately. Only its reusable method prefix is executable.
     prefix = original.split('\n本轮 102 的执行输入；不修改 Skill、验收合同或业务政策。\n')[0]
@@ -101,7 +126,7 @@ def render102(original, method):
         '先读本轮qualification_input、source_duration_evidence及101完整原件链；只处理上述唯一VID。公司、账号、SDK和音轨以本轮原生读回为准。',
         '先完成双锁、公司、VID、工具签名和fresh原生唯一enabled SeekBar/实屏轨道定位。必要同VID页面恢复严格沿前述一次恢复范围；不复制历史坐标。',
         f'唯一一次capture上限{m["capture_max_seconds"]}秒，单次ASR和单次主判。所有准备在record-start前完成；ready后以同EID record-status确认，再连贯执行唯一向左全轨swipe-evidence，时长<=1500ms，无补滑或二次capture。',
-        '录制前不归零；录制期间不调用有no_active_capture守卫的native-audio-evidence，不打开分享页，不操作手机或改变播放。不得以STOPPED position=0或tap/swipe成功代替原录制零点证据。',
+        '录制前不归零；录制期间不调用有no_active_capture守卫的native-audio-evidence，不打开分享页；完成上文唯一归零操作后不再操作手机或改变播放。不得以STOPPED position=0或tap/swipe成功代替原录制零点证据。',
         f'必须在本次原视频中找到真实00:00或可独立核验的原生等价零点及媒体PTS，并证明完整结束/同首帧循环；连续播放路线须真实1x无暂停跳播且覆盖本轮{m["duration_seconds"]}秒完整视频，另满足qualification_input.completion_anchor要求。墙钟等待和容器总时长不能证明覆盖，证据充分即正常stop，不必耗尽上限。',
         '原record-stop支持录制自行停止：沿同EID核状态、结束音轨并验证原件，auto time-limit不是另起capture理由。停止和extract后核真实MKV/WAV，分别ffprobe视频/音频轨、PCM非静音、原生音轨/SDK/固定scrcpy摘要及当前VID。',
         '按实际视频PTS先每2或5秒联系图定位内容，在本次归零附近抽全部帧并用showinfo保存实际PTS及原尺寸零点/开头/结尾/循环帧；粗抽可能漏短暂零点。两个PTS下同intro且中间完整内容顺序可核才能证明循环。不得用旧帧或固定诊断时间戳。',
@@ -121,7 +146,9 @@ def instructions(ops, original, method=None):
               '101的discover与discover_readback都必须传video.metrics：同一完整原始metrics对象。discover_readback使用原discover请求中的video及metrics，不只传video_id/video_url；不得重做已成功discover或自行补造metrics。',
               'ACTION_NAME是持久动作身份：同名同参数只读回。仅terminal且data.dispatched=false可按allowed_operations修正并使用新action_name；unknown不得换名重发。',
               '只按原合同和当前Skill交付证据，不修改合同、Skill、上下文、工具或Checker；是否通过仍由独立Checker判定。']
-    active = render102(original, method) if method else original
+    active = original
+    if method:
+        active = original+'\n本轮103冻结执行输入：\n'+json.dumps(method, ensure_ascii=False, sort_keys=True)+'\n' if method.get('workflow') == '103' else render102(original, method)
     return active+'\n冻结Activity业务操作与拒绝回执补充：\n'+'\n'.join(lines)+'\n'
 
 
@@ -161,9 +188,13 @@ def verify_host(root, ops):
             raise ValueError('ACTIVITY_HOST_SOURCE_CHANGED')
     actual = {key: sorted(ops[key]) for key in sorted(ops)}
     original = (root/'TOOLS-base.txt').read_text()
-    method = manifest.get('method_input102')
-    expected = BASE_SHA102 if method else BASE_SHA
-    if method and method_input102(json.loads((root/'context.json').read_text())) != method:
+    method = manifest.get('method_input103') or manifest.get('method_input102')
+    if manifest.get('method_input103') and manifest.get('method_input102'):
+        raise ValueError('ACTIVITY_HOST_MANIFEST_INVALID')
+    is103 = bool(manifest.get('method_input103'))
+    expected = BASE_SHA103 if is103 else (BASE_SHA102 if method else BASE_SHA)
+    method_reader = method_input103 if is103 else method_input102
+    if method and method_reader(json.loads((root/'context.json').read_text())) != method:
         raise ValueError('ACTIVITY_HOST_METHOD_INPUT_CHANGED')
     if manifest.get('base_sha256') != expected or digest(original.encode()) != expected['TOOLS.txt'] or actual != manifest['operations'] or (root/'TOOLS.txt').read_text() != instructions(actual, original, method):
         raise ValueError('ACTIVITY_HOST_METHOD_DRIFT')
@@ -175,10 +206,10 @@ def assemble(base, target, *, workflow='101', context=None):
     raw = {}
     if base.is_symlink() or target.exists() or target.is_symlink():
         raise ValueError('ACTIVITY_HOST_TARGET_INVALID')
-    if workflow not in ['101', '102']:
+    if workflow not in ['101', '102', '103']:
         raise ValueError('ACTIVITY_HOST_WORKFLOW_INVALID')
-    method = method_input102(context) if workflow == '102' else None
-    baselines = BASE_SHA102 if workflow == '102' else BASE_SHA
+    method = method_input103(context) if workflow == '103' else (method_input102(context) if workflow == '102' else None)
+    baselines = BASE_SHA103 if workflow == '103' else (BASE_SHA102 if workflow == '102' else BASE_SHA)
     for name, expected in baselines.items():
         p = base/name
         if p.is_symlink() or digest(p.read_bytes()) != expected:
@@ -192,7 +223,7 @@ def assemble(base, target, *, workflow='101', context=None):
     manifest = {'schema': 'activity-host-tools/v1', 'base_sha256': baselines,
                 'operations': ops, 'sha256': {key: digest(value.encode()) for key, value in files.items()}}
     if method:
-        manifest['method_input102'] = method
+        manifest['method_input'+workflow] = method
     target.mkdir(mode=0o700)
     for name, value in {**files, 'activity-host-tools.json': json.dumps(manifest, ensure_ascii=False, indent=2)+'\n'}.items():
         p = target/name
@@ -208,6 +239,7 @@ def assemble(base, target, *, workflow='101', context=None):
 
 if __name__ == '__main__':
     if len(sys.argv) not in [3, 4]:
-        raise SystemExit('usage: activity-host-tools.py ORIGINAL_FROZEN_HOST NEW_CANDIDATE_DIRECTORY [102_CONTEXT_JSON]')
-    options = {'workflow': '102', 'context': json.loads(pathlib.Path(sys.argv[3]).read_text())} if len(sys.argv) == 4 else {}
+        raise SystemExit('usage: activity-host-tools.py ORIGINAL_FROZEN_HOST NEW_CANDIDATE_DIRECTORY [102_OR_103_CONTEXT_JSON]')
+    context = json.loads(pathlib.Path(sys.argv[3]).read_text()) if len(sys.argv) == 4 else None
+    options = {'workflow': context.get('assigned_workflow'), 'context': context} if context is not None else {}
     print(json.dumps(assemble(*sys.argv[1:3], **options), ensure_ascii=False))
