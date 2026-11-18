@@ -58,3 +58,21 @@ test('没有原始审计快照不允许过滤，失败上游不提供空报告',
   assert.equal(reply.status, 502);
   assert.throws(() => proxy.assertHealthy(), /SNAPSHOT/);
 });
+
+test('原始请求尚未完成时不能切换过滤阶段', async t => {
+  let release, arrived;
+  const pending = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { arrived = resolve; });
+  const proxy = await startAuditSnapshot({ versions, upstream: async ({ method }) => {
+    if (method === 'POST') return { picomatch: [target] };
+    arrived(); await pending; return { name: 'picomatch' };
+  } });
+  t.after(() => proxy.close());
+  await (await fetch(proxy.origin + '/original' + bulkPath, { method: 'POST', body: JSON.stringify({ picomatch: versions }) })).json();
+  const reply = fetch(proxy.origin + '/original/picomatch');
+  await started;
+  assert.throws(() => proxy.activateRemediation(), /SNAPSHOT/);
+  release();
+  assert.deepEqual(await (await reply).json(), { name: 'picomatch' });
+  proxy.activateRemediation();
+});

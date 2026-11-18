@@ -9,6 +9,7 @@
 set -uo pipefail
 
 DIR="${1:-.}"
+REPOSITORY_ROOT=$(cd "$(dirname "$0")/../../.." && pwd -P) || exit 1
 # astro / @astrojs/mdx：修复需升 astro 7.x（semver major，涉及站点构建验证），
 # 已另立 sprint 跟踪；升级合并后删除这两行。
 # sharp/miniflare/wrangler/undici：同一根因，都是 astro 传递依赖链带进来的（astro→miniflare→
@@ -75,7 +76,13 @@ fi
 # npm audit exit 1 normally means vulnerabilities were found. Other failures must
 # not become an empty vulnerability set or a successful security decision.
 AUDIT_STATUS=0
-AUDIT_JSON=$(npm audit --json) || AUDIT_STATUS=$?
+# The original registry report is retained. Only a fully verified patched
+# distribution can use npm's recomputed report for this one advisory.
+if [ "$PWD" = "$REPOSITORY_ROOT" ] || [ "$PWD" = "$REPOSITORY_ROOT/apps/dashboard" ]; then
+  AUDIT_JSON=$(node "$REPOSITORY_ROOT/scripts/security/picomatch-audit.mjs" "$PWD") || AUDIT_STATUS=$?
+else
+  AUDIT_JSON=$(npm audit --json) || AUDIT_STATUS=$?
+fi
 if [ "$AUDIT_STATUS" -ne 0 ] && [ "$AUDIT_STATUS" -ne 1 ]; then
   echo "❌ npm audit 执行失败（exit $AUDIT_STATUS）" >&2
   exit 1

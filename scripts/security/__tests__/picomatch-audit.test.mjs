@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAuditReport } from '../picomatch-audit.mjs';
+import { validateAuditReport, npmProjectRoot } from '../picomatch-audit.mjs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const clean = () => ({ auditReportVersion: 2, vulnerabilities: {}, metadata: {
   vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
@@ -12,3 +15,12 @@ for (const [name, value] of [
   ['version', { ...clean(), auditReportVersion: 1 }],
   ['empty', {}], ['null', null], ['array', []],
 ]) test('原始或修补审计均拒绝无效报告 ' + name, () => assert.throws(() => validateAuditReport(JSON.stringify(value)), /REPORT/));
+
+test('保留真实workspace根锁选择，不强制使用子目录历史独立锁', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'audit-workspace-'))), child = join(root, 'apps/dashboard');
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(child, { recursive: true });
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'root-fixture', version: '1.0.0', workspaces: ['apps/*'] }));
+  writeFileSync(join(child, 'package.json'), JSON.stringify({ name: 'dashboard-fixture', version: '1.0.0' }));
+  assert.equal(await npmProjectRoot(child), root);
+});
