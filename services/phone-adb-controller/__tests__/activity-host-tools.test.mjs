@@ -170,7 +170,7 @@ print('rejected')`;
 test('host launch verification rejects removed external proof before tool dispatch',()=>{
  const r=probe('proof-removed');assert.equal(r.first.stdout,'');assert.match(r.first.error,/ACTIVITY_HOST_PROOF_MISSING/);assert.equal(r.calls.dispatch,0);
 });
-test('assembly requires an external identity proof container and preserves existing evidence',()=>{
+test('assembly validates configured proof without requiring it for proof-free workflows',()=>{
  const root=mkdtempSync(join(tmpdir(),'activity-host-proof-'));
  try{
  const script=String.raw`import importlib.util,json,sys,pathlib,copy
@@ -188,6 +188,13 @@ for mode in ['missing','mismatch']:
  assert not target.exists()
 existing={'schema':'activity-evidence/v1','identity':identity,'qualification_evidence':{'opaque_original_reference':'preserved_not_claimed_passed'}}
 proof.write_text(json.dumps(existing));proof.chmod(0o600);before=proof.read_bytes();m.assemble(base,r/'valid',context=c);assert proof.read_bytes()==before
+no_proof=copy.deepcopy(c);no_proof['verification'].pop('proof_manifest_path');m.assemble(base,r/'proof-free',context=no_proof)
+host=r/'internal-host';host.mkdir();(host/'proof.json').write_bytes(proof.read_bytes());(host/'proof.json').chmod(0o600)
+alias=r/'host-alias';alias.symlink_to(host,target_is_directory=True)
+inside=copy.deepcopy(c);inside['verification']['proof_manifest_path']=str(alias/'proof.json')
+try:m.verify_proof_manifest(inside,host)
+except ValueError as e:assert str(e)=='ACTIVITY_HOST_PROOF_PATH'
+else:raise AssertionError('parent symlink into host accepted')
 print('verified_no_overwrite')`;
  const r=spawnSync('/usr/bin/python3',['-c',script,helper,root],{input:JSON.stringify(fixture),encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'verified_no_overwrite');
  }finally{rmSync(root,{recursive:true,force:true});}
