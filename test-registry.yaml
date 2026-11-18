@@ -12165,3 +12165,30 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
     note: "真实单次请求schema绑定画像与本画像原依据；原r2错pair拒绝、长原文与emoji完整覆盖、原validator继续拒错且HTTP一次"
+
+  - id: leadgen-103-tool-host
+    path: services/phone-adb-controller/__tests__/103-tool-host.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "103 真实宿主阶段拒绝及未知边界"
+
+  - id: leadgen-103-checker-repair
+    path: services/phone-adb-controller/__tests__/103-checker-repair.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "103 完整无写入证据驱动一次返工与未知不洗白"
+
+  - id: leadgen-103-host-assembly
+    path: services/phone-adb-controller/__tests__/103-host-assembly.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "103 候选冻结和实际 checker 接线装配"
