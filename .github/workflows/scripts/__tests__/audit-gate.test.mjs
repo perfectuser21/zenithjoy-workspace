@@ -129,7 +129,7 @@ const patchedAdvisory = 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf';
 
 function patchFixture(project, tamper = false) {
   const path = 'vendor/picomatch-security/picomatch-4.0.7.tgz';
-  const contents = readFileSync(new URL('../../../../apps/dashboard/' + path, import.meta.url));
+  const contents = readFileSync(new URL('../../../../scripts/security/picomatch-remediation/packages/picomatch-4.0.7.patched.tgz', import.meta.url));
   mkdirSync(join(project, 'vendor/picomatch-security'), { recursive: true });
   writeFileSync(join(project, path), tamper ? 'changed' : contents);
   writeFileSync(join(project, 'package-lock.json'), JSON.stringify({ packages: {
@@ -147,9 +147,8 @@ function picomatchReport() {
   return result;
 }
 
-test('recognizes the exact patched advisory only after verifying the locked archive', () => {
-  const result = runGate({ payload: picomatchReport(), npmExit: 1, prepare: patchFixture });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
+test('a matching archive alone cannot exempt an unverified project or its metavulnerabilities', () => {
+  rejects({ payload: picomatchReport(), npmExit: 1, prepare: patchFixture });
 });
 
 test('rejects the advisory when the patched archive is missing or altered', () => {
@@ -164,22 +163,21 @@ test('blocks a different advisory on a package using the patched dependency', ()
 });
 
 
-test('patched archives keep ordinary glob behavior and treat unsupported repetition as literal', () => {
+test('patched archives keep ordinary glob behavior and reject repeated extglob before compilation', () => {
   const root = mkdtempSync(join(tmpdir(), 'audit-glob-patch-'));
   try {
     for (const version of ['2.3.2', '4.0.7']) {
       const dirname = join(root, version);
       mkdirSync(dirname);
-      const archive = new URL('../../../../apps/dashboard/vendor/picomatch-security/picomatch-' + version + '.tgz', import.meta.url);
+      const archive = new URL('../../../../scripts/security/picomatch-remediation/packages/picomatch-' + version + '.patched.tgz', import.meta.url);
       const extracted = spawnSync('tar', ['-xzf', fileURLToPath(archive), '-C', dirname], { encoding: 'utf8' });
       assert.equal(extracted.status, 0, extracted.stderr);
       const picomatch = createRequire(import.meta.url)(join(dirname, 'package'));
       assert.equal(picomatch('**/*.js')('src/a.js'), true);
-      assert.equal(picomatch('+(ab)')('abab'), true);
-      assert.equal(picomatch('+(*(a))')('aaa'), true);
-      assert.equal(picomatch('+(file*)')('+(file*)'), true);
-      assert.equal(picomatch('+(file*)')('file-one'), false);
-      assert.equal(picomatch('+(file*)', { maxExtglobRecursion: false })('file-one'), false);
+      for (const pattern of ['+(ab)', '+(*(a))', '+(file*)', '+(*a)', '+(*)']) {
+        assert.throws(() => picomatch(pattern), { code: 'PICOMATCH_REPEATED_EXTGLOB_BLOCKED' });
+        assert.throws(() => picomatch(pattern, { maxExtglobRecursion: false }), { code: 'PICOMATCH_REPEATED_EXTGLOB_BLOCKED' });
+      }
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

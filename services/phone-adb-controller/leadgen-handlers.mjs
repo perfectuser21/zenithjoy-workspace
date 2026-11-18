@@ -11,7 +11,7 @@ import {join,resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
-import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds,assertDiscoveryInput,canonical} from './runtime-definition.mjs';
+import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds,assertDiscoveryInput,canonical,workflowRunMaxSeconds} from './runtime-definition.mjs';
 import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
 import {createDiscoveryAction} from './leadgen-discovery-action.mjs';
 import {createPhoneAction} from './leadgen-phone-action.mjs';
@@ -81,7 +81,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   let central=centralLease||null;
   const getCentral=()=>central??=createCentralDeviceLease({...(readPublicDomainBinding(env.WFR_RUN_DIR)?{publicDomainDirectory:env.WFR_RUN_DIR}:{}),brainUrl:env.BRAIN_URL,token:env.BRAIN_INTERNAL_TOKEN,
     deviceName:serial,taskId,runId:state.run_id,expectedProjectId:env.WF_BRAIN_PROJECT_ID,
-    runSeconds:Number(env.WF_RUN_MAX_SECONDS||1800)});
+    runSeconds:env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?workflowRunMaxSeconds(env):Number(env.WF_RUN_MAX_SECONDS||1800)});
   const verifyPhoneAssociation=async({frozen,binding,scope})=>{
     if(!needsCentralLock)throw Error('CENTRAL_TASK_ASSOCIATION_UNAVAILABLE');
     const receipt=await verifyCentralTaskAssociation({lease:getCentral(),workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,
@@ -110,7 +110,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(opts.discoveryMinimumRemainingMs&&state.budgetDeadline-Date.now()<opts.discoveryMinimumRemainingMs){dispatchBudgetRejected=true;throw Error('budget_exhausted');}
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
-          state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
+          state.budgetDeadline?state.budgetDeadline-Date.now():(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?workflowRunMaxSeconds(env):Number(env.WF_RUN_MAX_SECONDS||1800))*1000)),
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...discoveryScope?.env,...collectionScope?.env,...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
       collectionScope?.assertEvidence();
       recordDiagnostic(result.stderr||'');

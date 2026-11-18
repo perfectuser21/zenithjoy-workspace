@@ -45,11 +45,40 @@ function openPrivateScoreAudit(env) {
   }catch {if(fd!==undefined)fs.closeSync(fd);throw Error('SCORE_AUDIT_PATH_INVALID');}
   return record=>{try {const b=Buffer.from(JSON.stringify(record));fs.writeSync(fd,b,0,b.length,0);fs.ftruncateSync(fd,b.length);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};
 }
-function singleScoreFormat(comment,video) {
+function frozenQuoteOptions(values) {
+  const options=[];
+  for(const original of values) {
+    if(typeof original!=='string'||!original.trim())continue;
+    let piece='';
+    for(const character of original) {
+      if(piece.length+character.length>300){if(piece.trim())options.push(piece);piece='';}
+      piece+=character;
+    }
+    if(piece.trim())options.push(piece);
+  }
+  return [...new Set(options)];
+}
+function singleScoreFormat(comment,video,rules) {
   const quote=original=>typeof original==='string'&&original.trim()&&original.length<=100?{type:'string',enum:[original]}:{type:'string',minLength:1,maxLength:100};
   const optionalVideo=typeof video==='string'&&video.trim()&&video.length<=100?{type:['string','null'],enum:[null,video]}:{type:['string','null'],minLength:1,maxLength:100};
-  return {type:'json_schema',json_schema:{name:'frozen_comment_score',strict:true,schema:{type:'object',additionalProperties:false,required:['grade','policy_evidence'],properties:{grade:{type:'string',enum:GRADES},policy_evidence:{type:'object',additionalProperties:false,required:['audience_id','matched_rule','comment_signal','video_signal','exclusion_rule','reason'],properties:{audience_id:{type:['string','null']},matched_rule:{type:['string','null'],maxLength:300},comment_signal:quote(comment),video_signal:optionalVideo,exclusion_rule:{type:['string','null'],maxLength:300},reason:{type:'string',minLength:1,maxLength:500}}}}}}};
+  const refs=frozenPolicyReferences(rules);
+  const evidence=(id,matched,exclusions,allowNull)=>({type:'object',additionalProperties:false,
+    required:['audience_id','matched_rule','comment_signal','video_signal','exclusion_rule','reason'],properties:{
+      audience_id:{type:['string','null'],enum:[id]},matched_rule:{type:['string','null'],enum:matched,maxLength:300},
+      comment_signal:quote(comment),video_signal:optionalVideo,
+      exclusion_rule:{type:['string','null'],enum:allowNull?[null,...exclusions]:exclusions,maxLength:300},
+      reason:{type:'string',minLength:1,maxLength:500}}});
+  const branches=[];
+  for(const audience of refs.audiences) {
+    if(typeof audience.id!=='string'||!audience.id.trim()||refs.audiences.filter(a=>a.id===audience.id).length!==1)continue;
+    const matched=frozenQuoteOptions(Object.values(audience.business_fields));
+    if(matched.length)branches.push(evidence(audience.id,matched,frozenQuoteOptions([...audience.exclusion_signals,refs.unrelated_criterion]),true));
+  }
+  branches.push(evidence(null,[null],frozenQuoteOptions([...refs.audiences.flatMap(a=>a.exclusion_signals),refs.unrelated_criterion]),false));
+  return {type:'json_schema',json_schema:{name:'frozen_comment_score',strict:true,schema:{type:'object',additionalProperties:false,
+    required:['grade','policy_evidence'],properties:{grade:{type:'string',enum:GRADES},policy_evidence:{anyOf:branches}}}}};
 }
+
 function validateScoringRules(rules) {
   if (!rules || !GRADES.every(g => typeof rules.criteria?.[g] === 'string' && rules.criteria[g].trim())
       || !Number.isFinite(rules.confidence_threshold) || rules.confidence_threshold < 0 || rules.confidence_threshold > 1) {
@@ -135,7 +164,7 @@ ${singlePass?"请直接根据上述公司规则和原文给出等级及依据。
   let resp,raw,validation='transport_failure';
   try {
   resp = await callOpenRouter(
-    "commander", (url,body,key)=>httpPost(url,body,key,{signal:AbortSignal.timeout(15000)}), COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }], ...(singlePass?{response_format:singleScoreFormat(comment,videoCaption),provider:{require_parameters:true}}:{}) }, key
+    "commander", (url,body,key)=>httpPost(url,body,key,{signal:AbortSignal.timeout(15000)}), COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }], ...(singlePass?{response_format:singleScoreFormat(comment,videoCaption,rules),provider:{require_parameters:true}}:{}) }, key
   );
   raw = resp?.choices?.[0]?.message?.content;
   let answer;

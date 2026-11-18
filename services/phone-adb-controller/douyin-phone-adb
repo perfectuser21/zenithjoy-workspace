@@ -2648,6 +2648,11 @@ read_commenter_identity() {
       account_type="id_not_visible"
     fi
   fi
+  if [[ "${5:-}" == metadata-card ]]; then
+    [[ "$observed_id" == "$6" ]] || die PROFILE_CARD_UID_MISMATCH
+    profile_card_finish "$evidence_id" "$6" "$nickname_b64" "$7" "$8"
+    return
+  fi
   "$ADB" -s "$SERIAL" shell input keyevent 4
   wait_ms 900
   back_xml="$EVIDENCE_ROOT/${evidence_id}-returned.xml"
@@ -3609,11 +3614,13 @@ comment_count_label_from_xml() {
 # 只认语义化 content-desc，绝不用 resource-id（沿用 0909 昵称 tqn→ttw 漂移教训）。
 # 输出每行：昵称<TAB>正文<TAB>日期<TAB>地区（后两列取不到时为空）。
 comments_from_xml() {
+  setopt localoptions pipefail
   local xml="$1" width="$2" line desc nick rest body date region author
   [[ -r "$xml" ]] || return 1
   [[ "$width" == <-> ]] || return 1
   (( width > 0 )) || return 1
-  /usr/bin/grep -oE "<node[^>]*text=\"\"[^>]*content-desc=\"[^\"]*,[^\"]*\"[^>]*bounds=\"\\[0,[0-9]+\\]\\[${width},[0-9]+\\]\"" "$xml" \
+  local legacy_output="" legacy_rc=0
+  legacy_output="$(/usr/bin/grep -oE "<node[^>]*text=\"\"[^>]*content-desc=\"[^\"]*,[^\"]*\"[^>]*bounds=\"\\[0,[0-9]+\\]\\[${width},[0-9]+\\]\"" "$xml" \
   | while IFS= read -r line; do
       desc="$(print -- "$line" | /usr/bin/sed -E 's/.*content-desc="([^"]*)".*/\1/')"
       [[ -n "$desc" ]] || continue
@@ -3646,7 +3653,10 @@ comments_from_xml() {
       fi
       nick_b64="$(print -n -- "$nick" | /usr/bin/base64 | tr -d '\n')"
       print -- "$nick\t$body\t${date:-}\t${region:-}\t${author:-}\ttap=${tap_x:-} ${tap_y:-}\tb64=$nick_b64"
-    done
+    done)" || legacy_rc=$?
+  (( legacy_rc <= 1 )) || return "$legacy_rc"
+  if [[ -n "$legacy_output" ]]; then print -r -- "$legacy_output"; return 0; fi
+  "$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/comment-compose-rows.py" "$xml" "$width"
 }
 
 # 评论区是否已翻到底（纯逻辑，可单测）。
@@ -4590,7 +4600,7 @@ fi
 # media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
 if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   case "$command" in
-    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio|native-audio-evidence|swipe|preflight|foreground|status|evidence-bundle|open-search|search-video-tab|search-time-layer|search-video-cards|open-video|back-to-results|on-search-results|detail-restored|back-evidence) ;;
+    commenter-profile-card-link|open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio|native-audio-evidence|swipe|preflight|foreground|status|evidence-bundle|open-search|search-video-tab|search-time-layer|search-video-cards|open-video|back-to-results|on-search-results|detail-restored|back-evidence) ;;
     *) die 'required lock owner is unsupported for this command';;
   esac
   source "${0:A:h}/phone-lock-lib.sh"
@@ -4612,6 +4622,8 @@ if [[ "$command" == close-app && -z "$LOCK_OWNER" ]]; then
   fi
   ! lock_requires_review || die 'standalone lock requires explicit owner cleanup'
 fi
+
+if [[ "$command" == commenter-profile-card-link ]]; then require_held_lock profile_card_link; fi
 
 # SDK31/34取链的原锁前置保持在任何ADB客户端调用之前。
 if [[ "$command" == current-video-link && ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
@@ -4934,6 +4946,11 @@ case "$command" in
     pm_owner="unknown"; [[ -r "$LOCK_DIR/owner" ]] && pm_owner="$(<"$LOCK_DIR/owner")"
     bypass_report phone_outward "$SERIAL" "${pm_owner:-unknown}" dm private-message-send
     send_private_message "$2" "$3" "$4" "$5" "${6:-}"
+    ;;
+  commenter-profile-card-link)
+    [[ "$#" == 6 ]] || die "usage: commenter-profile-card-link VID UID NICKNAME_B64 BODY_SHA EID"
+    source "$PHONE_CONTROLLER_DIR/profile-card-link.sh"
+    profile_card_link "$2" "$3" "$4" "$5" "$6"
     ;;
   commenter-card-link)
     # 0914 主理人亲授路径:他人主页 更多→(图标排横滑)→分享名片→复制链接→剪贴板回读→sec_uid 主页直链。

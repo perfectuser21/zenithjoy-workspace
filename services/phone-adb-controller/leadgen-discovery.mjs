@@ -1,4 +1,4 @@
-import {validateDiscoveryInput} from './runtime-definition.mjs';
+import {validateDiscoveryInput,workflowRunMaxSeconds} from './runtime-definition.mjs';
 // 101只负责搜索筛选后的真实视频链接；历史状态和资格判断交102。
 import {join} from 'node:path';
 import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,lstatSync} from 'node:fs';
@@ -71,7 +71,7 @@ export function createDiscoveryHandlers({discoveryInput,phone,execute,queue,prof
  let firstPage,stopReason=null,allScanned=false;
  const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,request,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,zero_comment_candidates:state.zero_comment_candidates,pending_capture:state.pending_capture,failures:state.failures,known_gaps:state.known_gaps,relocation_reveals:state.relocation_reveals,identity_enrichments:state.identity_enrichments,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
  const failure=(c,reason,error)=>{state.counts.failed++;state.failures.push({source:c.source,title:c.title,author:c.author,reason,detail:String(error?.stderr||error?.message||error).slice(0,1000)});progress();};
- const boundary=()=>{if(env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))throw Error('stop_requested');const deadline=budgetDeadline();if(deadline&&Date.now()>=deadline)throw Error('budget_exhausted');const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||1800);if(start>0&&Date.now()/1000-start>=max)throw Error('budget_exhausted');};
+ const boundary=()=>{if(env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))throw Error('stop_requested');const deadline=budgetDeadline();if(deadline&&Date.now()>=deadline)throw Error('budget_exhausted');const start=Number(env.WF_RUN_START_TS),max=workflowRunMaxSeconds({...env,WF_BRAIN_WORKFLOW:'douyin_video_discovery'});if(start>0&&Date.now()/1000-start>=max)throw Error('budget_exhausted');};
  const pause=async n=>{boundary();const r=await execute('/bin/sleep',[String(n)],{maxDurationS:n+2});if(r?.code!==0)throw Error('发现页面等待失败');};
  async function readPage(ctx,eid){boundary();const output=await phone('search-video-cards',eid),f=fieldsOf(output);if(f.video_tab!=='1'||!f.evidence)throw Error('当前页面未实际核验视频tab及UI树');let kw;try{kw=await phone('search-kw-matches',ctx.source,f.evidence);}catch(e){throw Error('搜索框回读与本来源关键词不一致: '+e.message);}if(!/^kw_matches=1$/m.test(kw))throw Error('搜索框回读与本来源关键词不一致');return {cards:cardsOf(output,ctx),loading:f.loading==='1',end:f.end_of_results==='1'||f.empty_results==='true',evidence:f.evidence};}
  async function filters(ctx,eid){

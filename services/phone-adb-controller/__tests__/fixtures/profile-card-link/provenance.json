@@ -1,0 +1,22 @@
+{
+  "09-read-comments.xml": {
+    "source": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/profile-link-explore/native/profilelink-20261118-13895794-09-read-comments.xml",
+    "sha256": "576eaa451ac06152e19db082d7fa08dacced00a78f878d5a924e181f328e3b72"
+  },
+  "11-profile.xml": {
+    "source": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/profile-link-explore/native/profilelink-20261118-13895794-11-profile.xml",
+    "sha256": "fe86d17bbe1c5118292f661873a94b35f52409f56ad30e5e32a2fab7dd572245"
+  },
+  "13-more.xml": {
+    "source": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/profile-link-explore/native/profilelink-20261118-13895794-13-more.xml",
+    "sha256": "9bdb5c3714f060e8024cb6ef3d2362e4eb617d5b750f69e5213fbe733e3cd210"
+  },
+  "15-share.xml": {
+    "source": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/profile-link-explore/native/profilelink-20261118-13895794-15-share.xml",
+    "sha256": "223655dca997c79b363531ef2d31e44fda5e11d2196d9c9552792e1e29970baa"
+  },
+  "16-scratch-placeholder.xml": {
+    "source": "/private/tmp/openclaw-phone/evidence/wuying_android14/cloud102-20261118-eb6ddd6a-v7707600173446204723-collection-after-card2-t1-seed-empty.xml",
+    "sha256": "74516eead60deb12b31c5d57845106e444f9671c987fbc8966d901a8cb952384"
+  }
+}

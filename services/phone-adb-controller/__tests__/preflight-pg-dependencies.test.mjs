@@ -115,7 +115,7 @@ for(const [label,rows]of [
 
 test('Git锁闭包机械检查拒不同版本/父级依赖映射或漏optional',async()=>{
  const {verifyPreflightPgLock}=await import('../preflight-pg-dependencies.mjs');const bytes=readFileSync(new URL('../../../package-lock.json',import.meta.url));const original=JSON.parse(bytes);
- const identity=verifyPreflightPgLock(bytes);assert.equal(identity.lock_sha256,'bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4');
+ const identity=verifyPreflightPgLock(bytes);assert.equal(identity.lock_sha256,'60156416b976b6e6330d3c77b6d94b0b34c747d5f88a34ef2e9d301772ba248d');
  for(const mutate of [d=>d.packages['node_modules/pg-pool'].version='3.12.0',d=>delete d.packages['node_modules/pg'].optionalDependencies,d=>d.packages['node_modules/pg'].dependencies.pgpass='999']){
   const changed=structuredClone(original);mutate(changed);assert.throws(()=>verifyPreflightPgLock(Buffer.from(JSON.stringify(changed))),/PREFLIGHT_PG_GIT_LOCK_DIGEST/);
  }
@@ -123,7 +123,7 @@ test('Git锁闭包机械检查拒不同版本/父级依赖映射或漏optional',
 
 test('中央release固定真实Git descriptor而不将第三方文件伪装Git code',async()=>{
  const {bindingComponents}=await import('../deployment-targets.mjs');
- const identity={lock_sha256:'bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4',package_lock_sha256:JSON.parse(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url))).package_lock_sha256};
+ const identity={lock_sha256:'60156416b976b6e6330d3c77b6d94b0b34c747d5f88a34ef2e9d301772ba248d',package_lock_sha256:JSON.parse(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url))).package_lock_sha256};
  const binding={kind:'code',scope:'activity',status:'verified',repo:'perfectuser21/zenithjoy-workspace',path:'services/phone-adb-controller/preflight-pg-lock.json',revision:'a'.repeat(40),digest:'sha256:'+identity.lock_sha256};
  const components=bindingComponents({activities:[{payload:{implementation_bindings:[binding]}}]},'a'.repeat(40),{preflightPgLock:identity});
  assert.throws(()=>bindingComponents({activities:[]},'a'.repeat(40),{preflightPgLock:identity}),/统一部署/);

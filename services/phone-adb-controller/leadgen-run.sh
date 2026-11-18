@@ -121,6 +121,11 @@ export WF_PLAN_PATH="$WF_HOME/plans/$WF_ARG_CAP.plan"
 source "$WF_PLAN_PATH"
 [[ "${WF_RUNNER:-}" == leadgen-workflow.mjs && -z "${WF_MISSING:-}" ]] || { print -u2 '计划缺正式实现'; exit 1; }
 export WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_STEP_SPEC
+# Only a new Code 101 receives the new default; existing frozen runs keep their original path.
+if [[ "${LEADGEN_EXECUTION_MODE:-code}" == code && "$WF_BRAIN_WORKFLOW" == douyin_video_discovery && ! -e "$WFR_RUN_DIR/run-definition.json" ]]; then
+  code_budget="$(node "$WF_HOME/runtime-receipts.mjs" run-max-seconds)"
+  export WF_RUN_MAX_SECONDS="$code_budget"
+fi
 if [[ "${LEADGEN_EXECUTION_MODE:-code}" == agent ]]; then
   # 输出只含校验过的整数；已有run恢复原绝对起点，不为续跑重置预算。
   agent_budget="$(node "$WF_HOME/runtime-receipts.mjs" agent-budget)"

@@ -65,8 +65,9 @@ test('A null video stays rejected',async()=>{await assert.rejects(score({grade:'
 
 test('single-pass schema constrains original short quotations and prompt requires every comment quote',async()=>{
  let req;await score(undefined,r=>req=r);assert.equal(req.response_format.type,'json_schema');assert.equal(req.response_format.json_schema.strict,true);assert.equal(req.provider.require_parameters,true);
- const p=req.response_format.json_schema.schema.properties.policy_evidence.properties;
- assert.deepEqual(p.comment_signal.enum,[body]);assert.deepEqual(p.video_signal.enum,[null,video]);assert.ok(req.messages[0].content.includes('每个等级都必须提供comment_signal'));
+ const branches=req.response_format.json_schema.schema.properties.policy_evidence.anyOf;assert.ok(Array.isArray(branches)&&branches.length>0);
+ for(const {properties:p} of branches){assert.deepEqual(p.comment_signal.enum,[body]);assert.deepEqual(p.video_signal.enum,[null,video]);}
+ assert.ok(req.messages[0].content.includes('每个等级都必须提供comment_signal'));
 });
 
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
