@@ -64,8 +64,6 @@
     "vitest": "^4.0.18"
   },
   "overrides": {
-    "picomatch@2": "file:vendor/picomatch-security/picomatch-2.3.2.tgz",
-    "picomatch@4": "file:vendor/picomatch-security/picomatch-4.0.7.tgz",
     "lodash": "^4.18.1",
     "esbuild": "^0.28.1"
   },
