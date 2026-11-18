@@ -222,6 +222,24 @@ class RuntimeKindTests(RuntimeFixture):
         self.assertNotIn('fixture-secret', raw)
         self.assertLess(len(raw), 6000)
 
+    def test_upload_diagnostics_reject_binary_line_separators_and_limit_safe_text(self):
+        for payload in (b'STAGED '+b'a'*32+b'\x1c', (b'STAGED '+b'a'*32+b'\n')*30):
+            with self.subTest(payload_bytes=len(payload)):
+                self.assertIsNone(self.runtime.stage_output_evidence(payload)['text'])
+
+    def test_upload_diagnostics_persistence_failure_keeps_unknown_and_partial_target(self):
+        original = os.replace
+        def refuse_upload_receipt(source, target):
+            if 'upload_result' in Path(source).read_text():
+                raise OSError('fixture diagnostic persistence refused')
+            return original(source, target)
+        with patch.object(self.runtime.os, 'replace', side_effect=refuse_upload_receipt):
+            result = self.runtime.stage_server(**self.config33())
+        self.assertFalse(result['verified'])
+        self.assertTrue(result['execution_stop_unknown'])
+        self.assertTrue((self.remote / 'scrcpy-server.jar').exists())
+        self.assertNotIn('"rm ', self.log.read_text())
+
     def shim_env(self, kind='sdk33'):
         config = self.config33()
         return {'ZJ_SCRCPY_RUNTIME_KIND': kind, 'ZJ_SCRCPY_RUNTIME_ROOT': str(self.sdk33),
