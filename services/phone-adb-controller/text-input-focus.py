@@ -11,10 +11,8 @@ from pathlib import Path
 PACKAGE = "com.xingin.xhs"
 VIEW = "com.xingin.capa.post.ui.UnderLineRichEdit"
 
-
 class NoStandardInput(ValueError):
     """只有完全没有标准焦点输入时，才允许走既有native白名单。"""
-
 
 def zhihu_body_structure(tree, field):
     """只认原生写文章页中已实证的唯一Web编辑器正文，不按空id泛化。"""
@@ -51,7 +49,6 @@ def zhihu_body_structure(tree, field):
         raise ValueError("Zhihu body field is noneditable")
     return {"policy": "zhihu_native_article_body_v1", "editor_text": "Zhihu Editor", "root_id": "root"}
 
-
 def bounds_rect(value):
     if not re.fullmatch(r"\[\d+,\d+\]\[\d+,\d+\]", value or ""):
         raise ValueError("invalid field geometry")
@@ -59,7 +56,6 @@ def bounds_rect(value):
     if values[0] >= values[2] or values[1] >= values[3]:
         raise ValueError("empty field geometry")
     return values
-
 
 def zhihu_search_structure(tree, field):
     package = "com.zhihu.android"
@@ -88,7 +84,6 @@ def zhihu_search_structure(tree, field):
         result[key] = identity(matches[0])
     return result
 
-
 def check_zhihu_search_shrink(selection, current):
     original, actual = selection["search_structure"], current.get("search_structure")
     if not actual or any(actual[k] != original[k] for k in ("policy", "parent", "back_layout", "search_button")):
@@ -103,7 +98,6 @@ def check_zhihu_search_shrink(selection, current):
             or clear_left < left or clear_top > top or clear_bottom < bottom
             or clear_right - clear_left > 2 * (bottom - top) or clear_bottom - clear_top > 2 * (bottom - top)):
         raise ValueError("search geometry is not the observed clear-button right shrink")
-
 
 def weibo_body_structure(tree, field):
     package = "com.sina.weibo"
@@ -129,7 +123,6 @@ def weibo_body_structure(tree, field):
     return {"policy": "weibo_composer_body_growth_v1", "parent_anchor": [pl, pt, pr],
             "markers": [{k: n.get(k, "") for k in ("resource-id", "class", "package", "text", "bounds")} for n in markers]}
 
-
 def standard_resolve(xml_path):
     tree = ET.parse(xml_path)
     nodes = [n for n in tree.iter("node")
@@ -154,7 +147,6 @@ def standard_resolve(xml_path):
         except ValueError:
             pass  # 未绑定原生页面时，只保留通用严格几何许可。
     return identity
-
 
 def standard_readback(xml_path, selection, allow_body_growth=False):
     current = standard_resolve(xml_path)
@@ -415,10 +407,18 @@ def douyin_dm_context(xml_path):
         if len(candidates) != 1 or candidates[0].get("package") != package or candidates[0].get("class") != cls:
             raise ValueError("private-message native structure missing or ambiguous: " + rid)
         return candidates[0]
-    root = one("l+=", "android.view.View")
-    container = one("d2_", "android.widget.LinearLayout")
-    messages = one("v54", "androidx.recyclerview.widget.RecyclerView")
-    privacy = one("sv_", "android.widget.TextView")
+    # 每份实证布局必须整套匹配；跨版本混搭或额外签名节点都拒绝。
+    signatures = (("l+=", "d2_", "v54", "sv_"), ("mdk", "d98", "v6m", "st+"))
+    known = {package + ":id/" + rid for signature in signatures for rid in signature}
+    present = {n.get("resource-id") for n in nodes} & known
+    matched = [s for s in signatures if present == {package + ":id/" + rid for rid in s}]
+    if len(matched) != 1:
+        raise ValueError("private-message native layout signature missing, mixed or ambiguous")
+    root_id, container_id, messages_id, privacy_id = matched[0]
+    root = one(root_id, "android.view.View")
+    container = one(container_id, "android.widget.LinearLayout")
+    messages = one(messages_id, "androidx.recyclerview.widget.RecyclerView")
+    privacy = one(privacy_id, "android.widget.TextView")
     field = one("msg_et", "android.widget.EditText")
     parents = {child: parent for parent in nodes for child in parent}
     frame = parents.get(root)
