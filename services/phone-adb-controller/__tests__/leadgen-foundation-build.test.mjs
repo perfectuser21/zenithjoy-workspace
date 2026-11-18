@@ -27,8 +27,8 @@ function fixture(){
   put(code,prefix+'/profiles/'+id+'.json',JSON.stringify({schema_version:1,contract:{workflow:key},profile:{leadgen:{workflow:id,method_repository:'perfectuser21/zenithjoy-skills',method_revision:methodRevision},files:{'source.mjs':hash('export {};'),'services/phone-adb-controller/skills/method/SKILL.md':hash(skill)}}}));
   put(code,prefix+'/schemas/'+id+'.json','{"type":"object"}');
  }
- put(code,'source.mjs','export {};');const profileRevision=commit(code);
- for(const [id,key]of Object.entries(WORKFLOWS)){const profilePath=prefix+'/profiles/'+id+'.json';put(code,'product-map/contracts/'+key+'.yaml',JSON.stringify({runtime:{kind:'commander-foundation-v1',profile_ref:{repo:'perfectuser21/zenithjoy-workspace',path:profilePath,revision:profileRevision,digest:'sha256:'+hash(fs.readFileSync(path.join(code,profilePath)))},timeout_ms:2400000,input_schema:{type:'object'}}}));}
+ put(code,'source.mjs','export {};');const profileRevision=commit(code);put(code,'business.mjs','export const business = true;');
+ for(const [id,key]of Object.entries(WORKFLOWS)){const profilePath=prefix+'/profiles/'+id+'.json';put(code,'product-map/contracts/'+key+'.yaml',JSON.stringify({activities:[{key:'business',implementation_bindings:[{kind:'code',repo:'perfectuser21/zenithjoy-workspace',revision:'contract',path:'business.mjs'},{kind:'skill',repo:'perfectuser21/zenithjoy-workspace',revision:'contract',path:'services/phone-adb-controller/skills/method/SKILL.md'}]}],runtime:{kind:'commander-foundation-v1',profile_ref:{repo:'perfectuser21/zenithjoy-workspace',path:profilePath,revision:profileRevision,digest:'sha256:'+hash(fs.readFileSync(path.join(code,profilePath)))},timeout_ms:2400000,input_schema:{type:'object'}}}));}
  const revision=commit(code);
  return {root,code,skills,revision,profileRevision,methodRevision,git,put,commit,close:()=>fs.rmSync(root,{recursive:true,force:true})};
 }
@@ -36,7 +36,9 @@ test('offline bundle fixes actual revisions and verifies all sources before writ
  const f=fixture();try{
   const output=path.join(f.root,'bundle'),b=buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:output});
   assert.equal(b.status,'built_not_registered');assert.equal(b.revision,f.revision);assert.equal(b.workflows.length,4);assert.ok(b.workflows.every(w=>w.runtime.profile_ref.revision===f.profileRevision&&w.contract_source.revision===f.revision));
-  assert.equal(fs.existsSync(path.join(output,b.repo,f.revision)),false,'B must install the profile at the actual declared A directory');
+  assert.equal(fs.existsSync(path.join(output,b.repo,f.revision,prefix,'profiles/101.json')),false,'profile stays at A, not B');
+  assert.equal(fs.readFileSync(path.join(output,b.repo,f.revision,'business.mjs'),'utf8'),'export const business = true;','publisher requires original Activity business bindings installed at B');
+  assert.equal(fs.readFileSync(path.join(output,b.repo,f.revision,'services/phone-adb-controller/skills/method/SKILL.md'),'utf8'),'documented method','B Skill alias resolves central source');
   assert.equal(b.source_origins[f.profileRevision+':services/phone-adb-controller/skills/method/SKILL.md'].revision,f.methodRevision);
   assert.ok(b.components.some(c=>c.kind==='repo'&&c.revision===f.revision));assert.ok(b.workflows.every(w=>w.implementation_bindings.length>0));
   for(const c of b.components.filter(c=>c.kind!=='repo'))assert.equal(hash(fs.readFileSync(path.join(output,c.repo,c.revision,c.path))),c.digest.slice(7));
