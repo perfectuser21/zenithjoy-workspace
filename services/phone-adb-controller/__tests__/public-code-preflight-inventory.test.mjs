@@ -20,7 +20,7 @@ test('actual account-preflight fixture inventory remains within the unchanged na
  const files=[];function walk(base,prefix=''){for(const e of readdirSync(base,{withFileTypes:true})){const path=prefix+e.name;e.isDirectory()?walk(join(base,e.name),path+'/'):files.push(path);}}walk(root);
  assert.ok(files.includes('config/native-phone-reviews/fixture-public-code.md'));
  assert.ok(files.includes('comment-compose-rows.py'),'queued recipient import requires the shared parser');
- for(const name of ['activity-103-tool-host.py','activity-103-checker-repair.mjs','workflow-101-manifest-budget.mjs','activity-host-pg.mjs','activity-host-tools.py'])assert.equal(files.includes(name),false,'account preflight must not freeze unused workflow assembly sources');
+ for(const name of ['activity-103-tool-host.py','activity-103-checker-repair.mjs','workflow-101-manifest-budget.mjs','activity-host-pg.mjs','activity-host-tools.py','activity-host-104.mjs','activity-104-context.mjs','activity-104-runtime.mjs','activity-104-transport.py'])assert.equal(files.includes(name),false,'account preflight must not freeze unused workflow assembly sources');
  const tracked=new Set(execFileSync('git',['ls-files','--','services/phone-adb-controller'],{cwd:fileURLToPath(new URL('../../../',import.meta.url)),encoding:'utf8'}).trim().split('\n').map(p=>p.replace(/^services\/phone-adb-controller\//,'')));
  assert.ok(files.length<=512,JSON.stringify({files:files.length,synthetic_review:1,qualification:files.filter(x=>x.startsWith('qualification-artifacts.')),extra_source_paths:files.filter(p=>p!=='config/native-phone-reviews/fixture-public-code.md'&&!tracked.has(p)).sort()}));
 });

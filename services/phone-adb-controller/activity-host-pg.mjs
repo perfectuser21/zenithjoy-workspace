@@ -14,6 +14,11 @@ const BASE={
  'production-readback-local.mjs':'3ef2c8d58d3f7d4ed196af657bf60df6a669016ae9883793ad641d3a908612bc',
 };
 const PG_SOURCE=['preflight-pg-dependencies.mjs','preflight-pg-lock.json'];
+const BASE102={
+ 'qualification/runtime-deps.mjs':'25f883023d2b9e38912586bc69b103d7f6b69d5c17dad30201f6644123b49a11',
+ 'qualification/helper.mjs':'ec62b2045d6525fa3905658d8c40b5d3e62b3642abf72b7aae9002aef2d64243',
+ 'collection-evidence/runtime-deps.mjs':'e4212d2945f9f27c0302dcb8365cd443bc836e247399cfc357d21eec5453b597',
+};
 function regular(file){const s=fs.lstatSync(file);need(s.isFile()&&!s.isSymbolicLink()&&s.nlink===1&&s.uid===process.getuid()&&!(s.mode&0o022),'FILE');return fs.readFileSync(file);}
 function runtime(root){need(typeof root==='string'&&path.isAbsolute(root)&&fs.realpathSync(root)===path.resolve(root),'ROOT');return root;}
 async function dependency(root,pins){
@@ -29,10 +34,12 @@ export async function loadActivityHostPg(context){
  return module.loadPreflightPg({runtimeRoot:context.runtime_root,frozen:context.verification.pg});
 }
 function replaceOnce(text,before,after){need(text.split(before).length===2,'BASE_WIRING');return text.replace(before,after);}
-export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,sourceCommit,expectedSource,expectedDeployment}){
+export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,sourceCommit,expectedSource,expectedDeployment,workflow='101'}){
+ need(['101','102','103'].includes(workflow),'WORKFLOW');
  need(/^[a-f0-9]{40}$/.test(sourceCommit||''),'SOURCE');runtime(baseRoot);runtime(runtimeRoot);
  need(typeof targetRoot==='string'&&path.isAbsolute(targetRoot)&&!fs.existsSync(targetRoot),'TARGET');
- const files={};for(const [name,digest]of Object.entries(BASE)){const bytes=regular(path.join(baseRoot,name));need(hash(bytes)===digest,'BASE');files[name]=bytes.toString();}
+ const base=workflow==='102'?{...BASE,...BASE102}:BASE;
+ const files={};for(const [name,digest]of Object.entries(base)){const bytes=regular(path.join(baseRoot,name));need(hash(bytes)===digest,'BASE');files[name]=bytes.toString();}
  const module=await dependency(runtimeRoot,expectedSource);
  const pg={deployment:{source_commit:sourceCommit},preflight_pg:module.preflightPgLockIdentity({runtimeRoot})};
  module.verifyPreflightPg({runtimeRoot,frozen:pg});
@@ -47,13 +54,27 @@ export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,so
  files['production-readback-local.mjs']=replaceOnce(files['production-readback-local.mjs'],"const {Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);");
  files['cleanup-result.mjs']=replaceOnce(files['cleanup-result.mjs'],"const require=createRequire(c.runtime_root+'/package.json'),{Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);").replace("import {createRequire} from 'node:module';",'');
  for(const name of Object.keys(BASE))files[name]="import {loadActivityHostPg} from './activity-host-pg.mjs';\n"+files[name];
+ if(workflow==='102'){
+  const oldRoot='/Users/administrator/.local/share/zenithjoy/leadgen-api-candidates/composite-97eac7e35dc3-phone-caa47f8ba3ae/services/phone-adb-controller';
+  for(const name of ['qualification/runtime-deps.mjs','collection-evidence/runtime-deps.mjs']){
+   files[name]=replaceOnce(files[name],"'97eac7e35dc3e098a4d7fdde76cdca6dbfb691fd'",JSON.stringify(sourceCommit));
+   // Original files use distinct quote styles. Both exact original hashes were checked above.
+   files[name]=replaceOnce(files[name],name.startsWith('qualification/')?JSON.stringify(oldRoot):"'"+oldRoot+"'",JSON.stringify(runtimeRoot));
+   files[name]="import {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+files[name];
+  }
+  const q='qualification/runtime-deps.mjs';
+  files[q]=replaceOnce(files[q],'export function createRuntimeDeps(c){','export async function createRuntimeDeps(c){');
+  files[q]=replaceOnce(files[q],"queue=require('./leadgen-queue.js'),pool=require('./leadgen-db-connect.js').getPool();","queue=require('./leadgen-queue.js'),{Pool}=await loadActivityHostPg(c),pool=new Pool(process.env.DATABASE_URL?{connectionString:process.env.DATABASE_URL}:{host:process.env.PGHOST,port:Number(process.env.PGPORT||5432),user:process.env.PGUSER,password:process.env.PGPASSWORD,database:process.env.PGDATABASE||'zenithjoy'});");
+  files['qualification/helper.mjs']=replaceOnce(files['qualification/helper.mjs'],'deps=injectedDeps||createRuntimeDeps(c);','deps=injectedDeps||await createRuntimeDeps(c);');
+  files['collection-evidence/runtime-deps.mjs']=replaceOnce(files['collection-evidence/runtime-deps.mjs'],"{Pool}=require('pg')","{Pool}=await loadActivityHostPg(c)");
+ }
  files['activity-host-pg.mjs']=regular(self).toString();
  files['context-pg.json']=JSON.stringify({pg,runtime_sha256:Object.fromEntries(PG_SOURCE.map(n=>[n,expectedSource[n]]))},null,2)+'\n';
  const receipt={schema:'activity-host-pg/v1',source_commit:sourceCommit,runtime_root:runtimeRoot,
   expected_source:Object.fromEntries(PG_SOURCE.map(n=>[n,expectedSource[n]])),expected_deployment:expectedDeployment,
-  base_sha256:BASE,sha256:Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)])),status:'assembled_not_started'};
+  base_sha256:base,sha256:Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)])),status:'assembled_not_started'};
  fs.mkdirSync(targetRoot,{mode:0o700});
- for(const [name,bytes]of Object.entries({...files,'activity-host-pg-receipt.json':JSON.stringify(receipt,null,2)+'\n'}))fs.writeFileSync(path.join(targetRoot,name),bytes,{flag:'wx',mode:0o600});
+ for(const [name,bytes]of Object.entries({...files,'activity-host-pg-receipt.json':JSON.stringify(receipt,null,2)+'\n'})){fs.mkdirSync(path.dirname(path.join(targetRoot,name)),{recursive:true,mode:0o700});fs.writeFileSync(path.join(targetRoot,name),bytes,{flag:'wx',mode:0o600});}
  return {pg,receipt};
 }
 export async function checkActivityHostPgReady(context,config){
