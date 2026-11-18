@@ -1,3 +1,4 @@
+import {partitionFoundationBindings} from './foundation-host-bindings.mjs';
 import {readFileSync,writeFileSync,lstatSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -41,12 +42,12 @@ export function collectMethods(root,{read=reader(root)}={}){
   const docs=Object.fromEntries(owners.map(key=>[key,parse(read('product-map/contracts/'+key+'.yaml').toString())]));
   const activities={},workflows={};
   for(let i=0;i<owners.length;i++){
-    const owner=owners[i],doc=docs[owner];
+    const owner=owners[i],doc=docs[owner],methodBindings=partitionFoundationBindings({document:doc,repoRoot:root,read,resolveActivity:ref=>{const [owner,key]=ref.split('.');return docs[owner]?.activities.find(a=>a.key===key);}});
     if(doc.contract_key!==owner)fail('ACTIVITY_OWNER_INVALID',owner);
     const actual=doc.activities.map(a=>a.ref||owner+'.'+a.key);
     if(!same(actual,slots[i]))fail('ACTIVITY_SLOT_LAYOUT_MISMATCH',owner);
     for(const a of doc.activities.filter(a=>!a.ref)){
-      const ref=owner+'.'+a.key,bindings=a.implementation_bindings,methods=bindings?.filter(b=>b.kind==='skill');
+      const ref=owner+'.'+a.key,bindings=methodBindings.get(a.key),methods=bindings?.filter(b=>b.kind==='skill');
       if(methods?.length!==1)fail('ACTIVITY_METHOD_BINDING_INVALID',ref);
       const b=methods[0],name='douyin-leadgen-activity-'+(101+i)+'-'+a.key.replaceAll('_','-'),path=prefix+'skills/'+name+'/SKILL.md';
       if(b.repo!==repository||b.revision!=='contract'||b.name!==name||b.path!==path)fail('ACTIVITY_METHOD_BINDING_INVALID',ref);

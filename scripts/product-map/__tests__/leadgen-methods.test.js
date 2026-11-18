@@ -29,6 +29,9 @@ function fixture(t){
   for(let i=0;i<flows.length;i++){
     const flow=flows[i],p='product-map/contracts/'+flow+'.yaml';
     docs[flow]=parse(readFileSync(join(source,p),'utf8'));
+    // This fixture exercises business method evolution; frozen host delivery has its own real-Git tests.
+    delete docs[flow].runtime;
+    for(const a of docs[flow].activities.filter(a=>!a.ref))a.implementation_bindings=a.implementation_bindings.filter(b=>b.purpose!=='foundation_host');
     for(const a of docs[flow].activities.filter(a=>!a.ref)){
       for(const b of a.implementation_bindings.filter(b=>b.kind==='code'))put(root,b.path,readFileSync(join(source,b.path)));
       const name='douyin-leadgen-activity-'+(101+i)+'-'+a.key.replaceAll('_','-'),path=skillRoot+name+'/SKILL.md';
