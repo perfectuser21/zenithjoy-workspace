@@ -1,0 +1,37 @@
+{
+  "provenance": {
+    "receipt_sha256": "b5cec4dd5b674550e4b302dcc0156894f9b36a89d500f6bba95796ae49bf08f3",
+    "commander_revision": "32585e7930fc2ccea26b3e774957177ea5d89bca",
+    "commander_source": "packages/brain/scripts/commander-workflow/skill-tools-mcp.mjs",
+    "commander_source_sha256": "97d800f6f7bd583d1c043c4c2fb127e6d2ab28a4953afb429c64d16d45bf21e8",
+    "project_sha256": "484599a0d54805a1e266f5c2400bc65f8d504244ca0fd006420a48918e10861c",
+    "note": "真实P4终态原件；project是固定Commander原函数，离线回归不冒充实际MCP调用。"
+  },
+  "receipt": {
+    "binding": {
+      "kind": "phone",
+      "args": [
+        "record-start",
+        "f840a043-ed5f-4a4c-bcb5-501030cbc24c-qualification-record",
+        "120",
+        "7709208240869657011"
+      ],
+      "activity": "qualification",
+      "identity": {
+        "run_id": "f840a043-ed5f-4a4c-bcb5-501030cbc24c",
+        "run_tag": "f840a043-ed5f-4a4c-bcb5-501030cbc24c",
+        "task_id": "7c678de0-958e-4a24-ac4f-bfea16a2a9de"
+      }
+    },
+    "state": "terminal",
+    "started_at": 1795006911.5774589,
+    "result": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "RECORD_AUDIO_CAPTURE_UNAVAILABLE recorder not ready; see /private/tmp/openclaw-phone/evidence/wuying_android14/f840a043-ed5f-4a4c-bcb5-501030cbc24c-qualification-record.capture-startup.json and /private/tmp/openclaw-phone/evidence/wuying_android14/f840a043-ed5f-4a4c-bcb5-501030cbc24c-qualification-record.rec.log\n"
+    },
+    "ended_at": 1795006927.640717
+  },
+  "native_root": "/private/tmp/openclaw-phone/evidence/wuying_android14",
+  "project_source": "function project(value,paths){\n const output={};for(const p of paths){let v=value;for(const key of p.split('.')){if(!v||typeof v!=='object'||!Object.hasOwn(v,key)){v=undefined;break;}v=v[key];}\n  if(v!==undefined)output[p]=v;\n }\n if(Buffer.byteLength(json(output))>32768)fail('host_tool_response_limit');return output;\n}"
+}

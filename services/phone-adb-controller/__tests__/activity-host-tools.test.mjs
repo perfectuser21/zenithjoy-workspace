@@ -1,4 +1,6 @@
 import test from 'node:test';
+import vm from 'node:vm';
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
@@ -7,6 +9,8 @@ import {tmpdir} from 'node:os';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-tools.json',import.meta.url)));
 const fixture102=JSON.parse(readFileSync(new URL('./fixtures/activity-host-102.json',import.meta.url)));
 const fixture103=JSON.parse(readFileSync(new URL('./fixtures/activity-host-103.json',import.meta.url)));
+const diagnosticFixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-record-diagnostic.json',import.meta.url)));
+const profile102=JSON.parse(readFileSync(new URL('../leadgen-foundation/profiles/102.json',import.meta.url)));
 const helper=new URL('../activity-host-tools.py',import.meta.url).pathname;
 function probe(mode='normal',workflow='101'){
  const root=mkdtempSync(join(tmpdir(),'activity-host-tools-'));
@@ -17,6 +21,7 @@ for name,item in packet['files'].items():
  assert hashlib.sha256(item['source'].encode()).hexdigest()==item['sha256'];(base/name).parent.mkdir(parents=True,exist_ok=True);(base/name).write_text(item['source'])
 c={'assigned_workflow':workflow,'source_commit':'a'*40,'profile':'fixture-phone','node':'node','max_candidates':1,'comment_limit':1,'line':'fixture','tasks':{workflow:{'task_id':'task','run_id':'run','run_tag':'fixture-new-run'}},'verification':{'policy_version':35,'102':{'video_ids':['7711111111111111111'],'qualification_input':{'video_id':'7711111111111111111','coverage':{'kind':'full_video','source_duration_display_seconds':37,'capture_max_seconds':120,'max_capture_sessions':1,'max_asr_calls':1,'max_judge_primary_calls':1}}}},'business_deadline_ms':time.time()*1000+10000,'cleanup_deadline_ms':time.time()*1000+10000}
 if workflow=='103':c['verification']['103']={'input_mode':'committed_partial_ids','comment_ids':['11111111-1111-4111-8111-111111111111'],'sources':{'11111111-1111-4111-8111-111111111111':'fixture-source-102'}}
+if mode.startswith('diagnostic-'):c['tasks'][workflow]['run_tag']=packet['diagnostic']['receipt']['binding']['identity']['run_tag']
 proof=p/'host-proof.json';c['verification']['proof_manifest_path']=str(proof);proof.write_text(json.dumps({'schema':'activity-evidence/v1','identity':{**c['tasks'][workflow],'workflow':workflow}}));proof.chmod(0o600)
 target=p/'candidate'
 if helper.exists():
@@ -67,6 +72,33 @@ def call(name,op):
  except Exception as e:error=type(e).__name__+':'+str(e)
  gc.collect();f=target/'receipts'/(name+'.json')
  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None}
+if mode.startswith('diagnostic-'):
+ raw=packet['diagnostic']['receipt'];original=raw['result'];args=list(raw['binding']['args']);c['tasks'][workflow]['run_tag']=raw['binding']['identity']['run_tag'];c['native_root']=packet['diagnostic']['native_root'];c['local_owner']='fixture-owner'
+ activity='qualification';kind='phone'
+ if mode=='diagnostic-wrong-activity':activity='cleanup'
+ if mode=='diagnostic-other-command':args=['close-app']
+ if mode=='diagnostic-wrong-run':args[1]='different-run-record'
+ result=dict(original)
+ if mode=='diagnostic-success':result['exit_code']=0
+ if mode=='diagnostic-cross-path':result['stderr']=result['stderr'].replace(c['tasks'][workflow]['run_tag'],'another-run')
+ if mode=='diagnostic-traversal':result['stderr']=result['stderr'].replace(c['native_root']+'/',c['native_root']+'/../')
+ if mode=='diagnostic-secret':result['stderr']+='SECRET_TOKEN=fixture-secret\n'
+ if mode=='diagnostic-unmatched':result['stderr']='private arbitrary stderr fixture-secret\n'
+ if mode=='diagnostic-large':result['stdout']='x'*14000
+ (target/'context.json').write_text(json.dumps(c));(target/'input.json').write_text(json.dumps({'activity_key':activity,'identity':c['tasks'][workflow]}));os.environ['COMMANDER_ACTIVITY_KEY']=activity
+ m.ssh=lambda *args:['fixture-dispatch']
+ def phone_dispatch(*a,**kw):calls['dispatch']+=1;return types.SimpleNamespace(returncode=result['exit_code'],stdout=result['stdout'],stderr=result['stderr'])
+ m.subprocess.run=phone_dispatch
+ if mode in ['diagnostic-existing-data','diagnostic-other-kind']:
+  if mode=='diagnostic-existing-data':result['data']={'original':'preserved'}
+  else:kind='business';args=[json.dumps({'op':'inspect_videos'})]
+  m.invoke=lambda *a:result
+ sys.argv=['tools',kind,'record-diagnostic',*args];out=io.StringIO();error=None;rc=None
+ try:
+  with contextlib.redirect_stdout(out):rc=m.main()
+ except Exception as e:error=type(e).__name__+':'+str(e)
+ gc.collect();f=target/'receipts/record-diagnostic.json'
+ print(json.dumps({'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None,'calls':calls}));sys.exit(0)
 if mode.startswith('fetch-'):
  native=p/'native-source';native.mkdir();c.update(transport='local',native_root=str(native));(target/'context.json').write_text(json.dumps(c))
  source=native/'fixture-new-run-wrong.json';correct=native/'fixture-new-run-correct.json';correct.write_text('original evidence')
@@ -105,7 +137,7 @@ replay=call('first','company_config' if mode in ['normal','persist-failure'] els
 second=call('corrected',good)
 corrected_replay=call('corrected','inspect_videos') if mode.startswith('metrics-') else None
 print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,'corrected_replay':corrected_replay,'calls':calls,'instructions':(target/'TOOLS.txt').read_text() if (target/'TOOLS.txt').exists() else '', 'original':(target/'TOOLS-base.txt').read_text() if (target/'TOOLS-base.txt').exists() else '', 'tools':(target/'tools.py').read_text()}))`;
- const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify(workflow==='103'?fixture103:(workflow==='102'?fixture102:fixture)),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
+ const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify({... (workflow==='103'?fixture103:(workflow==='102'?fixture102:fixture)),diagnostic:diagnosticFixture}),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
  }finally{rmSync(root,{recursive:true,force:true});}
 }
 test('real assembled collect host emits typed company_config rejection and only dispatches corrected new action',()=>{
@@ -261,4 +293,25 @@ with tempfile.TemporaryDirectory() as d:
  else:raise AssertionError('outside source accepted')
  assert outside.read_text()=='original';assert list(approved.iterdir())==[]`;
  const r=spawnSync('/usr/bin/python3',['-c',script,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+function projectDiagnostic(value){
+ const source=diagnosticFixture.project_source;
+ assert.equal(createHash('sha256').update(source).digest('hex'),diagnosticFixture.provenance.project_sha256);
+ return vm.runInNewContext('const json=JSON.stringify;const fail=r=>{throw Error(r)};'+source+';project(value,paths)',{Buffer,value,paths:profile102.profile.skill_runtime.host_tools.response_paths});
+}
+for(const mode of ['diagnostic-normal','diagnostic-large'])test(`real P4 ${mode} keeps exact failure and exposes only bounded filenames through pinned MCP projection`,()=>{
+ const r=probe(mode,'102');assert.equal(r.rc,2,r.error);assert.equal(r.receipt.state,'terminal');assert.equal(r.receipt.result.exit_code,2);assert.equal(r.receipt.result.stderr,diagnosticFixture.receipt.result.stderr);
+ const projected=projectDiagnostic(JSON.parse(r.stdout)),data=projected['result.data'];
+ assert.equal(data.error_code,'RECORD_AUDIO_CAPTURE_UNAVAILABLE');
+ const eid=diagnosticFixture.receipt.binding.args[1];assert.equal(data.diagnostic_files.startup,eid+'.capture-startup.json');assert.equal(data.diagnostic_files.log,eid+'.rec.log');
+ assert.equal(data.execution_stopped,undefined);assert.equal(data.retry_allowed,undefined);assert.equal(projected['result.stderr'],undefined);assert.equal(projected.stderr,undefined);assert.ok(Buffer.byteLength(JSON.stringify(projected))<32768);assert.equal(r.calls.dispatch,1);
+ if(mode==='diagnostic-large')assert.equal(projected.large_result_saved,true);
+});
+for(const mode of ['diagnostic-wrong-activity','diagnostic-other-command','diagnostic-wrong-run','diagnostic-success','diagnostic-cross-path','diagnostic-traversal','diagnostic-secret','diagnostic-unmatched','diagnostic-other-kind','diagnostic-existing-data'])test(`${mode} does not create or leak native diagnostics`,()=>{
+ const r=probe(mode,'102');if(r.stdout){const projected=projectDiagnostic(JSON.parse(r.stdout));assert.equal(projected['result.data']?.error_code,undefined);assert.equal(projected['result.data']?.diagnostic_files,undefined);assert.doesNotMatch(JSON.stringify(projected),/fixture-secret/);assert.equal(projected['result.stderr'],undefined);}
+ if(mode==='diagnostic-existing-data')assert.deepEqual(r.receipt.result.data,{original:'preserved'});
+});
+test('different Workflow cannot acquire 102 native record diagnostic fields',()=>{
+ const r=probe('diagnostic-normal','101');assert.equal(r.receipt.result?.data?.diagnostic_files,undefined);
 });
