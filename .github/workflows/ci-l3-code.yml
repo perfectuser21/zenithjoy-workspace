@@ -47,59 +47,12 @@ jobs:
         run: node scripts/ci/detect-changes.mjs code
 
   # ─── Dashboard ───────────────────────────────────────────────────────
-  dashboard-lint:
-    name: Dashboard Lint
-    needs: changes
-    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/dashboard/package-lock.json
-      - run: npm ci
-        working-directory: apps/dashboard
-      # 棘轮制：78 = 2026-07-05 实测警告数，只许降不许涨；目标 ≤20（消警告另立 sprint）
-      - run: npx eslint . --max-warnings 78
-        working-directory: apps/dashboard
-
-  dashboard-typecheck:
-    name: Dashboard Typecheck
-    needs: changes
-    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/dashboard/package-lock.json
-      - run: npm ci
-        working-directory: apps/dashboard
-      - run: npx tsc --noEmit
-        working-directory: apps/dashboard
-
   dashboard-build:
-    name: Dashboard Build
+    name: Dashboard Lint, Typecheck and Build
     needs: changes
     if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Restore pinned skill sources
@@ -112,18 +65,35 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-      - run: npm ci
+      - name: Install dependencies
+        id: install
+        run: npm ci
+        working-directory: apps/dashboard
+      # 保留 ESLint 警告棘轮。
+      - name: Lint Dashboard
+        run: npx eslint . --max-warnings 78
+        working-directory: apps/dashboard
+      - name: Typecheck Dashboard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx tsc --noEmit
         working-directory: apps/dashboard
       - name: Fix rollup optional deps (npm ci bug workaround)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: apps/dashboard
         run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
-      - run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
-      - run: npm run build
+      - name: Prepare gallery paths
+        id: gallery
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
+      - name: Build Dashboard
+        id: build
+        if: ${{ !cancelled() && steps.gallery.outcome == 'success' }}
+        run: npm run build
         working-directory: apps/dashboard
         env:
           CORE_FEATURES_PATH: ./src/stubs/core-features
       - uses: actions/upload-artifact@v4
-        if: github.ref == 'refs/heads/main'
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && github.ref == 'refs/heads/main' }}
         with:
           name: dashboard-dist
           path: apps/dashboard/dist
@@ -131,11 +101,11 @@ jobs:
 
   # ─── API ─────────────────────────────────────────────────────────────
   api-lint:
-    name: API Lint
+    name: API Lint and Typecheck
     needs: changes
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Restore pinned skill sources
@@ -148,31 +118,15 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: package-lock.json
-      - run: npm ci --workspace=apps/api
+      - name: Install dependencies
+        id: install
+        run: npm ci --workspace=apps/api
       # 棘轮制：40 = 2026-07-05 实测警告数（贴线），只许降不许涨；目标 ≤20（消警告另立 sprint）
       - run: npx eslint src/ --max-warnings 40
         working-directory: apps/api
-
-  api-typecheck:
-    name: API Typecheck
-    needs: changes
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-      - run: npm ci --workspace=apps/api
-      - run: npx tsc --noEmit
+      - name: Typecheck API
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx tsc --noEmit
         working-directory: apps/api
 
   # ─── GeoAI ──────────────────────────────────────────────────────────
@@ -733,11 +687,8 @@ jobs:
     name: L3 Code Gate Passed
     needs:
       - changes
-      - dashboard-lint
-      - dashboard-typecheck
       - dashboard-build
       - api-lint
-      - api-typecheck
       - geoai-build
       - security
       - openclaw-scripts-test
