@@ -5,6 +5,7 @@ import importlib.util
 import json
 import pathlib
 import re
+import stat
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -46,6 +47,46 @@ def read_business_input(args, *, activity, allowed_operations):
                              'tool_hint': 'discover与discover_readback都必须携带同一完整video.metrics原件对象。读取本轮metrics或原discover回执中的原对象，用新action名纠正本次请求；不重做已成功discover、不自行补造字段。'}
             raise error
     return value
+
+
+
+
+def record_start_diagnostic(c, activity, kind, args, result):
+    """Project only fixed native failure filenames; never infer execution state."""
+    if (c.get('assigned_workflow') != '102' or activity != 'qualification' or kind != 'phone'
+            or len(args) < 2 or args[0] != 'record-start' or not isinstance(result, dict)
+            or 'data' in result or type(result.get('exit_code')) is not int or result['exit_code'] == 0):
+        return None
+    run = c['tasks']['102']['run_tag']
+    eid, root, stderr = args[1], c.get('native_root'), result.get('stderr')
+    if (not isinstance(root, str) or not root.startswith('/') or len(root) > 4096
+            or any(x in root.split('/') for x in ['.', '..']) or root.endswith('/')
+            or not re.fullmatch(re.escape(run)+r'-[A-Za-z0-9_.-]+', eid)
+            or not isinstance(stderr, str) or len(stderr) > 10000):
+        return None
+    files = {'startup': eid+'.capture-startup.json', 'log': eid+'.rec.log'}
+    expected = ('RECORD_AUDIO_CAPTURE_UNAVAILABLE recorder not ready; see '
+                + root+'/'+files['startup']+' and '+root+'/'+files['log']+'\n')
+    if stderr != expected:
+        return None
+    return {'error_code': 'RECORD_AUDIO_CAPTURE_UNAVAILABLE', 'diagnostic_files': files}
+
+
+def require_local_native_source(source, source_root):
+    """Only this read-only local check, before copy2, can prove no dispatch."""
+    try:
+        observed = source.lstat()
+    except FileNotFoundError:
+        reason = 'not_found'
+    else:
+        reason = ('symlink' if stat.S_ISLNK(observed.st_mode) else
+                  'not_regular_file' if not stat.S_ISREG(observed.st_mode) else
+                  'outside_native_root' if source.resolve().parent != source_root else None)
+    if reason:
+        error = scope_rejection('NATIVE_LOCAL_SOURCE')
+        error.details = {'source_path': str(source), 'reason': reason,
+                         'tool_hint': '本地原生证据来源校验拒绝，尚未复制或外部dispatch；按真实原件文件名纠正，必须用新action名。不得伪造或改写原件。'}
+        raise error
 
 
 def digest(raw):
@@ -172,6 +213,9 @@ scope_rejection=_host.scope_rejection''')
     tools = replace_once(tools, " c=read(P/'context.json');f=", " _host.verify_host(P,OPS)\n c=read(P/'context.json');f=")
     tools = replace_once(tools, "  i=scoped_business(c,key,json.loads(args[0]))", "  parsed=read_business_input(args,activity=key,allowed_operations=OPS.get(key,set()))\n  i=scoped_business(c,key,parsed,reject=scope_rejection)")
     tools = replace_once(tools, "  # A policy error before launching an operation has no external operation in flight.\n  if isinstance(e,ValueError):atomic(action,{'binding':bind,'state':'terminal','started_at':started_at,'result':{'exit_code':2,'error':str(e)},'ended_at':time.time()})", "  if type(e) is PreDispatchRejected:\n   return emit_pre_dispatch_rejection(e,action=action,binding=bind,started_at=started_at,persist=atomic)")
+    tools = replace_once(tools, "   if source.is_symlink() or not source.is_file() or source.resolve().parent!=source_root:raise ValueError('NATIVE_LOCAL_SOURCE')", "   _host.require_local_native_source(source,source_root)")
+    tools = replace_once(tools, " out={'binding':bind,'state':'terminal'", " diagnostic=_host.record_start_diagnostic(c,key,kind,args,result)\n if diagnostic:result={**result,'data':diagnostic}\n out={'binding':bind,'state':'terminal'")
+    tools = replace_once(tools, "'stderr':result.get('stderr','')[-1200:]},ensure_ascii=False)", "'stderr':result.get('stderr','')[-1200:],**({'result':{'data':diagnostic}} if diagnostic else {})},ensure_ascii=False)")
     scope = replace_once(scope, 'def scoped_business(c,activity,i):', 'def scoped_business(c,activity,i,*,reject=ValueError):')
     start = scope.index('def scoped_business(')
     scope = scope[:start]+scope[start:].replace('raise ValueError(', 'raise reject(')

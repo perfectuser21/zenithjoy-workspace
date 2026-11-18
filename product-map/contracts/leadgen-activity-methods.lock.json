@@ -1365,14 +1365,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "d3c2cce65debe41f33be95f8f002385656e56141354bf20b9db18aadad96bd64"
+          "sha256": "619ce443e29291465c30f29d63c7c9a1172b9288675fc730fcca658cc3fc6ba0"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "3c888f36a05ec83505b6af8a8386bf37ccb5c496eefe0ef13b5a9602ed2cd379"
+          "sha256": "7ffbb7483a6ba6139349a00da90294fccb1511462f70d92049135aa1f2299a50"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1d97b65b5a7d21f83682c10059a9e4227a71fd9f314065c6b681ad19b960e6bf",
+      "code_digest": "bdf59ceb6b5aaafa47c72750e6f9215348f02af6358d313f0f0162070a0a5862",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅同步新宿主绑定后的合同来源摘要；步骤、DoD、晋升规则、Activity契约与Skill正文/版本均不变",
-        "reviewed_by": "agent:/root/audit_103_104_entry",
+        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。",
+        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring",
         "previous_code_digest": "3fbc0b6a03c8a81c45bfc5c76473f1bac7d9f4b7f172766399b1cf21588637c8",
-        "current_code_digest": "1d97b65b5a7d21f83682c10059a9e4227a71fd9f314065c6b681ad19b960e6bf"
+        "current_code_digest": "bdf59ceb6b5aaafa47c72750e6f9215348f02af6358d313f0f0162070a0a5862"
       }
     },
     "douyin_video_processing.dedup": {
@@ -5016,14 +5016,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "d3c2cce65debe41f33be95f8f002385656e56141354bf20b9db18aadad96bd64"
+          "sha256": "619ce443e29291465c30f29d63c7c9a1172b9288675fc730fcca658cc3fc6ba0"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "3c888f36a05ec83505b6af8a8386bf37ccb5c496eefe0ef13b5a9602ed2cd379"
+          "sha256": "7ffbb7483a6ba6139349a00da90294fccb1511462f70d92049135aa1f2299a50"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3b9ebec3ee9b174b70a13e8fb792f258c3c9f880677b4abc96a6eb5e54434f5c",
+      "code_digest": "5ae722adf6bb626d3e2295ccda2e544c14e856afb2120cde21669ceb3e5254c4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅同步新宿主绑定后的合同来源摘要；步骤、DoD、晋升规则、Activity契约与Skill正文/版本均不变",
-        "reviewed_by": "agent:/root/audit_103_104_entry",
+        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。",
+        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring",
         "previous_code_digest": "423d74275fa1886d9f4db2a6b341c12b3833fa54451788955bec276cbd6412e4",
-        "current_code_digest": "3b9ebec3ee9b174b70a13e8fb792f258c3c9f880677b4abc96a6eb5e54434f5c"
+        "current_code_digest": "5ae722adf6bb626d3e2295ccda2e544c14e856afb2120cde21669ceb3e5254c4"
       }
     },
     "douyin_comment_scoring.scoring": {
