@@ -1,0 +1,49 @@
+name: Video tools live acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deploy-staging-hk
+  cancel-in-progress: false
+jobs:
+  live:
+    name: Live video tools acceptance
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: creative-canvas-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify the exact deployed staging candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: node scripts/release-gate/staging-evidence.mjs "$SHA" api
+      - name: Install locked browser tooling
+        run: |
+          npm ci --workspace=apps/dashboard --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps --only-shell chromium
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+      - name: Verify live private canvas upload
+        env:
+          SHA: ${{ github.sha }}
+          ZJ_STAGING_CANVAS_PASSWORD: ${{ secrets.ZJ_STAGING_CANVAS_PASSWORD }}
+        run: |
+          set -o pipefail
+          node scripts/release-gate/video-tools-live.mjs "$SHA" | tee video-tools-live-proof.json
+      - name: Store live upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-tools-live-proof
+          path: video-tools-live-proof.json
+          if-no-files-found: error

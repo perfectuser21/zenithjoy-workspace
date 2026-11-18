@@ -1,0 +1,8 @@
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -284 +284 @@
+-  if (options.maxExtglobRecursion === false) {
++  if (options.maxExtglobRecursion === false && !body.includes('*')) {
+@@ -311 +311 @@
+-    if (repeatedExtglobRecursion(branch) > max) {
++    if (branch.includes('*') || repeatedExtglobRecursion(branch) > max) {

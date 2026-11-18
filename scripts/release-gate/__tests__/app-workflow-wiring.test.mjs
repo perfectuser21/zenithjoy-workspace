@@ -51,3 +51,20 @@ test('dashboard rollback uses trusted verified-content controller instead of mut
  assert.match(remote.with.script,/frontend-release\.sh[" ]+--rollback/);
  assert.doesNotMatch(remote.with.script,/\$REPO\/rollback\.sh/);
 });
+
+
+test('video tool promotion requires real upload evidence from protected main staging', () => {
+  const promote = load('promote-prod-hk');
+  assert.equal(promote.jobs.admission.with.video_tools_live, '${{ inputs.video_tools }}');
+  assert.ok(promote.jobs['promote-prod-hk'].needs.includes('admission'));
+  assert.ok(promote.jobs['promote-prod-hk'].steps.some(step => step.name === 'Confirm promotion'));
+  const admission = load('release-admission').jobs.admission;
+  assert.ok(admission.steps.some(step => step.name === 'Read exact live video tools acceptance' && step.if === 'inputs.video_tools_live'));
+  assert.ok(admission.steps.some(step => step.name === 'Read frozen business acceptance from Brain' && step.if === '${{ !inputs.video_tools_live }}'));
+  const workflow = load('video-tools-live-acceptance');
+  assert.equal(workflow.concurrency.group, 'deploy-staging-hk');
+  assert.equal(workflow.jobs.live.if, "github.ref == 'refs/heads/main'");
+  assert.equal(workflow.jobs.live.environment, 'creative-canvas-staging');
+  assert.ok(workflow.jobs.live.steps.some(step => step.name === 'Verify live private canvas upload'));
+  assert.ok(workflow.jobs.live.steps.some(step => step.name === 'Store live upload evidence'));
+});

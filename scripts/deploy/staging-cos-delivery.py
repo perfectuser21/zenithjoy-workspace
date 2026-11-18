@@ -36,12 +36,25 @@ def absent(client, location):
 
 def remote_command(original, size):
     # No URL in argv or environment. Download must finish before existing gates run.
+    required_kb = (size + 536870912 + 1023) // 1024
+    ram_probe = ''
+    if size <= 768 * 1024**2:
+        memory_kb = (size + 1536 * 1024**2 + 1023) // 1024
+        ram_probe = f'''if [[ -r /proc/meminfo && "$(stat -f -c %T /dev/shm 2>/dev/null)" == tmpfs ]]; then
+  RAM_FREE=$(df -Pk /dev/shm | awk 'NR==2 {{print $4}}')
+  MEM_FREE=$(awk '/^MemAvailable:/ {{print $2}}' /proc/meminfo)
+  if [[ "$RAM_FREE" =~ ^[0-9]+$ && "$MEM_FREE" =~ ^[0-9]+$ ]] && (( RAM_FREE >= {required_kb} && MEM_FREE >= {memory_kb} )); then
+    TRANSFER_DIR=/dev/shm
+  fi
+fi
+'''
     return '''set -euo pipefail
 umask 077
-TMP=$(mktemp -d /tmp/zj-cos.XXXXXXXX)
+TRANSFER_DIR=/tmp
+''' + ram_probe + '''TMP=$(mktemp -d "$TRANSFER_DIR/zj-cos.XXXXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 AVAILABLE=$(df -Pk "$TMP" | awk 'NR==2 {print $4}')
-[[ "$AVAILABLE" =~ ^[0-9]+$ ]] && (( AVAILABLE >= ''' + str((size + 536870912 + 1023) // 1024) + ''' )) || { echo 'COS_DOWNLOAD_DISK_FAILED' >&2; exit 41; }
+[[ "$AVAILABLE" =~ ^[0-9]+$ ]] && (( AVAILABLE >= ''' + str(required_kb) + ''' )) || { echo 'COS_DOWNLOAD_DISK_FAILED' >&2; exit 41; }
 curl --disable --fail --silent --proto '=https' --connect-timeout 30 --max-time 900 --config - --output "$TMP/image.tar.gz" 2>/dev/null || { echo 'COS_DOWNLOAD_FAILED' >&2; exit 42; }
 ''' + 'if ' + original + ' < "$TMP/image.tar.gz"; then :; else echo COS_ORIGINAL_GATE_FAILED >&2; exit 44; fi\n'
 
