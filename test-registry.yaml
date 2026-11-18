@@ -2038,9 +2038,18 @@ tests:
     path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws5/lead-acceptance-validator.test.ts
     type: unit
     ci: L3
+    status: deprecated
+    product: 中台认证
+    retirement: "Manual validator behavior moved to lead-acceptance-manual.test.mjs; obsolete missing-smoke string check is covered by current video routing and dispatch behavior tests. See docs/ci/test-retirements.json."
+
+  - id: lead-acceptance-manual-validator
+    path: .github/workflows/scripts/__tests__/lead-acceptance-manual.test.mjs
+    type: unit
+    ci: L3
     status: active
     product: 中台认证
-    note: "Sprint 2.1a WS5 — check-lead-acceptance.sh validator 防作弊检查 unit test"
+    note: "按需历史证据格式校验器行为回归；不代表真机或平台读回。"
+    execution: "ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs"
 
   - id: agent-douyin-publisher-video-selectors
     path: services/agent/publishers/douyin-publisher/__tests__/publish-douyin-video.test.cjs
@@ -9795,10 +9804,9 @@ tests:
     path: .github/workflows/scripts/__tests__/lead-evidence-format.test.mjs
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: unclassified
-    execution: ci-l3-code.yml / openclaw-scripts-test (three shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
-    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+    retirement: Historical Sprint evidence-format workflow and its exclusive wrapper were retired; the manual validator and current video-route and dispatch regressions remain.
 
   - id: ci-review-apps-api-src-tests-platform-data-admission-test-ts
     path: apps/api/src/__tests__/platform-data-admission.test.ts
