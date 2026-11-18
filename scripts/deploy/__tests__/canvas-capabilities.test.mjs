@@ -59,3 +59,57 @@ test('actual standalone probe rejects absent candidate code and missing new capa
  assert.equal(run({source:oldSource,action:'rollback'}).status,0);
  assert.notEqual(run({source:oldSource,action:'rollback',missingNode:'ZenithJoyWan'}).status,0);
 });
+
+
+test('reuses the verified canvas filesystem only when its complete build input is unchanged', () => {
+  const shell = readFileSync('scripts/deploy/hk-canvas-staging.sh', 'utf8');
+  const handler = shell.match(/build_canvas_image\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(handler);
+  const boundary = `
+    git() { [[ "$*" == *"diff --quiet"* && "$*" == *"infrastructure/comfyui"* && "$MODIFIED" == 0 ]]; }
+    docker() {
+      if [[ "$1" == image && "$2" == inspect && "$4" == --format ]]; then
+        case "$5" in
+          *Architecture*) echo linux/amd64 ;;
+          *RootFS*) [[ "$3" == "$IMAGE" && "$WRONG_LAYERS" == 1 ]] && echo wrong || echo layers ;;
+          *.Id*) echo "$PREVIOUS_ID" ;;
+          *revision*) echo "$PREVIOUS_SHA" ;;
+          *) return 99 ;;
+        esac
+      elif [[ "$1" == build ]]; then
+        if [[ "$*" == *"--network none"* ]]; then
+          read -r from && [[ "$from" == "FROM $PREVIOUS_TAG" ]] || return 99
+          echo reused
+        else
+          echo rebuilt
+        fi
+      else
+        return 99
+      fi
+    }
+    df() { printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted' 'x 9000000 0 9000000 1% /'; }
+    ${handler}
+    build_canvas_image
+  `;
+  const root = mkdtempSync(join(tmpdir(), 'canvas-build-reuse-'));
+  const previous = 'a'.repeat(40);
+  try {
+    const dir = join(root, previous);
+    spawnSync('mkdir', ['-p', dir]);
+    spawnSync('touch', [join(dir, 'receipt.json')]);
+    const run = (modified, wrongLayers) => spawnSync('bash', ['-ec', boundary], {encoding:'utf8',env:{
+      ...process.env, REPO:root, RELEASES:root, SOURCE:root, PREVIOUS_SHA:previous,
+      PREVIOUS_ID:'sha256:'+'a'.repeat(64), PREVIOUS_TAG:'canvas-old', IMAGE:'canvas-next',
+      SHA:'b'.repeat(40), MODIFIED:String(modified), WRONG_LAYERS:String(wrongLayers),
+    }});
+    const reused = run(0, 0);
+    assert.equal(reused.status, 0, reused.stderr);
+    assert.match(reused.stdout, /reused/);
+    const changed = run(1, 0);
+    assert.equal(changed.status, 0, changed.stderr);
+    assert.match(changed.stdout, /rebuilt/);
+    assert.notEqual(run(0, 1).status, 0);
+  } finally {
+    rmSync(root, {recursive:true,force:true});
+  }
+});

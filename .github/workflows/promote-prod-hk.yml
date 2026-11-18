@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       acceptance_run_key:
-        description: 冻结同版本且已定案的Brain验收单
+        description: 同版本验收单，视频工具启用时填真实上传验收的 GitHub 运行编号
         required: true
         type: string
       confirm:
@@ -55,6 +55,7 @@ jobs:
       sha: ${{ inputs.sha }}
       targets: api
       acceptance_run_key: ${{ inputs.acceptance_run_key }}
+      video_tools_live: ${{ inputs.video_tools }}
     secrets: inherit
   promote-prod-hk:
     name: Promote 生产 :5200（HK docker）
