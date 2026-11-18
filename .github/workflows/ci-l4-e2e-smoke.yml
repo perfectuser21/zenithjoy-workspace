@@ -732,7 +732,7 @@ jobs:
           psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
           for f in apps/api/db/migrations/*.sql; do
             echo "→ $f"
-            psql -h localhost -U cecelia -d cecelia -f "$f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
           done
 
       - name: Start isolated Brain task protocol fixture
