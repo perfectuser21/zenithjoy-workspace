@@ -397,14 +397,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -883,13 +883,13 @@
           "sha256": "df59592e5545dcc21d773eb082cd86b25a67521ff2df4b7b8a2fbc0490be230a"
         }
       ],
-      "code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
+      "code_digest": "440618e0032a814330a6065373c3e531e8a7d342fbc004aa64331282d03050de",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "680128cbc3d0575c40cfa7a4b85defdab172c32456772b0e5b6d11978ec368c0",
-        "current_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "ff4abad7e92c4d3a148981414eece405733ddea94b3639033cf55b62bc4048b8",
+        "current_code_digest": "440618e0032a814330a6065373c3e531e8a7d342fbc004aa64331282d03050de"
       }
     },
     "douyin_video_processing.preflight": {
@@ -1295,7 +1295,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
@@ -1379,7 +1379,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
+      "code_digest": "df6850896643d5320f2f075f168332c901fb1a88be88041191daa90af502dc79",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "59c0f6a119aaf07d3907b30354486644f4702391ef31184b37b71eeceff30312",
-        "current_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "323f03c2bcfb7442d6fc39fe47df04eb295b4eeced257e4f9e73b3b9cf028434",
+        "current_code_digest": "df6850896643d5320f2f075f168332c901fb1a88be88041191daa90af502dc79"
       }
     },
     "douyin_video_processing.dedup": {
@@ -2197,14 +2197,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -2683,13 +2683,13 @@
           "sha256": "40ba48ba2a034f7d8bd393137e0de4e0802ecdfd0129e1f6600d7a02a7b79fba"
         }
       ],
-      "code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
+      "code_digest": "061ccdaa1c4cef06aa064ae6d78e8958acefb650bfc8bf5a32ba55d2910cba6b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "c38169b4ee3cd1fca97f2c8ce117af457e026a55f8e829838f4243c47eb060cb",
-        "current_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "f517b3fe08db2bc747aac3ceea3c07e3b486f0d64360a6694e7ed3f13b06ba6e",
+        "current_code_digest": "061ccdaa1c4cef06aa064ae6d78e8958acefb650bfc8bf5a32ba55d2910cba6b"
       }
     },
     "douyin_video_processing.qualification": {
@@ -3079,14 +3079,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -3649,13 +3649,13 @@
           "sha256": "e22374d574306ba709a35aeb62dcc7ad983aa36a20803539a448d023a495c8f5"
         }
       ],
-      "code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
+      "code_digest": "d6fb3dccf82becf33dafe7a81cad6b9313c67ef0457a3052d8d2177af735cd1b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "e4f780821bbbda5f92c86a6ff912d2ac11daacbeb2be4ce7118fb5ed201dd21b",
-        "current_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "c71245b653e962afb854c30170b3063ec7083a7d8e3b7ea917199dd389d082d8",
+        "current_code_digest": "d6fb3dccf82becf33dafe7a81cad6b9313c67ef0457a3052d8d2177af735cd1b"
       }
     },
     "douyin_video_processing.collection": {
@@ -4040,14 +4040,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -4541,13 +4541,13 @@
           "sha256": "d31115758d260e6c413a3f4f76acc74a2351f92625267c89d59162f1a09e90ca"
         }
       ],
-      "code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
+      "code_digest": "e4685b959433804ad65b16c4a7f98aa0a191f4efcf74b5c46c38af40123c6671",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "ef5f5e069fe7b9cf3a4d7ed9347bf3c64d954f749dace9aa03ce786a5432a527",
-        "current_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "82b93962f5cbdf43ce9e1aa2ecaedf1f346ebf130bf239e149a488ac28dd415c",
+        "current_code_digest": "e4685b959433804ad65b16c4a7f98aa0a191f4efcf74b5c46c38af40123c6671"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -4946,14 +4946,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
+      "code_digest": "bebce4661090869a891b7319ab0618a4c8be8207f4a584bae298b56dfc118b29",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "5e56e57b392644247384eaab146d78cd4449f19f5554a36676a1d80aad120689",
-        "current_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "64ef6b250fc6af80709a326e86032054ad306392fa3e97ca8a93ef291ad70ff7",
+        "current_code_digest": "bebce4661090869a891b7319ab0618a4c8be8207f4a584bae298b56dfc118b29"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -5852,14 +5852,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -6352,13 +6352,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
+      "code_digest": "4893475e99b3ba0dab76421cd9b887126b36b81234b042e423f45112f28402e2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "a24d83b1ee520dcc3a99504000ef68964a4f1245b646c62269b8190b58c4c6b5",
-        "current_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "7beb3b27622cf034bd955312c21f2c7caef1473243c095df569756dbf0d939f5",
+        "current_code_digest": "4893475e99b3ba0dab76421cd9b887126b36b81234b042e423f45112f28402e2"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -6762,14 +6762,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -7290,13 +7290,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
+      "code_digest": "f4b7ba6d5415b1e07e9ec15e7c7e54a9ce774ea605c915f6be9fc788e662922e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "adbde842075752212ff1f2f80a055453d66b49cb9d24c1fca2acdee36ea79a90",
-        "current_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "36ff8d43ff656b794423169760415733c5c07b44ef9d0a65238cb55c6d656f6e",
+        "current_code_digest": "f4b7ba6d5415b1e07e9ec15e7c7e54a9ce774ea605c915f6be9fc788e662922e"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -7786,14 +7786,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -8150,13 +8150,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
+      "code_digest": "dfb774aa86a45051923955bbc7e23aee51e83078f9a6f9e7e0d2a45728393623",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "5505b587147cde25fccc41fa51a35370de0d94511fc12aafabd494b75d591e5a",
-        "current_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "8bdcb2f150a973b7692629c5ed7523f633d4c42966f5cd9cee1df1c9ecbc1d8a",
+        "current_code_digest": "dfb774aa86a45051923955bbc7e23aee51e83078f9a6f9e7e0d2a45728393623"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -8646,14 +8646,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -8985,13 +8985,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
+      "code_digest": "41dc6633149543975471d3db59fc2615156fcc80d541a263baf59c0832ee6ba5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "1a8fcdeae575954bf9dfe53fd6f555b93a73b29b6cd9fb02b1843221a65639fc",
-        "current_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "e490121b94899570ddc3aeb89dfaed41f745c773de3266ed0604aa1c7ea3bcfe",
+        "current_code_digest": "41dc6633149543975471d3db59fc2615156fcc80d541a263baf59c0832ee6ba5"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -9481,14 +9481,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -9813,13 +9813,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
+      "code_digest": "d5ecee2abbc5ad96f4d663c4de3b7c7a71becc186366969524aa644e46f02ca4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "ce98aaf441d77587c793df67d4791b2f85231970a94de9e69be6c1b786526c2a",
-        "current_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "8bec86ec7799abfcddcb943f97afd27a1786141b75d9160e759b26cf77e33be1",
+        "current_code_digest": "d5ecee2abbc5ad96f4d663c4de3b7c7a71becc186366969524aa644e46f02ca4"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -10309,14 +10309,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-dependencies.mjs",
           "revision": "contract",
-          "sha256": "ce284749d339ae34e43db9930c33e973493c2055fe49ff55fa0c678738e3cb61"
+          "sha256": "0b02f8a86ecf3cad25c7042d2c0b1f4cd560dc87c4e0b6b5e4ccf25366353203"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/preflight-pg-lock.json",
           "revision": "contract",
-          "sha256": "a8ca6b5cb0ab3337928d39100c3f7322113e3649b570c84bbf919ac4e5a3941c"
+          "sha256": "bf5322aa0c3aac1a239ecccc1e998a9987a31b90110326c5521478520e434dd4"
         },
         {
           "kind": "code",
@@ -10651,13 +10651,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
+      "code_digest": "22c7e67a97cb405072280e7551eae6b356c0531d9b198f34fe5f0abc274050d3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅固定SDK33客户端在成功写容器头后受检flush并冻结同ABI私有运行包；保留非零媒体、日志、身份与原startup截止，不声明完整录制通过。",
-        "reviewed_by": "/root/checker_feedback_adapter",
-        "previous_code_digest": "705c1342c5d4d5f7e84aabe82170bd4c000f194031bde46721b250aaecad5040",
-        "current_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257"
+        "reason": "Root lock changed only picomatch resolutions. All fourteen pinned PostgreSQL packages and their dependency edges remain byte-identical. Preflight closure verification passes with the updated root digest.",
+        "reviewed_by": "Codex",
+        "previous_code_digest": "7b556c12172c21e231fd2ee82eb663906a58e3bac86aa7aff3081aeb47166257",
+        "current_code_digest": "22c7e67a97cb405072280e7551eae6b356c0531d9b198f34fe5f0abc274050d3"
       }
     }
   },
