@@ -56,3 +56,10 @@ test('102 emitted checker and collection wrapper import the same admitted produc
   assert.equal(fs.existsSync(path.join(a.profile.cwd,'skills/douyin-leadgen-commander/scripts/production_readback.mjs')),false);
  }finally{f.close();}
 });
+test('102 emitted upstream scope carries controlled producer run identity for the actual reader',async()=>{
+ const f=await foundationFixture('102');try{
+  const a=await prepareLeadgenHost(f),c=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'context.json'))),video=c.verification['102'].video_ids[0];
+  const {resolveProducerIdentity}=await import('../activity-upstream-source.mjs');
+  assert.deepEqual(resolveProducerIdentity(c,'dedup',c.verification['102'].upstream[video]),{source_commit:'b'.repeat(40),profile:'different-producer-phone'});
+ }finally{f.close();}
+});
