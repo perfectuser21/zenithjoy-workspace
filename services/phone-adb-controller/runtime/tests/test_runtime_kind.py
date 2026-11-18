@@ -185,6 +185,61 @@ class RuntimeKindTests(RuntimeFixture):
         self.assertNotIn('temporary_path', receipt)
         self.assertNotIn('"rm ', self.log.read_text())
 
+    def test_upload_diagnostics_preserve_short_nonzero_and_wrong_ack_failures(self):
+        for mode in ('short-upload', 'upload-nonzero', 'upload-wrong-ack'):
+            with self.subTest(mode=mode):
+                os.environ['FAKE_ADB_MODE'] = mode
+                target = self.remote / 'scrcpy-server.jar'
+                target.unlink(missing_ok=True)
+                result = self.runtime.stage_server(**self.config33())
+                self.assertFalse(result['verified'])
+                self.assertTrue(result['execution_stop_unknown'])
+                raw = json.loads(Path(result['stage_receipt']).read_text())
+                evidence = raw['upload_result']
+                self.assertEqual(evidence, result['upload_result'])
+                self.assertEqual(evidence['expected_bytes'], len(self.server33))
+                self.assertEqual(evidence['exit_code'], 7 if mode == 'upload-nonzero' else 0)
+                for stream in ('stdout', 'stderr'):
+                    self.assertEqual(evidence[stream]['bytes'], len(evidence[stream]['text'].encode()))
+                    self.assertEqual(evidence[stream]['sha256'], hashlib.sha256(evidence[stream]['text'].encode()).hexdigest())
+                if mode == 'short-upload':
+                    self.assertEqual(target.read_bytes(), self.server33[:16384])
+                if mode == 'upload-nonzero':
+                    self.assertIn('adb: error: closed', evidence['stderr']['text'])
+                self.assertNotIn('"rm ', self.log.read_text())
+
+    def test_upload_diagnostics_omit_binary_unrecognized_and_oversized_text(self):
+        os.environ['FAKE_ADB_MODE'] = 'upload-unsafe-output'
+        result = self.runtime.stage_server(**self.config33())
+        self.assertFalse(result['verified'])
+        self.assertTrue(result['execution_stop_unknown'])
+        raw = Path(result['stage_receipt']).read_text()
+        evidence = json.loads(raw)['upload_result']
+        for stream, payload in [('stdout', b'PK\x03\x04' + b'x'*4096), ('stderr', b'Authorization: Bearer fixture-secret\n')]:
+            self.assertIsNone(evidence[stream]['text'])
+            self.assertEqual(evidence[stream]['bytes'], len(payload))
+            self.assertEqual(evidence[stream]['sha256'], hashlib.sha256(payload).hexdigest())
+        self.assertNotIn('fixture-secret', raw)
+        self.assertLess(len(raw), 6000)
+
+    def test_upload_diagnostics_reject_binary_line_separators_and_limit_safe_text(self):
+        for payload in (b'STAGED '+b'a'*32+b'\x1c', (b'STAGED '+b'a'*32+b'\n')*30):
+            with self.subTest(payload_bytes=len(payload)):
+                self.assertIsNone(self.runtime.stage_output_evidence(payload)['text'])
+
+    def test_upload_diagnostics_persistence_failure_keeps_unknown_and_partial_target(self):
+        original = os.replace
+        def refuse_upload_receipt(source, target):
+            if 'upload_result' in Path(source).read_text():
+                raise OSError('fixture diagnostic persistence refused')
+            return original(source, target)
+        with patch.object(self.runtime.os, 'replace', side_effect=refuse_upload_receipt):
+            result = self.runtime.stage_server(**self.config33())
+        self.assertFalse(result['verified'])
+        self.assertTrue(result['execution_stop_unknown'])
+        self.assertTrue((self.remote / 'scrcpy-server.jar').exists())
+        self.assertNotIn('"rm ', self.log.read_text())
+
     def shim_env(self, kind='sdk33'):
         config = self.config33()
         return {'ZJ_SCRCPY_RUNTIME_KIND': kind, 'ZJ_SCRCPY_RUNTIME_ROOT': str(self.sdk33),
