@@ -9,6 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {installPreflightPg,preflightPgDeployment,preflightPgLockIdentity} from '../preflight-pg-dependencies.mjs';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-pg.json',import.meta.url)));
+const fixture102=JSON.parse(readFileSync(new URL('./fixtures/activity-host-102.json',import.meta.url)));
 const implementation=new URL('../activity-host-pg.mjs',import.meta.url);
 const sha=b=>createHash('sha256').update(b).digest('hex');
 let f;
@@ -16,10 +17,30 @@ test.before(async()=>{
  const root=realpathSync(mkdtempSync(join(tmpdir(),'activity-host-pg-'))),runtime=join(root,'runtime'),base=join(root,'base');
  mkdirSync(runtime,{mode:0o700});mkdirSync(base,{mode:0o700});
  for(const [name,v] of Object.entries(fixture.files)){assert.equal(sha(v.source),v.sha256);writeFileSync(join(base,name),v.source,{mode:0o600});}
+ for(const [name,v] of Object.entries(fixture102.files).filter(([n])=>n.endsWith('.mjs'))){mkdirSync(join(base,name,'..'),{recursive:true});writeFileSync(join(base,name),v.source,{mode:0o600});}
+ for(const name of ['leadgen-db-lib.js','leadgen-queue.js','queued-recipient-evidence.js','company-config-lib.js'])writeFileSync(join(runtime,name),'module.exports={};',{mode:0o600});
  for(const name of ['preflight-pg-dependencies.mjs','preflight-pg-lock.json','leadgen-db-connect.js'])cpSync(new URL('../'+name,import.meta.url),join(runtime,name));
  const sourceCommit='a'.repeat(40);await installPreflightPg({runtimeRoot:runtime,sourceCommit});
  const expectedSource=Object.fromEntries(['preflight-pg-dependencies.mjs','preflight-pg-lock.json'].map(n=>[n,sha(readFileSync(join(runtime,n)))]));
  f={root,runtime,base,sourceCommit,expectedSource,expectedDeployment:preflightPgDeployment({runtimeRoot:runtime,sourceCommit})};
+});
+for(const name of ['qualification/runtime-deps.mjs','collection-evidence/runtime-deps.mjs'])test(`102 ${name} real initialization uses verified PG with sanitized host environment`,async()=>{
+ const targetRoot=join(f.root,'102-'+name.split('/')[0]);
+ const assembled=await (await import(implementation)).assembleActivityPgHost({baseRoot:f.base,targetRoot,runtimeRoot:f.runtime,sourceCommit:f.sourceCommit,expectedSource:f.expectedSource,expectedDeployment:f.expectedDeployment,workflow:'102'});
+ const file=join(targetRoot,name),raw=existsSync(file)?readFileSync(file,'utf8'):fixture102.files[name].source;
+ const line=raw.split('\n').find(l=>l.includes('pool=')&&l.includes('require('));
+ const context={source_commit:f.sourceCommit,runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:assembled.pg}};
+ const imports=raw.includes('loadActivityHostPg')?`import {loadActivityHostPg} from ${JSON.stringify(pathToFileURL(join(targetRoot,'activity-host-pg.mjs')).href)};`:'';
+ const result=child(`import {createRequire} from 'node:module';${imports}const c=${JSON.stringify(context)},ROOT=c.runtime_root,need=()=>{};${name.startsWith('qualification/')?"const require=createRequire(ROOT+'/package.json');":''}${line}\nconsole.log(typeof pool.query);await pool.end();`,targetRoot);
+ assert.equal(result.status,0,result.stderr);assert.equal(result.stdout.trim(),'function');assert.ok(existsSync(file));
+ assert.ok(raw.includes(JSON.stringify(f.runtime)),'runtime is fixed from approved assembly input');assert.ok(raw.includes(f.sourceCommit));
+ assert.match(readFileSync(join(targetRoot,'qualification/helper.mjs'),'utf8'),/deps=injectedDeps\|\|await createRuntimeDeps\(c\)/);
+});
+test('102 wrapper original drift rejects before creating an output directory',async()=>{
+ const base=join(f.root,'102-bad-base');cpSync(f.base,base,{recursive:true});writeFileSync(join(base,'qualification/runtime-deps.mjs'),'modified');
+ const targetRoot=join(f.root,'102-bad-output');
+ await assert.rejects((await import(implementation)).assembleActivityPgHost({baseRoot:base,targetRoot,runtimeRoot:f.runtime,sourceCommit:f.sourceCommit,expectedSource:f.expectedSource,expectedDeployment:f.expectedDeployment,workflow:'102'}),/ACTIVITY_HOST_PG_BASE/);
+ assert.equal(existsSync(targetRoot),false);
 });
 test.after(()=>{if(f)rmSync(f.root,{recursive:true,force:true});});
 async function candidate(name){
