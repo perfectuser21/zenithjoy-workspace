@@ -9806,7 +9806,7 @@ tests:
     ci: L3
     status: deprecated
     product: unclassified
-    retirement: Historical Sprint evidence-format workflow and its exclusive wrapper were retired; the underlying manual validator and mixed video-route regression remain.
+    retirement: Historical Sprint evidence-format workflow and its exclusive wrapper were retired; the manual validator and current video-route and dispatch regressions remain.
 
   - id: ci-review-apps-api-src-tests-platform-data-admission-test-ts
     path: apps/api/src/__tests__/platform-data-admission.test.ts
