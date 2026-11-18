@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
+import { EventEmitter } from 'node:events';
+import { Readable } from 'node:stream';
 import { startAuditSnapshot, remediateBulk } from '../picomatch-audit-proxy.mjs';
+import * as api from '../picomatch-audit-proxy.mjs';
 
 const target = { id: 1247710, url: 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf',
   severity: 'high', vulnerable_versions: '<=4.0.7', title: 'picomatch repeated extglobs', cwe: ['CWE-1333'] };
@@ -75,4 +78,29 @@ test('原始请求尚未完成时不能切换过滤阶段', async t => {
   release();
   assert.deepEqual(await (await reply).json(), { name: 'picomatch' });
   proxy.activateRemediation();
+});
+
+test('上游TLS连接固定主机，重定向和URL形式的外部路径不能改写目标', async () => {
+  assert.equal(typeof api.readRegistryJson, 'function');
+  let calls = 0, status = 200;
+  const transport = (options, receive) => {
+    calls++;
+    assert.equal(options.hostname, 'registry.npmjs.org');
+    assert.equal(options.protocol, 'https:'); assert.equal(options.port, 443);
+    assert.equal(options.path, '/picomatch');
+    assert.equal(options.headers.authorization, undefined);
+    const request = new EventEmitter(); request.destroy = () => {};
+    request.end = () => { const response = Readable.from([Buffer.from('{"name":"picomatch"}')]);
+      response.statusCode = status; response.headers = { location: 'https://attacker.invalid' }; receive(response); };
+    return request;
+  };
+  const request = { method: 'GET', path: '/picomatch', accept: 'application/json', body: '' };
+  assert.deepEqual(await api.readRegistryJson(request, transport), { name: 'picomatch' });
+  status = 302;
+  await assert.rejects(api.readRegistryJson(request, transport), /REGISTRY_302/);
+  assert.equal(calls, 2, '不跟随Location建立第二次连接');
+  for (const path of ['//attacker.invalid', 'https://attacker.invalid', '/%2Fattacker.invalid', '/..', '/pkg?redirect=https://attacker.invalid']) {
+    await assert.rejects(api.readRegistryJson({ ...request, path }, transport), /ENDPOINT/);
+  }
+  assert.equal(calls, 2, '非法目标不得发出网络请求');
 });
