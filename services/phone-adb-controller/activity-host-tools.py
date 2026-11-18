@@ -22,7 +22,7 @@ scope_rejection = typed.scope_rejection
 
 def read_business_input(args, *, activity, allowed_operations):
     try:
-        return typed.read_business_input(args, activity=activity, allowed_operations=allowed_operations)
+        value = typed.read_business_input(args, activity=activity, allowed_operations=allowed_operations)
     except PreDispatchRejected as error:
         if type(error) is not PreDispatchRejected:
             raise
@@ -30,6 +30,15 @@ def read_business_input(args, *, activity, allowed_operations):
         if activity == 'collect_videos':
             error.details['tool_hint'] += '101的company_config仅preflight；公司版本已由start checker核验，读取冻结context和preflight交接，不重复freeze。'
         raise
+    if activity == 'collect_videos' and value['op'] in ['discover', 'discover_readback']:
+        video = value.get('video')
+        if not isinstance(video, dict) or not isinstance(video.get('metrics'), dict) or not video['metrics']:
+            error = scope_rejection('METRICS_OBSERVATION_REQUIRED')
+            error.details = {'activity': activity, 'allowed_operations': sorted(allowed_operations),
+                             'required_fields': ['video.metrics'],
+                             'tool_hint': 'discover与discover_readback都必须携带同一完整video.metrics原件对象。读取本轮metrics或原discover回执中的原对象，用新action名纠正本次请求；不重做已成功discover、不自行补造字段。'}
+            raise error
+    return value
 
 
 def digest(raw):
@@ -54,6 +63,7 @@ def instructions(ops, original):
              '下面清单由冻结OPS生成，不在当前Activity清单中的业务操作禁止调用。']
     lines += [f'{key}允许操作：'+', '.join(values) for key, values in ops.items()]
     lines += ['101中company_config仅preflight调用；collect_videos使用已冻结公司政策，start checker已独立核验版本，不重新调用company_config。',
+              '101的discover与discover_readback都必须传video.metrics：同一完整原始metrics对象。discover_readback使用原discover请求中的video及metrics，不只传video_id/video_url；不得重做已成功discover或自行补造metrics。',
               'ACTION_NAME是持久动作身份：同名同参数只读回。仅terminal且data.dispatched=false可按allowed_operations修正并使用新action_name；unknown不得换名重发。',
               '只按原合同和当前Skill交付证据，不修改合同、Skill、上下文、工具或Checker；是否通过仍由独立Checker判定。']
     return original+'\n冻结Activity业务操作与拒绝回执补充：\n'+'\n'.join(lines)+'\n'
