@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "required": ["version", "capability", "name", "workflow", "brain_workflow_key", "source_repo", "checks", "trigger_inputs", "activities"],
   "properties": {
+    "runtime": {"type":"object","additionalProperties":false,"required":["kind","profile_ref","timeout_ms","input_schema"],"properties":{"kind":{"const":"commander-foundation-v1"},"profile_ref":{"type":"object","additionalProperties":false,"required":["repo","path","revision","digest"],"properties":{"repo":{"type":"string","pattern":"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},"path":{"type":"string","maxLength":500,"pattern":"^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*[?#\\\\])[a-zA-Z0-9_./-]+$"},"revision":{"type":"string","pattern":"^[a-f0-9]{40}$"},"digest":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"}}},"timeout_ms":{"type":"integer","minimum":1000,"maximum":86400000},"cleanup_timeout_ms":{"type":"integer","minimum":1,"maximum":3600000},"commander_timeout_ms":{"type":"integer","minimum":100,"maximum":600000},"input_schema":{"type":"object","required":["type"],"properties":{"type":{"const":"object"}}}}},
     "on_status": { "type": "object", "additionalProperties": false,
       "required": ["done", "retry", "failed", "empty", "partial", "needs_review"],
       "properties": {

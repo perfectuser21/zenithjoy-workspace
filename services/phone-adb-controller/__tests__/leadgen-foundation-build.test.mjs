@@ -52,3 +52,8 @@ test('four original product-map contracts pin executable profiles and every prof
   for(const [name,digest]of [[runtime.profile_ref.path,hash(profileBytes)],...Object.entries(p.files)])assert.ok(bindings.some(b=>b.path===name&&b.revision===runtime.profile_ref.revision&&b.digest==='sha256:'+digest),name+' lacks a frozen definition binding');
  }
 });
+test('product-map foundation runtime rejects floating profiles and unknown authority fields',async()=>{
+ const {default:Ajv}=await import('ajv');const schema=JSON.parse(fs.readFileSync(path.join(repo,'product-map/contracts/activity-contract.schema.json'))).properties.runtime;
+ const {parse}=await import('yaml'),runtime=parse(fs.readFileSync(path.join(repo,'product-map/contracts/douyin_video_discovery.yaml'),'utf8')).runtime,validate=new Ajv({strict:true}).compile(schema);
+ assert.equal(validate(runtime),true);for(const change of [r=>r.profile_ref.revision='main',r=>delete r.profile_ref.digest,r=>r.profile_ref.path='../outside',r=>r.timeout_ms=0,r=>r.env={OVERRIDE:'yes'}]){const r=structuredClone(runtime);change(r);assert.equal(validate(r),false);}
+});
