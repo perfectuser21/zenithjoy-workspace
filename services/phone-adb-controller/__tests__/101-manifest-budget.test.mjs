@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {create101BudgetCandidate} from '../workflow-101-manifest-budget.mjs';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const old={task_id:id(1),run_id:id(2),run_tag:'old101'},identity={task_id:id(3),run_id:id(4),run_tag:'new101'};
@@ -12,6 +13,7 @@ test('101新候选总40分钟含原cleanup；run/input/context一致且旧模板
  assert.equal(candidate.context.business_deadline_ms,2800000);assert.equal(candidate.context.cleanup_deadline_ms,3400000);
  assert.equal(candidate.context.run_max_seconds,2400);assert.equal(candidate.context.run_start_ts,1000);
  assert.deepEqual(candidate.context.tasks['101'],identity);assert.equal(candidate.manifest.run.task_id,identity.task_id);assert.equal(candidate.manifest.run.run_id,identity.run_id);
+ assert.equal(candidate.manifest.profile.files['context.json'],createHash('sha256').update(candidate.contextBytes).digest('hex'));
  assert.deepEqual(candidate.manifest.run.input,candidate.context);assert.deepEqual(candidate.manifest.run.contract,before.run.contract);assert.deepEqual(source,before);
  assert.equal(candidate.task_scope.run_max_seconds,2400);assert.equal(candidate.context.local_owner,'wf101'+identity.run_id.replaceAll('-',''));assert.equal(candidate.context.central_owner,identity.task_id);
 });

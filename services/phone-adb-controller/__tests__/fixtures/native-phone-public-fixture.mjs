@@ -54,6 +54,7 @@ export async function startNativePhoneAdbFixture(t,{serial,readFile,command}){
  return {endpoint:'tcp:127.0.0.1:'+server.address().port,requests};
 }
 
+// Preset model replies: this CI never calls a real model or a real phone.
 // Only text and official SDK terminal messages are synthetic. All protocol
 // clients, source checks, receipt issuers and parent-loop brands stay real.
 export async function startNativePhoneGatewayFixture(t,intents){
@@ -91,7 +92,7 @@ export async function usingNativePhonePublic(t,fn){
    WFR_RUN_ID:f.q.run_id.replace(/__a1$/,''),WFR_ATTEMPT:'a1',P:f.q.profile,SERIAL:f.q.serial,
    WFR_HOSTKEY:'mmv',LEADGEN_LINE:f.q.line,LEADGEN_LIMIT:String(f.q.limit),
    WF_BRAIN_WORKFLOW:f.q.workflow_key,WF_BRAIN_TASK_ID:f.q.task_id,
-   WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'600',
+   WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'2400',
    LEADGEN_EXECUTION_MODE:'agent',LEADGEN_EXECUTION_TRANSPORT:'raw-model-v1',LEADGEN_MAX_TURNS:'64'};
   const frozen={execution_mode:'agent',execution_transport:'raw-model-v1',
    deployment:{source_commit:f.source.commit,target:'mmv'},agent_input:{workflow_key:f.q.workflow_key}};

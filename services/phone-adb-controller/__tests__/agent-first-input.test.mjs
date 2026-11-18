@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,mkdirSync,rmSync,chmodSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,mkdirSync,rmSync,chmodSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -69,4 +69,20 @@ test('新101默认40分钟总预算，显式值优先，旧1800冻结起点和�
  const body=snapshot(expected),file=join(root,'run-definition.json');writeFileSync(file,JSON.stringify({...body,snapshot_sha256:definition.digest(body)}));
  assert.deepEqual(definition.initializeAgentBudget(fresh,{now}),{run_start_ts:1700000000,run_max_seconds:1800});
  assert.throws(()=>definition.initializeAgentBudget({...fresh,WF_RUN_MAX_SECONDS:'2400'},{now}),/AGENT_INPUT_BUDGET_RESUME_MISMATCH/);
+});
+
+
+test('Code仅101首次启动注入同源缺省，旧run和其它流程保持原路径',t=>{
+ const root=mkdtempSync(join(tmpdir(),'code101-default-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const source=readFileSync(new URL('../leadgen-run.sh',import.meta.url),'utf8');
+ const start=source.indexOf('# Only a new Code 101'),end=source.indexOf('if [[ "${LEADGEN_EXECUTION_MODE:-code}" == agent ]]',start);
+ assert.ok(start>=0&&end>start&&end<source.indexOf('node "$WF_HOME/runtime-receipts.mjs" prepare'));
+ const block=source.slice(start,end),bin=join(root,'bin');mkdirSync(bin);
+ writeFileSync(join(bin,'node'),'#!/bin/sh\nexec '+JSON.stringify(process.execPath)+' "$@"\n',{mode:0o700});
+ const script='set -eu\n'+block+'\nprintf "%s\\n" "${WF_RUN_MAX_SECONDS-unset}"\n';
+ const invoke=(extra={})=>spawnSync('/bin/zsh',['-c',script],{encoding:'utf8',env:{...process.env,PATH:bin+':/usr/bin:/bin',HOME:root,WF_HOME:new URL('../',import.meta.url).pathname,WFR_RUN_DIR:root,WF_BRAIN_WORKFLOW:'douyin_video_discovery',LEADGEN_EXECUTION_MODE:'code',WF_RUN_MAX_SECONDS:undefined,...extra}});
+ assert.equal(invoke().stdout,'2400\n');assert.equal(invoke({WF_RUN_MAX_SECONDS:'900'}).stdout,'900\n');
+ assert.equal(invoke({WF_BRAIN_WORKFLOW:'douyin_video_processing'}).stdout,'unset\n');assert.equal(invoke({LEADGEN_EXECUTION_MODE:'agent'}).stdout,'unset\n');
+ assert.notEqual(invoke({WF_RUN_MAX_SECONDS:''}).status,0);
+ writeFileSync(join(root,'run-definition.json'),'{}');assert.equal(invoke().stdout,'unset\n');assert.equal(invoke({WF_RUN_MAX_SECONDS:'1800'}).stdout,'1800\n');
 });
