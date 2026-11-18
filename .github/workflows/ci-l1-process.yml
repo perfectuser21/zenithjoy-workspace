@@ -22,138 +22,9 @@ concurrency:
 jobs:
   # ─── /dev 分支命名验证 ─────────────────────────────────────────────────────
 
-  verify-dev-workflow:
-    if: github.event_name == 'pull_request'
-    name: Verify /dev Workflow (Branch Name Check)
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: 验证分支必须通过 /dev 创建
-        env:
-          DEV_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          BRANCH="$DEV_BRANCH"
-          echo "检查分支名: $BRANCH"
-          # 兼容 8 位 (MMDDHHNN) 与 10 位 (MMDDHHMMSS) 时间戳
-          if ! echo "$BRANCH" | grep -qP '^cp-\d{8,10}-[a-z0-9-]+$'; then
-            echo ""
-            echo "❌ 分支名不符合 /dev 工作流规范"
-            echo "   当前分支: $BRANCH"
-            echo "   要求格式: cp-XXXXXXXX-task-name（8 或 10 位时间戳，例: cp-02281200-fix-login / cp-0228120030-fix-login）"
-            echo ""
-            echo "   所有代码改动必须通过 /dev 工作流创建分支。"
-            echo "   请运行 /dev 重新开始开发流程。"
-            exit 1
-          fi
-          echo "✅ 分支名验证通过: $BRANCH"
-
   # ─── PR 标题格式（Conventional Commits）─────────────────────────────────
 
-  pr-title:
-    if: github.event_name == 'pull_request'
-    name: PR Title Format
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check PR title follows conventional commits
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          echo "PR Title: $TITLE"
-
-          # 去掉 [CONFIG] / [INFRA] 前缀后再校验 conventional commits
-          STRIPPED=$(echo "$TITLE" | sed 's/^\[CONFIG\][[:space:]]*//' | sed 's/^\[INFRA\][[:space:]]*//')
-
-          if echo "$STRIPPED" | grep -qE "^(feat|fix|docs|chore|test|refactor|style|ci|perf|build)(\(.+\))?!?:"; then
-            echo "PR title follows conventional commits format"
-          else
-            echo ""
-            echo "PR title does not follow conventional commits format"
-            echo ""
-            echo "Expected: <type>(<scope>): <description>"
-            echo "Types: feat, fix, docs, chore, test, refactor, style, ci, perf, build"
-            echo "Examples:"
-            echo "  feat(dashboard): add user profile page"
-            echo "  fix(api): handle null response from database"
-            echo "  [CONFIG] ci(l1): add branch naming check"
-            exit 1
-          fi
-
   # ─── CI Config Audit ──────────────────────────────────────────────────────
-
-  ci-config-audit:
-    if: github.event_name == 'pull_request'
-    name: CI Config Audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Audit CI config changes
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_HEAD_REF: ${{ github.head_ref }}
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  CI Config Audit"
-          echo "  Branch: $PR_HEAD_REF"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-
-          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          # smoke scripts (.sh under scripts/) are not CI workflow definitions — exempt from audit
-          CI_CHANGED=$(echo "$CHANGED" | grep "^\.github/workflows/" | grep -v "^\.github/workflows/scripts/" || true)
-
-          if [ -z "$CI_CHANGED" ]; then
-            echo "No CI workflow files changed — audit not required"
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  ✅ CI Config Audit PASSED (no CI changes)"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            exit 0
-          fi
-
-          echo "CI workflow files changed:"
-          while IFS= read -r changed_path; do
-            printf '  - %s\n' "$changed_path"
-          done <<< "$CI_CHANGED"
-          echo ""
-
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "workflow_dispatch: 跳过 PR 标题 [CONFIG] 检查"
-          elif [[ ! "$PR_TITLE" =~ \[CONFIG\] ]] && [[ ! "$PR_TITLE" =~ \[INFRA\] ]]; then
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  ❌ CI Config Audit FAILED"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "  .github/workflows/** was modified but PR title is missing [CONFIG] or [INFRA] tag."
-            echo "  CI config changes are high-risk and require explicit labeling."
-            echo ""
-            echo "  Fix: update PR title to include [CONFIG] or [INFRA]"
-            echo "  Example: [CONFIG] ci(l1): add branch naming check"
-            echo ""
-            exit 1
-          fi
-
-          echo "PR title contains [CONFIG] or [INFRA] tag — audit passed"
-          echo ""
-          echo "Changed files summary:"
-          git diff --stat "origin/${BASE_REF}...HEAD" -- '.github/workflows/' | tail -5
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  ✅ CI Config Audit PASSED"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ─── Secrets Scan ────────────────────────────────────────────────────────
 
@@ -179,79 +50,6 @@ jobs:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   # ─── Frontend Browser DoD Check ──────────────────────────────────────────
-
-  frontend-browser-dod-check:
-    if: github.event_name == 'pull_request'
-    name: Frontend Browser DoD Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Detect frontend changes and check browser DoD
-        env:
-          BRANCH: ${{ github.head_ref }}
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  Frontend Browser DoD Check"
-          echo "  Branch: $BRANCH"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          BASE_REF="${{ github.base_ref }}"
-          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-
-          # 测试目录和 *.test.* / *.spec.* 只验证实现，不要求虚构浏览器操作。
-          # API 由 L4 api-test 的实际API测试硬门覆盖；浏览器DoD仅识别真实界面入口。
-          if ! echo "$CHANGED" |
-            grep -E '^apps/(dashboard|staff-hub)/' |
-            grep -vE '(^|/)(__tests__|tests?)/|(^|/)[^/]+\.(test|spec)\.[^/]+$' |
-            grep . >/dev/null; then
-            echo "无前端文件改动，跳过浏览器验证检查"
-            exit 0
-          fi
-
-          echo "检测到前端文件改动，检查 DoD 是否含浏览器验证步骤..."
-
-          DOD_FILE=""
-          if [ -f ".task-${BRANCH}.md" ]; then
-            DOD_FILE=".task-${BRANCH}.md"
-          elif [ -f ".dod-${BRANCH}.md" ]; then
-            DOD_FILE=".dod-${BRANCH}.md"
-          elif [ -f ".dod.md" ]; then
-            DOD_FILE=".dod.md"
-          fi
-
-          if [ -z "$DOD_FILE" ]; then
-            echo "⚠️  未找到 DoD 文件，跳过浏览器验证检查"
-            exit 0
-          fi
-
-          echo "DoD 文件: $DOD_FILE"
-
-          if grep -q "manual:chrome:\|localhost:3001" "$DOD_FILE"; then
-            echo "✅ 找到浏览器验证步骤，检查通过"
-            grep -n "manual:chrome:\|localhost:3001" "$DOD_FILE" | head -5
-            exit 0
-          fi
-
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  ❌ Frontend Browser DoD Check FAILED"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "  本 PR 修改了前端文件，但 DoD 中未找到浏览器验证步骤。"
-          echo ""
-          echo "  请在 DoD 的 [BEHAVIOR] 条目中添加（至少一个）："
-          echo "    Test: manual:chrome: 打开 http://localhost:3001/xxx → 验证主流程"
-          echo ""
-          exit 1
 
   # ─── 测试质量 lint 门禁（5 gates）────────────────────────────────────────
 
@@ -439,6 +237,9 @@ jobs:
     name: Static PR Policy Checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -448,6 +249,164 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - name: 验证分支必须通过 /dev 创建
+        env:
+          DEV_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          BRANCH="$DEV_BRANCH"
+          echo "检查分支名: $BRANCH"
+          # 兼容 8 位 (MMDDHHNN) 与 10 位 (MMDDHHMMSS) 时间戳
+          if ! echo "$BRANCH" | grep -qP '^cp-\d{8,10}-[a-z0-9-]+$'; then
+            echo ""
+            echo "❌ 分支名不符合 /dev 工作流规范"
+            echo "   当前分支: $BRANCH"
+            echo "   要求格式: cp-XXXXXXXX-task-name（8 或 10 位时间戳，例: cp-02281200-fix-login / cp-0228120030-fix-login）"
+            echo ""
+            echo "   所有代码改动必须通过 /dev 工作流创建分支。"
+            echo "   请运行 /dev 重新开始开发流程。"
+            exit 1
+          fi
+          echo "✅ 分支名验证通过: $BRANCH"
+
+      - name: Check PR title follows conventional commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "PR Title: $TITLE"
+
+          # 去掉 [CONFIG] / [INFRA] 前缀后再校验 conventional commits
+          STRIPPED=$(echo "$TITLE" | sed 's/^\[CONFIG\][[:space:]]*//' | sed 's/^\[INFRA\][[:space:]]*//')
+
+          if echo "$STRIPPED" | grep -qE "^(feat|fix|docs|chore|test|refactor|style|ci|perf|build)(\(.+\))?!?:"; then
+            echo "PR title follows conventional commits format"
+          else
+            echo ""
+            echo "PR title does not follow conventional commits format"
+            echo ""
+            echo "Expected: <type>(<scope>): <description>"
+            echo "Types: feat, fix, docs, chore, test, refactor, style, ci, perf, build"
+            echo "Examples:"
+            echo "  feat(dashboard): add user profile page"
+            echo "  fix(api): handle null response from database"
+            echo "  [CONFIG] ci(l1): add branch naming check"
+            exit 1
+          fi
+
+      - name: Audit CI config changes
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  CI Config Audit"
+          echo "  Branch: $PR_HEAD_REF"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          # smoke scripts (.sh under scripts/) are not CI workflow definitions — exempt from audit
+          CI_CHANGED=$(echo "$CHANGED" | grep "^\.github/workflows/" | grep -v "^\.github/workflows/scripts/" || true)
+
+          if [ -z "$CI_CHANGED" ]; then
+            echo "No CI workflow files changed — audit not required"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  ✅ CI Config Audit PASSED (no CI changes)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 0
+          fi
+
+          echo "CI workflow files changed:"
+          while IFS= read -r changed_path; do
+            printf '  - %s\n' "$changed_path"
+          done <<< "$CI_CHANGED"
+          echo ""
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "workflow_dispatch: 跳过 PR 标题 [CONFIG] 检查"
+          elif [[ ! "$PR_TITLE" =~ \[CONFIG\] ]] && [[ ! "$PR_TITLE" =~ \[INFRA\] ]]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  ❌ CI Config Audit FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "  .github/workflows/** was modified but PR title is missing [CONFIG] or [INFRA] tag."
+            echo "  CI config changes are high-risk and require explicit labeling."
+            echo ""
+            echo "  Fix: update PR title to include [CONFIG] or [INFRA]"
+            echo "  Example: [CONFIG] ci(l1): add branch naming check"
+            echo ""
+            exit 1
+          fi
+
+          echo "PR title contains [CONFIG] or [INFRA] tag — audit passed"
+          echo ""
+          echo "Changed files summary:"
+          git diff --stat "origin/${BASE_REF}...HEAD" -- '.github/workflows/' | tail -5
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ✅ CI Config Audit PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Detect frontend changes and check browser DoD
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Frontend Browser DoD Check"
+          echo "  Branch: $BRANCH"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          BASE_REF="${{ github.base_ref }}"
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+
+          # 测试目录和 *.test.* / *.spec.* 只验证实现，不要求虚构浏览器操作。
+          # API 由 L4 api-test 的实际API测试硬门覆盖；浏览器DoD仅识别真实界面入口。
+          if ! echo "$CHANGED" |
+            grep -E '^apps/(dashboard|staff-hub)/' |
+            grep -vE '(^|/)(__tests__|tests?)/|(^|/)[^/]+\.(test|spec)\.[^/]+$' |
+            grep . >/dev/null; then
+            echo "无前端文件改动，跳过浏览器验证检查"
+            exit 0
+          fi
+
+          echo "检测到前端文件改动，检查 DoD 是否含浏览器验证步骤..."
+
+          DOD_FILE=""
+          if [ -f ".task-${BRANCH}.md" ]; then
+            DOD_FILE=".task-${BRANCH}.md"
+          elif [ -f ".dod-${BRANCH}.md" ]; then
+            DOD_FILE=".dod-${BRANCH}.md"
+          elif [ -f ".dod.md" ]; then
+            DOD_FILE=".dod.md"
+          fi
+
+          if [ -z "$DOD_FILE" ]; then
+            echo "⚠️  未找到 DoD 文件，跳过浏览器验证检查"
+            exit 0
+          fi
+
+          echo "DoD 文件: $DOD_FILE"
+
+          if grep -q "manual:chrome:\|localhost:3001" "$DOD_FILE"; then
+            echo "✅ 找到浏览器验证步骤，检查通过"
+            grep -n "manual:chrome:\|localhost:3001" "$DOD_FILE" | head -5
+            exit 0
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ❌ Frontend Browser DoD Check FAILED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "  本 PR 修改了前端文件，但 DoD 中未找到浏览器验证步骤。"
+          echo ""
+          echo "  请在 DoD 的 [BEHAVIOR] 条目中添加（至少一个）："
+          echo "    Test: manual:chrome: 打开 http://localhost:3001/xxx → 验证主流程"
+          echo ""
+          exit 1
+
       - name: Run lint-test-pairing
         run: bash .github/workflows/scripts/lint-test-pairing.sh origin/main
       - name: Run lint-test-quality
@@ -477,7 +436,7 @@ jobs:
 
   l1-passed:
     name: L1 Process Gate Passed
-    needs: [static-pr-checks, verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane, lint-workflow-yaml-parse, test-deploy-lib, test-install-pack-ascii, release-admission-regression]
+    needs: [static-pr-checks, secrets-scan, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane, lint-workflow-yaml-parse, test-deploy-lib, test-install-pack-ascii, release-admission-regression]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -504,28 +463,8 @@ jobs:
             FAILED=true
           fi
 
-          if [ "${{ needs.verify-dev-workflow.result }}" != "success" ]; then
-            echo "FAIL: /dev Workflow Verification (${{ needs.verify-dev-workflow.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.pr-title.result }}" != "success" ]; then
-            echo "FAIL: PR Title Format (${{ needs.pr-title.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.ci-config-audit.result }}" != "success" ]; then
-            echo "FAIL: CI Config Audit (${{ needs.ci-config-audit.result }})"
-            FAILED=true
-          fi
-
           if [ "${{ needs.secrets-scan.result }}" != "success" ]; then
             echo "FAIL: Secrets Scan (${{ needs.secrets-scan.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.frontend-browser-dod-check.result }}" != "success" ]; then
-            echo "FAIL: Frontend Browser DoD Check (${{ needs.frontend-browser-dod-check.result }})"
             FAILED=true
           fi
 
