@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {spawnSync} from 'node:child_process';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';
 import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost} from '../leadgen-foundation/adapter.mjs';
 for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} real source assembly is isolated, reusable and effect free`,async()=>{
@@ -21,6 +21,13 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   for(const name of Object.keys(a.receipt.files).filter(n=>n.endsWith('.mjs')&&!n.startsWith('asr-runtime/'))){const r=spawnSync(process.execPath,['--check',path.join(a.profile.cwd,name)],{encoding:'utf8'});assert.equal(r.status,0,name+': '+r.stderr);}
   const python=spawnSync('python3',['-c',"import pathlib,sys; [compile(p.read_text(),str(p),'exec') for p in pathlib.Path(sys.argv[1]).rglob('*.py')]",a.profile.cwd],{encoding:'utf8'});assert.equal(python.status,0,python.stderr);
   fs.appendFileSync(contextFile,' ');await assert.rejects(a.verifySource(),/LEADGEN_RECOVERY_SOURCE/);
+ }finally{f.close();}
+});
+test('foundation recovery rejects coordinated source and self-reported receipt hash tampering',async()=>{
+ const f=await foundationFixture();try{
+  const first=await prepareLeadgenHost(f),file=path.join(first.profile.cwd,'tools.py'),receiptFile=path.join(first.profile.cwd,'leadgen-host-receipt.json');
+  fs.appendFileSync(file,'\n# foreign replacement\n');const receipt=JSON.parse(fs.readFileSync(receiptFile));receipt.files['tools.py']=createHash('sha256').update(fs.readFileSync(file)).digest('hex');fs.writeFileSync(receiptFile,JSON.stringify(receipt));
+  await assert.rejects(prepareLeadgenHost(f),/LEADGEN_RECOVERY_SOURCE/);assert.match(fs.readFileSync(file,'utf8'),/foreign replacement/);
  }finally{f.close();}
 });
 test('foundation recovery never recreates missing mutable proof evidence',async()=>{
