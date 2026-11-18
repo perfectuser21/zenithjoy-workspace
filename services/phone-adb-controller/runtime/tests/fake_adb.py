@@ -37,7 +37,7 @@ import sys,hashlib
 from pathlib import Path
 a=sys.argv[1:]
 if a[:2]==['head','-c']:
- data=sys.stdin.buffer.read(int(a[2]))
+ data=sys.stdin.buffer.read(min(int(a[2]),16384) if __import__('os').environ.get('FAKE_ADB_MODE')=='short-upload' else int(a[2]))
  if __import__('os').environ.get('FAKE_ADB_MODE')=='corrupt':data=b'corrupt'
  sys.stdout.buffer.write(data)
 elif a[0]=='sha256sum':
@@ -60,6 +60,10 @@ if data:
 # Deliberately keep child.stdin open. A cat receiver cannot complete here.
 code = child.wait(timeout=10)
 out, err = child.stdout.read(), child.stderr.read()
+if 'head -c' in script:
+    if mode == 'upload-nonzero': code = 7; err += b'adb: error: closed\n'
+    if mode == 'upload-wrong-ack': out = b'STAGED ' + b'0'*32 + b'\n'
+    if mode == 'upload-unsafe-output': out = b'PK\x03\x04' + b'x'*4096; err = b'Authorization: Bearer fixture-secret\n'
 # Translate only the path text in checksum replies, like real remote stdout.
 sys.stdout.buffer.write(out.replace(str(root).encode() + b'/', b'/data/local/tmp/'))
 sys.stderr.buffer.write(err)
