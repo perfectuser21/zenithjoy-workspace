@@ -16,3 +16,9 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   fs.appendFileSync(contextFile,' ');await assert.rejects(a.verifySource(),/LEADGEN_RECOVERY_SOURCE/);
  }finally{f.close();}
 });
+test('foundation recovery never recreates missing mutable proof evidence',async()=>{
+ const f=await foundationFixture();try{
+  const first=await prepareLeadgenHost(f),proof=first.context.verification.proof_manifest_path;fs.unlinkSync(proof);
+  await assert.rejects(prepareLeadgenHost(f),/LEADGEN_PROOF_MISSING/);assert.equal(fs.existsSync(proof),false);
+ }finally{f.close();}
+});
