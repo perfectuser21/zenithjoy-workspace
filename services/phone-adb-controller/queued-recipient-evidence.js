@@ -8,7 +8,7 @@ const {isDeepStrictEqual}=require('node:util');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 // Both the identity verifier and the Agent's pre-click enumerator use this
 // exact panel recognizer. It performs no UI action and produces no identity proof.
-const nativePanelPython=String.raw`import json,sys,re,xml.etree.ElementTree as E
+const nativePanelPython=fs.readFileSync(path.join(__dirname,'comment-compose-rows.py'),'utf8')+'\n'+String.raw`import json,sys,re,xml.etree.ElementTree as E
 pkg='com.ss.android.ugc.aweme'
 def native_nodes(s):
  if re.search(r'<!DOCTYPE|<!ENTITY',s,re.I): raise ValueError('doctype')
@@ -34,7 +34,10 @@ def native_panel(s):
    anchors=[n for n in b if n.get('resource-id')==pkg+':id/'+rid]
    if len(anchors)!=1 or anchors[0] not in comment_nodes or anchors[0].get('class')!='android.widget.ImageView' or anchors[0].get('content-desc')!=desc: raise ValueError('panel')
  else:
-  if not headers or not any(n.get('class')=='android.widget.EditText' for n in legacy_input): raise ValueError('panel')
+  if not headers or not any(n.get('class')=='android.widget.EditText' for n in legacy_input):
+   composed=compose_panel(s)
+   if not composed: raise ValueError('panel')
+   return b,list(composed['panel'].iter('node')),'compose',True
  return b,comment_nodes,row_id,strict_layout
 `;
 const recipientNativePython=nativePanelPython+String.raw`
@@ -46,7 +49,10 @@ def exact_comment(n):
  if n.get('resource-id')!=pkg+':id/'+row_id or n.get('class')!='android.widget.FrameLayout' or n.get('text','')!='': return False
  m=re.fullmatch(re.escape(v['nickname'])+r',(.+),[^,]*, · [^,]*,回复 按钮(?:,.*)?',n.get('content-desc',''))
  return bool(m and m.group(1)==v['commentBody'])
-matches=sum(exact_comment(n) for n in comment_nodes)
+if row_id=='compose':
+ matches=sum(not row['author'] and row['nickname']==v['nickname'] and row['body']==v['commentBody'] for row in compose_panel(v['returned'])['rows'])
+else:
+ matches=sum(exact_comment(n) for n in comment_nodes)
 if matches==0 or (strict_layout and matches!=1): raise ValueError('returned_comment')
 texts=list(dict.fromkeys(s for n in p for s in [n.get('text',''),n.get('content-desc','')] if s))
 print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'returned_comment_verified':True},ensure_ascii=False))
@@ -61,7 +67,7 @@ function parseNativeCommentXml(xml){
  if(typeof xml!=='string'||Buffer.byteLength(xml)>4*1024*1024)throw Error('RECIPIENT_COMMENT_PANEL_INVALID');
  const r=spawnSync('python3',['-c',nativePanelPython+String.raw`
 import base64
-v=json.load(sys.stdin);b,comment_nodes,row_id,strict_layout=native_panel(v['xml']);rows=[]
+v=json.load(sys.stdin);b,comment_nodes,row_id,strict_layout=native_panel(v['xml']);composed=compose_panel(v['xml']) if row_id=='compose' else None;rows=composed['rows'] if composed else []
 def bounds(n):
  m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
  if not m:return None
@@ -80,7 +86,7 @@ for n in comment_nodes:
 footer=any(n.get('text','').strip()=='暂时没有更多了' or n.get('content-desc','').strip()=='暂时没有更多了' for n in comment_nodes)
 # A scroll is available only from a single native list inside the same strict
 # panel. Unknown/overlapping controls make the capability absent, never a guess.
-viewport=None
+viewport=composed['scroll_viewport'] if composed else None
 lists=[n for n in comment_nodes if n.get('class','').endswith('.RecyclerView')]
 if strict_layout and len(lists)==1:
  panel_bounds=bounds(comment_nodes[0]);list_bounds=bounds(lists[0])

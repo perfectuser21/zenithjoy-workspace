@@ -1,0 +1,245 @@
+{
+  "request": {
+    "task_id": "94da9b21-27a4-40da-8d6a-7f2931e81771",
+    "run_id": "7d88fb30-5d54-4d8f-98d0-668f1427b3ea",
+    "run_tag": "cloud102-20261118-eb6ddd6a",
+    "workflow": "102",
+    "activity": "qualification",
+    "phase": "end",
+    "attempt": 1,
+    "nonce": "27148b9b-a80f-4c11-9f1d-0d9d525bb7ee",
+    "checks": [
+      "native_video_identity",
+      "company_policy_identity",
+      "capture_or_valid_cache",
+      "asr_error_classification",
+      "persisted_qualification",
+      "all_target_videos_resolved"
+    ],
+    "context": {
+      "assigned_workflow": "102",
+      "verification": {
+        "102": {
+          "video_ids": [
+            "7707600173446204723"
+          ],
+          "qualification_input": {
+            "completion_anchor": {
+              "actual_asset": null,
+              "media_pts_seconds": null,
+              "required": "同VID同次录制完整结束或首帧循环；或已证1x且无暂停跳播，已证零点PTS后至少60秒连续有效媒体"
+            },
+            "coverage": {
+              "asr_max_request_seconds": 300,
+              "capture_max_seconds": 120,
+              "kind": "full_video",
+              "max_asr_calls": 0,
+              "max_capture_sessions": 0,
+              "max_judge_primary_calls": 0,
+              "padding_policy": "保留同VID起录和归零padding；以真实起点、完整周期或1x连续播放证据核验，不按总时长推定覆盖",
+              "source_duration_display_seconds": 58,
+              "source_duration_evidence": {
+                "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery6/source-duration.json",
+                "sha256": "83dce728ca65ff7dde5a9ee84b2d8e1a249b7b7d877cba67a25a89418a67484d"
+              },
+              "source_duration_precision": "native_card_mm_ss",
+              "verified": false
+            },
+            "schema": "qualification-coverage-input/v1",
+            "source_recovery_audit": {
+              "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery6/qualification-audit.json",
+              "sha256": "936418fb28585f08a8c78d8f8448f104ea5923cea4862f35bc5a510afe70c401",
+              "task_id": "807529cc-8b23-4bae-91ee-7b8dfbcea5ac"
+            },
+            "source_recovery_audit_task": "807529cc-8b23-4bae-91ee-7b8dfbcea5ac",
+            "start_anchor": {
+              "actual_asset": null,
+              "media_pts_seconds": null,
+              "must_not_use": [
+                "STOPPED media-session position=0",
+                "旧坐标",
+                "tap成功本身",
+                "起录前归零"
+              ],
+              "required": "recorder ready后同VID原生SeekBar归零，保留同次录制实际00:00或可独立核验的原生等价起点及媒体PTS"
+            },
+            "status": "cached_verification_required",
+            "video_id": "7707600173446204723"
+          }
+        }
+      }
+    }
+  },
+  "observed": {
+    "identity": {
+      "task_id": "94da9b21-27a4-40da-8d6a-7f2931e81771",
+      "run_id": "7d88fb30-5d54-4d8f-98d0-668f1427b3ea",
+      "run_tag": "cloud102-20261118-eb6ddd6a",
+      "workflow": "102",
+      "activity": "qualification",
+      "attempt": 1
+    },
+    "nonce": "27148b9b-a80f-4c11-9f1d-0d9d525bb7ee",
+    "checks": [
+      {
+        "id": "native_video_identity",
+        "status": "passed",
+        "evidence": [
+          {
+            "source": "native:recording-and-asr-originals",
+            "observation": {
+              "proofs": [
+                {
+                  "video_id": "7707600173446204723",
+                  "capture_or_valid_cache": "passed",
+                  "asr_error_classification": "passed",
+                  "native_video_identity": "passed",
+                  "audio_seconds": 119.1135,
+                  "nonzero_pcm": true,
+                  "audio_sha256": "4f54c6d6d34b1feff061dfd347032eb1b61658289e61cf1e518af2e39a9018e6",
+                  "asr_classification": "transcribed",
+                  "device_binding": {
+                    "physical_serial": "B114E2190975",
+                    "adb_serial": "127.0.0.1:15555",
+                    "profile": "wuying_android14",
+                    "policy_sha256": "f0d123dfe11a1d507c0b4718174aceb15be675b005bb067f1c333c781ed2f613",
+                    "registry_sha256": "b10d2939452006300ae979bcf851796322f433510a12feea6370ed0f6790d37b"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "company_policy_identity",
+        "status": "passed",
+        "evidence": [
+          {
+            "source": "postgres:zenithjoy/company_config_runs",
+            "observation": {
+              "run": "cloud102-20261118-eb6ddd6a",
+              "company_id": "a97aad9a-205e-45ba-9737-c9dbaf821ae6",
+              "tenant_id": "8d760098-abb7-43d5-ae95-dad7936e657f",
+              "version": 34,
+              "policy_id": "yueshengyun-topic-pool-v2",
+              "exact_match": true
+            }
+          }
+        ]
+      },
+      {
+        "id": "capture_or_valid_cache",
+        "status": "passed",
+        "evidence": [
+          {
+            "source": "native:recording-and-asr-originals",
+            "observation": {
+              "proofs": [
+                {
+                  "video_id": "7707600173446204723",
+                  "capture_or_valid_cache": "passed",
+                  "asr_error_classification": "passed",
+                  "native_video_identity": "passed",
+                  "audio_seconds": 119.1135,
+                  "nonzero_pcm": true,
+                  "audio_sha256": "4f54c6d6d34b1feff061dfd347032eb1b61658289e61cf1e518af2e39a9018e6",
+                  "asr_classification": "transcribed",
+                  "device_binding": {
+                    "physical_serial": "B114E2190975",
+                    "adb_serial": "127.0.0.1:15555",
+                    "profile": "wuying_android14",
+                    "policy_sha256": "f0d123dfe11a1d507c0b4718174aceb15be675b005bb067f1c333c781ed2f613",
+                    "registry_sha256": "b10d2939452006300ae979bcf851796322f433510a12feea6370ed0f6790d37b"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "asr_error_classification",
+        "status": "passed",
+        "evidence": [
+          {
+            "source": "native:recording-and-asr-originals",
+            "observation": {
+              "proofs": [
+                {
+                  "video_id": "7707600173446204723",
+                  "capture_or_valid_cache": "passed",
+                  "asr_error_classification": "passed",
+                  "native_video_identity": "passed",
+                  "audio_seconds": 119.1135,
+                  "nonzero_pcm": true,
+                  "audio_sha256": "4f54c6d6d34b1feff061dfd347032eb1b61658289e61cf1e518af2e39a9018e6",
+                  "asr_classification": "transcribed",
+                  "device_binding": {
+                    "physical_serial": "B114E2190975",
+                    "adb_serial": "127.0.0.1:15555",
+                    "profile": "wuying_android14",
+                    "policy_sha256": "f0d123dfe11a1d507c0b4718174aceb15be675b005bb067f1c333c781ed2f613",
+                    "registry_sha256": "b10d2939452006300ae979bcf851796322f433510a12feea6370ed0f6790d37b"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "persisted_qualification",
+        "status": "passed",
+        "evidence": [
+          {
+            "source": "postgres:zenithjoy/leadgen_videos",
+            "observation": {
+              "requested": [
+                "7707600173446204723"
+              ],
+              "found": [
+                {
+                  "video_id": "7707600173446204723",
+                  "status": "matched",
+                  "process_status": "处理中:cloud102-20261118-eb6ddd6a"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "all_target_videos_resolved",
+        "status": "passed",
+        "evidence": [
+          {
+            "source": "postgres:zenithjoy/leadgen_videos",
+            "observation": {
+              "requested": [
+                "7707600173446204723"
+              ],
+              "found": [
+                {
+                  "video_id": "7707600173446204723",
+                  "status": "matched",
+                  "process_status": "处理中:cloud102-20261118-eb6ddd6a"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": "passed",
+    "output": {
+      "model_call_count": 0,
+      "read_only": true,
+      "video_ids": [
+        "7707600173446204723"
+      ],
+      "no_collectable_videos": false,
+      "unresolved_video_ids": []
+    }
+  }
+}

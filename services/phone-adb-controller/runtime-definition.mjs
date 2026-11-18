@@ -81,6 +81,10 @@ function agentInteger(raw,min=1,max=Number.MAX_SAFE_INTEGER){
  if(typeof raw!=='string'||!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)<min||Number(raw)>max)throw Error('AGENT_INPUT_INTEGER_INVALID');
  return Number(raw);
 }
+// Agent/manifest total includes preparation and cleanup; only new 101 defaults to 40 minutes.
+export function workflowRunMaxSeconds(env){
+ return agentInteger(Object.hasOwn(env,'WF_RUN_MAX_SECONDS')?env.WF_RUN_MAX_SECONDS:env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?'2400':'1800');
+}
 export function agentInput(env){
  if(executionModeInput(env)!=='agent')return null;
  const tasks=[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID].filter(Boolean);
@@ -90,7 +94,7 @@ export function agentInput(env){
  if(source!==null&&!agentToken(source)||workflow==='douyin_video_discovery'&&source!==null||workflow==='douyin_video_processing'&&source===null
    ||workflow==='douyin_comment_scoring'&&env.SERIAL!=='none'||workflow!=='douyin_comment_scoring'&&env.SERIAL==='none')throw Error('AGENT_INPUT_SOURCE_DEVICE_INVALID');
  const limit=agentInteger(Object.hasOwn(env,'LEADGEN_LIMIT')?env.LEADGEN_LIMIT:'2',1,50);
- const runMax=agentInteger(Object.hasOwn(env,'WF_RUN_MAX_SECONDS')?env.WF_RUN_MAX_SECONDS:'1800'),runStart=agentInteger(env.WF_RUN_START_TS);
+ const runMax=workflowRunMaxSeconds(env),runStart=agentInteger(env.WF_RUN_START_TS);
  if(!Number.isSafeInteger((runStart+runMax)*1000)||runStart>Math.floor(Date.now()/1000)+5)throw Error('AGENT_INPUT_BUDGET_INVALID');
  let filters=null,sampling=null,collectionBudget=null;
  if(workflow==='douyin_video_discovery'){
@@ -134,7 +138,7 @@ export function initializeAgentBudget(env,{now=Date.now()}={}){
   assertAgentInput(snapshot,{...env,WF_RUN_START_TS:String(start),WF_RUN_MAX_SECONDS:String(max)});
  }else{
   start=Object.hasOwn(env,'WF_RUN_START_TS')?agentInteger(env.WF_RUN_START_TS):Math.floor(now/1000);
-  max=Object.hasOwn(env,'WF_RUN_MAX_SECONDS')?agentInteger(env.WF_RUN_MAX_SECONDS):1800;
+  max=workflowRunMaxSeconds(env);
   agentInput({...env,WF_RUN_START_TS:String(start),WF_RUN_MAX_SECONDS:String(max)});
  }
  return {run_start_ts:start,run_max_seconds:max};

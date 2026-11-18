@@ -1,0 +1,105 @@
+{
+  "schema": "activity-evidence/v1",
+  "identity": {
+    "task_id": "ac7038ba-a8cd-4ca8-b81f-26761ca95852",
+    "run_id": "d245688d-3862-4f08-b693-5f44d0802c18",
+    "run_tag": "cloud102-20261118-eb6ddd6a",
+    "workflow": "102"
+  },
+  "qualification_evidence": {
+    "7707600173446204723": {
+      "video_id": "7707600173446204723",
+      "expected_run": "cloud102-20261118-eb6ddd6a",
+      "evidence_id": "cloud102-20261118-eb6ddd6a-qual-record",
+      "serial": "127.0.0.1:15555",
+      "local_owner": "wf1020e89922a5816402483c3d6310a7d3a20",
+      "required_seconds": 58,
+      "client_sha256": "62cacd647be07a5b7f5d2ba7380c4daea9a6ec1b2dccd9fb5fe148b2bf7a852a",
+      "server_sha256": "8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e",
+      "start": {
+        "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/receipts/qual-original-start.json",
+        "sha256": "3895413148932ed163769383d3a95c29229bec1c38840a2882886a03ef0bb45d"
+      },
+      "stop": {
+        "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/receipts/qual-original-stop.json",
+        "sha256": "e3d8a5fc1e5d827e4547cd6de89059917e377ce23accac469a59c09ab94b868d"
+      },
+      "video_identity": {
+        "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/receipts/qual-original-link.json",
+        "sha256": "65fec539422dadef4a9065189e939c51300c1c07fb8581a6c855ef09157823e4"
+      },
+      "wav": {
+        "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record.16k.wav",
+        "sha256": "4f54c6d6d34b1feff061dfd347032eb1b61658289e61cf1e518af2e39a9018e6"
+      },
+      "asr": {
+        "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/qualification-receipts/7707600173446204723/asr-response.json",
+        "sha256": "fe3b679dd109690bf0c6f9e7276def9169868fcc031cf6b0c75f7a194e4c5211"
+      },
+      "asr_audio_sha256": "4f54c6d6d34b1feff061dfd347032eb1b61658289e61cf1e518af2e39a9018e6",
+      "sidecars": {
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-end.audio.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-end.audio.txt",
+          "sha256": "bc4de6569470ee07fba217694524ec1f6123b39c8ace76495efedbf69da9e927"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-end.foreground.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-end.foreground.txt",
+          "sha256": "9a0320ae6bcf2b5b40e89ff02f5836c09e1419e386877f8922b0a06e2dc827f2"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-end.media-session.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-end.media-session.txt",
+          "sha256": "dcbebc3737bd0fbf72f863edeff021e116cce9b9d8e5abc00b698b4bf1b5eb72"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-end.package-uid.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-end.package-uid.txt",
+          "sha256": "d9e97ff553ed370fdbc8a61d25c52b66d2ff60e14609d1ea182994b2cf9f2ccd"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-end.uid-owners.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-end.uid-owners.txt",
+          "sha256": "d9e97ff553ed370fdbc8a61d25c52b66d2ff60e14609d1ea182994b2cf9f2ccd"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-restored.audio.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-restored.audio.txt",
+          "sha256": "910eb66a0dbc5aebec368177c5279d9565dd251983464864f7083ae0e2aaa441"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-restored.package-uid.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-restored.package-uid.txt",
+          "sha256": "d9e97ff553ed370fdbc8a61d25c52b66d2ff60e14609d1ea182994b2cf9f2ccd"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-restored.uid-owners.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-restored.uid-owners.txt",
+          "sha256": "d9e97ff553ed370fdbc8a61d25c52b66d2ff60e14609d1ea182994b2cf9f2ccd"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-start.audio.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-start.audio.txt",
+          "sha256": "623c13ff02be2ab1818df013c3d920adda6454c94be149054ef764baa10f9133"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-start.foreground.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-start.foreground.txt",
+          "sha256": "9a0320ae6bcf2b5b40e89ff02f5836c09e1419e386877f8922b0a06e2dc827f2"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-start.media-session.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-start.media-session.txt",
+          "sha256": "dcbebc3737bd0fbf72f863edeff021e116cce9b9d8e5abc00b698b4bf1b5eb72"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-start.package-uid.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-start.package-uid.txt",
+          "sha256": "d9e97ff553ed370fdbc8a61d25c52b66d2ff60e14609d1ea182994b2cf9f2ccd"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record-playback-start.uid-owners.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record-playback-start.uid-owners.txt",
+          "sha256": "d9e97ff553ed370fdbc8a61d25c52b66d2ff60e14609d1ea182994b2cf9f2ccd"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record.capture-runtime.json": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record.capture-runtime.json",
+          "sha256": "b4304c02e2f98f176cf12964bda36e42d22b2bf24aaee0354dbd5625edc2b5d4"
+        },
+        "cloud102-20261118-eb6ddd6a-qual-record.capture-sdk.txt": {
+          "path": "/Users/administrator/.codex-team1/artifacts/cloud-phone-verify-20261117/run-102-cloud-v34-r10-recovery7/native/cloud102-20261118-eb6ddd6a-qual-record.capture-sdk.txt",
+          "sha256": "ea243e5457028e97f9bc93b37a72f8e80ea61ae081911bb037765590ee6aa435"
+        }
+      },
+      "cached": true
+    }
+  }
+}

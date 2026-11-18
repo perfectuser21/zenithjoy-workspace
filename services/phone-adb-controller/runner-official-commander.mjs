@@ -77,7 +77,7 @@ export async function createRunnerOfficialCommander({runtimeRoot,runDir,source,r
     const seconds=Math.min(params.timeout,Math.floor((q.worker_deadline_ms-Date.now())/1000));
     if(seconds<1)throw fail();
     const bounded=[...args];bounded[6]=String(seconds*1000+5000);bounded[8]=JSON.stringify({...params,timeout:seconds});
-    return sdk.execute(command,bounded,{timeout:seconds*1000+5000,maxBuffer:1024*1024});
+    return sdk.executeBounded(command,bounded,{timeout:seconds*1000+5000,maxBuffer:1024*1024});
    };
    return openClawCommander({timeoutMs,execute,reserveOwner:owner.reserveOwner})(fixedReceipt);
    });job.done=running.finally(()=>jobs.delete(job));queue=job.done.catch(()=>{});return job.done;

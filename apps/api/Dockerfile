@@ -26,13 +26,13 @@ COPY tsconfig.base.json ./
 # 改用 npm ci 从根锁文件精确安装，与本地 npm test / CI 完全一致的依赖树，此类漂移
 # 从根源上不可能再发生。
 COPY package.json package-lock.json ./
-COPY apps/dashboard/vendor/picomatch-security/*.tgz ./apps/dashboard/vendor/picomatch-security/
 COPY apps/agent-panel/package.json ./apps/agent-panel/
 COPY apps/api/package.json ./apps/api/
 COPY apps/dashboard/package.json ./apps/dashboard/
 COPY apps/geoai/package.json ./apps/geoai/
 COPY apps/realtime-voice-mvp/package.json ./apps/realtime-voice-mvp/
 COPY apps/staff-hub/package.json ./apps/staff-hub/
+COPY scripts/security/picomatch-remediation/packages/*.patched.tgz ./scripts/security/picomatch-remediation/packages/
 
 RUN npm ci --workspace=apps/api
 
