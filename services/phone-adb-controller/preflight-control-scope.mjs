@@ -62,9 +62,11 @@ export function createPreflightPoolFactory({runtimeRoot,frozen,env}){
 export function createPreflightLocalPool({Pool,connectionString,deadlineMs}){
  assertNoAmbientPg();
  if(!Number.isSafeInteger(deadlineMs)||Date.now()>=deadlineMs)throw Error('PREFLIGHT_CONTROL_DEADLINE');
- const pool=new Pool({connectionString,max:1,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),query_timeout:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'}),clients=new Set();let timedOut=false,closed=false,closing;
- pool.on('connect',client=>{clients.add(client);if(closed||Date.now()>=deadlineMs){timedOut=true;void client.end().catch(()=>{});}});pool.on('remove',client=>clients.delete(client));
- const close=()=>closing??=(async()=>{closed=true;clearTimeout(timer);if(Date.now()>=deadlineMs)timedOut=true;await Promise.allSettled([...clients].map(client=>client.end()));if(!pool.ending)await pool.end();return {domain:'parent-pg-no-native-process-v1',execution_stopped:pool.ended===true&&!timedOut,deadline_exceeded:timedOut};})();
+ const pool=new Pool({connectionString,max:1,connectionTimeoutMillis:Math.max(1,deadlineMs-Date.now()),query_timeout:Math.max(1,deadlineMs-Date.now()),application_name:'zenithjoy-preflight'}),clients=new Set();let timedOut=false,connectionError=false,closed=false,closing;
+ const markConnectionError=()=>{connectionError=true;};
+ pool.on('error',markConnectionError);
+ pool.on('connect',client=>{clients.add(client);client.on('error',markConnectionError);if(closed||Date.now()>=deadlineMs){timedOut=true;void client.end().catch(markConnectionError);}});pool.on('remove',client=>clients.delete(client));
+ const close=()=>closing??=(async()=>{closed=true;clearTimeout(timer);if(Date.now()>=deadlineMs)timedOut=true;const results=await Promise.allSettled([...clients].map(client=>client.end()));if(results.some(result=>result.status==='rejected'))connectionError=true;if(!pool.ending)await pool.end();return {domain:'parent-pg-no-native-process-v1',execution_stopped:pool.ended===true&&!timedOut&&!connectionError,deadline_exceeded:timedOut,connection_error:connectionError};})();
  const timer=setTimeout(()=>{timedOut=true;void close().catch(()=>{});},Math.max(1,deadlineMs-Date.now()));timer.unref();
  return {pool,transport:{seal:close,close}};
 }
