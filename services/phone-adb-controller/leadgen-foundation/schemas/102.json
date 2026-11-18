@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "binding_key",
+    "business"
+  ],
+  "properties": {
+    "binding_key": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$"
+    },
+    "business": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "comment_limit",
+        "producer_key"
+      ],
+      "properties": {
+        "scope": {
+          "type": "object",
+          "required": [
+            "video_ids",
+            "upstream",
+            "qualification_input"
+          ],
+          "properties": {
+            "video_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]{16,24}$"
+              }
+            },
+            "upstream": {
+              "type": "object"
+            },
+            "qualification_input": {
+              "type": "object"
+            }
+          }
+        },
+        "comment_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "qualification_coverage_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "input_provenance": {
+          "type": "object"
+        },
+        "producer_key": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$",
+          "description": "受控本机配置内已完成101 manifest/result来源的索引；不接受用户文件路径或源码身份。"
+        }
+      }
+    }
+  }
+}

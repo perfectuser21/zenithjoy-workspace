@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "binding_key",
+    "business"
+  ],
+  "properties": {
+    "binding_key": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$"
+    },
+    "business": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope"
+      ],
+      "properties": {
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "record_id",
+            "comment_id",
+            "lead_id",
+            "target_douyin_id",
+            "profile_url",
+            "source_102_run",
+            "source_103_run"
+          ],
+          "properties": {
+            "record_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "comment_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "lead_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_douyin_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "profile_url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_102_run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_103_run": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

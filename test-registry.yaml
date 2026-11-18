@@ -12259,3 +12259,39 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "104冻结原宿主本地装配、明确授权范围、真实PG加载、原订单恢复及未知单发；外部订单/手机为计数替身"
+
+  - id: leadgen-foundation
+    path: services/phone-adb-controller/__tests__/leadgen-foundation.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"
+
+  - id: leadgen-foundation-assembly
+    path: services/phone-adb-controller/__tests__/leadgen-foundation-assembly.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"
+
+  - id: leadgen-foundation-build
+    path: services/phone-adb-controller/__tests__/leadgen-foundation-build.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"
+
+  - id: activity-upstream-source
+    path: services/phone-adb-controller/__tests__/activity-upstream-source.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"

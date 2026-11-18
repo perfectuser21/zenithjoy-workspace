@@ -13,11 +13,11 @@ export function protectedBytes(file){
 }
 const BUSINESS={
  '101':['keyword','search_filters','max_candidates'],
- '102':['scope','input_provenance','comment_limit','qualification_coverage_seconds'],
+ '102':['scope','input_provenance','producer_key','comment_limit','qualification_coverage_seconds'],
  '103':['scope'],
  '104':['scope'],
 };
-const FORBIDDEN=new Set(['task_id','tasks','actor','root_task_id','run_id','run_tag','runtime_root','runtimeRoot','credentials','source_commit','context','verification','phone_controller','node','python','command','env','environment','authorization_asset','cleanup_owner','central_owner','local_owner']);
+const FORBIDDEN=new Set(['task_id','tasks','actor','root_task_id','runtime_root','runtimeRoot','credentials','source_commit','context','verification','phone_controller','node','python','command','env','environment','authorization_asset','cleanup_owner','central_owner','local_owner']);
 function safeBusiness(x){
  if(!object(x)&&!Array.isArray(x))return;
  for(const [k,v]of Object.entries(x)){need(!FORBIDDEN.has(k),'INPUT_AUTHORITY');safeBusiness(v);}
@@ -45,18 +45,29 @@ export function buildContext({workflow,run,environment=process.env,hostRoot}){
  Object.assign(c,{assigned_workflow:workflow,root_task_id:run.task_id,actor:'foundation:'+config.machine_id,
   tasks:{[workflow]:{task_id:run.task_id,run_id:run.run_id,run_tag:run.run_id}},run_tag:run.run_id,
   local_owner:'wf'+workflow+'-'+run.run_id,central_owner:run.task_id,business_deadline_ms:run.deadline_ms,cleanup_deadline_ms:run.cleanup_deadline_ms,
-  skills_root:path.join(hostRoot,'skills'),run_start_ts:new Date(run.deadline_ms-(binding.timeout_ms??2400000)).toISOString(),run_max_seconds:Math.floor((binding.timeout_ms??2400000)/1000)});
+  skills_root:path.join(hostRoot,'skills'),run_max_seconds:Math.floor((binding.timeout_ms??2400000)/1000)});
  c.verification.native={...c.verification.native,cleanup_owner:run.task_id};
  c.verification.proof_manifest_path=path.join(path.dirname(hostRoot),'proof.json');
  if(workflow==='101'){
   need(typeof input.business.keyword==='string'&&input.business.keyword.trim()&&object(input.business.search_filters)&&Number.isSafeInteger(input.business.max_candidates)&&input.business.max_candidates>0,'INPUT_101');
-  Object.assign(c,input.business);c.verification['101']={keyword:c.keyword,search_filters:c.search_filters,max_candidates:c.max_candidates};
+  Object.assign(c,input.business);c.verification['101']={output_scope:'persisted_run',output_limit:c.max_candidates};
  }else{
   need(object(input.business.scope),'INPUT_SCOPE');c.verification[workflow]=structuredClone(input.business.scope);
-  for(const key of BUSINESS[workflow].filter(k=>k!=='scope'))if(input.business[key]!==undefined){
+  for(const key of BUSINESS[workflow].filter(k=>!['scope','producer_key'].includes(k)))if(input.business[key]!==undefined){
    if(key==='input_provenance')c.verification[key]=structuredClone(input.business[key]);else c[key]=input.business[key];
   }
-  if(workflow==='103')c.max_candidates=c.comment_limit=1;
+  if(workflow==='102'){
+   const key=input.business.producer_key;need(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(key??''),'PRODUCER_KEY');
+   const producer=binding.producers?.[key],scope=c.verification['102'];need(object(producer)&&producer.workflow==='101','PRODUCER_BINDING');
+   need(Array.isArray(scope.video_ids)&&scope.video_ids.length===1&&object(scope.upstream)&&Object.keys(scope.upstream).length===1
+    &&scope.video_ids.every(id=>scope.upstream[id]?.run===producer.run_tag),'PRODUCER_SCOPE');
+   c.input_provenance={producer:structuredClone(producer)};
+  }
+  if(workflow==='103'){
+   const s=c.verification['103'];need(s.input_mode==='committed_partial_ids'&&Array.isArray(s.comment_ids)&&s.comment_ids.length===1&&UUID.test(s.comment_ids[0])
+    &&object(s.sources)&&Object.keys(s.sources).length===1&&typeof s.sources[s.comment_ids[0]]==='string'&&s.sources[s.comment_ids[0]]!==run.run_id,'INPUT_103_SINGLE');
+   c.max_candidates=c.comment_limit=1;
+  }
  }
  if(workflow==='104'){
   const asset=c.authorization_asset;need(asset&&/^[a-f0-9]{64}$/.test(asset.sha256??''),'AUTHORIZATION_REQUIRED');

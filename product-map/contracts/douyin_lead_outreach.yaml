@@ -1,4 +1,12 @@
 version: 1
+input_schema:
+  $ref: services/phone-adb-controller/leadgen-foundation/schemas/104.json
+implementation:
+  foundation_registration:
+    protocol: commander-foundation-v1
+    profile: services/phone-adb-controller/leadgen-foundation/profiles/104.json
+    input_schema: services/phone-adb-controller/leadgen-foundation/schemas/104.json
+    publication: resolve_exact_revision_and_digest_from_clean_candidate
 capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
