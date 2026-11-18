@@ -12192,3 +12192,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
     note: "103 候选冻结和实际 checker 接线装配"
+
+  - id: leadgen-101-manifest-budget
+    path: services/phone-adb-controller/__tests__/101-manifest-budget.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
+    note: "新101总预算含收尾、显式任务优先、新身份和旧manifest不变；仅离线候选"
