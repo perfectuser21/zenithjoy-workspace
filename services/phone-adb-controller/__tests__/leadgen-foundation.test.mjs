@@ -8,7 +8,7 @@ const moduleURL=new URL('../leadgen-foundation/context.mjs',import.meta.url);
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const task='11111111-1111-4111-8111-111111111111',runId='22222222-2222-4222-8222-222222222222';
 function fixture(){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'leadgen-foundation-'));
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'leadgen-foundation-')));
  const config={schema:'leadgen-host-config/v1',machine_id:'fixture-machine',bindings:{customer:{
   allowed_workflows:['101','102','103','104'],context:{company_id:'company',tenant_id:'tenant',line:'line',profile:'fixture-phone',account:'sender',
    verification:{policy_version:1,policy_id:'fixture-policy',runtime_sha256:{}},credentials:{database:'/private/db',brain:'/private/brain',feishu:'/private/feishu',provider_env_files:[]}}
@@ -48,5 +48,24 @@ test('foundation cannot reuse an authorization asset for a different 104 Task',a
   f.config.bindings.customer.context.authorization_asset={path:file,sha256:hash(fs.readFileSync(file))};fs.writeFileSync(f.configFile,JSON.stringify(f.config));f.environment.LEADGEN_HOST_CONFIG_SHA256=hash(fs.readFileSync(f.configFile));
   f.run.input.business={scope:{record_id:'order'}};
   assert.throws(()=>buildContext({workflow:'104',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')}),/LEADGEN_AUTHORIZATION_TASK/);
+ }finally{f.close();}
+});
+test('foundation recovery preserves original source and rejects missing files or changed binding',async()=>{
+ const {freezeHost}=await import(new URL('../leadgen-foundation/freeze.mjs',import.meta.url));const f=fixture();try{
+  const directory=path.join(f.root,'host'),identity={task_id:task,run_id:runId,configuration_sha256:'a'.repeat(64),binding_sha256:'b'.repeat(64)};
+  const first=freezeHost({directory,identity,files:{'context.json':'{"task":"first"}\n','worker.mjs':'export {};\n'}});
+  const time=fs.statSync(path.join(directory,'context.json')).mtimeMs;
+  assert.equal(freezeHost({directory,identity,files:{'context.json':'{"task":"first"}\n','worker.mjs':'export {};\n'}}).recovered,true);
+  assert.equal(fs.statSync(path.join(directory,'context.json')).mtimeMs,time);assert.equal(first.recovered,false);
+  assert.throws(()=>freezeHost({directory,identity:{...identity,binding_sha256:'c'.repeat(64)},files:{}}),/LEADGEN_RECOVERY_IDENTITY/);
+  fs.unlinkSync(path.join(directory,'worker.mjs'));assert.throws(()=>freezeHost({directory,identity,files:{'worker.mjs':'replacement'}}),/LEADGEN_RECOVERY_SOURCE/);
+  assert.equal(fs.readFileSync(path.join(directory,'context.json'),'utf8'),'{"task":"first"}\n');
+ }finally{f.close();}
+});
+test('foundation cannot adopt a preexisting unreceipted directory or symlink source',async()=>{
+ const {freezeHost}=await import(new URL('../leadgen-foundation/freeze.mjs',import.meta.url));const f=fixture();try{
+  const directory=path.join(f.root,'host');fs.mkdirSync(directory,{mode:0o700});fs.writeFileSync(path.join(directory,'foreign'),'old');
+  assert.throws(()=>freezeHost({directory,identity:{},files:{'worker.mjs':'new'}}),/LEADGEN_RECOVERY_RECEIPT/);
+  assert.equal(fs.readFileSync(path.join(directory,'foreign'),'utf8'),'old');
  }finally{f.close();}
 });
