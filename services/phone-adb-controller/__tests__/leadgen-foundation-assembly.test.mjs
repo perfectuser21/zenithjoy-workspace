@@ -45,3 +45,14 @@ test('104 actual Codex child receives frozen exact scope without changing parent
   fs.appendFileSync(binary,'\n# changed\n');const drift=spawnSync(a.profile.skill_runtime.codex.command,[],{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/LEADGEN_CODEX_SOURCE/);
  }finally{f.close();}
 });
+test('102 emitted checker and collection wrapper import the same admitted producer-aware reader',async()=>{
+ const f=await foundationFixture('102');try{
+  const a=await prepareLeadgenHost(f),reader=fs.readFileSync(path.join(a.profile.cwd,'production-readback-local.mjs'),'utf8');assert.match(reader,/resolveProducerIdentity/);
+  const probe=path.join(f.root,'reader-probe');fs.cpSync(a.profile.cwd,probe,{recursive:true});
+  fs.writeFileSync(path.join(probe,'production-readback-local.mjs'),"export async function main(request){return {reader:'same-local-production',activity:request.activity,run_id:request.run_id};}\n");
+  for(const [file,request]of [['collection-readback.mjs',a.context],['checker.mjs',{phase:'end',workflow:'102',activity:'collection',run_id:f.run.run_id,context:a.context}]]){
+   const result=spawnSync(process.execPath,[path.join(probe,file)],{encoding:'utf8',input:JSON.stringify(request),cwd:probe});assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(result.stdout),{reader:'same-local-production',activity:'collection',run_id:f.run.run_id});
+  }
+  assert.equal(fs.existsSync(path.join(a.profile.cwd,'skills/douyin-leadgen-commander/scripts/production_readback.mjs')),false);
+ }finally{f.close();}
+});
