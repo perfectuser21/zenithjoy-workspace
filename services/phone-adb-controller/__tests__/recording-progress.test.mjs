@@ -44,16 +44,32 @@ test('live matching recorder is recording; foreign argv and missing startup proo
  const d=mkdtempSync(join(tmpdir(),'record-progress-owner-'));try{
  const script=String.raw`import pathlib,sys,subprocess,importlib.util,json,shlex,os
 r=pathlib.Path(sys.argv[2]);s=importlib.util.spec_from_file_location('p',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
-media=r/'media.mkv';media.write_bytes(b'x'); sleeper=r/'sleeper.py';sleeper.write_text('import time; time.sleep(20)')
-child=subprocess.Popen([sys.executable,str(sleeper),'--record='+str(media)])
+media=r/'media.mkv';media.write_bytes(b'x'); sleeper=r/'sleeper.py';sleeper.write_text("import time; print('ready',flush=True); time.sleep(20)")
+child=subprocess.Popen([sys.executable,str(sleeper),'--record='+str(media)],stdout=subprocess.PIPE,text=True)
 try:
+ assert child.stdout.readline().strip()=='ready'
  row=subprocess.check_output(['/bin/ps','-ww','-p',str(child.pid),'-o','uid=,ppid=,lstart=,stat=,command='],text=True).strip();args=shlex.split(row.split(None,8)[8])
  p={'status':'ready','pid':child.pid,'parent_pid':os.getpid(),'expected_argv':args,'observations':[{'ps':row}]};proof=r/'proof.json';proof.write_text(json.dumps(p));proof.chmod(0o600)
  assert m.recorder_state(proof,media)=='recording'
  p['expected_argv'].append('foreign');proof.write_text(json.dumps(p));assert m.recorder_state(proof,media)=='unknown'
+ p['pid']=10**100;proof.write_text(json.dumps(p));assert m.recorder_state(proof,media)=='unknown'
  proof.unlink();assert m.recorder_state(proof,media)=='unknown'
 finally:child.terminate();child.wait(timeout=2)
 print('identity verified')`;
+ const r=spawnSync('/usr/bin/python3',['-c',script,join(root,'recording-progress.py'),d],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+test('identity becoming unknown during a probe never retains recording or terminal state',()=>{
+ const d=mkdtempSync(join(tmpdir(),'record-progress-end-'));try{
+ const script=String.raw`import pathlib,sys,importlib.util,json
+r=pathlib.Path(sys.argv[2]);s=importlib.util.spec_from_file_location('p',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+media=r/'media.mkv';media.write_bytes(b'x');probe=r/'ffprobe';probe.write_text('#!/usr/bin/python3\nprint(\'{"streams":[{"index":0,"codec_type":"video"}],"packets":[{"stream_index":0,"pts_time":"1"}]}\')\n');probe.chmod(0o700)
+for before in ['terminal','recording']:
+ states=iter([before,'unknown']);m.recorder_state=lambda *_:next(states)
+ observed=m.observe(str(media),str(r/'proof.json'),str(probe))
+ assert observed['capture_state']=='unknown',observed
+ assert observed['progress_status']=='unknown' and observed['coverage_verified'] is False
+print('end identity guarded')`;
  const r=spawnSync('/usr/bin/python3',['-c',script,join(root,'recording-progress.py'),d],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
  }finally{rmSync(d,{recursive:true,force:true});}
 });
