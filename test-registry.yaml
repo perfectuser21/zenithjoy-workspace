@@ -12222,3 +12222,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test real phone_tests glob discovers this exact path"
     note: "新101总预算含收尾、显式任务优先、新身份和旧manifest不变；仅离线候选"
+
+  - id: activity-host-pg
+    path: services/phone-adb-controller/__tests__/activity-host-pg.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "冻结Agent宿主三入口清env加载同一受验PG闭包；坏来源在DB使用前拒绝"
