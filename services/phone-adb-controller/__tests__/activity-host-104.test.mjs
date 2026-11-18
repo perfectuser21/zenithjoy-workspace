@@ -119,3 +119,12 @@ test('same-account earlier prepared or unknown orders block a different recipien
   const own={...other,record_id:f.context.verification['104'].record_id};assert.equal(observe104Runtime(f.context,{orders:[own]}).unresolved_attempt_reservations,0);
  }
 });
+
+test('invalid historical observation time or missing risk flags cannot attest complete account coverage',async()=>{
+ for(const mode of ['time','risk']){
+  const f=setup(),binding={host:'old-host',profile:'old-phone',serial:'old-route'},date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date());f.context.outreach_runtime.account_bindings.push(binding);
+  const h={...binding,sender_id:f.context.sender_id,observed_at:new Date().toISOString(),date,complete:true,today_dm_attempts:0,unparsed_ledger_rows:0,unresolved_attempts:0,pause:false,halt:false};if(mode==='time')h.observed_at='invalid-date';else delete h.pause;
+  const p=path.join(f.root,'history.json');fs.writeFileSync(p,JSON.stringify(h),{mode:0o600});f.context.outreach_runtime.history_assets=[{path:p,sha256:hash(fs.readFileSync(p))}];await candidate(f);
+  const {observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));assert.equal(observe104Runtime(f.context).account_day_coverage_complete,false);
+ }
+});
