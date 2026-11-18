@@ -21,7 +21,7 @@ set -uo pipefail
 
 NODE_EXE="${NODE_EXE:-node}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PUBLISHERS_DIR="${PUBLISHERS_DIR:-$SCRIPT_DIR/../../../services/agent/publishers}"
+PUBLISHERS_DIR="${PUBLISHERS_DIR:-$SCRIPT_DIR/../../../../services/agent/publishers}"
 KEYWORD="${KEYWORD:-美甲}"
 MAX_RESULTS="${MAX_RESULTS:-5}"
 
