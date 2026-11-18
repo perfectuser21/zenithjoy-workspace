@@ -1,0 +1,39 @@
+{
+  "original_sha256": "658135de74bb13e9467b398a2d932db3cf5796f8e5c1457399479b84c1bb92bf",
+  "fixture_sha256": "ca2f0cdf8da20aa783f0e55b0e5a8e48b0a189e6eed1957611f900509853a029",
+  "source_run": "probe104-r4-52540d03106e",
+  "source_commit": "f3d4781e57a2ce58ca44951d423f399cb62388d9",
+  "node_count": 28,
+  "redaction": "仅替换非空text/content-desc；保全节点、顺序、所有属性名、包名、类型、ID、bounds及交互状态。",
+  "redactions": [
+    {
+      "node_index": 6,
+      "attribute": "text"
+    },
+    {
+      "node_index": 9,
+      "attribute": "text"
+    },
+    {
+      "node_index": 12,
+      "attribute": "text"
+    },
+    {
+      "node_index": 21,
+      "attribute": "text"
+    },
+    {
+      "node_index": 23,
+      "attribute": "content-desc"
+    },
+    {
+      "node_index": 25,
+      "attribute": "content-desc"
+    },
+    {
+      "node_index": 27,
+      "attribute": "content-desc"
+    }
+  ],
+  "real_focus_or_ime_proven": false
+}

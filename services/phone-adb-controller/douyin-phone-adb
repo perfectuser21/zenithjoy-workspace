@@ -3378,14 +3378,10 @@ PYCAPTUREREADY
 }
 
 record_status() {
-  local eid pidf out state size
+  local eid out
   eid="$1"; require_evidence_id "$eid"
-  pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
-  state=stopped
-  if [[ -f "$pidf" ]] && kill -0 "$(cat "$pidf")" 2>/dev/null; then state=recording; fi
-  size=0
-  [[ -f "$out" ]] && size="$(/usr/bin/stat -f %z "$out")"
-  print -- "state=$state bytes=$size path=$out"
+  out="$(record_out_file "$eid")"
+  "$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/recording-progress.py" "$out" "$EVIDENCE_ROOT/$eid.capture-startup.json" "$FFPROBE"
 }
 
 record_stop() {
@@ -4004,7 +4000,8 @@ open_user_profile() {
       || die "profile identity mismatch: page shows ${did}, expected ${expect}" TARGET_ABSENT
   fi
   nick="$(/usr/bin/grep -oE 'content-desc="[^"]+，复制名字和修改备注"' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/^content-desc="//; s/，复制名字和修改备注"$//')"
-  works="$(/usr/bin/grep -oE 'content-desc="作品 [0-9]+' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/.*作品 //')"
+  # 作品数仅作展示；新版主页可能没有旧描述，缺省仍返回下方的 unknown。
+  works="$(/usr/bin/grep -oE 'content-desc="作品 [0-9]+' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/.*作品 //' || true)"
   snapshot_evidence "${eid}-profile-ok" >/dev/null
   print -- "profile_opened=1"
   print -- "sec_uid=$su"
