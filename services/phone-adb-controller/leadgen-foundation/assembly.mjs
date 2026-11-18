@@ -57,7 +57,7 @@ export function prepareProof(context,{initialize=false}={}){
 /** Only assembles frozen source. No phone, database, model or message operation occurs here. */
 export async function assembleSources({context:c,profile,hostRoot,initializeProof=true}){
  const workflow=c.assigned_workflow,files=sourceArchive(path.join(HERE,'sources',workflow+'.json'));
- for(const [name,expected]of Object.entries(profile.files).filter(([name])=>name.startsWith('skills/'))){
+ for(const [name,expected]of Object.entries(profile.files).filter(([name])=>name.startsWith('services/phone-adb-controller/skills/'))){
   const bytes=fs.readFileSync(path.join(profile.cwd,name),'utf8');need(hash(bytes)===expected,'SKILL_SOURCE');files[name]=bytes;
  }
  const nativeChecker='native_artifacts.py';need(files[nativeChecker],'NATIVE_CHECKER_REQUIRED');
