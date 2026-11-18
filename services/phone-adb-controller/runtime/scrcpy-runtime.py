@@ -21,7 +21,6 @@ def capture_popen(argv, **kwargs):
     owner = runpy.run_path(str(Path(__file__).resolve().parent.parent / 'official-recording-observer.py'))
     return owner['owned_popen'](argv, **kwargs)
 
-
 POLICY = json.loads(Path(__file__).with_name('runtime-policy.json').read_text())
 CLI_PATH = Path(__file__).with_name('scrcpy-runtime-cli.py')
 
@@ -159,6 +158,14 @@ def require_adb_client(adb_bin, timeout=2):
         raise RuntimeFailure('local ADB protocol does not match approved server protocol')
 
 
+def stage_output_evidence(raw):
+    # 固定ACK或确定无凭据的错误正文；未知/二进制/超限只存长度和摘要。
+    text = raw.decode('utf-8', errors='replace') if len(raw) <= 1024 else None
+    safe = text is not None and all(b in (10, 13) or 32 <= b <= 126 for b in raw) and all(re.fullmatch(r'(?:STAGED|REFUSED|CANONICAL_OPENED) [0-9a-f]{32}', line)
+        or line in ('adb: error: closed', 'adb: error: failed to write data: Broken pipe',
+                    'head: write error: Broken pipe', 'head: read error: Interrupted system call') for line in text.splitlines())
+    return {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(), 'text': text if safe else None}
+
 def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
                  evidence_root, evidence_id, timeout=45, client_sha256=None, runtime_kind='sdk31'):
     receipt = {'verified': False, 'execution_stop_unknown': False, 'phase': 'planned',
@@ -208,6 +215,10 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
         except (subprocess.TimeoutExpired, RuntimeFailure) as error:
             terminate_owned(child)
             raise RuntimeFailure('bounded adb command did not complete', unknown=True) from error
+        if data is not None:
+            receipt['upload_result'] = {'expected_bytes': len(data), 'exit_code': child.returncode,
+                'stdout': stage_output_evidence(stdout), 'stderr': stage_output_evidence(stderr)}
+            save()
         try:
             require_owner(lock_dir, owner)
         except RuntimeFailure as error:
