@@ -65,7 +65,7 @@ test('native phone 101 runs in the same required Darwin PG owner with pinned Pil
 test('public Code preflight and epoch producer native regressions require an owned hosted Darwin job',()=>{
  const doc=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
  const key='public-code-phone-darwin-test',job=doc.jobs[key];assert.ok(job,'Linux platform skips do not cover the public Code native boundary');
- assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],10);
+ assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],15);
  const commands=job.steps.filter(s=>s.run).map(s=>s.run).join('\n');
  for(const name of ['public-code-preflight.test.mjs','phone-epoch-producer.test.mjs'])assert.ok(commands.includes('services/phone-adb-controller/__tests__/'+name),name);
  assert.match(commands,/process\.platform.*darwin/);assert.match(commands,/PREFLIGHT_TEST_PYTHON_BIN/);
