@@ -4224,7 +4224,7 @@ tests:
   - id: wechat-cs-install-pack-ascii
     path: services/agent/install-pack/__tests__/install-pack-ascii.test.sh
     type: unit
-    ci: L3
+    ci: L1
     status: active
     product: 客户私域AI接管
     note: "防打包坑：install-pack 无非ASCII文件名(中文名致Windows tar解压中断) + start.bat 纯ASCII无BOM(BOM破坏@echo off)"
