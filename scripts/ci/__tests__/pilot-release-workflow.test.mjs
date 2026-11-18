@@ -8,7 +8,7 @@ import YAML from 'yaml';
 import {validatePatrolCaller} from '../implementation-patrol-scope.mjs';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
 // 固定已独立验真的工具来源；消费者合并前核实该提交可达 Cecelia main。
-const revision='ccd2b73df9ec091dfb7723fc6a4765be20c0eaa7';
+const revision='7d37d2887253a85aa3c1f653603d76a5cfc73309';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
 test('完整发布caller名称与路径固定，仅main push/手动触发，不借PR影响结果',()=>{
  const w=config();assert.equal(w.name,'Pilot release verification');

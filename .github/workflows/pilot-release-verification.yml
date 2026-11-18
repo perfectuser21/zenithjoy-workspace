@@ -54,7 +54,7 @@ jobs:
       DB_USER: cecelia
       DB_PASSWORD: source-test-only
       AUTHORING_BRAIN_ROOT: ${{ github.workspace }}/.ci-brain-tooling
-      AUTHORING_BRAIN_REVISION: ccd2b73df9ec091dfb7723fc6a4765be20c0eaa7
+      AUTHORING_BRAIN_REVISION: 7d37d2887253a85aa3c1f653603d76a5cfc73309
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: perfectuser21/cecelia
-          ref: ccd2b73df9ec091dfb7723fc6a4765be20c0eaa7
+          ref: 7d37d2887253a85aa3c1f653603d76a5cfc73309
           fetch-depth: 0
           path: .ci-brain-tooling
           persist-credentials: false
@@ -102,7 +102,7 @@ jobs:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: zenithjoy
       head_revision: ${{ github.sha }}
-      tooling_revision: ccd2b73df9ec091dfb7723fc6a4765be20c0eaa7
+      tooling_revision: 7d37d2887253a85aa3c1f653603d76a5cfc73309
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
@@ -118,7 +118,7 @@ jobs:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: commander-generic
       head_revision: ${{ github.sha }}
-      tooling_revision: ccd2b73df9ec091dfb7723fc6a4765be20c0eaa7
+      tooling_revision: 7d37d2887253a85aa3c1f653603d76a5cfc73309
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
@@ -134,7 +134,7 @@ jobs:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: cecelia-device-patrol-definitions
       head_revision: ${{ github.sha }}
-      tooling_revision: ccd2b73df9ec091dfb7723fc6a4765be20c0eaa7
+      tooling_revision: 7d37d2887253a85aa3c1f653603d76a5cfc73309
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
