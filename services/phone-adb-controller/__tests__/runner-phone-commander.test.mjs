@@ -17,7 +17,7 @@ import fs from 'node:fs';import childProcess,{execFileSync} from 'node:child_pro
 
 // Real copied Caller, SDK and bounded owner. Only the central HTTP authority
 // and model server are isolated fixtures; positive closure is never fabricated.
-async function realPhone(fn,{processing=false,cloneClosure=false,gateway,nativeRuntimeFactory,ownerCheckDelayMs=0}={}){
+async function realPhone(fn,{processing=false,cloneClosure=false,gateway,nativeRuntimeFactory,ownerCheckDelayMs=0,beforeSdkExecute=()=>{}}={}){
  await using(async f=>{
   const cold=await import('file://'+join(f.runtimeRoot,'runner-official-commander.mjs'));
   const sdk=await import('file://'+join(f.runtimeRoot,'official-commander-sdk.mjs'));
@@ -33,7 +33,7 @@ async function realPhone(fn,{processing=false,cloneClosure=false,gateway,nativeR
   if(process.env.PREFLIGHT_TEST_PHONE_ARTIFACTS){childProcess.spawn=(binary,args,options)=>{const child=originalSpawn(binary,args,options),row={binary,argv_sha256:createHash('sha256').update(JSON.stringify(args)).digest('hex'),pid:child.pid,started_at:Date.now(),stdout:'',stderr:''};reviewLeaves.push(row);child.stdout?.on('data',b=>row.stdout=(row.stdout+b).slice(-16384));child.stderr?.on('data',b=>row.stderr=(row.stderr+b).slice(-4096));child.once('close',(code,signal)=>Object.assign(row,{code,signal,closed_at:Date.now()}));return child;};syncBuiltinESMExports();}
 
   const createObserver=async options=>{
-   const observer=await cold.createRunnerOfficialCommander({...options,factories:{createControl:({request,directory})=>f.createControl({...f.options,request,journalDirectory:directory,deadlineMs:request.worker_deadline_ms,cleanupDeadlineMs:request.deadline_ms}),createSdk:options=>{const actual=sdk.createOfficialCommanderExecute({...options,...(gateway?{gatewayDependencies:gateway.dependencies,gatewayCredential:()=> 'fixture'}:{})});sdkDomains.push({sdk:actual,request:options.request});return {...actual,execute:async(...args)=>{trace('sdk-start',{timeout:JSON.parse(args[1][8]).timeout,worker_deadline_ms:options.request.worker_deadline_ms,remaining_ms:options.request.worker_deadline_ms-Date.now()});try{const value=await actual.execute(...args);trace('sdk-returned',{stdout:value.stdout});return value;}catch(error){trace('sdk-error',{message:error.message,code:error.code});throw error;}}};},createOwner:options=>{ownerPins.push(structuredClone(options.python));const actual=owner.createBoundedCommanderOwner(options);return {...actual,reserveOwner:async(scope,options)=>{trace('owner-reserve-start');const reservation=await actual.reserveOwner(scope,{...options,home:f.options.home});trace('owner-reserved');const wrap=name=>async(...args)=>{trace('owner-'+name+'-start');try{const value=await reservation[name](...args);if(name==='check'&&ownerCheckDelayMs)await new Promise(resolve=>setTimeout(resolve,ownerCheckDelayMs));trace('owner-'+name+'-returned',{snapshot:actual.snapshot()});return value;}catch(error){trace('owner-'+name+'-error',{message:error.message,code:error.code,snapshot:actual.snapshot()});throw error;}};return {...reservation,check:wrap('check'),returned:wrap('returned'),close:wrap('close')};}};}}});
+   const observer=await cold.createRunnerOfficialCommander({...options,factories:{createControl:({request,directory})=>f.createControl({...f.options,request,journalDirectory:directory,deadlineMs:request.worker_deadline_ms,cleanupDeadlineMs:request.deadline_ms}),createSdk:options=>{const actual=sdk.createOfficialCommanderExecute({...options,...(gateway?{gatewayDependencies:gateway.dependencies,gatewayCredential:()=> 'fixture'}:{})});sdkDomains.push({sdk:actual,request:options.request});const wrap=method=>async(...args)=>{beforeSdkExecute();trace('sdk-start',{timeout:JSON.parse(args[1][8]).timeout,worker_deadline_ms:options.request.worker_deadline_ms,remaining_ms:options.request.worker_deadline_ms-Date.now()});try{const value=await actual[method](...args);trace('sdk-returned',{stdout:value.stdout});return value;}catch(error){trace('sdk-error',{message:error.message,code:error.code});throw error;}};return {...actual,execute:wrap('execute'),...(actual.executeBounded?{executeBounded:wrap('executeBounded')}:{})};},createOwner:options=>{ownerPins.push(structuredClone(options.python));const actual=owner.createBoundedCommanderOwner(options);return {...actual,reserveOwner:async(scope,options)=>{trace('owner-reserve-start');const reservation=await actual.reserveOwner(scope,{...options,home:f.options.home});trace('owner-reserved');const wrap=name=>async(...args)=>{trace('owner-'+name+'-start');try{const value=await reservation[name](...args);if(name==='check'&&ownerCheckDelayMs)await new Promise(resolve=>setTimeout(resolve,ownerCheckDelayMs));trace('owner-'+name+'-returned',{snapshot:actual.snapshot()});return value;}catch(error){trace('owner-'+name+'-error',{message:error.message,code:error.code,snapshot:actual.snapshot()});throw error;}};return {...reservation,check:wrap('check'),returned:wrap('returned'),close:wrap('close')};}};}}});
    allocated.push(options.request.activity_key);
    return {...observer,close:async()=>{const proof=await observer.close();proofs.push(proof);assert.equal(cold.runnerCommanderClosureKnown(proof,options.request),true);return cloneClosure?{...proof}:proof;}};
   };
@@ -158,3 +158,19 @@ test('dispatch deadline tightening leaves foreign commands and parameters for th
   assert.equal(cold.runnerCommanderClosureKnown(proofs[1],q),true);
  });
  });
+
+
+test('102自生成timeout跨整秒仍按原截止缩短并保留全桥调用预算',async t=>{
+ const gateway=await loopbackGateway(t);gateway.release();let advanced=false;
+ await realPhone(async({router,q,requests,activities})=>{
+  const original=structuredClone(requests),events=[];
+  t.mock.timers.enable({apis:['Date'],now:requests[0].worker_deadline_ms-11007});
+  try{
+   const bridge=createCommanderBridge({run_id:q.run_id,budget:{max_calls:1,timeout_ms:5000},onEvent:async event=>events.push(event),transport:request=>router.commander({...q,...request,commander_role:'observer'})});
+   await bridge.notify(activities[0],{progress:'fixture'},{executor_kind:'agent'});
+   assert.equal(advanced,true,'必须进入真实SDK执行入口');const calls=gateway.frames.filter(frame=>frame.method==='agent');assert.equal(calls.length,1,'合法自生成调用跨整秒不能变成SCOPE拒绝');assert.equal(calls[0].params.timeout,10);
+   await router.selectActivity(activities[1]);await bridge.notify(activities[1],{progress:'fixture'},{executor_kind:'agent'});
+   assert.ok(events.some(event=>event.event_type==='COMMANDER_BUDGET_EXHAUSTED'));assert.equal(gateway.frames.filter(frame=>frame.method==='agent').length,1);assert.deepEqual(requests,original,'原绝对截止与身份必须不变');assert.equal((await router.close()).execution_stopped,true);
+  }finally{t.mock.timers.reset();}
+ },{processing:true,gateway,beforeSdkExecute:()=>{if(!advanced){advanced=true;t.mock.timers.tick(9);}}});
+});
