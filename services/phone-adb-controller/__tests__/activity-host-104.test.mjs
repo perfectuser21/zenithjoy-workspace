@@ -30,7 +30,7 @@ test('real frozen 104 accepts an explicit current runtime before any PG or order
 });
 test('wrong authorization/root/order/source rejects before runtime module execution',async()=>{
  const f=setup();await candidate(f);const api=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/runtime-deps.mjs')));
- for(const mutate of [c=>c.node='/other-node',c=>c.python='/other-python',c=>c.company_id='other',c=>c.account='other',c=>c.root_task_id='other',c=>c.verification['104'].record_id='other',c=>c.source_commit='b'.repeat(40),c=>c.authorization_asset.sha256='0'.repeat(64)]){
+ for(const mutate of [c=>c.marker_source='b'.repeat(40),c=>c.node='/other-node',c=>c.python='/other-python',c=>c.company_id='other',c=>c.account='other',c=>c.root_task_id='other',c=>c.verification['104'].record_id='other',c=>c.source_commit='b'.repeat(40),c=>c.authorization_asset.sha256='0'.repeat(64)]){
   const c=structuredClone(f.context);mutate(c);await assert.rejects(api.createRuntimeDeps(c,c.verification['104']),/104_(CONTEXT|AUTHORIZATION|SOURCE)/);
  }
  assert.equal(fs.existsSync(path.join(f.root,'external-effects')),false);
