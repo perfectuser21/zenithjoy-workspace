@@ -67,6 +67,32 @@ def call(name,op):
  except Exception as e:error=type(e).__name__+':'+str(e)
  gc.collect();f=target/'receipts'/(name+'.json')
  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None}
+if mode.startswith('fetch-'):
+ native=p/'native-source';native.mkdir();c.update(transport='local',native_root=str(native));(target/'context.json').write_text(json.dumps(c))
+ source=native/'fixture-new-run-wrong.json';correct=native/'fixture-new-run-correct.json';correct.write_text('original evidence')
+ if mode=='fetch-symlink':source.symlink_to(correct)
+ elif mode=='fetch-directory':source.mkdir()
+ elif mode in ['fetch-after-copy','fetch-untyped','fetch-timeout']:source.write_text('evidence')
+ calls['copy']=0;m.pinned_transport=lambda c:None
+ copy=m.shutil.copy2
+ def copying(src,dst):
+  calls['copy']+=1;copy(src,dst)
+  if mode=='fetch-after-copy':src.write_text('changed after local write')
+ m.shutil.copy2=copying
+ if mode=='fetch-untyped':m.invoke=lambda *a:(_ for _ in ()).throw(ValueError('NATIVE_LOCAL_SOURCE'))
+ if mode=='fetch-timeout':m.invoke=lambda *a:(_ for _ in ()).throw(m.subprocess.TimeoutExpired('read-only download',1))
+ def fetch(name,filename):
+  sys.argv=['tools','fetch-native',name,filename];out=io.StringIO();error=None;rc=None
+  try:
+   with contextlib.redirect_stdout(out):rc=m.main()
+  except Exception as e:error=type(e).__name__+':'+str(e)
+  gc.collect();receipt=target/'receipts'/(name+'.json')
+  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(receipt.read_text()) if receipt.exists() else None}
+ first=fetch('first',source.name);before=dict(calls);replay=fetch('first',source.name);conflict=fetch('first',correct.name)
+ second=fetch('corrected',correct.name);after=dict(calls)
+ os.environ['COMMANDER_ACTIVITY_KEY']='cleanup';(target/'input.json').write_text(json.dumps({'activity_key':'cleanup','identity':c['tasks'][workflow]}))
+ cleanup=call('cleanup','inspect_videos')
+ print(json.dumps({'first':first,'before':before,'replay':replay,'conflict':conflict,'second':second,'after':after,'cleanup':cleanup,'calls':calls,'source':str(source),'native_target_exists':(target/'native'/source.name).exists(),'partial_exists':(target/'download-incomplete'/(source.name+'.download-part')).exists()}));sys.exit(0)
 good='score_readback' if workflow=='103' else 'inspect_videos'
 first=call('first','company_config' if mode in ['normal','persist-failure'] else good);before=dict(calls)
 replay=call('first','company_config' if mode in ['normal','persist-failure'] else good)
@@ -198,4 +224,20 @@ else:raise AssertionError('parent symlink into host accepted')
 print('verified_no_overwrite')`;
  const r=spawnSync('/usr/bin/python3',['-c',script,helper,root],{input:JSON.stringify(fixture),encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'verified_no_overwrite');
  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+for(const [mode,reason] of [['fetch-missing','not_found'],['fetch-symlink','symlink'],['fetch-directory','not_regular_file']])test(`local ${mode} rejects before copy with exact cause; replay immutable, correction new action and cleanup admitted`,()=>{
+ const r=probe(mode,'102');assert.equal(r.first.rc,2,r.first.error);const v=JSON.parse(r.first.stdout);
+ assert.equal(v.state,'terminal');assert.equal(v.result.error,'NATIVE_LOCAL_SOURCE');assert.equal(v.result.data.reason,reason);assert.equal(v.result.data.source_path,r.source);
+ assert.equal(v.result.data.dispatched,false);assert.equal(v.result.data.external_effect,'none');assert.match(v.result.data.tool_hint,/新action/);
+ assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0,copy:0});assert.equal(r.replay.stdout,r.first.stdout);assert.match(r.conflict.error,/ACTION_IDENTITY_CONFLICT/);
+ assert.equal(r.second.rc,0,r.second.error);assert.equal(r.after.copy,1);assert.equal(r.after.dispatch,0);assert.equal(r.cleanup.rc,0,r.cleanup.error);assert.equal(r.calls.dispatch,1);
+ assert.equal(r.native_target_exists,false);assert.equal(r.partial_exists,false);
+});
+for(const mode of ['fetch-after-copy','fetch-untyped'])test(`${mode} remains unknown; matching error text cannot grant deterministic rejection`,()=>{
+ const r=probe(mode,'102');assert.equal(r.first.stdout,'');assert.equal(r.first.receipt.state,'unknown');assert.match(r.replay.error,/ACTION_UNKNOWN_NO_REPLAY/);assert.match(r.cleanup.error,/PRIOR_ACTION_UNKNOWN/);
+ if(mode==='fetch-after-copy'){assert.equal(r.before.copy,1);assert.equal(r.partial_exists,true);}
+});
+test('existing read-only downloader timeout terminal semantics remain unchanged',()=>{
+ const r=probe('fetch-timeout','102');assert.equal(r.first.rc,124);assert.equal(r.first.receipt.state,'terminal');assert.equal(r.first.receipt.result.error,'READ_ONLY_DOWNLOAD_TIMEOUT');assert.equal(r.first.receipt.result.artifact_usable,false);
 });
