@@ -36,3 +36,24 @@ test('hung local probe has a fixed bound and does not claim progress',()=>{
 test('bad or backwards packet PTS cannot supply misleading progress',()=>{
  for(const data of [packet('NaN'),{...packet(),packets:[{stream_index:0,pts_time:'5'},{stream_index:0,pts_time:'4'}]}])assert.equal(fixture('normal',data).progress_status,'unknown');
 });
+
+test('deployment carries the actual recording progress dependency',()=>{
+ assert.match(readFileSync(join(root,'deploy.sh'),'utf8'),/\brecording-progress\.py\b/);
+});
+test('live matching recorder is recording; foreign argv and missing startup proof remain unknown',()=>{
+ const d=mkdtempSync(join(tmpdir(),'record-progress-owner-'));try{
+ const script=String.raw`import pathlib,sys,subprocess,importlib.util,json,shlex,os
+r=pathlib.Path(sys.argv[2]);s=importlib.util.spec_from_file_location('p',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+media=r/'media.mkv';media.write_bytes(b'x'); sleeper=r/'sleeper.py';sleeper.write_text('import time; time.sleep(20)')
+child=subprocess.Popen([sys.executable,str(sleeper),'--record='+str(media)])
+try:
+ row=subprocess.check_output(['/bin/ps','-ww','-p',str(child.pid),'-o','uid=,ppid=,lstart=,stat=,command='],text=True).strip();args=shlex.split(row.split(None,8)[8])
+ p={'status':'ready','pid':child.pid,'parent_pid':os.getpid(),'expected_argv':args,'observations':[{'ps':row}]};proof=r/'proof.json';proof.write_text(json.dumps(p));proof.chmod(0o600)
+ assert m.recorder_state(proof,media)=='recording'
+ p['expected_argv'].append('foreign');proof.write_text(json.dumps(p));assert m.recorder_state(proof,media)=='unknown'
+ proof.unlink();assert m.recorder_state(proof,media)=='unknown'
+finally:child.terminate();child.wait(timeout=2)
+print('identity verified')`;
+ const r=spawnSync('/usr/bin/python3',['-c',script,join(root,'recording-progress.py'),d],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
