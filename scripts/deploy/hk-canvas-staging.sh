@@ -65,8 +65,38 @@ OVERRIDE="$RELEASES/$SHA/image.json"
 printf '{"services":{"%s":{"image":"%s"}}}\n' "$SERVICE" "$IMAGE" > "$OVERRIDE"
 compose() { docker compose --env-file "$ENVFILE" -p "$PROJECT" -f "$SOURCE/deploy/docker-compose.creative-canvas-staging.yml" -f "$OVERRIDE" "$@"; }
 compose config -q
-if [[ "$ACTION" == deploy && ! -f "$RELEASES/$SHA/receipt.json" ]]; then
+build_canvas_image() {
+  if [[ -n "${PREVIOUS_SHA:-}" && "$PREVIOUS_SHA" != "$SHA" && -f "$RELEASES/$PREVIOUS_SHA/receipt.json" ]] &&
+     git -C "$REPO" diff --quiet "$PREVIOUS_SHA" "$SHA" -- infrastructure/comfyui .dockerignore; then
+    # A source-only API change must not duplicate the CPU model dependencies.
+    # The previous receipt was checked above. Bind the unchanged filesystem to
+    # the new revision and still require the new runtime capability probe.
+    [[ $(docker image inspect "$PREVIOUS_TAG" --format '{{.Id}}') == "$PREVIOUS_ID" ]] || return 1
+    [[ $(docker image inspect "$PREVIOUS_ID" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$PREVIOUS_SHA" ]] || return 1
+    local previous_layers previous_platform
+    previous_platform=$(docker image inspect "$PREVIOUS_ID" --format '{{.Os}}/{{.Architecture}}')
+    [[ "$previous_platform" =~ ^linux/(amd64|arm64)$ ]] || return 1
+    previous_layers=$(docker image inspect "$PREVIOUS_ID" --format '{{json .RootFS.Layers}}')
+    printf 'FROM %s\n' "$PREVIOUS_TAG" |
+      docker build --platform "$previous_platform" --pull=false --network none \
+        --label "org.opencontainers.image.base.digest=$PREVIOUS_ID" \
+        --label "org.opencontainers.image.revision=$SHA" -t "$IMAGE" -
+    [[ $(docker image inspect "$IMAGE" --format '{{json .RootFS.Layers}}') == "$previous_layers" ]] || {
+      echo 'Canvas reuse changed the image filesystem' >&2
+      return 1
+    }
+    return 0
+  fi
+  local available_kb
+  available_kb=$(df -Pk "$RELEASES" | awk 'NR==2 {print $4}')
+  [[ "$available_kb" =~ ^[0-9]+$ && "$available_kb" -ge 5242880 ]] || {
+    echo 'Insufficient disk space to rebuild the canvas image' >&2
+    return 1
+  }
   docker build --label "org.opencontainers.image.revision=$SHA" -f "$SOURCE/infrastructure/comfyui/Dockerfile" -t "$IMAGE" "$SOURCE"
+}
+if [[ "$ACTION" == deploy && ! -f "$RELEASES/$SHA/receipt.json" ]]; then
+  build_canvas_image
 else
   [[ -f "$RELEASES/$SHA/receipt.json" ]] || { echo 'Rollback requires a previously verified release receipt' >&2; exit 1; }
   python3 - "$RELEASES/$SHA/receipt.json" "$ENV_HASH" <<'PY'

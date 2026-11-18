@@ -137,6 +137,14 @@ class DeliveryTest(unittest.TestCase):
         original.write_text('#!/bin/bash\nexit 47\n')
         result=subprocess.run(['bash','-c',command],input='url = "https://private.invalid/?SECRET_URL"\n',text=True,capture_output=True,env=env)
         self.assertEqual(result.returncode,44)
+    def test_ram_download_is_bounded_and_preserves_on_disk_fallback(self):
+        command = delivery.remote_command('bash /tmp/fixed', 350 * 1024**2)
+        self.assertIn('TRANSFER_DIR=/tmp', command)
+        self.assertIn('stat -f -c %T /dev/shm', command)
+        self.assertIn('MemAvailable:', command)
+        self.assertIn('TRANSFER_DIR=/dev/shm', command)
+        self.assertNotIn('TRANSFER_DIR=/dev/shm', delivery.remote_command('bash /tmp/fixed', 769 * 1024**2))
+
     def test_workflow_wires_cos_and_preserves_original_admission_arguments(self):
         workflow=(Path(__file__).parents[3]/'.github/workflows/deploy-staging-hk.yml').read_text()
         self.assertIn("- 'scripts/deploy/staging-cos-delivery.py'",workflow)

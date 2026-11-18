@@ -47,9 +47,12 @@
    API 同版本部署通过固定 overlay 激活配置；不直接改现役 `.env`。
 2. 通过真实邮箱登录验收测试员工：Wan/超分生成真实结果、Aidge 访问与业务、画布加载和工作流执行；
    独立读回结果，核对实例隔离、无权限账号和故障提示。配置就绪不等于模型调用成功。
-3. 将实际证据写入现有 Brain 冻结发布验收规程。未完成的验收不得填通过。
-4. 正常 `promote-prod-hk.yml` 输入同 SHA、真实 `acceptance_run_key`、`confirm=PROMOTE`、`video_tools=true`。
-   现有 release-admission 先核同 SHA staging 和 Brain 验收；通过后才准备生产实例。
+3. 在 main 上运行 `video-tools-live-acceptance.yml`。该任务使用受保护预发环境的专用账号，检查同版本 API，
+   在画布节点先提交无效的测试文件，再上传一段生成的 MP4，验证素材 ID、下载回来的原始字节和匿名拒绝。
+   任务上传无凭据的验收报告，并与预发部署使用同一并发锁。
+4. 正常 `promote-prod-hk.yml` 输入同 SHA、上述实传验收的 GitHub Actions 运行编号作为 `acceptance_run_key`、
+   `confirm=PROMOTE` 和 `video_tools=true`。release-admission 核对最新同 SHA 预发部署及其之后的实传成功记录。
+   通过后才准备生产实例。
    生产只复用同 SHA staging 验过的不可变 ComfyUI image ID，绝不生产重建或用 latest。
 5. HK API 正式发布器将每版本私有 overlay 纳入保留的 image 配置，启用后再次读取 API 实际环境、
    每人实例 image/健康/卷/token/网络成员。任一不符则正常恢复原 API。

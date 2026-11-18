@@ -94,6 +94,11 @@ INSPECT_LAYERS_HASH=$(docker image inspect "$IMAGE" --format '{{json .RootFS.Lay
 [[ "$INSPECT_LAYERS_HASH" == "$EXPECTED_LAYERS_HASH" ]] || { echo 'Loaded image layers mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || { echo 'Image platform mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$SHA" ]] || { echo 'Image SHA label mismatch' >&2; exit 1; }
+# Ordinary API releases keep the private configuration of the healthy active
+# predecessor. A candidate with an explicitly prepared canvas takes precedence.
+if [[ "$PREVIOUS_SHA" != "$SHA" && ! -f "$RELEASES/$SHA/canvas-plan.json" && -f "$RELEASES/$PREVIOUS_SHA/canvas-plan.json" ]]; then
+  node "$SOURCE/scripts/deploy/video-tools-release.mjs" inherit-staging "$RELEASES" "$PREVIOUS_SHA" "$SHA"
+fi
 if [[ -f "$RELEASES/$SHA/canvas-plan.json" ]]; then
   node "$SOURCE/scripts/deploy/video-tools-release.mjs" verify-instances "$RELEASES/$SHA/canvas-plan.json"
   node "$SOURCE/scripts/deploy/video-tools-release.mjs" merge-image "$RELEASES" "$SHA" "$LOADED_IMAGE" "$SERVICE"

@@ -4,7 +4,7 @@ import { releaseContract } from '../../../../scripts/release-gate/acceptance-rec
 const sha = 'a'.repeat(40), repo = 'perfectuser21/zenithjoy-workspace';
 function receipt() { const c=releaseContract(['api','dashboard']);return {run:{id:'run-id',run_key:'release-check',status:'adjudicated',gp_id:'gp',detail:{source_repo:repo,environment:'staging',release_targets:['api','dashboard'],backend_sha:sha,backend_sha_src2:sha,frontend_sha:sha,frontend_sha_src2:sha,spec_sha:c.spec_sha,gate_verdict:'绿'}}, checks:c.checks.map(x=>({...x,run_id:'run-id',result:'通过',note:'evidence://result/'+x.check_key}))}; }
 
-// Exercise the actual mandatory Brain step, with only SSH/HTTP transport isolated.
+// Exercise the actual mandatory Brain step for standard releases, with only SSH/HTTP transport isolated.
 // No machine, credential store, real Brain endpoint or publication is contacted.
 for (const [label,mutate,pass] of [
  ['same-SHA frozen S2/S3',()=>{},true],
@@ -17,7 +17,8 @@ for (const [label,mutate,pass] of [
  const {default:YAML}=await import('yaml');
  const workflow=YAML.parse(readFileSync(new URL('../../release-admission.yml',import.meta.url),'utf8'));
  const job=workflow.jobs.admission,step=job.steps.find(s=>s.name==='Read frozen business acceptance from Brain');assert.ok(step);
- assert.equal(job['continue-on-error'],undefined);assert.equal(step['continue-on-error'],undefined);assert.equal(step.if,undefined);
+ assert.equal(job['continue-on-error'],undefined);assert.equal(step['continue-on-error'],undefined);assert.equal(step.if,'${{ !inputs.video_tools_live }}');
+ assert.equal(workflow.on.workflow_call.inputs.video_tools_live.default,false);
  assert.equal(step.env.SHA,'${{ steps.staging.outputs.sha }}');assert.equal(step.env.RUN_KEY,'${{ inputs.acceptance_run_key }}');
  const dir=mkdtempSync(join(tmpdir(),'mandatory-release-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const bin=join(dir,'bin');mkdirSync(bin);
  const record=receipt();mutate(record);const recordFile=join(dir,'record.json');writeFileSync(recordFile,JSON.stringify(record));const calls=join(dir,'calls.jsonl');
