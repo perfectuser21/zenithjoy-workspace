@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdtempSync,cpSync,mkdirSync,rmSync} from 'node:fs';
-import {resolve,join,dirname} from 'node:path';
+import {readFileSync,writeFileSync,mkdtempSync,cpSync,mkdirSync,rmSync,readdirSync} from 'node:fs';
+import {resolve,join,dirname,basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import {spawnSync,execFileSync} from 'node:child_process';
@@ -50,4 +50,21 @@ test('same name and version install from pinned archives with ignore-scripts and
  assert.equal(typeof api.verifyRemediation,'function');const manifest=JSON.parse(readFileSync(join(root,folder,'manifest.json')));
  for(const item of manifest.patched_packages){const dir=mkdtempSync(join(tmpdir(),'picomatch-install-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const pkg={name:'isolated-remediation-test',version:'1.0.0',private:true,dependencies:{picomatch:item.version}},record={version:item.version,resolved:'file:'+join(root,item.path),integrity:item.integrity};writeFileSync(join(dir,'package.json'),JSON.stringify(pkg));writeFileSync(join(dir,'package-lock.json'),JSON.stringify({name:pkg.name,version:pkg.version,lockfileVersion:3,requires:true,packages:{'':pkg,'node_modules/picomatch':record}}));
  for(const command of ['ci','install']){const r=spawnSync('npm',[command,'--ignore-scripts','--offline','--no-fund','--no-audit'],{cwd:dir,encoding:'utf8',timeout:45000,env:{...process.env,npm_config_cache:join(dir,'.cache')}});assert.equal(r.status,0,r.stderr);const check=spawnSync(process.execPath,['-e',"const assert=require('node:assert/strict'),p=require('picomatch');assert.equal(require('picomatch/package.json').version,process.argv[1]);assert.throws(()=>p('+(*a)'),e=>e.code==='PICOMATCH_REPEATED_EXTGLOB_BLOCKED');assert.equal(p('src/**/*.js')('src/a.js'),true);",item.version],{cwd:dir,encoding:'utf8',timeout:3000});assert.equal(check.status,0,check.stderr);rmSync(join(dir,'node_modules'),{recursive:true});}}
+});
+
+test('API容器的真实COPY安装上下文包含根锁引用的全部补丁包',t=>{
+ const stage=mkdtempSync(join(tmpdir(),'picomatch-docker-stage-'));t.after(()=>rmSync(stage,{recursive:true,force:true}));
+ const dockerfile=readFileSync(join(root,'apps/api/Dockerfile'),'utf8'),install=dockerfile.indexOf('RUN npm ci --workspace=apps/api');assert.ok(install>0);
+ for(const line of dockerfile.slice(0,install).split('\n').filter(line=>line.startsWith('COPY '))){
+  const words=line.trim().split(/\s+/).slice(1),destination=words.pop();
+  for(const source of words){
+   const sources=source.endsWith('/*.patched.tgz')?readdirSync(join(root,dirname(source))).filter(name=>name.endsWith('.patched.tgz')).map(name=>join(dirname(source),name)):[source];
+   for(const item of sources){const target=join(stage,destination,basename(item));mkdirSync(dirname(target),{recursive:true});cpSync(join(root,item),target,{recursive:true});}
+  }
+ }
+ const lock=JSON.parse(readFileSync(join(stage,'package-lock.json')));
+ for(const [path,entry]of Object.entries(lock.packages))if(path.endsWith('/picomatch')){
+  assert.ok(entry.resolved.startsWith('file:'));const bytes=readFileSync(resolve(stage,entry.resolved.slice(5)));
+  assert.equal('sha512-'+createHash('sha512').update(bytes).digest('base64'),entry.integrity);
+ }
 });
