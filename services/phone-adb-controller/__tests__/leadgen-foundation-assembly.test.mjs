@@ -4,11 +4,11 @@ import {prepareLeadgenHost} from '../leadgen-foundation/adapter.mjs';
 for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} real source assembly is isolated, reusable and effect free`,async()=>{
  const f=await foundationFixture(workflow);try{
   const before=Date.now(),a=await prepareLeadgenHost(f);assert.equal(a.receipt.status,'assembled_not_started');
-  assert.ok(Date.parse(a.context.run_start_ts)>=before);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
+  assert.ok(a.receipt.assembled_at_ms>=before);assert.equal(a.context.run_start_ts,undefined);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);
   assert.equal(fs.existsSync(path.join(a.profile.cwd,'receipts')),false);assert.equal(fs.existsSync(path.join(a.profile.cwd,'outreach-receipts')),false);
   const contextFile=path.join(a.profile.cwd,'context.json'),bytes=fs.readFileSync(contextFile),mtime=fs.statSync(contextFile).mtimeMs;
-  const b=await prepareLeadgenHost(f);assert.equal(b.receipt.recovered,true);assert.equal(b.context.run_start_ts,a.context.run_start_ts);assert.equal(fs.statSync(contextFile).mtimeMs,mtime);assert.deepEqual(fs.readFileSync(contextFile),bytes);
+  const b=await prepareLeadgenHost(f);assert.equal(b.receipt.recovered,true);assert.equal(b.receipt.assembled_at_ms,a.receipt.assembled_at_ms);assert.equal(fs.statSync(contextFile).mtimeMs,mtime);assert.deepEqual(fs.readFileSync(contextFile),bytes);
   const proof=JSON.parse(fs.readFileSync(a.context.verification.proof_manifest_path));assert.deepEqual(proof.fields,{});assert.equal(proof.identity.run_id,f.run.run_id);
   if(workflow==='104'){
    const exact=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'outreach-scope.json')));
@@ -34,5 +34,14 @@ test('foundation recovery never recreates missing mutable proof evidence',async(
  const f=await foundationFixture();try{
   const first=await prepareLeadgenHost(f),proof=first.context.verification.proof_manifest_path;fs.unlinkSync(proof);
   await assert.rejects(prepareLeadgenHost(f),/LEADGEN_PROOF_MISSING/);assert.equal(fs.existsSync(proof),false);
+ }finally{f.close();}
+});
+test('104 actual Codex child receives frozen exact scope without changing parent environment',async()=>{
+ const f=await foundationFixture('104');try{
+  const binary=path.join(f.root,'codex-probe');fs.writeFileSync(binary,'#!/bin/sh\nprintf \'%s\\n\' "$LEADGEN_OUTREACH_MODE" "$LEADGEN_OUTREACH_SCOPE_FILE" "$1"\n',{mode:0o700});
+  f.profile.skill_runtime.codex={command:binary,command_sha256:createHash('sha256').update(fs.readFileSync(binary)).digest('hex')};
+  const before=process.env.LEADGEN_OUTREACH_MODE,a=await prepareLeadgenHost(f),probe=spawnSync(a.profile.skill_runtime.codex.command,['probe'],{encoding:'utf8',env:{PATH:process.env.PATH,LEADGEN_OUTREACH_MODE:'company_queue'}});
+  assert.equal(probe.status,0,probe.stderr);assert.deepEqual(probe.stdout.trim().split('\n'),['exact',path.join(a.profile.cwd,'outreach-scope.json'),'probe']);assert.equal(process.env.LEADGEN_OUTREACH_MODE,before);
+  fs.appendFileSync(binary,'\n# changed\n');const drift=spawnSync(a.profile.skill_runtime.codex.command,[],{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/LEADGEN_CODEX_SOURCE/);
  }finally{f.close();}
 });
