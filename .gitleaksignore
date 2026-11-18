@@ -167,3 +167,7 @@ b1221a58be60b2a2173215535ef6a47e8f38e132:apps/api/src/routes/walking-skeleton.te
 # OpenSSH公开格式识别grammar（startsWith header及base64正则），不含任何私钥payload。
 # 独审仅批准这一条历史fingerprint，不能扩成文件/路径/规则豁免。
 9730d5c32d16b5d4fff88a36a6ede2fa812aca9b:services/phone-adb-controller/preflight-metadata.mjs:private-key:60
+
+# 104 宿主装配匹配旧授权 JSON 的 SHA256 摘要，已对原文件复算，不是 API key。
+# 只豁免该历史 commit 的精确单行，不排除整个宿主或 generic-api-key 规则。
+3548cc729a9cad053e747fed6e1ae755dfabfa83:services/phone-adb-controller/activity-host-104.mjs:generic-api-key:20
