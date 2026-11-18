@@ -12248,3 +12248,13 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "真实tools.main权限/101缺metrics执行前拒绝、原action重放、纠正与unknown保护；102/103按冻结输入装配，外部派发为计数替身"
+
+
+  - id: activity-host-104
+    path: services/phone-adb-controller/__tests__/activity-host-104.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "104冻结原宿主本地装配、明确授权范围、真实PG加载、原订单恢复及未知单发；外部订单/手机为计数替身"

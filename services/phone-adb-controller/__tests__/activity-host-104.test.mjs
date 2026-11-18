@@ -45,3 +45,66 @@ test('parent transport calls the pinned local controller; guard remains single i
  const script=`import sys,json,pathlib,importlib.util,hashlib,time,datetime\nsys.path.insert(0,${JSON.stringify(f.targetRoot)})\nimport tools\nc=json.loads(${JSON.stringify(JSON.stringify(f.context))})\ncmd=tools.ssh(c,['--profile',c['profile'],'lock-status'])\nassert 'ssh' not in cmd and c['phone_controller'] in cmd,cmd\nfrom outreach104.phone_guard import send_once\np=pathlib.Path(${JSON.stringify(f.targetRoot)});d=p/'outreach-receipts';d.mkdir()\nt=c['tasks']['104'];s=c['verification']['104'];msg='测试正文'\ni={**t,**{k:c[k] for k in ['profile','serial','sender_id']},**{k:s[k] for k in ['record_id','comment_id','target_douyin_id','profile_url']},'message':msg,'message_sha256':hashlib.sha256(msg.encode()).hexdigest(),'message_b64':__import__('base64').b64encode(msg.encode()).decode(),'evidence_id':t['run_tag']+'-a2-dm-1','action_key':'action'}\n(d/'send-input.json').write_text(json.dumps(i));(d/'prepare-runtime.json').write_text(json.dumps({'verified':True,'pause':False,'halt':False,'observed_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}))\ncalls=[]\ndef run(*a,**kw):\n calls.append(a);raise TimeoutError('unknown')\napi={'task_authority':lambda c:None,'resource_authority':lambda c:None,'readback':lambda c:{**{k:True for k in ['prepared_verified','sender_verified','target_verified','message_verified','same_uid_clear','initial_phone_allowed']},'phone_invocation_present':False,'action_key':'action'},'run':run,'ssh':tools.ssh}\nfor _ in range(2):\n try:send_once(p,c,'send_dm',[],api)\n except (TimeoutError,ValueError):pass\nassert len(calls)==1,calls\nassert json.loads((d/'phone-invocation.json').read_text())['state']=='unknown'\nprint('single-unknown-preserved')`;
  const r=spawnSync('python3',['-c',script],{encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'single-unknown-preserved');
 });
+
+test('original prepared order recovery never repeats PUT and unknown never clears reservation',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));
+ const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),s=f.context.verification['104'];
+ const row={record_id:s.record_id,fields:{'抖音号':s.target_douyin_id,'主页链接':s.profile_url,'状态':'待触达','发送状态':'未发送'}};
+ const counts={put:0,get:0,native:0};let outcome='unknown';
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[structuredClone(row)],get:async()=>{counts.get++;return structuredClone(row);},fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,fields)=>{counts.put++;Object.assign(row.fields,fields);if(counts.put===1)throw Error('response-lost-after-committed-put');}},freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),checkPreflight:async()=>({verified:true}),checkNative:async()=>{counts.native++;return {verified:outcome==='sent',outcome,sent_at_ms:Date.now()};},close:async()=>{}};
+ const args={context:f.context,scope:s,artifact_dir:path.join(f.root,'orders'),evidence:{}};
+ assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(counts.put,1);
+ assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(counts.put,1);
+ assert.equal((await request({...args,op:'prepare'},deps)).status,'prepared');assert.equal(counts.put,2);
+ assert.equal((await request({...args,op:'prepare'},deps)).status,'prepared');assert.equal(counts.put,2);
+ assert.equal((await request({...args,op:'write_back'},deps)).status,'unknown');assert.equal(counts.put,2);assert.match(row.fields['回复结果'],/^\[104 prepared:/);
+ assert.equal((await request({...args,op:'readback'},deps)).status,'prepared');assert.equal(counts.put,2);
+});
+test('missing local state and missing migrated-account history are blocked without creating directories',async()=>{
+ const f=setup();f.context.outreach_runtime.account_bindings.push({host:'old-host',profile:'old-profile',serial:'old-device'});await candidate(f);
+ const {observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));
+ const r=observe104Runtime(f.context);assert.equal(r.verified,false);assert.equal(r.account_day_coverage_complete,false);assert.ok(r.missing_sources.includes('state_directory'));assert.equal(fs.existsSync(f.context.outreach_runtime.state_directory),false);
+});
+test('local counters and malformed native ledger fail closed while retaining original files',async()=>{
+ for(const mode of ['pause','bad-count','bad-ledger']){
+  const f=setup(),cfg=f.context.outreach_runtime;fs.mkdirSync(cfg.state_directory);fs.mkdirSync(path.join(cfg.evidence_base,f.context.profile),{recursive:true});fs.mkdirSync(cfg.lock_root);const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()).replaceAll('-','');
+  const file=mode==='pause'?path.join(cfg.state_directory,'dm-paused-'+f.context.profile+'.flag'):mode==='bad-count'?path.join(cfg.state_directory,'dm-count-'+f.context.profile+'-'+date+'.txt'):path.join(cfg.evidence_base,f.context.profile,'old-outward-ledger.jsonl');fs.writeFileSync(file,'broken');await candidate(f);
+  const {observe104Runtime}=await import(pathToFileURL(path.join(f.targetRoot,'activity-104-runtime.mjs')));const r=observe104Runtime(f.context);if(mode==='pause')assert.equal(r.pause,true);else assert.equal(r.verified,false);assert.equal(fs.readFileSync(file,'utf8'),'broken');
+ }
+});
+test('hardware proof is independent of ADB route and rejects mismatches before returning preflight',async()=>{
+ const f=setup(),adb=path.join(f.context.runtime_root,'adb-managed-client.py');fs.writeFileSync(adb,'# frozen fixture');f.context.verification.runtime_sha256['adb-managed-client.py']=hash(fs.readFileSync(adb));await candidate(f);
+ const script=`import sys,json,importlib.util,subprocess\nsys.path.insert(0,${JSON.stringify(f.targetRoot)})\nsp=importlib.util.spec_from_file_location('host',${JSON.stringify(path.join(f.targetRoot,'activity-104-transport.py'))});m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\nc=json.loads(${JSON.stringify(JSON.stringify(f.context))})\ncalls=[]\ndef run(args,**kw):\n calls.append(args);return subprocess.CompletedProcess(args,0,'hardware-1\\n','')\nr=subprocess.CompletedProcess([],0,'serial='+c['adb_serial']+'\\n','')\nout=m.preflight_result(c,r,run)\nassert 'hardware_serial=hardware-1' in out.stdout and calls[0][-3:]==['shell','getprop','ro.serialno']\ndef wrong(args,**kw):return subprocess.CompletedProcess(args,0,'other-hardware','')\ntry:m.preflight_result(c,subprocess.CompletedProcess([],0,'serial='+c['adb_serial']+'\\n',''),wrong);raise AssertionError('accepted wrong hardware')\nexcept ValueError as e:assert str(e)=='ACTIVITY_104_HARDWARE_BINDING'\nprint('bound')`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'bound');
+});
+test('authorization content mutation and config hash mutation reject without external loading',async()=>{
+ const f=setup();await candidate(f);const api=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/runtime-deps.mjs')));
+ fs.appendFileSync(f.context.authorization_asset.path,' ');await assert.rejects(api.createRuntimeDeps(f.context,f.context.verification['104']),/104_SOURCE_DIGEST/);
+ fs.appendFileSync(path.join(f.targetRoot,'outreach-host-binding.json'),' ');await assert.rejects(api.createRuntimeDeps(f.context,f.context.verification['104']),/104_CONTEXT_FROZEN/);
+});
+test('all assembled JavaScript/Python entry sources parse and 104 method stays scoped',async()=>{
+ const f=setup();const receipt=await candidate(f);
+ for(const name of Object.keys(receipt.sha256))if(name.endsWith('.mjs')){const r=spawnSync(process.execPath,['--check',path.join(f.targetRoot,name)],{encoding:'utf8'});assert.equal(r.status,0,name+': '+r.stderr);}
+ const p=spawnSync('python3',['-c','import ast,pathlib,sys\nfor p in pathlib.Path(sys.argv[1]).rglob("*.py"):ast.parse(p.read_text())',f.targetRoot],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);
+ assert.equal(hash(fs.readFileSync(path.join(f.targetRoot,'outreach104/order-adapter.mjs'))),fixture.files['outreach104/order-adapter.mjs'].sha256);
+ assert.equal(hash(fs.readFileSync(path.join(f.targetRoot,'outreach104/phone_guard.py'))),fixture.files['outreach104/phone_guard.py'].sha256);
+ assert.match(fs.readFileSync(path.join(f.targetRoot,'TOOLS.txt'),'utf8'),/commander_host_tools.invoke/);
+});
+
+test('actual assembled runtime loads admitted PG closure; bad scope dispatches zero external initializations',async()=>{
+ const f=setup(),runtime=f.context.runtime_root;
+ const {installPreflightPg,preflightPgLockIdentity}=await import('../preflight-pg-dependencies.mjs');
+ for(const n of ['preflight-pg-dependencies.mjs','preflight-pg-lock.json']){fs.copyFileSync(new URL('../'+n,import.meta.url),path.join(runtime,n));f.context.verification.runtime_sha256[n]=hash(fs.readFileSync(path.join(runtime,n)));}
+ await installPreflightPg({runtimeRoot:runtime,sourceCommit:f.context.source_commit});f.context.verification.pg.preflight_pg=preflightPgLockIdentity({runtimeRoot:runtime});
+ globalThis.activity104Effects={module:0,order:0,query:0};
+ for(const n of ['leadgen-outreach-orders.js','line-routes.js','next-outreach-lib.js','leadgen-outreach-bridge.js','company-config-lib.js','leadgen-policy-review.js']){
+  const code='globalThis.activity104Effects.module++;module.exports='+ (n==='line-routes.js'?'{routeOf:()=>({})}':n==='leadgen-outreach-orders.js'?'{orderClient:async()=>{globalThis.activity104Effects.order++;return {};},withOrderLock:(_line,fn)=>fn()}':'{}')+';';fs.writeFileSync(path.join(runtime,n),code,{mode:0o600});f.context.verification.runtime_sha256[n]=hash(code);
+ }
+ await candidate(f);const api=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/runtime-deps.mjs'))),env={DATABASE_URL:process.env.DATABASE_URL,LEADGEN_FEISHU_CREDENTIALS:process.env.LEADGEN_FEISHU_CREDENTIALS};
+ process.env.DATABASE_URL='postgres://fixture:fixture@127.0.0.1:1/fixture';process.env.LEADGEN_FEISHU_CREDENTIALS='fixture-no-read';
+ try{
+  const wrong={...f.context,company_id:'other'};await assert.rejects(api.createRuntimeDeps(wrong,wrong.verification['104']),/104_CONTEXT_CHANGED/);assert.deepEqual(globalThis.activity104Effects,{module:0,order:0,query:0});
+  await assert.rejects(api.createRuntimeDeps(f.context,{...f.context.verification['104'],record_id:'other'}),/104_CONTEXT_SCOPE/);assert.equal(globalThis.activity104Effects.module,0);
+  const d=await api.createRuntimeDeps(f.context,f.context.verification['104']);await d.close();assert.deepEqual(globalThis.activity104Effects,{module:6,order:1,query:0});
+ }finally{for(const[k,v]of Object.entries(env))if(v===undefined)delete process.env[k];else process.env[k]=v;delete globalThis.activity104Effects;}
+});
