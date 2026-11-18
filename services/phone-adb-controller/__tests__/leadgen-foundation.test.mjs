@@ -69,3 +69,14 @@ test('foundation cannot adopt a preexisting unreceipted directory or symlink sou
   assert.equal(fs.readFileSync(path.join(directory,'foreign'),'utf8'),'old');
  }finally{f.close();}
 });
+test('102 selects only a controlled producer asset and rejects scope disagreement',async()=>{
+ const {buildContext}=await import(moduleURL);const f=fixture();try{
+  const producer={workflow:'101',task_id:'33333333-3333-4333-8333-333333333333',run_id:'44444444-4444-4444-8444-444444444444',run_tag:'producer-tag',source_commit:'a'.repeat(40),manifest_path:'/private/producer.json',manifest_sha256:'b'.repeat(64),result_path:'/private/result.json',result_sha256:'c'.repeat(64)};
+  f.config.bindings.customer.producers={approved:producer};fs.writeFileSync(f.configFile,JSON.stringify(f.config));f.environment.LEADGEN_HOST_CONFIG_SHA256=hash(fs.readFileSync(f.configFile));
+  f.run.input.business={producer_key:'approved',scope:{video_ids:['7711111111111111111'],upstream:{'7711111111111111111':{run:'producer-tag'}}},comment_limit:1};
+  const call=()=>buildContext({workflow:'102',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')});
+  assert.deepEqual(call().context.input_provenance.producer,producer);
+  f.run.input.business.scope.upstream['7711111111111111111'].run='foreign';assert.throws(call,/LEADGEN_PRODUCER_SCOPE/);
+  f.run.input.business.producer_key='../untrusted';assert.throws(call,/LEADGEN_PRODUCER_KEY/);
+ }finally{f.close();}
+});
