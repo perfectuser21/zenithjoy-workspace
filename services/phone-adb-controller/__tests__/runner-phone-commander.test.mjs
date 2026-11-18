@@ -168,9 +168,20 @@ test('102自生成timeout跨整秒仍按原截止缩短并保留全桥调用预�
   try{
    const bridge=createCommanderBridge({run_id:q.run_id,budget:{max_calls:1,timeout_ms:5000},onEvent:async event=>events.push(event),transport:request=>router.commander({...q,...request,commander_role:'observer'})});
    await bridge.notify(activities[0],{progress:'fixture'},{executor_kind:'agent'});
-   assert.equal(advanced,true,'必须进入真实SDK执行入口');const calls=gateway.frames.filter(frame=>frame.method==='agent');assert.equal(calls.length,1,'合法自生成调用跨整秒不能变成SCOPE拒绝');assert.equal(calls[0].params.timeout,10);
+   assert.equal(advanced,true,'必须进入真实SDK执行入口');const calls=gateway.frames.filter(frame=>frame.method==='agent');assert.equal(calls.length,1,'合法自生成调用跨整秒不能变成SCOPE拒绝');assert.equal(calls[0].params.timeout,8,'SDK收紧后，原dispatch收尾预留继续收紧到8秒');
    await router.selectActivity(activities[1]);await bridge.notify(activities[1],{progress:'fixture'},{executor_kind:'agent'});
    assert.ok(events.some(event=>event.event_type==='COMMANDER_BUDGET_EXHAUSTED'));assert.equal(gateway.frames.filter(frame=>frame.method==='agent').length,1);assert.deepEqual(requests,original,'原绝对截止与身份必须不变');assert.equal((await router.close()).execution_stopped,true);
   }finally{t.mock.timers.reset();}
  },{processing:true,gateway,beforeSdkExecute:()=>{if(!advanced){advanced=true;t.mock.timers.tick(9);}}});
+});
+
+test('自生成调用进入SDK前耗尽worker秒数不得借cleanup预算',async t=>{
+ const gateway=await loopbackGateway(t);gateway.release();let advanced=false;
+ await realPhone(async({router,q,requests})=>{
+  const original=structuredClone(requests);t.mock.timers.enable({apis:['Date'],now:requests[0].worker_deadline_ms-11007});
+  try{
+   await assert.rejects(router.commander({...q,commander_role:'observer',phase:'event',activity:'preflight'}),/COMMANDER_UNAVAILABLE/);
+   assert.equal(advanced,true);assert.equal(gateway.frames.length,0);assert.deepEqual(requests,original);assert.equal((await router.close()).execution_stopped,true);
+  }finally{t.mock.timers.reset();}
+ },{processing:true,gateway,beforeSdkExecute:()=>{if(!advanced){advanced=true;t.mock.timers.tick(10008);}}});
 });
