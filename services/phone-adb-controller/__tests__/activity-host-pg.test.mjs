@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
+import {createRequire} from 'node:module';
 import {installPreflightPg,preflightPgDeployment,preflightPgLockIdentity} from '../preflight-pg-dependencies.mjs';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-pg.json',import.meta.url)));
 const implementation=new URL('../activity-host-pg.mjs',import.meta.url);
@@ -32,7 +33,7 @@ function child(script,root){
 }
 for(const name of ['business.mjs','checker.mjs','production-readback-local.mjs'])test(`${name} actual frozen PG initialization works with the host sanitized environment`,async()=>{
  const c=await candidate(name.replaceAll('.','-'));
- const context={runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:c.pg}};
+ const context={source_commit:f.sourceCommit,runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:c.pg}};
  const raw=readFileSync(join(c.targetRoot,name),'utf8');
  // Execute the real initialization statements extracted from each frozen entry, not a replacement loader.
  let body;
@@ -51,7 +52,22 @@ test('assembly preserves old host and refuses a changed baseline before creating
 test('unadmitted source and dependency mutation reject before code or database use',async()=>{
  const api=await import(implementation),targetRoot=join(f.root,'bad-admission');
  await assert.rejects(api.assembleActivityPgHost({...f,baseRoot:f.base,targetRoot,runtimeRoot:f.runtime,expectedSource:{...f.expectedSource,'preflight-pg-dependencies.mjs':'0'.repeat(64)}}),/ACTIVITY_HOST_PG_SOURCE/);assert.equal(existsSync(targetRoot),false);
- const c=await candidate('tamper'),context={runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:c.pg}};
+ const c=await candidate('tamper'),context={source_commit:f.sourceCommit,runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:c.pg}};
  const dep=join(f.runtime,'_dependencies/preflight-pg/node_modules/pg/lib/index.js'),original=readFileSync(dep);writeFileSync(dep,'throw Error("UNTRUSTED_MODULE_EXECUTED")');
  try{const r=child(`import {loadActivityHostPg} from ${JSON.stringify(pathToFileURL(join(c.targetRoot,'activity-host-pg.mjs')).href)};await loadActivityHostPg(${JSON.stringify(context)});`,c.targetRoot);assert.notEqual(r.status,0);assert.match(r.stderr,/PREFLIGHT_PG_FILE_DIGEST/);assert.doesNotMatch(r.stderr,/UNTRUSTED_MODULE_EXECUTED/);}finally{writeFileSync(dep,original);}
+});
+test('frozen dependency lock and execution source must match before returning a Pool',async()=>{
+ const c=await candidate('frozen-binding'),api=await import(pathToFileURL(join(c.targetRoot,'activity-host-pg.mjs')));
+ const context={source_commit:f.sourceCommit,runtime_root:f.runtime,verification:{runtime_sha256:f.expectedSource,pg:c.pg}};
+ for(const mutate of [v=>v.verification.pg.preflight_pg.lock_sha256='b'.repeat(64),v=>v.verification.pg.preflight_pg.package_lock_sha256='b'.repeat(64),v=>v.verification.pg.deployment.source_commit='b'.repeat(40),v=>v.source_commit='b'.repeat(40)]){
+  const changed=structuredClone(context);mutate(changed);await assert.rejects(api.loadActivityHostPg(changed),/ACTIVITY_HOST_PG_|PREFLIGHT_PG_/);
+ }
+});
+test('readiness uses only read-only queries and does not require or create a run snapshot',async()=>{
+ const api=await import(implementation),c=await candidate('readiness');
+ const context={source_commit:f.sourceCommit,runtime_root:f.runtime,company_id:'fixture-company',tenant_id:'fixture-tenant',verification:{runtime_sha256:f.expectedSource,pg:c.pg,policy_version:34,policy_id:'fixture-policy'}};
+ const require=createRequire(pathToFileURL(join(f.runtime,'_dependencies/preflight-pg/package.json'))),{Pool}=require('pg'),original=Pool.prototype.connect,queries=[];
+ // SQL result fixture only; loading still uses the actual verified official PG closure.
+ Pool.prototype.connect=async()=>({release(){},async query(sql){queries.push(sql);if(sql.includes('current_database'))return {rows:[{name:'zenithjoy',read_only:'on'}]};if(sql.includes('tenant_company_profiles'))return {rows:[{company_id:context.company_id,tenant_id:context.tenant_id,config_status:'enabled',config_version:34,runtime_config:{policy_id:'fixture-policy'}}]};return {rows:[]};}});
+ try{assert.equal((await api.checkActivityHostPgReady(context,{})).status,'ready');assert.equal(queries[0],'BEGIN READ ONLY');assert.equal(queries.at(-1),'ROLLBACK');assert.equal(queries.length,5);assert.ok(queries.every(q=>!q.includes('company_config_runs')));}finally{Pool.prototype.connect=original;}
 });
