@@ -38,10 +38,16 @@ try {
   assert.equal(status.available, true);
 
   await page.goto(origin + '/creative-canvas');
-  const template = page.waitForResponse(response =>
-    response.url() === origin + '/api/creative-canvas/extensions/zenithjoy/short-video-wan.json', {timeout:120000});
-  await page.getByRole('button', {name:'打开短视频分镜工作流'}).click({timeout:120000});
-  assert.equal((await template).status(), 200);
+  const open = page.getByRole('button', {name:'打开短视频分镜工作流'});
+  await open.waitFor({timeout:120000});
+  const [template] = await Promise.all([
+    page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.origin === origin && url.pathname === '/api/creative-canvas/extensions/zenithjoy/short-video-wan.json';
+    }, {timeout:120000}),
+    open.click({timeout:120000}),
+  ]);
+  assert.equal(template.status(), 200);
   const frame = page.frames().find(child => child.url().startsWith(origin + '/api/creative-canvas/'));
   assert.ok(frame);
   const uploadLabel = '上传完整视频';
