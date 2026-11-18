@@ -112,9 +112,9 @@ jobs:
           echo "✅ 全部 $FOUND 个回归测试通过"
 
   test-deploy-lib:
-    name: Test — Deploy Lib (发版自洽函数库)
+    name: Test — Deploy Lib and Install Pack ASCII
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Restore pinned skill sources
@@ -128,23 +128,15 @@ jobs:
           shellcheck .github/workflows/scripts/__tests__/deploy-lib.test.sh
           shellcheck rollback.sh
       - name: Run current deployment library regressions (atomic/frontend/manual rollback)
+        timeout-minutes: 10
         run: bash .github/workflows/scripts/__tests__/deploy-lib.test.sh
 
-  test-install-pack-ascii:
-    name: Test — Install Pack ASCII (start.bat 纯ASCII回归守卫)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: shellcheck install-pack-ascii test
         run: shellcheck services/agent/install-pack/__tests__/install-pack-ascii.test.sh
       - name: Run install-pack-ascii guard (start.bat 含中文必报红)
+        timeout-minutes: 5
         run: bash services/agent/install-pack/__tests__/install-pack-ascii.test.sh
+
 
   lint-workflow-yaml-parse:
     name: Lint — Workflow YAML Parse
@@ -436,7 +428,7 @@ jobs:
 
   l1-passed:
     name: L1 Process Gate Passed
-    needs: [static-pr-checks, secrets-scan, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane, lint-workflow-yaml-parse, test-deploy-lib, test-install-pack-ascii, release-admission-regression]
+    needs: [static-pr-checks, secrets-scan, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane, lint-workflow-yaml-parse, test-deploy-lib, release-admission-regression]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -497,11 +489,6 @@ jobs:
 
           if [ "${{ needs.test-deploy-lib.result }}" != "success" ]; then
             echo "FAIL: Deploy Library (${{ needs.test-deploy-lib.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.test-install-pack-ascii.result }}" != "success" ]; then
-            echo "FAIL: Install Pack ASCII (${{ needs.test-install-pack-ascii.result }})"
             FAILED=true
           fi
 

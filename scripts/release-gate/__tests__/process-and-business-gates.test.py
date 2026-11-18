@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -174,6 +175,76 @@ class L1AggregateTest(unittest.TestCase):
     def test_merge_queue_remains_closed_without_pr_metadata_evidence(self):
         result = self.run_aggregate(event="merge_group")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class ReleaseToolingConsolidationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
+        cls.job = cls.jobs["test-deploy-lib"]
+
+    def step(self, name):
+        return next(s for s in self.job["steps"] if s.get("name") == name)
+
+    def test_both_release_guards_run_without_skips_in_required_l1(self):
+        self.assertNotIn("test-install-pack-ascii", self.jobs)
+        self.assertIn("test-deploy-lib", self.jobs["l1-passed"]["needs"])
+        self.assertNotIn("if", self.job)
+        for name in ("shellcheck deploy-lib", "Run current deployment library regressions (atomic/frontend/manual rollback)",
+                     "shellcheck install-pack-ascii test", "Run install-pack-ascii guard (start.bat 含中文必报红)"):
+            step = self.step(name)
+            self.assertNotIn("if", step)
+            self.assertFalse(step.get("continue-on-error", False))
+        self.assertEqual(self.step("Run current deployment library regressions (atomic/frontend/manual rollback)")["timeout-minutes"], 10)
+        self.assertEqual(self.step("Run install-pack-ascii guard (start.bat 含中文必报红)")["timeout-minutes"], 5)
+
+    def test_actual_install_pack_step_rejects_bom_and_non_ascii(self):
+        command = self.step("Run install-pack-ascii guard (start.bat 含中文必报红)")["run"]
+        with tempfile.TemporaryDirectory(prefix="installpack-gate-") as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", directory], check=True)
+            pack = root / "services/agent/install-pack"
+            (pack / "__tests__").mkdir(parents=True)
+            shutil.copy2(ROOT / "services/agent/install-pack/__tests__/install-pack-ascii.test.sh",
+                         pack / "__tests__/install-pack-ascii.test.sh")
+            (pack / "README.txt").write_text("readme\n")
+            bat = pack / "start.bat"
+            run = lambda: subprocess.run(["bash", "-e", "-c", command], cwd=root, capture_output=True, text=True)
+            bat.write_bytes(b"@echo off\r\n")
+            self.assertEqual(run().returncode, 0)
+            bat.write_bytes(b"\xef\xbb\xbf@echo off\r\n")
+            self.assertNotEqual(run().returncode, 0)
+            bat.write_text("@echo off\necho 中文\n")
+            self.assertNotEqual(run().returncode, 0)
+            bat.write_bytes(b"@echo off\r\n")
+            (pack / "中文.txt").write_text("fixture")
+            self.assertNotEqual(run().returncode, 0)
+
+    def test_actual_shell_steps_propagate_failure(self):
+        commands = [self.step("shellcheck deploy-lib")["run"],
+                    self.step("shellcheck install-pack-ascii test")["run"],
+                    self.step("Run current deployment library regressions (atomic/frontend/manual rollback)")["run"]]
+        with tempfile.TemporaryDirectory(prefix="release-gate-failure-") as directory:
+            root = Path(directory)
+            binary = root / "bin"
+            binary.mkdir()
+            shellcheck = binary / "shellcheck"
+            shellcheck.write_text('#!/bin/sh\ncase "$*" in *"$FAIL_TARGET"*) exit 42;; esac\nexit 0\n')
+            shellcheck.chmod(0o755)
+            deploy_test = root / ".github/workflows/scripts/__tests__/deploy-lib.test.sh"
+            deploy_test.parent.mkdir(parents=True)
+            deploy_test.write_text("#!/bin/bash\nexit 43\n")
+            env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"]}
+            for target, command in [("scripts/deploy-lib.sh", commands[0]),
+                                    ("scripts/__tests__/deploy-lib.test.sh", commands[0]),
+                                    ("rollback.sh", commands[0]),
+                                    ("install-pack-ascii.test.sh", commands[1])]:
+                result = subprocess.run(["bash", "-e", "-c", command], cwd=root,
+                                        env={**env, "FAIL_TARGET": target}, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 42, result.stdout + result.stderr)
+            result = subprocess.run(["bash", "-e", "-c", commands[2]], cwd=root, env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 43, result.stdout + result.stderr)
 
 
 class StaticPrChecksTest(unittest.TestCase):
