@@ -249,7 +249,7 @@
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "85eaad92ab2b25740e53a1044163cf2d259526f1a941d9bc8ddf2fc746fd6c6f",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "49d82c198deff99c2794cb4cf5256c1604ac3be41664d5d020e67fe8d7ec6dca",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "bfa727c5e003884f0210a0e2b01186f17844311cf8bbbb1ecf038165cfba7236",
-      "services/phone-adb-controller/leadgen-foundation/context.mjs": "b1d90d2383eeed5dd9486ea090e0e7f00b247079d29022fec97093c515d41326",
+      "services/phone-adb-controller/leadgen-foundation/context.mjs": "3491bb063cbfd63f187687f32f59e8c3dc860f1acdffba737060d72b696ad736",
       "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "3756d9228db426c9d144234ee8122b0399f263ad9a509731ecd303186bf6f0ab",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "1831bee8f5acd8dc58abcc926e93c4ca8f510ca606affeff092db05a9c54a9e0",

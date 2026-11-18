@@ -60,7 +60,8 @@ export function buildContext({workflow,run,environment=process.env,hostRoot}){
    const key=input.business.producer_key;need(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(key??''),'PRODUCER_KEY');
    const producer=binding.producers?.[key],scope=c.verification['102'];need(object(producer)&&producer.workflow==='101','PRODUCER_BINDING');
    need(Array.isArray(scope.video_ids)&&scope.video_ids.length===1&&object(scope.upstream)&&Object.keys(scope.upstream).length===1
-    &&scope.video_ids.every(id=>scope.upstream[id]?.run===producer.run_tag),'PRODUCER_SCOPE');
+    &&scope.video_ids.every(id=>scope.upstream[id]?.run===producer.run_tag&&Object.keys(scope.upstream[id]).every(k=>k==='run')),'PRODUCER_SCOPE');
+   for(const id of scope.video_ids)scope.upstream[id]={run:producer.run_tag,run_id:producer.run_id};
    c.input_provenance={producer:structuredClone(producer)};
   }
   if(workflow==='103'){

@@ -76,6 +76,8 @@ test('102 selects only a controlled producer asset and rejects scope disagreemen
   f.run.input.business={producer_key:'approved',scope:{video_ids:['7711111111111111111'],upstream:{'7711111111111111111':{run:'producer-tag'}}},comment_limit:1};
   const call=()=>buildContext({workflow:'102',run:f.run,environment:f.environment,hostRoot:path.join(f.root,'a')});
   assert.deepEqual(call().context.input_provenance.producer,producer);
+  assert.deepEqual(call().context.verification['102'].upstream['7711111111111111111'],{run:producer.run_tag,run_id:producer.run_id});
+  f.run.input.business.scope.upstream['7711111111111111111'].run_id='foreign';assert.throws(call,/LEADGEN_PRODUCER_SCOPE/);delete f.run.input.business.scope.upstream['7711111111111111111'].run_id;
   f.run.input.business.scope.upstream['7711111111111111111'].run='foreign';assert.throws(call,/LEADGEN_PRODUCER_SCOPE/);
   f.run.input.business.producer_key='../untrusted';assert.throws(call,/LEADGEN_PRODUCER_KEY/);
  }finally{f.close();}
