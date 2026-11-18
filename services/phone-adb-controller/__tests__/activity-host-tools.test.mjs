@@ -99,7 +99,7 @@ test('102 typed host retains COS and original methods while rendering current in
  assert.equal(r.original,fixture102.files['TOOLS.txt'].source);assert.match(r.tools,/COS_SECRET_ID/);assert.match(r.tools,/COS_SECRET_KEY/);
  assert.match(r.instructions,/7711111111111111111/);assert.match(r.instructions,/37/);assert.match(r.instructions,/fixture-new-run/);assert.match(r.instructions,/a{40}/);
  for(const old of ['7707600173446204723','原97e','r7原件','caa47f8ba3ae','00:58','至少14秒','约90秒墙钟'])assert.ok(!r.instructions.includes(old),old);
- for(const needed of ['started_at_epoch_seconds','recipientEvidence','record-status','swipe-evidence','ffprobe','单次ASR','unknown','cleanup','no_active_capture'])assert.ok(r.instructions.includes(needed),needed);
+ for(const needed of ['started_at_epoch_seconds','recipientEvidence','record-status','swipe-evidence','ffprobe','单次ASR','unknown','cleanup','no_active_capture','video.last_pts_seconds','media_progress','同一次录制','不得换EID'])assert.ok(r.instructions.includes(needed),needed);
 });
 for(const mode of ['same-text','after-dispatch','network','persist-failure'])test(`102 ${mode} remains unknown without dispatch replay`,()=>{
  const r=probe(mode,'102');assert.equal(r.first.stdout,'');assert.equal(r.first.receipt.state,'unknown');assert.deepEqual(r.calls,r.before);assert.match(r.second.error,/PRIOR_ACTION_UNKNOWN/);
