@@ -49,7 +49,8 @@ test('the real required L2 gate shares setup, retains events and blocks skipped 
   for (const name of names) {
     const step = actual(name);
     assert.ok(step?.run, name);
-    assert.equal(step.if, undefined, name);
+    assert.equal(step.if, name === 'Check Node.js version consistency' || name === 'Check for sensitive files' ? '${{ !cancelled() }}' : undefined, name);
+    if (step.if) assert.equal(step['timeout-minutes'], 5, name);
     assert.equal(step['continue-on-error'], undefined, name);
   }
   assert.equal(workflow.jobs['l2-passed'].if, 'always()');

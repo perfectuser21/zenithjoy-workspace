@@ -81,6 +81,8 @@ jobs:
           fi
 
       - name: Check Node.js version consistency
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
         run: |
           echo "Checking engines.node consistency across workspace..."
 
@@ -109,6 +111,8 @@ jobs:
           echo "All Node.js versions consistent"
 
       - name: Check for sensitive files
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
         run: |
           echo "Checking for sensitive files..."
           PATTERNS=(
