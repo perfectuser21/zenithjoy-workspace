@@ -90,7 +90,7 @@ class BusinessGateTest(unittest.TestCase):
 class FrontendBrowserDodTest(unittest.TestCase):
     def run_frontend_check(self, paths):
         jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
-        step = next(step for step in jobs["frontend-browser-dod-check"]["steps"]
+        step = next(step for step in jobs["static-pr-checks"]["steps"]
                     if step.get("name") == "Detect frontend changes and check browser DoD")
         script = step["run"].replace("${{ github.base_ref }}", "main")
         with tempfile.TemporaryDirectory() as directory:
@@ -143,7 +143,7 @@ class L1AggregateTest(unittest.TestCase):
         cls.jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
         cls.gate = cls.jobs["l1-passed"]
 
-    def run_aggregate(self, failing_job=None, status="failure"):
+    def run_aggregate(self, failing_job=None, status="failure", event="pull_request"):
         # Execute the actual workflow shell after substituting GitHub needs results.
         # Missing dependencies expose no result, matching the needs context contract.
         results = {job: (status if job == failing_job else "success")
@@ -151,7 +151,8 @@ class L1AggregateTest(unittest.TestCase):
         script = "\n".join(step.get("run", "") for step in self.gate["steps"])
         script = re.sub(r"\$\{\{\s*needs\.([\w-]+)\.result\s*\}\}",
                         lambda match: results.get(match.group(1), ""), script)
-        return subprocess.run(["bash", "-e", "-c", script], capture_output=True, text=True)
+        return subprocess.run(["bash", "-e", "-c", script], capture_output=True, text=True,
+                              env={**os.environ, "GITHUB_EVENT_NAME": event})
 
     def test_all_success_can_pass(self):
         result = self.run_aggregate()
@@ -170,8 +171,60 @@ class L1AggregateTest(unittest.TestCase):
         # A gate must not finish while an unlisted check can still fail later.
         self.assertEqual(set(self.gate["needs"]), set(self.jobs) - {"l1-passed"})
 
+    def test_merge_queue_remains_closed_without_pr_metadata_evidence(self):
+        result = self.run_aggregate(event="merge_group")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 class StaticPrChecksTest(unittest.TestCase):
+    def metadata_step(self, name, **environment):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
+        step = next(s for s in jobs["static-pr-checks"]["steps"] if s.get("name") == name)
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / "bin"
+            binary.mkdir()
+            git = binary / "git"
+            git.write_text('#!/bin/sh\nif [ "$1" = diff ] && [ "$2" = --name-only ]; then printf "%s\\n" "$CHANGED_FILES"; fi\n')
+            git.chmod(0o755)
+            env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
+                   "BASE_REF": "main", "EVENT_NAME": "pull_request", "PR_HEAD_REF": "cp-11181510-test",
+                   "CHANGED_FILES": "", **environment}
+            return subprocess.run(["bash", "-e", "-c", step["run"]], cwd=directory,
+                                  env=env, capture_output=True, text=True)
+
+    def test_metadata_checks_remain_required_and_fail_on_invalid_inputs(self):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
+        for old in ("verify-dev-workflow", "pr-title", "ci-config-audit", "frontend-browser-dod-check"):
+            self.assertNotIn(old, jobs)
+        self.assertIn("static-pr-checks", jobs["l1-passed"]["needs"])
+        for name in ("验证分支必须通过 /dev 创建", "Check PR title follows conventional commits",
+                     "Audit CI config changes", "Detect frontend changes and check browser DoD"):
+            step = next(s for s in jobs["static-pr-checks"]["steps"] if s.get("name") == name)
+            self.assertNotIn("if", step)
+            self.assertFalse(step.get("continue-on-error", False))
+        branch = "验证分支必须通过 /dev 创建"
+        title = "Check PR title follows conventional commits"
+        config = "Audit CI config changes"
+        self.assertEqual(self.metadata_step(branch, DEV_BRANCH="cp-11181510-test").returncode, 0)
+        self.assertNotEqual(self.metadata_step(branch, DEV_BRANCH="main").returncode, 0)
+        self.assertEqual(self.metadata_step(title, TITLE="[CONFIG] fix(ci): test").returncode, 0)
+        self.assertNotEqual(self.metadata_step(title, TITLE="untagged title").returncode, 0)
+        self.assertNotEqual(self.metadata_step(config, PR_TITLE="fix(ci): test",
+                            CHANGED_FILES=".github/workflows/ci-l1-process.yml").returncode, 0)
+        self.assertEqual(self.metadata_step(config, PR_TITLE="[CONFIG] fix(ci): test",
+                         CHANGED_FILES=".github/workflows/ci-l1-process.yml").returncode, 0)
+        self.assertEqual(self.metadata_step(config, PR_TITLE="fix(ci): test",
+                         CHANGED_FILES="apps/api/src/index.ts").returncode, 0)
+
+    def test_line04_pr_does_not_duplicate_branch_push_and_preserves_other_entries(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/golden-path-4-smoke.yml").read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        self.assertEqual(triggers["push"]["branches"], ["main"])
+        self.assertEqual(triggers["pull_request"]["branches"], ["main"])
+        self.assertIn("workflow_dispatch", triggers)
+        self.assertEqual(set(workflow["jobs"]["golden-path-4-smoke"]["needs"]),
+                         {"ws1", "ws2", "ws3", "ws4", "ws5"})
+
     def test_static_lints_share_one_checkout_and_keep_every_command(self):
         jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
         job = jobs["static-pr-checks"]
