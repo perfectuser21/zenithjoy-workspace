@@ -35,9 +35,9 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
 
   tsconfig-inheritance:
-    name: TSConfig Inheritance Check
+    name: TSConfig, Node Engines and Sensitive File Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -80,18 +80,6 @@ jobs:
             exit 1
           fi
 
-  engines-consistency:
-    name: Engines Consistency Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Check Node.js version consistency
         run: |
           echo "Checking engines.node consistency across workspace..."
@@ -120,18 +108,6 @@ jobs:
           fi
           echo "All Node.js versions consistent"
 
-  sensitive-files:
-    name: Sensitive File Scan
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Check for sensitive files
         run: |
           echo "Checking for sensitive files..."
@@ -190,6 +166,8 @@ jobs:
         run: npm ci --ignore-scripts --workspaces=false
       - name: Verify registry checker regressions
         run: node --test .github/workflows/scripts/__tests__/test-registry.test.mjs scripts/ci/__tests__/orphan-cache-filter.test.mjs scripts/ci/__tests__/orphan-test-workflow.test.mjs
+      - name: Verify shared L2 runner failure paths
+        run: node --test .github/workflows/scripts/__tests__/l2-shared-runner.test.mjs
       - name: Check all test files are registered in test-registry.yaml
         run: node scripts/ci/test-registry.mjs
 
@@ -291,7 +269,7 @@ jobs:
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [authoring-source-version, tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract, acceptance-spec-contract]
+    needs: [authoring-source-version, tsconfig-inheritance, orphan-test-check, registry-sync-check, product-map-contract, acceptance-spec-contract]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -309,17 +287,7 @@ jobs:
           fi
 
           if [ "${{ needs.tsconfig-inheritance.result }}" != "success" ]; then
-            echo "FAIL: TSConfig Inheritance (${{ needs.tsconfig-inheritance.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.engines-consistency.result }}" != "success" ]; then
-            echo "FAIL: Engines Consistency (${{ needs.engines-consistency.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.sensitive-files.result }}" != "success" ]; then
-            echo "FAIL: Sensitive File Scan (${{ needs.sensitive-files.result }})"
+            echo "FAIL: TSConfig, Node Engines and Sensitive File Checks (${{ needs.tsconfig-inheritance.result }})"
             FAILED=true
           fi
 
