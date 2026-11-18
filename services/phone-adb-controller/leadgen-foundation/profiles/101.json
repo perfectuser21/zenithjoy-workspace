@@ -266,7 +266,7 @@
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/activity-upstream-source.mjs": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df",
       "services/phone-adb-controller/activity-host-pg.mjs": "5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a",
-      "services/phone-adb-controller/activity-host-tools.py": "22dbee76b9c791f091d88cfe0ec4f03f7cb25af975a044b731db2bf4f3c10514",
+      "services/phone-adb-controller/activity-host-tools.py": "f554f633bf051eac8d93c4af229d8caced19f6f026883f971996881ed6b7e77b",
       "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
       "services/phone-adb-controller/activity-host-104.mjs": "97d8d9d30846e1d27f19bb74abdadcca8196f3971b5d2e1b54c520b10652120b",
       "services/phone-adb-controller/activity-104-context.mjs": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a",
