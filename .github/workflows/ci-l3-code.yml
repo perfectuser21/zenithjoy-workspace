@@ -406,7 +406,8 @@ jobs:
   public-code-phone-darwin-test:
     name: Public Code Phone Darwin Test
     runs-on: macos-latest
-    timeout-minutes: 10
+    # Serial native suites passed but exhausted 10m including setup/teardown; worker deadlines stay unchanged.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

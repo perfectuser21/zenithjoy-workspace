@@ -16,11 +16,14 @@ for (const [name, value] of [
   ['empty', {}], ['null', null], ['array', []],
 ]) test('原始或修补审计均拒绝无效报告 ' + name, () => assert.throws(() => validateAuditReport(JSON.stringify(value)), /REPORT/));
 
-test('保留真实workspace根锁选择，不强制使用子目录历史独立锁', async t => {
+test('workspace与独立发布分别选择实际锁，不能混用审计证明', async t => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'audit-workspace-'))), child = join(root, 'apps/dashboard');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(child, { recursive: true });
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'root-fixture', version: '1.0.0', workspaces: ['apps/*'] }));
   writeFileSync(join(child, 'package.json'), JSON.stringify({ name: 'dashboard-fixture', version: '1.0.0' }));
   assert.equal(await npmProjectRoot(child), root);
+  assert.equal(await npmProjectRoot(child, 'standalone'), child);
+  assert.equal(await npmProjectRoot(root, 'standalone'), root);
+  await assert.rejects(npmProjectRoot(child, 'unknown'), /MODE/);
 });

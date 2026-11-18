@@ -20,15 +20,15 @@ for(const mutation of ['missing-site','extra-site','wrong-version','registry-rep
  assert.equal(typeof api.verifyRemediation,'function');const dir=fixture(t),p=join(dir,'package-lock.json'),lock=JSON.parse(readFileSync(p)),key='node_modules/picomatch';
  if(mutation==='missing-site')delete lock.packages[key];
  if(mutation==='extra-site')lock.packages['node_modules/unexpected/node_modules/picomatch']={...lock.packages[key]};
- if(mutation==='wrong-version')lock.packages[key].version='4.0.7';
- if(mutation==='registry-replacement')lock.packages[key].resolved='https://registry.npmjs.org/picomatch/-/picomatch-4.0.5.tgz';
+ if(mutation==='wrong-version')lock.packages[key].version='9.9.9';
+ if(mutation==='registry-replacement')lock.packages[key].resolved='https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz';
  if(mutation==='wrong-integrity')lock.packages[key].integrity='sha512-invalid';
  if(mutation==='archive-drift'){const m=JSON.parse(readFileSync(join(dir,folder,'manifest.json'))),f=join(dir,m.patched_packages[0].path);writeFileSync(f,Buffer.concat([readFileSync(f),Buffer.from('drift')]));}
  writeFileSync(p,JSON.stringify(lock));assert.throws(()=>api.verifyRemediation({repositoryRoot:dir,projectRoot:dir}),/PICOMATCH_REMEDIATION_/);
 });
 test('brand becomes invalid if the checked lock changes afterwards',t=>{assert.equal(typeof api.verifyRemediation,'function');const dir=fixture(t),scope={repositoryRoot:dir,projectRoot:dir},proof=api.verifyRemediation(scope);writeFileSync(join(dir,'package-lock.json'),readFileSync(join(dir,'package-lock.json'),'utf8')+' ');assert.equal(api.isVerifiedRemediation(proof,scope),false);});
 for(const mode of ['checksum','trailing-tar','partial-block','single-eof','directory-conflict'])test('ambiguous tar is rejected even when manifest and lock hashes are updated: '+mode,t=>{
- const dir=fixture(t),manifestPath=join(dir,folder,'manifest.json'),manifest=JSON.parse(readFileSync(manifestPath)),item=manifest.patched_packages.find(x=>x.version==='4.0.5'),archivePath=join(dir,item.path);let raw=gunzipSync(readFileSync(archivePath));
+ const dir=fixture(t),manifestPath=join(dir,folder,'manifest.json'),manifest=JSON.parse(readFileSync(manifestPath)),item=manifest.patched_packages.find(x=>x.version==='4.0.7'),archivePath=join(dir,item.path);let raw=gunzipSync(readFileSync(archivePath));
  if(mode==='checksum')raw.write('000000\0 ',148,'ascii');
  else if(mode==='trailing-tar')raw=Buffer.concat([raw,raw]);
  else if(mode==='partial-block')raw=Buffer.concat([raw,Buffer.from([0])]);

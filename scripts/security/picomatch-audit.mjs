@@ -14,8 +14,14 @@ const severities = ['info', 'low', 'moderate', 'high', 'critical'];
 const npmEnvironment = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key)));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
-export async function npmProjectRoot(projectRoot) {
-  const result = await exec('npm', ['prefix'], { cwd: projectRoot, env: npmEnvironment(), timeout: 10000 });
+function npmScopeArguments(projectRoot, mode) {
+  if (mode === 'workspace') return [];
+  if (mode === 'standalone') return ['--prefix', projectRoot, '--workspaces=false'];
+  throw fail('MODE');
+}
+
+export async function npmProjectRoot(projectRoot, mode = 'workspace') {
+  const result = await exec('npm', ['prefix', ...npmScopeArguments(projectRoot, mode)], { cwd: projectRoot, env: npmEnvironment(), timeout: 10000 });
   return realpathSync(result.stdout.trim());
 }
 
@@ -35,12 +41,12 @@ export function validateAuditReport(text) {
   return report;
 }
 
-async function npmAudit({ projectRoot, registry, cache, config, directory, phase }) {
+async function npmAudit({ projectRoot, mode, registry, cache, config, directory, phase }) {
   // Inherited workspace/omit/registry settings must not narrow the declared lock.
   const environment = npmEnvironment();
   let result;
   try {
-    result = await exec('npm', ['audit', '--json', '--registry', registry,
+    result = await exec('npm', ['audit', ...npmScopeArguments(projectRoot, mode), '--json', '--registry', registry,
       '--include=dev', '--include=optional', '--include=peer', '--userconfig', config, '--globalconfig', config + '.global'], {
       cwd: projectRoot, timeout: 240000, maxBuffer: 32 * 1024 * 1024,
       env: { ...environment, npm_config_cache: cache, npm_config_offline: 'false',
@@ -58,19 +64,19 @@ async function npmAudit({ projectRoot, registry, cache, config, directory, phase
   return report;
 }
 
-export async function auditVerifiedDistribution({ repositoryRoot, projectRoot }) {
+export async function auditVerifiedDistribution({ repositoryRoot, projectRoot, mode = 'workspace' }) {
   const { verifyRemediation, isVerifiedRemediation } = await import('./verify-picomatch-remediation.mjs');
   const repository = realpathSync(repositoryRoot), auditCwd = realpathSync(projectRoot);
   if (![repository, join(repository, 'apps/dashboard')].includes(auditCwd)) throw fail('PROJECT_SCOPE');
-  // Preserve npm's real workspace selection. `--prefix apps/dashboard` would
-  // incorrectly switch to its stale, standalone lock rather than the installed tree.
-  const scope = { repositoryRoot: repository, projectRoot: await npmProjectRoot(auditCwd) };
+  // Workspace and standalone releases consume different locks. Bind both npm
+  // audit phases and their proof to the explicitly selected installation scope.
+  const scope = { repositoryRoot: repository, projectRoot: await npmProjectRoot(auditCwd, mode) };
   const cwdManifest = join(auditCwd, 'package.json'), cwdManifestSha = sha(readFileSync(cwdManifest));
   const proof = verifyRemediation(scope);
   if (!isVerifiedRemediation(proof, scope)) throw fail('UNVERIFIED');
   const assertUnchanged = async () => {
     if (!isVerifiedRemediation(proof, scope) || sha(readFileSync(cwdManifest)) !== cwdManifestSha
-        || await npmProjectRoot(auditCwd) !== scope.projectRoot) throw fail('DISTRIBUTION_CHANGED');
+        || await npmProjectRoot(auditCwd, mode) !== scope.projectRoot) throw fail('DISTRIBUTION_CHANGED');
   };
   const directory = mkdtempSync(join(tmpdir(), 'picomatch-remediation-audit-'));
   const config = join(directory, 'npmrc');
@@ -80,7 +86,7 @@ export async function auditVerifiedDistribution({ repositoryRoot, projectRoot })
   const version = (await exec('npm', ['--version'], { timeout: 10000 })).stdout.trim();
   const proxy = await startAuditSnapshot({ versions: proof.versions });
   try {
-    const common = { projectRoot: auditCwd, config, directory };
+    const common = { projectRoot: auditCwd, mode, config, directory };
     const raw = await npmAudit({ ...common, phase: 'original', registry: proxy.origin + '/original/', cache: join(directory, 'original-cache') });
     proxy.assertHealthy();
     await assertUnchanged();
@@ -99,7 +105,7 @@ export async function auditVerifiedDistribution({ repositoryRoot, projectRoot })
     await assertUnchanged();
     const receipt = { schema_version: 1, npm_version: version, scope: 'locked-distribution',
       advisory_id: proof.advisory_id, policy_id: 'repeated_extglob_rejected', audit_cwd: auditCwd,
-      effective_project_root: scope.projectRoot, audit_cwd_package_sha256: cwdManifestSha,
+      audit_mode: mode, effective_project_root: scope.projectRoot, audit_cwd_package_sha256: cwdManifestSha,
       raw_audit_clean: raw.metadata.vulnerabilities.high + raw.metadata.vulnerabilities.critical === 0,
       verified_remediated_advisories: target.length, raw_counts: raw.metadata.vulnerabilities,
       remediated_counts: result.metadata.vulnerabilities, evidence_directory: directory,
@@ -116,7 +122,8 @@ export async function auditVerifiedDistribution({ repositoryRoot, projectRoot })
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-  auditVerifiedDistribution({ repositoryRoot, projectRoot: resolve(process.argv[2] || '.') })
+  const mode = process.argv[3] === undefined ? 'workspace' : process.argv[3] === '--standalone' ? 'standalone' : 'invalid';
+  auditVerifiedDistribution({ repositoryRoot, projectRoot: resolve(process.argv[2] || '.'), mode })
     .then(report => process.stdout.write(JSON.stringify(report) + '\n'))
     .catch(cause => { process.stderr.write(String(cause.stack || cause) + '\n'); process.exitCode = 2; });
 }

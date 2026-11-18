@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +27,7 @@ function report(packages = []) {
 }
 
 function runGate({ payload = report(), npmExit = 0, realNpm = false,
-  packageJson = true, lock = true, missingDir = false, brokenJq = false } = {}) {
+  packageJson = true, lock = true, missingDir = false, brokenJq = false, prepare } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'audit-gate-test-'));
   try {
     const project = join(root, 'project');
@@ -34,10 +36,11 @@ function runGate({ payload = report(), npmExit = 0, realNpm = false,
     mkdirSync(bin);
     if (packageJson) writeFileSync(join(project, 'package.json'), '{"name":"audit-fixture","version":"1.0.0"}\n');
     if (lock) writeFileSync(join(project, 'package-lock.json'), '{"name":"audit-fixture","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"audit-fixture","version":"1.0.0"}}}\n');
+    prepare?.(project);
     const fixture = join(root, 'audit.json');
     writeFileSync(fixture, typeof payload === 'string' ? payload : JSON.stringify(payload));
     // Replace only the external registry boundary; Bash, jq, cwd and exit handling stay real.
-    if (!realNpm) writeFileSync(join(bin, 'npm'), '#!/bin/sh\n[ "$#" = 2 ] && [ "$1" = audit ] && [ "$2" = --json ] || exit 99\ncat "$AUDIT_FIXTURE"\nexit "$AUDIT_EXIT"\n', { mode: 0o755 });
+    if (!realNpm) writeFileSync(join(bin, 'npm'), '#!/bin/sh\n[ "$#" = 5 ] && [ "$1" = audit ] && [ "$2" = --prefix ] && [ "$3" = "$PWD" ] && [ "$4" = --workspaces=false ] && [ "$5" = --json ] || exit 99\ncat "$AUDIT_FIXTURE"\nexit "$AUDIT_EXIT"\n', { mode: 0o755 });
     if (brokenJq) writeFileSync(join(bin, 'jq'), '#!/bin/sh\nexit 2\n', { mode: 0o755 });
     return spawnSync('bash', [gate, missingDir ? join(root, 'missing') : project], {
       cwd: project, encoding: 'utf8', timeout: 15000,
@@ -119,4 +122,64 @@ test('passes an actual offline npm audit for a dependency-free locked project', 
 test('permits unlisted moderate vulnerabilities on normal audit exit 1', () => {
   const result = runGate({ payload: report([['moderate-fixture', 'moderate']]), npmExit: 1 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+
+const patchedAdvisory = 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf';
+
+function patchFixture(project, tamper = false) {
+  const path = 'vendor/picomatch-security/picomatch-4.0.7.tgz';
+  const contents = readFileSync(new URL('../../../../scripts/security/picomatch-remediation/packages/picomatch-4.0.7.patched.tgz', import.meta.url));
+  mkdirSync(join(project, 'vendor/picomatch-security'), { recursive: true });
+  writeFileSync(join(project, path), tamper ? 'changed' : contents);
+  writeFileSync(join(project, 'package-lock.json'), JSON.stringify({ packages: {
+    'node_modules/picomatch': {
+      version: '4.0.7', resolved: 'file:' + path,
+      integrity: 'sha512-' + createHash('sha512').update(contents).digest('base64')
+    }
+  } }));
+}
+
+function picomatchReport() {
+  const result = report([['picomatch', 'high'], ['test-glob-consumer', 'high']]);
+  result.vulnerabilities.picomatch.via = [{ url: patchedAdvisory }];
+  result.vulnerabilities['test-glob-consumer'].via = ['picomatch'];
+  return result;
+}
+
+test('a matching archive alone cannot exempt an unverified project or its metavulnerabilities', () => {
+  rejects({ payload: picomatchReport(), npmExit: 1, prepare: patchFixture });
+});
+
+test('rejects the advisory when the patched archive is missing or altered', () => {
+  rejects({ payload: picomatchReport(), npmExit: 1 });
+  rejects({ payload: picomatchReport(), npmExit: 1, prepare: project => patchFixture(project, true) });
+});
+
+test('blocks a different advisory on a package using the patched dependency', () => {
+  const payload = picomatchReport();
+  payload.vulnerabilities['test-glob-consumer'].via.push({ url: 'https://example.invalid/advisory' });
+  rejects({ payload, npmExit: 1, prepare: patchFixture });
+});
+
+
+test('patched archives keep ordinary glob behavior and reject repeated extglob before compilation', () => {
+  const root = mkdtempSync(join(tmpdir(), 'audit-glob-patch-'));
+  try {
+    for (const version of ['2.3.2', '4.0.7']) {
+      const dirname = join(root, version);
+      mkdirSync(dirname);
+      const archive = new URL('../../../../scripts/security/picomatch-remediation/packages/picomatch-' + version + '.patched.tgz', import.meta.url);
+      const extracted = spawnSync('tar', ['-xzf', fileURLToPath(archive), '-C', dirname], { encoding: 'utf8' });
+      assert.equal(extracted.status, 0, extracted.stderr);
+      const picomatch = createRequire(import.meta.url)(join(dirname, 'package'));
+      assert.equal(picomatch('**/*.js')('src/a.js'), true);
+      for (const pattern of ['+(ab)', '+(*(a))', '+(file*)', '+(*a)', '+(*)']) {
+        assert.throws(() => picomatch(pattern), { code: 'PICOMATCH_REPEATED_EXTGLOB_BLOCKED' });
+        assert.throws(() => picomatch(pattern, { maxExtglobRecursion: false }), { code: 'PICOMATCH_REPEATED_EXTGLOB_BLOCKED' });
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -78,10 +78,13 @@ fi
 AUDIT_STATUS=0
 # The original registry report is retained. Only a fully verified patched
 # distribution can use npm's recomputed report for this one advisory.
-if [ "$PWD" = "$REPOSITORY_ROOT" ] || [ "$PWD" = "$REPOSITORY_ROOT/apps/dashboard" ]; then
+if [ "$PWD" = "$REPOSITORY_ROOT" ]; then
   AUDIT_JSON=$(node "$REPOSITORY_ROOT/scripts/security/picomatch-audit.mjs" "$PWD") || AUDIT_STATUS=$?
+elif [ "$PWD" = "$REPOSITORY_ROOT/apps/dashboard" ]; then
+  # Dashboard also ships independently, using its own lock instead of the root workspace.
+  AUDIT_JSON=$(node "$REPOSITORY_ROOT/scripts/security/picomatch-audit.mjs" "$PWD" --standalone) || AUDIT_STATUS=$?
 else
-  AUDIT_JSON=$(npm audit --json) || AUDIT_STATUS=$?
+  AUDIT_JSON=$(npm audit --prefix "$PWD" --workspaces=false --json) || AUDIT_STATUS=$?
 fi
 if [ "$AUDIT_STATUS" -ne 0 ] && [ "$AUDIT_STATUS" -ne 1 ]; then
   echo "❌ npm audit 执行失败（exit $AUDIT_STATUS）" >&2

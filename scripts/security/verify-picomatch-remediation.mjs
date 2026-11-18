@@ -8,12 +8,11 @@ const MANIFEST='scripts/security/picomatch-remediation/manifest.json';
 const ADVISORY='GHSA-fc5q-39xc-vjpf',POLICY='repeated_extglob_rejected';
 const UPSTREAM={
  '2.3.2':'sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==',
- '4.0.4':'sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==',
- '4.0.5':'sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A=='
+ '4.0.7':'sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=='
 };
 const SITES={
- 'package-lock.json':{'node_modules/picomatch':'4.0.5','node_modules/anymatch/node_modules/picomatch':'2.3.2','node_modules/micromatch/node_modules/picomatch':'2.3.2','node_modules/readdirp/node_modules/picomatch':'2.3.2'},
- 'apps/dashboard/package-lock.json':{'node_modules/picomatch':'2.3.2','node_modules/@rollup/pluginutils/node_modules/picomatch':'4.0.4','node_modules/tinyglobby/node_modules/picomatch':'4.0.4','node_modules/vite/node_modules/picomatch':'4.0.4','node_modules/vitest/node_modules/picomatch':'4.0.4'}
+ 'package-lock.json':{'node_modules/picomatch':'4.0.7','node_modules/anymatch/node_modules/picomatch':'2.3.2','node_modules/micromatch/node_modules/picomatch':'2.3.2','node_modules/readdirp/node_modules/picomatch':'2.3.2'},
+ 'apps/dashboard/package-lock.json':{'node_modules/picomatch':'2.3.2','node_modules/@rollup/pluginutils/node_modules/picomatch':'4.0.7','node_modules/tinyglobby/node_modules/picomatch':'4.0.7','node_modules/vite/node_modules/picomatch':'4.0.7','node_modules/vitest/node_modules/picomatch':'4.0.7'}
 };
 const MARKER='  const extglobOpen = (type, value) => {';
 const GUARD="\n    if (type === 'plus' || type === 'star') {\n      throw Object.assign(new SyntaxError('Repeated extglob syntax is disabled by GHSA-fc5q-39xc-vjpf remediation'), { code: 'PICOMATCH_REPEATED_EXTGLOB_BLOCKED' });\n    }";
@@ -60,7 +59,7 @@ function verifyInner(options){
  const manifestBytes=read(MANIFEST);let manifest;try{manifest=JSON.parse(manifestBytes);}catch{fail('MANIFEST');}
  if(manifest.schema_version!==1||manifest.advisory_id!==ADVISORY||manifest.package_name!=='picomatch'||manifest.policy_id!==POLICY)fail('MANIFEST');
  if(!Array.isArray(manifest.limitations)||!manifest.limitations.some(x=>typeof x==='string'&&x.includes('raw-regex')))fail('POLICY_LIMITS');
- const index=rows=>{if(!Array.isArray(rows)||rows.length!==3)fail('PACKAGE_SET');const map=new Map();for(const row of rows){if(!row||row.name!=='picomatch'||!Object.hasOwn(UPSTREAM,row.version)||map.has(row.version))fail('PACKAGE_SET');map.set(row.version,row);}return map;};
+ const index=rows=>{if(!Array.isArray(rows)||rows.length!==2)fail('PACKAGE_SET');const map=new Map();for(const row of rows){if(!row||row.name!=='picomatch'||!Object.hasOwn(UPSTREAM,row.version)||map.has(row.version))fail('PACKAGE_SET');map.set(row.version,row);}return map;};
  const original=index(manifest.upstream_packages),patched=index(manifest.patched_packages),packages=[];
  for(const [version,up]of original){
   const fix=patched.get(version),upPath=`scripts/security/picomatch-remediation/packages/picomatch-${version}.upstream.tgz`,fixPath=`scripts/security/picomatch-remediation/packages/picomatch-${version}.patched.tgz`,patchPath=`scripts/security/picomatch-remediation/patches/picomatch-${version}.patch`;

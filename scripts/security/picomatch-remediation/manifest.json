@@ -20,21 +20,12 @@
     },
     {
       "name": "picomatch",
-      "version": "4.0.4",
-      "path": "scripts/security/picomatch-remediation/packages/picomatch-4.0.4.upstream.tgz",
-      "url": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.4.tgz",
-      "integrity": "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==",
-      "sha256": "515b5ab666558ed9a117483a310892aede54a68dd78f2d8db6604513e578571c",
-      "parse_sha256": "ce57c04e04994b83e2ca566170fa192e6fe19d710bea6da00ce2f76d01c0dea4"
-    },
-    {
-      "name": "picomatch",
-      "version": "4.0.5",
-      "path": "scripts/security/picomatch-remediation/packages/picomatch-4.0.5.upstream.tgz",
-      "url": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.5.tgz",
-      "integrity": "sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==",
-      "sha256": "e89c478225a42b3793bb4a39fd576de142c9829c26a5bd71782249e48b112f51",
-      "parse_sha256": "73211a8ba85ce257b827abd8960e52c9750385b3fd18e8ef1080b114d774eb23"
+      "version": "4.0.7",
+      "path": "scripts/security/picomatch-remediation/packages/picomatch-4.0.7.upstream.tgz",
+      "url": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz",
+      "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==",
+      "sha256": "697b463be3cdbd9ffc8f4194fd5019a69ddf95875fb703d78b2b115cc9e740a8",
+      "parse_sha256": "4e1e05447668aa1e94366c5516a2bcd8f5fff800cc92b1d0cd7d77703b8618c4"
     }
   ],
   "patched_packages": [
@@ -50,22 +41,12 @@
     },
     {
       "name": "picomatch",
-      "version": "4.0.4",
-      "path": "scripts/security/picomatch-remediation/packages/picomatch-4.0.4.patched.tgz",
-      "integrity": "sha512-Pu1WNAPspUYK5ImvqZ7jCchzO5ZLCXv8tonjCG/pIRysm4jyx72KWX8BC7G9rzWTWRA4x2eAFI3Hd48tf1WfQQ==",
-      "sha256": "6090ce62296c2f93b1b468dd9b95a59b31c58c91528081dd4a1a60988bc515c3",
-      "parse_sha256": "3304aead5adaafa975100ce15ddd24a359ebf2656b026c6590589c6622847ab9",
-      "patch_path": "scripts/security/picomatch-remediation/patches/picomatch-4.0.4.patch",
-      "patch_sha256": "2d80a9f82407714a7d269dc8685bab49989baa07c4b8aa64d99713dd0318681f"
-    },
-    {
-      "name": "picomatch",
-      "version": "4.0.5",
-      "path": "scripts/security/picomatch-remediation/packages/picomatch-4.0.5.patched.tgz",
-      "integrity": "sha512-c9RrmACd2VFxFXUyzKOGAYc5IUwP43AKVMRRomTQlO0r7bzvxlz9Ap63Wv0YKl8vC4B09f5J09cHqAl0o0h6dQ==",
-      "sha256": "60028c32534d3ef7279178f7851a3f9fabd993371394a4981d7ae8b276520325",
-      "parse_sha256": "c90eda2eb8644703f8b2e1cf036a19ac126e43abfd8ce153aa565ad9a2c468d0",
-      "patch_path": "scripts/security/picomatch-remediation/patches/picomatch-4.0.5.patch",
+      "version": "4.0.7",
+      "path": "scripts/security/picomatch-remediation/packages/picomatch-4.0.7.patched.tgz",
+      "integrity": "sha512-ATDnbXlnvsV/vaTS0ld5iVG6C2fioAdedkGzZngpGOHlQ8SJ39nf1kh6gODW9a4RN617xRVZec1gLz3fROIchQ==",
+      "sha256": "4f3a08d54d79fe409ac3ea4d008f9e6bd5857ac6eb9785f071932e025c89ffef",
+      "parse_sha256": "aff7c6175fe5d403bc84d30905efab7ee46c539db94678e51031e18ff13c23ab",
+      "patch_path": "scripts/security/picomatch-remediation/patches/picomatch-4.0.7.patch",
       "patch_sha256": "cbac85d19a0f9ad9d0be1a0a5ce92107838c257aa54e7cbf3975791c3df73007"
     }
   ],
@@ -83,7 +64,7 @@
     {
       "lockfile": "package-lock.json",
       "package_path": "node_modules/picomatch",
-      "version": "4.0.5"
+      "version": "4.0.7"
     },
     {
       "lockfile": "package-lock.json",
@@ -93,7 +74,7 @@
     {
       "lockfile": "apps/dashboard/package-lock.json",
       "package_path": "node_modules/@rollup/pluginutils/node_modules/picomatch",
-      "version": "4.0.4"
+      "version": "4.0.7"
     },
     {
       "lockfile": "apps/dashboard/package-lock.json",
@@ -103,17 +84,17 @@
     {
       "lockfile": "apps/dashboard/package-lock.json",
       "package_path": "node_modules/tinyglobby/node_modules/picomatch",
-      "version": "4.0.4"
+      "version": "4.0.7"
     },
     {
       "lockfile": "apps/dashboard/package-lock.json",
       "package_path": "node_modules/vite/node_modules/picomatch",
-      "version": "4.0.4"
+      "version": "4.0.7"
     },
     {
       "lockfile": "apps/dashboard/package-lock.json",
       "package_path": "node_modules/vitest/node_modules/picomatch",
-      "version": "4.0.4"
+      "version": "4.0.7"
     }
   ]
 }
