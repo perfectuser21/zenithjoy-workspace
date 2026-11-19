@@ -103,3 +103,26 @@ test('foundation recovery survives the official host normalization of equivalent
   const recovered=await prepareLeadgenHost(f);assert.equal(recovered.receipt.recovered,true);assert.deepEqual(fs.readFileSync(path.join(recovered.profile.cwd,'context.json')),bytes);
  }finally{f.close();}
 });
+
+test('independent failed checks survive the actual assembled checker without granting retry',async()=>{
+ const f=await foundationFixture('102');try{
+  const a=await prepareLeadgenHost(f),probe=path.join(f.root,'failed-checker-probe');fs.cpSync(a.profile.cwd,probe,{recursive:true});
+  // Only the database/native readback is replaced; execute the real assembled checker entry.
+  fs.writeFileSync(path.join(probe,'production-readback-local.mjs'),"import fs from 'node:fs';export async function main(){return JSON.parse(fs.readFileSync(new URL('./observed.json',import.meta.url)));}\n");
+  const identity={task_id:f.run.task_id,run_id:f.run.run_id,run_tag:f.run.run_id,workflow:'102',activity:'dedup',attempt:1};
+  const ids=['upstream_provenance','company_policy_scope','eligible_video_set','video_claim_ownership'];
+  const request={...identity,phase:'end',nonce:'fixed-independent-nonce',checks:ids,context:a.context,proposal:{status:'needs_review'}};
+  const observed={identity,nonce:request.nonce,outcome:'blocked',checks:ids.map((id,i)=>({id,status:i===3?'failed':'passed',evidence:[{source:'postgres:fixture/read-only',observation:i===3?{process_status:'待判定',claimed:false}:{verified:true}}]})),output:{model_call_count:0,read_only:true}};
+  const run=(value,req=request)=>{fs.writeFileSync(path.join(probe,'observed.json'),JSON.stringify(value));const r=spawnSync(process.execPath,[path.join(probe,'checker.mjs')],{encoding:'utf8',input:JSON.stringify(req),cwd:probe});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);};
+  const failed=run(observed);assert.equal(failed.outcome,'failed');assert.equal(failed.retryable,false);assert.equal(failed.external_effect,'unknown');
+  assert.deepEqual(failed.identity,identity);assert.equal(failed.nonce,request.nonce);assert.deepEqual(failed.output,observed.output);
+  assert.deepEqual(failed.checks.slice(0,3),observed.checks.slice(0,3));
+  const check=failed.checks[3];assert.deepEqual(check.evidence,observed.checks[3].evidence);assert.deepEqual(check.expected,{status:'passed'});assert.deepEqual(check.actual,{status:'failed',evidence:observed.checks[3].evidence});assert.equal(check.reason,'independent_check_failed');
+  for(const mutate of [v=>{v.checks[0].status='unknown';},v=>{v.checks[3].evidence=[];},v=>{v.checks.pop();},v=>{v.checks[3].id=v.checks[0].id;},v=>{v.nonce='wrong';},v=>{v.identity.run_id='different';},v=>{v.output.readback_error='READBACK_UNAVAILABLE';},v=>{v.output.read_only=false;}]){
+   const value=structuredClone(observed);mutate(value);assert.deepEqual(run(value),value);
+  }
+  const stopped={...request,proposal:{execution_stopped:false}};assert.deepEqual(run(observed,stopped),observed);
+  for(const outcome of ['passed','empty']){const value=structuredClone(observed);value.outcome=outcome;value.checks.forEach(c=>c.status='passed');assert.deepEqual(run(value),value);}
+  await a.verifySource();assert.equal(fs.existsSync(path.join(a.profile.cwd,'receipts')),false);
+ }finally{f.close();}
+});
