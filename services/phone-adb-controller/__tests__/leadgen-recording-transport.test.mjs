@@ -36,7 +36,7 @@ async function fixture({usb=false,asr=true,wrongHardware=false,wrongTransport=fa
  }catch(error){f.close();throw error;}
 }
 for(const usb of [false,true])test('actual qualification outer and original inner checker agree for '+(usb?'USB':'cloud transport'),async()=>{
- const f=await fixture({usb});try{const before=JSON.stringify(f.spec),r=await f.run();assert.equal(r.outcome,'passed',JSON.stringify(r));assert.equal(JSON.stringify(f.spec),before);assert.equal(f.spec.serial,f.a.context.serial);}finally{f.f.close();}
+ const f=await fixture({usb});try{const proof=f.a.context.verification.proof_manifest_path,before=fs.readFileSync(proof),r=await f.run();assert.deepEqual(fs.readFileSync(proof),before);assert.equal(r.outcome,'passed',JSON.stringify(r));assert.equal(f.spec.serial,f.a.context.serial);}finally{f.f.close();}
 });
 for(const option of ['wrongHardware','wrongTransport','wrongOwner'])test('qualification refuses '+option+' without weakening original identities',async()=>{
  const f=await fixture({[option]:true});try{const r=await f.run();assert.equal(r.outcome,'blocked');if(option==='wrongHardware')assert.equal(r.output.readback_error,'QUALIFICATION_ARTIFACT_SCOPE_MISMATCH');else assert.equal(r.checks.find(x=>x.id==='capture_or_valid_cache').evidence[0].observation.proofs[0].reason,'CAPTURE_STAGE_OWNER_UNVERIFIED');}finally{f.f.close();}

@@ -96,6 +96,11 @@ export async function assembleSources({context:c,profile,hostRoot,initializeProo
    files[file]=files[file].replace(legacy,"path.join(profileRoot,'native_artifacts.py')");
    const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
    files['production-readback-local.mjs']=wireProducerReadback(files['production-readback-local.mjs']);
+   const recording="await artifactCheck(v,'recording',spec)";
+   need(typeof c.adb_serial==='string'&&c.adb_serial.length>0,'RECORDING_TRANSPORT_REQUIRED');
+   need(files['production-readback-local.mjs'].split(recording).length===2,'RECORDING_TRANSPORT_LAYOUT');
+   // The outer proof retains hardware identity; the native stage records the controlled ADB transport.
+   files['production-readback-local.mjs']=files['production-readback-local.mjs'].replace(recording,"await artifactCheck(v,'recording',{...spec,serial:c.adb_serial})");
    files['activity-upstream-source.mjs']=fs.readFileSync(path.join(HERE,'../activity-upstream-source.mjs'),'utf8');
   }
   for(const name of ['checker.mjs','collection-readback.mjs']){
