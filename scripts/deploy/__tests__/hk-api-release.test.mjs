@@ -248,6 +248,17 @@ test('退役 ComfyUI 后普通预发 API 继续发布并保留供应商和员工
   assert.deepEqual(JSON.parse(f.state().environment.CREATIVE_CANVAS_SERVICE_TOKENS), {});
   assert.ok(!(f.state().networks||[]).some(network => network.startsWith('zj-canvas-stage-')));
 });
+test('退役 ComfyUI 后预发切换失败也不会恢复旧画布绑定', t => {
+  const f = fixture(t);
+  const result = stage(f, {WITH_CANVAS: '1', RETIRED_COMFY: '1', FAIL_MODE: 'up'});
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().active, 'sha256:'+'a'.repeat(64));
+  assert.equal(f.state().environment.COS_BUCKET, 'private-materials-12345');
+  assert.equal(f.state().environment.STAFF_EMAILS, 'employee@example.test');
+  assert.equal(f.state().environment.CREATIVE_CANVAS_INSTANCES, '{}');
+  assert.equal(f.state().environment.CREATIVE_CANVAS_SERVICE_TOKENS, '{}');
+  assert.ok(!f.state().networks.some(network => network.startsWith('zj-canvas-stage-')));
+});
 test('staging 加载固定候选并核实镜像后迁移和切换', t => {const f=fixture(t);f.git('checkout',f.old);const result=stage(f);assert.equal(result.status,0,result.stderr);assert.equal(f.git('rev-parse','HEAD'),f.old);assert.equal(f.state().images[f.state().active],f.next);assert.equal(f.state().dbChecks,1);assert.equal(f.state().migrations,1);});
 for(const mode of ['digest','image','layers','platform','label','db','migration']) test(`staging ${mode}失败不能切换`,t=>{const f=fixture(t),result=stage(f,{FAIL_MODE:mode});assert.notEqual(result.status,0);assert.deepEqual(f.state().ups,[]);assert.equal(f.state().builds,1);if(mode!=='migration')assert.equal(f.state().migrations||0,0);if(mode==='db'||mode==='migration')assert.equal(f.state().dbChecks,1);if(mode==='migration')assert.equal(f.state().migrations,1);});
 for(const mode of ['truncated','load']) test(`staging ${mode}流失败不得迁移或切换`,t=>{const f=fixture(t),result=stage(f,{FAIL_MODE:mode});assert.notEqual(result.status,0);assert.equal(f.state().migrations||0,0);assert.deepEqual(f.state().ups,[]);});
