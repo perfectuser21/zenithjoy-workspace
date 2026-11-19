@@ -8,11 +8,11 @@ const root=fileURLToPath(new URL('../../../',import.meta.url));
 const owners=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'];
 const documents=()=>Object.fromEntries(owners.map(key=>[key,parse(fs.readFileSync(root+'product-map/contracts/'+key+'.yaml','utf8'))]));
 const args=(docs=documents(),workflow=owners[1],activity='dedup')=>({documents:docs,workflow,activity});
-test('acceptance preserves the authoritative complete Activity and derives only declared pre/postconditions',()=>{
+test('acceptance preserves complete Activity and projects normative fields without promoting implementation steps',()=>{
  const docs=documents(),a=generateAcceptance(args(docs)),original=structuredClone(docs[owners[1]].activities.find(x=>x.key==='dedup'));delete original.implementation_bindings;
  assert.deepEqual(a.document,original);assert.equal(a.source.activity_ref,owners[1]+'.dedup');
- assert.equal(a.criteria.length,original.preconditions.length+original.postconditions.length);
- assert.deepEqual(a.criteria.map(x=>x.requirement),[...original.preconditions,...original.postconditions]);
+ assert.deepEqual(a.criteria.filter(x=>x.source_pointer.startsWith('/preconditions/')).map(x=>x.requirement),original.preconditions);
+ assert.deepEqual(a.criteria.filter(x=>x.source_pointer.startsWith('/postconditions/')).map(x=>x.requirement),original.postconditions);
  assert.equal(a.criteria.some(x=>x.source_pointer.startsWith('/steps')),false,'legacy implementation steps are not promoted to new business criteria');
  assert.equal(verifyAcceptance(a,args(docs)),true);
 });
@@ -35,4 +35,12 @@ test('missing, duplicate or cyclic references and self-referential acceptance de
  for(const mutate of [d=>{d[owners[1]].activities=[];},d=>{d[owners[1]].activities.push(structuredClone(d[owners[1]].activities.find(x=>x.key==='dedup')));},d=>{d[owners[1]].activities=d[owners[1]].activities.map(x=>x.key==='dedup'?{ref:owners[1]+'.dedup'}:x);},d=>{d[owners[1]].activities=[{key:'dedup',acceptance:{description:'check frozen contract'}}];}]){
   const d=documents();mutate(d);assert.throws(()=>generateAcceptance(args(d)),/CONTRACT_/);
  }
+});
+
+test('an output or preserved side-effect obligation has its own result criterion',()=>{
+ const a=generateAcceptance(args(documents(),owners[0],'collect_videos'));
+ for(const field of ['inputs','outputs','side_effects'])for(const [i,value]of a.document[field].entries()){
+  const c=a.criteria.find(x=>x.source_pointer===`/${field}/${i}`);assert.ok(c,`missing ${field} ${i}`);assert.deepEqual(c.requirement,value);assert.equal(c.phase,field==='inputs'?'start':'end');
+ }
+ assert.ok(a.criteria.some(x=>x.source_pointer==='/idempotency'));assert.ok(a.criteria.some(x=>x.source_pointer==='/failure'));
 });
