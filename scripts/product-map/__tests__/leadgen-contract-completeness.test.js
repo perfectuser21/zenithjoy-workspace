@@ -63,6 +63,8 @@ test('101 按原Video字段交接指标结构，原XML由通用Checker独立读�
   assert.match(readback.asserts, /写前 process_status 为“评论已采”/);
   assert.match(readback.asserts, /部分采集评论.*进度状态沿用写前值/);
   assert.match(collect.side_effects[0].description, /写前 process_status 为“评论已采”/);
+  assert.match(collect.side_effects[0].description, /写入表为 zenithjoy\.leadgen_videos/);
+  assert.doesNotMatch(collect.side_effects[0].description, /评论行的历史来源/);
 });
 
 test('共享预检的定时闸不误写成手动活动条件', () => {

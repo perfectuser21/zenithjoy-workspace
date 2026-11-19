@@ -160,7 +160,7 @@ activities:
     side_effects:
       - kind: internal_write
         target: pg zenithjoy.leadgen_videos
-        description: 实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及评论行的历史来源。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。
+        description: 实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。
     invokers:
       - code
       - agent

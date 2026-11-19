@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "f6b829906433171a32294c79d633d29fbc94fc43f5060862f51cbba06d2a16f6"
+            "contract_digest": "a7c691a9adf89016a058b28ceed8be1973512751f8c3223642f9aa9b60b4f96d"
           },
           "document": {
             "key": "collect_videos",
@@ -707,7 +707,7 @@
               {
                 "kind": "internal_write",
                 "target": "pg zenithjoy.leadgen_videos",
-                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及评论行的历史来源。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
               }
             ],
             "invokers": [
@@ -1131,7 +1131,7 @@
               "requirement": {
                 "kind": "internal_write",
                 "target": "pg zenithjoy.leadgen_videos",
-                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及评论行的历史来源。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
               },
               "source_pointer": "/side_effects/0"
             },
@@ -1627,7 +1627,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "af558b6e13f5046ad3690980044ca6a3be22ed0c",
-      "contract_sha256": "f2ac7212af4f5c8ee4360c2920217db0d946590ae94084bb6350780cade254fc"
+      "contract_sha256": "9511a4f33a44f266539ca374f6c86271017bc4ca419db4a262714227e09acb4e"
     },
     "skill_runtime": {
       "control_dir": "control",
