@@ -11,10 +11,16 @@ import {relative} from './freeze.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const {validateOutreachScope}=createRequire(import.meta.url)('../leadgen-outreach-scope.js');
 export const EXACT_ENV_KEYS=['LEADGEN_OUTREACH_MODE','LEADGEN_OUTREACH_SCOPE_FILE','WF_BRAIN_WORKFLOW','WFR_TAG','P','SERIAL','LEADGEN_LINE'];
+const ASR_TARBALLS=new Set(['cos-nodejs-sdk-v5-3.0.0.tgz','cos-fast-xml-parser-1.0.0.tgz','strnum-1.1.2.tgz'].map(n=>'_dependencies/asr-cos/tarballs/'+n));
 export function sourceArchive(file){
  const doc=JSON.parse(fs.readFileSync(file));need(doc.schema==='leadgen-host-source/v1'&&doc.files,'SOURCE_ARCHIVE');
  return Object.fromEntries(Object.entries(doc.files).map(([name,item])=>{
-  relative(name);need(typeof item.source==='string'&&hash(item.source)===item.sha256,'SOURCE_DIGEST');return [name,item.source];
+  relative(name);need(typeof item.source==='string','SOURCE_BYTES');let bytes=item.source;
+  if(item.encoding!==undefined){
+   need(item.encoding==='base64'&&ASR_TARBALLS.has(name)&&item.source.length>0&&item.source.length<=6*1024*1024,'SOURCE_ENCODING');
+   bytes=Buffer.from(item.source,'base64');need(bytes.toString('base64')===item.source,'SOURCE_ENCODING');
+  }
+  need(hash(bytes)===item.sha256,'SOURCE_DIGEST');return [name,bytes];
  }));
 }
 function writeSources(root,files){

@@ -39,6 +39,13 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
   const files=await assembleSources({context,profile,hostRoot});
   receipt=freezeHost({directory:hostRoot,identity,files,executableFiles:workflow==='104'?['codex-exact']:[]});expectedFiles=Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]));
  }
+ if(workflow==='102'){
+  // The emitted SDK must satisfy its original complete lock before a worker can act.
+  // This signer only verifies/loads local utilities; it has no HTTP dispatch path.
+  const {officialSign}=await import(pathToFileURL(path.join(hostRoot,'asr-runtime/asr-cos-http.mjs')));
+  const signature=officialSign({SecretId:'offline-readiness',SecretKey:'offline-readiness',Method:'GET',Pathname:'/offline',KeyTime:'1700000000;1700000180'});
+  need(new URLSearchParams(signature).get('q-sign-algorithm')==='sha1','ASR_OFFLINE_READINESS');
+ }
  const verify=async()=>{
   await verifySource();verifyProfile(profile);
   need(readHostConfiguration(environment).configuration_sha256===identity.configuration_sha256,'RECOVERY_IDENTITY');

@@ -54,3 +54,20 @@ test('formal 102 preparation refuses incomplete frozen ASR before returning an e
   assert.equal(fs.existsSync(path.join(host,'qualification-receipts')),false);
  }finally{fs.readFileSync=read;f.close();}
 });
+
+for(const kind of ['missing_text','extra_file','self_consistent_bad_tarball'])test('original SDK lock rejects '+kind+' during actual preparation',async()=>{
+ const f=await foundationFixture('102'),read=fs.readFileSync;
+ const archive=new URL('../leadgen-foundation/sources/asr.json',import.meta.url),broken=JSON.parse(read(archive));
+ const prefix='_dependencies/asr-cos/';
+ if(kind==='missing_text')delete broken.files[prefix+'node_modules/cos-nodejs-sdk-v5/LICENSE'];
+ if(kind==='extra_file')broken.files[prefix+'unexpected.txt']={source:'extra',sha256:hash('extra')};
+ if(kind==='self_consistent_bad_tarball'){
+  const entry=broken.files[prefix+'tarballs/cos-nodejs-sdk-v5-3.0.0.tgz'],bytes=Buffer.from(entry.source,'base64');bytes[bytes.length-1]^=1;
+  entry.source=bytes.toString('base64');entry.sha256=hash(bytes);
+ }
+ try{
+  fs.readFileSync=function(file,...args){return String(file)===archive.pathname?JSON.stringify(broken):read.call(this,file,...args);};
+  await assert.rejects(prepareLeadgenHost(f),/ASR_COS_DEPENDENCY_UNVERIFIED/);
+  assert.equal(fs.existsSync(path.join(f.profile.cwd,'.leadgen-run/host/receipts')),false);
+ }finally{fs.readFileSync=read;f.close();}
+});
