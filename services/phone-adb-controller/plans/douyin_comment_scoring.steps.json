@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_comment_scoring",
   "brain_workflow_key": "douyin_comment_scoring",
-  "contract_sha256": "6360bdb3c140b518730bf5e6cc489a7755f8997a3817d1c4c8f022ca79864583",
+  "contract_sha256": "c562c47c4053376ea081d0cbdc4ed110c29d2f8ee38effb38b5f4b69476e2ee7",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -13,18 +13,14 @@
       "at": "scoring",
       "mode": "checkpoint",
       "readback": {
-        "type": "log",
-        "regex": "^SORT_STATS ",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
+        "type": "none"
       },
       "usage": {
         "workflow_key": "douyin_comment_scoring",
         "slot_key": "scoring",
         "sequence_no": 1
-      }
+      },
+      "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。"
     },
     {
       "key": "douyin_comment_scoring.scoring.judge_grade",
@@ -32,19 +28,14 @@
       "at": "scoring",
       "mode": "checkpoint",
       "readback": {
-        "type": "evidence",
-        "glob": "{tag}-scoring-readback.json",
-        "match": "\"verified\"\\s*:\\s*true",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
+        "type": "none"
       },
       "usage": {
         "workflow_key": "douyin_comment_scoring",
         "slot_key": "scoring",
         "sequence_no": 1
-      }
+      },
+      "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。"
     },
     {
       "key": "douyin_comment_scoring.mark_leads.upsert_lead",
@@ -52,19 +43,14 @@
       "at": "mark_leads",
       "mode": "checkpoint",
       "readback": {
-        "type": "evidence",
-        "glob": "{tag}-mark_leads-readback.json",
-        "match": "\"verified\"\\s*:\\s*true",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
+        "type": "none"
       },
       "usage": {
         "workflow_key": "douyin_comment_scoring",
         "slot_key": "mark_leads",
         "sequence_no": 2
-      }
+      },
+      "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。"
     },
     {
       "key": "douyin_comment_scoring.mark_leads.advance_pool",
@@ -72,19 +58,14 @@
       "at": "mark_leads",
       "mode": "checkpoint",
       "readback": {
-        "type": "evidence",
-        "glob": "{tag}-mark_leads-readback.json",
-        "match": "\"verified\"\\s*:\\s*true",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
+        "type": "none"
       },
       "usage": {
         "workflow_key": "douyin_comment_scoring",
         "slot_key": "mark_leads",
         "sequence_no": 2
-      }
+      },
+      "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。"
     }
   ]
 }

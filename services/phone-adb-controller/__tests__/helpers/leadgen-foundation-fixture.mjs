@@ -3,8 +3,8 @@ import {createHash} from 'node:crypto';
 import {parse} from 'yaml';import {projectAgentProfile} from '../../leadgen-foundation/profile-contract.mjs';
 import {installPreflightPg,preflightPgDeployment,preflightPgLockIdentity} from '../../preflight-pg-dependencies.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
-export async function foundationFixture(workflow='101'){
- const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'foundation-host-'))),runtime=path.join(root,'runtime'),cwd=path.join(root,'bundle');
+export async function foundationFixture(workflow='101',{directory=os.tmpdir()}={}){
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(directory,'foundation-host-'))),runtime=path.join(root,'runtime'),cwd=path.join(root,'bundle');
  for(const p of [runtime,cwd])fs.mkdirSync(p,{mode:0o700});
  for(const n of ['preflight-pg-dependencies.mjs','preflight-pg-lock.json'])fs.copyFileSync(new URL('../../'+n,import.meta.url),path.join(runtime,n));
  const source='a'.repeat(40);await installPreflightPg({runtimeRoot:runtime,sourceCommit:source});

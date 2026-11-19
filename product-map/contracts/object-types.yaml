@@ -148,6 +148,8 @@ types:
       - script_id
       - sender_id
       - reached_at
+      - script_version
+      - feishu_record_id
     note: repeat_hits 对应PG dup_hit_count；按人身份保留重复命中和触达标记，不删除人。
   OutreachOrder:
     identity:

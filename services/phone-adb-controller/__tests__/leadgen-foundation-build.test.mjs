@@ -5,7 +5,7 @@ const prefix='services/phone-adb-controller/leadgen-foundation',repo=fileURLToPa
 test('four published profiles freeze source closure and central skills without an instance identity',()=>{
  for(const [id,key]of Object.entries(WORKFLOWS)){
   const doc=JSON.parse(fs.readFileSync(path.join(repo,prefix,'profiles',id+'.json'))),p=doc.profile;
-  assert.equal(doc.contract.workflow,key);assert.equal(p.leadgen.workflow,id);assert.equal(p.leadgen.method_revision,'1e1c069c379ed16315da125122f32e87eb27ae75');
+  assert.equal(doc.contract.workflow,key);assert.equal(p.leadgen.workflow,id);assert.equal(p.leadgen.method_revision,'81b523d620c0e285cbe03f72618a8a0acf37249e');
   assert.equal(Object.keys(p.files).some(n=>n.startsWith('skills/')),false,'Skill aliases must exist in the central catalog');assert.ok(Object.keys(p.files).length<200);assert.ok(p.files[p.adapter]);let size=0;
   for(const [name,sha]of Object.entries(p.files)){
    assert.match(sha,/^[a-f0-9]{64}$/);assert.equal(path.isAbsolute(name),false);assert.equal(name.includes('..'),false);

@@ -1,24 +1,3 @@
-# 由 scripts/product-map/wf-plan.mjs --write 从 product-map/contracts/douyin_video_processing.yaml 生成，勿手改
-WF_CAP='douyin_video_processing'
-WF_WORKFLOW='douyin-video-processing'
-WF_BRAIN_WORKFLOW='douyin_video_processing'
-WF_SOURCE_REPO='perfectuser21/zenithjoy-workspace'
-WF_CONTRACT_SHA256='57e7c7375db0ccdd3e0a2384a92f9cb59be5485b1e9710ba0ddff46eed44bfa9'
-WF_CONTRACT_RAW_SHA256='2535a352d651c0c79573980de9c3bedc6b80c3681b6e91d742f82ce98bcd5e39'
-WF_ACTIVITY_REFS='[{"slot_key":"preflight","sequence_no":1,"definition_key":"douyin_video_processing.preflight","source_capability":"douyin_video_processing","contract_sha256":"d708020a1e7cc52de2d19c64e7e792c2e05e08de0eefc3672640c3442a1f9e1c"},{"slot_key":"dedup","sequence_no":2,"definition_key":"douyin_video_processing.dedup","source_capability":"douyin_video_processing","contract_sha256":"aa9f867b89ee0743840df0fc90243825461bcd00ea5c63a81762e91817354978"},{"slot_key":"qualification","sequence_no":3,"definition_key":"douyin_video_processing.qualification","source_capability":"douyin_video_processing","contract_sha256":"8f49c94891f9b1a610f45ce1433e92a09729cde9bdcbb84c764686ee23248cd5"},{"slot_key":"collection","sequence_no":4,"definition_key":"douyin_video_processing.collection","source_capability":"douyin_video_processing","contract_sha256":"f2802b3ba94488d957887e1308e2f07135cfdb5415dd4e12ea30a9edeaac32d8"},{"slot_key":"cleanup","sequence_no":5,"definition_key":"douyin_video_processing.cleanup","source_capability":"douyin_video_processing","contract_sha256":"61b7685ea0f7e7d2fecb5f9d24761789902e40b0851dd58ec733f03f31ca2978"}]'
-WF_STEP_SPEC='plans/douyin_video_processing.steps.json'
-WF_STAGES='预检,按视频ID判重和筛选,判定视频,采集评论,收尾'
-WF_SOURCE_KIND='pending_videos'
-WF_DISCOVER_CMD=''
-WF_MISSING=''
-WF_RUNNER='leadgen-workflow.mjs'
-WF_BUDGET_preflight='600'
-WF_BUDGET_dedup='600'
-WF_BUDGET_qualification='1800'
-WF_BUDGET_collection='7200'
-WF_BUDGET_cleanup='300'
-WF_TIMEOUT_CLASS_preflight='record'
-WF_TIMEOUT_CLASS_dedup='record'
-WF_TIMEOUT_CLASS_qualification='record'
-WF_TIMEOUT_CLASS_collection='record'
-WF_TIMEOUT_CLASS_cleanup='record'
+# Foundation douyin_video_processing：仅原API/profile入口，禁止旧wf-run
+printf '%s\n' 'FOUNDATION_API_ONLY' >&2
+return 64 2>/dev/null || exit 64
