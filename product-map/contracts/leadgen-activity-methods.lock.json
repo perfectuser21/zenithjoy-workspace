@@ -138,7 +138,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_video_processing.preflight": {
@@ -441,7 +441,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -598,13 +598,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_video_processing.dedup": {
@@ -744,7 +744,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -901,13 +901,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1052,7 +1052,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -1209,13 +1209,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_video_processing.collection": {
@@ -1355,7 +1355,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -1512,13 +1512,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1658,7 +1658,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -1815,13 +1815,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1966,7 +1966,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -2123,13 +2123,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2274,7 +2274,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -2431,13 +2431,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2577,7 +2577,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -2734,13 +2734,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2880,7 +2880,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -3037,13 +3037,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3183,7 +3183,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -3340,13 +3340,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3486,7 +3486,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "d704306eaae8596aefd27d8c607189f7f615241ab272f82fd9ae69081972b35b"
+          "sha256": "b200f912687afc8d94fd1ec543b7e6db2c97d5f4bcfac82a25251e9e80ef7e08"
         },
         {
           "kind": "code",
@@ -3643,13 +3643,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929",
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "复核变化仅补充现有只读回执的指标观测时间，并注明101搜索证据交接，活动契约及Skill和写入边界保持兼容。",
+        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
         "reviewed_by": "codex:cloud-phone-verify-20261117",
         "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "f0001af259a4e3a8887d248bfc62be17862f05eee5968acaf719cd5cdd29e929"
+        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
       }
     }
   },
