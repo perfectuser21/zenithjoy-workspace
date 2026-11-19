@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const load = name => JSON.parse(execFileSync('python3',['-c',
@@ -53,18 +54,24 @@ test('dashboard rollback uses trusted verified-content controller instead of mut
 });
 
 
-test('video tool promotion requires real upload evidence from protected main staging', () => {
+test('Hong Kong API releases keep matching staging and Brain acceptance after private canvas retirement', () => {
+  const staging = load('deploy-staging-hk');
   const promote = load('promote-prod-hk');
-  assert.equal(promote.jobs.admission.with.video_tools_live, '${{ inputs.video_tools }}');
+  assert.equal(staging.on.workflow_dispatch?.inputs?.video_tools, undefined);
+  for (const trigger of ['workflow_dispatch', 'workflow_call']) {
+    assert.equal(promote.on[trigger].inputs.video_tools, undefined);
+  }
+  assert.equal(promote.jobs.admission.uses, './.github/workflows/release-admission.yml');
+  assert.equal(promote.jobs.admission.with.video_tools_live, undefined);
   assert.ok(promote.jobs['promote-prod-hk'].needs.includes('admission'));
   assert.ok(promote.jobs['promote-prod-hk'].steps.some(step => step.name === 'Confirm promotion'));
-  const admission = load('release-admission').jobs.admission;
-  assert.ok(admission.steps.some(step => step.name === 'Read exact live video tools acceptance' && step.if === 'inputs.video_tools_live'));
-  assert.ok(admission.steps.some(step => step.name === 'Read frozen business acceptance from Brain' && step.if === '${{ !inputs.video_tools_live }}'));
-  const workflow = load('video-tools-live-acceptance');
-  assert.equal(workflow.concurrency.group, 'deploy-staging-hk');
-  assert.equal(workflow.jobs.live.if, "github.ref == 'refs/heads/main'");
-  assert.equal(workflow.jobs.live.environment, 'creative-canvas-staging');
-  assert.ok(workflow.jobs.live.steps.some(step => step.name === 'Verify live private canvas upload'));
-  assert.ok(workflow.jobs.live.steps.some(step => step.name === 'Store live upload evidence'));
+  const flags = [staging.jobs['deploy-staging-hk'], promote.jobs['promote-prod-hk']];
+  assert.ok(flags.every(job => job.steps.every(step => !/hk-canvas-(production|staging)\.sh/.test(step.run || ''))));
+  const admission = load('release-admission');
+  assert.equal(admission.on.workflow_call.inputs.video_tools_live, undefined);
+  assert.ok(admission.jobs.admission.steps.some(step => step.name === 'Verify exact candidate staging runs'));
+  assert.ok(admission.jobs.admission.steps.some(step => step.name === 'Read frozen business acceptance from Brain' && step.if === undefined));
+  for (const workflow of ['deploy-creative-canvas-staging', 'video-tools-live-acceptance']) {
+    assert.equal(existsSync(new URL(`../../../.github/workflows/${workflow}.yml`, import.meta.url)), false);
+  }
 });

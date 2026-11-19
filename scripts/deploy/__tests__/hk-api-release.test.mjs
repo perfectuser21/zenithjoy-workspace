@@ -201,6 +201,7 @@ if(process.env.FAKE_STAGING_CANVAS){
  if(args[0]==='network'&&args[1]==='inspect'){console.log(JSON.stringify([{Containers:{}}]));process.exit(0)}
  if(args[0]==='inspect'&&!args.includes('--format')){
   const node=Object.values(plan.compose.services).find(s=>s.container_name===args[1]);
+  if(node&&process.env.RETIRED_COMFY)process.exit(1);
   const environment=Object.entries(node?node.environment:state.environment||{}).map(([k,v])=>k+'='+v);
   const networks=Object.fromEntries((node?node.networks:state.networks||[]).map(n=>[n,{}]));
   console.log(JSON.stringify([{Image:plan.image,Config:{Env:environment},NetworkSettings:{Networks:networks},
@@ -211,7 +212,7 @@ if(process.env.FAKE_STAGING_CANVAS){
 if(args[0]==='inspect'){let fmt=args[args.indexOf('--format')+1];if(fmt.includes('config_files'))console.log(process.env.PREVIOUS_CONFIG);else if(fmt.includes('project'))console.log('repo');else if(fmt.includes('Health'))console.log(process.env.FAIL_MODE==='health'&&state.active===next?'unhealthy':'healthy');else if(fmt.includes('.Image'))console.log(state.active);else throw Error('bad inspect '+fmt);process.exit(0)}
 if(args[0]==='image'&&args[1]==='inspect'){const image=args[2];if(image!==old&&image!==tag)process.exit(1);let fmt=args[args.indexOf('--format')+1]||'';if(fmt.includes('RootFS.Layers'))console.log(JSON.stringify(process.env.FAIL_MODE==='layers'?['sha256:'+'c'.repeat(64)]:['sha256:'+'d'.repeat(64)]));else if(fmt.includes('.Os'))console.log(process.env.FAIL_MODE==='platform'?'linux/arm64':'linux/amd64');else if(fmt.includes('revision'))console.log(process.env.FAIL_MODE==='label'?'0'.repeat(40):process.env.CANDIDATE);else if(fmt.includes('.Id'))console.log(image===old?old:(process.env.FAIL_MODE==='image'?'sha256:'+'c'.repeat(64):next));process.exit(0)}
 if(args[0]==='tag')process.exit(0);
-if(args[0]==='compose'&&args.includes('config')){if(process.env.SAME_SHA_RETRY){console.log(fs.readFileSync(args[args.lastIndexOf('-f')+1],'utf8'));}else console.log(JSON.stringify({services:{'zenithjoy-api-staging':{image:state.active,environment:{STAFF_EMAILS:'previous@example.com'},networks:['old-private']}},networks:{'old-private':{external:true}}}));process.exit(0)}
+if(args[0]==='compose'&&args.includes('config')){if(process.env.SAME_SHA_RETRY){console.log(fs.readFileSync(args[args.lastIndexOf('-f')+1],'utf8'));}else console.log(JSON.stringify({services:{'zenithjoy-api-staging':{image:state.active,environment:state.environment||{STAFF_EMAILS:'previous@example.com'},networks:state.networks||['old-private']}},networks:{'old-private':{external:true}}}));process.exit(0)}
 if(args[0]==='load'){fs.readFileSync(0);if(process.env.FAIL_MODE==='load')process.exit(9);state.images[next]=process.env.CANDIDATE;state.builds++;save();process.exit(0)}
 if(args[0]==='run'){if(args.includes('-e')&&args.includes('NODE_PATH=/repo/node_modules')&&args.includes('-e')&&args.includes('node')&&args.includes('-e')&&args.includes('/repo/apps/api')){state.dbChecks=(state.dbChecks||0)+1;save();if(process.env.FAIL_MODE==='db')process.exit(8);process.exit(0)}const mount=args.find(x=>x.endsWith(':/source:ro'));if(!mount||!mount.includes('migration-source.')||!args.includes(tag)||args.at(-1)!=='/source/apps/api/db/migrations/run-migration.ts')throw Error('bad migration');if(fs.existsSync(path.join(mount.slice(0,-11),'apps/api/db/migrations/node_modules')))throw Error('poisoned archive');state.migrations=(state.migrations||0)+1;save();if(process.env.FAIL_MODE==='migration')process.exit(8);process.exit(0)}
 if(args[0]==='compose'&&args.includes('up')){const files=args.flatMap((a,i)=>a==='-f'?[args[i+1]]:[]),service=JSON.parse(fs.readFileSync(files.at(-1))).services['zenithjoy-api-staging'],image=service.image;state.environment=service.environment;state.networks=service.networks;state.active=image===old?old:next;state.ups.push(state.active);save();if(process.env.FAIL_MODE==='up'&&state.active===next)process.exit(9);process.exit(0)}
@@ -236,17 +237,27 @@ with tarfile.open(sys.argv[1],'w') as t:
   const expected=extra.FAIL_MODE==='image'?'sha256:'+'c'.repeat(64):identity.config;
   return spawnSync('bash',[stagingScript,f.next,extra.FAIL_MODE==='digest'?'0'.repeat(64):digest,expected,String(input.length),'1000',identity.layers_hash],{input,env:{...f.env,PATH:`${stageBin}:${process.env.PATH}`,ZJ_STAGING_RELEASES:join(f.root,'staging'),ZJ_STAGING_LOCK:join(f.root,'staging.lock'),FAKE_SERVICE:'zenithjoy-api-staging',OLD_ID:oldId,NEW_ID:candidateId,PREVIOUS_CONFIG:config,SAVE_TAR:archive,...extra},encoding:'utf8'});
 }
-test('普通预发 API 发布继承验证过的私人画布和上传配置', t => {
+test('退役 ComfyUI 后普通预发 API 继续发布并保留供应商和员工配置', t => {
   const f = fixture(t);
-  const result = stage(f, {WITH_CANVAS: '1'});
+  const result = stage(f, {WITH_CANVAS: '1', RETIRED_COMFY: '1'});
   assert.equal(result.status, 0, result.stderr);
   assert.equal(f.state().environment?.STAFF_EMAILS, 'employee@example.test');
   assert.equal(f.state().environment.COS_BUCKET, 'private-materials-12345');
-  assert.ok(JSON.parse(f.state().environment.CREATIVE_CANVAS_INSTANCES).employee);
-  assert.ok(f.state().networks.some(network => network.startsWith('zj-canvas-stage-')));
-  const metadata = JSON.parse(readFileSync(join(f.root, 'staging', f.next, 'video-tools-prepared.json')));
-  assert.equal(metadata.api_source_commit, f.next);
-  assert.equal(metadata.source_commit, f.old);
+  assert.equal(f.state().environment.DASHSCOPE_API_KEY, 'wan');
+  assert.deepEqual(JSON.parse(f.state().environment.CREATIVE_CANVAS_INSTANCES), {});
+  assert.deepEqual(JSON.parse(f.state().environment.CREATIVE_CANVAS_SERVICE_TOKENS), {});
+  assert.ok(!(f.state().networks||[]).some(network => network.startsWith('zj-canvas-stage-')));
+});
+test('退役 ComfyUI 后预发切换失败也不会恢复旧画布绑定', t => {
+  const f = fixture(t);
+  const result = stage(f, {WITH_CANVAS: '1', RETIRED_COMFY: '1', FAIL_MODE: 'up'});
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().active, 'sha256:'+'a'.repeat(64));
+  assert.equal(f.state().environment.COS_BUCKET, 'private-materials-12345');
+  assert.equal(f.state().environment.STAFF_EMAILS, 'employee@example.test');
+  assert.equal(f.state().environment.CREATIVE_CANVAS_INSTANCES, '{}');
+  assert.equal(f.state().environment.CREATIVE_CANVAS_SERVICE_TOKENS, '{}');
+  assert.ok(!f.state().networks.some(network => network.startsWith('zj-canvas-stage-')));
 });
 test('staging 加载固定候选并核实镜像后迁移和切换', t => {const f=fixture(t);f.git('checkout',f.old);const result=stage(f);assert.equal(result.status,0,result.stderr);assert.equal(f.git('rev-parse','HEAD'),f.old);assert.equal(f.state().images[f.state().active],f.next);assert.equal(f.state().dbChecks,1);assert.equal(f.state().migrations,1);});
 for(const mode of ['digest','image','layers','platform','label','db','migration']) test(`staging ${mode}失败不能切换`,t=>{const f=fixture(t),result=stage(f,{FAIL_MODE:mode});assert.notEqual(result.status,0);assert.deepEqual(f.state().ups,[]);assert.equal(f.state().builds,1);if(mode!=='migration')assert.equal(f.state().migrations||0,0);if(mode==='db'||mode==='migration')assert.equal(f.state().dbChecks,1);if(mode==='migration')assert.equal(f.state().migrations,1);});
@@ -263,7 +274,7 @@ test('同SHA重试失败恢复旧有效环境与私有网络，不引用已覆�
  assert.deepEqual(f.state().environment,{STAFF_EMAILS:'previous@example.com'});
  assert.deepEqual(f.state().networks,['old-private']);
 });
-test('普通API跨版本发布及回退都保留已激活的provider与个人画布',t=>{
+test('个人画布已停用后，普通生产 API 发布、失败恢复及回退仍保留模型和素材配置',t=>{
  const f=fixture(t),rosterPath=join(f.root,'roster.json');
  const roster={schema_version:1,source_commit:f.old,origin:'https://zenithjoy.tech',providers:{DASHSCOPE_API_KEY:'wan-private',ALIYUN_ACCESS_KEY_ID:'ali-id',ALIYUN_ACCESS_KEY_SECRET:'ali-secret',COS_SECRET_ID:'cos-id',COS_SECRET_KEY:'cos-key',COS_BUCKET:'private-materials-12345',COS_REGION:'ap-guangzhou'},users:[{id:'employee',email:'employee@example.com',token:'k'.repeat(40)}]};
  writeFileSync(rosterPath,JSON.stringify(roster),{mode:0o600});
@@ -272,13 +283,31 @@ test('普通API跨版本发布及回退都保留已激活的provider与个人画
  const originalSource=join(f.env.ZJ_HK_RELEASES,f.old,'source');mkdirSync(originalSource,{recursive:true});
  const originalArchive=spawnSync('git',['-C',f.env.ZJ_HK_REPO,'archive',f.old]);assert.equal(originalArchive.status,0);
  assert.equal(spawnSync('tar',['-x','-C',originalSource],{input:originalArchive.stdout}).status,0);
- const oldPlan=join(f.env.ZJ_HK_RELEASES,f.old,'canvas-plan.json');
- const result=f.run(['promote',f.next],{FAKE_CANVAS_PLAN:oldPlan});assert.equal(result.status,0,result.stderr);
- const fresh=JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,f.next,'image.json'))).services['zenithjoy-api-prod'];
- assert.equal(fresh.environment.DASHSCOPE_API_KEY,'wan-private');assert.equal(fresh.environment.COS_BUCKET,'private-materials-12345');assert.equal(fresh.environment.COS_SECRET_KEY,'cos-key');assert.deepEqual(fresh.networks,plan.apiOverlay.services['zenithjoy-api-prod'].networks);
- const rollback=f.run(['rollback',f.old],{FAKE_CANVAS_PLAN:oldPlan});assert.equal(rollback.status,0,rollback.stderr);
- const restored=JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,f.old,'image.json'))).services['zenithjoy-api-prod'];
- assert.deepEqual(restored.environment,fresh.environment);assert.deepEqual(restored.networks,fresh.networks);
+ const config = version => JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,version,'image.json')));
+ const failed=f.run(['promote',f.next],{FAIL_MODE:'up'});
+ assert.notEqual(failed.status,0);
+ assert.match(failed.stderr,/Previous production restored/);
+ assert.equal(f.state().active,'sha256:old-image');
+ const result=f.run(['promote',f.next]);assert.equal(result.status,0,result.stderr);
+ f.git('commit','--allow-empty','-m','follow-up');
+ const followUp=f.git('rev-parse','HEAD');
+ const subsequent=f.run(['promote',followUp],{CANDIDATE:followUp});
+ assert.equal(subsequent.status,0,subsequent.stderr);
+ assert.equal(f.state().images[f.state().active],followUp);
+ const rollback=f.run(['rollback',f.old]);assert.equal(rollback.status,0,rollback.stderr);
+ for (const version of [f.old,f.next,followUp]) {
+   const entry=config(version);
+   const api=entry.services['zenithjoy-api-prod'];
+   assert.equal(api.environment.DASHSCOPE_API_KEY,'wan-private');
+   assert.equal(api.environment.COS_BUCKET,'private-materials-12345');
+   assert.equal(api.environment.COS_SECRET_KEY,'cos-key');
+   assert.equal(api.environment.CREATIVE_CANVAS_INSTANCES,'{}');
+   assert.equal(api.environment.CREATIVE_CANVAS_SERVICE_TOKENS,'{}');
+   assert.equal(api.environment.CREATIVE_CANVAS_ALLOWED_ORIGINS,'');
+   assert.equal(api.networks,undefined);
+   assert.equal(entry.networks,undefined);
+ }
+ assert.deepEqual(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,f.old,'canvas-plan.json'))),plan);
 });
 test('回退到当前已运行镜像不改写previous历史',t=>{
  const f=fixture(t);assert.equal(f.run(['promote',f.next]).status,0);
