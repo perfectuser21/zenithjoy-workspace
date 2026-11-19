@@ -6,8 +6,8 @@ import {spawnSync} from 'node:child_process';
 import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost} from '../leadgen-foundation/adapter.mjs';
 const probe=new URL('./fixtures/host-authority-http.py',import.meta.url);
-async function run(mode){
- const f=await foundationFixture('102');try{
+async function run(mode,workflow='102'){
+ const f=await foundationFixture(workflow);try{
   const host=await prepareLeadgenHost(f);
   const r=spawnSync('python3',[probe.pathname,host.profile.cwd,mode],{encoding:'utf8',timeout:30000,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
   assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
@@ -58,4 +58,11 @@ for(const mode of ['eid-good','link-good'])test(`${mode} keeps the existing oper
 test('a new action corrects a refused recording EID and dispatches exactly one capture',async()=>{
  const r=await run('eid-recover');assert.equal(r.code,0);assert.equal(r.error,null);assert.deepEqual(r.first_receipts,[]);assert.equal(r.dispatches,1);assert.deepEqual(r.receipts,['corrected-record.json']);
  const [refusal,success]=r.stdout.trim().split('\n').map(JSON.parse);assert.equal(refusal.result.data.dispatched,false);assert.equal(success.result.exit_code,0);
+});
+
+for(const mode of ['healthy','exhaust','reset','post-dispatch'])test(`104 dedicated assembly preserves its send scope with shared read-only admission ${mode}`,async()=>{
+ const r=await run(mode,'104');
+ if(mode==='post-dispatch'){assert.equal(r.stdout,'');assert.equal(r.dispatches,1);assert.deepEqual(r.states,['unknown']);assert.match(r.error,/TaskAuthorityUnavailable/);}
+ else if(mode==='exhaust'){assert.equal(r.code,75);assert.equal(requests(r),2);assert.equal(r.dispatches,0);assert.deepEqual(r.receipts,[]);assert.equal(JSON.parse(r.stdout).result.data.dispatched,false);}
+ else {assert.equal(r.code,0,r.error);assert.equal(requests(r),mode==='healthy'?1:2);assert.equal(r.dispatches,1);}
 });
