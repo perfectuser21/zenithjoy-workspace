@@ -49,6 +49,26 @@ test('四条获客流程的每个 Activity 都有可展示的业务合同', () =
   assert.equal(uniqueActivities, 12);
 });
 
+test('101 按原Video字段交接指标结构，原XML由通用Checker独立读取', () => {
+  const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_discovery.yaml'), 'utf8'));
+  const collect = doc.activities.find(activity => activity.key === 'collect_videos');
+  const video = collect.outputs.find(output => output.type === 'Video');
+  assert.deepEqual(video.fields, ['line_key', 'video_id', 'video_url', 'title', 'keyword', 'comment_count',
+    'discovery_metrics', 'harvest_batch', 'author']);
+  const check = collect.postconditions.find(condition => condition.probe === 'disc_candidates_persisted');
+  assert.match(check.asserts, /outputs\.Video/);
+  const run = collect.outputs.find(output => output.type === 'Run');
+  assert.match(run.destination, /实际操作、提交和读回终态.*执行提案状态/);
+  assert.match(check.asserts, /仅原始XML .*evidence\.xml.*可由原件引用交付/);
+  assert.match(check.asserts, /原XML.*SHA256.*持久行/);
+  const readback = collect.postconditions.find(condition => condition.probe === 'videos_readback');
+  assert.match(readback.asserts, /写前 process_status 为“评论已采”/);
+  assert.match(readback.asserts, /部分采集阶段的视频进度以该视频写前 process_status 为准/);
+  assert.match(collect.side_effects[0].description, /写前 process_status 为“评论已采”/);
+  assert.match(collect.side_effects[0].description, /写入表为 zenithjoy\.leadgen_videos/);
+  assert.doesNotMatch(collect.side_effects[0].description, /评论行的历史来源/);
+});
+
 test('共享预检的定时闸不误写成手动活动条件', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
   const preflight = doc.activities.find(activity => activity.key === 'preflight');

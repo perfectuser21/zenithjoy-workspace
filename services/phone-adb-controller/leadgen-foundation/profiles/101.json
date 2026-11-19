@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "9b1f04d4003ffb1970f06f76a42546d09c67a14d4525190b7434d38b30458423"
+            "contract_digest": "60d944525b95fa00de3fb5c342c07444058b2b3a29aeb328bbaeca584095c4c9"
           },
           "document": {
             "key": "collect_videos",
@@ -550,7 +550,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "5.3.0",
+            "version": "5.4.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -620,7 +620,7 @@
               },
               {
                 "type": "Run",
-                "destination": "搜索采集Activity的真实状态和停止原因回执，整条Workflow终态由宿主在后续验收后计算",
+                "destination": "以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -645,11 +645,11 @@
               },
               {
                 "probe": "disc_candidates_persisted",
-                "asserts": "交接每个实际VID的PG持久字段，包括库中实采comment_count和完整discovery_metrics；原生卡片证实author。逐ID核对原提交回执、真实读回及持久行，提交集合以本轮回执和数据库为准。"
+                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。提交集合以本轮回执和数据库为准。"
               },
               {
                 "probe": "videos_readback",
-                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现查前后保护字段，保留既有处理状态、转写、实采comment_count及评论已采VID的原批次。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
               },
               {
                 "probe": "line_key_not_null",
@@ -707,7 +707,7 @@
               {
                 "kind": "internal_write",
                 "target": "pg zenithjoy.leadgen_videos",
-                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及历史来源，评论已采视频保留原harvest_batch。"
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
               }
             ],
             "invokers": [
@@ -1069,7 +1069,7 @@
               "phase": "end",
               "requirement": {
                 "type": "Run",
-                "destination": "搜索采集Activity的真实状态和停止原因回执，整条Workflow终态由宿主在后续验收后计算",
+                "destination": "以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -1103,7 +1103,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "disc_candidates_persisted",
-                "asserts": "交接每个实际VID的PG持久字段，包括库中实采comment_count和完整discovery_metrics；原生卡片证实author。逐ID核对原提交回执、真实读回及持久行，提交集合以本轮回执和数据库为准。"
+                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。提交集合以本轮回执和数据库为准。"
               },
               "source_pointer": "/postconditions/2"
             },
@@ -1112,7 +1112,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "videos_readback",
-                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现查前后保护字段，保留既有处理状态、转写、实采comment_count及评论已采VID的原批次。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
               },
               "source_pointer": "/postconditions/3"
             },
@@ -1131,7 +1131,7 @@
               "requirement": {
                 "kind": "internal_write",
                 "target": "pg zenithjoy.leadgen_videos",
-                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及历史来源，评论已采视频保留原harvest_batch。"
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
               },
               "source_pointer": "/side_effects/0"
             },
@@ -1626,8 +1626,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "b1e70fdd522881bd7d3849849308b49fcf71588b",
-      "contract_sha256": "70f351055450c023090eac95635a2f4a322569fc2486bddda2aeb6c1a7acd50d"
+      "method_revision": "af558b6e13f5046ad3690980044ca6a3be22ed0c",
+      "contract_sha256": "1052d09fdb69937203e27938d396fc741ff0925a8feb819f2cf9133cdb506e2b"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -1760,7 +1760,7 @@
       "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
       "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
       "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
-      "services/phone-adb-controller/activity-upstream-source.mjs": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f",
+      "services/phone-adb-controller/activity-upstream-source.mjs": "eabb48fb6c5fe0233b498ce291e828992a094690ab6b2bea0ed2238a3d835e5e",
       "services/phone-adb-controller/discovery-metrics-queue.js": "7f6b4ba23aabc0b4acba54ae9778bde992d3c3716a3281d8135c3dee2157ac59",
       "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
@@ -1768,7 +1768,7 @@
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "5e0dcd1e26b81dce453d934eb72e488d063ea6bcf88fcaa3d047ecf5d6bbf849",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "554574c9b34997f6f4f29b7015b07706a894f106924d142a5fb3ed972e444652",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
@@ -1789,7 +1789,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "5308162c0d28b36bcbd1c26ef9407b85bd2d1021884c26d0d68dd335e279c448",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "69d89ab6acc376c1a4d221d83fe4bfd7dfda8781f6284304d20e33f84c8fc331",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "8d5b4381c8543f2d127394280cd27df855945b4e38a80325b6a75981a94b6908",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "eef4d1f2b4f83ff0de96a3a9a353f571041b87d0bd91630f3f4c2ef19fc4ec9e",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "eed9c7e8734cffe2f464a2cdbdfda111ca5cf366f8eada8e789eb885eb29d927"
     }

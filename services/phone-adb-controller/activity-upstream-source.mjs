@@ -62,7 +62,7 @@ function readLegacyVideo(result,descriptor,input,videoId,receipt){
  const expected={video_id:videoId,video_url:url,line_key:input.line,run_id:descriptor.run_id,run:descriptor.run_tag,
   source_commit:descriptor.source_commit,profile:input.profile};
  need(Object.entries(expected).every(([key,value])=>metrics[key]===value),'VIDEO_EVIDENCE');
- return {video_id:videoId,url,keyword:input.keyword,discovery_metrics:metrics};
+ return {video_id:videoId,video_url:url,keyword:input.keyword,discovery_metrics:metrics};
 }
 export function readUpstreamHandoff(c){
  const scope=c.verification?.['102'],videoId=scope?.video_ids?.[0];
@@ -74,9 +74,11 @@ export function readUpstreamHandoff(c){
  let video;
  if(Array.isArray(delivery.outputs?.Video)){
   const matches=delivery.outputs.Video.filter(v=>v.video_id===videoId);
-  need(matches.length===1&&matches[0].url==='https://www.douyin.com/video/'+videoId,'VIDEO');
-  const fields=['video_id','url','title','author','keyword','comment_count','discovery_metrics'];
-  video=Object.fromEntries(fields.filter(key=>Object.hasOwn(matches[0],key)).map(key=>[key,matches[0][key]]));
+  need(matches.length===1,'VIDEO');
+  const item=matches[0],url=item.video_url??item.url;
+  need(url==='https://www.douyin.com/video/'+videoId&&(item.url===undefined||item.url===url),'VIDEO');
+  const fields=['video_id','line_key','title','author','keyword','comment_count','harvest_batch','discovery_metrics'];
+  video={video_url:url,...Object.fromEntries(fields.filter(key=>Object.hasOwn(item,key)).map(key=>[key,item[key]]))};
  }else video=readLegacyVideo(result,descriptor,input,videoId,delivery);
  const fields=['task_id','run_id','run_tag','source_commit','manifest_sha256','result_sha256'];
  return {producer:{workflow:'101',company_id:input.company_id,tenant_id:input.tenant_id,line:input.line,

@@ -67,7 +67,7 @@ test('formal producer uses separately frozen expanded context bound to manifest 
 
 test('consumer freezes only the authorized video from the completed producer receipt',t=>{
  const f=setup(t),video='7711111111111111111',foreign='7722222222222222222';
- const selected={video_id:video,url:'https://www.douyin.com/video/'+video,title:'Original',author:'Native',keyword:'keyword',comment_count:0,discovery_metrics:{run:f.producer.run}};
+ const selected={video_id:video,video_url:'https://www.douyin.com/video/'+video,title:'Original',author:'Native',keyword:'keyword',comment_count:0,discovery_metrics:{run:f.producer.run}};
  f.c.verification={'102':{video_ids:[video],upstream:{[video]:f.producer}}};
  f.result.receipts=[{activity_key:'collect_videos',status:'completed',outputs:{Video:[selected,{...selected,video_id:foreign}],unrelated:'excluded'}}];
  f.writeResult();
@@ -102,7 +102,7 @@ test('legacy handoff reads the original observation named by the pinned producer
  fs.mkdirSync(directory,{mode:0o700});
  fs.writeFileSync(file,JSON.stringify(observation),{mode:0o600});
  assert.deepEqual(implementation.readUpstreamHandoff(f.c).video,
-  {video_id:video,url,keyword:'original keyword',discovery_metrics:observation});
+  {video_id:video,video_url:url,keyword:'original keyword',discovery_metrics:observation});
  fs.writeFileSync(file,JSON.stringify({...observation,evidence:{...observation.evidence,xml:'<hierarchy/>'}}));
  assert.throws(()=>implementation.readUpstreamHandoff(f.c),/UPSTREAM_SOURCE_VIDEO_EVIDENCE/);
 });
