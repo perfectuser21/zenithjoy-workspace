@@ -159,3 +159,26 @@ test('unsafe writable or hardlinked toolchain assets still reject before host cr
   await assert.rejects(candidate(f),/ACTIVITY_104_SOURCE_FILE/);assert.equal(fs.existsSync(f.targetRoot),false);
  }
 });
+
+function stateFixture(f){
+ const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),s=f.context.verification['104'];
+ const row={record_id:s.record_id,fields:{'抖音号':s.target_douyin_id,'主页链接':s.profile_url,'状态':'待触达','发送状态':'未发送'}};
+ const counts={put:0,pg:0};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,
+ api:{all:async()=>[structuredClone(row)],get:async()=>structuredClone(row),fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,v)=>{counts.put++;Object.assign(row.fields,v);}},
+ freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),checkPreflight:async()=>({verified:true}),
+ checkNative:async()=>({verified:true,outcome:'sent',sent_at_ms:1795000000000}),syncLead:async()=>{counts.pg++;return {lead:{id:s.lead_id,status:'已触达'}};},readLead:async()=>({lead:{id:s.lead_id}}),close:async()=>{}};
+ return {row,counts,deps,args:{context:f.context,scope:s,artifact_dir:path.join(f.root,'orders'),evidence:{}}};
+}
+test('104 own unprepared claim releases once through assembled adapter and returns original readback',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);
+ const r=await request({...x.args,op:'release'},x.deps);assert.equal(r.status,'released');assert.equal(x.row.fields['状态'],'待触达');
+ assert.equal((await request({...x.args,op:'release'},x.deps)).status,'released');assert.equal(x.counts.put,2);
+});
+test('104 original writeback and terminal recovery both call the PG synchronization without repeating Feishu writes',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);await request({...x.args,op:'prepare'},x.deps);
+ const a=await request({...x.args,op:'write_back'},x.deps);assert.equal(a.lead_readback.lead.id,x.args.scope.lead_id);assert.equal(x.counts.pg,1);
+ await request({...x.args,op:'write_back'},x.deps);assert.equal(x.counts.pg,2);assert.equal(x.counts.put,3);
+});
