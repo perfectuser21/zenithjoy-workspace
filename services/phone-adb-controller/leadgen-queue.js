@@ -9,6 +9,7 @@ const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason
 const commentAdmission=require('./leadgen-comment-admission.js');
 const sampledAdmission=require('./leadgen-sampled-admission.js');
 const committedPartial=require('./leadgen-committed-partial.js');
+const {readScoreTranscript}=require('./leadgen-score-context.js');
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
@@ -404,7 +405,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         if(input.sources&&row.harvest_batch!==input.sources[row.id])throw Error('POLICY_SCORE_ROW_SOURCE_CHANGED');
         const nextCursor=row.collected_at&&uuid.test(row.id)?{line:lineKey,run,source_run:sourceRun||null,
           collected_at:new Date(row.collected_at).toISOString(),id:row.id}:null;
-        const videos=(await client.query(`SELECT video_id,video_url,title,judgment_status FROM zenithjoy.leadgen_videos
+        const videos=(await client.query(`SELECT video_id,video_url,title,judgment_status,transcript FROM zenithjoy.leadgen_videos
           WHERE line_key=$1 AND video_url=$2 AND process_status='评论已采' AND harvest_batch=$3`,[lineKey,row.source_video_url,row.harvest_batch])).rows;
         const admitted=sourceRun===commentAdmission.SOURCE_RUN
           ?await commentAdmission.admittedRows(client,{lineKey,run,sourceRun}):[];
@@ -413,9 +414,12 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched'||sampled.some(a=>a.id===row.id)||committedPartial.contains(currentPartial,row))){
           const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
         }
+        let videoTranscript;
+        try{videoTranscript=await readScoreTranscript(client,lineKey,row,videos);}
+        catch(error){error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;}
         let verdict;
         try{verdict=await deps.judgeComment(row.comment_body, row.source_video, targetProfile,
-          { scoringRules: snapshot.runtime_config.comment_scoring });}
+          { scoringRules: snapshot.runtime_config.comment_scoring,videoTranscript });}
         catch(cause){
           const failure=scoreFailureReceipt(cause);
           const error=Error(failure.code);error.score_failure=failure;

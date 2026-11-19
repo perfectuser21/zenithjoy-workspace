@@ -138,7 +138,7 @@ async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = d
 // 0929: 调用失败/错误体(402余额/429限流/网络)不是"存疑",是 API 故障——抛 JudgeApiError,
 // sort-comments.js 计入「判定异常N条(留待分拣)」,池行保持待分拣,下轮重判,不静默降 C 档。这一段走普通chat completions,
 // 跟Jev的Decisions端点无关,不受本次API修正影响。
-async function judgeCommander(comment, videoCaption, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env, scoringRules, retryEvidence = false, retryVideoQuote = false, singlePass = false } = {}) {
+async function judgeCommander(comment, videoCaption, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env, scoringRules, videoTranscript, retryEvidence = false, retryVideoQuote = false, singlePass = false } = {}) {
   const rules = validateScoringRules(scoringRules);
   const key = apiKey || resolveOpenRouterKey(env);
   if (!key) throw new JudgeApiError("judgeCommander: 找不到OPENROUTER_API_KEY", { stage: "commander" });
@@ -149,7 +149,7 @@ ${targetProfile}
 
 视频文案:
 ${videoCaption || "(无)"}
-
+${typeof videoTranscript==='string'&&videoTranscript.trim()?`\n视频转写（已持久化的原文，仅作内容上下文；video_signal 仍引用上方标题）：\n${videoTranscript}\n`:''}
 评论原文:
 ${comment}
 
