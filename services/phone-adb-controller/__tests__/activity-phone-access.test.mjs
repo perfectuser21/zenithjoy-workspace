@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost} from '../leadgen-foundation/adapter.mjs';
 const probe = new URL('./fixtures/host-phone-access.py', import.meta.url);
@@ -19,6 +20,10 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
  const f = await foundationFixture(workflow);
  try {
   const host = await prepareLeadgenHost(f);
+  const instructions=readFileSync(host.profile.cwd+'/TOOLS.txt','utf8');
+  assert.match(instructions,/不再按Activity列手机命令名单/);
+  assert.match(instructions,/commenter-profile-card-link VID UID NICKNAME_B64 BODY_SHA EID/);
+  assert.match(instructions,/不是|不代表已有数据库评论ID/);
   for (const activity of activities[workflow]) await t.test(`${activity} admits an existing tap with frozen owner`, () => {
    const r=run(host,{activity,args:['tap','100','200'],replay:true}); admitted(r);
    const argv=r.calls[0].argv; assert.ok(argv.includes(r.controller));
@@ -26,10 +31,28 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
    assert.equal(argv[argv.indexOf('--lock-owner')+1],r.owner);
    assert.equal(r.replay.stdout,r.first.stdout); assert.equal(r.replay.dispatches,1);
   });
+  if(workflow==='102') await t.test('collection can call existing native profile link APIs with run evidence and original owner ABI',()=>{
+   const strict=['commenter-profile-card-link','$VID','target-uid','bmFtZQ==','a'.repeat(64),'$RUN-resume1-person'];
+   const r=run(host,{activity:'collection',args:strict}); admitted(r);
+   assert.equal(r.calls[0].argv[r.calls[0].argv.indexOf('--lock-owner')+1],r.owner);
+   assert.ok(r.locks.length>0);
+   admitted(run(host,{activity:'collection',args:['commenter-card-link','$RUN-card']}));
+   for(const args of [[...strict.slice(0,-1),'foreign-card'],['commenter-card-link','foreign-card']]) {
+    const denied=run(host,{activity:'collection',args});refused(denied,/EVIDENCE_RUN_SCOPE/);assert.deepEqual(denied.receipts,{});
+   }
+   const foreign=run(host,{activity:'collection',args:[strict[0],'7722222222222222222',...strict.slice(2)]});
+   refused(foreign,/VIDEO_SCOPE/);assert.deepEqual(foreign.receipts,{});
+  });
   await t.test('cleanup cannot start ordinary or unknown operations after business deadline', () => {
    for (const args of [['tap','100','200'],['future-phone-operation']]) {
     const r=run(host,{activity:'cleanup',late:true,args}); refused(r,/ABSOLUTE_DEADLINE/);
     assert.deepEqual(r.receipts,{});
+   }
+  });
+  await t.test('existing read-only foreground and status stay usable before acquiring a local lock', () => {
+   for(const args of [['foreground'],['status']]) {
+    const r=run(host,{activity:'cleanup',late:true,local_free:true,args});admitted(r);
+    assert.equal(r.calls[0].argv.includes('--lock-owner'),false);assert.equal(r.locks.length,0);
    }
   });
   await t.test('existing read-only and own cleanup operations retain cleanup time, not new acquisition', () => {
@@ -48,6 +71,13 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
    }
    for(const args of [['snapshot-evidence','foreign-evidence'],['lock-release-exact','foreign'],['open-video','7722222222222222222','$RUN-video']]) {
     refused(run(host,{activity:'cleanup',args}),/EVIDENCE_RUN_SCOPE|LOCAL_OWNER_SCOPE|VIDEO_SCOPE/);
+   }
+  });
+  await t.test('existing evidence-bearing phone APIs bind their actual EID argument to this run',()=>{
+   for(const args of [['locate','bmFtZQ==','foreign'],['locate-tap','bmFtZQ==','foreign'],
+    ['open-user-profile','target','foreign'],['set-playback-speed','1','foreign'],
+    ['evidence-bundle','foreign'],['profile-video-cards','foreign'],['search-grid-scroll','foreign','up']]) {
+    const r=run(host,{activity:'cleanup',args});refused(r,/EVIDENCE_RUN_SCOPE/);assert.deepEqual(r.receipts,{});
    }
   });
   await t.test('external command execution, overrides and explicit unapproved outward operations stay closed', () => {

@@ -28,6 +28,8 @@ def brain(route, body=None, **kwargs):
         'expires_at': '2100-01-01T00:00:00Z'}]}
 m.brain = brain
 def child(argv, **kwargs):
+    if case.get('local_free') and '--lock-owner' in argv:
+        raise AssertionError('read-only command was incorrectly converted to a held-lock operation')
     if 'lock-status' in argv:
         locks.append(argv)
         return types.SimpleNamespace(returncode=0, stdout='lock=held owner='+('foreign' if case.get('owner_foreign') else c['local_owner'])+' stale=false', stderr='')
