@@ -180,7 +180,7 @@
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8",
       "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "76dd3b6ecdb876c0bf653fc039567cd7189038c32d2f26d8a3348ad1884852f5",
       "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
       "services/phone-adb-controller/leadgen-foundation/sources/103.json": "0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03",
       "services/phone-adb-controller/leadgen-foundation/sources/102.json": "dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb",
@@ -201,7 +201,8 @@
       "services/phone-adb-controller/activity-104-runtime.mjs": "876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c",
       "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
       "services/phone-adb-controller/leadgen-outreach-scope.js": "c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7",
-      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
+      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
+      "services/phone-adb-controller/leadgen-foundation/checker-feedback.mjs": "cf8b8b6a11412bcc035ea3107f74ece65f4f24709257765bda115ffc60bdfb7a"
     }
   }
 }

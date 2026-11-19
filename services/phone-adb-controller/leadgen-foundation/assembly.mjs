@@ -107,6 +107,11 @@ export async function assembleSources({context:c,profile,hostRoot,initializeProo
    const old="'./skills/douyin-leadgen-commander/scripts/production_readback.mjs'",current="'./production-readback-local.mjs'";
    if(files[name].includes(old))files[name]=replaceRequired(files[name],old,current);else need(files[name].includes(current),'SOURCE_LAYOUT');
   }
+  const endReadback="if(request.phase==='end')console.log(JSON.stringify(await (request.workflow==='104'?(await import('./outreach104/checker104.mjs')).verify104(request,path.dirname(new URL(import.meta.url).pathname)):request.activity==='cleanup'?verifyCleanup(request):readback(request))));";
+  need(files['checker.mjs'].split(endReadback).length===2,'CHECKER_FEEDBACK_LAYOUT');
+  files['checker.mjs']="import {knownFailure} from './checker-feedback.mjs';\n"+files['checker.mjs'].replace(endReadback,
+   "if(request.phase==='end'){const observed=await (request.workflow==='104'?(await import('./outreach104/checker104.mjs')).verify104(request,path.dirname(new URL(import.meta.url).pathname)):request.activity==='cleanup'?verifyCleanup(request):readback(request));console.log(JSON.stringify(knownFailure(request,observed)));}");
+  files['checker-feedback.mjs']=fs.readFileSync(path.join(HERE,'checker-feedback.mjs'),'utf8');
   bindReadbackCredentials(files);
   files['context.json']=JSON.stringify(c,null,2)+'\n';
   const kernel=path.join(profile.runtimeRoot,'scripts/commander-workflow/skill-worker.mjs');
