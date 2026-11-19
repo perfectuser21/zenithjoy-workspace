@@ -1,0 +1,40 @@
+{
+  "schema": "historical-test-fixture/v1",
+  "revision": "c3de2aca5e4dc8a7846863f55510005f1e57f57e",
+  "archive_sha256": "0c7616885efc38748e6fc6a5d4fa56610e893a0acc79bff9522b1fad7d2efcdf",
+  "files": {
+    "product-map/contracts/douyin_video_discovery.yaml": {
+      "sha256": "2d58617d04cbbefbc853ed2d2248b477c281453a66c0af092a3ea3b0a5c80c11",
+      "git_blob": "a1d0af080d14bfe2dd0212fc7659425f7a1269f1"
+    },
+    "services/phone-adb-controller/plans/douyin_video_discovery.steps.json": {
+      "sha256": "a683c6c575e3144e97f168c39998451b8e836001565ab657e57c6c0da0553c6f",
+      "git_blob": "0d5a8ebe1ac3982fd1d84742ce1a0ad6b3df5147"
+    },
+    "product-map/contracts/douyin_video_processing.yaml": {
+      "sha256": "4e499e0c09af05c3c7e89855f43f2e7b70c4d9a4bb6109c0ba8e7f54b6fe9587",
+      "git_blob": "55365dd5a8fb143860cbcc841a315f6394860493"
+    },
+    "services/phone-adb-controller/plans/douyin_video_processing.steps.json": {
+      "sha256": "9c4097f424a0a55332a77024c63df01bb81e6e80860b8210c42542acf6ddb326",
+      "git_blob": "85d80b3a72e65b736afc2e0b3a7b4b2bb594a488"
+    },
+    "product-map/contracts/douyin_comment_scoring.yaml": {
+      "sha256": "dc9a6e869fae79c04d2a98c0dfaac9358dd5e195717f44286d19cb24730bbc27",
+      "git_blob": "12481c06bb2ff82b115d6525f058ccc9c57c0645"
+    },
+    "services/phone-adb-controller/plans/douyin_comment_scoring.steps.json": {
+      "sha256": "f660cd4b2e9f7edf96c7f0b5529e3e49500ace6ed018dab141aa3e36489c7f85",
+      "git_blob": "f703c789cfb7dc77d743a68e77b4eb4bc1aa9fd3"
+    },
+    "product-map/contracts/douyin_lead_outreach.yaml": {
+      "sha256": "8fbab640010916d7f4b392fab3664cebe7da42c39c804fbfb38363530fd9e7f0",
+      "git_blob": "06afe6b6848dc6327e5c1de4ab8fc83f5e38e3af"
+    },
+    "services/phone-adb-controller/plans/douyin_lead_outreach.steps.json": {
+      "sha256": "a45f6ac8fc34b192bc6e0904642253fcba2ae59538bbf196dc4d0f1bf23a00b2",
+      "git_blob": "3df04bfbbb555a67748e205ce99104f234b27b82"
+    }
+  },
+  "runtime_authority": false
+}

@@ -1,3 +1,4 @@
+import {historicalSteps} from './fixtures/historical-leadgen-contract.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync,readdirSync} from 'node:fs';
@@ -13,7 +14,7 @@ const body=source.split('  search-video-tab)\n')[1]?.split('\n    ;;\n  collect-
 const foregroundHelper=source.slice(source.indexOf('_foreground_is_exact_douyin() {'),source.indexOf('\n_is_complete_douyin_xml() {'));
 assert.ok(foregroundHelper.includes('PYFOCUS'));
 assert.ok(body);
-const spec=JSON.parse(readFileSync(new URL('../plans/douyin_video_discovery.steps.json',import.meta.url)));
+const spec=historicalSteps('douyin_video_discovery');
 const checkpoint=spec.steps.find(s=>s.key==='douyin_video_discovery.collect_videos.switch_video_tab');
 assert.ok(checkpoint);
 const before=readFileSync(new URL('./fixtures/search-tabs-before-reorder.xml',import.meta.url),'utf8');

@@ -18,14 +18,17 @@ function businessBindings(contract){
   }});
 }
 
-test('四首版Skill存在、身份可解析，原Activity及代码绑定保留',()=>{
+test('四Workflow当前Skill身份精确绑定Agent与Foundation宿主，不回退旧CLI',()=>{
   for(const flow of flows){
     const current=document(flow),methods=businessBindings(current);
     const entry='services/phone-adb-controller/skills/douyin-leadgen-'+numbers[flow]+'/SKILL.md';
     assert.ok(readFileSync(root+entry,'utf8').includes('name: douyin-leadgen-'+numbers[flow]));
     for(const activity of current.activities.filter(a=>!a.ref)){
       const code=methods.get(activity.key).filter(b=>b.kind==='code');
-      assert.ok(code.some(b=>b.path==='services/phone-adb-controller/leadgen-workflow.mjs'),'配套Skill不能替掉正式代码执行入口');
+      assert.ok(code.some(b=>b.path==='services/phone-adb-controller/leadgen-foundation/adapter.mjs'),'正式Foundation宿主必须在固定源内');
+      assert.equal(code.some(b=>b.path==='services/phone-adb-controller/leadgen-workflow.mjs'),false,'旧CLI不再是当前Activity执行入口');
+      assert.equal(activity.execution.primary_kind,'agent');
+      assert.equal(activity.runtime.entry,'services/phone-adb-controller/leadgen-foundation/worker.mjs');
       const bindings=methods.get(activity.key).filter(b=>b.kind==='skill');
       assert.equal(bindings.length,1);
       const binding=bindings[0];

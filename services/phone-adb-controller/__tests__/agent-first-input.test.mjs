@@ -45,14 +45,14 @@ test('真实budget CLI续跑恢复冻结起点；显式改起点或其它输入�
  for(const change of [{WF_RUN_START_TS:'1700000001'},{LEADGEN_LIMIT:'3'},{LEADGEN_SORT:'latest'},{WF_RUN_MAX_SECONDS:'1801'}]){const bad=invoke(change);assert.notEqual(bad.status,0);assert.equal(bad.stdout,'');assert.match(bad.stderr,/AGENT_INPUT/);}
 });
 
-test('正式zsh入口在prepare及业务启动之前拒绝冻结预算起点漂移',t=>{
+test('Foundation合同拒绝旧zsh入口且不因旧预算参数启动业务',t=>{
  assert.equal(typeof definition.agentInput,'function');const root=mkdtempSync(join(tmpdir(),'primary-real-cli-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const home=join(root,'home');mkdirSync(join(home,'.local/bin'),{recursive:true});const host=join(home,'.local/bin/hostname');writeFileSync(host,'#!/bin/sh\nprintf "aad17-2\\n"\n');chmodSync(host,0o700);
  const runHome=join(root,'runs'),runDir=join(runHome,'ledger/douyin_comment_scoring-pure103');mkdirSync(runDir,{recursive:true});
  const localEnv={...env,WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WFR_TAG:'pure103',P:'mmv-scoring',SERIAL:'none',LEADGEN_SOURCE_RUN:'pure102'};for(const key of ['LEADGEN_SORT','LEADGEN_TIME_LAYER','LEADGEN_LOCATION'])delete localEnv[key];
  const input=definition.agentInput(localEnv),body=snapshot(input);writeFileSync(join(runDir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:definition.digest(body)}));
  const result=spawnSync('/bin/zsh',[new URL('../leadgen-run.sh',import.meta.url).pathname,'douyin_comment_scoring','mmv-scoring','none','yuesheng','pure103'],{env:{...process.env,...localEnv,HOME:home,WFR_HOME:runHome,WF_RUN_START_TS:'1700000001'},encoding:'utf8'});
- assert.notEqual(result.status,0);assert.match(result.stderr,/AGENT_INPUT/);assert.doesNotMatch(result.stdout,/WF_RUN_STARTED/);
+ assert.notEqual(result.status,0);assert.match(result.stderr,/FOUNDATION_API_ONLY/);assert.doesNotMatch(result.stdout,/WF_RUN_STARTED/);
 });
 
 

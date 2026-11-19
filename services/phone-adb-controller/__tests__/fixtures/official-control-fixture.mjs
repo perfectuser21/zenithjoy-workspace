@@ -1,3 +1,4 @@
+import {historicalSteps} from './historical-leadgen-contract.mjs';
 import assert from 'node:assert/strict';
 import {createServer,request as requestHttp} from 'node:http';
 import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,realpathSync,cpSync,readdirSync,chmodSync} from 'node:fs';
@@ -20,10 +21,12 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,phone=false,controlAcceptance=false,terminalPolicy,splitDeadlines=false}={}){
+export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,phone=false,controlAcceptance=false,terminalPolicy,splitDeadlines=false,historicalPhoneContract=false}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
+ // Legacy public-handler regression freezes its original c3de step contract before any source hash.
+ if(historicalPhoneContract)for(const flow of ['douyin_video_discovery','douyin_video_processing'])writeFileSync(join(runtimeRoot,'plans',flow+'.steps.json'),JSON.stringify(historicalSteps(flow)));
  if(scoring||phone){const binding=bindNative103TestPython(runtimeRoot);if(binding)writeFileSync(binding.path,JSON.stringify(binding.policy));}
  const localControl=await import(new URL('./runtime/official-agent-control.mjs',new URL('file://'+copied+'/')).href);
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-control-'))),home=join(directory,'home'),journalDirectory=join(directory,'journal');

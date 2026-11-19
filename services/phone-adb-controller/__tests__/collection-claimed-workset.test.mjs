@@ -1,3 +1,4 @@
+import {historicalSteps} from './fixtures/historical-leadgen-contract.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
@@ -9,7 +10,7 @@ import {judgeSteps} from '../step-judge.mjs';
 import {handlerZero} from './helpers/no-comments-fixture.mjs';
 import {writeAcceptedDiscoveryResult} from './helpers/discovery-handoff-fixture.mjs';
 const actual=JSON.parse(readFileSync(new URL('./fixtures/claimed-workset-570b.json',import.meta.url)));
-const steps=JSON.parse(readFileSync(new URL('../plans/douyin_video_processing.steps.json',import.meta.url)));
+const steps=historicalSteps('douyin_video_processing');
 const [selected,unclaimed]=actual.source_video_ids,source='cicd2fa_101_rem3_20261025_102551',run=actual.recording.run;
 function fixture(t,{verdict='rejected',claimUnknown=false,qualificationFails=false,collectionFails=false}={}){
  const home=mkdtempSync(join(tmpdir(),'claimed-workset-')),dir=join(home,'douyin_video_processing-'+run),upstream=join(home,'douyin_video_discovery-'+source);mkdirSync(dir);mkdirSync(upstream);

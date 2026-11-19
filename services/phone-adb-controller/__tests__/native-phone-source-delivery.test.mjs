@@ -1,3 +1,4 @@
+import {historicalMethodsRead} from './fixtures/historical-leadgen-contract.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -43,7 +44,7 @@ test('cold phone source reaches both deployed inventories, RPC and every shared 
  assert.ok(required,'actual RPC receiver source gate exists');
  const receiver=new Set([...required[1].matchAll(/'([^']+)'/g)].map(m=>m[1]));
  for(const file of dependencies){assert.ok(RPC_FILES.includes(file),`RPC misses ${file}`);assert.ok(receiver.has(file),`RPC receiver misses ${file}`);}
- const methods=collectMethods(repository);
+ const methods=collectMethods(repository,{read:historicalMethodsRead});
  for(const [ref,activity] of Object.entries(methods.activities)){
   const bound=new Set(activity.code_bindings.map(row=>row.path));
   const xian=policy.device_sources.find(row=>row.profile==='xiaolongxia');

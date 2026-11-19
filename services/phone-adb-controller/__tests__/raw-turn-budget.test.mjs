@@ -1,3 +1,4 @@
+import {historicalMethodsRead} from './fixtures/historical-leadgen-contract.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 const subject=await import('../raw-turn-budget.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return {};throw e;});
@@ -32,9 +33,9 @@ for(const list of ['MMV_JS_FILES','DEVICE_NODE_FILES','RPC_FILES'])test('正式'
 import {collectMethods} from '../../../scripts/product-map/leadgen-methods.mjs';
 import {RPC_FILES} from '../leadgen-client.mjs';import {verifyRpcSource} from '../leadgen-rpc.mjs';import {createHash} from 'node:crypto';
 test('正式Activity冻结预算真实字节且接收端拒缺依赖',()=>{
- const repo=resolve(root,'../..'),methods=collectMethods(repo);let packages=0;
+ const repo=resolve(root,'../..'),methods=collectMethods(repo,{read:historicalMethodsRead});let packages=0;
  const budget='services/phone-adb-controller/raw-turn-budget.mjs',bytes=readFileSync(join(repo,budget));
- const changed=collectMethods(repo,{read:path=>path===budget?Buffer.concat([bytes,Buffer.from('\n// changed fixture source')]):readFileSync(join(repo,path))});
+ const changed=collectMethods(repo,{read:path=>path===budget?Buffer.concat([bytes,Buffer.from('\n// changed fixture source')]):historicalMethodsRead(path)});
  for(const [key,activity] of Object.entries(methods.activities)){
   if(!activity.code_bindings.some(b=>b.path.endsWith('/official-agent-control.mjs')))continue;
   const binding=activity.code_bindings.find(b=>b.path===budget);
@@ -46,4 +47,6 @@ test('正式Activity冻结预算真实字节且接收端拒缺依赖',()=>{
  const read=path=>path.endsWith('deployment-manifest.json')?Buffer.from(JSON.stringify({source_commit:source.commit})):readFileSync(path);
  verifyRpcSource(source,{base:root,read});
  assert.throws(()=>verifyRpcSource({...source,files:source.files.filter(f=>f.path!=='raw-turn-budget.mjs')},{base:root,read}),/RPC_SOURCE_DEPENDENCY_MISSING:raw-turn-budget/);
+ assert.ok(RPC_FILES.includes('leadgen-score-context.js'),'the queue dependency must be frozen by the RPC sender');
+ assert.throws(()=>verifyRpcSource({...source,files:source.files.filter(f=>f.path!=='leadgen-score-context.js')},{base:root,read}),/RPC_SOURCE_DEPENDENCY_MISSING:leadgen-score-context/);
 });

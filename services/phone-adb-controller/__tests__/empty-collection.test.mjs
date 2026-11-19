@@ -1,3 +1,4 @@
+import {historicalSteps} from './fixtures/historical-leadgen-contract.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,writeFileSync,statSync,rmSync} from 'node:fs';
@@ -6,7 +7,7 @@ import {join} from 'node:path';
 import {createHandlers} from '../leadgen-workflow.mjs';
 import {judgeSteps} from '../step-judge.mjs';
 
-const spec=JSON.parse(readFileSync(new URL('../plans/douyin_video_processing.steps.json',import.meta.url)));
+const spec=historicalSteps('douyin_video_processing');
 const profileLinkStep=spec.steps.find(s=>s.key.endsWith('.resolve_profile_link'));
 
 test('无合格视频产生真实空评论工件，主页链接读回通过，评论和采样数量仍为0',async()=>{

@@ -100,5 +100,5 @@ export async function usingNativePhonePublic(t,fn){
    taskId:f.q.task_id,sourceCommit:f.source.commit,
    rpc:async()=>{throw Error('NO_OUTER_RPC');},execute:async()=>{throw Error('NO_OUTER_EXEC');}});
   return fn({...f,workflow,env,frozen,handlers});
- },{rawTransport:true,phone:true});
+ },{rawTransport:true,phone:true,historicalPhoneContract:true});
 }

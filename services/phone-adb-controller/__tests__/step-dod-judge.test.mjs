@@ -1,3 +1,4 @@
+import {historicalSteps} from './fixtures/historical-leadgen-contract.mjs';
 // 步骤 DoD 可执行化（任务 9032cdad，决策 2a60378a：步骤 DoD 读回型、外部统一裁判执行、agent 保持纯 skill；
 // 新步骤先 checkpoint 只记录不拦，跑稳证明不误报再升 hard；与 skill-distill 同一套格式）。
 //
@@ -232,14 +233,13 @@ test("接线守卫：批次/收工/触达三处给裁判读回上下文；部署
 });
 
 // 新正式102 r3：原件评论4头与真实输入树，不把正文评论文本当面板。
-const PROCESS_SPEC_PATH=join(SRC,'plans','douyin_video_processing.steps.json');
 function processCommentPanelJudgment(xml,{scoped=true,tag='headerProof'}={}) {
  const d=mkdtempSync(join(tmpdir(),'comment-header-'));
  try {
  const name=scoped?`${tag}-v7674939415818521875-collection-comments-panel.xml`:`${tag}-collection-comments-panel.xml`;
  writeFileSync(join(d,name),xml);
  writeFileSync(join(d,'comments.tsv'),`COLLECTION\t7674939415818521875\tcollected\t1\n`);
- const all=JSON.parse(readFileSync(PROCESS_SPEC_PATH,'utf8'));
+ const all=historicalSteps('douyin_video_processing');
  const step=all.steps.find(s=>s.key==='douyin_video_processing.collection.open_comment_section');
  return judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{tag,evidenceDir:d,runDir:d,tsvFile:join(d,'comments.tsv'),metrics:{videos_processed:1}}}).steps[0];
  } finally {rmSync(d,{recursive:true,force:true});}
