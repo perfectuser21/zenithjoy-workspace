@@ -180,3 +180,18 @@ test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，�
  const changed=skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace('## 成功条件\n','## 成功条件\n\n新增可观察要求。\n')):read(path));
  assert.notEqual(digest(changed),digest(original));assert.notEqual(changed.skill.activities[0].sha256,original.skill.activities[0].sha256);
 });
+
+test('判重来源分支标题新旧恰一且正文完整进入验收，双标题或缺标题仍拒绝',async()=>{
+ const {readFileSync}=await import('node:fs');const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const key='douyin_video_processing',method='services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md';
+ const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));
+ const current=read(method).toString();assert.ok(current.includes('## 来源证明与认领分支\n'));
+ for(const heading of ['来源证明与认领分支','明示producer交接']){
+  const text=current.replace('## 来源证明与认领分支\n','## '+heading+'\n');
+  const result=skillAcceptanceDefinition(key,path=>path===method?Buffer.from(text):read(path));
+  assert.ok(result.checks.some(c=>c.section==='douyin_video_processing.dedup/'+heading&&c.text.includes('producer_descriptor')));
+ }
+ for(const replacement of ['## 未声明来源分支\n','## 明示producer交接\n\n额外段落。\n\n## 来源证明与认领分支\n','']){
+  assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(current.replace('## 来源证明与认领分支\n',replacement)):read(path)),/未知或重复/);
+ }
+});
