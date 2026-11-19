@@ -119,7 +119,7 @@ test('the frozen receipt inventory keeps a real source path and unknown action w
   const create=(name,target=identity)=>writeFileSync(join(directory,name),JSON.stringify({binding:{identity:target,activity:'preflight',kind:'phone',
    args:['account-current','sensitive-argument']},state:'unknown',started_at:123.45,result:null}),{mode:0o600});
   create('account-current.json');
-  writeFileSync(join(directory,'cv-filters-original.json'),JSON.stringify({args:['search-time-layer'],exit_code:0,stdout:'live evidence',stderr:''}),{mode:0o600});
+  writeFileSync(join(directory,'cv-filters-original.json'),JSON.stringify({args:['search-time-layer'],exit_code:0,stdout:'live evidence',stderr:''}),{mode:0o644});
   const items=listHostReceipts(root,identity);
   assert.deepEqual(items,[{path:'receipts/account-current.json',activity:'preflight',kind:'phone',operation:'account-current',state:'unknown',started_at:123.45}]);
   create('foreign.json',{...identity,run_id:'foreign'});
