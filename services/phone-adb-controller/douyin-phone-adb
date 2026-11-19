@@ -3171,7 +3171,11 @@ PYSDKCREATE
   if [[ "$capture_mode" == output_pcm_sdk31 ]]; then
     capture_args=(-s "$SERIAL" --no-window --no-playback --no-video --audio-source=output --audio-codec=raw --record-format=wav --require-audio --record="$out" --time-limit="$max")
   else
-    capture_args=(-s "$SERIAL" --no-window --no-playback --audio-source=playback --audio-dup --require-audio --record="$out" --time-limit="$max")
+    capture_args=(-s "$SERIAL" --no-window --no-playback)
+    if [[ "$SERIAL" =~ '^([A-Za-z0-9._-]+|\[[0-9A-Fa-f:]+\]):([0-9]{1,5})$' ]] && (( 10#$match[2] >= 1 && 10#$match[2] <= 65535 )); then
+      capture_args+=(--force-adb-forward)
+    fi
+    capture_args+=(--audio-source=playback --audio-dup --require-audio --record="$out" --time-limit="$max")
   fi
   # 媒体音量必须非 0，否则录到 -91dB 死寂、ASR 必挂；幂等驱动到最低非零档，
   # 稳态零按键、不再形成音量棘轮。依据见 ensure_media_volume 注释。

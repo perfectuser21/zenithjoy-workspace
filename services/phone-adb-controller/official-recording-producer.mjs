@@ -33,7 +33,9 @@ export function createOfficialRecordingProducer({scope,sourceRoot,evidenceRoot,f
   for(const k of ['client','server'])need(digest(bytes(runtime.runtime[k+'_path'],false,16*1024*1024))===policy[k+'_sha256']);
   const startup=json('.capture-startup.json');need(startup.status==='ready'&&Number.isSafeInteger(startup.pid)&&startup.pid>1&&Array.isArray(startup.expected_argv)&&startup.expected_argv[0]===runtime.runtime.client_path);
   const media=join(evidenceRoot,e.evidenceId+(sdk==='31'?'.rec.wav':'.rec.mkv'));
-  const expected=[runtime.runtime.client_path,'-s',fixed.serial,'--no-window','--no-playback',...(sdk==='31'?['--no-video','--audio-source=output','--audio-codec=raw','--record-format=wav']:['--audio-source=playback','--audio-dup']),'--require-audio','--record='+media,'--time-limit='+e.seconds];
+  const tcp=/^([A-Za-z0-9._-]+|\[[0-9A-Fa-f:]+\]):([0-9]{1,5})$/.exec(fixed.serial);
+  const forward=tcp&&Number(tcp[2])>=1&&Number(tcp[2])<=65535;
+  const expected=[runtime.runtime.client_path,'-s',fixed.serial,'--no-window','--no-playback',...(sdk==='31'?['--no-video','--audio-source=output','--audio-codec=raw','--record-format=wav']:[...(forward?['--force-adb-forward']:[]),'--audio-source=playback','--audio-dup']),'--require-audio','--record='+media,'--time-limit='+e.seconds];
   need(JSON.stringify(startup.expected_argv)===JSON.stringify(expected)&&startup.observations?.length>=2);
   return {startup,media};
  };
