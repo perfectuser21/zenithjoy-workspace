@@ -72,7 +72,7 @@ test('product-map foundation runtime rejects floating profiles and unknown autho
 test('publisher installation follows explicit shared Activity refs and rejects binding digest drift before writing',()=>{
  const f=fixture();try{
   const p='product-map/contracts/'+WORKFLOWS['101']+'.yaml',doc=JSON.parse(fs.readFileSync(path.join(f.code,p)));
-  doc.activities=[{ref:WORKFLOWS['102']+'.business'}];f.put(f.code,p,JSON.stringify(doc));f.commit(f.code);
+  assert.deepEqual(doc.activities,[{ref:WORKFLOWS['102']+'.business'}]);
   const b=buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'shared')});
   assert.equal(b.workflows[0].definition_bindings.length,2);assert.ok(b.workflows[0].definition_bindings.every(x=>x.revision===b.revision));
   const q='product-map/contracts/'+WORKFLOWS['102']+'.yaml',other=JSON.parse(fs.readFileSync(path.join(f.code,q)));other.activities[0].implementation_bindings[0].digest='sha256:'+'0'.repeat(64);f.put(f.code,q,JSON.stringify(other));f.commit(f.code);

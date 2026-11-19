@@ -1,6 +1,7 @@
 // Offline packaging of the profile revisions actually declared by registered workflow sources.
 import fs from 'node:fs';import path from 'node:path';import {execFileSync} from 'node:child_process';import {fileURLToPath} from 'node:url';import {parse} from 'yaml';
 import {hash,canonical,need} from './context.mjs';import {relative} from './freeze.mjs';
+import {verifyAgentProfile} from './profile-contract.mjs';
 const PREFIX='services/phone-adb-controller/leadgen-foundation';
 const REPO='perfectuser21/zenithjoy-workspace',SKILLS='perfectuser21/zenithjoy-skills',SKILL_PREFIX='services/phone-adb-controller/skills/';
 export const WORKFLOWS={'101':'douyin_video_discovery','102':'douyin_video_processing','103':'douyin_comment_scoring','104':'douyin_lead_outreach'};
@@ -15,6 +16,7 @@ export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot}){
  need(git(repoRoot,['status','--porcelain','--untracked-files=normal']).length===0,'BUILD_DIRTY');
  const revision=git(repoRoot,['rev-parse','HEAD']).toString().trim();need(/^[a-f0-9]{40}$/.test(revision),'BUILD_REVISION');
  need(path.isAbsolute(outputRoot)&&!fs.existsSync(outputRoot),'BUILD_TARGET');
+ const authority=Object.fromEntries(Object.values(WORKFLOWS).map(key=>[key,parse(read(repoRoot,revision,'product-map/contracts/'+key+'.yaml').toString())]));
  const files=new Map(),origins={},workflows=[],revisions=new Set([revision]);
  const add=(sourceRevision,name,bytes,origin,kind=name.endsWith('/SKILL.md')?'skill':'code')=>{relative(name);need(bytes.length<=1024*1024,'BUILD_FILE_SIZE');const key=sourceRevision+':'+name;
   if(files.has(key))need(files.get(key).bytes.equals(bytes)&&files.get(key).kind===kind,'BUILD_COLLISION');else files.set(key,{revision:sourceRevision,name,bytes,kind});origins[key]=origin;};
@@ -23,7 +25,7 @@ export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot}){
   const profilePath=`${PREFIX}/profiles/${workflow}.json`;
   need(runtime?.kind==='commander-foundation-v1'&&ref?.repo===REPO&&ref.path===profilePath&&/^[a-f0-9]{40}$/.test(ref.revision??'')&&/^sha256:[a-f0-9]{64}$/.test(ref.digest??''),'BUILD_RUNTIME');
   const profileRevision=ref.revision,bytes=read(repoRoot,profileRevision,profilePath);need('sha256:'+hash(bytes)===ref.digest,'BUILD_PROFILE_DIGEST');
-  const document=JSON.parse(bytes),profile=document.profile;revisions.add(profileRevision);
+  const document=JSON.parse(bytes),profile=document.profile;verifyAgentProfile(document,{documents:authority,workflow:key});revisions.add(profileRevision);
   need(document.schema_version===1&&document.contract.workflow===key&&profile.leadgen.workflow===workflow&&profile.leadgen.method_repository===SKILLS,'BUILD_PROFILE');
   const lock=JSON.parse(read(repoRoot,profileRevision,'.skills-source.json'));need(lock.version===1&&lock.repository===SKILLS&&lock.profile==='zenithjoy'&&/^[a-f0-9]{40}$/.test(lock.revision),'BUILD_SKILL_LOCK');
   const catalog=JSON.parse(read(skillsRepo,lock.revision,'distribution/catalog.json'));need(catalog.version===1&&Array.isArray(catalog.profiles?.zenithjoy?.files),'BUILD_SKILL_CATALOG');

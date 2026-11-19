@@ -8,7 +8,7 @@ const AUTHORITY_KEYS=['assigned_workflow','tasks','line','company_id','tenant_id
 const unique=x=>[...new Set(x.filter(v=>typeof v==='string'&&v.length>0))];
 function scope(request,c){
  requireCondition(object(c));
- for(const key of AUTHORITY_KEYS)if(Object.hasOwn(request.context??{},key))requireCondition(canonical(request.context[key])===canonical(c[key]));
+ for(const key of new Set([...Object.keys(c),...AUTHORITY_KEYS]))if(Object.hasOwn(request.context??{},key))requireCondition(canonical(request.context[key])===canonical(c[key]));
  const t=c?.tasks?.[c.assigned_workflow],s=c?.verification?.[c.assigned_workflow]??{};
  requireCondition(t&&request.identity?.task_id===t.task_id&&request.identity?.run_id===t.run_id&&typeof request.nonce==='string'&&request.nonce.length>0&&typeof c.line==='string'&&c.line.length>0);
  return{c,t,s,run:t.run_tag??t.run_id,videoIds:unique(s.video_ids??[]),commentIds:unique([...(s.comment_ids??[]),s.comment_id]),recordIds:unique([s.record_id]),taskIds:unique([t.task_id,c.input_provenance?.producer?.task_id])};
