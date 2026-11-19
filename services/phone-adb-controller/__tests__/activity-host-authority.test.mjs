@@ -36,3 +36,14 @@ for(const mode of ['http401','http403','http500','bad-json','bad-owner','bad-sta
 test('cleanup uses its actual cleanup deadline after business deadline has passed',async()=>{
  const r=await run('cleanup');assert.equal(r.code,0);assert.equal(requests(r),1);assert.equal(r.dispatches,1);
 });
+
+test('real TCP reset is retried only at the read-only Task boundary',async()=>{
+ const r=await run('reset');assert.equal(r.code,0);assert.equal(requests(r),2);assert.deepEqual(r.sleeps,[8]);assert.equal(r.dispatches,1);
+});
+test('the same authority failure after actual invoke remains unknown without a false pre-dispatch receipt',async()=>{
+ const r=await run('post-dispatch');assert.equal(r.code,null);assert.match(r.error,/TaskAuthorityUnavailable/);assert.equal(r.stdout,'');assert.equal(r.dispatches,1);assert.deepEqual(r.states,['unknown']);
+});
+
+test('a trickling HTTP body cannot extend the admission deadline or dispatch late',async()=>{
+ const r=await run('slow-body');assert.equal(r.code,75);assert.equal(r.dispatches,0);assert.equal(requests(r),1);assert.ok(r.duration<0.8,r.duration);assert.deepEqual(r.receipts,[]);
+});
