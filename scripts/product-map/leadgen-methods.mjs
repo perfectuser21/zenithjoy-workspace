@@ -81,6 +81,11 @@ function validateAssessment(a,old,ref){
   if(!c||c.kind!=='internal_compatible'||typeof c.reason!=='string'||c.reason.trim().length<12||typeof c.reviewed_by!=='string'||!c.reviewed_by.trim()||!/^[a-f0-9]{64}$/.test(c.previous_code_digest)||old&&c.previous_code_digest!==old.code_digest||c.current_code_digest!==a.code_digest)fail('CODE_COMPATIBILITY_REQUIRED',ref);
   if(!same(Object.keys(c).sort(),['kind','reason','reviewed_by','previous_code_digest','current_code_digest'].sort()))fail('CODE_COMPATIBILITY_INVALID',ref);
 }
+function validateMethodAssessment(a,old,ref){
+  const c=a.method_compatibility;
+  if(!c||c.kind!=='contract_preserving'||typeof c.reason!=='string'||c.reason.trim().length<12||typeof c.reviewed_by!=='string'||!c.reviewed_by.trim()||!/^[a-f0-9]{64}$/.test(c.previous_skill_digest)||old&&c.previous_skill_digest!==old.skill.content_digest||c.current_skill_digest!==a.skill.content_digest||c.contract_digest!==a.contract_digest)fail('METHOD_COMPATIBILITY_REQUIRED',ref);
+  if(!same(Object.keys(c).sort(),['kind','reason','reviewed_by','previous_skill_digest','current_skill_digest','contract_digest'].sort()))fail('METHOD_COMPATIBILITY_INVALID',ref);
+}
 function evolution(now,before,readBase){
   for(const [ref,a] of Object.entries(now.activities)){
     const old=before?.activities?.[ref];if(!old)continue;
@@ -103,12 +108,19 @@ function evolution(now,before,readBase){
       if(priorVersion&&((changed||textChanged)&&!advanced(s.version,priorVersion)||s.version!==priorVersion&&!advanced(s.version,priorVersion)))fail(code,key);
     }
   }
+  // Version/hash checks cannot establish semantic compatibility of natural-language methods.
+  for(const [ref,a]of Object.entries(now.activities)){
+    const old=before?.activities?.[ref];
+    if(old&&a.contract_digest===old.contract_digest&&a.skill.content_digest!==old.skill.content_digest)validateMethodAssessment(a,old,ref);
+  }
 }
 
-export function writeMethodsLock(root,{compatibility={}}={}){
+export function writeMethodsLock(root,{compatibility={},methodCompatibility={}}={}){
   if(!compatibility||Array.isArray(compatibility)||typeof compatibility!=='object')fail('CODE_COMPATIBILITY_INVALID');
+  if(!methodCompatibility||Array.isArray(methodCompatibility)||typeof methodCompatibility!=='object')fail('METHOD_COMPATIBILITY_INVALID');
   const current=collectMethods(root),read=reader(root),oldBytes=optional(read,LOCK_PATH),old=oldBytes?JSON.parse(oldBytes):null;
   for(const ref of Object.keys(compatibility))if(!current.activities[ref])fail('CODE_COMPATIBILITY_ACTIVITY_UNKNOWN',ref);
+  for(const ref of Object.keys(methodCompatibility))if(!current.activities[ref])fail('METHOD_COMPATIBILITY_ACTIVITY_UNKNOWN',ref);
   for(const [ref,a] of Object.entries(current.activities)){
     const prior=old?.activities?.[ref];
     // Code-only review belongs to one method identity. A versioned method
@@ -116,14 +128,17 @@ export function writeMethodsLock(root,{compatibility={}}={}){
     const unchanged=prior&&a.method_version===prior.method_version&&a.skill.content_digest===prior.skill.content_digest&&a.activity_version===prior.activity_version&&a.contract_digest===prior.contract_digest;
     const assessment=compatibility[ref]??(unchanged?prior.code_compatibility:undefined);
     if(assessment)a.code_compatibility=assessment;
+    const methodAssessment=methodCompatibility[ref]??(unchanged?prior.method_compatibility:undefined);
+    if(methodAssessment){a.method_compatibility=methodAssessment;validateMethodAssessment(a,null,ref);}
   }
   writeFileSync(join(root,LOCK_PATH),JSON.stringify(current,null,2)+'\n');return current;
 }
 export function checkMethods(root,{base=null,skillSource}={}){
   const read=reader(root),actual=collectMethods(root),lock=json(read,LOCK_PATH),stripped=structuredClone(lock);
-  for(const a of Object.values(stripped.activities??{}))delete a.code_compatibility;
+  for(const a of Object.values(stripped.activities??{})){delete a.code_compatibility;delete a.method_compatibility;}
   if(!same(actual,stripped))fail('METHOD_LOCK_DRIFT','run explicit lock generation and review source changes');
   for(const [ref,a] of Object.entries(lock.activities))if(a.code_compatibility)validateAssessment(a,null,ref);
+  for(const [ref,a] of Object.entries(lock.activities))if(a.method_compatibility)validateMethodAssessment(a,null,ref);
   if(base){
     if(!/^[a-f0-9]{40}$/.test(base))fail('BASE_SHA_INVALID');
     try{execFileSync('git',['rev-parse','--verify',base+'^{commit}'],{cwd:root,stdio:'pipe'});}catch{fail('BASE_COMMIT_UNAVAILABLE',base);}
@@ -135,16 +150,16 @@ export function checkMethods(root,{base=null,skillSource}={}){
       return readImplementationSource(root,base,path,{source:skillSource});
     };
     const bytes=optional(readBase,LOCK_PATH);let before=null;
-    if(bytes){before=JSON.parse(bytes);const baseActual=collectMethods(root,{read:readBase}),strippedBase=structuredClone(before);for(const a of Object.values(strippedBase.activities??{}))delete a.code_compatibility;if(!same(baseActual,strippedBase))fail('BASE_METHOD_LOCK_DRIFT');}
+    if(bytes){before=JSON.parse(bytes);const baseActual=collectMethods(root,{read:readBase}),strippedBase=structuredClone(before);for(const a of Object.values(strippedBase.activities??{})){delete a.code_compatibility;delete a.method_compatibility;}if(!same(baseActual,strippedBase))fail('BASE_METHOD_LOCK_DRIFT');}
     evolution(lock,before,readBase);
   }
   return {status:'PASS',activities:Object.keys(actual.activities).length,workflow_slots:Object.values(actual.workflows).reduce((n,w)=>n+w.activities.length,0),base,execution_verified:false};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{
-    const args=process.argv.slice(2);let root=fileURLToPath(new URL('../../',import.meta.url)),base=null,write=false,compatibility={};
-    for(let i=0;i<args.length;i++){const a=args[i];if(a==='--root')root=resolve(args[++i]);else if(a==='--base'){base=args[++i];if(!/^[a-f0-9]{40}$/.test(base??''))fail('BASE_SHA_INVALID');}else if(a==='--write')write=true;else if(a==='--compatibility')compatibility=JSON.parse(readFileSync(resolve(root,args[++i]),'utf8'));else fail('METHOD_OPTION_INVALID',a);}
-    if(write){if(base)fail('METHOD_OPTION_INVALID','--write and --base cannot be combined');writeMethodsLock(root,{compatibility});console.log('method lock generated; generation is not compatibility approval');}
+    const args=process.argv.slice(2);let root=fileURLToPath(new URL('../../',import.meta.url)),base=null,write=false,compatibility={},methodCompatibility={};
+    for(let i=0;i<args.length;i++){const a=args[i];if(a==='--root')root=resolve(args[++i]);else if(a==='--base'){base=args[++i];if(!/^[a-f0-9]{40}$/.test(base??''))fail('BASE_SHA_INVALID');}else if(a==='--write')write=true;else if(a==='--compatibility')compatibility=JSON.parse(readFileSync(resolve(root,args[++i]),'utf8'));else if(a==='--method-compatibility')methodCompatibility=JSON.parse(readFileSync(resolve(root,args[++i]),'utf8'));else fail('METHOD_OPTION_INVALID',a);}
+    if(write){if(base)fail('METHOD_OPTION_INVALID','--write and --base cannot be combined');writeMethodsLock(root,{compatibility,methodCompatibility});console.log('method lock generated; generation is not compatibility approval');}
     else console.log(JSON.stringify(checkMethods(root,{base,skillSource:process.env.SKILLS_SOURCE_DIR})));
   }catch(e){console.error(e.message);process.exitCode=1;}
 }

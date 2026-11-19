@@ -19,10 +19,15 @@ export function generateAcceptance({documents,workflow,activity}){
  need(document.key===resolved.activity&&typeof document.version==='string'&&Array.isArray(document.inputs)&&Array.isArray(document.outputs),'BODY');
  need(Array.isArray(document.preconditions)&&document.preconditions.length>0&&Array.isArray(document.postconditions)&&document.postconditions.length>0,'CRITERIA');
  const criteria=[];
- for(const [field,phase]of [['preconditions','start'],['postconditions','end']])for(const [i,requirement]of document[field].entries()){
+ const append=(id,phase,requirement,source_pointer)=>{
   need(typeof requirement==='string'?requirement.trim().length>0:requirement&&typeof requirement==='object'&&!Array.isArray(requirement)&&Object.keys(requirement).length>0,'CRITERION');
-  criteria.push({id:field+'_'+i,phase,requirement:structuredClone(requirement),source_pointer:'/'+field+'/'+i});
+  criteria.push({id,phase,requirement:structuredClone(requirement),source_pointer});
+ };
+ for(const [field,phase]of [['inputs','start'],['preconditions','start'],['outputs','end'],['postconditions','end'],['side_effects','end']]){
+  need(Array.isArray(document[field]),'BODY');
+  for(const [i,value]of document[field].entries())append(field+'_'+i,phase,value,'/'+field+'/'+i);
  }
+ for(const field of ['idempotency','failure'])append(field,'end',document[field],'/'+field);
  return {source:{repo:'perfectuser21/zenithjoy-workspace',path:'product-map/contracts/'+resolved.workflow+'.yaml',activity_ref:resolved.workflow+'.'+resolved.activity,contract_digest:digest(document)},document,criteria};
 }
 /** Must receive documents from the actual registered B revision, not the A snapshot itself. */
