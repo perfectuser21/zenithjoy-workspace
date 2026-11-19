@@ -41,7 +41,8 @@ function indexedAcceptance(key,path,bytes,text,readFile){
    &&header.match(/^  version: (\S+)$/m)?.[1]===row.skill_version
    &&header.match(/^  activity_ref: (\S+)$/m)?.[1]===row.activity_ref
    &&/^  method_role: single-activity$/m.test(header),'Activity方法身份或版本不符');
-  for(const [,name,content]of parseSections(body,['执行上下文与工具边界','输入与交付','操作',...(row.skill_name==='douyin-leadgen-activity-101-collect-videos'?['有界首屏输入']:row.skill_name==='douyin-leadgen-activity-102-dedup'?['明示producer交接']:[]),'成功条件','副作用','结果与验收','宿主恢复声明']))add(row.activity_ref+'/'+name,content);
+  const dedupSection=/^## 来源证明与认领分支$/m.test(body)?'来源证明与认领分支':'明示producer交接';
+  for(const [,name,content]of parseSections(body,['执行上下文与工具边界','输入与交付','操作',...(row.skill_name==='douyin-leadgen-activity-101-collect-videos'?['有界首屏输入']:row.skill_name==='douyin-leadgen-activity-102-dedup'?[dedupSection]:[]),'成功条件','副作用','结果与验收','宿主恢复声明']))add(row.activity_ref+'/'+name,content);
   const supporting=[];
   for(const match of body.matchAll(/\]\((references\/[^)]+)\)/g)){
    const rel=match[1];need(/^references\/[a-z0-9-]+\.md$/.test(rel),'Activity支持文件路径无效');

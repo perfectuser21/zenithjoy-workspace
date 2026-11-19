@@ -12312,7 +12312,7 @@ tests:
     status: active
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
-    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"
+    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；四 profile 的通用 Checker 合同与事实入口；隔离读回替身，不声明生产验收"
 
   - id: leadgen-foundation-build
     path: services/phone-adb-controller/__tests__/leadgen-foundation-build.test.mjs
