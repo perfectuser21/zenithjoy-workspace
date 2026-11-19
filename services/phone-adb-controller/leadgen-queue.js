@@ -162,7 +162,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   }
   if(op==='inspect_videos'){
     if(videoIds===null)throw Error('缺明确视频ID清单');
-    const protection=input.include_discovery_protection===true?",comment_count,encode(sha256(convert_to(transcript,'UTF8')),'hex') AS transcript_sha256":"";
+    const protection=input.include_discovery_protection===true?",comment_count,encode(sha256(convert_to(transcript,'UTF8')),'hex') AS transcript_sha256,discovery_metrics->>'observed_at' AS discovery_metrics_observed_at":"";
     return (await pool.query(`SELECT video_id,line_key,judgment_status,judgment_config,process_status,harvest_batch${protection}
       FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])`,[lineKey,videoIds])).rows;
   }

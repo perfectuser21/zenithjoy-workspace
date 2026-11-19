@@ -538,14 +538,15 @@ test('unknown execution video quarantine CAS binds line/run/VID and reads back p
  const bad=fakePool([]);await assert.rejects(queueRequest(bad,{op:'quarantine_video',line:'jinuo',run:'fixture',video_id:'wrong'}));assert.equal(bad.calls.length,0);
 });
 
-test('101 can read exact protected old fields and a transcript digest for the same VID',async()=>{
+test('101 can read exact protected old fields, observation time and a transcript digest for the same VID',async()=>{
  const id='7709208240869657011', calls=[];
  const pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:[]};}};
  const request={op:'inspect_videos',line:'jinuo',run:'new101',video_ids:[id]};
  await queueRequest(pool,request);
  await queueRequest(pool,{...request,include_discovery_protection:true});
- assert.doesNotMatch(calls[0].sql,/transcript_sha256|comment_count/);
+ assert.doesNotMatch(calls[0].sql,/transcript_sha256|comment_count|discovery_metrics_observed_at/);
  assert.match(calls[1].sql,/comment_count[\s\S]*sha256[\s\S]*AS transcript_sha256/);
+ assert.match(calls[1].sql,/discovery_metrics->>'observed_at' AS discovery_metrics_observed_at/);
  assert.deepEqual(calls[1].args,['jinuo',[id]]);
  assert.ok(calls.every(({sql})=>sql.startsWith('SELECT')));
 });

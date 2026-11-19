@@ -102,7 +102,13 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   files['agent-tools.txt']=files['TOOLS.txt']+'\n交付协议：最终只输出一个 JSON 对象，成功提案必须包含顶层 `outputs`。\n'
    +'`outputs` 的键是合同声明的对象类型，值按 cardinality 提交单对象或数组；字段使用当前合同中的原名。把已核实的字段放进对象，禁止只写在提案顶层、解释文字或 metrics。\n'
    +'按工具实际回执填写 `evidence`：列出本次真实文件的相对路径及其用途，例如从工具响应 receipt 得到的 receipts/ 实际文件名。不要猜测路径或用旧运行证据；外部原件说明实际工具和证据标识。交付不齐时如实报告，独立 Checker 仍逐项核验。\n';
-  if(workflow==='101')files['agent-tools.txt']+='\n本101冻结业务工具支持以下只读参数。discover_readback 加 include_handoff:true，返回该VID的真实持久 handoff（含comment_count和完整discovery_metrics）。inspect_videos 加 include_discovery_protection:true，只读同一已取链VID的原前后保护字段及转写SHA256。保留工具真实回执路径，省略缺失不等于0。\n';
+  if(workflow==='101')files['agent-tools.txt']+='\n本101冻结业务工具支持以下只读参数。discover_readback 加 include_handoff:true，返回该VID的真实持久 handoff（含comment_count和完整discovery_metrics）。'
+   +'inspect_videos 加 include_discovery_protection:true，只读同一已取链VID的原前后保护字段、转写SHA256与 discovery_metrics_observed_at。保留原生 null，省略缺失不等于0。\n'
+   +'invoke 返回 state=terminal、exit_code=0 和实际 evidence_ref 时，保留结果与回执名。在同一101宿主内，该 evidence_ref 的实际文件名对应独立Checker可读的 receipts/ 文件。'
+   +'搜索入口、视频页签、筛选和卡片均按各自调用实际返回的文件名引用。执行Agent不必重新读取原回执，也不为补引用重做搜索、筛选或写入。'
+   +'按已返回的真实证据和合同判断完成状态，已有视频的本轮观测写入和读回也可以完成；是否新增单独据原写入回执计数。\n'
+   +'收尾若本轮确实操作过App，用 close-app 和 return-safe-desktop 的原前台回执；持有资源时在归位后用 phone 的 snapshot-evidence 获得本次桌面截图，再用 fetch-native 保存到 native 证据根。引用原释放回执、锁空读回和本次归位证据。\n'
+   +'run.progress 是独立Checker的只读核对入口；执行Agent根据本轮收尾工具结果交付Run状态，不要求提前读取该活动或Workflow的验收终态。\n';
   if(workflow==='102')files['agent-tools.txt']+='\n判重原始来源和本 run 普通认领范围已经冻结到 checker-input/upstream.json。读取该文件和当前数据库事实；其中 claim 是开工输入，不是已认领的回执。\n';
   delete c.checker_media_tool;
   const probe=['/opt/homebrew/bin/ffprobe','/usr/bin/ffprobe'].find(p=>fs.existsSync(p));
