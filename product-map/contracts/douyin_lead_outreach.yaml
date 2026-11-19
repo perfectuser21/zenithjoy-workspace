@@ -1,5 +1,5 @@
 version: 1
-runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/104.json, revision: 564be76576744f976b18e6bb04d7f7e6cb316398, digest: sha256:546b8a6e40cdf6cf2f766c541f5e837ffa7e5384382d6421cc950fa5f1eb37a0 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope" ], "properties": { "scope": { "type": "object", "additionalProperties": false, "required": [ "record_id", "comment_id", "lead_id", "target_douyin_id", "profile_url", "source_102_run", "source_103_run" ], "properties": { "record_id": { "type": "string", "minLength": 1 }, "comment_id": { "type": "string", "minLength": 1 }, "lead_id": { "type": "string", "minLength": 1 }, "target_douyin_id": { "type": "string", "minLength": 1 }, "profile_url": { "type": "string", "minLength": 1 }, "source_102_run": { "type": "string", "minLength": 1 }, "source_103_run": { "type": "string", "minLength": 1 } } } } } } } }
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/104.json, revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a, digest: sha256:1cd2efefce43a9f6d7e14277441409d3cc59c7a0f05998c85c0c271a9111578b }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope" ], "properties": { "scope": { "type": "object", "additionalProperties": false, "required": [ "record_id", "comment_id", "lead_id", "target_douyin_id", "profile_url", "source_102_run", "source_103_run" ], "properties": { "record_id": { "type": "string", "minLength": 1 }, "comment_id": { "type": "string", "minLength": 1 }, "lead_id": { "type": "string", "minLength": 1 }, "target_douyin_id": { "type": "string", "minLength": 1 }, "profile_url": { "type": "string", "minLength": 1 }, "source_102_run": { "type": "string", "minLength": 1 }, "source_103_run": { "type": "string", "minLength": 1 } } } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/104.json
 implementation:
@@ -147,217 +147,222 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:546b8a6e40cdf6cf2f766c541f5e837ffa7e5384382d6421cc950fa5f1eb37a0
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:1cd2efefce43a9f6d7e14277441409d3cc59c7a0f05998c85c0c271a9111578b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state-wiring.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-transport.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-104.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-pg.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-tools.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-identity.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-tool-result.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-upstream-source.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/judge-comment.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-authorization-intent.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-committed-partial.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:03a71ce5519faed6f3d2ed95bbc1c2d79296b8e1d529414229ef8f894de97cbb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/worker.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-scope.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-score-context.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/package.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8b899836b04c3c8fbc2833fb4c7e593f28353cb0a76dddbba88562eab37dbac2
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:75eb196398d6dfeb5cf11891c8e7a51e01580ee721aae02081615aac375022f8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:d9360fefc9beb660f364735b72b1c4c1026b136fbb63176a3fc789ac66c4fdbe
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cc189fdf8d48482768128388720f2f569bd7b0fb2f3ecc14066e7fc08a0059b0
     steps:
       - key: acquire_device_lock
@@ -649,217 +654,222 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:546b8a6e40cdf6cf2f766c541f5e837ffa7e5384382d6421cc950fa5f1eb37a0
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:1cd2efefce43a9f6d7e14277441409d3cc59c7a0f05998c85c0c271a9111578b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state-wiring.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-transport.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-104.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-pg.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-tools.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-identity.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-tool-result.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-upstream-source.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/judge-comment.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-authorization-intent.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-committed-partial.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:03a71ce5519faed6f3d2ed95bbc1c2d79296b8e1d529414229ef8f894de97cbb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/worker.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-scope.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-score-context.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/package.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8b899836b04c3c8fbc2833fb4c7e593f28353cb0a76dddbba88562eab37dbac2
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:75eb196398d6dfeb5cf11891c8e7a51e01580ee721aae02081615aac375022f8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:d9360fefc9beb660f364735b72b1c4c1026b136fbb63176a3fc789ac66c4fdbe
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cc189fdf8d48482768128388720f2f569bd7b0fb2f3ecc14066e7fc08a0059b0
     steps:
       - key: pick_order
@@ -1037,217 +1047,222 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:546b8a6e40cdf6cf2f766c541f5e837ffa7e5384382d6421cc950fa5f1eb37a0
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:1cd2efefce43a9f6d7e14277441409d3cc59c7a0f05998c85c0c271a9111578b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state-wiring.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-transport.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-104.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-pg.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-tools.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-identity.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-tool-result.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-upstream-source.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/judge-comment.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-authorization-intent.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-committed-partial.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:03a71ce5519faed6f3d2ed95bbc1c2d79296b8e1d529414229ef8f894de97cbb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/worker.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-scope.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-score-context.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/package.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8b899836b04c3c8fbc2833fb4c7e593f28353cb0a76dddbba88562eab37dbac2
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:75eb196398d6dfeb5cf11891c8e7a51e01580ee721aae02081615aac375022f8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:d9360fefc9beb660f364735b72b1c4c1026b136fbb63176a3fc789ac66c4fdbe
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cc189fdf8d48482768128388720f2f569bd7b0fb2f3ecc14066e7fc08a0059b0
     steps:
       - key: write_back_result
@@ -1362,217 +1377,222 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:546b8a6e40cdf6cf2f766c541f5e837ffa7e5384382d6421cc950fa5f1eb37a0
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:1cd2efefce43a9f6d7e14277441409d3cc59c7a0f05998c85c0c271a9111578b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state-wiring.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-transport.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-104.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-pg.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-tools.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-identity.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-tool-result.py
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-upstream-source.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/judge-comment.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-authorization-intent.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-committed-partial.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:03a71ce5519faed6f3d2ed95bbc1c2d79296b8e1d529414229ef8f894de97cbb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/context.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
-        digest: sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
+        digest: sha256:4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/101.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/102.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/103.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/104.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/worker.mjs
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-scope.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-score-context.js
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/package.json
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:8b899836b04c3c8fbc2833fb4c7e593f28353cb0a76dddbba88562eab37dbac2
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:75eb196398d6dfeb5cf11891c8e7a51e01580ee721aae02081615aac375022f8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:d9360fefc9beb660f364735b72b1c4c1026b136fbb63176a3fc789ac66c4fdbe
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
-        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        revision: 1d8d4ee09b8e73e6bd8b2cc5f9aea1e9b8c8728a
         digest: sha256:cc189fdf8d48482768128388720f2f569bd7b0fb2f3ecc14066e7fc08a0059b0
     steps:
       - key: close_app
