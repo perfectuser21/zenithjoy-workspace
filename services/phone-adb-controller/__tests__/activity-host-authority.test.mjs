@@ -54,3 +54,8 @@ for(const mode of ['eid-bad','eid-wrong'])test(`102 qualification ${mode} cannot
 for(const mode of ['eid-good','link-good'])test(`${mode} keeps the existing operation and identity rules`,async()=>{
  const r=await run(mode);assert.equal(r.code,0);assert.equal(r.dispatches,1);assert.equal(r.resource_calls,1);if(mode==='eid-good')assert.notEqual(r.checker_scope,'RECORDING_SCOPE_MISMATCH');
 });
+
+test('a new action corrects a refused recording EID and dispatches exactly one capture',async()=>{
+ const r=await run('eid-recover');assert.equal(r.code,0);assert.equal(r.error,null);assert.deepEqual(r.first_receipts,[]);assert.equal(r.dispatches,1);assert.deepEqual(r.receipts,['corrected-record.json']);
+ const [refusal,success]=r.stdout.trim().split('\n').map(JSON.parse);assert.equal(refusal.result.data.dispatched,false);assert.equal(success.result.exit_code,0);
+});

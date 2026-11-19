@@ -61,7 +61,7 @@ m.subprocess.run = child
 resource_calls=[]
 m.resource_authority=lambda *a,**k:resource_calls.append(1)
 m.ssh=lambda c,args:['fixture-native-child',*args]
-checker_scope=None
+checker_scope=None;first_receipts=None
 out = io.StringIO();error = None;code = None;started = time.monotonic()
 try:
     with contextlib.redirect_stdout(out):
@@ -77,8 +77,12 @@ try:
                 nspec=importlib.util.spec_from_file_location('native_original',root/'native_artifacts.py');native=importlib.util.module_from_spec(nspec);nspec.loader.exec_module(native)
                 checker_scope=native.recording({'start':asset,'stop':asset,'evidence_id':eid,'expected_run':run,'video_id':video}).get('reason')
             code = m.main()
+            if mode == 'eid-recover':
+                first_receipts=list(p.name for p in (root/'receipts').glob('*.json'))
+                sys.argv=[str(root/'tools.py'),'phone','corrected-record','record-start',run+'-v'+video+'-capture']
+                code=m.main()
 except Exception as e:error = type(e).__name__+':'+str(e)
 finally:
     duration = time.monotonic()-started
     server.shutdown();server.server_close();thread.join()
-print(json.dumps({'code':code,'stdout':out.getvalue(),'error':error,'counts':counts,'sleeps':sleeps,'timeouts':timeouts,'dispatches':len(dispatched),'receipts':list(p.name for p in (root/'receipts').glob('*.json')),'duration':duration,'checker_scope':checker_scope,'resource_calls':len(resource_calls),'states':[json.loads(p.read_text()).get('state') for p in (root/'receipts').glob('*.json')]}))
+print(json.dumps({'code':code,'stdout':out.getvalue(),'error':error,'counts':counts,'sleeps':sleeps,'timeouts':timeouts,'dispatches':len(dispatched),'receipts':list(p.name for p in (root/'receipts').glob('*.json')),'duration':duration,'first_receipts':first_receipts,'checker_scope':checker_scope,'resource_calls':len(resource_calls),'states':[json.loads(p.read_text()).get('state') for p in (root/'receipts').glob('*.json')]}))

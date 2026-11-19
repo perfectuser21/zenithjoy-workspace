@@ -74,6 +74,9 @@ def call(name,op):
  return {'rc':rc,'stdout':out.getvalue(),'error':error,'receipt':json.loads(f.read_text()) if f.exists() else None}
 if mode.startswith('diagnostic-'):
  raw=packet['diagnostic']['receipt'];original=raw['result'];args=list(raw['binding']['args']);c['tasks'][workflow]['run_tag']=raw['binding']['identity']['run_tag'];c['native_root']=packet['diagnostic']['native_root'];c['local_owner']='fixture-owner'
+ # Keep the historical P4 fixture immutable; exercise its error format with today's admitted recording identity.
+ historical_eid=args[1];args[1]=c['tasks'][workflow]['run_tag']+'-v7711111111111111111-capture'
+ original={**original,'stderr':original['stderr'].replace(historical_eid,args[1])}
  activity='qualification';kind='phone'
  if mode=='diagnostic-wrong-activity':activity='cleanup'
  if mode=='diagnostic-other-command':args=['close-app']
@@ -300,11 +303,11 @@ function projectDiagnostic(value){
  assert.equal(createHash('sha256').update(source).digest('hex'),diagnosticFixture.provenance.project_sha256);
  return vm.runInNewContext('const json=JSON.stringify;const fail=r=>{throw Error(r)};'+source+';project(value,paths)',{Buffer,value,paths:profile102.profile.skill_runtime.host_tools.response_paths});
 }
-for(const mode of ['diagnostic-normal','diagnostic-large'])test(`real P4 ${mode} keeps exact failure and exposes only bounded filenames through pinned MCP projection`,()=>{
- const r=probe(mode,'102');assert.equal(r.rc,2,r.error);assert.equal(r.receipt.state,'terminal');assert.equal(r.receipt.result.exit_code,2);assert.equal(r.receipt.result.stderr,diagnosticFixture.receipt.result.stderr);
+for(const mode of ['diagnostic-normal','diagnostic-large'])test(`P4 error format with an admitted EID ${mode} exposes only bounded filenames through pinned MCP projection`,()=>{
+ const r=probe(mode,'102');assert.equal(r.rc,2,r.error);assert.equal(r.receipt.state,'terminal');assert.equal(r.receipt.result.exit_code,2);const original=diagnosticFixture.receipt,eid=original.binding.identity.run_tag+'-v7711111111111111111-capture';assert.equal(r.receipt.result.stderr,original.result.stderr.replaceAll(original.binding.args[1],eid));
  const projected=projectDiagnostic(JSON.parse(r.stdout)),data=projected['result.data'];
  assert.equal(data.error_code,'RECORD_AUDIO_CAPTURE_UNAVAILABLE');
- const eid=diagnosticFixture.receipt.binding.args[1];assert.equal(data.diagnostic_files.startup,eid+'.capture-startup.json');assert.equal(data.diagnostic_files.log,eid+'.rec.log');
+ assert.equal(data.diagnostic_files.startup,eid+'.capture-startup.json');assert.equal(data.diagnostic_files.log,eid+'.rec.log');
  assert.equal(data.execution_stopped,undefined);assert.equal(data.retry_allowed,undefined);assert.equal(projected['result.stderr'],undefined);assert.equal(projected.stderr,undefined);assert.ok(Buffer.byteLength(JSON.stringify(projected))<32768);assert.equal(r.calls.dispatch,1);
  if(mode==='diagnostic-large')assert.equal(projected.large_result_saved,true);
 });
