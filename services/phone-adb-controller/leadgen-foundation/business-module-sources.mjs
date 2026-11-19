@@ -1,7 +1,7 @@
 // Fixed changed business modules execute from the host; unchanged dependencies retain admitted Phone provenance.
 import fs from'node:fs';import path from'node:path';import{fileURLToPath,pathToFileURL}from'node:url';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
-export const BUSINESS_MODULES=['leadgen-queue.js','leadgen-committed-partial.js','judge-comment.js','leadgen-score-context.js'];
+export const BUSINESS_MODULES=['leadgen-queue.js','discovery-metrics-queue.js','leadgen-committed-partial.js','judge-comment.js','leadgen-score-context.js'];
 export function businessModuleSources(context){
  const files={'business-runtime/package.json':'{"type":"commonjs"}\n'};
  for(const name of BUSINESS_MODULES){

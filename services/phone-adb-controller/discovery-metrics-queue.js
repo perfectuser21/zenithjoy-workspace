@@ -15,13 +15,16 @@ async function discoverMetricsRequest(pool,input,{sourceCommit,execution,nativeM
    ||Number(company.snapshot?.version)!==Number(company.version)||company.snapshot?.runtime_config?.routing?.line_key!==lineKey)throw Error('METRICS_COMPANY_BINDING_MISMATCH');
  const bound={...observation,company_binding:{company_id:company.company_id,tenant_id:company.tenant_id,version:Number(company.version),run_id:run,line_key:lineKey}};
  if(op==='discover_readback'){
-  const result=await pool.query(`SELECT judgment_status,(transcript IS NOT NULL AND transcript<>'') AS has_transcript,
+  const handoffFields=['line_key','video_id','video_url','title','keyword','comment_count','harvest_batch','discovery_metrics'];
+  const projection=input.include_handoff===true?handoffFields.join(',')+',':'';
+  const result=await pool.query(`SELECT ${projection}judgment_status,(transcript IS NOT NULL AND transcript<>'') AS has_transcript,
     discovery_metrics=$4::jsonb AS metrics_verified FROM zenithjoy.leadgen_videos
     WHERE line_key=$1 AND video_id=$2 AND video_url=$3`,[lineKey,videoId,videoUrl,JSON.stringify(bound)]);
   const row=result.rows[0];
   if(!row)return null;
   if(row.metrics_verified!==true)throw Error('METRICS_READBACK_MISMATCH');
-  return {status:row.judgment_status,has_transcript:!!row.has_transcript,inserted:false,recovered:true,metrics_verified:true,metrics_digest:observation.digest};
+  return {status:row.judgment_status,has_transcript:!!row.has_transcript,inserted:false,recovered:true,metrics_verified:true,metrics_digest:observation.digest,
+    ...(input.include_handoff===true?{handoff:Object.fromEntries(handoffFields.map(field=>[field,row[field]]))}:{})};
  }
  return discoverVideo(pool,{lineKey,videoId,videoUrl,title:video.title,keyword:video.keyword,harvestBatch:run,discoveryMetrics:bound});
 }

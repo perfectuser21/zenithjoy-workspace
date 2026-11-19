@@ -9,20 +9,26 @@ export function listHostReceipts(root,identity){
  const files=fs.readdirSync(directory).filter(name=>name.endsWith('.json')).sort();
  need(files.length<=500);
  let total=0;
- return files.map(name=>{
+ return files.flatMap(name=>{
   need(/^[A-Za-z0-9_.-]+\.json$/.test(name));
-  const file=path.join(directory,name),size=fs.lstatSync(file).size;
-  total+=size;need(size<=2*1024*1024&&total<=12*1024*1024);
-  const raw=JSON.parse(privateBytes(file)),binding=raw.binding??{},bound=binding.identity;
-  need(bound&&['task_id','run_id','run_tag'].every(key=>typeof identity[key]==='string'&&identity[key]===bound[key])
+  const file=path.join(directory,name),stat=fs.lstatSync(file);
+  total+=stat.size;
+  need(stat.isFile()&&!stat.isSymbolicLink()&&stat.uid===process.getuid()&&!(stat.mode&0o022)
+   &&stat.size<=2*1024*1024&&total<=12*1024*1024);
+  const raw=JSON.parse(fs.readFileSync(file,'utf8'));
+  // Original phone command evidence shares the directory with the host transport ledger.
+  if(Object.keys(raw).sort().join(',')==='args,exit_code,stderr,stdout'
+   &&Array.isArray(raw.args)&&Number.isInteger(raw.exit_code)&&typeof raw.stdout==='string'&&typeof raw.stderr==='string')return [];
+  const binding=raw.binding??{},bound=binding.identity;
+  need(!(stat.mode&0o077)&&bound&&['task_id','run_id','run_tag'].every(key=>typeof identity[key]==='string'&&identity[key]===bound[key])
    &&/^[a-z][a-z0-9_]{0,79}$/.test(binding.activity??'')&&/^[a-z][a-z0-9_-]{0,79}$/.test(binding.kind??'')
    &&['terminal','unknown','prepared'].includes(raw.state)
    &&Number.isFinite(raw.started_at));
   const operation=binding.args?.[0];
-  return {path:'receipts/'+name,activity:binding.activity,kind:binding.kind,
+  return [{path:'receipts/'+name,activity:binding.activity,kind:binding.kind,
    ...(typeof operation==='string'&&/^[A-Za-z0-9][A-Za-z0-9_/-]{0,63}$/.test(operation)?{operation}:{}),
    state:raw.state,started_at:raw.started_at,...(Number.isFinite(raw.ended_at)?{ended_at:raw.ended_at}:{}),
-   ...(Number.isInteger(raw.result?.exit_code)?{exit_code:raw.result.exit_code}:{})};
+   ...(Number.isInteger(raw.result?.exit_code)?{exit_code:raw.result.exit_code}:{})}];
  });
 }
 export function readFrozenContext(file,expectedSha){

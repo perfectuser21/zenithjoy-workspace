@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.12.2
+  version: 0.12.3
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -52,7 +52,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 5.2.0
+    version: 5.3.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -104,7 +104,7 @@ activities:
           - harvest_batch
           - author
       - type: Run
-        destination: 本轮运行账本与停止原因
+        destination: 搜索采集Activity的真实状态和停止原因回执，整条Workflow终态由宿主在后续验收后计算
         cardinality: one
         effect: update
         fields:
@@ -116,13 +116,13 @@ activities:
       - 关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤
     postconditions:
       - probe: discovery_metrics_verified
-        asserts: 每个实际VID绑定同次原生详情证据、run/attempt、公司与固定来源，原始指标及其PG行可独立读回；缺失指标保留null，不伪造0。
+        asserts: 每个实际VID以原生卡片作者、点开、同次取链及原始指标回执绑定本轮run/attempt和公司；用本轮真实回执路径逐项独立核对。原始指标缺失保留null，不伪造0。
       - probe: source_completed
-        asserts: 原生页面显示真实搜索词及所选筛选参数与本次输入相符；来源读取成功且无旧入口回退。真实no_cards可empty，并保存原生空结果与停止原因；未加载不能当空。
+        asserts: 用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致，来源读取成功且无旧入口回退。真实no_cards可empty，须保存原生空结果与停止原因；未加载不能当空。
       - probe: disc_candidates_persisted
-        asserts: 本批实际VID及完整观察字段在PG可读回，已提交集合与工具实际持久化结果一致，不以执行者自报计数代替逐ID事实。
+        asserts: 交接每个实际VID的PG持久字段，包括库中实采comment_count和完整discovery_metrics；原生卡片证实author。逐ID核对原提交回执、真实读回及持久行，提交集合以本轮回执和数据库为准。
       - probe: videos_readback
-        asserts: 新增与已存在VID分别标记；重复发现不覆盖已有102处理状态、comment_count和harvest_batch。完整VID交接包含真实stop_reason/all_results_scanned，不把达到本次上限说成全结果扫描。
+        asserts: 按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现查前后保护字段，保留既有处理状态、转写、实采comment_count及评论已采VID的原批次。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。
       - probe: line_key_not_null
         asserts: 本批每个实际持久化VID的line_key与本次业务线一致，未知或缺行不能交接。
     execution:
@@ -175,7 +175,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.9.0
+        version: 0.10.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
