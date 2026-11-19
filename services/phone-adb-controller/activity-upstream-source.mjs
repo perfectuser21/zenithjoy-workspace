@@ -13,9 +13,7 @@ function readPinned(file,digest,kind){
   const bytes=fs.readFileSync(file);need(hash(bytes)===digest,kind);return JSON.parse(bytes);
  }catch{throw Error('UPSTREAM_SOURCE_'+kind);}
 }
-export function resolveProducerIdentity(c,activity,producer){
- if(activity==='collect_videos')return {source_commit:c.source_commit,profile:c.profile};
- need(activity==='dedup','ACTIVITY');
+function readProducerRun(c,producer){
  const p=c?.input_provenance?.producer;
  need(p&&p.workflow==='101'&&COMMIT.test(p.source_commit??'')&&UUID.test(p.task_id??'')&&UUID.test(p.run_id??'')
   &&typeof p.run_tag==='string'&&p.run_tag.length>0&&p.run_tag===producer?.run&&p.run_id===producer?.run_id,'SCOPE');
@@ -37,7 +35,52 @@ export function resolveProducerIdentity(c,activity,producer){
  need(typeof input.profile==='string'&&input.profile.length>0&&input.profile.length<=128
   &&['company_id','tenant_id','line'].every(k=>typeof c[k]==='string'&&c[k].length>0&&input[k]===c[k]),'BUSINESS_SCOPE');
  need(r?.task_id===p.task_id&&r.run_id===p.run_id&&r.status==='completed'&&r.business_pass===true,'RESULT');
+ return {descriptor:p,input,result:r};
+}
+export function resolveProducerIdentity(c,activity,producer){
+ if(activity==='collect_videos')return {source_commit:c.source_commit,profile:c.profile};
+ need(activity==='dedup','ACTIVITY');
+ const {input}=readProducerRun(c,producer);
  return {source_commit:input.source_commit,profile:input.profile};
+}
+function readLegacyVideo(result,descriptor,input,videoId,receipt){
+ need(result.outputs?.video_ids?.includes(videoId)&&receipt.outputs?.video_ids?.includes(videoId),'VIDEO');
+ const accepted=receipt.activities?.find(a=>a.key==='collect_videos'&&a.status==='completed')
+  ?.validator_verdict?.evidence?.find(item=>item.id==='video_identity');
+ const proofs=(accepted?.evidence??[]).flatMap(e=>e.observation?.proofs??[])
+  .filter(proof=>proof.video_id===videoId&&proof.run===descriptor.run_tag);
+ need(proofs.length===1&&SHA.test(proofs[0].digest??''),'VIDEO_EVIDENCE');
+ const digest=proofs[0].digest,file=path.join(path.dirname(descriptor.result_path),'discovery-metrics',digest+'.json');
+ need(fs.realpathSync(file)===file,'VIDEO_EVIDENCE');
+ const stat=fs.lstatSync(file);
+ need(stat.isFile()&&stat.uid===process.getuid()&&!(stat.mode&0o077)&&stat.size<=1024*1024,'VIDEO_EVIDENCE');
+ const metrics=JSON.parse(fs.readFileSync(file,'utf8'));
+ const {digest:stored,...observation}=metrics;
+ need(stored===digest&&hash(JSON.stringify(observation))===digest&&typeof metrics.evidence?.xml==='string'
+  &&hash(metrics.evidence.xml)===metrics.evidence.sha256,'VIDEO_EVIDENCE');
+ const url='https://www.douyin.com/video/'+videoId;
+ const expected={video_id:videoId,video_url:url,line_key:input.line,run_id:descriptor.run_id,run:descriptor.run_tag,
+  source_commit:descriptor.source_commit,profile:input.profile};
+ need(Object.entries(expected).every(([key,value])=>metrics[key]===value),'VIDEO_EVIDENCE');
+ return {video_id:videoId,url,keyword:input.keyword,discovery_metrics:metrics};
+}
+export function readUpstreamHandoff(c){
+ const scope=c.verification?.['102'],videoId=scope?.video_ids?.[0];
+ need(scope?.video_ids?.length===1&&/^[0-9]{16,24}$/.test(videoId??''),'VIDEO');
+ const {descriptor,input,result}=readProducerRun(c,scope.upstream?.[videoId]);
+ const deliveries=(result.receipts??[]).filter(r=>r.activity_key==='collect_videos'&&r.status==='completed');
+ need(deliveries.length===1,'VIDEO');
+ const delivery=deliveries[0];
+ let video;
+ if(Array.isArray(delivery.outputs?.Video)){
+  const matches=delivery.outputs.Video.filter(v=>v.video_id===videoId);
+  need(matches.length===1&&matches[0].url==='https://www.douyin.com/video/'+videoId,'VIDEO');
+  const fields=['video_id','url','title','author','keyword','comment_count','discovery_metrics'];
+  video=Object.fromEntries(fields.filter(key=>Object.hasOwn(matches[0],key)).map(key=>[key,matches[0][key]]));
+ }else video=readLegacyVideo(result,descriptor,input,videoId,delivery);
+ const fields=['task_id','run_id','run_tag','source_commit','manifest_sha256','result_sha256'];
+ return {producer:{workflow:'101',company_id:input.company_id,tenant_id:input.tenant_id,line:input.line,
+  ...Object.fromEntries(fields.map(key=>[key,descriptor[key]]))},video};
 }
 export function wireProducerReadback(source){
  need(typeof source==='string'&&hash(source)===PG_READBACK_SHA,'BASE');

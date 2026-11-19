@@ -4,7 +4,7 @@ import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {assembleActivityPgHost} from '../activity-host-pg.mjs';
-import {resolveProducerIdentity} from '../activity-upstream-source.mjs';
+import {readUpstreamHandoff} from '../activity-upstream-source.mjs';
 import {assembleActivity104Host} from '../activity-host-104.mjs';
 import {validateAuthorization} from '../activity-104-context.mjs';
 import {hash,need,canonical} from './context.mjs';
@@ -93,11 +93,17 @@ export async function assembleSources({context:c,profile,contract,hostRoot,ident
    const file='collection-evidence/runtime-deps.mjs',legacy="path.join(profileRoot,'skills/douyin-leadgen-commander/scripts/native_artifacts.py')";
    need(files[file].split(legacy).length===2,'NATIVE_IDENTITY_LAYOUT');
    files[file]=files[file].replace(legacy,"path.join(profileRoot,'native-identity.py')").replace('c.verification.artifact_checker','c.verification.native_identity_reader');
-   const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
+   const scope=c.verification['102'];
+   const handoff=readUpstreamHandoff(c);
+   const claim={op:'claim_videos',video_ids:scope.video_ids,limit:c.max_candidates,config_required:true,source_run:null,
+    line:c.line,run:c.run_tag};
+   files['checker-input/upstream.json']=JSON.stringify({handoff,claim},null,2)+'\n';
   }
   files['agent-tools.txt']=files['TOOLS.txt']+'\n交付协议：最终只输出一个 JSON 对象，成功提案必须包含顶层 `outputs`。\n'
    +'`outputs` 的键是合同声明的对象类型，值按 cardinality 提交单对象或数组；字段使用当前合同中的原名。把已核实的字段放进对象，禁止只写在提案顶层、解释文字或 metrics。\n'
    +'按工具实际回执填写 `evidence`：列出本次真实文件的相对路径及其用途，例如从工具响应 receipt 得到的 receipts/ 实际文件名。不要猜测路径或用旧运行证据；外部原件说明实际工具和证据标识。交付不齐时如实报告，独立 Checker 仍逐项核验。\n';
+  if(workflow==='101')files['agent-tools.txt']+='\n本101冻结业务工具支持以下只读参数。discover_readback 加 include_handoff:true，返回该VID的真实持久 handoff（含comment_count和完整discovery_metrics）。inspect_videos 加 include_discovery_protection:true，只读同一已取链VID的原前后保护字段及转写SHA256。保留工具真实回执路径，省略缺失不等于0。\n';
+  if(workflow==='102')files['agent-tools.txt']+='\n判重原始来源和本 run 普通认领范围已经冻结到 checker-input/upstream.json。读取该文件和当前数据库事实；其中 claim 是开工输入，不是已认领的回执。\n';
   delete c.checker_media_tool;
   const probe=['/opt/homebrew/bin/ffprobe','/usr/bin/ffprobe'].find(p=>fs.existsSync(p));
   if(probe){const executable=fs.realpathSync(probe);c.checker_media_tool={path:executable,sha256:hash(fs.readFileSync(executable))};}

@@ -54,3 +54,26 @@ test('成功取链原件封存与最终逐VID读回，路径/原件/权限/ACK�
 });
 
 test('远端discover拒绝原生证实0评论，且在任何SQL或排队之前拒绝',async()=>{const {discoverMetricsRequest}=require('../discovery-metrics-queue.js');let queries=0;const observation=metricsFixture({xml:tree('67','0')});await assert.rejects(()=>discoverMetricsRequest({query:async()=>{queries++;return {rows:[]};}},{op:'discover',run:scope.run,line:'jinuo',video:{videoId:scope.video_id,videoUrl:scope.video_url,metrics:observation}},{sourceCommit:scope.source_commit,execution:{run:scope.run,run_id:scope.run_id,profile:scope.profile,line:'jinuo'}}),/DISCOVERY_CONFIRMED_ZERO_COMMENTS/);assert.equal(queries,0);});
+
+test('获客交接只从已经验证的持久行投影完整指标和实采评论数',async()=>{
+ const {discoverMetricsRequest}=require('../discovery-metrics-queue.js');
+ const observation=metricsFixture(), binding={company_id:'company',tenant_id:'tenant',version:34,run_id:scope.run,line_key:scope.line_key};
+ const company={company_id:binding.company_id,tenant_id:binding.tenant_id,version:binding.version,run_id:scope.run,
+  snapshot:{company_id:binding.company_id,tenant_id:binding.tenant_id,version:binding.version,runtime_config:{routing:{line_key:scope.line_key}}}};
+ const saved={line_key:scope.line_key,video_id:scope.video_id,video_url:scope.video_url,title:'真实持久标题',keyword:'真实关键词',
+  comment_count:8,harvest_batch:'historic-batch',discovery_metrics:{...observation,company_binding:binding}};
+ const statements=[],pool={query:async(sql,args)=>{
+  statements.push({sql,args});
+  return{rows:sql.includes('company_config_runs')?[company]:[{...saved,judgment_status:'matched',has_transcript:true,metrics_verified:true}]};
+ }};
+ const input={op:'discover_readback',run:scope.run,line:'jinuo',video:{videoId:scope.video_id,videoUrl:scope.video_url,metrics:observation}};
+ const deps={sourceCommit:scope.source_commit,execution:{run:scope.run,run_id:scope.run_id,profile:scope.profile,line:'jinuo'}};
+ const old=await discoverMetricsRequest(pool,input,deps);
+ assert.equal(old.handoff,undefined);
+ const actual=await discoverMetricsRequest(pool,{...input,include_handoff:true},deps);
+ assert.deepEqual(actual.handoff,saved);
+ assert.equal(actual.recovered,true);
+ assert.ok(statements.every(({sql})=>/^SELECT/.test(sql)));
+ assert.match(statements.at(-1).sql,/comment_count[\s\S]*discovery_metrics/);
+ assert.deepEqual(statements.at(-1).args.slice(0,3),[scope.line_key,scope.video_id,scope.video_url]);
+});

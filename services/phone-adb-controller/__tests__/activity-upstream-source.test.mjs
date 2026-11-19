@@ -64,3 +64,45 @@ test('formal producer uses separately frozen expanded context bound to manifest 
  }
  context.tasks['101'].run_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc';fs.writeFileSync(contextPath,JSON.stringify(context));f.descriptor.context_sha256=hash(fs.readFileSync(contextPath));assert.throws(()=>implementation.resolveProducerIdentity(f.c,'dedup',f.producer),/UPSTREAM_SOURCE_IDENTITY/);
 });
+
+test('consumer freezes only the authorized video from the completed producer receipt',t=>{
+ const f=setup(t),video='7711111111111111111',foreign='7722222222222222222';
+ const selected={video_id:video,url:'https://www.douyin.com/video/'+video,title:'Original',author:'Native',keyword:'keyword',comment_count:0,discovery_metrics:{run:f.producer.run}};
+ f.c.verification={'102':{video_ids:[video],upstream:{[video]:f.producer}}};
+ f.result.receipts=[{activity_key:'collect_videos',status:'completed',outputs:{Video:[selected,{...selected,video_id:foreign}],unrelated:'excluded'}}];
+ f.writeResult();
+ const facts=implementation.readUpstreamHandoff(f.c);
+ assert.deepEqual(facts.video,selected);
+ assert.equal(facts.producer.run_id,f.descriptor.run_id);
+ assert.equal(facts.producer.result_sha256,f.descriptor.result_sha256);
+ assert.equal(facts.video_ids,undefined);
+ assert.equal(facts.unrelated,undefined);
+ assert.equal(facts.producer.result_path,undefined);
+ f.result.receipts[0].outputs.Video=[{...selected,video_id:foreign}];f.writeResult();
+ assert.throws(()=>implementation.readUpstreamHandoff(f.c),/UPSTREAM_SOURCE_VIDEO/);
+});
+
+test('legacy handoff reads the original observation named by the pinned producer result',async t=>{
+ const f=setup(t),video='7711111111111111111',url='https://www.douyin.com/video/'+video;
+ const {default:metrics}=await import('../discovery-metrics.js');
+ const observation=metrics.buildObservation({run:f.producer.run,run_id:f.producer.run_id,
+  profile:f.input.profile,source_commit:f.input.source_commit,line_key:f.input.line,video_id:video,video_url:url,
+  observed_at:'2026-10-22T03:00:00.000Z',evidence_id:f.producer.run+'-candidate1-link-t1',
+  xml:'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="评论4，按钮"/></hierarchy>'});
+ f.input.keyword='original keyword';
+ f.writeManifest();
+ f.c.verification={'102':{video_ids:[video],upstream:{[video]:f.producer}}};
+ f.result.outputs={video_ids:[video]};
+ const proof={video_id:video,run:f.producer.run,digest:observation.digest};
+ const evidence=[{id:'video_identity',evidence:[{observation:{proofs:[proof]}}]}];
+ f.result.receipts=[{activity_key:'collect_videos',status:'completed',outputs:{video_ids:[video]},
+  activities:[{key:'collect_videos',status:'completed',validator_verdict:{evidence}}]}];
+ f.writeResult();
+ const directory=path.join(f.root,'discovery-metrics'),file=path.join(directory,observation.digest+'.json');
+ fs.mkdirSync(directory,{mode:0o700});
+ fs.writeFileSync(file,JSON.stringify(observation),{mode:0o600});
+ assert.deepEqual(implementation.readUpstreamHandoff(f.c).video,
+  {video_id:video,url,keyword:'original keyword',discovery_metrics:observation});
+ fs.writeFileSync(file,JSON.stringify({...observation,evidence:{...observation.evidence,xml:'<hierarchy/>'}}));
+ assert.throws(()=>implementation.readUpstreamHandoff(f.c),/UPSTREAM_SOURCE_VIDEO_EVIDENCE/);
+});

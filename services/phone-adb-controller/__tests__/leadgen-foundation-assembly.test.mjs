@@ -14,6 +14,11 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   assert.match(tools,/顶层 `outputs`/);
   assert.match(tools,/`outputs` 的键是合同声明的对象类型/);
   assert.match(tools,/按工具实际回执填写 `evidence`/);
+  if(workflow==='101'){
+   assert.match(tools,/discover_readback.*include_handoff:true/);
+   assert.match(tools,/inspect_videos.*include_discovery_protection:true/);
+   assert.ok(a.receipt.files['business-runtime/discovery-metrics-queue.js']);
+  }
   for(const runtime of Object.values(a.profile.skill_runtime.activities)){
    assert.match(runtime.checker.evidence.provider.description,/先读 proposal.evidence/);
    assert.match(runtime.checker.evidence.provider.description,/只核对本轮实际适用的失败和幂等条件/);
@@ -84,6 +89,12 @@ test('102 emitted upstream scope carries controlled producer run identity for th
   const a=await prepareLeadgenHost(f),c=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'context.json'))),video=c.verification['102'].video_ids[0];
   const {resolveProducerIdentity}=await import('../activity-upstream-source.mjs');
   assert.deepEqual(resolveProducerIdentity(c,'dedup',c.verification['102'].upstream[video]),{source_commit:'b'.repeat(40),profile:'different-producer-phone'});
+  const evidence=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'checker-input/upstream.json')));
+  assert.ok(a.receipt.files['checker-input/upstream.json']);
+  assert.deepEqual(evidence.handoff.video,{video_id:video,url:'https://www.douyin.com/video/'+video,title:'fixture'});
+  assert.equal(evidence.handoff.producer.run_tag,c.verification['102'].upstream[video].run);
+  assert.deepEqual(evidence.claim,{op:'claim_videos',video_ids:[video],limit:c.max_candidates,config_required:true,source_run:null,line:c.line,run:c.run_tag});
+  assert.match(a.profile.skill_runtime.activities.dedup.checker.evidence.provider.description,/checker-input\/upstream\.json/);
  }finally{f.close();}
 });
 
