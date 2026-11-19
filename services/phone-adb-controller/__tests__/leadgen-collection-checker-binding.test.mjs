@@ -16,12 +16,24 @@ test('actual emitted collection identity verifier admits only its frozen host ch
   process.env.DATABASE_URL='postgresql://unused:unused@127.0.0.1:1/unused';
   const {createDeps}=await import(pathToFileURL(path.join(root,'collection-evidence/runtime-deps.mjs')));
   deps=await createDeps(a.context,root);
-  // The actual Python checker rejects missing original assets, proving it was reached rather than bypassed.
-  await assert.rejects(deps.verifyIdentity({}),e=>!e.message.includes('NATIVE_CHECKER_PIN')&&e.message.includes('video_identity'));
+  // Original checker consumes the exact pinned successful native-link receipt; no network fallback.
+  const run=a.context.tasks['102'].run_tag,video=a.context.verification['102'].video_ids[0],file=path.join(root,'native-link-test.json');
+  const bytes=JSON.stringify({exit_code:0,args:['current-video-link',run+'-native-link'],stdout:'https://www.douyin.com/video/'+video});fs.writeFileSync(file,bytes);
+  const spec={expected_run:run,video_id:video,video_identity:{path:file,sha256:hash(bytes)}};
+  assert.equal(await deps.verifyIdentity(spec),true);
+  assert.equal(await deps.verifyIdentity({...spec,video_id:'7711111111111111112'}),false);
   const original=checker.sha256[checker.command[1]];checker.sha256[checker.command[1]]='0'.repeat(64);
-  await assert.rejects(deps.verifyIdentity({}),/NATIVE_CHECKER_PIN/);checker.sha256[checker.command[1]]=original;
+  await assert.rejects(deps.verifyIdentity(spec),/NATIVE_CHECKER_PIN/);checker.sha256[checker.command[1]]=original;
   const exact=checker.command[1];checker.command[1]=path.join(root,'skills/douyin-leadgen-commander/scripts/native_artifacts.py');
-  await assert.rejects(deps.verifyIdentity({}),/NATIVE_CHECKER_PIN/);checker.command[1]=exact;
+  await assert.rejects(deps.verifyIdentity(spec),/NATIVE_CHECKER_PIN/);checker.command[1]=exact;
   assert.equal(fs.existsSync(path.join(root,'receipts')),false);
  }finally{if(deps)await deps.close();if(old===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=old;f.close();}
+});
+test('102 executable tool instructions reference the delivered original checker, not an absent gate document',async()=>{
+ const f=await foundationFixture('102');try{
+  const a=await prepareLeadgenHost(f),tools=fs.readFileSync(path.join(a.profile.cwd,'TOOLS.txt'),'utf8');
+  assert.ok(!tools.includes('gate-contract.md'));assert.match(tools,/字段按本宿主冻结的native_artifacts.py/);
+  assert.equal(a.context.verification.artifact_checker.sha256[path.join(a.profile.cwd,'native_artifacts.py')],hash(fs.readFileSync(path.join(a.profile.cwd,'native_artifacts.py'))));
+  assert.match(fs.readFileSync(path.join(a.profile.cwd,'TOOLS-base.txt'),'utf8'),/gate-contract.md/);
+ }finally{f.close();}
 });
