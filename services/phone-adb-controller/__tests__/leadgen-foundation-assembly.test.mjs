@@ -126,3 +126,13 @@ test('independent failed checks survive the actual assembled checker without gra
   await a.verifySource();assert.equal(fs.existsSync(path.join(a.profile.cwd,'receipts')),false);
  }finally{f.close();}
 });
+test('all four published profiles freeze the checker feedback implementation and assembly',()=>{
+ for(const workflow of ['101','102','103','104']){
+  const doc=JSON.parse(fs.readFileSync(new URL('../leadgen-foundation/profiles/'+workflow+'.json',import.meta.url)));
+  for(const name of ['assembly.mjs','checker-feedback.mjs']){
+   const file='services/phone-adb-controller/leadgen-foundation/'+name;
+   assert.equal(doc.profile.files[file],createHash('sha256').update(fs.readFileSync(new URL('../leadgen-foundation/'+name,import.meta.url))).digest('hex'),workflow+': '+name);
+  }
+  for(const a of doc.contract.activities){assert.equal(a.runtime.checker_repair,undefined);assert.deepEqual(a.failure.retryable,[]);}
+ }
+});
