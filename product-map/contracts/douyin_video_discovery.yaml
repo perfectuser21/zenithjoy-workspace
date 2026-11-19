@@ -104,7 +104,7 @@ activities:
           - harvest_batch
           - author
       - type: Run
-        destination: 搜索采集Activity的真实状态和停止原因回执，整条Workflow终态由宿主在后续验收后计算
+        destination: 以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。
         cardinality: one
         effect: update
         fields:
@@ -122,7 +122,7 @@ activities:
       - probe: disc_candidates_persisted
         asserts: 在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。提交集合以本轮回执和数据库为准。
       - probe: videos_readback
-        asserts: 按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集评论保留自己的原来源，视频进度状态沿用写前值。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。
+        asserts: 按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。
       - probe: line_key_not_null
         asserts: 本批每个实际持久化VID的line_key与本次业务线一致，未知或缺行不能交接。
     execution:

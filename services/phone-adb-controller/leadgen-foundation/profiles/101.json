@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "a7c691a9adf89016a058b28ceed8be1973512751f8c3223642f9aa9b60b4f96d"
+            "contract_digest": "60d944525b95fa00de3fb5c342c07444058b2b3a29aeb328bbaeca584095c4c9"
           },
           "document": {
             "key": "collect_videos",
@@ -620,7 +620,7 @@
               },
               {
                 "type": "Run",
-                "destination": "搜索采集Activity的真实状态和停止原因回执，整条Workflow终态由宿主在后续验收后计算",
+                "destination": "以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -649,7 +649,7 @@
               },
               {
                 "probe": "videos_readback",
-                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集评论保留自己的原来源，视频进度状态沿用写前值。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
               },
               {
                 "probe": "line_key_not_null",
@@ -1069,7 +1069,7 @@
               "phase": "end",
               "requirement": {
                 "type": "Run",
-                "destination": "搜索采集Activity的真实状态和停止原因回执，整条Workflow终态由宿主在后续验收后计算",
+                "destination": "以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -1112,7 +1112,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "videos_readback",
-                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集评论保留自己的原来源，视频进度状态沿用写前值。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
               },
               "source_pointer": "/postconditions/3"
             },
@@ -1627,7 +1627,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "af558b6e13f5046ad3690980044ca6a3be22ed0c",
-      "contract_sha256": "9511a4f33a44f266539ca374f6c86271017bc4ca419db4a262714227e09acb4e"
+      "contract_sha256": "1052d09fdb69937203e27938d396fc741ff0925a8feb819f2cf9133cdb506e2b"
     },
     "skill_runtime": {
       "control_dir": "control",
