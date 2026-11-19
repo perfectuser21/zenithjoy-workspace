@@ -191,7 +191,8 @@ test('判重来源分支标题新旧恰一且正文完整进入验收，双标�
   const result=skillAcceptanceDefinition(key,path=>path===method?Buffer.from(text):read(path));
   assert.ok(result.checks.some(c=>c.section==='douyin_video_processing.dedup/'+heading&&c.text.includes('producer_descriptor')));
  }
- for(const replacement of ['## 未声明来源分支\n','## 明示producer交接\n\n额外段落。\n\n## 来源证明与认领分支\n','']){
+ for(const replacement of ['## 未声明来源分支\n','## 明示producer交接\n\n额外段落。\n\n## 来源证明与认领分支\n','## 来源证明与认领分支\n\n重复段落。\n\n## 来源证明与认领分支\n','']){
   assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(current.replace('## 来源证明与认领分支\n',replacement)):read(path)),/未知或重复/);
  }
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(current.replace(/(^## 来源证明与认领分支\n)[\s\S]*?(?=^## )/m,'$1\n')):read(path)),/规范段落为空/);
 });
