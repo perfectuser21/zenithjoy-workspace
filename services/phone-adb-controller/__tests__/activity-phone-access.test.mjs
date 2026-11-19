@@ -55,7 +55,7 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
    for(const unknown of [false,true]) {
     const r=run(host,{activity:'qualification',next_activity:'collection',args,unknown});
     assert.equal(r.first.dispatches,1);assert.equal(r.calls.length,1);
-    assert.match(r.other.error,/SINGLE_CAPTURE_OR_SEEK_LIMIT|PRIOR_ACTION_UNKNOWN/);
+    assert.match(r.other.error || r.other.stdout,/SINGLE_CAPTURE_OR_SEEK_LIMIT|PRIOR_ACTION_UNKNOWN/);
    }
   });
   if(workflow==='102') await t.test('deterministic capture budget rejection leaves cleanup available without clearing real unknowns',()=>{

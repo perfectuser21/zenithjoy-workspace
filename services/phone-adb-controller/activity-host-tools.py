@@ -345,12 +345,20 @@ def phone_deadline(c,activity,kind,args):
         tools = replace_once(tools, 'def task_authority(c):\n return _host.task_authority(c,brain,os.environ.get(\'COMMANDER_ACTIVITY_KEY\'))', "def task_authority(c,*,deadline_ms=None):\n return _host.task_authority(c,brain,os.environ.get('COMMANDER_ACTIVITY_KEY'),deadline_ms=deadline_ms)")
     tools = replace_once(tools, """  if key=='qualification' and cmd in {'swipe-evidence','record-start'}:
    history=[read(f).get('binding',{}) for f in (P/'receipts').glob('*.json')]
-   if sum(b.get('activity')==key and b.get('kind')=='phone' and b.get('args',[None])[0]==cmd for b in history)>1:raise ValueError('SINGLE_CAPTURE_OR_SEEK_LIMIT')""", """  capture_limit=c['verification'].get(c['assigned_workflow'],{}).get('qualification_input',{}).get('coverage',{}).get('max_capture_sessions')
+   if sum(b.get('activity')==key and b.get('kind')=='phone' and b.get('args',[None])[0]==cmd for b in history)>1:raise ValueError('SINGLE_CAPTURE_OR_SEEK_LIMIT')""", '')
+    # Under the existing action lock, after replay/unknown checks and before recording an intent.
+    tools = replace_once(tools, " started_at=time.time();atomic(action,", """ if kind=='phone':
+  cmd=args[0];capture_limit=c['verification'].get(c['assigned_workflow'],{}).get('qualification_input',{}).get('coverage',{}).get('max_capture_sessions')
+  error=None
   if cmd=='record-start' and capture_limit is not None or key=='qualification' and cmd=='swipe-evidence':
    limit=capture_limit if cmd=='record-start' else 1
-   if type(limit) is not int or limit<1:raise ValueError('CAPTURE_BUDGET_INVALID')
-   history=[read(f).get('binding',{}) for f in (P/'receipts').glob('*.json')]
-   if sum(b.get('identity')==c['tasks'][c['assigned_workflow']] and (cmd=='record-start' or b.get('activity')==key) and b.get('kind')=='phone' and b.get('args',[None])[0]==cmd for b in history)>limit:raise ValueError('SINGLE_CAPTURE_OR_SEEK_LIMIT')""")
+   if type(limit) is not int or limit<1:error='CAPTURE_BUDGET_INVALID'
+   else:
+    history=[read(f).get('binding',{}) for f in root.glob('*.json')]
+    if sum(b.get('identity')==bind['identity'] and (cmd=='record-start' or b.get('activity')==key) and b.get('kind')=='phone' and b.get('args',[None])[0]==cmd for b in history)>=limit:error='SINGLE_CAPTURE_OR_SEEK_LIMIT'
+  if error:
+   print(json.dumps({'state':'terminal','result':{'exit_code':2,'error':error,'data':{'phase':'pre_dispatch','dispatched':False,'business_receipt_created':False,'correction_requires_new_action_name':True}}}));return 2
+ started_at=time.time();atomic(action,""")
     tools = replace_once(tools, '  return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=420)', '''  remaining=(phone_deadline(c,key,kind,args)-time.time()*1000)/1000
   if remaining<=0:raise ValueError('ABSOLUTE_DEADLINE')
   return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=min(420,remaining))''')
