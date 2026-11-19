@@ -106,3 +106,11 @@ test('预检交接已分配Run，收尾只交自己的Activity状态',()=>{
   assert.doesNotMatch(finalize.check,/记录真实终态/);
  }
 });
+
+test('101交接要求逐VID的实际数据库字段和原始搜索收据',()=>{
+ const activity=loadContractsFromDisk().contracts.douyin_video_discovery.activities.find(a=>a.key==='collect_videos');
+ assert.match(activity.outputs.find(o=>o.type==='Run').destination,/搜索采集Activity/);
+ assert.match(activity.postconditions.find(p=>p.probe==='disc_candidates_persisted').asserts,/comment_count.*discovery_metrics/);
+ assert.match(activity.postconditions.find(p=>p.probe==='source_completed').asserts,/原始搜索.*筛选/);
+ assert.match(activity.postconditions.find(p=>p.probe==='videos_readback').asserts,/原提交回执.*保护字段/);
+});
