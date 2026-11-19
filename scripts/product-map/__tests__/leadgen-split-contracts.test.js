@@ -63,3 +63,29 @@ test('103终态排除与异步bridge、104独立资格均有正式合同和读�
  const checks=loadChecks(scoring.checks,'services/phone-adb-controller/checks/schema.json');assert.ok(checks.doc.probes.some(p=>p.key==='bridge_readback'&&p.probe.ref==='metrics.bridge_readback_failures'&&p.expect.value===0));
  assert.ok(checks.doc.probes.some(p=>p.key==='exclusion_readback'&&p.probe.ref==='metrics.exclusion_readback_failures'&&p.expect.value===0&&p.severity==='error'));
 });
+
+
+test('预检开始只要求可在开工前读取的身份，原生登录和本轮锁在结束验证',()=>{
+ const ctx=loadContractsFromDisk();
+ for(const key of [keys[0],keys[1],keys[3]]){
+  const preflight=assemble(ctx,key).activities.find(a=>a.key==='preflight');
+  const expectedAccount=preflight.inputs.find(i=>i.type==='Account');
+  const device=preflight.inputs.find(i=>i.type==='Device');
+  assert.doesNotMatch(expectedAccount.source,/原生登录态/,key);
+  assert.ok(!device.fields.includes('lock_holder'),key);
+  assert.ok(preflight.postconditions.some(p=>p.probe==='pf_account_verified'&&/原生登录/.test(p.asserts)),key);
+  assert.ok(preflight.postconditions.some(p=>p.probe==='pf_lock_acquired'&&/双锁|本地与中央/.test(p.asserts)),key);
+ }
+});
+
+test('预检未开工时，无本轮资源可收尾；已有副作用仍要按归属核对',()=>{
+ const ctx=loadContractsFromDisk();
+ for(const key of [keys[0],keys[1],keys[3]]){
+  const cleanup=assemble(ctx,key).activities.find(a=>a.key==='cleanup');
+  const device=cleanup.inputs.find(i=>i.type==='Device');
+  assert.ok(!device.fields.includes('lock_holder'),key);
+  assert.ok(cleanup.failure.empty_ok.some(c=>/无本轮动作/.test(c)),key);
+  assert.ok(cleanup.postconditions.some(p=>p.probe==='cl_lock_released'&&/确实持有/.test(p.asserts)),key);
+  assert.ok(cleanup.postconditions.some(p=>p.probe==='cl_app_closed'&&/本轮打开/.test(p.asserts)),key);
+ }
+});
