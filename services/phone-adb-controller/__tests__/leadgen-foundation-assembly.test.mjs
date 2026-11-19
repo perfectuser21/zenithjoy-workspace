@@ -6,6 +6,14 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   const before=Date.now(),a=await prepareLeadgenHost(f);assert.equal(a.receipt.status,'assembled_not_started');
   assert.ok(a.receipt.assembled_at_ms>=before);assert.equal(a.context.run_start_ts,undefined);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);
+  const tools=fs.readFileSync(path.join(a.profile.cwd,'TOOLS.txt'),'utf8');
+  assert.match(tools,/顶层 `outputs`/);
+  assert.match(tools,/`outputs` 的键是合同声明的对象类型/);
+  assert.match(tools,/按工具实际回执填写 `evidence`/);
+  for(const runtime of Object.values(a.profile.skill_runtime.activities)){
+   assert.match(runtime.checker.evidence.provider.description,/先读 proposal.evidence/);
+   assert.match(runtime.checker.evidence.provider.description,/只核对本轮实际适用的失败和幂等条件/);
+  }
   const binding=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'checker-input/identity.json'),'utf8'));
   assert.deepEqual(binding.binding,a.receipt.identity);
   assert.equal(binding.business_deadline_ms,f.run.deadline_ms);
