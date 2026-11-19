@@ -7,18 +7,13 @@ on:
         required: true
         type: string
       acceptance_run_key:
-        description: 同版本验收单，视频工具启用时填真实上传验收的 GitHub 运行编号
+        description: 同版本真实业务验收 run key
         required: true
         type: string
       confirm:
         description: 输入PROMOTE
         required: true
         type: string
-      video_tools:
-        description: 同时启用已备妥的生产视频工具和每员工独立画布（仍须同SHA验收）
-        required: false
-        type: boolean
-        default: false
   workflow_call:
     outputs:
       previous_sha:
@@ -38,10 +33,6 @@ on:
         required: false
         type: string
         default: PROMOTE
-      video_tools:
-        required: false
-        type: boolean
-        default: false
 concurrency:
   group: ${{ inputs.coordinated && format('zenithjoy-nested-{0}-api', github.run_id) || 'zenithjoy-production-hk' }}
   cancel-in-progress: false
@@ -55,7 +46,6 @@ jobs:
       sha: ${{ inputs.sha }}
       targets: api
       acceptance_run_key: ${{ inputs.acceptance_run_key }}
-      video_tools_live: ${{ inputs.video_tools }}
     secrets: inherit
   promote-prod-hk:
     name: Promote 生产 :5200（HK docker）
@@ -76,23 +66,6 @@ jobs:
           version: latest
 
       - uses: actions/checkout@v4
-
-      - name: Prepare admitted private production video tools
-        if: inputs.video_tools
-        env:
-          SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
-          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
-          DEPLOY_SHA: ${{ needs.admission.outputs.sha }}
-        run: |
-          set -euo pipefail
-          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
-          KEY_FILE=$(mktemp)
-          trap 'rm -f "$KEY_FILE"' EXIT
-          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \
-            -i "$KEY_FILE" "root@${SSH_HOST}" bash -s -- prepare "$DEPLOY_SHA" \
-            < scripts/deploy/hk-canvas-production.sh
 
       - name: Promote verified SHA via SSH（保留镜像，失败自动恢复）
         id: deploy

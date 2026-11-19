@@ -17,8 +17,8 @@ for (const [label,mutate,pass] of [
  const {default:YAML}=await import('yaml');
  const workflow=YAML.parse(readFileSync(new URL('../../release-admission.yml',import.meta.url),'utf8'));
  const job=workflow.jobs.admission,step=job.steps.find(s=>s.name==='Read frozen business acceptance from Brain');assert.ok(step);
- assert.equal(job['continue-on-error'],undefined);assert.equal(step['continue-on-error'],undefined);assert.equal(step.if,'${{ !inputs.video_tools_live }}');
- assert.equal(workflow.on.workflow_call.inputs.video_tools_live.default,false);
+ assert.equal(job['continue-on-error'],undefined);assert.equal(step['continue-on-error'],undefined);assert.equal(step.if,undefined);
+ assert.equal(workflow.on.workflow_call.inputs.video_tools_live,undefined);
  assert.equal(step.env.SHA,'${{ steps.staging.outputs.sha }}');assert.equal(step.env.RUN_KEY,'${{ inputs.acceptance_run_key }}');
  const dir=mkdtempSync(join(tmpdir(),'mandatory-release-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const bin=join(dir,'bin');mkdirSync(bin);
  const record=receipt();mutate(record);const recordFile=join(dir,'record.json');writeFileSync(recordFile,JSON.stringify(record));const calls=join(dir,'calls.jsonl');
