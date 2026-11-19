@@ -42,3 +42,15 @@ test('ASR locked tarball archive bytes are binary and reject malformed or unappr
   }
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('formal 102 preparation refuses incomplete frozen ASR before returning an executable host',async()=>{
+ const f=await foundationFixture('102'),read=fs.readFileSync;
+ const archive=new URL('../leadgen-foundation/sources/asr.json',import.meta.url);
+ const broken=JSON.parse(read(archive));delete broken.files['_dependencies/asr-cos/node_modules/cos-nodejs-sdk-v5/sdk/util.js'];
+ try{
+  fs.readFileSync=function(file,...args){return String(file)===archive.pathname?JSON.stringify(broken):read.call(this,file,...args);};
+  await assert.rejects(prepareLeadgenHost(f),/ASR_COS_DEPENDENCY_UNVERIFIED/);
+  const host=path.join(f.profile.cwd,'.leadgen-run/host');assert.equal(fs.existsSync(path.join(host,'receipts')),false);
+  assert.equal(fs.existsSync(path.join(host,'qualification-receipts')),false);
+ }finally{fs.readFileSync=read;f.close();}
+});
