@@ -4,3 +4,28 @@ async function fixture(){const root=fs.realpathSync(fs.mkdtempSync(path.join(os.
 test('historical qualification reads original documents only through bound manifest and Brain identity',async()=>{const{readQualificationOrigin}=await import('../leadgen-foundation/checker-file-facts.mjs');const f=await fixture();try{const r=await readQualificationOrigin(f.c,run,video,f.brain);assert.equal(r.origin.run_id,run);assert.equal(r.documents['journal.json'].data.transcript,'raw words');assert.equal(r.verified,undefined);assert.equal(r.outcome,undefined);assert.equal(r.visual_evidence_read,false);assert.match(r.manifest_sha256,/^[a-f0-9]{64}$/);}finally{f.close();}});
 test('historical wrong company, Brain identity, path aliases and absent evidence cannot authorize reads',async()=>{const{readQualificationOrigin}=await import('../leadgen-foundation/checker-file-facts.mjs');const f=await fixture();try{for(const[context,brain]of [[{...f.c,company_id:'foreign'},f.brain],[f.c,async()=>({task:{id:'foreign'}})],[f.c,async()=>{throw Error('offline');}]])await assert.rejects(readQualificationOrigin(context,run,video,brain));await assert.rejects(readQualificationOrigin(f.c,'../escape',video,f.brain));fs.renameSync(f.dir,f.dir+'-real');fs.symlinkSync(f.dir+'-real',f.dir);await assert.rejects(readQualificationOrigin(f.c,run,video,f.brain));}finally{f.close();}});
 test('media reader admits only an owned root file and fixed executable, never arbitrary protocols or paths',async()=>{const{readMediaFacts}=await import('../leadgen-foundation/checker-file-facts.mjs');const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'checker-media-')));try{const binary=path.join(root,'probe'),file=path.join(root,'clip.wav');fs.writeFileSync(binary,'#!/bin/sh\nprintf \'{"streams":[{"codec_type":"audio"}],"format":{}}\'\n',{mode:0o700});fs.writeFileSync(file,'fixture media',{mode:0o600});const tool={path:binary,sha256:hash(fs.readFileSync(binary))};const r=await readMediaFacts(root,'clip.wav',tool);assert.equal(r.metadata.streams[0].codec_type,'audio');assert.equal(r.sha256,hash('fixture media'));assert.equal(r.coverage_verified,undefined);for(const name of ['../clip.wav','https://example/media','sub/clip.wav'])await assert.rejects(readMediaFacts(root,name,tool));await assert.rejects(readMediaFacts(root,'clip.wav',{...tool,sha256:'0'.repeat(64)}));fs.symlinkSync(file,path.join(root,'alias.wav'));await assert.rejects(readMediaFacts(root,'alias.wav',tool));}finally{fs.rmSync(root,{recursive:true,force:true});}});
+
+// Stat ownership is the only simulated boundary. The parser executable, WAV
+// bytes and readMediaFacts implementation are real; no chmod/chown of host tools.
+async function mediaOwnership({toolUid=process.getuid(),mode=0o755,mediaUid=process.getuid(),accepted=false}){
+ const {readMediaFacts}=await import('../leadgen-foundation/checker-file-facts.mjs');
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'checker-tool-owner-'))),file=path.join(root,'clip.wav');
+ const candidate=['/opt/homebrew/bin/ffprobe','/usr/bin/ffprobe'].find(p=>fs.existsSync(p));assert.ok(candidate,'real ffprobe is required');
+ const binary=fs.realpathSync(candidate),tool={path:binary,sha256:hash(fs.readFileSync(binary))},original=fs.lstatSync;
+ const wav=Buffer.alloc(44+32000);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(16000,24);wav.writeUInt32LE(32000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(32000,40);fs.writeFileSync(file,wav,{mode:0o600});
+ try{
+  fs.lstatSync=function(p,...args){const stat=original.call(this,p,...args);if(String(p)===binary){stat.uid=toolUid;stat.mode=(stat.mode&~0o777)|mode;}if(String(p)===file)stat.uid=mediaUid;return stat;};
+  if(accepted){const r=await readMediaFacts(root,'clip.wav',tool);assert.equal(r.sha256,hash(wav));assert.equal(r.metadata.streams[0].codec_type,'audio');assert.equal(Number(r.metadata.streams[0].sample_rate),16000);assert.equal(r.coverage_verified,undefined);}
+  else await assert.rejects(readMediaFacts(root,'clip.wav',tool),/FACT_FILE_SCOPE/);
+ }finally{fs.lstatSync=original;fs.rmSync(root,{recursive:true,force:true});}
+}
+test('real media reader accepts a fixed current-user executable',()=>mediaOwnership({accepted:true}));
+test('real media reader accepts a fixed root-owned executable without granting media ownership',()=>mediaOwnership({toolUid:0,accepted:true}));
+test('real media reader rejects an executable owned by another non-root user',()=>mediaOwnership({toolUid:process.getuid()+1000}));
+for(const mode of [0o775,0o757])test('real media reader rejects group or world writable executable '+mode.toString(8),()=>mediaOwnership({mode}));
+test('root-owned tool permission never admits foreign-owned media evidence',()=>mediaOwnership({toolUid:0,mediaUid:process.getuid()+1000}));
+test('historical qualification documents still require the executing user owner',async()=>{
+ const {readQualificationOrigin}=await import('../leadgen-foundation/checker-file-facts.mjs'),f=await fixture(),original=fs.lstatSync;
+ try{const target=path.join(f.host,'context.json');fs.lstatSync=function(p,...args){const stat=original.call(this,p,...args);if(String(p)===target)stat.uid=process.getuid()+1000;return stat;};await assert.rejects(readQualificationOrigin(f.c,run,video,f.brain),/FACT_FILE_SCOPE/);}
+ finally{fs.lstatSync=original;f.close();}
+});
