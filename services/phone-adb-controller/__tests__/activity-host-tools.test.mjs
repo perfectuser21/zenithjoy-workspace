@@ -45,7 +45,7 @@ if mode=='context-drift':
  else:c['verification']['102']['qualification_input']['coverage']['source_duration_display_seconds']=38
  (target/'context.json').write_text(json.dumps(c))
 spec=importlib.util.spec_from_file_location('host',target/'tools.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-m.task_authority=lambda c:None;calls={'dispatch':0,'credentials':0,'resource':0}
+m.task_authority=lambda c,**kw:None;calls={'dispatch':0,'credentials':0,'resource':0}
 def resource(c):calls['resource']+=1
 def environment(c):calls['credentials']+=1;return {}
 def dispatch(*args,**kw):
@@ -198,7 +198,8 @@ for(const mode of ['same-text','after-dispatch','network','persist-failure'])tes
 test('103 real host preserves dedicated methods and freezes exact current comment provenance',()=>{
  const r=probe('normal','103');assert.notEqual(r.first.stdout,'');const v=JSON.parse(r.first.stdout);
  assert.equal(v.result.error,'BUSINESS_ACTIVITY_SCOPE');assert.equal(v.result.data.dispatched,false);assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});assert.equal(r.replay.stdout,r.first.stdout);assert.equal(r.second.rc,0);assert.equal(r.calls.dispatch,1);
- assert.equal(r.original,fixture103.files['TOOLS.txt'].source);assert.ok(r.instructions.startsWith(r.original));assert.match(r.instructions,/11111111-1111-4111-8111-111111111111/);assert.match(r.instructions,/fixture-source-102/);assert.match(r.instructions,/fixture-new-run/);assert.doesNotMatch(r.instructions,/6ced59bd|cloud102-20261118|录制|capture上限/);
+ assert.equal(r.original,fixture103.files['TOOLS.txt'].source);assert.ok(r.instructions.startsWith(r.original));assert.match(r.instructions,/11111111-1111-4111-8111-111111111111/);assert.match(r.instructions,/fixture-source-102/);assert.match(r.instructions,/fixture-new-run/);assert.doesNotMatch(r.instructions.split('手机工具统一使用')[0],/6ced59bd|cloud102-20261118|录制|capture上限/);
+ assert.match(r.instructions,/不再按Activity列手机命令名单/);
 });
 for(const mode of ['same-text','after-dispatch','network','persist-failure'])test(`103 ${mode} remains unknown without dispatch replay`,()=>{
  const r=probe(mode,'103');assert.equal(r.first.stdout,'');assert.equal(r.first.receipt.state,'unknown');assert.deepEqual(r.calls,r.before);assert.match(r.second.error,/PRIOR_ACTION_UNKNOWN/);
