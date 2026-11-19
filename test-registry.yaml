@@ -12376,3 +12376,11 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "已批准单次intent按真实Task/run原子绑定；跨run、并发、半绑定与篡改拒绝；离线无手机/模型/发送"
+
+  - id: phone-lock-uuid
+    path: services/phone-adb-controller/__tests__/phone-lock-uuid.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    note: 实际zsh及隔离本地锁CLI验证完整UUID身份、legacy尾兼容和不同UUID不归并；原phone_tests glob执行，无手机操作。
