@@ -1,7 +1,7 @@
 {
   "schema": "historical-test-fixture/v1",
   "revision": "c3de2aca5e4dc8a7846863f55510005f1e57f57e",
-  "archive_sha256": "0c7616885efc38748e6fc6a5d4fa56610e893a0acc79bff9522b1fad7d2efcdf",
+  "archive_sha256": "973eee560b1db5c46799c135abb8702dbf3693a9fd1cbb6f3d173df4a674037e",
   "files": {
     "product-map/contracts/douyin_video_discovery.yaml": {
       "sha256": "2d58617d04cbbefbc853ed2d2248b477c281453a66c0af092a3ea3b0a5c80c11",
@@ -34,6 +34,20 @@
     "services/phone-adb-controller/plans/douyin_lead_outreach.steps.json": {
       "sha256": "a45f6ac8fc34b192bc6e0904642253fcba2ae59538bbf196dc4d0f1bf23a00b2",
       "git_blob": "3df04bfbbb555a67748e205ce99104f234b27b82"
+    },
+    "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": {
+      "repository": "perfectuser21/zenithjoy-skills",
+      "revision": "1e1c069c379ed16315da125122f32e87eb27ae75",
+      "source": "business-skills/zenithjoy/services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
+      "blob": "433ff7e2a48b479fd5589382a558c5fc1a2e647e",
+      "sha256": "8a247698a61b2e009f55f5342042ae0e46fc706a450c3730cf702c1dabf72dae"
+    },
+    "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": {
+      "repository": "perfectuser21/zenithjoy-skills",
+      "revision": "1e1c069c379ed16315da125122f32e87eb27ae75",
+      "source": "business-skills/zenithjoy/services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
+      "blob": "0f10995e6b17e10e3f977d8459877feda4cedbf8",
+      "sha256": "26f46bb668c5ce3efb2d192c370a34fbed92acf5d5020eb35f199ef4b364c4b5"
     }
   },
   "runtime_authority": false

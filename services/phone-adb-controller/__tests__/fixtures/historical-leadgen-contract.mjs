@@ -18,7 +18,7 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 if(provenance.revision!==HISTORICAL_LEADGEN_REVISION||hash(archive)!==provenance.archive_sha256)throw Error('HISTORICAL_FIXTURE_SOURCE');
 const originals=JSON.parse(gunzipSync(archive));
 export function historicalLeadgenText(path){
- if(!contract.test(path)&&!step.test(path))throw Error('HISTORICAL_FIXTURE_PATH');
+ if(!contract.test(path)&&!step.test(path)&&!/^services\/phone-adb-controller\/skills\/douyin-leadgen-activity-103-(scoring|mark-leads)\/SKILL\.md$/.test(path))throw Error('HISTORICAL_FIXTURE_PATH');
  const text=originals[path];
  if(typeof text!=='string'||hash(text)!==provenance.files[path]?.sha256)throw Error('HISTORICAL_FIXTURE_DIGEST');
  return text;
