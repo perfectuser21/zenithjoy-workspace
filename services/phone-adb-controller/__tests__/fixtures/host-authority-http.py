@@ -5,7 +5,7 @@ sys.path.insert(0, str(root))
 spec = importlib.util.spec_from_file_location('actual_host', root/'tools.py')
 m = importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 c = json.loads((root/'context.json').read_text());stage=c['assigned_workflow']
-activity = 'cleanup' if mode == 'cleanup' else 'qualification'
+activity = 'cleanup' if mode == 'cleanup' else 'preflight' if stage == '104' else 'qualification'
 if mode == 'distinct':c['root_task_id'] = '33333333-3333-4333-8333-333333333333'
 now = time.time()
 if stage != '104':c['business_deadline_ms'] = (now + (0.3 if mode == 'slow-body' else 7 if mode == 'short' else -1 if mode == 'cleanup' else 60))*1000

@@ -62,7 +62,7 @@ test('a new action corrects a refused recording EID and dispatches exactly one c
 
 for(const mode of ['healthy','exhaust','reset','post-dispatch'])test(`104 dedicated assembly preserves its send scope with shared read-only admission ${mode}`,async()=>{
  const r=await run(mode,'104');
- if(mode==='post-dispatch'){assert.equal(r.stdout,'');assert.equal(r.dispatches,1);assert.deepEqual(r.states,['unknown']);assert.match(r.error,/TaskAuthorityUnavailable/);}
+ if(mode==='post-dispatch'){assert.equal(r.stdout,'');assert.equal(r.dispatches,1);assert.deepEqual(r.states,['unknown']);assert.match(r.error,/RemoteDisconnected/);assert.equal(requests(r),2);assert.deepEqual(r.sleeps,[]);}
  else if(mode==='exhaust'){assert.equal(r.code,75);assert.equal(requests(r),2);assert.equal(r.dispatches,0);assert.deepEqual(r.receipts,[]);assert.equal(JSON.parse(r.stdout).result.data.dispatched,false);}
  else {assert.equal(r.code,0,r.error);assert.equal(requests(r),mode==='healthy'?1:2);assert.equal(r.dispatches,1);}
 });
