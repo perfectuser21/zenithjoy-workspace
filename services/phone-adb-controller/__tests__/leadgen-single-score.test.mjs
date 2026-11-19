@@ -14,14 +14,14 @@ const audit={model:'google/gemini-2.5-flash',response_id:'single-response',stage
 const verdict={grade:'A',relevance:'相关',reason:'报名咨询',audit};
 
 test('normal score commits one evaluation without invoking policy models',async()=>{
- let selected=false,calls=0,reviewCalls=0,saved;
+ let selected=false,calls=0,reviewCalls=0,saved;const transcript='持久转写：报名先提交申请。';
  const client={async query(sql,args=[]){
   if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:selected?[]:(selected=true,[row])};
-  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{video_url:row.source_video_url,title:row.source_video,judgment_status:'matched'}]};
+  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{video_url:row.source_video_url,title:row.source_video,judgment_status:'matched',transcript}]};
   if(sql.includes('UPDATE zenithjoy.leadgen_comments'))saved={relevance:args[1],intent_grade:args[2],judgment_reason:args[3],judgment_config:JSON.parse(args[4])};
   return {rows:[]};},release(){}};
  const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:'once103',source_run:'batch102',limit:1},{freezeCompanyConfig:async()=>snapshot,
-  judgeComment:async()=>{calls++;return verdict;},judgePolicy:async()=>{reviewCalls++;throw Error('must not review');}});
+  judgeComment:async(body,title,profile,opts)=>{assert.equal(opts.videoTranscript,transcript);calls++;return verdict;},judgePolicy:async()=>{reviewCalls++;throw Error('must not review');}});
  assert.equal(result.scored,1);assert.equal(calls,1);assert.equal(reviewCalls,0);assert.equal(saved.intent_grade,'A');
  assert.equal(saved.judgment_config.scoring_mode,'single-evaluation-v1');assert.equal(saved.judgment_config.policy_reviews,undefined);
  const stored={...row,...saved};assert.equal(policy.verifyStoredScore(stored,snapshot).status,'pass');
@@ -33,6 +33,20 @@ test('single scoring uses one structured model request even on low confidence',a
  const rules=snapshot.runtime_config.comment_scoring;const audience=rules.audiences[0];const signal=String(audience.fields['意向信号']).split(/[\/、，,；;\n]/).find(s=>s.trim());let calls=0;
  const result=await judge.judgeCommentOnce('怎么报名？',row.source_video,'公司画像',{scoringRules:rules,apiKey:'fixture-only',httpPost:async()=>{calls++;return {id:'one-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:JSON.stringify({grade:'A',policy_evidence:{audience_id:audience.id,matched_rule:signal,comment_signal:'怎么报名？',video_signal:'怎么报名',exclusion_rule:null,reason:'本人询问报名'}})}}]};}});
  assert.equal(result.grade,'A');assert.equal(calls,1);assert.equal(result.audit.response_id,'one-response');
+});
+test('single scoring sends persisted transcript as context in its only model request',async()=>{
+ const rules=snapshot.runtime_config.comment_scoring,audience=rules.audiences[0],transcript='真实转写：本视频介绍报名流程和课程内容。';let calls=0,request;
+ const result=await judge.judgeCommentOnce('怎么报名？',row.source_video,'公司画像',{videoTranscript:transcript,scoringRules:rules,apiKey:'fixture-only',httpPost:async(url,body)=>{calls++;request=body;return {id:'transcript-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:JSON.stringify({grade:'B',policy_evidence:{audience_id:audience.id,matched_rule:audience.fields['人群描述'],comment_signal:'怎么报名？',video_signal:null,exclusion_rule:null,reason:'依据原文'}})}}]};}});
+ assert.equal(result.grade,'B');assert.equal(calls,1);assert.ok(request.messages[0].content.includes(transcript));assert.ok(request.messages[0].content.includes(row.source_video));
+});
+test('transcript read binds line, video URL and title and preserves absent transcript as null',async()=>{
+ const {readScoreTranscript}=require('../leadgen-score-context.js');let reads=0;
+ const video={video_url:row.source_video_url,title:row.source_video};
+ const client={query:async(sql,args)=>{reads++;assert.deepEqual(args,['jinuo',row.source_video_url]);assert.match(sql,/line_key=\$1 AND video_url=\$2/);return {rows:[video]};}};
+ assert.equal(await readScoreTranscript(client,'jinuo',row,[]),null);assert.equal(reads,1);
+ for(const videos of [[],[video,video],[{...video,video_url:row.source_video_url+'1'}],[{...video,title:'其他视频'}],[{...video,transcript:{text:'未授权结构'}}]]){
+  await assert.rejects(readScoreTranscript({query:async()=>({rows:videos})},'jinuo',row,[]),/POLICY_VIDEO_(CONTEXT|TRANSCRIPT)_INVALID/);
+ }
 });
 
 test('invalid single model response stops without calling a fallback model',async()=>{

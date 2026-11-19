@@ -164,7 +164,7 @@ test('固定Workflow索引验收逐Activity正文及支持文件，不把目录�
  for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103,douyin_lead_outreach:104})){
   const d=skillAcceptanceDefinition(key,read);assert.equal(d.workflow_key,key);assert.ok(d.checks.length>0);
   assert.equal(d.skill.activities.length,n===101?3:n===102?5:n===103?2:4);assert.ok(d.skill.activities.every(a=>a.sha256.length===64));assert.ok(d.checks.some(c=>c.section.endsWith('/成功条件')));
-  if(n!==104)assert.ok(d.checks.some(c=>c.section==='Workflow/工作流之间的异步交接'&&c.text.includes('collect_partial')),'异步放行边界必须进入验收，不能静默遗漏');
+  if(n!==104){const raw=read(`services/phone-adb-controller/skills/douyin-leadgen-${n}/SKILL.md`).toString().match(/^## 工作流之间的异步交接\n([\s\S]*?)(?=^## )/m)[1];assert.deepEqual(d.checks.filter(c=>c.section==='Workflow/工作流之间的异步交接').map(c=>c.text),raw.trim().split(/\n\s*\n/).map(s=>s.trim()),'异步放行原文逐段完整保留');}
  }
 });
 test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，真实方法变更改变验收摘要',async()=>{
@@ -179,4 +179,41 @@ test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，�
  assert.throws(()=>skillAcceptanceDefinition(key,path=>{if(path!==manifest)return read(path);const m=JSON.parse(read(path));m.activities[0].activity_ref='douyin_video_processing.scoring';return Buffer.from(JSON.stringify(m));}),/所属Workflow不符/);
  const changed=skillAcceptanceDefinition(key,path=>path===method?Buffer.from(read(path).toString().replace('## 成功条件\n','## 成功条件\n\n新增可观察要求。\n')):read(path));
  assert.notEqual(digest(changed),digest(original));assert.notEqual(changed.skill.activities[0].sha256,original.skill.activities[0].sha256);
+});
+
+test('判重来源分支标题新旧恰一且正文完整进入验收，双标题或缺标题仍拒绝',async()=>{
+ const {readFileSync}=await import('node:fs');const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const key='douyin_video_processing',method='services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md';
+ const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));
+ const current=read(method).toString();assert.ok(current.includes('## 来源证明与认领分支\n'));
+ for(const heading of ['来源证明与认领分支','明示producer交接']){
+  const text=current.replace('## 来源证明与认领分支\n','## '+heading+'\n');
+  const result=skillAcceptanceDefinition(key,path=>path===method?Buffer.from(text):read(path));
+  assert.ok(result.checks.some(c=>c.section==='douyin_video_processing.dedup/'+heading&&c.text.includes('producer_descriptor')));
+ }
+ for(const replacement of ['## 未声明来源分支\n','## 明示producer交接\n\n额外段落。\n\n## 来源证明与认领分支\n','## 来源证明与认领分支\n\n重复段落。\n\n## 来源证明与认领分支\n','']){
+  assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(current.replace('## 来源证明与认领分支\n',replacement)):read(path)),/未知或重复/);
+ }
+ assert.throws(()=>skillAcceptanceDefinition(key,path=>path===method?Buffer.from(current.replace(/(^## 来源证明与认领分支\n)[\s\S]*?(?=^## )/m,'$1\n')):read(path)),/规范段落为空/);
+});
+
+test('通用Checker方法的新合同与能力声明完整提取；未知、重复、空段拒绝，旧结构仍可读',async()=>{
+ const {readFileSync}=await import('node:fs');const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));
+ for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103,douyin_lead_outreach:104})){
+  const result=skillAcceptanceDefinition(key,read),index=`services/phone-adb-controller/skills/douyin-leadgen-${n}/SKILL.md`;
+  for(const path of [index,...result.skill.activities.map(a=>a.path)]){
+   const original=read(path).toString(),section='合同、执行提案与独立验收';
+   assert.ok(result.checks.some(c=>c.section.endsWith('/'+section)&&c.text.includes('Contract')));
+   assert.ok(result.checks.some(c=>c.section.endsWith('/宿主恢复能力声明')));
+   for(const replacement of ['## 未知合同声明\n','## '+section+'\n\n重复。\n\n## '+section+'\n']){
+    assert.throws(()=>skillAcceptanceDefinition(key,p=>p===path?Buffer.from(original.replace('## '+section+'\n',replacement)):read(p)),/未知或重复/);
+   }
+   assert.throws(()=>skillAcceptanceDefinition(key,p=>p===path?Buffer.from(original.replace(/(^## 合同、执行提案与独立验收\n)[\s\S]*?(?=^## )/m,'$1\n')):read(p)),/规范段落为空/);
+  }
+  const legacy=skillAcceptanceDefinition(key,p=>{
+   const raw=read(p);if(!p.endsWith('/SKILL.md'))return raw;
+   return Buffer.from(raw.toString().replace(/^## 合同、执行提案与独立验收\n[\s\S]*?(?=^## )/m,'').replace('## 宿主恢复能力声明\n',p===index?'## 历史宿主兼容声明\n':'## 宿主恢复声明\n'));
+  });assert.ok(legacy.checks.length>0);
+ }
 });

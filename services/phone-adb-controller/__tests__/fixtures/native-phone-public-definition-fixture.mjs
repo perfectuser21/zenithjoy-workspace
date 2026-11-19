@@ -1,3 +1,4 @@
+import {historicalContract} from './historical-leadgen-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {createServer} from 'node:http';
@@ -17,7 +18,7 @@ export async function freezePublicPhoneDefinition(t,f,{env,manifest,extraFrozen=
  task.claimed_at=new Date().toISOString();Object.assign(task.payload,{workflow_key:input.workflow_key,run_tag:input.run_tag,profile:input.profile,device_serial:input.serial,company_line:input.line,source_commit:manifest.source_commit,scope:{source_run:null,limit:input.limit,send:0,run_max_seconds:input.run_max_seconds,execution_transport:input.execution_transport,max_turns:input.max_turns}});
  const binding=f.routes.get('/api/brain/runs/'+f.q.run_id+'/definition').binding,wf=f.routes.get('/api/brain/workflows/w1/versions/wv1').version;
  wf.id='wv1';wf.source_commit=manifest.source_commit;wf.payload.workflow_id='w1';wf.payload.activities=[];
- wf.payload.contract=YAML.parse(readFileSync(new URL('../../../../product-map/contracts/douyin_video_discovery.yaml',import.meta.url),'utf8'));
+ wf.payload.contract=YAML.parse(historicalContract('douyin_video_discovery'));
  const activities=[];
  for(const[key,index]of [['preflight',1],['collect_videos',2],['cleanup',3]]){
   const method=key==='collect_videos'?'douyin-leadgen-activity-101-collect-videos':'douyin-leadgen-activity-102-'+key,text=readFileSync(join(f.runtimeRoot,'skills',method,'SKILL.md'),'utf8'),contract={budget:{max_duration_s:typeof activityBudgetS==='number'?activityBudgetS:activityBudgetS[key]}},version={id:'av'+index,source_commit:manifest.source_commit,contract_sha256:sha(contract),payload:{activity_id:'a'+index,definition_key:(key==='collect_videos'?'douyin_video_discovery.':'douyin_video_processing.')+key,contract,implementation_bindings:[{kind:'skill',status:'verified',repo:manifest.source_repo,revision:manifest.source_commit,name:method,version:text.match(/^  version: (\S+)$/m)[1],content_sha256:sha(text),path:'services/phone-adb-controller/skills/'+method+'/SKILL.md'}]}};

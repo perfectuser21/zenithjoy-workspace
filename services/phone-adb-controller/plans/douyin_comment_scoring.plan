@@ -1,18 +1,3 @@
-# 由 scripts/product-map/wf-plan.mjs --write 从 product-map/contracts/douyin_comment_scoring.yaml 生成，勿手改
-WF_CAP='douyin_comment_scoring'
-WF_WORKFLOW='douyin-comment-scoring'
-WF_BRAIN_WORKFLOW='douyin_comment_scoring'
-WF_SOURCE_REPO='perfectuser21/zenithjoy-workspace'
-WF_CONTRACT_SHA256='6360bdb3c140b518730bf5e6cc489a7755f8997a3817d1c4c8f022ca79864583'
-WF_CONTRACT_RAW_SHA256='4ba09ea879c3aed3c01aaaf72ba3912ed375fecabd6df539fe6eae6a7e1d3c62'
-WF_ACTIVITY_REFS='[{"slot_key":"scoring","sequence_no":1,"definition_key":"douyin_comment_scoring.scoring","source_capability":"douyin_comment_scoring","contract_sha256":"a31b5fc1e8bad6f09318f248a888df48333398eb54121f9760c2cc008f5d127b"},{"slot_key":"mark_leads","sequence_no":2,"definition_key":"douyin_comment_scoring.mark_leads","source_capability":"douyin_comment_scoring","contract_sha256":"9386d1a3e6703d5ed561665b5a1b7df5c85d895b380a1997afb8551bbf7c400c"}]'
-WF_STEP_SPEC='plans/douyin_comment_scoring.steps.json'
-WF_STAGES='评分,标记人'
-WF_SOURCE_KIND='pending_comments'
-WF_DISCOVER_CMD=''
-WF_MISSING=''
-WF_RUNNER='leadgen-workflow.mjs'
-WF_BUDGET_scoring='1800'
-WF_BUDGET_mark_leads='1800'
-WF_TIMEOUT_CLASS_scoring='record'
-WF_TIMEOUT_CLASS_mark_leads='record'
+# Foundation douyin_comment_scoring：仅原API/profile入口，禁止旧wf-run
+printf '%s\n' 'FOUNDATION_API_ONLY' >&2
+return 64 2>/dev/null || exit 64

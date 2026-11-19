@@ -1,3 +1,4 @@
+import {historicalSteps} from './fixtures/historical-leadgen-contract.mjs';
 import {handlerZero} from './helpers/no-comments-fixture.mjs';
 import {writeAcceptedDiscoveryResult} from './helpers/discovery-handoff-fixture.mjs';
 import {metricPhoneReceipt} from './helpers/discovery-metrics-fixture.mjs';
@@ -357,7 +358,7 @@ for(const mode of ['avatar','identity','missing_avatar','malformed_avatar'])test
   await h.dedup();await h.qualification();const out=await h.collection();
   if(mode.includes('avatar')&&mode!=='avatar'){assert.equal(out.status,'partial');assert.equal(out.videos_sampled,0);assert.match(out.failures[0].reason,/头像恢复/);return;}
   assert.equal(out.comments_inserted,5);assert.equal(out.avatar_recovery_count,2);assert.equal(out.identity_rescan_count,identity);assert.equal(out.rescan_count,identity);assert.equal(out.rescan_rate,identity);
-  const spec=JSON.parse(readFileSync('services/phone-adb-controller/plans/douyin_video_processing.steps.json','utf8'));const step=spec.steps.find(s=>s.key.endsWith('.return_to_results'));const result=judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{metrics:out}});assert.equal(result.steps[0].pass,mode==='avatar');
+  const spec=historicalSteps('douyin_video_processing');const step=spec.steps.find(s=>s.key.endsWith('.return_to_results'));const result=judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{metrics:out}});assert.equal(result.steps[0].pass,mode==='avatar');
   const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-video-processing.yaml','utf8')),probe=checks.probes.find(p=>p.key==='coll_rescan_rate');assert.equal(probe.expect.value,0.3);assert.equal(probe.probe.ref,'metrics.rescan_rate');assert.equal(out.rescan_rate<=probe.expect.value,mode==='avatar');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

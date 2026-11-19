@@ -203,7 +203,7 @@ test('评论持久化失败必须回滚，不能先把视频标成已采', async
 
 test('评论评分模型失败留在待评分队列，不降成C档', async () => {
   const pool = fakePool([{ rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训',source_video_url:'https://www.douyin.com/video/7617837149999841201' }] },
-    {rows:[{title:'培训',judgment_status:'matched'}]},{rows:[]}]);
+    {rows:[{title:'培训',video_url:'https://www.douyin.com/video/7617837149999841201',judgment_status:'matched'}]},{rows:[]}]);
   const result=await queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
     judgeComment: async () => { throw Error('AUTH_FAILED'); },
   });
@@ -230,7 +230,7 @@ test('103评分失败回执区分Jev HTTP故障与Commander证据无效，且不
   for (const { failure, expected } of cases) {
     const pool = fakePool([
       { rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训', source_video_url: 'https://www.douyin.com/video/7617837149999841201' }] },
-      { rows: [{ title: '培训', judgment_status: 'matched' }] },
+      { rows: [{ title: '培训', video_url:'https://www.douyin.com/video/7617837149999841201', judgment_status: 'matched' }] },
       { rows: [] },
     ]);
     const result = await queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {

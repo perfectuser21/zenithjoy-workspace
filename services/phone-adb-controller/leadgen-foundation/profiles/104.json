@@ -8,23 +8,554 @@
         "key": "preflight",
         "order": 1,
         "budget": {
-          "max_duration_s": 900,
-          "heartbeat_s": 2
+          "max_duration_s": 300,
+          "heartbeat_s": 60
         },
         "acceptance": {
-          "description": "按冻结douyin_lead_outreach.preflight合同独立核验真实产物"
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_lead_outreach.yaml",
+            "activity_ref": "douyin_lead_outreach.preflight",
+            "contract_digest": "cfbf7234115ffd9de6eed5ad0737c3e09b81279f78f0391e0f5f4839251b8c40"
+          },
+          "document": {
+            "key": "preflight",
+            "name": "预检",
+            "promise": "核对本轮触达授权、公司账号、设备、原政策及批准话术；本段不领取或创建订单",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_lead_outreach"
+              ],
+              "activity_key": "preflight",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 1,
+            "version": "5.1.0",
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "breaking",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "获客采收员"
+            },
+            "inputs": [
+              {
+                "type": "Device",
+                "source": "设备台账及本轮原生设备锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "host",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Account",
+                "source": "该公司已启用的发送账号配置",
+                "cardinality": "one",
+                "fields": [
+                  "platform",
+                  "profile",
+                  "sender_id",
+                  "dm_paused",
+                  "daily_cap"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Device",
+                "destination": "本轮触达设备锁及运行上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "online",
+                  "call_state",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Account",
+                "destination": "本轮已核发送账号上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "logged_in"
+                ]
+              },
+              {
+                "type": "Run",
+                "destination": "本轮触达运行账本",
+                "cardinality": "one",
+                "effect": "create",
+                "fields": [
+                  "run_tag",
+                  "profile",
+                  "serial"
+                ]
+              }
+            ],
+            "preconditions": [
+              "本run有真实批准资产/intent绑定公司、发送账号、目标和批准正文；本轮发送上限与每日上限从该资产及现行政策读取，不从旧固定60/10推定。",
+              "真实账号风险/暂停状态及原额度可读，不符合时禁止取单发送。",
+              "只核本次上下文与政策；原订单与目标资格在领取时验证，不修改protected/已发或unknown订单。"
+            ],
+            "postconditions": [
+              {
+                "probe": "pf_device_verified",
+                "asserts": "设备原生在线且真实硬件/路由与授权设备一致。"
+              },
+              {
+                "probe": "pf_account_verified",
+                "asserts": "原生登录发送账号、公司/租户、批准正文和当前政策版本一致；资产授权及每日/本轮剩余额度有独立来源。"
+              },
+              {
+                "probe": "pf_call_idle",
+                "asserts": "手机当前不在通话中，未知不当idle。"
+              },
+              {
+                "probe": "pf_lock_acquired",
+                "asserts": "本run取得精确双锁并保来源回执，实际owner/租约一致；预检不领取旁单、不发送。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 300,
+              "heartbeat_s": 60
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>"
+              ],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "Run.run_tag",
+              "on_duplicate": "reject"
+            },
+            "failure": {
+              "empty_ok": [],
+              "retryable": [
+                "lock_busy 设备锁被占"
+              ],
+              "needs_human": {
+                "cases": [
+                  "device_offline 设备离线",
+                  "account_mismatch 手机登录号不符",
+                  "call_busy 设备通话中（未挂断的电话）"
+                ],
+                "alert": {
+                  "channel": "bark",
+                  "object": "harvest-cron.sh:121-125 离线升级分身 → Bark"
+                }
+              },
+              "fatal": [
+                "run_tag 重复"
+              ]
+            },
+            "side_effects": [],
+            "invokers": [
+              "code"
+            ],
+            "runtime": {
+              "phase": "setup",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "acquire_device_lock",
+                "name": "拿设备锁",
+                "order": 1,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Device.lock_holder"
+                ],
+                "check": "取得本run精确双锁，租约按本次冻结配置，不能覆盖他人。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.acquire_device_lock（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "refresh_lock_heartbeat",
+                "name": "锁心跳续期",
+                "order": 2,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [
+                  "Device.lock_holder"
+                ],
+                "check": "lock-refresh 后锁文件 mtime 更新",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.refresh_lock_heartbeat（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "verify_device_identity",
+                "name": "验设备身份",
+                "order": 3,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Device.online"
+                ],
+                "check": "adb get-state == device 且 serial 与声明一致",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.verify_device_identity（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "verify_call_idle",
+                "name": "验通话空闲",
+                "order": 4,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Device.call_state"
+                ],
+                "check": "telephony call_state == IDLE",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.verify_call_idle（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "read_account_mark",
+                "name": "读账号标记(我页)",
+                "order": 5,
+                "reads": [
+                  "Account.sender_id"
+                ],
+                "writes": [
+                  "Account.logged_in"
+                ],
+                "check": "我页抖音号 in profile 的注册账号列表(account-current + account_registered)",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.read_account_mark（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "open_run_ledger",
+                "name": "开账本",
+                "order": 6,
+                "reads": [
+                  "Account.profile",
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Run.run_tag",
+                  "Run.profile",
+                  "Run.serial"
+                ],
+                "check": "保存真实本次设备、账号、通话、锁及批准资产原件，不以旧cron日志或固定指标代替。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.open_run_ledger（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "check_breaker_and_cap",
+                "name": "熔断与日限额闸",
+                "order": 7,
+                "reads": [
+                  "Account.dm_paused",
+                  "Account.daily_cap"
+                ],
+                "writes": [],
+                "check": "按真实批准资产/现行政策读取风险与额度，不使用旧60/10固定上限。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "outreach-tick.sh:218-303"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "verify_sender_account",
+                "name": "验发送账号",
+                "order": 8,
+                "reads": [
+                  "Account.sender_id"
+                ],
+                "writes": [],
+                "check": "我页抖音号 == sender_id，不符一次即熔断",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "outreach-tick.sh account_mismatch"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "设备台账及本轮原生设备锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "host",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Account",
+                "source": "该公司已启用的发送账号配置",
+                "cardinality": "one",
+                "fields": [
+                  "platform",
+                  "profile",
+                  "sender_id",
+                  "dm_paused",
+                  "daily_cap"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "本run有真实批准资产/intent绑定公司、发送账号、目标和批准正文；本轮发送上限与每日上限从该资产及现行政策读取，不从旧固定60/10推定。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "真实账号风险/暂停状态及原额度可读，不符合时禁止取单发送。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "preconditions_2",
+              "phase": "start",
+              "requirement": "只核本次上下文与政策；原订单与目标资格在领取时验证，不修改protected/已发或unknown订单。",
+              "source_pointer": "/preconditions/2"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Device",
+                "destination": "本轮触达设备锁及运行上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "online",
+                  "call_state",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Account",
+                "destination": "本轮已核发送账号上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "logged_in"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "outputs_2",
+              "phase": "end",
+              "requirement": {
+                "type": "Run",
+                "destination": "本轮触达运行账本",
+                "cardinality": "one",
+                "effect": "create",
+                "fields": [
+                  "run_tag",
+                  "profile",
+                  "serial"
+                ]
+              },
+              "source_pointer": "/outputs/2"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_device_verified",
+                "asserts": "设备原生在线且真实硬件/路由与授权设备一致。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_account_verified",
+                "asserts": "原生登录发送账号、公司/租户、批准正文和当前政策版本一致；资产授权及每日/本轮剩余额度有独立来源。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "postconditions_2",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_call_idle",
+                "asserts": "手机当前不在通话中，未知不当idle。"
+              },
+              "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "postconditions_3",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_lock_acquired",
+                "asserts": "本run取得精确双锁并保来源回执，实际owner/租约一致；预检不领取旁单、不发送。"
+              },
+              "source_pointer": "/postconditions/3"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Run.run_tag",
+                "on_duplicate": "reject"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [],
+                "retryable": [
+                  "lock_busy 设备锁被占"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "device_offline 设备离线",
+                    "account_mismatch 手机登录号不符",
+                    "call_busy 设备通话中（未挂断的电话）"
+                  ],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "harvest-cron.sh:121-125 离线升级分身 → Bark"
+                  }
+                },
+                "fatal": [
+                  "run_tag 重复"
+                ]
+              },
+              "source_pointer": "/failure"
+            }
+          ]
         },
         "failure": {
           "empty_ok": [],
-          "retryable": [],
-          "fatal": [
-            "error"
+          "retryable": [
+            "lock_busy 设备锁被占"
           ],
           "needs_human": {
             "cases": [
-              "unknown"
-            ]
-          }
+              "device_offline 设备离线",
+              "account_mismatch 手机登录号不符",
+              "call_busy 设备通话中（未挂断的电话）"
+            ],
+            "alert": {
+              "channel": "bark",
+              "object": "harvest-cron.sh:121-125 离线升级分身 → Bark"
+            }
+          },
+          "fatal": [
+            "run_tag 重复"
+          ]
         },
         "runtime": {
           "phase": "source",
@@ -45,23 +576,551 @@
         "key": "send_dm",
         "order": 2,
         "budget": {
-          "max_duration_s": 1800,
-          "heartbeat_s": 2
+          "max_duration_s": 1500,
+          "heartbeat_s": 60
         },
         "acceptance": {
-          "description": "按冻结douyin_lead_outreach.send_dm合同独立核验真实产物"
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_lead_outreach.yaml",
+            "activity_ref": "douyin_lead_outreach.send_dm",
+            "contract_digest": "9b557cc1f22979c9189307ff048624a1e1089d2a2a53abb2dedd8123d88eac25"
+          },
+          "document": {
+            "key": "send_dm",
+            "name": "发私信",
+            "promise": "仅对已授权合格目标发送该公司批准话术，交出一次可核验的发送或未发送结果",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_lead_outreach"
+              ],
+              "activity_key": "send_dm",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 2,
+            "version": "6.1.0",
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "breaking",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "私信触达员"
+            },
+            "inputs": [
+              {
+                "type": "Lead",
+                "source": "该公司已交付且资格合格的待触达线索",
+                "cardinality": "many",
+                "fields": [
+                  "douyin_id",
+                  "profile_url",
+                  "intent_grade",
+                  "repeat_hits",
+                  "status"
+                ]
+              },
+              {
+                "type": "Account",
+                "source": "预检通过的发送账号及限额",
+                "cardinality": "one",
+                "fields": [
+                  "profile",
+                  "sender_id",
+                  "dm_paused",
+                  "daily_cap"
+                ]
+              },
+              {
+                "type": "Device",
+                "source": "触达预检取得的本轮设备锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "OutreachOrder",
+                "source": "该公司canonical队列中已存在的合格未发送订单；普通模式按公司资格队列，单条验收按精确范围领取",
+                "cardinality": "one",
+                "fields": [
+                  "lead_record_id",
+                  "douyin_id",
+                  "sender_id",
+                  "script_id",
+                  "message",
+                  "result"
+                ]
+              },
+              {
+                "type": "OutreachScope",
+                "source": "仅exact模式输入，本run从私有0600文件冻结的唯一飞书订单及原评论、公司、102/103来源和执行设备身份",
+                "cardinality": "one",
+                "fields": [
+                  "record_id",
+                  "comment_id",
+                  "company_id",
+                  "source_run",
+                  "mark_run",
+                  "target_douyin_id",
+                  "line_key",
+                  "run_tag",
+                  "profile",
+                  "serial"
+                ]
+              },
+              {
+                "type": "RecipientQualification",
+                "source": "原订单关联的该公司已通过原生身份核验的资格快照",
+                "cardinality": "one",
+                "fields": [
+                  "company_id",
+                  "policy_id",
+                  "native_profile_sha256"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "OutreachOrder",
+                "destination": "该公司已有 canonical 订单的永久预留及本次发送回执",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lead_record_id",
+                  "douyin_id",
+                  "sender_id",
+                  "script_id",
+                  "message",
+                  "result"
+                ]
+              }
+            ],
+            "preconditions": [
+              "发送账号风险与暂停状态允许，本run批准资产/intent的每日和本轮上限仍有余额；公司数值不写死在通用Contract。",
+              "冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。",
+              "批准正文、发送账号、目标、公司及原订单/102/103来源与冻结范围完全一致。",
+              "ordinary公司队列与exact原单模式按各自冻结授权选单，不从exact失败回退旁单；先永久预留，再执行唯一手机发送。",
+              "未知/已prepared/已发动作仅按原幂等状态读回，不能重发；Checker只读取证不授发送权。"
+            ],
+            "postconditions": [
+              {
+                "probe": "out_zero_send_while_paused",
+                "asserts": "暂停/未授权/额度不足阶段零发送；未发送如实标记，不造成功。"
+              },
+              {
+                "probe": "out_order_scope_verified",
+                "asserts": "实际领取原单与批准公司、目标及102/103来源一致，旁单零领取；发送不超过本轮与每日批准上限。"
+              },
+              {
+                "probe": "out_delivery_result_verified",
+                "asserts": "真实发送前后原生证据、当前收件人与发送账号、批准正文及限制提示完整。结果未知不报成功且不重发；出现气泡不宣称对方已送达。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 1500,
+              "heartbeat_s": 60
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>",
+                "outreach-tick mkdir 锁（35 分钟尸锁）"
+              ],
+              "limits": [
+                {
+                  "name": "daily_cap",
+                  "value": "批准资产/intent与现行公司政策给定，每日真实发送数不得超过"
+                },
+                {
+                  "name": "run_cap",
+                  "value": "本次批准资产/intent给定，单动作状态机及未知不重发保持"
+                }
+              ]
+            },
+            "idempotency": {
+              "dedupe_key": "OutreachOrder.lead_record_id",
+              "on_duplicate": "reject"
+            },
+            "failure": {
+              "empty_ok": [
+                "NO_PENDING 无待触达单",
+                "restricted 对方仅互关（不计成功）"
+              ],
+              "retryable": [
+                "lock_busy等仅在已证未prepared且未发送的本人原单，按本run冻结runtime授权有界重试；不得另行扩次数。",
+                "rate_limited按现行政策停发；prepared、已发或未知只读原动作，不回队列重发。"
+              ],
+              "needs_human": {
+                "cases": [
+                  "account_mismatch账号身份不符停止",
+                  "原动作结果未知，保留原订单与证据，不重发",
+                  "TARGET_ABSENT",
+                  "NO_SCRIPT批准正文缺失"
+                ],
+                "alert": {
+                  "channel": "bark",
+                  "object": "熔断即 Bark（notify-bark.js，去重 24h）"
+                }
+              },
+              "fatal": []
+            },
+            "side_effects": [
+              {
+                "kind": "external_visible",
+                "target": "抖音私信",
+                "description": "真实向潜在客户发送私信（douyin-phone-adb:2372）"
+              }
+            ],
+            "invokers": [
+              "code"
+            ],
+            "runtime": {
+              "phase": "batch_end",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "pick_order",
+                "name": "取单预写触达中",
+                "order": 1,
+                "reads": [
+                  "Lead.status",
+                  "Lead.repeat_hits",
+                  "Lead.intent_grade"
+                ],
+                "writes": [
+                  "OutreachOrder.lead_record_id",
+                  "OutreachOrder.douyin_id",
+                  "OutreachOrder.script_id"
+                ],
+                "check": "预写触达中后回读，状态/分发号/话术ID 三项一致，否则 CLAIM_FAILED 不发",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.pick_order（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "send_private_message",
+                "name": "发私信",
+                "order": 2,
+                "reads": [
+                  "OutreachOrder.lead_record_id",
+                  "Lead.profile_url"
+                ],
+                "writes": [
+                  "OutreachOrder.message"
+                ],
+                "check": "输入框回读 == 审批话术，发送后气泡可见",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.send_private_message（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "verify_delivery",
+                "name": "核验发送UI及限制提示",
+                "order": 3,
+                "reads": [
+                  "OutreachOrder.message"
+                ],
+                "writes": [
+                  "OutreachOrder.result"
+                ],
+                "check": "现场无「暂无法给对方发送消息」「发送消息过于频繁」",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.verify_delivery（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Lead",
+                "source": "该公司已交付且资格合格的待触达线索",
+                "cardinality": "many",
+                "fields": [
+                  "douyin_id",
+                  "profile_url",
+                  "intent_grade",
+                  "repeat_hits",
+                  "status"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Account",
+                "source": "预检通过的发送账号及限额",
+                "cardinality": "one",
+                "fields": [
+                  "profile",
+                  "sender_id",
+                  "dm_paused",
+                  "daily_cap"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "inputs_2",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "触达预检取得的本轮设备锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/inputs/2"
+            },
+            {
+              "id": "inputs_3",
+              "phase": "start",
+              "requirement": {
+                "type": "OutreachOrder",
+                "source": "该公司canonical队列中已存在的合格未发送订单；普通模式按公司资格队列，单条验收按精确范围领取",
+                "cardinality": "one",
+                "fields": [
+                  "lead_record_id",
+                  "douyin_id",
+                  "sender_id",
+                  "script_id",
+                  "message",
+                  "result"
+                ]
+              },
+              "source_pointer": "/inputs/3"
+            },
+            {
+              "id": "inputs_4",
+              "phase": "start",
+              "requirement": {
+                "type": "OutreachScope",
+                "source": "仅exact模式输入，本run从私有0600文件冻结的唯一飞书订单及原评论、公司、102/103来源和执行设备身份",
+                "cardinality": "one",
+                "fields": [
+                  "record_id",
+                  "comment_id",
+                  "company_id",
+                  "source_run",
+                  "mark_run",
+                  "target_douyin_id",
+                  "line_key",
+                  "run_tag",
+                  "profile",
+                  "serial"
+                ]
+              },
+              "source_pointer": "/inputs/4"
+            },
+            {
+              "id": "inputs_5",
+              "phase": "start",
+              "requirement": {
+                "type": "RecipientQualification",
+                "source": "原订单关联的该公司已通过原生身份核验的资格快照",
+                "cardinality": "one",
+                "fields": [
+                  "company_id",
+                  "policy_id",
+                  "native_profile_sha256"
+                ]
+              },
+              "source_pointer": "/inputs/5"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "发送账号风险与暂停状态允许，本run批准资产/intent的每日和本轮上限仍有余额；公司数值不写死在通用Contract。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "preconditions_2",
+              "phase": "start",
+              "requirement": "批准正文、发送账号、目标、公司及原订单/102/103来源与冻结范围完全一致。",
+              "source_pointer": "/preconditions/2"
+            },
+            {
+              "id": "preconditions_3",
+              "phase": "start",
+              "requirement": "ordinary公司队列与exact原单模式按各自冻结授权选单，不从exact失败回退旁单；先永久预留，再执行唯一手机发送。",
+              "source_pointer": "/preconditions/3"
+            },
+            {
+              "id": "preconditions_4",
+              "phase": "start",
+              "requirement": "未知/已prepared/已发动作仅按原幂等状态读回，不能重发；Checker只读取证不授发送权。",
+              "source_pointer": "/preconditions/4"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "OutreachOrder",
+                "destination": "该公司已有 canonical 订单的永久预留及本次发送回执",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lead_record_id",
+                  "douyin_id",
+                  "sender_id",
+                  "script_id",
+                  "message",
+                  "result"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "out_zero_send_while_paused",
+                "asserts": "暂停/未授权/额度不足阶段零发送；未发送如实标记，不造成功。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "out_order_scope_verified",
+                "asserts": "实际领取原单与批准公司、目标及102/103来源一致，旁单零领取；发送不超过本轮与每日批准上限。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "postconditions_2",
+              "phase": "end",
+              "requirement": {
+                "probe": "out_delivery_result_verified",
+                "asserts": "真实发送前后原生证据、当前收件人与发送账号、批准正文及限制提示完整。结果未知不报成功且不重发；出现气泡不宣称对方已送达。"
+              },
+              "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "side_effects_0",
+              "phase": "end",
+              "requirement": {
+                "kind": "external_visible",
+                "target": "抖音私信",
+                "description": "真实向潜在客户发送私信（douyin-phone-adb:2372）"
+              },
+              "source_pointer": "/side_effects/0"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "OutreachOrder.lead_record_id",
+                "on_duplicate": "reject"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [
+                  "NO_PENDING 无待触达单",
+                  "restricted 对方仅互关（不计成功）"
+                ],
+                "retryable": [
+                  "lock_busy等仅在已证未prepared且未发送的本人原单，按本run冻结runtime授权有界重试；不得另行扩次数。",
+                  "rate_limited按现行政策停发；prepared、已发或未知只读原动作，不回队列重发。"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "account_mismatch账号身份不符停止",
+                    "原动作结果未知，保留原订单与证据，不重发",
+                    "TARGET_ABSENT",
+                    "NO_SCRIPT批准正文缺失"
+                  ],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "熔断即 Bark（notify-bark.js，去重 24h）"
+                  }
+                },
+                "fatal": []
+              },
+              "source_pointer": "/failure"
+            }
+          ]
         },
         "failure": {
-          "empty_ok": [],
-          "retryable": [],
-          "fatal": [
-            "error"
+          "empty_ok": [
+            "NO_PENDING 无待触达单",
+            "restricted 对方仅互关（不计成功）"
+          ],
+          "retryable": [
+            "lock_busy等仅在已证未prepared且未发送的本人原单，按本run冻结runtime授权有界重试；不得另行扩次数。",
+            "rate_limited按现行政策停发；prepared、已发或未知只读原动作，不回队列重发。"
           ],
           "needs_human": {
             "cases": [
-              "unknown"
-            ]
-          }
+              "account_mismatch账号身份不符停止",
+              "原动作结果未知，保留原订单与证据，不重发",
+              "TARGET_ABSENT",
+              "NO_SCRIPT批准正文缺失"
+            ],
+            "alert": {
+              "channel": "bark",
+              "object": "熔断即 Bark（notify-bark.js，去重 24h）"
+            }
+          },
+          "fatal": []
         },
         "runtime": {
           "phase": "source",
@@ -82,23 +1141,384 @@
         "key": "write_back",
         "order": 3,
         "budget": {
-          "max_duration_s": 1800,
-          "heartbeat_s": 2
+          "max_duration_s": 1500,
+          "heartbeat_s": 60
         },
         "acceptance": {
-          "description": "按冻结douyin_lead_outreach.write_back合同独立核验真实产物"
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_lead_outreach.yaml",
+            "activity_ref": "douyin_lead_outreach.write_back",
+            "contract_digest": "f5817e57e5a56305867e6800c00d3418a0a043c5fd68a977f5a8457e90b0e592"
+          },
+          "document": {
+            "key": "write_back",
+            "name": "回填",
+            "promise": "按真实发送结果回写原订单与线索并独立读回，未知发送结果保留待决",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_lead_outreach"
+              ],
+              "activity_key": "write_back",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 3,
+            "version": "4.1.0",
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "breaking",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "私信触达员"
+            },
+            "inputs": [
+              {
+                "type": "Lead",
+                "source": "本轮触达所认领的线索",
+                "cardinality": "many",
+                "fields": [
+                  "douyin_id",
+                  "profile_url",
+                  "intent_grade",
+                  "repeat_hits",
+                  "status"
+                ]
+              },
+              {
+                "type": "Account",
+                "source": "本轮已核发送账号",
+                "cardinality": "one",
+                "fields": [
+                  "profile",
+                  "sender_id",
+                  "dm_paused",
+                  "daily_cap"
+                ]
+              },
+              {
+                "type": "Device",
+                "source": "本轮触达设备及锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "OutreachOrder",
+                "source": "本轮原订单及发私信 Activity 的真实结果",
+                "cardinality": "one",
+                "fields": [
+                  "lead_record_id",
+                  "result"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "OutreachOrder",
+                "destination": "该公司 canonical 触达订单终态及读回",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lead_record_id",
+                  "douyin_id",
+                  "sender_id",
+                  "script_id",
+                  "message",
+                  "result"
+                ]
+              },
+              {
+                "type": "Lead",
+                "destination": "该公司原 PostgreSQL 线索触达状态",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status",
+                  "send_status",
+                  "script_version",
+                  "feishu_record_id",
+                  "reached_at"
+                ]
+              }
+            ],
+            "preconditions": [
+              "已有本run原订单永久预留及实际发送/受阻/未知原件；不重新执行发送准入或再发一次消息。",
+              "PG线索、Feishu原订单、发送账号、话术版本及原收件人关联可从真实持久来源核对。"
+            ],
+            "postconditions": [
+              {
+                "probe": "out_no_stuck_inflight",
+                "asserts": "原Feishu订单与PG线索触达状态都写回并独立读取真实一致结果，含状态/send_status/reached_at及原单与话术版本关联；sender_id/script_id从真实原订单关联核验，不虚构PG列。未知保留prepared/发送待核实、不重新发送；未发送不得造成功或送达。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 1500,
+              "heartbeat_s": 60
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>",
+                "outreach-tick mkdir 锁（35 分钟尸锁）"
+              ],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "OutreachOrder.lead_record_id",
+              "on_duplicate": "reject"
+            },
+            "failure": {
+              "empty_ok": [],
+              "retryable": [
+                "只允许原订单和PG的幂等读回/写回；prepared或结果未知保留原动作，绝不回到发送队列。"
+              ],
+              "needs_human": {
+                "cases": [
+                  "原发送事实或订单关联未知，保留prepared并报告"
+                ],
+                "alert": {
+                  "channel": "bark",
+                  "object": "原动作写回未确认留痕"
+                }
+              },
+              "fatal": []
+            },
+            "side_effects": [
+              {
+                "kind": "internal_write",
+                "target": "原Feishu订单及该公司PG线索",
+                "description": "依据原发送事实写回两处状态与关联，未知保留prepared且不重新发送"
+              }
+            ],
+            "invokers": [
+              "code"
+            ],
+            "runtime": {
+              "phase": "batch_end",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "write_back_result",
+                "name": "结果回写",
+                "order": 1,
+                "reads": [
+                  "OutreachOrder.result"
+                ],
+                "writes": [
+                  "Lead.status",
+                  "Lead.send_status",
+                  "Lead.reached_at",
+                  "Lead.sender_id",
+                  "Lead.script_id"
+                ],
+                "check": "按原发送证据写回并独立读取原Feishu订单和PG线索状态/时间/话术版本及原单关联；未知保留不重发。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js write_back.write_back_result（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Lead",
+                "source": "本轮触达所认领的线索",
+                "cardinality": "many",
+                "fields": [
+                  "douyin_id",
+                  "profile_url",
+                  "intent_grade",
+                  "repeat_hits",
+                  "status"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Account",
+                "source": "本轮已核发送账号",
+                "cardinality": "one",
+                "fields": [
+                  "profile",
+                  "sender_id",
+                  "dm_paused",
+                  "daily_cap"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "inputs_2",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "本轮触达设备及锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/inputs/2"
+            },
+            {
+              "id": "inputs_3",
+              "phase": "start",
+              "requirement": {
+                "type": "OutreachOrder",
+                "source": "本轮原订单及发私信 Activity 的真实结果",
+                "cardinality": "one",
+                "fields": [
+                  "lead_record_id",
+                  "result"
+                ]
+              },
+              "source_pointer": "/inputs/3"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "已有本run原订单永久预留及实际发送/受阻/未知原件；不重新执行发送准入或再发一次消息。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "PG线索、Feishu原订单、发送账号、话术版本及原收件人关联可从真实持久来源核对。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "OutreachOrder",
+                "destination": "该公司 canonical 触达订单终态及读回",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lead_record_id",
+                  "douyin_id",
+                  "sender_id",
+                  "script_id",
+                  "message",
+                  "result"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Lead",
+                "destination": "该公司原 PostgreSQL 线索触达状态",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status",
+                  "send_status",
+                  "script_version",
+                  "feishu_record_id",
+                  "reached_at"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "out_no_stuck_inflight",
+                "asserts": "原Feishu订单与PG线索触达状态都写回并独立读取真实一致结果，含状态/send_status/reached_at及原单与话术版本关联；sender_id/script_id从真实原订单关联核验，不虚构PG列。未知保留prepared/发送待核实、不重新发送；未发送不得造成功或送达。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "side_effects_0",
+              "phase": "end",
+              "requirement": {
+                "kind": "internal_write",
+                "target": "原Feishu订单及该公司PG线索",
+                "description": "依据原发送事实写回两处状态与关联，未知保留prepared且不重新发送"
+              },
+              "source_pointer": "/side_effects/0"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "OutreachOrder.lead_record_id",
+                "on_duplicate": "reject"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [],
+                "retryable": [
+                  "只允许原订单和PG的幂等读回/写回；prepared或结果未知保留原动作，绝不回到发送队列。"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "原发送事实或订单关联未知，保留prepared并报告"
+                  ],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "原动作写回未确认留痕"
+                  }
+                },
+                "fatal": []
+              },
+              "source_pointer": "/failure"
+            }
+          ]
         },
         "failure": {
           "empty_ok": [],
-          "retryable": [],
-          "fatal": [
-            "error"
+          "retryable": [
+            "只允许原订单和PG的幂等读回/写回；prepared或结果未知保留原动作，绝不回到发送队列。"
           ],
           "needs_human": {
             "cases": [
-              "unknown"
-            ]
-          }
+              "原发送事实或订单关联未知，保留prepared并报告"
+            ],
+            "alert": {
+              "channel": "bark",
+              "object": "原动作写回未确认留痕"
+            }
+          },
+          "fatal": []
         },
         "runtime": {
           "phase": "source",
@@ -119,23 +1539,374 @@
         "key": "cleanup",
         "order": 4,
         "budget": {
-          "max_duration_s": 600,
-          "heartbeat_s": 2
+          "max_duration_s": 120,
+          "heartbeat_s": 30
         },
         "acceptance": {
-          "description": "按冻结douyin_lead_outreach.cleanup合同独立核验真实产物"
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_lead_outreach.yaml",
+            "activity_ref": "douyin_lead_outreach.cleanup",
+            "contract_digest": "72fc04aa99e4fd0b835cbb8da281b3eb19d54957c65965ded18c9ab94889ad54"
+          },
+          "document": {
+            "key": "cleanup",
+            "name": "收尾",
+            "promise": "触达后归位设备及订单锁，保护未决发送并记录收尾状态",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_lead_outreach"
+              ],
+              "activity_key": "cleanup",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 4,
+            "version": "3.3.0",
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "backward",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "获客采收员"
+            },
+            "inputs": [
+              {
+                "type": "Device",
+                "source": "本轮触达预检取得的设备与锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Run",
+                "source": "本轮触达运行账本及发送结果",
+                "cardinality": "one",
+                "fields": [
+                  "run_tag"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Device",
+                "destination": "设备锁台账与原生释放回执",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Run",
+                "destination": "本轮触达运行账本终态",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status"
+                ]
+              }
+            ],
+            "preconditions": [
+              "本 run 各阶段已写工件或已判失败"
+            ],
+            "postconditions": [
+              {
+                "probe": "cl_app_closed",
+                "asserts": "真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。"
+              },
+              {
+                "probe": "cl_lock_released",
+                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。"
+              },
+              {
+                "probe": "cl_safe_desktop_visible",
+                "asserts": "原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 120,
+              "heartbeat_s": 30
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>"
+              ],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "Run.run_tag",
+              "on_duplicate": "skip"
+            },
+            "failure": {
+              "empty_ok": [],
+              "retryable": [
+                "工件 scp 到 mmv 失败（本地保留）"
+              ],
+              "needs_human": {
+                "cases": [
+                  "finalize 自检 artifact_count_mismatch"
+                ],
+                "alert": {
+                  "channel": "brain_alert",
+                  "object": "Brain 终态 failed 回执（workflow-result.sh:200）"
+                }
+              },
+              "fatal": []
+            },
+            "side_effects": [],
+            "invokers": [
+              "code"
+            ],
+            "runtime": {
+              "phase": "finalize",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "close_app",
+                "name": "关App",
+                "order": 1,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [],
+                "check": "前台不再是 com.ss.android.ugc.aweme",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.close_app（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "release_lock",
+                "name": "放锁",
+                "order": 2,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [
+                  "Device.lock_holder"
+                ],
+                "check": "仅精确释放本人已确认可释放的资源；未知保留并报告，不宽杀、不按TTL抢占。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.release_lock（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "return_safe_desktop",
+                "name": "回安全桌面",
+                "order": 3,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [],
+                "check": "前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.return_safe_desktop（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "finalize_run",
+                "name": "终态回执",
+                "order": 4,
+                "reads": [
+                  "Run.run_tag"
+                ],
+                "writes": [
+                  "Run.status"
+                ],
+                "check": "记录真实终态与实际成果数，合法empty/partial/failed皆可收尾，不伪造非零产物。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.finalize_run（原约束保留，原订单/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "本轮触达预检取得的设备与锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Run",
+                "source": "本轮触达运行账本及发送结果",
+                "cardinality": "one",
+                "fields": [
+                  "run_tag"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "本 run 各阶段已写工件或已判失败",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Device",
+                "destination": "设备锁台账与原生释放回执",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Run",
+                "destination": "本轮触达运行账本终态",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "cl_app_closed",
+                "asserts": "真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "cl_lock_released",
+                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "postconditions_2",
+              "phase": "end",
+              "requirement": {
+                "probe": "cl_safe_desktop_visible",
+                "asserts": "原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。"
+              },
+              "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Run.run_tag",
+                "on_duplicate": "skip"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [],
+                "retryable": [
+                  "工件 scp 到 mmv 失败（本地保留）"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "finalize 自检 artifact_count_mismatch"
+                  ],
+                  "alert": {
+                    "channel": "brain_alert",
+                    "object": "Brain 终态 failed 回执（workflow-result.sh:200）"
+                  }
+                },
+                "fatal": []
+              },
+              "source_pointer": "/failure"
+            }
+          ]
         },
         "failure": {
           "empty_ok": [],
-          "retryable": [],
-          "fatal": [
-            "error"
+          "retryable": [
+            "工件 scp 到 mmv 失败（本地保留）"
           ],
           "needs_human": {
             "cases": [
-              "unknown"
-            ]
-          }
+              "finalize 自检 artifact_count_mismatch"
+            ],
+            "alert": {
+              "channel": "brain_alert",
+              "object": "Brain 终态 failed 回执（workflow-result.sh:200）"
+            }
+          },
+          "fatal": []
         },
         "runtime": {
           "phase": "finalize",
@@ -166,7 +1937,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "1e1c069c379ed16315da125122f32e87eb27ae75"
+      "method_revision": "81b523d620c0e285cbe03f72618a8a0acf37249e",
+      "contract_sha256": "1c4ded9a74b834515b855580d49ccaf3ee16c54d6d6ce27a0d9cf453a5005c54"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -187,23 +1959,24 @@
           "activity": "preflight",
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md",
           "checker": {
-            "command": "@node",
-            "entry": "checker.mjs",
-            "args": [],
-            "start_checks": [
-              "task",
-              "policy",
-              "resources"
-            ],
-            "required_checks": [
-              "company_source",
-              "native_account_device",
-              "resource_ownership",
-              "shared_order_lock",
-              "authorized_message",
-              "current_pause_quota"
-            ],
-            "timeout_ms": 120000
+            "mode": "agent",
+            "timeout_ms": 120000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
           },
           "allow_empty": false
         },
@@ -212,44 +1985,50 @@
           "activity": "send_dm",
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md",
           "checker": {
-            "command": "@node",
-            "entry": "checker.mjs",
-            "args": [],
-            "start_checks": [
-              "task",
-              "policy",
-              "resources"
-            ],
-            "required_checks": [
-              "original_order_prepared",
-              "exact_action_identity",
-              "single_native_attempt",
-              "native_send_outcome"
-            ],
-            "timeout_ms": 120000
+            "mode": "agent",
+            "timeout_ms": 120000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
           },
-          "allow_empty": false
+          "allow_empty": true
         },
         "write_back": {
           "workflow": "104",
           "activity": "write_back",
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md",
           "checker": {
-            "command": "@node",
-            "entry": "checker.mjs",
-            "args": [],
-            "start_checks": [
-              "task",
-              "policy",
-              "resources"
-            ],
-            "required_checks": [
-              "native_result_verified",
-              "original_order_writeback",
-              "accurate_contact_time",
-              "delivery_not_inferred"
-            ],
-            "timeout_ms": 120000
+            "mode": "agent",
+            "timeout_ms": 120000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
           },
           "allow_empty": false
         },
@@ -258,23 +2037,24 @@
           "activity": "cleanup",
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md",
           "checker": {
-            "command": "@node",
-            "entry": "checker.mjs",
-            "args": [],
-            "start_checks": [
-              "task",
-              "policy",
-              "resources"
-            ],
-            "required_checks": [
-              "native_operations_terminal",
-              "safe_desktop",
-              "video_leases_released",
-              "local_lock_released",
-              "central_lock_released",
-              "original_order_preserved"
-            ],
-            "timeout_ms": 120000
+            "mode": "agent",
+            "timeout_ms": 120000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
           },
           "allow_empty": false
         }
@@ -306,35 +2086,49 @@
       }
     },
     "files": {
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md": "a54624304c1e61109f60c3bf5991f627b4ee3b22bab1c2c148dfe58e69302649",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md": "09283328a490eacff1ace56113a53dd8722c7674056e097ebc07acefbe7e8499",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md": "05873299afb2d85b75d1231db9eefc89375a4752823f3328d1d473425cbb52e8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md": "23156ee226582ba12c037242e6a35f9d399060fe28f7cc3bde50639a781808ef",
-      "services/phone-adb-controller/leadgen-foundation/context.mjs": "7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8",
-      "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
-      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93",
-      "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
-      "services/phone-adb-controller/leadgen-foundation/sources/103.json": "0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03",
-      "services/phone-adb-controller/leadgen-foundation/sources/102.json": "dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb",
-      "services/phone-adb-controller/leadgen-foundation/sources/104.json": "a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4",
-      "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98",
-      "services/phone-adb-controller/leadgen-foundation/sources/101.json": "a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed",
-      "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
-      "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
-      "services/phone-adb-controller/leadgen-foundation/schemas/104.json": "b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd",
-      "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
-      "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
-      "services/phone-adb-controller/activity-upstream-source.mjs": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df",
-      "services/phone-adb-controller/activity-host-pg.mjs": "5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a",
-      "services/phone-adb-controller/activity-host-tools.py": "2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166",
-      "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
-      "services/phone-adb-controller/activity-host-104.mjs": "76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38",
       "services/phone-adb-controller/activity-104-context.mjs": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a",
       "services/phone-adb-controller/activity-104-runtime.mjs": "876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c",
+      "services/phone-adb-controller/activity-104-state-wiring.mjs": "dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1",
+      "services/phone-adb-controller/activity-104-state.mjs": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6",
       "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
+      "services/phone-adb-controller/activity-host-104.mjs": "6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7",
+      "services/phone-adb-controller/activity-host-pg.mjs": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4",
+      "services/phone-adb-controller/activity-host-tools.py": "7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03",
+      "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
+      "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
+      "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
+      "services/phone-adb-controller/activity-upstream-source.mjs": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df",
+      "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
+      "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
+      "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b",
+      "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679",
+      "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
+      "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
+      "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
+      "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
+      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d",
+      "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
+      "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
+      "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
+      "services/phone-adb-controller/leadgen-foundation/schemas/104.json": "b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd",
+      "services/phone-adb-controller/leadgen-foundation/sources/101.json": "01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db",
+      "services/phone-adb-controller/leadgen-foundation/sources/102.json": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618",
+      "services/phone-adb-controller/leadgen-foundation/sources/103.json": "816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9",
+      "services/phone-adb-controller/leadgen-foundation/sources/104.json": "69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb",
+      "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98",
+      "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
       "services/phone-adb-controller/leadgen-outreach-scope.js": "c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7",
-      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
+      "services/phone-adb-controller/leadgen-queue.js": "29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c",
+      "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
+      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md": "8b899836b04c3c8fbc2833fb4c7e593f28353cb0a76dddbba88562eab37dbac2",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md": "75eb196398d6dfeb5cf11891c8e7a51e01580ee721aae02081615aac375022f8",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md": "d9360fefc9beb660f364735b72b1c4c1026b136fbb63176a3fc789ac66c4fdbe",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md": "cc189fdf8d48482768128388720f2f569bd7b0fb2f3ecc14066e7fc08a0059b0"
     }
   }
 }

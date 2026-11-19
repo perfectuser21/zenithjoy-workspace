@@ -12312,7 +12312,7 @@ tests:
     status: active
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
-    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"
+    note: "正式每run装配、冻结身份与来源、恢复拒覆盖；四 profile 的通用 Checker 合同与事实入口；隔离读回替身，不声明生产验收"
 
   - id: leadgen-foundation-build
     path: services/phone-adb-controller/__tests__/leadgen-foundation-build.test.mjs
@@ -12393,3 +12393,84 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "实际四Workflow装配宿主及tools.main验证通用手机接入、原参数身份/绝对截止和unknown保护；任务与锁读取及最终原生child为隔离替身，无手机或业务PG。"
+
+  - id: activity-104-state
+    path: services/phone-adb-controller/__tests__/activity-104-state.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "104精确原订单与PG触达事实幂等、错身份/未知不写、只读取证；可选本人scratch真实事务与COMMIT回复丢失回归"
+
+  - id: foundation-agent-plan
+    path: scripts/product-map/__tests__/foundation-agent-plan.test.js
+    type: contract
+    ci: L2
+    status: active
+    product: line02
+    execution: "ci-l2-consistency.yml / npm run test:product-map"
+    note: "Foundation Agent声明与旧wf-run明确拒绝；旧sh保持；隔离回归不冒生产验收"
+
+  - id: activity-native-facts
+    path: services/phone-adb-controller/__tests__/activity-native-facts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "原生receipt身份与原工具报告事实；不作送达裁判；隔离回归不冒生产验收"
+
+  - id: leadgen-agent-profile
+    path: services/phone-adb-controller/__tests__/leadgen-agent-profile.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "实际B完整合同生成及来源/预算漂移拒绝；隔离回归不冒生产验收"
+
+  - id: leadgen-agent-source-archive
+    path: services/phone-adb-controller/__tests__/leadgen-agent-source-archive.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "新发布归档不含specific业务裁判；隔离回归不冒生产验收"
+
+  - id: leadgen-checker-facts
+    path: services/phone-adb-controller/__tests__/leadgen-checker-facts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "冻结授权原行只读取证；不以业务状态过滤；隔离回归不冒生产验收"
+
+  - id: leadgen-checker-file-facts
+    path: services/phone-adb-controller/__tests__/leadgen-checker-file-facts.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "受控旧run原件与固定媒体技术读取；无视觉或覆盖结论；隔离回归不冒生产验收"
+
+  - id: leadgen-contract-acceptance
+    path: services/phone-adb-controller/__tests__/leadgen-contract-acceptance.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "原规范字段机械完整投影；隔离回归不冒生产验收"
+
+  - id: leadgen-contract-alignment
+    path: services/phone-adb-controller/__tests__/leadgen-contract-alignment.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "已裁定四Workflow语义及步骤义务迁移；隔离回归不冒生产验收"

@@ -16,13 +16,15 @@ function explicitIds(input,sourceRun){
  if(input.ids!==undefined&&(!Array.isArray(input.ids)||input.ids.some(id=>!ids.includes(id))))fail('IDS_OUTSIDE_SCOPE');
  return ids;
 }
-async function readFrozen(pool,lineKey,run){
+async function readFrozen(pool,lineKey,run,{qualificationOrigin=false}={}){
  if(!RUN.test(run||''))fail('RUN_INVALID');
  const rows=(await pool.query(`SELECT company_id,tenant_id,version,run_id,source_run,snapshot,task_inputs
    FROM zenithjoy.company_config_runs WHERE run_id=$1
    AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;
  const f=rows[0],s=f?.snapshot;
- if(rows.length!==1||f.run_id!==run||f.source_run!==null||!s||s.config_status!=='enabled'
+ const sourceModeValid=f?.source_run===null||(qualificationOrigin&&typeof f?.source_run==='string'
+   &&RUN.test(f.source_run)&&f.source_run!==run);
+ if(rows.length!==1||f.run_id!==run||!sourceModeValid||!s||s.config_status!=='enabled'
    ||typeof s.company_id!=='string'||!s.company_id||typeof s.tenant_id!=='string'||!s.tenant_id
    ||!Number.isSafeInteger(s.version)||s.version<1||f.company_id!==s.company_id
    ||f.tenant_id!==s.tenant_id||Number(f.version)!==s.version||!s.policy_id
@@ -31,7 +33,7 @@ async function readFrozen(pool,lineKey,run){
 }
 function samePolicy(a,b){return ['company_id','tenant_id','version','policy_id'].every(k=>a[k]===b[k])
  &&isDeepStrictEqual(a.runtime_config.comment_scoring,b.runtime_config.comment_scoring);}
-function verifyIdentity(row,video,source,binding){
+function verifyIdentity(row,video,source,binding,qualificationSource){
  const e=row.recipient_evidence,s=source.snapshot,c=video?.judgment_config;
  if(!UUID.test(row.id||'')||row.line_key!==s.runtime_config.routing.line_key||row.harvest_batch!==source.run_id
    ||!['待分拣','已分拣'].includes(row.process_status)||typeof row.comment_body!=='string'||!row.comment_body
@@ -41,7 +43,7 @@ function verifyIdentity(row,video,source,binding){
    ||!/^\d{16,24}$/.test(video.video_id||'')||video.video_url!==`https://www.douyin.com/video/${video.video_id}`
    ||row.source_video_url!==video.video_url||row.source_video!==video.title||video.judgment_status!=='matched'
    ||!['待判定','评论已采',`处理中:${row.harvest_batch}`].includes(video.process_status)
-   ||c?.run_id!==row.harvest_batch||c.company_id!==s.company_id||c.tenant_id!==s.tenant_id
+   ||c?.run_id!==qualificationSource.run_id||!samePolicy(qualificationSource.snapshot,s)||c.company_id!==s.company_id||c.tenant_id!==s.tenant_id
    ||Number(c.version)!==s.version||c.policy_id!==s.policy_id)fail('ROW_VIDEO_INVALID');
  if(e?.status!=='verified'||!e.company_binding||e.scope?.source_run!==null
    ||e.scope.video_id!==video.video_id||e.scope.video_url!==row.source_video_url)fail('RECIPIENT_UNVERIFIED');
@@ -58,16 +60,20 @@ async function readOne(pool,{lineKey,id,run,requireLease=false}){
  if(videos.length!==1)fail('VIDEO_AMBIGUOUS');
  const video=videos[0];
  if(requireLease&&(row.harvest_batch!==run||video.process_status!==`处理中:${run}`))fail('LEASE_NOT_OWNED');
+ const qualificationRun=video.judgment_config?.run_id;
+ // 旧判定可来自普通或有上游的正式运行；本次评论/评分来源仍必须是普通模式。
+ const qualificationSource=qualificationRun===source.run_id?source:await readFrozen(pool,lineKey,qualificationRun,{qualificationOrigin:true});
+ if(!samePolicy(qualificationSource.snapshot,source.snapshot))fail('QUALIFICATION_POLICY_MISMATCH');
  const binding=await readCollectionAccountBinding(pool,{lineKey,run:row.harvest_batch,sourceRun:null});
- return {row,source,video,binding};
+ return {row,source,video,binding,qualificationSource};
 }
 async function admittedRows(pool,{lineKey,run,ids}){
  if(!Array.isArray(ids)||!ids.length||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>!UUID.test(id||'')))fail('SCOPE_INVALID');
  const target=await readFrozen(pool,lineKey,run),out=[];
  for(const id of ids){
-  const {row,source,video,binding}=await readOne(pool,{lineKey,id});
+  const {row,source,video,binding,qualificationSource}=await readOne(pool,{lineKey,id});
   if(!samePolicy(source.snapshot,target.snapshot))fail('POLICY_MISMATCH');
-  out.push(verifyIdentity(row,video,source,binding));
+  out.push(verifyIdentity(row,video,source,binding,qualificationSource));
  }
  return out;
 }
@@ -76,12 +82,12 @@ function contains(rows,row){return Boolean(row&&rows.some(a=>identityKeys.every(
 async function certify(pool,input,{lineKey}){
  const {comment_id:id,comment,video_id:videoId,video_url:videoUrl,run}=input;
  if(!UUID.test(id||'')||!comment||!/^\d{16,24}$/.test(videoId||'')||videoUrl!==`https://www.douyin.com/video/${videoId}`||input.source_run!=null)fail('CERTIFICATION_SCOPE_INVALID');
- const {row,source,video,binding}=await readOne(pool,{lineKey,id,run,requireLease:true});
+ const {row,source,video,binding,qualificationSource}=await readOne(pool,{lineKey,id,run,requireLease:true});
  if(video.video_id!==videoId||row.source_video_url!==videoUrl||row.process_status!=='待分拣'
    ||row.relevance!==null||row.intent_grade!==null||row.judgment_reason!==null||row.judgment_config!==null
    ||row.nickname!==comment.nickname||row.douyin_id!==comment.douyinId||row.comment_body!==comment.commentBody
    ||row.profile_url!==comment.profileUrl||row.source_video!==comment.sourceVideo||row.source_video_url!==comment.sourceVideoUrl)fail('CERTIFICATION_ROW_CHANGED');
- const candidate={...row,recipient_evidence:comment.recipientEvidence};verifyIdentity(candidate,video,source,binding);
+ const candidate={...row,recipient_evidence:comment.recipientEvidence};verifyIdentity(candidate,video,source,binding,qualificationSource);
  if(row.recipient_evidence?.status==='verified'){
   if(!isDeepStrictEqual(row.recipient_evidence,comment.recipientEvidence))fail('ALREADY_CERTIFIED');
   return {certified:0,already_certified:true,id,video_id:videoId};
@@ -95,9 +101,9 @@ async function certify(pool,input,{lineKey}){
 }
 async function certificationReadback(pool,input,{lineKey}){
  if(!UUID.test(input.comment_id||'')||input.source_run!=null)fail('CERTIFICATION_SCOPE_INVALID');
- const {row,source,video,binding}=await readOne(pool,{lineKey,id:input.comment_id});
+ const {row,source,video,binding,qualificationSource}=await readOne(pool,{lineKey,id:input.comment_id});
  if(row.harvest_batch!==input.run||video.video_id!==input.video_id)fail('CERTIFICATION_SCOPE_INVALID');
- verifyIdentity(row,video,source,binding);
+ verifyIdentity(row,video,source,binding,qualificationSource);
  return {verified:true,id:row.id,video_id:video.video_id,recipient_status:'verified',douyin_id:row.douyin_id};
 }
 
@@ -125,7 +131,7 @@ async function metadataRows(pool,input,lineKey){
  return value;
 }
 async function verifyCompletedMetadata(pool,input,{lineKey,verifyProfileCardLink}){
- const {row,source,video,binding}=await readOne(pool,{lineKey,id:input.comment_id});
+ const {row,source,video,binding,qualificationSource}=await readOne(pool,{lineKey,id:input.comment_id});
  metadataScope(input,row,source,video);
  const before=input.before_snapshot;
  if(!before||input.before_sha256!==metadataSnapshotHash(before)||!isDeepStrictEqual(Object.keys(before).sort(),[...metadataSnapshotKeys].sort()))fail('METADATA_BEFORE_UNBOUND');
@@ -135,11 +141,11 @@ async function verifyCompletedMetadata(pool,input,{lineKey,verifyProfileCardLink
  if(typeof verifyProfileCardLink!=='function')fail('METADATA_PROFILE_LINK_VERIFIER_REQUIRED');
  const link=await verifyProfileCardLink(input.profile_link_evidence,{comment_id:row.id,line_key:lineKey,run:row.harvest_batch,video_id:video.video_id,douyin_id:row.douyin_id,nickname:row.nickname,comment_body_sha256:native.hash(row.comment_body),recipient_evidence_sha256:metadataSnapshotHash(row.recipient_evidence),profile:binding.profile});
  if(!link?.profile_url||row.profile_url!==link.profile_url||row.source_video!==video.title||Object.entries(original).some(([k,value])=>row[k]!==value))fail('METADATA_READBACK_MISMATCH');
- verifyIdentity(row,video,source,binding);
+ verifyIdentity(row,video,source,binding,qualificationSource);
  return {verified:true,id:row.id,video_id:video.video_id,before_sha256:input.before_sha256,metadata_sha256:metadataSnapshotHash(metadataSnapshot(row)),profile_link_proof_sha256:input.profile_link_evidence?.sha256};
 }
 async function completeMetadata(pool,input,{lineKey,verifyProfileCardLink}){
- const {row,source,video,binding}=await metadataRows(pool,input,lineKey),before=input.before_snapshot;
+ const {row,source,video,binding,qualificationSource}=await metadataRows(pool,input,lineKey),before=input.before_snapshot;
  if(!before||!isDeepStrictEqual(Object.keys(before).sort(),[...metadataSnapshotKeys].sort())||input.before_sha256!==metadataSnapshotHash(before))fail('METADATA_BEFORE_UNBOUND');
  const projected=metadataSnapshot({...row,...Object.fromEntries(metadataKeys.map(k=>[k,before[k]]))});
  if(!isDeepStrictEqual(projected,before)||metadataKeys.some(k=>before[k]!==null&&row[k]!==before[k]))fail('METADATA_ROW_CHANGED');
@@ -149,7 +155,7 @@ async function completeMetadata(pool,input,{lineKey,verifyProfileCardLink}){
  if(typeof link?.profile_url!=='string'||!/^https:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/$/.test(link.profile_url))fail('METADATA_PROFILE_LINK_UNVERIFIED');
  const derived={source_video:video.title,profile_url:link.profile_url,...original};
  if(metadataKeys.some(k=>row[k]!==null&&derived[k]!==null&&row[k]!==derived[k]))fail('METADATA_NON_NULL_CONFLICT');
- const candidate={...row,...Object.fromEntries(metadataKeys.map(k=>[k,row[k]??derived[k]]))};verifyIdentity(candidate,video,source,binding);
+ const candidate={...row,...Object.fromEntries(metadataKeys.map(k=>[k,row[k]??derived[k]]))};verifyIdentity(candidate,video,source,binding,qualificationSource);
  if(metadataKeys.every(k=>row[k]===candidate[k]))return {updated:0,already_complete:true,id:row.id,metadata:Object.fromEntries(metadataKeys.map(k=>[k,row[k]]))};
  const args=[row.id,...metadataKeys.map(k=>candidate[k]),lineKey,row.harvest_batch,row.douyin_id,row.nickname,row.comment_body,row.source_video_url,JSON.stringify(row.recipient_evidence),...metadataKeys.map(k=>row[k])];
  const assignments=metadataKeys.map((k,i)=>k+'=COALESCE('+k+',$'+(i+2)+')').join(',');
@@ -158,11 +164,11 @@ async function completeMetadata(pool,input,{lineKey,verifyProfileCardLink}){
  AND process_status='待分拣' AND relevance IS NULL AND intent_grade IS NULL AND judgment_reason IS NULL AND judgment_config IS NULL
  AND source_video IS NOT DISTINCT FROM $14 AND profile_url IS NOT DISTINCT FROM $15 AND account_type IS NOT DISTINCT FROM $16 AND profile_ip IS NOT DISTINCT FROM $17 AND region IS NOT DISTINCT FROM $18 RETURNING *`,args);
  if(changed.rowCount!==1||changed.rows[0]?.id!==row.id)fail('METADATA_CAS_LOST');
- const after=changed.rows[0];if(!isDeepStrictEqual(metadataSnapshot(after),metadataSnapshot(candidate)))fail('METADATA_READBACK_CHANGED');verifyIdentity(after,video,source,binding);
+ const after=changed.rows[0];if(!isDeepStrictEqual(metadataSnapshot(after),metadataSnapshot(candidate)))fail('METADATA_READBACK_CHANGED');verifyIdentity(after,video,source,binding,qualificationSource);
  return {updated:1,already_complete:false,id:row.id,metadata:Object.fromEntries(metadataKeys.map(k=>[k,after[k]])),recipient_evidence_sha256:metadataSnapshotHash(after.recipient_evidence),profile_link_evidence_sha256:metadataSnapshotHash(input.profile_link_evidence)};
 }
 async function metadataReadback(pool,input,{lineKey}){
- const {row,binding,video,source}=await metadataRows(pool,input,lineKey);originalMetadata(row,binding);const before=metadataSnapshot(row);let admitted=false;try{verifyIdentity(row,video,source,binding);admitted=true;}catch{}
+ const {row,binding,video,source,qualificationSource}=await metadataRows(pool,input,lineKey);originalMetadata(row,binding);const before=metadataSnapshot(row);let admitted=false;try{verifyIdentity(row,video,source,binding,qualificationSource);admitted=true;}catch{}
  return {id:row.id,before_snapshot:before,before_sha256:metadataSnapshotHash(before),metadata_complete:admitted};
 }
 function validateNewCommentMetadata(comment,owned){

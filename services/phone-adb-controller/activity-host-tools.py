@@ -253,7 +253,8 @@ def render102(original, method):
     prefix = prefix.replace('覆盖全片或本轮明确前90秒（较短者）', '覆盖本轮冻结输入指定的完整视频')
     prefix = prefix.replace('方法见本文末尾本轮58秒视频补充', '方法见本文末尾由本轮冻结输入生成的补充')
     prefix = prefix.replace('（覆盖kind=full_video时替代旧90秒描述）', '（coverage.kind=full_video）')
-    prefix = replace_once(prefix, '字段按冻结gate-contract.md及native_artifacts.py', '字段按本宿主冻结的native_artifacts.py；实际入口由context.verification.artifact_checker的精确路径及SHA绑定')
+    prefix = replace_once(prefix, '字段按冻结gate-contract.md及native_artifacts.py', '字段按本Activity完整冻结Contract；原生记录、媒体和公司原始事实由独立通用Checker读取核验')
+    prefix = replace_once(prefix, '本profile的native_artifacts.py必须是已修成功取链解析的固定版本，并与context.verification.artifact_checker.sha256一致。', '本宿主已固定native-identity.py技术身份解析器；它只读取原生VID/URL证据，不作业务验收。')
     m = method
     return prefix + '\n本轮102冻结执行输入：\n' + json.dumps(m, ensure_ascii=False, sort_keys=True) + '\n' + '\n'.join([
         'TOOLS-base.txt保留完整历史来源及摘要，仅供来源审计；其中旧VID、旧录制、旧时长、旧source、旧run和诊断PTS均不是本轮执行指令或证据。',

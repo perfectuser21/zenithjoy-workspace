@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {historicalContract} from './fixtures/historical-leadgen-contract.mjs';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -166,10 +167,9 @@ test('MMV102真实preflight只在PG和当前原生账号均相等后写私有bin
  try{await h.preflight();const file=join(d,run+'-company-binding.json');assert.deepEqual(JSON.parse(readFileSync(file)),b);assert.ok(calls.some(([c,a])=>c==='/fixture/controller'&&a.includes('account-current')));await h.preflight();assert.deepEqual(JSON.parse(readFileSync(file)),b);}
  finally{rmSync(d,{recursive:true,force:true});}
 });
-test('PG来源授权helper进入三个实际消费Activity的固定Code集合，兼容新增方法有版本',()=>{
- const root=new URL('../../../',import.meta.url);
+test('历史c3de的PG来源授权helper进入三个实际消费Activity固定Code集合并保原方法版本',()=>{
  for(const [flow,key,version] of [['douyin_video_processing','preflight','2.3.0'],['douyin_video_processing','collection','2.7.2'],['douyin_comment_scoring','mark_leads','3.9.0']]){
-  const d=parseYaml(readFileSync(new URL('product-map/contracts/'+flow+'.yaml',root),'utf8')),a=d.activities.find(a=>a.key===key);
+  const d=parseYaml(historicalContract(flow)),a=d.activities.find(a=>a.key===key);
   assert.equal(a.version,version);assert.ok(a.implementation_bindings.some(b=>b.kind==='code'&&b.path==='services/phone-adb-controller/company-config-lib.js'));
  }
 });

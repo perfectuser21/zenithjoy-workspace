@@ -6,7 +6,7 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   const before=Date.now(),a=await prepareLeadgenHost(f);assert.equal(a.receipt.status,'assembled_not_started');
   assert.ok(a.receipt.assembled_at_ms>=before);assert.equal(a.context.run_start_ts,undefined);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);
-  assert.equal(fs.existsSync(path.join(a.profile.cwd,'receipts')),false);assert.equal(fs.existsSync(path.join(a.profile.cwd,'outreach-receipts')),false);
+  assert.deepEqual(fs.readdirSync(path.join(a.profile.cwd,'receipts')),['.keep']);assert.deepEqual(fs.readdirSync(path.join(a.profile.cwd,'outreach-receipts')),['.keep']);
   const contextFile=path.join(a.profile.cwd,'context.json'),bytes=fs.readFileSync(contextFile),mtime=fs.statSync(contextFile).mtimeMs;
   const {canonical}=await import('../leadgen-foundation/context.mjs');f.run.input=JSON.parse(canonical(f.run.input));
   const b=await prepareLeadgenHost(f);assert.equal(b.receipt.recovered,true);assert.equal(b.receipt.assembled_at_ms,a.receipt.assembled_at_ms);assert.equal(fs.statSync(contextFile).mtimeMs,mtime);assert.deepEqual(fs.readFileSync(contextFile),bytes);
@@ -46,15 +46,11 @@ test('104 actual Codex child receives frozen exact scope without changing parent
   fs.appendFileSync(binary,'\n# changed\n');const drift=spawnSync(a.profile.skill_runtime.codex.command,[],{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/LEADGEN_CODEX_SOURCE/);
  }finally{f.close();}
 });
-test('102 emitted checker and collection wrapper import the same admitted producer-aware reader',async()=>{
- const f=await foundationFixture('102');try{
-  const a=await prepareLeadgenHost(f),reader=fs.readFileSync(path.join(a.profile.cwd,'production-readback-local.mjs'),'utf8');assert.match(reader,/resolveProducerIdentity/);
-  const probe=path.join(f.root,'reader-probe');fs.cpSync(a.profile.cwd,probe,{recursive:true});
-  fs.writeFileSync(path.join(probe,'production-readback-local.mjs'),"export async function main(request){return {reader:'same-local-production',activity:request.activity,run_id:request.run_id};}\n");
-  for(const [file,request]of [['collection-readback.mjs',a.context],['checker.mjs',{phase:'end',workflow:'102',activity:'collection',run_id:f.run.run_id,context:a.context}]]){
-   const result=spawnSync(process.execPath,[path.join(probe,file)],{encoding:'utf8',input:JSON.stringify(request),cwd:probe});assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(result.stdout),{reader:'same-local-production',activity:'collection',run_id:f.run.run_id});
-  }
-  assert.equal(fs.existsSync(path.join(a.profile.cwd,'skills/douyin-leadgen-commander/scripts/production_readback.mjs')),false);
+test('102 execution readback and Checker use the same raw fact implementation, with no specialized verdict',async()=>{
+ const f=await foundationFixture('102');try{const a=await prepareLeadgenHost(f);
+  assert.equal(fs.existsSync(path.join(a.profile.cwd,'production-readback-local.mjs')),false);assert.equal(fs.existsSync(path.join(a.profile.cwd,'checker.mjs')),false);
+  for(const name of ['collection-readback.mjs','checker-facts-entry.mjs'])assert.match(fs.readFileSync(path.join(a.profile.cwd,name),'utf8'),/checker-facts.mjs/);
+  assert.match(fs.readFileSync(path.join(a.profile.cwd,'collection-readback.mjs'),'utf8'),/relation.*comments/);
  }finally{f.close();}
 });
 test('102 emitted upstream scope carries controlled producer run identity for the actual reader',async()=>{
@@ -82,7 +78,7 @@ test('104 runtime binds intent before a simulated task-create response and valid
    const {randomUUID}=await import('node:crypto');f.run.task_id=randomUUID();f.run.run_id=randomUUID();f.run.input.run_tag=f.run.run_id;events.push('task_created','worker_claimed');
    const runtime=await createRuntime(f);events.push('runtime_bound');
    const {validateAuthorization}=await import('../activity-104-context.mjs'),auth=validateAuthorization(runtime.run.input);assert.equal(auth.root_task_id,f.run.task_id);assert.equal(auth.max_send_attempts,1);
-   assert.equal(fs.existsSync(path.join(runtime.profile.cwd,'outreach-receipts')),false);assert.equal(runtime.profile.skill_runtime.host_tools.kinds.includes('issue_authorization'),false);
+   assert.deepEqual(fs.readdirSync(path.join(runtime.profile.cwd,'outreach-receipts')),['.keep']);assert.equal(runtime.profile.skill_runtime.host_tools.kinds.includes('issue_authorization'),false);
    return runtime;
   };
   const runtime=await createTask();events.push('task_response');assert.deepEqual(events,['task_created','worker_claimed','runtime_bound','task_response']);
@@ -101,5 +97,17 @@ test('foundation recovery survives the official host normalization of equivalent
   const first=await prepareLeadgenHost(f),bytes=fs.readFileSync(path.join(first.profile.cwd,'context.json'));
   const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/foundation-normalized-input.json',import.meta.url)));assert.deepEqual(f.run.input,fixture.input);assert.match(fixture.source.sha256,/^[a-f0-9]{64}$/);f.run.input=fixture.normalized_input;
   const recovered=await prepareLeadgenHost(f);assert.equal(recovered.receipt.recovered,true);assert.deepEqual(fs.readFileSync(path.join(recovered.profile.cwd,'context.json')),bytes);
+ }finally{f.close();}
+});
+
+test('generated provider binds frozen context and scorer imports actual new modules outside repository cwd',async()=>{
+ const f=await foundationFixture('103');try{
+  const a=await prepareLeadgenHost(f),root=a.profile.cwd;
+  assert.ok(a.receipt.files['checker-facts-entry.mjs']);assert.ok(a.receipt.files['business-runtime/leadgen-score-context.js']);
+  const spec=a.profile.skill_runtime.activities.scoring.checker;assert.equal(spec.mode,'agent');assert.equal(spec.evidence.provider.entry,'checker-facts-entry.mjs');assert.equal(spec.evidence.provider.command,process.execPath);
+  const hostile={identity:f.run,nonce:'hostile',context:{...a.context,credentials:{database:'/foreign'}},operation:'pg.rows',args:{relation:'comments'}};
+  const result=spawnSync(process.execPath,[path.join(root,spec.evidence.provider.entry)],{cwd:f.root,env:{PATH:process.env.PATH,NODE_PATH:''},input:JSON.stringify(hostile),encoding:'utf8'});assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).reason,'FACT_SCOPE_REJECTED');
+  const src="import {createRequire} from 'node:module';const r=createRequire("+JSON.stringify(path.join(root,'business-runtime/package.json'))+");const m=r('./leadgen-score-context.js');const t=await m.readScoreTranscript({query:async()=>({rows:[{video_url:'v',title:'t',transcript:'actual text'}]})},'line',{source_video_url:'v',source_video:'t'},[]);if(t!=='actual text')throw Error('TRANSCRIPT');const {loadActivityHostPg}=await import("+JSON.stringify('file://'+path.join(root,'activity-host-pg.mjs'))+");const fs=await import('node:fs');const c=JSON.parse(fs.readFileSync("+JSON.stringify(path.join(root,'context.json'))+"));if(typeof (await loadActivityHostPg(c)).Pool!=='function')throw Error('PG');console.log('loaded');";
+  const probe=spawnSync(process.execPath,['--input-type=module','-e',src],{cwd:f.root,env:{PATH:process.env.PATH,NODE_PATH:''},encoding:'utf8'});assert.equal(probe.status,0,probe.stderr);assert.equal(probe.stdout.trim(),'loaded');
  }finally{f.close();}
 });

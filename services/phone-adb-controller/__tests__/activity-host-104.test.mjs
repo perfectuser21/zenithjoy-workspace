@@ -60,7 +60,7 @@ test('original prepared order recovery never repeats PUT and unknown never clear
  const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),s=f.context.verification['104'];
  const row={record_id:s.record_id,fields:{'抖音号':s.target_douyin_id,'主页链接':s.profile_url,'状态':'待触达','发送状态':'未发送'}};
  const counts={put:0,get:0,native:0};let outcome='unknown';
- const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[structuredClone(row)],get:async()=>{counts.get++;return structuredClone(row);},fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,fields)=>{counts.put++;Object.assign(row.fields,fields);if(counts.put===1)throw Error('response-lost-after-committed-put');}},freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),checkPreflight:async()=>({verified:true}),checkNative:async()=>{counts.native++;return {verified:outcome==='sent',outcome,sent_at_ms:Date.now()};},close:async()=>{}};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[structuredClone(row)],get:async()=>{counts.get++;return structuredClone(row);},fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,fields)=>{counts.put++;Object.assign(row.fields,fields);if(counts.put===1)throw Error('response-lost-after-committed-put');}},freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),readSendFacts:async()=>{counts.native++;return {source_verified:outcome==='sent',outcome,sent_at_ms:Date.now()};},close:async()=>{}};
  const args={context:f.context,scope:s,artifact_dir:path.join(f.root,'orders'),evidence:{}};
  assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(counts.put,1);
  assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(counts.put,1);
@@ -95,7 +95,8 @@ test('all assembled JavaScript/Python entry sources parse and 104 method stays s
  const f=setup();const receipt=await candidate(f);
  for(const name of Object.keys(receipt.sha256))if(name.endsWith('.mjs')){const r=spawnSync(process.execPath,['--check',path.join(f.targetRoot,name)],{encoding:'utf8'});assert.equal(r.status,0,name+': '+r.stderr);}
  const p=spawnSync('python3',['-c','import ast,pathlib,sys\nfor p in pathlib.Path(sys.argv[1]).rglob("*.py"):ast.parse(p.read_text())',f.targetRoot],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);
- assert.equal(hash(fs.readFileSync(path.join(f.targetRoot,'outreach104/order-adapter.mjs'))),fixture.files['outreach104/order-adapter.mjs'].sha256);
+ assert.match(fs.readFileSync(path.join(f.targetRoot,'outreach104/order-adapter.mjs'),'utf8'),/releaseOwnClaim/);
+ assert.equal(hash(fs.readFileSync(path.join(f.baseRoot,'outreach104/order-adapter.mjs'))),fixture.files['outreach104/order-adapter.mjs'].sha256);
  assert.equal(hash(fs.readFileSync(path.join(f.targetRoot,'outreach104/phone_guard.py'))),fixture.files['outreach104/phone_guard.py'].sha256);
  assert.match(fs.readFileSync(path.join(f.targetRoot,'TOOLS.txt'),'utf8'),/commander_host_tools.invoke/);
 });
@@ -145,7 +146,7 @@ test('original order adapter keeps same-UID prohibition and daily 100 limit with
  const own={record_id:scope.record_id,fields:{'抖音号':scope.target_douyin_id,'主页链接':scope.profile_url,'状态':'待触达','发送状态':'未发送'}};
  const makeOther=i=>({record_id:'previous-order-'+i,fields:{'抖音号':'other-person-'+i,'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 unknown:old-run:old-source]','状态':'触达中'}});
  let prior=[makeOther(0)],row=own;const args={context:f.context,scope,artifact_dir:path.join(f.root,'budget-orders'),evidence:{}};
- const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0}),checkPreflight:async()=>({verified:true}),close:async()=>{}};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),close:async()=>{}};
  assert.equal((await request({...args,op:'inspect'},deps)).status,'ready');assert.equal(puts,0);
  prior[0].fields['抖音号']=scope.target_douyin_id;await assert.rejects(request({...args,op:'claim'},deps),/RECIPIENT_RESERVED/);assert.equal(puts,0);
  prior=[makeOther(0)];assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(puts,1);
@@ -158,4 +159,84 @@ test('unsafe writable or hardlinked toolchain assets still reject before host cr
   const f=setup(),file=path.join(f.root,'unsafe-node');fs.copyFileSync(node,file);fs.chmodSync(file,mode==='writable'?0o775:0o700);if(mode==='hardlink')fs.linkSync(file,file+'-alias');f.context.node=file;f.context.node_sha256=hash(fs.readFileSync(file));
   await assert.rejects(candidate(f),/ACTIVITY_104_SOURCE_FILE/);assert.equal(fs.existsSync(f.targetRoot),false);
  }
+});
+
+function stateFixture(f){
+ const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),s=f.context.verification['104'];
+ const row={record_id:s.record_id,fields:{'抖音号':s.target_douyin_id,'主页链接':s.profile_url,'状态':'待触达','发送状态':'未发送'}};
+ const counts={put:0,pg:0};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,
+ api:{all:async()=>[structuredClone(row)],get:async()=>structuredClone(row),fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,v)=>{counts.put++;Object.assign(row.fields,v);}},
+ freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),
+ readSendFacts:async()=>({source_verified:true,outcome:'sent',sent_at_ms:1795000000000}),syncLead:async()=>{counts.pg++;return {lead:{id:s.lead_id,status:'已触达'}};},readLead:async()=>({lead:{id:s.lead_id}}),close:async()=>{}};
+ return {row,counts,deps,args:{context:f.context,scope:s,artifact_dir:path.join(f.root,'orders'),evidence:{}}};
+}
+test('104 own unprepared claim releases once through assembled adapter and returns original readback',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);
+ const r=await request({...x.args,op:'release'},x.deps);assert.equal(r.status,'released');assert.equal(x.row.fields['状态'],'待触达');
+ assert.equal((await request({...x.args,op:'release'},x.deps)).status,'released');assert.equal(x.counts.put,2);
+});
+test('104 original writeback and terminal recovery both call the PG synchronization without repeating Feishu writes',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);await request({...x.args,op:'prepare'},x.deps);
+ const a=await request({...x.args,op:'write_back'},x.deps);assert.equal(a.lead_readback.lead.id,x.args.scope.lead_id);assert.equal(x.counts.pg,1);
+ await request({...x.args,op:'write_back'},x.deps);assert.equal(x.counts.pg,2);assert.equal(x.counts.put,3);
+});
+test('104 release never clears prepared, unknown, pending prepare or any native invocation',async()=>{
+ for(const mode of ['prepared','prepare-intent','unknown','reserved','invocation','send-input','other-owner']){
+  const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+  await request({...x.args,op:'claim'},x.deps);const file=path.join(x.args.artifact_dir,'action.json'),j=JSON.parse(fs.readFileSync(file));
+  if(mode==='prepared')await request({...x.args,op:'prepare'},x.deps);
+  else if(mode==='prepare-intent'){j.phase='prepared_intent';j.pending_write={phase:'prepared',fields:{}};fs.writeFileSync(file,JSON.stringify(j));}
+  else if(mode==='unknown'){j.phase='unknown';fs.writeFileSync(file,JSON.stringify(j));}
+  else if(mode==='reserved'){j.reserved_budget=1;fs.writeFileSync(file,JSON.stringify(j));}
+  else if(mode==='other-owner')x.row.fields['回复结果']='[104 claim:other:source]';
+  else fs.writeFileSync(path.join(x.args.artifact_dir,mode==='invocation'?'phone-invocation.json':'send-input.json'),'{}');
+  const before=JSON.stringify(x.row),puts=x.counts.put;
+  await assert.rejects(request({...x.args,op:'release'},x.deps),/RELEASE_/);assert.equal(x.counts.put,puts);assert.equal(JSON.stringify(x.row),before);
+ }
+});
+test('104 release response loss reconciles original row only; no blind repeat PUT',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);const get=x.deps.api.get;x.deps.api.get=async()=>{throw Error('lost');};
+ assert.equal((await request({...x.args,op:'release'},x.deps)).status,'unknown');assert.equal(x.counts.put,2);
+ x.deps.api.get=get;assert.equal((await request({...x.args,op:'release'},x.deps)).status,'released');assert.equal(x.counts.put,2);
+});
+test('104 lost claim acknowledgement and rejected preparation before reservation can be cleaned up',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f),get=x.deps.api.get;
+ x.deps.api.get=async()=>{throw Error('lost');};assert.equal((await request({...x.args,op:'claim'},x.deps)).status,'unknown');
+ x.deps.api.get=get;fs.writeFileSync(path.join(x.args.artifact_dir,'prepare-runtime.json'),JSON.stringify({verified:false}));
+ assert.equal((await request({...x.args,op:'release'},x.deps)).status,'released');assert.equal(x.counts.put,2);
+});
+test('104 uncertain release leaves its intent and never retries an unconfirmed PUT',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);x.deps.api.put=async()=>{x.counts.put++;throw Error('unknown');};
+ assert.equal((await request({...x.args,op:'release'},x.deps)).status,'unknown');assert.equal((await request({...x.args,op:'release'},x.deps)).status,'unknown');assert.equal(x.counts.put,2);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(x.args.artifact_dir,'action.json'))).phase,'release_intent');assert.match(x.row.fields['回复结果'],/^\[104 claim:/);
+});
+test('104 both JSON-stdio boundaries expose release only to cleanup and readback to every phase',async()=>{
+ const f=setup();await candidate(f);const {OPS}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/profile-input.mjs')));
+ for(const [key,ops]of Object.entries(OPS)){assert.equal(ops.includes('release'),key==='cleanup');assert.ok(ops.includes('lead_readback'));}
+ const script=`import sys,json\nsys.path.insert(0,${JSON.stringify(f.targetRoot)})\nfrom outreach104.tool_extension import OPS,readonly_recovery\nassert all(('release' in v)==(k=='cleanup') and 'lead_readback' in v for k,v in OPS.items())\nassert readonly_recovery('outreach',['{"op":"lead_readback"}'])\nassert not readonly_recovery('outreach',['{"op":"release"}'])\nprint('scoped')`;
+ const p=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout.trim(),'scoped');
+ const source=fs.readFileSync(path.join(f.targetRoot,'outreach104/runtime-deps.mjs'),'utf8');assert.match(source,/\['readback','lead_readback','release','write_back'\]\.includes\(op\)/);
+});
+test('104 committed Feishu result with failed PG returns unknown then repairs PG only',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ await request({...x.args,op:'claim'},x.deps);await request({...x.args,op:'prepare'},x.deps);
+ const sync=x.deps.syncLead;x.deps.syncLead=async()=>{throw Error('COMMIT_REPLY_LOST');};
+ const r=await request({...x.args,op:'write_back'},x.deps);assert.equal(r.status,'unknown');assert.equal(r.reason,'LEAD_WRITEBACK_UNCONFIRMED');assert.equal(x.row.fields['状态'],'已触达');
+ x.deps.syncLead=sync;assert.equal((await request({...x.args,op:'write_back'},x.deps)).status,'sent');assert.equal(x.counts.put,3);assert.equal(x.counts.pg,1);
+});
+test('104 lead readback returns raw facts and never performs a write',async()=>{
+ const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
+ const r=await request({...x.args,op:'lead_readback'},x.deps);assert.equal(r.lead_readback.lead.id,x.args.scope.lead_id);assert.equal(x.counts.put,0);assert.equal(x.counts.pg,0);assert.equal(Object.hasOwn(r,'verified'),false);
+});
+
+test('current assembled 104 contains source facts and no legacy independent business judges',async()=>{
+ const f=setup();await candidate(f);
+ for(const name of ['checker.mjs','cleanup-result.mjs','native-readback.mjs','outreach104/checker104.mjs','outreach104/preserved-checker.mjs','outreach104/native-checker.py','outreach104/native-checker.mjs'])assert.equal(fs.existsSync(path.join(f.targetRoot,name)),false,name);
+ const deps=fs.readFileSync(path.join(f.targetRoot,'outreach104/runtime-deps.mjs'),'utf8'),adapter=fs.readFileSync(path.join(f.targetRoot,'outreach104/order-adapter.mjs'),'utf8');
+ assert.match(deps,/readSendFacts/);assert.match(adapter,/native\.source_verified/);assert.doesNotMatch(adapter,/native\.verified/);
 });

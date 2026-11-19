@@ -20,7 +20,7 @@ function fixture(){
  const row={id,line_key:line,harvest_batch:batch,source_video:video.title,source_video_url:url,comment_body:body,nickname,douyin_id:douyinId,profile_url:'https://v.douyin.com/fixture-profile/',recipient_evidence:evidence,collected_at:new Date('2026-11-12T00:00:00Z'),process_status:'待分拣',relevance:null,intent_grade:null,judgment_reason:null,judgment_config:null,dedup_key:'fixture-dedup'};
  const state={source,target,snapshot,video,row,updates:[],modelCalls:0,outbox:[]};
  const client={async query(sql,args=[]){
-  if(sql.includes('company_config_runs'))return {rows:[args[0]===batch?state.source:state.target]};
+  if(sql.includes('company_config_runs'))return {rows:args[0]===batch?[state.source]:args[0]===run?[state.target]:(state.priorSources||[])};
   if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:sql.includes("process_status='评论已采'")?[]:[state.video]};
   if(sql.includes('FROM zenithjoy.leadgen_comments')){
    if(sql.includes('FOR UPDATE SKIP LOCKED')&&((Array.isArray(args[2])&&args[2].includes(id))||(sql.includes('relevance IS NULL')?state.row.relevance!==null:state.row.relevance===null)))return {rows:[]};
@@ -47,6 +47,43 @@ function fixture(){
 
 test('explicit verified committed partial comment scores once before video is exhausted',async()=>{
  const f=fixture();const r=await queueRequest(f.pool,f.input('score'),f.deps);assert.equal(r.scored,1);assert.equal(f.modelCalls,1);assert.equal(f.video.process_status,'待判定');assert.equal(f.row.judgment_config.scoring_mode,'single-evaluation-v1');
+});
+function cachedFixture(){const f=fixture();f.priorSources=[{...structuredClone(f.source),run_id:'cached102'}];f.video.judgment_config.run_id='cached102';return f;}
+test('same-policy cached qualification preserves its producer and scores current proven comment once',async()=>{
+ const f=cachedFixture(),proof=structuredClone(f.row.recipient_evidence);
+ const r=await queueRequest(f.pool,f.input('score'),f.deps);
+ assert.equal(r.scored,1);assert.equal(f.modelCalls,1);assert.equal(f.video.judgment_config.run_id,'cached102');assert.deepEqual(f.row.recipient_evidence,proof);
+ assert.equal((await queueRequest(f.pool,f.input('score_readback'))).verified,true);assert.equal(f.modelCalls,1);
+});
+test('ordinary current comments may reuse a same-policy qualification from a formal upstream-bound run',async()=>{
+ const f=cachedFixture();f.priorSources[0].source_run='formal101';
+ assert.equal((await queueRequest(f.pool,f.input('score'),f.deps)).scored,1);
+ assert.equal(f.video.judgment_config.run_id,'cached102');assert.equal(f.row.recipient_evidence.scope.source_run,null);assert.equal(f.modelCalls,1);
+});
+for(const [name,change] of [
+ ['missing source',f=>f.priorSources=[]],['ambiguous source',f=>f.priorSources.push(structuredClone(f.priorSources[0]))],
+ ['wrong company',f=>{f.priorSources[0].company_id='other';f.priorSources[0].snapshot.company_id='other';}],
+ ['wrong tenant',f=>{f.priorSources[0].tenant_id='other';f.priorSources[0].snapshot.tenant_id='other';}],
+ ['wrong version',f=>{f.priorSources[0].version++;f.priorSources[0].snapshot.version++;}],
+ ['wrong policy',f=>f.priorSources[0].snapshot.policy_id='other'],
+ ['wrong scoring rules',f=>f.priorSources[0].snapshot.runtime_config.comment_scoring.criteria.A='changed'],
+ ['missing current native proof',f=>f.row.recipient_evidence={status:'unknown'}],
+ ['wrong current VID',f=>f.row.recipient_evidence.scope.video_id='7704584547186793911'],
+ ['wrong binding',f=>f.row.recipient_evidence.company_binding.company_id='other'],
+ ['unmatched video',f=>f.video.judgment_status='rejected'],
+ ['malformed old upstream',f=>f.priorSources[0].source_run='../invalid'],
+ ['self-referencing old upstream',f=>f.priorSources[0].source_run='cached102'],
+ ['missing old source mode',f=>delete f.priorSources[0].source_run],
+ ['nonordinary current source',f=>f.source.source_run='formal101'],
+ ['nonordinary current target',f=>f.target.source_run=batch],
+])test('cached qualification refuses '+name+' without scoring',async()=>{
+ const f=cachedFixture();change(f);await assert.rejects(queueRequest(f.pool,f.input('score'),f.deps),/COMMITTED_PARTIAL|RECIPIENT_/);assert.equal(f.modelCalls,0);assert.equal(f.updates.length,0);
+});
+test('committed partial scoring receives the persisted same-video transcript',async()=>{
+ const f=fixture();f.video.transcript='真实持久转写：课程包括电子表格自动化。';let received;
+ const original=f.deps.judgeComment;f.deps.judgeComment=async(...args)=>{received=args;return original(...args);};
+ assert.equal((await queueRequest(f.pool,f.input('score'),f.deps)).scored,1);
+ assert.equal(received[1],f.video.title);assert.equal(received[3].videoTranscript,f.video.transcript);assert.equal(f.modelCalls,1);
 });
 test('explicit committed scope returns exact IDs and does not select unready ordinary rows',async()=>{
  const f=fixture();const r=await queueRequest(f.pool,f.input('score_scope'));assert.deepEqual(r.ids,[id]);assert.equal(r.sources[id],batch);

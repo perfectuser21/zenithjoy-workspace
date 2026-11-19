@@ -287,12 +287,12 @@ test('103首次评分缺响应身份即回滚，不调用模型复核',async()=>
  const calls=[];let scoreCalls=0,reviewCalls=0;
  const client={async query(sql,args=[]){calls.push(sql);
   if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:args[2]?.includes(row.id)?[]:[row]};
-  if(sql.includes('leadgen_videos'))return {rows:[{title:row.source_video,judgment_status:'matched'}]};
+  if(sql.includes('leadgen_videos'))return {rows:[{video_url:row.source_video_url,title:row.source_video,judgment_status:'matched',transcript:'真实持久转写：介绍FDE证书'}]};
   return {rows:[]};},release(){}};
  const result=await queueRequest({connect:async()=>client},
   {op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},
   {freezeCompanyConfig:async()=>policy,
-   judgeComment:async()=>{scoreCalls++;return {grade:'A',relevance:'相关',reason:'model:A',audit:{model:'fixture'}};},
+   judgeComment:async(_body,_video,_profile,opts)=>{scoreCalls++;assert.equal(opts.videoTranscript,'真实持久转写：介绍FDE证书');return {grade:'A',relevance:'相关',reason:'model:A',audit:{model:'fixture'}};},
    judgePolicy:async()=>{reviewCalls++;return {grade:'A',audit:{model:'fixture-model',response_id:'fixture-response',
     policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:row.comment_body,
      video_signal:'FDE证书咨询',exclusion_rule:null,reason:'证书咨询'}}};}});

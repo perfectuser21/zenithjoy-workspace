@@ -65,7 +65,7 @@ else process.exit(1);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test('四流程可分别组装，仍归同一智能获客能力，每个活动有Commander绑定', () => {
+test('四流程仍归同一智能获客能力，但Foundation必须走原API而非旧wf-plan', () => {
   const ctx = loadContractsFromDisk();
   assert.deepEqual(validateContracts(ctx), []);
   for (const [key, slots] of Object.entries(workflows)) {
@@ -74,11 +74,12 @@ test('四流程可分别组装，仍归同一智能获客能力，每个活动�
     assert.equal(doc.capability, 'keyword_acquisition');
     assert.equal(doc.brain_workflow_key, key);
     const plan = planFor(ctx, key);
-    assert.equal(plan.ok, true, plan.errors?.join('\n'));
-    assert.deepEqual(plan.activities.map(a => a.key), slots);
-    assert.equal(plan.env.WF_RUNNER, 'leadgen-workflow.mjs');
-    assert.equal(plan.env.WF_MISSING, '');
-    for (const a of plan.activities) assert.equal(a.commander.entry, 'activity-commander.mjs');
+    assert.equal(doc.runtime.kind,'commander-foundation-v1');
+    assert.deepEqual(doc.activities.map(a=>a.key||a.ref.split('.').at(-1)),slots);
+    assert.equal(plan.ok,false);
+    assert.match(plan.errors.join('\n'),/FOUNDATION_API_ONLY/);
+    assert.deepEqual(plan.activities,[]);
+    assert.equal(plan.env,undefined,'拒绝不得附可执行旧runner');
   }
 });
 

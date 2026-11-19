@@ -4,10 +4,11 @@ import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {assembleActivityPgHost} from '../activity-host-pg.mjs';
-import {wireProducerReadback,resolveProducerIdentity} from '../activity-upstream-source.mjs';
+import {resolveProducerIdentity} from '../activity-upstream-source.mjs';
 import {assembleActivity104Host} from '../activity-host-104.mjs';
 import {hash,need,canonical} from './context.mjs';
 import {relative} from './freeze.mjs';
+import {businessModuleSources} from './business-module-sources.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const {validateOutreachScope}=createRequire(import.meta.url)('../leadgen-outreach-scope.js');
 export const EXACT_ENV_KEYS=['LEADGEN_OUTREACH_MODE','LEADGEN_OUTREACH_SCOPE_FILE','WF_BRAIN_WORKFLOW','WFR_TAG','P','SERIAL','LEADGEN_LINE'];
@@ -45,12 +46,6 @@ function localCredentials(files,c){
  files['tools.py']=t;
  const manifest=JSON.parse(files['activity-host-tools.json']);for(const name of Object.keys(manifest.sha256))manifest.sha256[name]=hash(files[name]);files['activity-host-tools.json']=JSON.stringify(manifest,null,2)+'\n';
 }
-function bindReadbackCredentials(files){
- const swaps=[[/path\.join\((?:process\.env\.HOME|os\.homedir\(\)),'.credentials\/zenithjoy-db.json'\)/g,'c.credentials.database'],
-  [/path\.join\((?:process\.env\.HOME|os\.homedir\(\)),'.credentials\/cecelia-internal.env'\)/g,'c.credentials.brain'],
-  [/path\.join\((?:process\.env\.HOME|os\.homedir\(\)),'.credentials\/leadgen-feishu-yuesheng-live.json'\)/g,'c.credentials.feishu']];
- for(const name of ['checker.mjs','cleanup-result.mjs','native-readback.mjs','production-readback-local.mjs'])if(files[name])for(const [old,next]of swaps)files[name]=files[name].replace(old,next);
-}
 export function prepareProof(context,{initialize=false}={}){
  const file=context.verification.proof_manifest_path,identity={...context.tasks[context.assigned_workflow],workflow:context.assigned_workflow};
  if(fs.existsSync(file)){
@@ -61,13 +56,15 @@ export function prepareProof(context,{initialize=false}={}){
  }
 }
 /** Only assembles frozen source. No phone, database, model or message operation occurs here. */
-export async function assembleSources({context:c,profile,hostRoot,initializeProof=true}){
+export async function assembleSources({context:c,profile,contract,hostRoot,initializeProof=true}){
  const workflow=c.assigned_workflow,files=sourceArchive(path.join(HERE,'sources',workflow+'.json'));
  for(const [name,expected]of Object.entries(profile.files).filter(([name])=>name.startsWith('services/phone-adb-controller/skills/'))){
   const bytes=fs.readFileSync(path.join(profile.cwd,name),'utf8');need(hash(bytes)===expected,'SKILL_SOURCE');files[name]=bytes;
  }
- const nativeChecker='native_artifacts.py';need(files[nativeChecker],'NATIVE_CHECKER_REQUIRED');
- c.verification.artifact_checker={command:[c.python,path.join(hostRoot,nativeChecker)],sha256:{[c.python]:hash(fs.readFileSync(c.python)),[path.join(hostRoot,nativeChecker)]:hash(files[nativeChecker])}};
+ if(workflow==='102'){
+  const name='native-identity.py',bytes=fs.readFileSync(path.join(HERE,'../activity-native-identity.py'),'utf8');files[name]=bytes;
+  c.verification.native_identity_reader={command:[c.python,path.join(hostRoot,name)],sha256:{[c.python]:hash(fs.readFileSync(c.python)),[path.join(hostRoot,name)]:hash(bytes)}};
+ }
  const temporary=fs.mkdtempSync(path.join(path.dirname(hostRoot),'.leadgen-assembly-'));
  try{
   const base=path.join(temporary,'base');writeSources(base,files);prepareProof(c,{initialize:initializeProof});
@@ -76,39 +73,41 @@ export async function assembleSources({context:c,profile,hostRoot,initializeProo
     pgHelper:{path:path.join(HERE,'../activity-host-pg.mjs'),sha256:hash(fs.readFileSync(path.join(HERE,'../activity-host-pg.mjs')))}});
    Object.assign(files,directoryFiles(target));
    files['TOOLS.txt']+='\n本正式profile由宿主固定为exact范围：outreach-scope.json为原runtime-definition读取的7字段私有文件；LEADGEN_OUTREACH_MODE=exact和LEADGEN_OUTREACH_SCOPE_FILE由独立worker及每次invoke进程绑定，唯一原订单及来源与context.verification[104]一致，批准正文和额度由context.authorization_asset校验。禁止Agent改环境、切company_queue或另选订单；不因Skill的一般示例扩充宿主工具权限。prepared或未知结果仍仅原动作读回，不另用text-input/tap-evidence补发。\n';
-   const original=sourceArchive(path.join(HERE,'sources/101.json'))['production-readback-local.mjs'];
-   files['production-readback-local.mjs']="import {loadActivityHostPg} from './activity-host-pg.mjs';\n"+replaceRequired(original,"const {Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);");
   }else{
    const target=path.join(temporary,'pg');need(c.verification.pg_deployment,'PG_DEPLOYMENT_REQUIRED');
    const pg=await assembleActivityPgHost({baseRoot:base,targetRoot:target,runtimeRoot:c.runtime_root,sourceCommit:c.source_commit,
-    expectedSource:c.verification.runtime_sha256,expectedDeployment:c.verification.pg_deployment,workflow});
+    expectedSource:c.verification.runtime_sha256,expectedDeployment:c.verification.pg_deployment,workflow,checkerMode:'agent'});
    need(canonical(pg.pg)===canonical(c.verification.pg),'PG_CONTEXT_CHANGED');Object.assign(files,directoryFiles(target));
    const input=path.join(temporary,'context.json');fs.writeFileSync(input,JSON.stringify(c),{mode:0o600});
    const typed=path.join(temporary,'typed');const argv=[path.join(HERE,'../activity-host-tools.py'),base,typed,...(workflow==='101'?[]:[input])];
    const result=spawnSync(c.python,argv,{encoding:'utf8',timeout:15000,maxBuffer:1024*1024,env:{PATH:process.env.PATH,HOME:process.env.HOME,PYTHONDONTWRITEBYTECODE:'1'}});
    need(result.status===0,'TYPED_ASSEMBLY');Object.assign(files,directoryFiles(typed));localCredentials(files,c);
-   // collection-readback consumes the same production implementation as the independent checker.
    if(workflow==='102')for(const [name,bytes]of Object.entries(sourceArchive(path.join(HERE,'sources/asr.json'))))files['asr-runtime/'+name]=bytes;
+  }
+  if(workflow!=='104'){
+   Object.assign(files,businessModuleSources(c));
+   files['business.mjs']=replaceRequired(files['business.mjs'],"createRequire(path.join(c.runtime_root,'package.json'))","createRequire(path.join(root,'business-runtime/package.json'))");
   }
   if(workflow==='102'){
    const file='collection-evidence/runtime-deps.mjs',legacy="path.join(profileRoot,'skills/douyin-leadgen-commander/scripts/native_artifacts.py')";
-   need(files[file].split(legacy).length===2,'NATIVE_CHECKER_LAYOUT');
-   files[file]=files[file].replace(legacy,"path.join(profileRoot,'native_artifacts.py')");
+   need(files[file].split(legacy).length===2,'NATIVE_IDENTITY_LAYOUT');
+   files[file]=files[file].replace(legacy,"path.join(profileRoot,'native-identity.py')").replace('c.verification.artifact_checker','c.verification.native_identity_reader');
    const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
-   files['production-readback-local.mjs']=wireProducerReadback(files['production-readback-local.mjs']);
-   const recording="await artifactCheck(v,'recording',spec)";
-   need(typeof c.adb_serial==='string'&&c.adb_serial.length>0,'RECORDING_TRANSPORT_REQUIRED');
-   need(files['production-readback-local.mjs'].split(recording).length===2,'RECORDING_TRANSPORT_LAYOUT');
-   // The outer proof retains hardware identity; the native stage records the controlled ADB transport.
-   files['production-readback-local.mjs']=files['production-readback-local.mjs'].replace(recording,"await artifactCheck(v,'recording',{...spec,serial:c.adb_serial})");
-   files['activity-upstream-source.mjs']=fs.readFileSync(path.join(HERE,'../activity-upstream-source.mjs'),'utf8');
   }
-  for(const name of ['checker.mjs','collection-readback.mjs']){
-   const old="'./skills/douyin-leadgen-commander/scripts/production_readback.mjs'",current="'./production-readback-local.mjs'";
-   if(files[name].includes(old))files[name]=replaceRequired(files[name],old,current);else need(files[name].includes(current),'SOURCE_LAYOUT');
-  }
-  bindReadbackCredentials(files);
+  delete c.checker_media_tool;
+  const probe=['/opt/homebrew/bin/ffprobe','/usr/bin/ffprobe'].find(p=>fs.existsSync(p));
+  if(probe){const executable=fs.realpathSync(probe);c.checker_media_tool={path:executable,sha256:hash(fs.readFileSync(executable))};}
   files['context.json']=JSON.stringify(c,null,2)+'\n';
+  for(const name of ['checker-facts.mjs','checker-facts-runtime.mjs','checker-file-facts.mjs'])files[name]=fs.readFileSync(path.join(HERE,name),'utf8');
+  const authority="const contextFile=new URL('./context.json',import.meta.url).pathname,contextSha256="+JSON.stringify(hash(files['context.json']))+";\n";
+  files['checker-facts-entry.mjs']="import {serveFacts} from './checker-facts.mjs';\n"+authority+"await serveFacts({contextFile,contextSha256});\n";
+  for(const [name,operation,args]of [['native-inspect.mjs','native.read',{}],['collection-readback.mjs','pg.rows',{relation:'comments'}]]){
+   files[name]="import fs from 'node:fs';import {readFacts} from './checker-facts.mjs';import {factDependencies,readFrozenContext} from './checker-facts-runtime.mjs';\n"+authority+
+    "const c=readFrozenContext(contextFile,contextSha256),input=JSON.parse(fs.readFileSync(0,'utf8')),t=c.tasks[c.assigned_workflow];const r=await readFacts({identity:t,nonce:'executor-fact-read',context:input,operation:"+JSON.stringify(operation)+",args:"+JSON.stringify(args)+"},{...factDependencies,readAuthority:async()=>c});console.log(JSON.stringify(r));if(r.status!=='available')process.exitCode=2;\n";
+  }
+  for(const directory of ['native','receipts','qualification-receipts','collection-evidence-receipts','outreach-receipts'])files[directory+'/.keep']='';
+  files['checker-input/contract.json']=JSON.stringify(contract,null,2)+'\n';
+  files['checker-input/identity.json']=JSON.stringify({tasks:c.tasks,line:c.line,company_id:c.company_id,tenant_id:c.tenant_id,profile:c.profile,serial:c.serial},null,2)+'\n';
   const kernel=path.join(profile.runtimeRoot,'scripts/commander-workflow/skill-worker.mjs');
   let exactEnv={};
   if(workflow==='104'){

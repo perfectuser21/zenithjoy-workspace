@@ -1,3 +1,4 @@
+import {historicalSteps,historicalLeadgenText} from './historical-leadgen-contract.mjs';
 import assert from 'node:assert/strict';
 import {createServer,request as requestHttp} from 'node:http';
 import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,realpathSync,cpSync,readdirSync,chmodSync} from 'node:fs';
@@ -20,15 +21,21 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const jsonHash=x=>sha(canonical(x));
 
-export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,phone=false,controlAcceptance=false,terminalPolicy,splitDeadlines=false}={}){
+export async function using(fn,{delay=false,suppressClose=false,shortDeadline=false,gatewayDependencies,gatewayCredential,rawTransport=false,scoring=false,phone=false,controlAcceptance=false,terminalPolicy,splitDeadlines=false,historicalPhoneContract=false,historicalScoringContract=false}={}){
  assert.equal(typeof control.createOfficialAgentControl,'function','正式authority需要不fork外层Node/SSH的Code-owned入口');
  const copied=mkdtempSync(join(resolve(root,'../..'),'.official-control-fixture-')),runtimeRoot=join(copied,'runtime');
  cpSync(root,runtimeRoot,{recursive:true,filter:path=>!path.split('/').some(part=>['__tests__','node_modules','__pycache__'].includes(part))});
+ // Legacy public-handler regression freezes its original c3de step contract before any source hash.
+ if(historicalPhoneContract)for(const flow of ['douyin_video_discovery','douyin_video_processing'])writeFileSync(join(runtimeRoot,'plans',flow+'.steps.json'),JSON.stringify(historicalSteps(flow)));
+ if(historicalScoringContract){
+  writeFileSync(join(runtimeRoot,'plans/douyin_comment_scoring.steps.json'),JSON.stringify(historicalSteps('douyin_comment_scoring')));
+  for(const name of ['scoring','mark-leads']){const p='skills/douyin-leadgen-activity-103-'+name+'/SKILL.md';writeFileSync(join(runtimeRoot,p),historicalLeadgenText('services/phone-adb-controller/'+p));}
+ }
  if(scoring||phone){const binding=bindNative103TestPython(runtimeRoot);if(binding)writeFileSync(binding.path,JSON.stringify(binding.policy));}
  const localControl=await import(new URL('./runtime/official-agent-control.mjs',new URL('file://'+copied+'/')).href);
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'official-control-'))),home=join(directory,'home'),journalDirectory=join(directory,'journal');
  mkdirSync(journalDirectory,{mode:0o700});
- const methodName=scoring?'douyin-leadgen-activity-103-scoring':'douyin-leadgen-activity-101-collect-videos',text=readFileSync(join(root,'skills',methodName,'SKILL.md'),'utf8');
+ const methodName=scoring?'douyin-leadgen-activity-103-scoring':'douyin-leadgen-activity-101-collect-videos',text=readFileSync(join(runtimeRoot,'skills',methodName,'SKILL.md'),'utf8');
  const version=parse(text.match(/^---\n([\s\S]*?)\n---/)[1]).metadata.version;
  const support=readFileSync(join(root,'skills/leadgen-activity-execution.md'),'utf8');
  const contract={budget:{max_duration_s:30}},contractSha=jsonHash(contract),commit='a'.repeat(40);

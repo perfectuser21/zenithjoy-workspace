@@ -9,6 +9,12 @@ import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost} from '../leadgen-foundation/adapter.mjs';
 import {sourceArchive} from '../leadgen-foundation/assembly.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
+function assertNoActionEvidence(host){
+ for(const name of ['receipts','qualification-receipts']){
+  const dir=path.join(host,name);assert.deepEqual(fs.readdirSync(dir),['.keep']);
+  assert.equal(fs.readFileSync(path.join(dir,'.keep')).length,0);
+ }
+}
 
 test('actual assembled 102 has the complete original ASR SDK closure and signs offline before any action',async()=>{
  const f=await foundationFixture('102');
@@ -24,8 +30,7 @@ test('actual assembled 102 has the complete original ASR SDK closure and signs o
    const signature=officialSign({SecretId:'offline-fixture',SecretKey:'offline-fixture',Method:'GET',Pathname:'/offline',KeyTime:'1700000000;1700000180'});
    assert.equal(new URLSearchParams(signature).get('q-sign-algorithm'),'sha1');assert.equal(calls,0);
   }finally{https.request=oldRequest;https.get=oldGet;}
-  assert.equal(fs.existsSync(path.join(a.profile.cwd,'receipts')),false);
-  assert.equal(fs.existsSync(path.join(a.profile.cwd,'qualification-receipts')),false);
+  assertNoActionEvidence(a.profile.cwd);
   await a.verifySource();
  }finally{f.close();}
 });
@@ -50,8 +55,7 @@ test('formal 102 preparation refuses incomplete frozen ASR before returning an e
  try{
   fs.readFileSync=function(file,...args){return String(file)===archive.pathname?JSON.stringify(broken):read.call(this,file,...args);};
   await assert.rejects(prepareLeadgenHost(f),/ASR_COS_DEPENDENCY_UNVERIFIED/);
-  const host=path.join(f.profile.cwd,'.leadgen-run/host');assert.equal(fs.existsSync(path.join(host,'receipts')),false);
-  assert.equal(fs.existsSync(path.join(host,'qualification-receipts')),false);
+  assertNoActionEvidence(path.join(f.profile.cwd,'.leadgen-run/host'));
  }finally{fs.readFileSync=read;f.close();}
 });
 
@@ -68,6 +72,6 @@ for(const kind of ['missing_text','extra_file','self_consistent_bad_tarball'])te
  try{
   fs.readFileSync=function(file,...args){return String(file)===archive.pathname?JSON.stringify(broken):read.call(this,file,...args);};
   await assert.rejects(prepareLeadgenHost(f),/ASR_COS_DEPENDENCY_UNVERIFIED/);
-  assert.equal(fs.existsSync(path.join(f.profile.cwd,'.leadgen-run/host/receipts')),false);
+  assertNoActionEvidence(path.join(f.profile.cwd,'.leadgen-run/host'));
  }finally{fs.readFileSync=read;f.close();}
 });
