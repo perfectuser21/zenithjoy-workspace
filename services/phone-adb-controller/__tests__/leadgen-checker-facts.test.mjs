@@ -2,7 +2,7 @@ import test from'node:test';import assert from'node:assert/strict';
 import {readFacts}from'../leadgen-foundation/checker-facts.mjs';
 const context={assigned_workflow:'102',line:'fixture-line',company_id:'fixture-company',tenant_id:'fixture-tenant',tasks:{102:{task_id:'task',run_id:'run',run_tag:'run'}},verification:{102:{video_ids:['7709208240869657011']}}};
 const request=(operation,args={})=>({identity:{task_id:'task',run_id:'run'},nonce:'fixture-nonce',context,operation,args});
-function database(rows=[]){const calls=[];return{calls,loadPool:async()=>({connect:async()=>({query:async(sql,args)=>{calls.push({sql,args});return{rows:sql.startsWith('SELECT')?rows:[]};},release(){calls.push({release:true});}}),end:async()=>calls.push({end:true})})};}
+function database(rows=[]){const calls=[];return{calls,readAuthority:async()=>context,loadPool:async()=>({connect:async()=>({query:async(sql,args)=>{calls.push({sql,args});return{rows:sql.startsWith('SELECT')?rows:[]};},release(){calls.push({release:true});}}),end:async()=>calls.push({end:true})})};}
 test('raw scoped PG rows are returned without business verdict or changed-state filtering',async()=>{
  const rows=[{video_id:'7709208240869657011',judgment_status:'rejected',process_status:'unexpected',transcript:null}],db=database(rows);
  const out=await readFacts(request('pg.rows',{relation:'videos'}),db);
@@ -20,13 +20,27 @@ test('scope uses parameters and database errors cannot become passed or leak con
  const out=await readFacts(request('pg.rows',{relation:'comments'}),db);assert.equal(out.status,'unavailable');assert.equal(out.reason,'FACT_READ_UNAVAILABLE');assert.doesNotMatch(JSON.stringify(out),/secret|example/);assert.ok(db.calls.includes('ROLLBACK'));
 });
 test('provider only performs bound Brain GET and returns missing records as facts, not a business failure',async()=>{
- const calls=[];const deps={brainGet:async(endpoint)=>{calls.push(endpoint);return{task:{status:'failed'}};}};
+ const calls=[];const deps={readAuthority:async()=>context,brainGet:async(endpoint)=>{calls.push(endpoint);return{task:{status:'failed'}};}};
  assert.equal((await readFacts(request('brain.get',{resource:'task'}),deps)).facts.task.status,'failed');assert.deepEqual(calls,['/tasks/task']);
  const bad=await readFacts(request('brain.get',{resource:'task',task_id:'foreign'}),deps);assert.equal(bad.status,'unavailable');assert.equal(calls.length,1);
 });
 test('native and CRM providers cannot be used to navigate, send or nominate an arbitrary URL',async()=>{
- const calls=[],deps={nativeRead:async()=>{calls.push('native');return{foreground_package:'fixture',local_lock:{lock:'held'}};},feishuGet:async()=>{calls.push('crm');return{};}};
+ const calls=[],deps={readAuthority:async()=>context,nativeRead:async()=>{calls.push('native');return{foreground_package:'fixture',local_lock:{lock:'held'}};},feishuGet:async()=>{calls.push('crm');return{};}};
  assert.equal((await readFacts(request('native.read'),deps)).status,'available');
  for(const r of [request('native.read',{command:'tap'}),request('feishu.get',{url:'https://attacker.invalid'}),request('feishu.get',{record_id:'arbitrary'})])assert.equal((await readFacts(r,deps)).status,'unavailable');
  assert.deepEqual(calls,['native']);
+});
+test('the CRM transport only permits fixed-origin GET and the fixed authentication endpoint',async()=>{
+ const {readOnlyCrmFetch}=await import('../leadgen-foundation/checker-facts-runtime.mjs');
+ for(const [url,method]of [['https://attacker.invalid/open-apis/records','GET'],['https://open.feishu.cn/open-apis/records','POST'],['https://open.feishu.cn/open-apis/records','DELETE'],['https://user:pass@open.feishu.cn/open-apis/records','GET']])assert.throws(()=>readOnlyCrmFetch(url,{method}),/FACT_RUNTIME_UNAVAILABLE/);
+ const old=globalThis.fetch,calls=[];globalThis.fetch=async(url,options)=>{calls.push({url,options});return{ok:true};};
+ try{await readOnlyCrmFetch('https://open.feishu.cn/open-apis/bitable/v1/apps/f/tables/t/records/r');assert.equal(calls[0].options.redirect,'error');assert.ok(calls[0].options.signal);}finally{globalThis.fetch=old;}
+});
+
+test('authority is required and merged output cannot replace frozen tenant, scope or credential paths',async()=>{
+ for(const changed of [{line:'foreign'},{credentials:{database:'/tmp/attacker'}},{runtime_root:'/tmp/attacker'},{verification:{102:{video_ids:['foreign']}}},{input_provenance:{producer:{task_id:'foreign'}}}]){
+  const db=database();const r={...request('pg.rows',{relation:'videos'}),context:{...context,...changed}};
+  const out=await readFacts(r,db);assert.equal(out.status,'unavailable');assert.equal(db.calls.length,0);
+ }
+ const db=database();delete db.readAuthority;assert.equal((await readFacts(request('pg.rows',{relation:'videos'}),db)).status,'unavailable');assert.equal(db.calls.length,0);
 });
