@@ -111,3 +111,10 @@ test('103 explicit PG assembly reuses all four original host entries without 102
  for(const name of Object.keys(fixture.files)){assert.equal(r.receipt.base_sha256[name],fixture.files[name].sha256);assert.match(readFileSync(join(targetRoot,name),'utf8'),/loadActivityHostPg/);}
  assert.equal(existsSync(join(targetRoot,'qualification')),false);
 });
+test('agent checker PG assembly does not require or emit legacy business verdict programs',async()=>{
+ const base=join(f.root,'agent-base');cpSync(f.base,base,{recursive:true});
+ const removed=['checker.mjs','production-readback-local.mjs','cleanup-result.mjs'];for(const name of removed)rmSync(join(base,name));
+ const targetRoot=join(f.root,'agent-output'),r=await(await import(implementation)).assembleActivityPgHost({baseRoot:base,targetRoot,runtimeRoot:f.runtime,sourceCommit:f.sourceCommit,expectedSource:f.expectedSource,expectedDeployment:f.expectedDeployment,workflow:'102',checkerMode:'agent'});
+ for(const name of removed){assert.equal(existsSync(join(targetRoot,name)),false);assert.equal(r.receipt.base_sha256[name],undefined);}
+ assert.ok(existsSync(join(targetRoot,'business.mjs')));assert.ok(existsSync(join(targetRoot,'qualification/runtime-deps.mjs')));
+});
