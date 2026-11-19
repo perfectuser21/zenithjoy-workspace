@@ -170,7 +170,7 @@ test('102g无接纳回执时 score/policy_review/mark_leads 全拒绝，不调�
   const client={async query(sql,args=[]){calls.push({sql,args});
     if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
     if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:args[2]?.includes?.(row.id)?[]:[row]};
-    if(sql.includes('SELECT video_id,video_url,title,judgment_status FROM zenithjoy.leadgen_videos'))return {rows:[]};
+    if(sql.includes('SELECT video_id,video_url,title,judgment_status,transcript FROM zenithjoy.leadgen_videos'))return {rows:[]};
     if(sql.includes('SELECT * FROM zenithjoy.db_audit'))return {rows:[]};
     if(sql.includes('SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs'))return {rows:[{run_id:input.run,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,snapshot}]};
     if(sql.includes('SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos'))return {rows:[]};
@@ -180,6 +180,8 @@ test('102g无接纳回执时 score/policy_review/mark_leads 全拒绝，不调�
   const score=await queueRequest(pool,{op:'score',line:'jinuo',run:input.run,source_run:run,ids:[ids[1]],limit:1},
     {freezeCompanyConfig:async()=>snapshot,judgeComment:async()=>{modelCalls++;throw Error('must not call model');}});
   assert.equal(score.scored,0);assert.equal(score.blocked,1);assert.equal(modelCalls,0);
+  assert.deepEqual(score.blocked_reasons,[{id:row.id,code:'POLICY_VIDEO_SCOPE_INVALID'}]);
+  assert.ok(calls.some(c=>c.sql.includes('SELECT * FROM zenithjoy.db_audit')),'必须实际读取接纳回执后拒绝');
   const review=await queueRequest(pool,{op:'policy_review',line:'jinuo',run:input.run,claim:input.run,source_run:run,ids:[ids[1]]});
   assert.equal(review.verified,false);assert.equal(review.rows[0].reason,'row_or_video_scope_unverified');
   row.relevance='相关';row.intent_grade='A';row.judgment_config={run_id:input.run};
