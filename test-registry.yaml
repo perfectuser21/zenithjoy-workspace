@@ -12250,6 +12250,24 @@ tests:
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "实际Foundation装配及本机HTTP：鉴权断连硬截止/去重/拒绝、后派发unknown、102原EID规则与新动作纠正；原invoke末端为计数替身"
 
+  - id: leadgen-asr-closure
+    path: services/phone-adb-controller/__tests__/leadgen-asr-closure.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "实际宿主装配完整72项ASR依赖与原SDK离线签名；缺件/额外项/坏SRI/非规范二进制拒绝"
+
+  - id: leadgen-recording-transport
+    path: services/phone-adb-controller/__tests__/leadgen-recording-transport.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "实际outer main与原Python checker的硬件/ADB身份边界；DB替身、真实WAV，cloud/USB及错误身份拒绝，缺ASR仍失败"
+
   - id: leadgen-collection-checker-binding
     path: services/phone-adb-controller/__tests__/leadgen-collection-checker-binding.test.mjs
     type: integration

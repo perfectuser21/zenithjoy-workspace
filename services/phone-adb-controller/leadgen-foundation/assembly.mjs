@@ -11,10 +11,16 @@ import {relative} from './freeze.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const {validateOutreachScope}=createRequire(import.meta.url)('../leadgen-outreach-scope.js');
 export const EXACT_ENV_KEYS=['LEADGEN_OUTREACH_MODE','LEADGEN_OUTREACH_SCOPE_FILE','WF_BRAIN_WORKFLOW','WFR_TAG','P','SERIAL','LEADGEN_LINE'];
+const ASR_TARBALLS=new Set(['cos-nodejs-sdk-v5-3.0.0.tgz','cos-fast-xml-parser-1.0.0.tgz','strnum-1.1.2.tgz'].map(n=>'_dependencies/asr-cos/tarballs/'+n));
 export function sourceArchive(file){
  const doc=JSON.parse(fs.readFileSync(file));need(doc.schema==='leadgen-host-source/v1'&&doc.files,'SOURCE_ARCHIVE');
  return Object.fromEntries(Object.entries(doc.files).map(([name,item])=>{
-  relative(name);need(typeof item.source==='string'&&hash(item.source)===item.sha256,'SOURCE_DIGEST');return [name,item.source];
+  relative(name);need(typeof item.source==='string','SOURCE_BYTES');let bytes=item.source;
+  if(item.encoding!==undefined){
+   need(item.encoding==='base64'&&ASR_TARBALLS.has(name)&&item.source.length>0&&item.source.length<=6*1024*1024,'SOURCE_ENCODING');
+   bytes=Buffer.from(item.source,'base64');need(bytes.toString('base64')===item.source,'SOURCE_ENCODING');
+  }
+  need(hash(bytes)===item.sha256,'SOURCE_DIGEST');return [name,bytes];
  }));
 }
 function writeSources(root,files){
@@ -90,6 +96,11 @@ export async function assembleSources({context:c,profile,hostRoot,initializeProo
    files[file]=files[file].replace(legacy,"path.join(profileRoot,'native_artifacts.py')");
    const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
    files['production-readback-local.mjs']=wireProducerReadback(files['production-readback-local.mjs']);
+   const recording="await artifactCheck(v,'recording',spec)";
+   need(typeof c.adb_serial==='string'&&c.adb_serial.length>0,'RECORDING_TRANSPORT_REQUIRED');
+   need(files['production-readback-local.mjs'].split(recording).length===2,'RECORDING_TRANSPORT_LAYOUT');
+   // The outer proof retains hardware identity; the native stage records the controlled ADB transport.
+   files['production-readback-local.mjs']=files['production-readback-local.mjs'].replace(recording,"await artifactCheck(v,'recording',{...spec,serial:c.adb_serial})");
    files['activity-upstream-source.mjs']=fs.readFileSync(path.join(HERE,'../activity-upstream-source.mjs'),'utf8');
   }
   for(const name of ['checker.mjs','collection-readback.mjs']){
