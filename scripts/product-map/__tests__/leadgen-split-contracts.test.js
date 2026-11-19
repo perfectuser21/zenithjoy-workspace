@@ -109,8 +109,15 @@ test('预检交接已分配Run，收尾只交自己的Activity状态',()=>{
 
 test('101交接要求逐VID的实际数据库字段和原始搜索收据',()=>{
  const activity=loadContractsFromDisk().contracts.douyin_video_discovery.activities.find(a=>a.key==='collect_videos');
- assert.match(activity.outputs.find(o=>o.type==='Run').destination,/搜索采集Activity/);
- assert.match(activity.postconditions.find(p=>p.probe==='disc_candidates_persisted').asserts,/comment_count.*discovery_metrics/);
+ const run=activity.outputs.find(output=>output.type==='Run');
+ assert.deepEqual(run.fields,['status','stop_reason','all_results_scanned']);
+ assert.match(run.destination,/实际操作、提交和读回终态.*执行提案状态/);
+ assert.match(run.destination,/整条Workflow终态由宿主/);
+ const handoff=activity.postconditions.find(p=>p.probe==='disc_candidates_persisted').asserts;
+ assert.match(handoff,/outputs\.Video.*comment_count.*discovery_metrics/);
+ assert.match(handoff,/原XML.*SHA256.*原提交回执、真实读回和持久行/);
  assert.match(activity.postconditions.find(p=>p.probe==='source_completed').asserts,/原始搜索.*筛选/);
- assert.match(activity.postconditions.find(p=>p.probe==='videos_readback').asserts,/原提交回执.*保护字段/);
+ const readback=activity.postconditions.find(p=>p.probe==='videos_readback').asserts;
+ assert.match(readback,/原提交回执.*写前和写后原件.*转写、实采comment_count保留/);
+ assert.match(readback,/写前 process_status 为“评论已采”时保留原harvest_batch/);
 });
