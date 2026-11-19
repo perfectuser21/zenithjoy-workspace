@@ -28,7 +28,14 @@ async function server(t,devices,{version='0029',hang=false}={}){
 }
 async function route(ports,socket='',serial='431'){
  const code=`import importlib.util,sys,json\ns=importlib.util.spec_from_file_location('route',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ntry: print(m.select_route(sys.argv[2],sys.argv[3],ports=json.loads(sys.argv[4]),budget=0.8))\nexcept Exception as e: print(str(e),file=sys.stderr);sys.exit(2)`;
- return new Promise(resolve=>{const c=spawn('python3',['-c',code,helper,serial,socket,JSON.stringify(ports)]);let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out:out.trim(),err}));});
+ const home=mkdtempSync(join(tmpdir(),'adb-route-fixture-home-'));
+ const env={...process.env,HOME:home};
+ delete env.ZJ_ADB_HOST_CONFIG;
+ return new Promise(resolve=>{
+  const c=spawn('python3',['-c',code,helper,serial,socket,JSON.stringify(ports)],{env});
+  let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);
+  c.on('close',status=>{rmSync(home,{recursive:true,force:true});resolve({status,out:out.trim(),err});});
+ });
 }
 test('5037无目标而5042有目标：只读现有server按精确serial选路',async t=>{
  const a=await server(t,'440\tdevice\n'),b=await server(t,'431\tdevice\n422\tdevice\n');const r=await route([a.port,b.port]);assert.equal(r.status,0,r.err);assert.equal(r.out,String(b.port));assert.deepEqual(a.requests,['host:version','host:devices']);assert.deepEqual(b.requests,['host:version','host:devices']);
@@ -75,7 +82,8 @@ test('真实controller先验证既有socket再用该路由，customclient也不�
  const s=await server(t,'431\tdevice\n'),dir=mkdtempSync(join(tmpdir(),'adb-route-controller-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const adb=join(dir,'adb'),reg=join(dir,'profiles'),log=join(dir,'calls');writeFileSync(reg,'p\t431\tMODEL\t1199\t2663\n');
  writeFileSync(adb,'#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nwith open(os.environ["ADB_CALL_LOG"],"a") as f:f.write(" ".join(a)+"\\n")\nif a==["version"]: print("Android Debug Bridge version 1.0.41")\nelif a[-1:]==["get-state"]: print("device" if os.environ.get("ADB_SERVER_SOCKET")==os.environ["EXPECTED_SOCKET"] else "offline")\nelif a[-2:]==["getprop","ro.product.model"]: print("MODEL")\nelse: sys.exit(8)\n',{mode:0o755});
- const base={...process.env,...phoneLockFixtureEnv(reg,join(dir,'tmp')),DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:'/usr/bin/python3',ADB_CALL_LOG:log,EXPECTED_SOCKET:`tcp:127.0.0.1:${s.port}`};
+ const base={...process.env,...phoneLockFixtureEnv(reg,join(dir,'tmp')),HOME:dir,DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:'/usr/bin/python3',ADB_CALL_LOG:log,EXPECTED_SOCKET:`tcp:127.0.0.1:${s.port}`};
+ delete base.ZJ_ADB_HOST_CONFIG;
  const call=(op,socket)=>new Promise(resolve=>{const c=spawn('zsh',[new URL('../douyin-phone-adb',import.meta.url).pathname,'--profile','p',op],{env:{...base,ADB_SERVER_SOCKET:socket}});let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out,err}));});
  const good=await call('status',base.EXPECTED_SOCKET);assert.equal(good.status,0,good.err);assert.match(good.out,/431 device MODEL/);
  const before=readFileSync(log,'utf8');assert.doesNotMatch(before,/start-server|kill-server/);
