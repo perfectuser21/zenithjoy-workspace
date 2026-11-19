@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.9.1
+  version: 0.9.2
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -47,7 +47,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 5.2.0
+    version: 5.3.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -86,14 +86,15 @@ activities:
         fields:
           - logged_in
       - type: Run
-        destination: 本轮触达运行账本
+        destination: 底座已分配并持久化的同一Run身份，供后续Activity交接
         cardinality: one
-        effect: create
+        effect: update
         fields:
           - run_tag
           - profile
           - serial
     preconditions:
+      - run.identity 读回底座已经持久化的本轮Task/run，须与 checker-input/identity.json 的原任务和原Run一致。本活动交同一身份，不另建业务Run。冻结的预期账号与配置摘要由 identity.json 提供，同时核公司登记的启用账号；不读取包含凭据的完整宿主配置。
       - 从 checker-input/identity.json 的已绑定授权摘要和原单确认本轮公司、发送账号、目标和批准正文摘要；本轮发送上限和每日上限取批准资产及现行政策。
       - 开工前从公司配置确认发送账号的风险、暂停状态和原额度配置；设备上的当前登录、实际风险与剩余额度由预检执行后取证，不符合时禁止取单发送。
       - 只核本次上下文与政策；原订单与目标资格在领取时验证，不修改protected/已发或unknown订单。
@@ -105,7 +106,7 @@ activities:
       - probe: pf_call_idle
         asserts: 手机当前不在通话中，未知不当idle。
       - probe: pf_lock_acquired
-        asserts: 本run取得精确双锁并保来源回执，实际owner/租约一致；预检不领取旁单、不发送。
+        asserts: 本run取得精确双锁并保来源回执，实际owner/租约一致；预检不领取旁单、不发送。 用 host.receipts 找到本轮真实取得回执路径并逐份读取，与当前设备/中央锁读回交叉核验；同一身份已安全取得的锁只读回。
     execution:
       primary_kind: agent
       location: phone
@@ -119,7 +120,7 @@ activities:
       limits: []
     idempotency:
       dedupe_key: Run.run_tag
-      on_duplicate: reject
+      on_duplicate: skip
     failure:
       empty_ok: []
       retryable:
@@ -133,7 +134,7 @@ activities:
           channel: bark
           object: harvest-cron.sh:121-125 离线升级分身 → Bark
       fatal:
-        - run_tag 重复
+        - 冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果
     side_effects: []
     invokers:
       - code
@@ -148,7 +149,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 1.3.0
+        version: 1.4.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1388,7 +1389,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 3.4.0
+    version: 3.5.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1414,12 +1415,13 @@ activities:
         fields:
           - lock_holder
       - type: Run
-        destination: 本轮触达运行账本终态
+        destination: 交付本轮收尾Activity状态及可读回证据，由宿主验收后计算Workflow终态
         cardinality: one
         effect: update
         fields:
           - status
     preconditions:
+      - run.identity 核对本轮身份。以 run.progress 和 host.receipts 核对业务Activity是否开工及本轮真实工具动作；结合当前原生操作数、设备锁和适用业务资源，判断是否有本人资源待处理。
       - 从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。
     postconditions:
       - probe: cl_app_closed
@@ -1468,7 +1470,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.6.0
+        version: 0.7.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1676,13 +1678,13 @@ activities:
           readback:
             type: none
       - key: finalize_run
-        name: 终态回执
+        name: 收尾回执
         order: 4
         reads:
           - Run.run_tag
         writes:
           - Run.status
-        check: 记录真实终态与实际成果数，合法empty/partial/failed皆可收尾，不伪造非零产物。
+        check: 记录本收尾Activity的真实状态、资源和实际成果数；未开工无本轮动作和资源可以交empty。Workflow终态由宿主验收后产生，本活动不将其作为前提。
         implementation:
           status: implemented
           ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.finalize_run（原约束保留，原订单/证据读回）

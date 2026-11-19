@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.12.1
+  version: 0.12.2
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -59,7 +59,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.5.0
+    version: 2.6.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -96,14 +96,15 @@ activities:
         fields:
           - logged_in
       - type: Run
-        destination: 本轮运行账本，交给后续采集 Activity
+        destination: 底座已分配并持久化的同一Run身份，供后续Activity交接
         cardinality: one
-        effect: create
+        effect: update
         fields:
           - run_tag
           - profile
           - serial
     preconditions:
+      - run.identity 读回底座已经持久化的本轮Task/run，须与 checker-input/identity.json 的原任务和原Run一致。本活动交同一身份，不另建业务Run。冻结的预期账号与配置摘要由 identity.json 提供，同时核公司登记的启用账号；不读取包含凭据的完整宿主配置。
       - 读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。
       - 读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。
     postconditions:
@@ -114,7 +115,7 @@ activities:
       - probe: pf_call_idle
         asserts: 当前手机不在通话中，未知状态不得等同idle。
       - probe: pf_lock_acquired
-        asserts: 本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。
+        asserts: 本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。 用 host.receipts 找到本轮真实取得回执路径并逐份读取，与当前设备/中央锁读回交叉核验；同一身份已安全取得的锁只读回。
     execution:
       primary_kind: agent
       location: phone
@@ -128,7 +129,7 @@ activities:
       limits: []
     idempotency:
       dedupe_key: Run.run_tag
-      on_duplicate: reject
+      on_duplicate: skip
     failure:
       empty_ok: []
       retryable:
@@ -142,7 +143,7 @@ activities:
           channel: bark
           object: harvest-cron.sh:121-125 离线升级分身 → Bark
       fatal:
-        - run_tag 重复
+        - 冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果
     side_effects: []
     invokers:
       - code
@@ -157,7 +158,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-preflight
-        version: 0.10.0
+        version: 0.11.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1845,7 +1846,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 5
-    version: 2.5.0
+    version: 2.6.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1871,12 +1872,13 @@ activities:
         fields:
           - lock_holder
       - type: Run
-        destination: 本轮运行账本的终态
+        destination: 交付本轮收尾Activity状态及可读回证据，由宿主验收后计算Workflow终态
         cardinality: one
         effect: update
         fields:
           - status
     preconditions:
+      - run.identity 核对本轮身份。以 run.progress 和 host.receipts 核对业务Activity是否开工及本轮真实工具动作；结合当前原生操作数、设备锁和适用业务资源，判断是否有本人资源待处理。
       - 从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。
     postconditions:
       - probe: cl_app_closed
@@ -1925,7 +1927,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-cleanup
-        version: 0.10.0
+        version: 0.11.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -2133,13 +2135,13 @@ activities:
           readback:
             type: none
       - key: finalize_run
-        name: 终态回执
+        name: 收尾回执
         order: 4
         reads:
           - Run.run_tag
         writes:
           - Run.status
-        check: 记录真实终态与实际成果数，合法empty/partial/failed皆可收尾，不伪造非零产物。
+        check: 记录本收尾Activity的真实状态、资源和实际成果数；未开工无本轮动作和资源可以交empty。Workflow终态由宿主验收后产生，本活动不将其作为前提。
         implementation:
           status: implemented
           ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）
