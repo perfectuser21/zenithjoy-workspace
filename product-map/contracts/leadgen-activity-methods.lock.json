@@ -96,7 +96,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -131,14 +131,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -295,7 +295,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.0",
@@ -392,7 +392,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -427,14 +427,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -591,13 +591,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_video_processing.dedup": {
@@ -695,7 +695,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -730,14 +730,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -894,13 +894,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1003,7 +1003,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -1038,14 +1038,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -1202,13 +1202,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_video_processing.collection": {
@@ -1306,7 +1306,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -1341,14 +1341,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -1505,13 +1505,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1609,7 +1609,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -1644,14 +1644,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -1808,13 +1808,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1917,7 +1917,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -1952,14 +1952,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -2116,13 +2116,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2225,7 +2225,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -2260,14 +2260,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -2424,13 +2424,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2528,7 +2528,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -2563,14 +2563,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -2727,13 +2727,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2831,7 +2831,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -2866,14 +2866,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -3030,13 +3030,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3134,7 +3134,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -3169,14 +3169,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -3333,13 +3333,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3437,7 +3437,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-upstream-source.mjs",
           "revision": "contract",
-          "sha256": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"
+          "sha256": "1b112e675bbf8bd369d9be02a60c0b99d3f8b3d784960939f27a02a0d39cbd7f"
         },
         {
           "kind": "code",
@@ -3472,14 +3472,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
+          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "e23c55a06f15ee654de4e3183a004fafe287bc21c941a181f66d537ebbee5ac4"
+          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
         },
         {
           "kind": "code",
@@ -3636,13 +3636,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0",
+      "code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "核对原完整契约、执行 Skill 与写入SQL原样。变化为101专用可选只读投影和共用原始回执索引，两者保留既有工具协议。",
+        "reason": "核对冻结契约、执行 Skill 和原业务写入接口。101补齐原始证据，102判重新增受控上游只读原件与已冻结认领输入；不改变业务写入和验收规则。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "bd9c4225d34067c36ed530c590b905e56702dd6d267e196fa3738568b9fd8a66",
-        "current_code_digest": "aa28d8d6d8866a66c69c4ff943e49343a843d6bc1d17134d284fce9edebacec0"
+        "current_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a"
       }
     }
   },
