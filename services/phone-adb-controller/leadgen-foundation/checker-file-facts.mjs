@@ -1,7 +1,7 @@
 // File provenance and media parsing only. No qualification, coverage or delivery verdict.
 import fs from'node:fs';import path from'node:path';import{createHash}from'node:crypto';import{spawn}from'node:child_process';
 const hash=x=>createHash('sha256').update(x).digest('hex'),need=x=>{if(!x)throw Error('FACT_FILE_SCOPE');},UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-function regular(file,max=4*1024*1024){const s=fs.lstatSync(file);need(s.isFile()&&!s.isSymbolicLink()&&s.uid===process.getuid()&&s.nlink===1&&s.size<=max&&fs.realpathSync(file)===file);return s;}
+function regular(file,max=4*1024*1024,executable=false){const s=fs.lstatSync(file);need(s.isFile()&&!s.isSymbolicLink()&&(executable?((s.uid===process.getuid()||s.uid===0)&&(s.mode&0o022)===0):s.uid===process.getuid())&&s.nlink===1&&s.size<=max&&fs.realpathSync(file)===file);return s;}
 function document(file){regular(file);const bytes=fs.readFileSync(file);return{sha256:hash(bytes),data:JSON.parse(bytes)};}
 function directory(file){need(path.isAbsolute(file)&&fs.realpathSync(file)===file&&fs.statSync(file).isDirectory());return file;}
 export async function readQualificationOrigin(c,run,video,brainGet){
@@ -21,7 +21,7 @@ export async function readQualificationOrigin(c,run,video,brainGet){
 }
 export async function readMediaFacts(root,name,tool){
  directory(root);need(typeof name==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,239}\.(mkv|mp4|wav|webm|mp3|m4a)$/.test(name));const file=path.join(root,name),before=regular(file,512*1024*1024);
- need(tool&&path.isAbsolute(tool.path)&&/^[a-f0-9]{64}$/.test(tool.sha256));regular(tool.path,128*1024*1024);need(hash(fs.readFileSync(tool.path))===tool.sha256);
+ need(tool&&path.isAbsolute(tool.path)&&/^[a-f0-9]{64}$/.test(tool.sha256));regular(tool.path,128*1024*1024,true);need(hash(fs.readFileSync(tool.path))===tool.sha256);
  const metadata=await new Promise((resolve,reject)=>{let output='',settled=false;const child=spawn(tool.path,['-v','error','-protocol_whitelist','file','-show_streams','-show_format','-of','json',file],{stdio:['ignore','pipe','pipe'],env:{PATH:process.env.PATH}});
   const fail=()=>{if(!settled){settled=true;child.kill('SIGKILL');reject(Error('FACT_MEDIA_UNAVAILABLE'));}};const timer=setTimeout(fail,10000);child.on('error',fail);child.stderr.resume();child.stdout.on('data',b=>{output+=b;if(Buffer.byteLength(output)>1024*1024)fail();});child.on('close',code=>{clearTimeout(timer);if(settled)return;settled=true;try{need(code===0);resolve(JSON.parse(output));}catch(e){reject(e);}});
  });
