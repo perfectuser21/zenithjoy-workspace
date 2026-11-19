@@ -1,3 +1,4 @@
+import {historicalContract,historicalSteps} from './fixtures/historical-leadgen-contract.mjs';
 import YAML from 'yaml';
 import {mkdtempSync,cpSync,existsSync,rmSync} from 'node:fs';
 import {isAbsolute} from 'node:path';
@@ -131,3 +132,9 @@ test('actual public empty server scope routes scoring empty to mark empty with r
 test('actual public empty scope never converts independent Judge close unknown into empty or opens mark',t=>publicScenario(t,{emptyScope:true,hangJudgeCaller:true}));
 
 test('starter 103 public external ACK reaches the original native prepare without a fixture Task FK',t=>publicScenario(t,{prepareOnly:true}));
+
+test('legacy 103 fixture freezes c3de scoring steps before source admission',async()=>using(async f=>{
+ const actual=JSON.parse(readFileSync(join(f.runtimeRoot,'plans/douyin_comment_scoring.steps.json')));
+ assert.deepEqual(actual,historicalSteps('douyin_comment_scoring'));
+ assert.ok(actual.steps.some(s=>s.readback?.type==='metric'));
+},{scoring:true,historicalScoringContract:true}));
