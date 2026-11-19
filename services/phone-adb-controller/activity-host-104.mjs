@@ -1,4 +1,5 @@
 // Only an exact historical 104 source plus a known local transport can be assembled.
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';
 import {hash,need,regular,asset,scope,validateScope,KEYS} from './activity-104-context.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
@@ -29,7 +30,12 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  r=replace(r,'raw.verified=raw.today_ambiguous_sender_orders===0','raw.verified=raw.verified===true&&raw.today_ambiguous_sender_orders===0');
  r=replace(r,'checkPreflight:(e,scope)=>checkPreflight(e,scope)','checkPreflight:(e,scope)=>checkPreflight(e,scope,c)');
  files['outreach104/runtime-deps.mjs']="import {verify104Context,verify104Runtime,canonical} from '../activity-104-context.mjs';\nimport {observe104Runtime} from '../activity-104-runtime.mjs';\nimport {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+r;
- let t=files['tools.py'];t=replace(t,'import os,sys,json,pathlib,hashlib,subprocess,shlex,time,urllib.request,fcntl,re','import os,sys,json,pathlib,hashlib,subprocess,shlex,time,urllib.request,fcntl,re,shutil\nimport importlib.util\n_sp=importlib.util.spec_from_file_location("host104",pathlib.Path(__file__).parent/"activity-104-transport.py")\n_host104=importlib.util.module_from_spec(_sp);_sp.loader.exec_module(_host104)');
+ // Reuse only read-only Task admission; the 104 dispatcher/authorization/OPS stay dedicated.
+ for(const name of ['activity-host-tools.py','activity-tool-result.py'])files[name]=regular(path.join(HERE,name)).toString();
+ const authorityPatch="import importlib.util,sys\ns=importlib.util.spec_from_file_location('authority',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nsys.stdout.write(m.patch_task_authority(sys.stdin.read(),main_only=True))\n";
+ const patched=spawnSync(c.python,['-c',authorityPatch,path.join(HERE,'activity-host-tools.py')],{input:files['tools.py'],encoding:'utf8',timeout:10000,maxBuffer:1024*1024,env:{PATH:process.env.PATH,PYTHONDONTWRITEBYTECODE:'1'}});
+ need(patched.status===0,'AUTHORITY_ASSEMBLY');
+ let t="import importlib.util,pathlib\n_a=importlib.util.spec_from_file_location('authority',pathlib.Path(__file__).parent/'activity-host-tools.py')\n_host=importlib.util.module_from_spec(_a);_a.loader.exec_module(_host)\n"+patched.stdout;t=replace(t,'import os,sys,json,pathlib,hashlib,subprocess,shlex,time,urllib.request,fcntl,re','import os,sys,json,pathlib,hashlib,subprocess,shlex,time,urllib.request,fcntl,re,shutil\nimport importlib.util\n_sp=importlib.util.spec_from_file_location("host104",pathlib.Path(__file__).parent/"activity-104-transport.py")\n_host104=importlib.util.module_from_spec(_sp);_sp.loader.exec_module(_host104)');
  const sshStart=t.indexOf('def ssh(c,args):'),sshEnd=t.indexOf('def central(c):');t=t.slice(0,sshStart)+'def ssh(c,args):\n return _host104.command(c,args)\n'+t.slice(sshEnd);
  t=replace(t," c=read(P/'context.json');f="," c=read(P/'context.json');_host104.verify_context(c);f=");
  t=replace(t,"read(H/'.credentials/zenithjoy-db.json')","read(c['credentials']['database'])");t=replace(t,"str(H/'.credentials/leadgen-feishu-yuesheng-live.json')","c['credentials']['feishu']");

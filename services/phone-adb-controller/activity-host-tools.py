@@ -289,6 +289,25 @@ def replace_once(text, old, new):
     return text.replace(old, new, 1)
 
 
+def patch_task_authority(tools, *, main_only=False):
+    tools = replace_once(tools, 'def brain(route,body=None):', 'def brain(route,body=None,*,timeout=20):')
+    tools = replace_once(tools, 'urllib.request.urlopen(req,timeout=20)', 'urllib.request.urlopen(req,timeout=timeout)')
+    if not main_only:
+        tools = replace_once(tools, """def task_authority(c):
+ for key in [c['root_task_id'],c['tasks'][c['assigned_workflow']]['task_id']]:
+  x=brain('tasks/'+key);x=x.get('task',x)
+  if x['status']!='in_progress' or x['claimed_by']!=c['actor']:raise ValueError('TASK_AUTHORITY')""", """def task_authority(c):
+ return _host.task_authority(c,brain,os.environ.get('COMMANDER_ACTIVITY_KEY'))""")
+    tools = replace_once(tools, " task_authority(c);deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']", """ deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']
+ try:task_authority(c)
+ except _host.TaskAuthorityUnavailable as error:
+  if type(error) is not _host.TaskAuthorityUnavailable:raise
+  print(json.dumps(_host.authority_refusal(error),ensure_ascii=False));return 75""")
+    if main_only:
+        tools = replace_once(tools, ' try:task_authority(c)', ' try:_host.task_authority(c,brain,key)')
+    return tools
+
+
 def patch_sources(tools, scope):
     tools = replace_once(tools, 'from tool_scope import phone_args,scoped_business,READ', '''from tool_scope import phone_args,scoped_business,READ,OPS
 import importlib.util
@@ -298,22 +317,12 @@ PreDispatchRejected=_host.PreDispatchRejected
 emit_pre_dispatch_rejection=_host.emit_pre_dispatch_rejection
 read_business_input=_host.read_business_input
 scope_rejection=_host.scope_rejection''')
-    tools = replace_once(tools, 'def brain(route,body=None):', 'def brain(route,body=None,*,timeout=20):')
-    tools = replace_once(tools, 'urllib.request.urlopen(req,timeout=20)', 'urllib.request.urlopen(req,timeout=timeout)')
-    tools = replace_once(tools, """def task_authority(c):
- for key in [c['root_task_id'],c['tasks'][c['assigned_workflow']]['task_id']]:
-  x=brain('tasks/'+key);x=x.get('task',x)
-  if x['status']!='in_progress' or x['claimed_by']!=c['actor']:raise ValueError('TASK_AUTHORITY')""", """def task_authority(c):
- return _host.task_authority(c,brain,os.environ.get('COMMANDER_ACTIVITY_KEY'))""")
-    tools = replace_once(tools, " task_authority(c);deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']", """ deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']
- try:task_authority(c)
- except _host.TaskAuthorityUnavailable as error:
-  if type(error) is not _host.TaskAuthorityUnavailable:raise
-  print(json.dumps(_host.authority_refusal(error),ensure_ascii=False));return 75
- try:_host.require_recording_identity(c,key,kind,args)
+    tools = patch_task_authority(tools)
+    tools = replace_once(tools, " if time.time()*1000>=deadline:raise ValueError('ABSOLUTE_DEADLINE')", """ try:_host.require_recording_identity(c,key,kind,args)
  except PreDispatchRejected as error:
   if type(error) is not PreDispatchRejected:raise
-  print(json.dumps(_host.recording_identity_refusal(error),ensure_ascii=False));return 2""")
+  print(json.dumps(_host.recording_identity_refusal(error),ensure_ascii=False));return 2
+ if time.time()*1000>=deadline:raise ValueError('ABSOLUTE_DEADLINE')""")
     tools = replace_once(tools, " c=read(P/'context.json');f=", " _host.verify_host(P,OPS)\n c=read(P/'context.json');f=")
     tools = replace_once(tools, "  i=scoped_business(c,key,json.loads(args[0]))", "  parsed=read_business_input(args,activity=key,allowed_operations=OPS.get(key,set()))\n  i=scoped_business(c,key,parsed,reject=scope_rejection)")
     tools = replace_once(tools, "  # A policy error before launching an operation has no external operation in flight.\n  if isinstance(e,ValueError):atomic(action,{'binding':bind,'state':'terminal','started_at':started_at,'result':{'exit_code':2,'error':str(e)},'ended_at':time.time()})", "  if type(e) is PreDispatchRejected:\n   return emit_pre_dispatch_rejection(e,action=action,binding=bind,started_at=started_at,persist=atomic)")
