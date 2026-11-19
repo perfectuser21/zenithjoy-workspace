@@ -1,5 +1,5 @@
 """Run the actually assembled host against an isolated real HTTP server."""
-import contextlib, http.server, importlib.util, io, json, os, pathlib, shutil, socket, struct, sys, threading, time, types, urllib.request
+import hashlib, contextlib, http.server, importlib.util, io, json, os, pathlib, shutil, socket, struct, sys, threading, time, types, urllib.request
 root, mode = pathlib.Path(sys.argv[1]), sys.argv[2]
 sys.path.insert(0, str(root))
 spec = importlib.util.spec_from_file_location('actual_host', root/'tools.py')
@@ -58,15 +58,27 @@ def child(*args,**kwargs):
         m.task_authority(c)
     return types.SimpleNamespace(returncode=0,stdout='{"fixture":"readback"}',stderr='')
 m.subprocess.run = child
+resource_calls=[]
+m.resource_authority=lambda *a,**k:resource_calls.append(1)
+m.ssh=lambda c,args:['fixture-native-child',*args]
+checker_scope=None
 out = io.StringIO();error = None;code = None;started = time.monotonic()
 try:
     with contextlib.redirect_stdout(out):
         if mode == 'post':m.brain('device-locks',{'fixture':True})
         else:
             sys.argv = [str(root/'tools.py'),'native-readback','authority-probe']
+            if mode.startswith('eid-') or mode == 'link-good':
+                run=c['tasks']['102']['run_tag'];video=c['verification']['102']['video_ids'][0]
+                eid=run+('-v'+video+'-capture' if mode=='eid-good' else '-v'+str(int(video)+1)+'-capture' if mode=='eid-wrong' else '-qual-record')
+                sys.argv=[str(root/'tools.py'),'phone','authority-probe','current-video-link' if mode=='link-good' else 'record-start',eid]
+                artifact=root/'test-recording.json';raw=json.dumps({'exit_code':0,'stdout':''}).encode();artifact.write_bytes(raw)
+                asset={'path':str(artifact),'sha256':hashlib.sha256(raw).hexdigest()}
+                nspec=importlib.util.spec_from_file_location('native_original',root/'native_artifacts.py');native=importlib.util.module_from_spec(nspec);nspec.loader.exec_module(native)
+                checker_scope=native.recording({'start':asset,'stop':asset,'evidence_id':eid,'expected_run':run,'video_id':video}).get('reason')
             code = m.main()
 except Exception as e:error = type(e).__name__+':'+str(e)
 finally:
     duration = time.monotonic()-started
     server.shutdown();server.server_close();thread.join()
-print(json.dumps({'code':code,'stdout':out.getvalue(),'error':error,'counts':counts,'sleeps':sleeps,'timeouts':timeouts,'dispatches':len(dispatched),'receipts':list(p.name for p in (root/'receipts').glob('*.json')),'duration':duration,'states':[json.loads(p.read_text()).get('state') for p in (root/'receipts').glob('*.json')]}))
+print(json.dumps({'code':code,'stdout':out.getvalue(),'error':error,'counts':counts,'sleeps':sleeps,'timeouts':timeouts,'dispatches':len(dispatched),'receipts':list(p.name for p in (root/'receipts').glob('*.json')),'duration':duration,'checker_scope':checker_scope,'resource_calls':len(resource_calls),'states':[json.loads(p.read_text()).get('state') for p in (root/'receipts').glob('*.json')]}))

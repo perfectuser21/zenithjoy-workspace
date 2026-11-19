@@ -47,3 +47,10 @@ test('the same authority failure after actual invoke remains unknown without a f
 test('a trickling HTTP body cannot extend the admission deadline or dispatch late',async()=>{
  const r=await run('slow-body');assert.equal(r.code,75);assert.equal(r.dispatches,0);assert.equal(requests(r),1);assert.ok(r.duration<0.8,r.duration);assert.deepEqual(r.receipts,[]);
 });
+
+for(const mode of ['eid-bad','eid-wrong'])test(`102 qualification ${mode} cannot dispatch an EID the original checker rejects`,async()=>{
+ const r=await run(mode);assert.equal(r.checker_scope,'RECORDING_SCOPE_MISMATCH');assert.equal(r.code,2);assert.equal(r.dispatches,0);assert.equal(r.resource_calls,0);assert.deepEqual(r.receipts,[]);assert.equal(JSON.parse(r.stdout).result.data.dispatched,false);
+});
+for(const mode of ['eid-good','link-good'])test(`${mode} keeps the existing operation and identity rules`,async()=>{
+ const r=await run(mode);assert.equal(r.code,0);assert.equal(r.dispatches,1);assert.equal(r.resource_calls,1);if(mode==='eid-good')assert.notEqual(r.checker_scope,'RECORDING_SCOPE_MISMATCH');
+});
