@@ -30,7 +30,7 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  const identity={task_id:run.task_id,run_id:run.run_id,workflow,configuration_sha256:built.configuration_sha256,binding_sha256:built.binding_sha256,
   input_sha256:built.input_sha256,profile_sha256:hash(canonical(profile.files))};
  let receipt,context=built.context,expectedFiles;verifyRuntime(context);
- const assembly={context,profile,contract:run.contract,hostRoot,identity,bindingKey:run.input.binding_key};
+ const assembly={context,profile,contract:run.contract,input:run.input,hostRoot,identity,bindingKey:run.input.binding_key};
  if(fs.existsSync(hostRoot)){
   // Reconstruct only in a new temporary directory. Never trust an editable receipt
   // to nominate replacement source hashes or repair missing executed evidence.
@@ -58,6 +58,10 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  if(workflow==='104'){const command=path.join(hostRoot,'codex-exact');need(!!(fs.statSync(command).mode&0o100),'CODEX_EXECUTABLE');skill_runtime.codex={...skill_runtime.codex,env_keys:[...new Set([...(skill_runtime.codex?.env_keys??[]),...EXACT_ENV_KEYS])],command,command_sha256:hash(fs.readFileSync(command))};}
  skill_runtime.host_tools={...skill_runtime.host_tools,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath)),entry:'invoke.mjs'};
  for(const spec of Object.values(skill_runtime.activities)){need(spec.checker?.mode==='agent','AGENT_CHECKER_REQUIRED');spec.checker.evidence.provider={...spec.checker.evidence.provider,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath))};}
+ if(workflow==='101'){
+  const provider=skill_runtime.activities.collect_videos.checker.evidence.provider;
+  provider.description+=' 采集开工时用 read_file 读取 checker-input/input.json。它是本轮冻结的派单原始业务输入及绑定业务线，请从 business 中核对关键词、筛选和数量上限。';
+ }
  if(workflow==='102'){
   const provider=skill_runtime.activities.dedup.checker.evidence.provider;
   provider.description+=' 判重请先用 read_file 读取 checker-input/upstream.json。handoff 是本次冻结的101原交付，我方当前持久记录另外用 pg.rows 获取。claim 是已冻结的本轮普通认领输入；开工时尚无真实认领回执。历史交付的原生XML包含页面作者和评论数，PG已采评论数是另一个字段。';
