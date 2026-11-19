@@ -11,10 +11,10 @@ const functions=source.slice(source.indexOf('normalize_run_id() {'),source.index
 assert.match(functions,/same_run_lock\(\)/);
 const shell=(body,args=[])=>spawnSync('zsh',['-f','-c','setopt EXTENDED_GLOB\n'+functions+'\n'+body,'uuid-test',...args],{encoding:'utf8',timeout:5000});
 const original='8d4e2d9d-0de3-4865-a377-6eff535e160a';
-const roots=[original,'a1234567-0de3-4865-b377-6eff535e160a','8d4e2d9d-a123-4865-b377-6eff535e160a','8d4e2d9d-0de3-a123-b377-6eff535e160a','8d4e2d9d-0de3-4865-b377-a12345678901'];
+const roots=[original,original.toUpperCase(),'a1234567-0de3-4865-b377-6eff535e160a','8d4e2d9d-a123-4865-b377-6eff535e160a','8d4e2d9d-0de3-a123-b377-6eff535e160a','8d4e2d9d-0de3-4865-b377-a12345678901'];
 test('actual zsh preserves complete UUID roots with a-digit segments at every position',()=>{
  const cases=[];
- for(const uuid of roots)for(const prefix of ['','wf102-','batch_root_'])for(const suffix of ['',':a2','-a2-qualification-1','_a3_cleanup_1','-w12'])cases.push([prefix+uuid+suffix,prefix+uuid]);
+ for(const uuid of roots)for(const prefix of ['','wf102-','batch_root_'])for(const suffix of ['',':a2','-a2-qualification-1','_a3_cleanup_1','-w12','-w2-a3-cleanup-1'])cases.push([prefix+uuid+suffix,prefix+uuid]);
  const r=shell('for value in "$@"; do normalize_run_id "$value"; done',cases.map(x=>x[0]));assert.equal(r.status,0,r.stderr);assert.deepEqual(r.stdout.trimEnd().split('\n'),cases.map(x=>x[1]));
 });
 test('different full UUIDs and unrecognized tails never share a run lock',()=>{
@@ -49,4 +49,9 @@ test('actual compatible acquire cannot adopt a different UUID sharing the former
  const f=fixture(t),owner='wf102-'+original,other='wf102-8d4e2d9d-0de3-4865-a378-6eff535e160a';assert.equal(f.run('lock-acquire',owner).status,0);
  assert.notEqual(f.run('lock-acquire',other).status,0);assert.notEqual(f.run('lock-refresh',other).status,0);assert.notEqual(f.run('lock-release',other).status,0);
  assert.equal(readFileSync(join(f.lock,'owner'),'utf8'),owner+'\n');assert.equal(f.run('lock-release',owner+'-a2-cleanup-1').status,0);assert.ok(!existsSync(f.calls));
+});
+test('a previously truncated owner is not silently adopted or released by a complete UUID',t=>{
+ const f=fixture(t),old='wf102-8d4e2d9d-0de3-4865',owner='wf102-'+original;assert.equal(f.run('lock-acquire',old).status,0);
+ assert.notEqual(f.run('lock-acquire',owner).status,0);assert.notEqual(f.run('lock-release-exact',owner).status,0);assert.equal(readFileSync(join(f.lock,'owner'),'utf8'),old+'\n');
+ assert.equal(f.run('lock-release-exact',old).status,0);assert.ok(!existsSync(f.calls));
 });

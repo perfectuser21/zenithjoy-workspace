@@ -37,6 +37,9 @@ function setup(t) {
   writeFileSync(join(dir,'curl'),'#!/bin/sh\ncat "$TEST_DIR/tasks.json"\n',{mode:0o755});
   writeFileSync(join(dir,'tasks.json'),'[]');
   const env={...process.env,PATH:dir+':'+process.env.PATH,TEST_DIR:dir,...phoneLockFixtureEnv(reg,join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
+  const policy=join(dir,'adb-service.json');
+  writeFileSync(policy,JSON.stringify({schema_version:1,host_id:'xian-m4',transport:'usb',endpoint:env.ADB_SERVER_SOCKET,forbidden_ports:[],adb_bin:env.DOUYIN_ADB_BIN}),{mode:0o600});
+  env.ZJ_ADB_HOST_CONFIG=policy;
   const lock=join(dir,'tmp','locks','SER1.lock');
   const run=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
   const stale=(owner='probe-btr-budget')=>{mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),owner+'\n');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));};
