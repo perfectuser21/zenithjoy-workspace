@@ -1,3 +1,4 @@
+import {readQualificationOrigin,readMediaFacts} from './checker-file-facts.mjs';
 import fs from'node:fs';import path from'node:path';import{createHash}from'node:crypto';import{createRequire}from'node:module';import{fileURLToPath}from'node:url';import{spawn}from'node:child_process';
 const HERE=path.dirname(fileURLToPath(import.meta.url)),hash=x=>createHash('sha256').update(x).digest('hex');
 const need=x=>{if(!x)throw Error('FACT_RUNTIME_UNAVAILABLE');};
@@ -23,6 +24,8 @@ export function readOnlyCrmFetch(url,options={}){
  return fetch(parsed.href,{...options,redirect:'error',signal:AbortSignal.timeout(10000)});
 }
 export const factDependencies={
+ async originRead(c,run,video){return readQualificationOrigin(c,run,video,factDependencies.brainGet);},
+ async mediaRead(c,name){return readMediaFacts(path.join(c.checker_evidence_root,'native'),name,c.checker_media_tool);},
  async loadPool(c){
   runtime(c);const {loadActivityHostPg}=await import('./activity-host-pg.mjs');const{Pool}=await loadActivityHostPg(c);
   const config=JSON.parse(privateBytes(c.credentials.database));need(typeof config.DATABASE_URL==='string');

@@ -94,8 +94,11 @@ export async function assembleSources({context:c,profile,contract,hostRoot,initi
    files[file]=files[file].replace(legacy,"path.join(profileRoot,'native-identity.py')").replace('c.verification.artifact_checker','c.verification.native_identity_reader');
    const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
   }
+  delete c.checker_media_tool;
+  const probe=['/opt/homebrew/bin/ffprobe','/usr/bin/ffprobe'].find(p=>fs.existsSync(p));
+  if(probe){const executable=fs.realpathSync(probe);c.checker_media_tool={path:executable,sha256:hash(fs.readFileSync(executable))};}
   files['context.json']=JSON.stringify(c,null,2)+'\n';
-  for(const name of ['checker-facts.mjs','checker-facts-runtime.mjs'])files[name]=fs.readFileSync(path.join(HERE,name),'utf8');
+  for(const name of ['checker-facts.mjs','checker-facts-runtime.mjs','checker-file-facts.mjs'])files[name]=fs.readFileSync(path.join(HERE,name),'utf8');
   const authority="const contextFile=new URL('./context.json',import.meta.url).pathname,contextSha256="+JSON.stringify(hash(files['context.json']))+";\n";
   files['checker-facts-entry.mjs']="import {serveFacts} from './checker-facts.mjs';\n"+authority+"await serveFacts({contextFile,contextSha256});\n";
   for(const [name,operation,args]of [['native-inspect.mjs','native.read',{}],['collection-readback.mjs','pg.rows',{relation:'comments'}]]){

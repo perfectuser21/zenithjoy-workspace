@@ -47,6 +47,9 @@ export function buildContext({workflow,run,environment=process.env,hostRoot,runR
   tasks:{[workflow]:{task_id:run.task_id,run_id:run.run_id,run_tag:run.run_id}},run_tag:run.run_id,
   local_owner:'wf'+workflow+'-'+run.run_id,central_owner:run.task_id,business_deadline_ms:run.deadline_ms,cleanup_deadline_ms:run.cleanup_deadline_ms,
   skills_root:path.join(hostRoot,'services/phone-adb-controller/skills'),run_max_seconds:Math.floor((binding.timeout_ms??2400000)/1000)});
+ delete c.foundation_state_root;
+ if(path.basename(runRoot)===run.run_id&&fs.realpathSync(runRoot)===runRoot)c.foundation_state_root=fs.realpathSync(path.dirname(runRoot));
+ c.checker_evidence_root=hostRoot;
  c.verification.native={...c.verification.native,cleanup_owner:run.task_id};
  c.verification.proof_manifest_path=path.join(path.dirname(hostRoot),'proof.json');
  if(workflow==='101'){
