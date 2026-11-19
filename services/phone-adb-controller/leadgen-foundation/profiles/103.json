@@ -9,22 +9,375 @@
         "order": 1,
         "budget": {
           "max_duration_s": 1800,
-          "heartbeat_s": 2
+          "heartbeat_s": 120
         },
         "acceptance": {
-          "description": "按冻结douyin_comment_scoring.scoring合同独立核验真实产物"
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_comment_scoring.yaml",
+            "activity_ref": "douyin_comment_scoring.scoring",
+            "contract_digest": "1541338a740fdabd8b614fa9ece66a965fcea39e2bd69a02a9b43951b4816a1f"
+          },
+          "document": {
+            "key": "scoring",
+            "name": "评分",
+            "promise": "按冻结公司政策对每条已提交评论评估一次并保存等级、理由与原文依据；不追加模型复核",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_comment_scoring"
+              ],
+              "activity_key": "scoring",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 1,
+            "version": "2.9.0",
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "backward",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "评论分拣员"
+            },
+            "inputs": [
+              {
+                "type": "Comment",
+                "source": "zenithjoy.leadgen_comments 已提交且待分拣的评论",
+                "cardinality": "many",
+                "fields": [
+                  "dedup_key",
+                  "body",
+                  "nickname",
+                  "douyin_id",
+                  "profile_url",
+                  "process_status"
+                ]
+              },
+              {
+                "type": "Video",
+                "source": "评论关联的原视频标题与转写",
+                "cardinality": "many",
+                "fields": [
+                  "title",
+                  "transcript"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Comment",
+                "destination": "zenithjoy.leadgen_comments 的评分或独立排除终态；仅真评分交给标记人 Activity",
+                "cardinality": "many",
+                "effect": "update",
+                "fields": [
+                  "process_status",
+                  "relevance",
+                  "intent_grade",
+                  "judgment_reason",
+                  "judgment_config",
+                  "promoted"
+                ]
+              }
+            ],
+            "preconditions": [
+              "精确评论ID、公司/租户与实际102来源可独立核验；普通committed_partial来源不要求整个102成功，但仅消费真实已提交且来源/资格/原生身份完整的行。",
+              "评分输入包括原评论正文、对应视频标题与转写，来自真实持久来源；缺失不能由标题或猜测补造。",
+              "按本次冻结公司政策执行唯一业务评分；已有评分或不确定动作先只读恢复，不重新评分。",
+              "模型/HTTP/证据/输出异常保留未决，不伪造C级、不相关或人工评分。"
+            ],
+            "postconditions": [
+              {
+                "probe": "scores_readback",
+                "asserts": "精确ID的真实relevance/intent_grade、原文依据、模型响应及公司版本已持久化并读回；输入视频标题和转写来源可核。一次业务评分后不追加评分模型QC，Checker只读原结果与证据，本活动不创建Lead/outbox。"
+              },
+              {
+                "probe": "exclusion_readback",
+                "asserts": "不相关保存原政策要求的排除事实且无Lead/outbox，技术失败不写排除；旧行保历史来源，纯排除与空队列分别说明，不冒评分成功。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "mmv",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 1800,
+              "heartbeat_s": 120
+            },
+            "resources": {
+              "locks": [],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "Comment.line_key+Comment.id",
+              "on_duplicate": "skip"
+            },
+            "failure": {
+              "empty_ok": [
+                "本批无待分拣评论"
+              ],
+              "retryable": [
+                "模型HTTP/网络、鉴权/额度、证据非法或评分输出无效保留待分拣，后续有界重试；不得转成人工评分或误排除"
+              ],
+              "needs_human": {
+                "cases": [],
+                "alert": {
+                  "channel": "bark",
+                  "object": "仅记录运行告警，不派人工评分"
+                }
+              },
+              "fatal": []
+            },
+            "side_effects": [
+              {
+                "kind": "internal_write",
+                "target": "pg zenithjoy.leadgen_comments",
+                "description": "单次评估后保存真实relevance/intent_grade、理由、模型身份及原文摘要；技术失败保持未决，不由本活动创建线索"
+              }
+            ],
+            "invokers": [
+              "code",
+              "agent"
+            ],
+            "runtime": {
+              "phase": "batch_end",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "model": [
+              {
+                "provider": "openrouter",
+                "model": "google/gemini-2.5-flash",
+                "purpose": "评论单次结构化评分及原文依据（judgeCommentOnce）"
+              }
+            ],
+            "steps": [
+              {
+                "key": "scan_pending",
+                "name": "扫池取待分拣",
+                "order": 1,
+                "reads": [
+                  "Comment.process_status",
+                  "Comment.dedup_key"
+                ],
+                "writes": [],
+                "check": "按冻结精确ID及真实来源读取待处理行；已有评分或未知动作只读恢复，不重新评分。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js scoring.scan_pending（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "judge_grade",
+                "name": "模型三合一判级",
+                "order": 2,
+                "reads": [
+                  "Comment.body",
+                  "Video.transcript",
+                  "Video.title"
+                ],
+                "writes": [
+                  "Comment.relevance",
+                  "Comment.intent_grade",
+                  "Comment.process_status",
+                  "Comment.judgment_reason",
+                  "Comment.judgment_config"
+                ],
+                "check": "单次有效评分保存A/B/C/不相关及原文依据，后续不增加模型复核；模型或引用无效则不写分、不误排除",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js scoring.judge_grade（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": true,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "known_gaps": [
+              {
+                "gap": "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）",
+                "task": "34f69930"
+              },
+              {
+                "gap": "scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义",
+                "task": "4ca3b584"
+              },
+              {
+                "gap": "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的",
+                "task": "4ca3b584"
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Comment",
+                "source": "zenithjoy.leadgen_comments 已提交且待分拣的评论",
+                "cardinality": "many",
+                "fields": [
+                  "dedup_key",
+                  "body",
+                  "nickname",
+                  "douyin_id",
+                  "profile_url",
+                  "process_status"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Video",
+                "source": "评论关联的原视频标题与转写",
+                "cardinality": "many",
+                "fields": [
+                  "title",
+                  "transcript"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "精确评论ID、公司/租户与实际102来源可独立核验；普通committed_partial来源不要求整个102成功，但仅消费真实已提交且来源/资格/原生身份完整的行。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "评分输入包括原评论正文、对应视频标题与转写，来自真实持久来源；缺失不能由标题或猜测补造。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "preconditions_2",
+              "phase": "start",
+              "requirement": "按本次冻结公司政策执行唯一业务评分；已有评分或不确定动作先只读恢复，不重新评分。",
+              "source_pointer": "/preconditions/2"
+            },
+            {
+              "id": "preconditions_3",
+              "phase": "start",
+              "requirement": "模型/HTTP/证据/输出异常保留未决，不伪造C级、不相关或人工评分。",
+              "source_pointer": "/preconditions/3"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Comment",
+                "destination": "zenithjoy.leadgen_comments 的评分或独立排除终态；仅真评分交给标记人 Activity",
+                "cardinality": "many",
+                "effect": "update",
+                "fields": [
+                  "process_status",
+                  "relevance",
+                  "intent_grade",
+                  "judgment_reason",
+                  "judgment_config",
+                  "promoted"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "scores_readback",
+                "asserts": "精确ID的真实relevance/intent_grade、原文依据、模型响应及公司版本已持久化并读回；输入视频标题和转写来源可核。一次业务评分后不追加评分模型QC，Checker只读原结果与证据，本活动不创建Lead/outbox。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "exclusion_readback",
+                "asserts": "不相关保存原政策要求的排除事实且无Lead/outbox，技术失败不写排除；旧行保历史来源，纯排除与空队列分别说明，不冒评分成功。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "side_effects_0",
+              "phase": "end",
+              "requirement": {
+                "kind": "internal_write",
+                "target": "pg zenithjoy.leadgen_comments",
+                "description": "单次评估后保存真实relevance/intent_grade、理由、模型身份及原文摘要；技术失败保持未决，不由本活动创建线索"
+              },
+              "source_pointer": "/side_effects/0"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Comment.line_key+Comment.id",
+                "on_duplicate": "skip"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [
+                  "本批无待分拣评论"
+                ],
+                "retryable": [
+                  "模型HTTP/网络、鉴权/额度、证据非法或评分输出无效保留待分拣，后续有界重试；不得转成人工评分或误排除"
+                ],
+                "needs_human": {
+                  "cases": [],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "仅记录运行告警，不派人工评分"
+                  }
+                },
+                "fatal": []
+              },
+              "source_pointer": "/failure"
+            }
+          ]
         },
         "failure": {
-          "empty_ok": [],
-          "retryable": [],
-          "fatal": [
-            "error"
+          "empty_ok": [
+            "本批无待分拣评论"
+          ],
+          "retryable": [
+            "模型HTTP/网络、鉴权/额度、证据非法或评分输出无效保留待分拣，后续有界重试；不得转成人工评分或误排除"
           ],
           "needs_human": {
-            "cases": [
-              "unknown"
-            ]
-          }
+            "cases": [],
+            "alert": {
+              "channel": "bark",
+              "object": "仅记录运行告警，不派人工评分"
+            }
+          },
+          "fatal": []
         },
         "runtime": {
           "phase": "source",
@@ -46,22 +399,520 @@
         "order": 2,
         "budget": {
           "max_duration_s": 1800,
-          "heartbeat_s": 2
+          "heartbeat_s": 120
         },
         "acceptance": {
-          "description": "按冻结douyin_comment_scoring.mark_leads合同独立核验真实产物"
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_comment_scoring.yaml",
+            "activity_ref": "douyin_comment_scoring.mark_leads",
+            "contract_digest": "24367209e4631579101500aa41c8e915970524efb746228a7ad1563a2dd0bcff"
+          },
+          "document": {
+            "key": "mark_leads",
+            "name": "标记人",
+            "promise": "消费已保存的真实评分，核对原生UID和公司来源后交出线索及配送状态；不再次评估评分或受众意向",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_comment_scoring"
+              ],
+              "activity_key": "mark_leads",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 2,
+            "version": "3.10.0",
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "backward",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "评论分拣员"
+            },
+            "inputs": [
+              {
+                "type": "Comment",
+                "source": "评分 Activity 处理的已提交评论与收件人原件",
+                "cardinality": "many",
+                "fields": [
+                  "dedup_key",
+                  "body",
+                  "nickname",
+                  "douyin_id",
+                  "profile_url",
+                  "process_status",
+                  "recipient_evidence"
+                ]
+              },
+              {
+                "type": "Video",
+                "source": "该评论关联视频的标题与转写",
+                "cardinality": "many",
+                "fields": [
+                  "title",
+                  "transcript"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Comment",
+                "destination": "zenithjoy.leadgen_comments 的最终处理状态",
+                "cardinality": "many",
+                "effect": "update",
+                "fields": [
+                  "process_status",
+                  "relevance",
+                  "intent_grade",
+                  "promoted"
+                ]
+              },
+              {
+                "type": "Lead",
+                "destination": "zenithjoy.leadgen_leads，供触达 Workflow 读取",
+                "cardinality": "many",
+                "effect": "upsert",
+                "fields": [
+                  "line_key",
+                  "douyin_id",
+                  "nickname",
+                  "profile_url",
+                  "intent_grade",
+                  "repeat_hits",
+                  "status"
+                ]
+              },
+              {
+                "type": "RecipientQualification",
+                "destination": "该公司原 PostgreSQL 收件人资格记录",
+                "cardinality": "many",
+                "effect": "upsert",
+                "fields": [
+                  "line_key",
+                  "comment_id",
+                  "status",
+                  "company_id",
+                  "company_version",
+                  "native_profile_sha256",
+                  "reason",
+                  "tenant_id",
+                  "policy_id"
+                ]
+              },
+              {
+                "type": "OutreachBridgeIntent",
+                "destination": "该公司原 PostgreSQL 配送意图及真实配送回执",
+                "cardinality": "many",
+                "effect": "upsert",
+                "fields": [
+                  "line_key",
+                  "comment_id",
+                  "lead_id",
+                  "run_tag",
+                  "source_run",
+                  "qualification_status",
+                  "state",
+                  "payload_sha256",
+                  "fields_sha256",
+                  "feishu_record_id"
+                ]
+              }
+            ],
+            "preconditions": [
+              "普通committed_partial精确ID及原102来源、公司/租户/政策与原生身份完整；来源证明不改变历史harvest_batch，失败整个102不自动否定已独立核验的提交。",
+              "消费已有唯一评分及原文/模型响应，不再次调用评分模型；技术失败或评分来源未知不能标记为已处理。",
+              "只对政策相关的实际对象创建Lead和配送；不相关合法处理单列，不以空队列冒成功。",
+              "收件人资格取真实原生主页及本次冻结公司政策；缺证unknown，不修改原评分来迎合资格。",
+              "保原line订单锁/owner与幂等边界，未知或活owner不清理，不按TTL抢占。"
+            ],
+            "postconditions": [
+              {
+                "probe": "pool_advanced",
+                "asserts": "相关对象的Lead实际落地后才推进评论，原UID、评分和同事务outbox逐ID可读；不相关对象不得有Lead/outbox，合法排除单列完成。"
+              },
+              {
+                "probe": "bridge_readback",
+                "asserts": "实际outbox IDs及comment→lead映射可读；配送confirmed还需真实Feishu GET的原marker/UID/字段与持久payload一致。未知POST仅只读查原动作，绝不重发；bridge_readback按实际outbox ids查询。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "mmv",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 1800,
+              "heartbeat_s": 120
+            },
+            "resources": {
+              "locks": [
+                "outreach-order:<line_key>"
+              ],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "Lead.line_key+Lead.douyin_id",
+              "on_duplicate": "merge"
+            },
+            "failure": {
+              "empty_ok": [
+                "本批无待分拣评论"
+              ],
+              "retryable": [
+                "判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）"
+              ],
+              "needs_human": {
+                "cases": [
+                  "已存评分身份或原生来源不完整"
+                ],
+                "alert": {
+                  "channel": "bark",
+                  "object": "sort-comments 整批失败 → Bark"
+                }
+              },
+              "fatal": []
+            },
+            "side_effects": [
+              {
+                "kind": "internal_write",
+                "target": "pg zenithjoy.leadgen_leads + leadgen_comments",
+                "description": "按人身份去重保留人，重复出现计数；线索落地后才推进评论已分拣"
+              },
+              {
+                "kind": "external_visible",
+                "target": "原Feishu line-routes线索表",
+                "description": "本103 mark活动消费durable outbox；原fields/1Pcache/orderLock复用，attempted先持久再单POST，全池UID+nick去重不修改protected/已发；未知仅GET读回"
+              }
+            ],
+            "invokers": [
+              "code",
+              "agent"
+            ],
+            "runtime": {
+              "phase": "batch_end",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "upsert_lead",
+                "name": "合格行进线索表",
+                "order": 1,
+                "reads": [
+                  "Comment.douyin_id",
+                  "Comment.nickname",
+                  "Comment.profile_url",
+                  "Comment.intent_grade",
+                  "Comment.recipient_evidence"
+                ],
+                "writes": [
+                  "Lead.douyin_id",
+                  "Lead.nickname",
+                  "Lead.profile_url",
+                  "Lead.intent_grade",
+                  "Lead.repeat_hits",
+                  "Lead.status",
+                  "Lead.line_key",
+                  "RecipientQualification.status",
+                  "OutreachBridgeIntent.payload_sha256",
+                  "OutreachBridgeIntent.state"
+                ],
+                "check": "仅待分拣且已保存合法单次评分的相关(A/B/C级)：新建（状态=待触达）或已有行 repeat_hits+1，按抖音号去重；不相关及已排除均不建Lead/outbox，含C级仍留档；真实lead UID读回防昵称别名，独立recipient资格不改grade；同事务保存outbox再推进，正常103消费原Feishu桥",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js mark_leads.upsert_lead（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "advance_pool",
+                "name": "推进池状态",
+                "order": 2,
+                "reads": [
+                  "Comment.dedup_key"
+                ],
+                "writes": [
+                  "Comment.process_status",
+                  "Comment.promoted"
+                ],
+                "check": "线索落地之后才推进 已分拣（永远最后一步）；outbox故障整体回滚，独立PG逐ID回读及bridge处置不通过不得报完成",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js mark_leads.advance_pool（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "known_gaps": [
+              {
+                "gap": "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）",
+                "task": "34f69930"
+              },
+              {
+                "gap": "scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义",
+                "task": "4ca3b584"
+              },
+              {
+                "gap": "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的",
+                "task": "4ca3b584"
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Comment",
+                "source": "评分 Activity 处理的已提交评论与收件人原件",
+                "cardinality": "many",
+                "fields": [
+                  "dedup_key",
+                  "body",
+                  "nickname",
+                  "douyin_id",
+                  "profile_url",
+                  "process_status",
+                  "recipient_evidence"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Video",
+                "source": "该评论关联视频的标题与转写",
+                "cardinality": "many",
+                "fields": [
+                  "title",
+                  "transcript"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "普通committed_partial精确ID及原102来源、公司/租户/政策与原生身份完整；来源证明不改变历史harvest_batch，失败整个102不自动否定已独立核验的提交。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "消费已有唯一评分及原文/模型响应，不再次调用评分模型；技术失败或评分来源未知不能标记为已处理。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "preconditions_2",
+              "phase": "start",
+              "requirement": "只对政策相关的实际对象创建Lead和配送；不相关合法处理单列，不以空队列冒成功。",
+              "source_pointer": "/preconditions/2"
+            },
+            {
+              "id": "preconditions_3",
+              "phase": "start",
+              "requirement": "收件人资格取真实原生主页及本次冻结公司政策；缺证unknown，不修改原评分来迎合资格。",
+              "source_pointer": "/preconditions/3"
+            },
+            {
+              "id": "preconditions_4",
+              "phase": "start",
+              "requirement": "保原line订单锁/owner与幂等边界，未知或活owner不清理，不按TTL抢占。",
+              "source_pointer": "/preconditions/4"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Comment",
+                "destination": "zenithjoy.leadgen_comments 的最终处理状态",
+                "cardinality": "many",
+                "effect": "update",
+                "fields": [
+                  "process_status",
+                  "relevance",
+                  "intent_grade",
+                  "promoted"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Lead",
+                "destination": "zenithjoy.leadgen_leads，供触达 Workflow 读取",
+                "cardinality": "many",
+                "effect": "upsert",
+                "fields": [
+                  "line_key",
+                  "douyin_id",
+                  "nickname",
+                  "profile_url",
+                  "intent_grade",
+                  "repeat_hits",
+                  "status"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "outputs_2",
+              "phase": "end",
+              "requirement": {
+                "type": "RecipientQualification",
+                "destination": "该公司原 PostgreSQL 收件人资格记录",
+                "cardinality": "many",
+                "effect": "upsert",
+                "fields": [
+                  "line_key",
+                  "comment_id",
+                  "status",
+                  "company_id",
+                  "company_version",
+                  "native_profile_sha256",
+                  "reason",
+                  "tenant_id",
+                  "policy_id"
+                ]
+              },
+              "source_pointer": "/outputs/2"
+            },
+            {
+              "id": "outputs_3",
+              "phase": "end",
+              "requirement": {
+                "type": "OutreachBridgeIntent",
+                "destination": "该公司原 PostgreSQL 配送意图及真实配送回执",
+                "cardinality": "many",
+                "effect": "upsert",
+                "fields": [
+                  "line_key",
+                  "comment_id",
+                  "lead_id",
+                  "run_tag",
+                  "source_run",
+                  "qualification_status",
+                  "state",
+                  "payload_sha256",
+                  "fields_sha256",
+                  "feishu_record_id"
+                ]
+              },
+              "source_pointer": "/outputs/3"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "pool_advanced",
+                "asserts": "相关对象的Lead实际落地后才推进评论，原UID、评分和同事务outbox逐ID可读；不相关对象不得有Lead/outbox，合法排除单列完成。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "bridge_readback",
+                "asserts": "实际outbox IDs及comment→lead映射可读；配送confirmed还需真实Feishu GET的原marker/UID/字段与持久payload一致。未知POST仅只读查原动作，绝不重发；bridge_readback按实际outbox ids查询。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "side_effects_0",
+              "phase": "end",
+              "requirement": {
+                "kind": "internal_write",
+                "target": "pg zenithjoy.leadgen_leads + leadgen_comments",
+                "description": "按人身份去重保留人，重复出现计数；线索落地后才推进评论已分拣"
+              },
+              "source_pointer": "/side_effects/0"
+            },
+            {
+              "id": "side_effects_1",
+              "phase": "end",
+              "requirement": {
+                "kind": "external_visible",
+                "target": "原Feishu line-routes线索表",
+                "description": "本103 mark活动消费durable outbox；原fields/1Pcache/orderLock复用，attempted先持久再单POST，全池UID+nick去重不修改protected/已发；未知仅GET读回"
+              },
+              "source_pointer": "/side_effects/1"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Lead.line_key+Lead.douyin_id",
+                "on_duplicate": "merge"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [
+                  "本批无待分拣评论"
+                ],
+                "retryable": [
+                  "判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "已存评分身份或原生来源不完整"
+                  ],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "sort-comments 整批失败 → Bark"
+                  }
+                },
+                "fatal": []
+              },
+              "source_pointer": "/failure"
+            }
+          ]
         },
         "failure": {
-          "empty_ok": [],
-          "retryable": [],
-          "fatal": [
-            "error"
+          "empty_ok": [
+            "本批无待分拣评论"
+          ],
+          "retryable": [
+            "判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）"
           ],
           "needs_human": {
             "cases": [
-              "unknown"
-            ]
-          }
+              "已存评分身份或原生来源不完整"
+            ],
+            "alert": {
+              "channel": "bark",
+              "object": "sort-comments 整批失败 → Bark"
+            }
+          },
+          "fatal": []
         },
         "runtime": {
           "phase": "source",
@@ -92,7 +943,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "1e1c069c379ed16315da125122f32e87eb27ae75"
+      "method_revision": "81b523d620c0e285cbe03f72618a8a0acf37249e",
+      "contract_sha256": "d691f880b2941a60a921caa81c9d8895465a1fb9cf58d9b39c1cc2e1d558a918"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -132,21 +984,24 @@
           "activity": "scoring",
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
           "checker": {
-            "command": "@node",
-            "entry": "checker.mjs",
-            "args": [],
-            "start_checks": [
-              "task",
-              "policy"
-            ],
-            "required_checks": [
-              "committed_input_scope",
-              "qualification_and_identity",
-              "company_scoring_policy",
-              "persisted_scores",
-              "no_duplicate_evaluation"
-            ],
-            "timeout_ms": 120000
+            "mode": "agent",
+            "timeout_ms": 120000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
           },
           "allow_empty": true
         },
@@ -155,53 +1010,70 @@
           "activity": "mark_leads",
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
           "checker": {
-            "command": "@node",
-            "entry": "checker.mjs",
-            "args": [],
-            "start_checks": [
-              "task",
-              "policy"
-            ],
-            "required_checks": [
-              "existing_score_readback",
-              "lead_identity_and_scope",
-              "persisted_leads",
-              "delivery_readback"
-            ],
-            "timeout_ms": 120000
+            "mode": "agent",
+            "timeout_ms": 120000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
           },
-          "allow_empty": false
+          "allow_empty": true
         }
       }
     },
     "files": {
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "26f46bb668c5ce3efb2d192c370a34fbed92acf5d5020eb35f199ef4b364c4b5",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "8a247698a61b2e009f55f5342042ae0e46fc706a450c3730cf702c1dabf72dae",
-      "services/phone-adb-controller/leadgen-foundation/context.mjs": "7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8",
-      "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
-      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93",
-      "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
-      "services/phone-adb-controller/leadgen-foundation/sources/103.json": "0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03",
-      "services/phone-adb-controller/leadgen-foundation/sources/102.json": "dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb",
-      "services/phone-adb-controller/leadgen-foundation/sources/104.json": "a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4",
-      "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98",
-      "services/phone-adb-controller/leadgen-foundation/sources/101.json": "a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed",
-      "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
-      "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
-      "services/phone-adb-controller/leadgen-foundation/schemas/104.json": "b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd",
-      "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
-      "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
-      "services/phone-adb-controller/activity-upstream-source.mjs": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df",
-      "services/phone-adb-controller/activity-host-pg.mjs": "5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a",
-      "services/phone-adb-controller/activity-host-tools.py": "2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166",
-      "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
-      "services/phone-adb-controller/activity-host-104.mjs": "76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38",
       "services/phone-adb-controller/activity-104-context.mjs": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a",
       "services/phone-adb-controller/activity-104-runtime.mjs": "876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c",
+      "services/phone-adb-controller/activity-104-state-wiring.mjs": "dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1",
+      "services/phone-adb-controller/activity-104-state.mjs": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6",
       "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
+      "services/phone-adb-controller/activity-host-104.mjs": "6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7",
+      "services/phone-adb-controller/activity-host-pg.mjs": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4",
+      "services/phone-adb-controller/activity-host-tools.py": "7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03",
+      "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
+      "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
+      "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
+      "services/phone-adb-controller/activity-upstream-source.mjs": "98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df",
+      "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
+      "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
+      "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c",
+      "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe",
+      "services/phone-adb-controller/leadgen-foundation/context.mjs": "7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8",
+      "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
+      "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
+      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d",
+      "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
+      "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
+      "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
+      "services/phone-adb-controller/leadgen-foundation/schemas/104.json": "b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd",
+      "services/phone-adb-controller/leadgen-foundation/sources/101.json": "01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db",
+      "services/phone-adb-controller/leadgen-foundation/sources/102.json": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618",
+      "services/phone-adb-controller/leadgen-foundation/sources/103.json": "816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9",
+      "services/phone-adb-controller/leadgen-foundation/sources/104.json": "69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb",
+      "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98",
+      "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
       "services/phone-adb-controller/leadgen-outreach-scope.js": "c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7",
-      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
+      "services/phone-adb-controller/leadgen-queue.js": "29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c",
+      "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
+      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "24afc41780c93e7f5edbfb774614dd81ab8b170e08ca3bbcbabf20b206d4d168",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "40b7ceabccc9741c424ec93de8b1f17237e31bcb547e5ecd1f3e07aa9e8638e6"
     }
   }
 }
