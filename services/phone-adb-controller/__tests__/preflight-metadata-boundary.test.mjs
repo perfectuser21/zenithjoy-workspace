@@ -46,17 +46,17 @@ test('unknown metadata outcome never acquires or starts physical execution',asyn
 test('late metadata cannot acquire central ownership or start physical execution after the frozen deadline',async t=>{
   let release;const gate=new Promise(resolve=>{release=resolve;});
   const r=rig(t,{metadataGate:gate});r.scope.deadline_ms=Date.now()+100;
-  const tools=await r.h.createAgentTools({key:'preflight'},r.scope),pending=tools.prepare();
+  const tools=await r.h.createAgentTools({key:'preflight'},r.scope),pending=assert.rejects(tools.prepare(),{code:'PREFLIGHT_METADATA_DEADLINE'});
   await new Promise(resolve=>setTimeout(resolve,120));release();
-  await assert.rejects(()=>pending,{code:'PREFLIGHT_METADATA_DEADLINE'});
+  await pending;
   assert.deepEqual(r.calls,[]);assert.equal(r.h.state.account??null,null);
   assert.equal(existsSync(join(r.dir,'central-lock-events.jsonl')),false);
 });
 test('metadata worker deadline closes admission while receipt time remains available',async t=>{
  let release;const gate=new Promise(resolve=>{release=resolve;});const r=rig(t,{metadataGate:gate});
  r.scope.deadline_ms=Date.now()+10000;r.scope.worker_deadline_ms=Date.now()+50;
- const tools=await r.h.createAgentTools({key:'preflight'},r.scope),pending=tools.prepare();await new Promise(resolve=>setTimeout(resolve,80));release();
- await assert.rejects(()=>pending,{code:'PREFLIGHT_METADATA_DEADLINE'});assert.deepEqual(r.calls,[]);assert.equal(r.h.state.account??null,null);
+ const tools=await r.h.createAgentTools({key:'preflight'},r.scope),pending=assert.rejects(tools.prepare(),{code:'PREFLIGHT_METADATA_DEADLINE'});await new Promise(resolve=>setTimeout(resolve,80));release();
+ await pending;assert.deepEqual(r.calls,[]);assert.equal(r.h.state.account??null,null);
 });
 
 test('worker company_config reads the already verified parent snapshot without reopening the old RPC outer',async t=>{
