@@ -276,7 +276,7 @@ test('真实部署闭包冻结后导入新handler；缺文件、错hash或冻结
  for(const name of ['native-scoring-workflow.mjs','native-scoring-runtime.mjs','native-scoring-producers.mjs','native-scoring-control.mjs','native-activity-authority.mjs','native-task-lease.mjs','native-scoring-readback.mjs'])assert.equal(declared.filter(value=>value===name).length,1,`official native runtime must declare exactly one ${name}`);
  for(const name of ['runner-official-commander.mjs','control-acceptance-tools.mjs','official-agent-control.mjs','official-commander-sdk.mjs','official-model-turn.mjs','commander-bounded-owner.mjs','official-gateway-runtime.mjs','official-gateway-runtime.json','official-gateway-dependencies.mjs','vendor/official-gateway-sdk.json','vendor/official-gateway-client.mjs','vendor/official-gateway-client.LICENSE.txt'])
   assert.equal(declared.filter(value=>value===name).length,1,`official raw runtime must include exactly one ${name}`);
- for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js'])
+ for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js','leadgen-score-context.js'])
   assert.ok(files.includes(name),`official MMV runtime omitted ${name}`);
  const setup=()=>{
   const f=fixture();t.after(()=>rmSync(f.dir,{recursive:true,force:true}));
