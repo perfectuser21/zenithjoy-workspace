@@ -27,3 +27,13 @@ test('cleanup permits legitimate empty work and protects unresolved prepared sid
 test('dedup source proof does not implicitly grant the special producer descriptor path',()=>{
  const a=activity('douyin_video_processing','dedup');assert.match(text(a.preconditions),/input_provenance/);assert.match(text(a.preconditions),/producer_descriptor/);assert.match(text(a.postconditions),/认领/);
 });
+test('scoring deduplicates exact comment IDs rather than merging people into Leads',()=>{
+ const a=activity('douyin_comment_scoring','scoring');assert.equal(a.idempotency.dedupe_key,'Comment.line_key+Comment.id');assert.notEqual(a.idempotency.on_duplicate,'merge');
+});
+test('104 failures never implicitly requeue a prepared or unknown send',()=>{
+ for(const key of ['send_dm','write_back']){const a=activity('douyin_lead_outreach',key);assert.doesNotMatch(text(a.failure),/两轮后|连续3次|软熔断2小时/);assert.match(text(a.failure),/prepared/);assert.match(text(a.failure),/未知/);}
+ assert.doesNotMatch(text(activity('douyin_lead_outreach','write_back').failure),/device_ui|NO_SCRIPT/);
+});
+test('collection acceptance retains author and own-account filtering independently of legacy step checks',()=>{
+ const a=activity('douyin_video_processing','collection');assert.match(text(a.postconditions),/作者UID/);assert.match(text(a.postconditions),/自有账号/);
+});
