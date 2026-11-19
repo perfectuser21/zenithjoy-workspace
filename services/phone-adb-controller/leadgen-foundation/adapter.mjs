@@ -58,6 +58,10 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  if(workflow==='104'){const command=path.join(hostRoot,'codex-exact');need(!!(fs.statSync(command).mode&0o100),'CODEX_EXECUTABLE');skill_runtime.codex={...skill_runtime.codex,env_keys:[...new Set([...(skill_runtime.codex?.env_keys??[]),...EXACT_ENV_KEYS])],command,command_sha256:hash(fs.readFileSync(command))};}
  skill_runtime.host_tools={...skill_runtime.host_tools,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath)),entry:'invoke.mjs'};
  for(const spec of Object.values(skill_runtime.activities)){need(spec.checker?.mode==='agent','AGENT_CHECKER_REQUIRED');spec.checker.evidence.provider={...spec.checker.evidence.provider,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath))};}
+ if(workflow==='102'){
+  const provider=skill_runtime.activities.dedup.checker.evidence.provider;
+  provider.description+=' 判重请先用 read_file 读取 checker-input/upstream.json。handoff 是本次冻结的101原交付，我方当前持久记录另外用 pg.rows 获取。claim 是已冻结的本轮普通认领输入；开工时尚无真实认领回执。历史交付的原生XML包含页面作者和评论数，PG已采评论数是另一个字段。';
+ }
  const generated={...profile,cwd:hostRoot,files:receipt.files,skill_runtime};
  return {profile:generated,context,receipt,verifySource:verify,run:{...run,input:{...context,run_tag:run.run_id}}};
 }
