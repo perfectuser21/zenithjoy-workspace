@@ -59,3 +59,14 @@ test('PG evidence records actual connection identity and transaction read-only s
  const db=database();const out=await readFacts(request('pg.rows',{relation:'videos'}),db);
  assert.ok(db.calls.some(x=>x.sql?.includes('current_database()')&&x.sql.includes('transaction_read_only')));assert.ok(Object.hasOwn(out.facts,'connection'));
 });
+test('qualification origin uses bound PG identity rather than caller supplied run or path',async()=>{
+ const db=database([{video_id:'7709208240869657011',judgment_config:{run_id:'22222222-2222-4222-8222-222222222222'}}]),calls=[];
+ db.originRead=async(c,run,video)=>{calls.push({c,run,video});return{origin:{run_id:run,video_id:video},visual_evidence_read:false};};
+ const out=await readFacts(request('qualification.origin',{video_id:'7709208240869657011'}),db);assert.equal(out.status,'available');assert.equal(calls.length,1);assert.equal(calls[0].run,'22222222-2222-4222-8222-222222222222');
+ for(const args of [{video_id:'foreign'},{video_id:'7709208240869657011',run_id:'forged'},{video_id:'7709208240869657011',path:'/tmp/forged'}])assert.equal((await readFacts(request('qualification.origin',args),db)).status,'unavailable');assert.equal(calls.length,1);
+});
+test('media metadata names are bounded to this run and cannot launch caller commands',async()=>{
+ const calls=[],deps={readAuthority:async()=>context,mediaRead:async(c,name)=>{calls.push(name);return{metadata:{streams:[]}};}};
+ assert.equal((await readFacts(request('media.inspect',{name:'run-v7709208240869657011.wav'}),deps)).status,'available');
+ for(const args of [{name:'foreign.wav'},{name:'run/../clip.wav'},{name:'run-clip.wav',command:'arbitrary'}])assert.equal((await readFacts(request('media.inspect',args),deps)).status,'unavailable');assert.equal(calls.length,1);
+});
