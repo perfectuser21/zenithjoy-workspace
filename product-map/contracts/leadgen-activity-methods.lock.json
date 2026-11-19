@@ -1365,14 +1365,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "7802e6a8b581cfd631d48962b16627e26d6ee9013f4bc4a1799003c77f488189"
+          "sha256": "7375aa1c2e453b1a3e2bd55b95384a5cc18c69e6eaf95fa799f8d2b0efb2ba62"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "21a0c14c8060ab82dd46a0d429df94b91b4924cf107e039f934740a4775124cb"
+          "sha256": "62b0bf62b99099b424c1c3e77501154a8eeb695db9630cc1813ec04b08c0f5df"
         },
         {
           "kind": "code",
@@ -1806,13 +1806,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b58f7a7b5975885e9df79ef138b6b651249026240552f565436f9eb392f2b1d9",
+      "code_digest": "31406b98a0c4687f0c0b8e32b3c47534ed2c07743047083bd747a7f15d5ab0f6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "55fe80e5f438c654ce2c3416a68ec8c8e87758a617c24d475b58babfef821b5f",
-        "current_code_digest": "b58f7a7b5975885e9df79ef138b6b651249026240552f565436f9eb392f2b1d9",
-        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。；本轮已独审增量：SDK33+且实际ADB serial为TCP端点的录制切换原scrcpy forward三通道，USB/SDK31不变；精确forward创建强制no-rebind避免覆盖他人映射，原权限、音视频、停止及业务合同不变。真实reverse关闭方未定位，不宣称根因已证。；本轮仅正式宿主A引用变更引起101/102 steps契约来源摘要同步，步骤执行正文、业务Skill和合同输入输出标准不变。A调用接缝由 /root/prepare_104_live 独立审查，正式业务验收另行记录。",
-        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring；本轮 /root/prepare_104_live 精确源码与参数边界独审；本轮来源同步 /root/prepare_104_live"
+        "previous_code_digest": "b58f7a7b5975885e9df79ef138b6b651249026240552f565436f9eb392f2b1d9",
+        "current_code_digest": "31406b98a0c4687f0c0b8e32b3c47534ed2c07743047083bd747a7f15d5ab0f6",
+        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。；本轮已独审增量：SDK33+且实际ADB serial为TCP端点的录制切换原scrcpy forward三通道，USB/SDK31不变；精确forward创建强制no-rebind避免覆盖他人映射，原权限、音视频、停止及业务合同不变。真实reverse关闭方未定位，不宣称根因已证。；本轮仅正式宿主A引用变更引起101/102 steps契约来源摘要同步，步骤执行正文、业务Skill和合同输入输出标准不变。A调用接缝由 /root/prepare_104_live 独立审查，正式业务验收另行记录。；本轮 /root/prepare_104_live 独审：固定宿主补齐原72项ASR依赖并在运行前原SDK验源，102录制读回在原硬件校验后仅派生可信ADB传输身份；此处仅来源ref导致步骤摘要同步，业务Skill/验收合同不变。",
+        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring；本轮 /root/prepare_104_live 精确源码与参数边界独审；本轮来源同步 /root/prepare_104_live; /root/prepare_104_live (ASR closure and transport proof review)"
       }
     },
     "douyin_video_processing.dedup": {
@@ -5016,14 +5016,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_discovery.steps.json",
           "revision": "contract",
-          "sha256": "7802e6a8b581cfd631d48962b16627e26d6ee9013f4bc4a1799003c77f488189"
+          "sha256": "7375aa1c2e453b1a3e2bd55b95384a5cc18c69e6eaf95fa799f8d2b0efb2ba62"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/plans/douyin_video_processing.steps.json",
           "revision": "contract",
-          "sha256": "21a0c14c8060ab82dd46a0d429df94b91b4924cf107e039f934740a4775124cb"
+          "sha256": "62b0bf62b99099b424c1c3e77501154a8eeb695db9630cc1813ec04b08c0f5df"
         },
         {
           "kind": "code",
@@ -5442,13 +5442,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "09e9ad10423dd78df015346094f81d25d5df2b9e237f2226ff582009c39af350",
+      "code_digest": "7c0cf1278e5306fb78a02349d798660396eca3e07f52cdb8de19a8c34458d2a0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "0459e16b284ad2715457af9ee1fe2cfb1912f820f7389c368a34fe4962d24111",
-        "current_code_digest": "09e9ad10423dd78df015346094f81d25d5df2b9e237f2226ff582009c39af350",
-        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。；本轮已独审增量：SDK33+且实际ADB serial为TCP端点的录制切换原scrcpy forward三通道，USB/SDK31不变；精确forward创建强制no-rebind避免覆盖他人映射，原权限、音视频、停止及业务合同不变。真实reverse关闭方未定位，不宣称根因已证。；本轮仅正式宿主A引用变更引起101/102 steps契约来源摘要同步，步骤执行正文、业务Skill和合同输入输出标准不变。A调用接缝由 /root/prepare_104_live 独立审查，正式业务验收另行记录。",
-        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring；本轮 /root/prepare_104_live 精确源码与参数边界独审；本轮来源同步 /root/prepare_104_live"
+        "previous_code_digest": "09e9ad10423dd78df015346094f81d25d5df2b9e237f2226ff582009c39af350",
+        "current_code_digest": "7c0cf1278e5306fb78a02349d798660396eca3e07f52cdb8de19a8c34458d2a0",
+        "reason": "固定79e772独立审查：仅本地copy前来源拒绝及record-start固定失败文件名投影，业务方法/单次录制/终态/未知守卫不变。；本轮已独审增量：SDK33+且实际ADB serial为TCP端点的录制切换原scrcpy forward三通道，USB/SDK31不变；精确forward创建强制no-rebind避免覆盖他人映射，原权限、音视频、停止及业务合同不变。真实reverse关闭方未定位，不宣称根因已证。；本轮仅正式宿主A引用变更引起101/102 steps契约来源摘要同步，步骤执行正文、业务Skill和合同输入输出标准不变。A调用接缝由 /root/prepare_104_live 独立审查，正式业务验收另行记录。；本轮 /root/prepare_104_live 独审：固定宿主补齐原72项ASR依赖并在运行前原SDK验源，102录制读回在原硬件校验后仅派生可信ADB传输身份；此处仅来源ref导致步骤摘要同步，业务Skill/验收合同不变。",
+        "reviewed_by": "codex:/root/audit_103_104_entry + codex:/root/fix_103_tool_wiring；本轮 /root/prepare_104_live 精确源码与参数边界独审；本轮来源同步 /root/prepare_104_live; /root/prepare_104_live (ASR closure and transport proof review)"
       }
     },
     "douyin_comment_scoring.scoring": {
