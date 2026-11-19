@@ -14,6 +14,11 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   assert.match(tools,/顶层 `outputs`/);
   assert.match(tools,/`outputs` 的键是合同声明的对象类型/);
   assert.match(tools,/按工具实际回执填写 `evidence`/);
+  if(workflow==='101'){
+   assert.match(tools,/discover_readback.*include_handoff:true/);
+   assert.match(tools,/inspect_videos.*include_discovery_protection:true/);
+   assert.ok(a.receipt.files['business-runtime/discovery-metrics-queue.js']);
+  }
   for(const runtime of Object.values(a.profile.skill_runtime.activities)){
    assert.match(runtime.checker.evidence.provider.description,/先读 proposal.evidence/);
    assert.match(runtime.checker.evidence.provider.description,/只核对本轮实际适用的失败和幂等条件/);
