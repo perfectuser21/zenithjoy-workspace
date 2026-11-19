@@ -1,5 +1,6 @@
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {parse} from 'yaml';import {projectAgentProfile} from '../../leadgen-foundation/profile-contract.mjs';
 import {installPreflightPg,preflightPgDeployment,preflightPgLockIdentity} from '../../preflight-pg-dependencies.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 export async function foundationFixture(workflow='101'){
@@ -38,8 +39,10 @@ export async function foundationFixture(workflow='101'){
   producers={approved:{workflow:'101',task_id:producerTask,run_id:producerRun,run_tag:'upstream',source_commit:'b'.repeat(40),manifest_path:manifestPath,manifest_sha256:hash(fs.readFileSync(manifestPath)),result_path:resultPath,result_sha256:hash(fs.readFileSync(resultPath))}};
  }
  const config={schema:'leadgen-host-config/v1',machine_id:'fixture-machine',bindings:{customer:{allowed_workflows:[workflow],context:c,...(producers?{producers}:{})}}},file=path.join(root,'config.json');fs.writeFileSync(file,JSON.stringify(config),{mode:0o600});
- const profile={cwd,runtimeRoot:path.join(root,'kernel'),leadgen:{workflow},files:{},skill_runtime:{codex:{command:node,command_sha256:hash(fs.readFileSync(node))},control_dir:'control',tools:'TOOLS.txt',host_tools:{kinds:['business']},activities:{}}};
+ const keys=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'],documents=Object.fromEntries(keys.map(k=>[k,parse(fs.readFileSync(new URL('../../../../product-map/contracts/'+k+'.yaml',import.meta.url),'utf8'))]));
+ const published=projectAgentProfile(JSON.parse(fs.readFileSync(new URL('../../leadgen-foundation/profiles/'+workflow+'.json',import.meta.url))),{documents,workflow:keys[Number(workflow)-101]});
+ const profile={cwd,runtimeRoot:path.join(root,'kernel'),leadgen:{workflow,contract_sha256:published.profile.leadgen.contract_sha256},files:{},skill_runtime:{codex:{command:node,command_sha256:hash(fs.readFileSync(node))},control_dir:'control',tools:'TOOLS.txt',host_tools:{kinds:['business']},activities:published.profile.skill_runtime.activities}};
  fs.writeFileSync(path.join(cwd,'sentinel'),'published');profile.files.sentinel=hash('published');
- return {root,profile,run:{task_id:task,run_id:id,deadline_ms:Date.now()+1000000,cleanup_deadline_ms:Date.now()+1200000,input:{run_tag:id,binding_key:'customer',business}},
+ return {root,profile,run:{task_id:task,run_id:id,contract:published.contract,deadline_ms:Date.now()+1000000,cleanup_deadline_ms:Date.now()+1200000,input:{run_tag:id,binding_key:'customer',business}},
   environment:{LEADGEN_HOST_CONFIG:file,LEADGEN_HOST_CONFIG_SHA256:hash(fs.readFileSync(file)),LEADGEN_MACHINE_ID:config.machine_id},close:()=>fs.rmSync(root,{recursive:true,force:true})};
 }

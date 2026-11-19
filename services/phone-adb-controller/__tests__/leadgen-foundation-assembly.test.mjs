@@ -103,3 +103,15 @@ test('foundation recovery survives the official host normalization of equivalent
   const recovered=await prepareLeadgenHost(f);assert.equal(recovered.receipt.recovered,true);assert.deepEqual(fs.readFileSync(path.join(recovered.profile.cwd,'context.json')),bytes);
  }finally{f.close();}
 });
+
+test('generated provider binds frozen context and scorer imports actual new modules outside repository cwd',async()=>{
+ const f=await foundationFixture('103');try{
+  const a=await prepareLeadgenHost(f),root=a.profile.cwd;
+  assert.ok(a.receipt.files['checker-facts-entry.mjs']);assert.ok(a.receipt.files['business-runtime/leadgen-score-context.js']);
+  const spec=a.profile.skill_runtime.activities.scoring.checker;assert.equal(spec.mode,'agent');assert.equal(spec.evidence.provider.entry,'checker-facts-entry.mjs');assert.equal(spec.evidence.provider.command,process.execPath);
+  const hostile={identity:f.run,nonce:'hostile',context:{...a.context,credentials:{database:'/foreign'}},operation:'pg.rows',args:{relation:'comments'}};
+  const result=spawnSync(process.execPath,[path.join(root,spec.evidence.provider.entry)],{cwd:f.root,env:{PATH:process.env.PATH,NODE_PATH:''},input:JSON.stringify(hostile),encoding:'utf8'});assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).reason,'FACT_SCOPE_REJECTED');
+  const src="import {createRequire} from 'node:module';const r=createRequire("+JSON.stringify(path.join(root,'business-runtime/package.json'))+");const m=r('./leadgen-score-context.js');const t=await m.readScoreTranscript({query:async()=>({rows:[{video_url:'v',title:'t',transcript:'actual text'}]})},'line',{source_video_url:'v',source_video:'t'},[]);if(t!=='actual text')throw Error('TRANSCRIPT');const {loadActivityHostPg}=await import("+JSON.stringify('file://'+path.join(root,'activity-host-pg.mjs'))+");const fs=await import('node:fs');const c=JSON.parse(fs.readFileSync("+JSON.stringify(path.join(root,'context.json'))+"));if(typeof (await loadActivityHostPg(c)).Pool!=='function')throw Error('PG');console.log('loaded');";
+  const probe=spawnSync(process.execPath,['--input-type=module','-e',src],{cwd:f.root,env:{PATH:process.env.PATH,NODE_PATH:''},encoding:'utf8'});assert.equal(probe.status,0,probe.stderr);assert.equal(probe.stdout.trim(),'loaded');
+ }finally{f.close();}
+});
