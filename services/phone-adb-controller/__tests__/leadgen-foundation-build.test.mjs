@@ -3,9 +3,12 @@ import {buildFoundationBundle,WORKFLOWS} from '../leadgen-foundation/build.mjs';
 import {projectAgentProfile} from '../leadgen-foundation/profile-contract.mjs';
 const prefix='services/phone-adb-controller/leadgen-foundation',repo=fileURLToPath(new URL('../../../',import.meta.url));
 test('four published profiles freeze source closure and central skills without an instance identity',()=>{
+ const lock=JSON.parse(fs.readFileSync(path.join(repo,'.skills-source.json')));
+ assert.equal(lock.repository,'perfectuser21/zenithjoy-skills');
+ assert.match(lock.revision,/^[a-f0-9]{40}$/);
  for(const [id,key]of Object.entries(WORKFLOWS)){
   const doc=JSON.parse(fs.readFileSync(path.join(repo,prefix,'profiles',id+'.json'))),p=doc.profile;
-  assert.equal(doc.contract.workflow,key);assert.equal(p.leadgen.workflow,id);assert.equal(p.leadgen.method_revision,'81b523d620c0e285cbe03f72618a8a0acf37249e');
+  assert.equal(doc.contract.workflow,key);assert.equal(p.leadgen.workflow,id);assert.equal(p.leadgen.method_repository,lock.repository);assert.equal(p.leadgen.method_revision,lock.revision);
   assert.equal(Object.keys(p.files).some(n=>n.startsWith('skills/')),false,'Skill aliases must exist in the central catalog');assert.ok(Object.keys(p.files).length<200);assert.ok(p.files[p.adapter]);let size=0;
   for(const [name,sha]of Object.entries(p.files)){
    assert.match(sha,/^[a-f0-9]{64}$/);assert.equal(path.isAbsolute(name),false);assert.equal(name.includes('..'),false);

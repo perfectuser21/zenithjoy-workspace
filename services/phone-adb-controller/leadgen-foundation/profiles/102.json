@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.preflight",
-            "contract_digest": "c4097815f0277d297e7c9da666b37731226cebd7dd2c3d9e9aeaa2a11cbf90e8"
+            "contract_digest": "20713d380f2bcd65265f9826607078e2189dca291fe78a7612d0afdb0dd0c86f"
           },
           "document": {
             "key": "preflight",
@@ -33,7 +33,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.4.0",
+            "version": "2.5.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -54,7 +54,7 @@
               },
               {
                 "type": "Account",
-                "source": "该公司已启用账号配置与手机原生登录态",
+                "source": "本轮冻结的公司已启用账号配置；预检执行时取手机原生账号，结束时比对",
                 "cardinality": "one",
                 "fields": [
                   "platform",
@@ -97,8 +97,8 @@
               }
             ],
             "preconditions": [
-              "本次真实Task/run、公司、租户、业务线、设备与账号来源已冻结且可读取；缺失不凭历史实例补造。",
-              "业务Agent仅在本次授权和原绝对deadline内执行；旧定时器时段或KPI退让不作为正式API派单的业务准入。"
+              "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
+              "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。"
             ],
             "postconditions": [
               {
@@ -340,7 +340,7 @@
               "phase": "start",
               "requirement": {
                 "type": "Account",
-                "source": "该公司已启用账号配置与手机原生登录态",
+                "source": "本轮冻结的公司已启用账号配置；预检执行时取手机原生账号，结束时比对",
                 "cardinality": "one",
                 "fields": [
                   "platform",
@@ -353,13 +353,13 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "本次真实Task/run、公司、租户、业务线、设备与账号来源已冻结且可读取；缺失不凭历史实例补造。",
+              "requirement": "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
               "source_pointer": "/preconditions/0"
             },
             {
               "id": "preconditions_1",
               "phase": "start",
-              "requirement": "业务Agent仅在本次授权和原绝对deadline内执行；旧定时器时段或KPI退让不作为正式API派单的业务准入。",
+              "requirement": "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。",
               "source_pointer": "/preconditions/1"
             },
             {
@@ -2152,7 +2152,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "e7b6c37ac7a39dbdc44b8515fc0f3bf785ba928de4982a86bc7de405b973347e"
+            "contract_digest": "75da544d82f1c8505356a58b1efdbb8ab0ccf7bf7c68ced2c9130f9472f9124a"
           },
           "document": {
             "key": "cleanup",
@@ -2169,7 +2169,7 @@
               "current_skill_verified": false
             },
             "order": 5,
-            "version": "2.4.0",
+            "version": "2.5.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -2181,11 +2181,10 @@
             "inputs": [
               {
                 "type": "Device",
-                "source": "本轮预检取得的设备及锁",
+                "source": "本 run 的冻结设备标识；实际锁归属从台账和本地原件查，不以已取锁作为开始条件",
                 "cardinality": "one",
                 "fields": [
-                  "serial",
-                  "lock_holder"
+                  "serial"
                 ]
               },
               {
@@ -2218,12 +2217,12 @@
               }
             ],
             "preconditions": [
-              "本 run 各阶段已写工件或已判失败"
+              "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。"
             ],
             "postconditions": [
               {
                 "probe": "cl_app_closed",
-                "asserts": "真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。"
+                "asserts": "如果 App 由本轮打开，须真实关闭并保存动作及前台原件。独立证据证实未开工且无本轮动作时，不操作 App，不把日志标记当关闭事实。"
               },
               {
                 "probe": "cl_lock_released",
@@ -2231,7 +2230,7 @@
               },
               {
                 "probe": "cl_safe_desktop_visible",
-                "asserts": "原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。"
+                "asserts": "本轮确曾操作 App 时，用原生证据核对归位；独立证据确认未开工且无本轮动作时无需回桌面。未知资源状态需报告，不因没有业务成果阻断收尾。"
               }
             ],
             "execution": {
@@ -2254,7 +2253,9 @@
               "on_duplicate": "skip"
             },
             "failure": {
-              "empty_ok": [],
+              "empty_ok": [
+                "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
+              ],
               "retryable": [
                 "工件 scp 到 mmv 失败（本地保留）"
               ],
@@ -2383,11 +2384,10 @@
               "phase": "start",
               "requirement": {
                 "type": "Device",
-                "source": "本轮预检取得的设备及锁",
+                "source": "本 run 的冻结设备标识；实际锁归属从台账和本地原件查，不以已取锁作为开始条件",
                 "cardinality": "one",
                 "fields": [
-                  "serial",
-                  "lock_holder"
+                  "serial"
                 ]
               },
               "source_pointer": "/inputs/0"
@@ -2408,7 +2408,7 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "本 run 各阶段已写工件或已判失败",
+              "requirement": "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。",
               "source_pointer": "/preconditions/0"
             },
             {
@@ -2444,7 +2444,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "cl_app_closed",
-                "asserts": "真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。"
+                "asserts": "如果 App 由本轮打开，须真实关闭并保存动作及前台原件。独立证据证实未开工且无本轮动作时，不操作 App，不把日志标记当关闭事实。"
               },
               "source_pointer": "/postconditions/0"
             },
@@ -2462,7 +2462,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "cl_safe_desktop_visible",
-                "asserts": "原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。"
+                "asserts": "本轮确曾操作 App 时，用原生证据核对归位；独立证据确认未开工且无本轮动作时无需回桌面。未知资源状态需报告，不因没有业务成果阻断收尾。"
               },
               "source_pointer": "/postconditions/2"
             },
@@ -2479,7 +2479,9 @@
               "id": "failure",
               "phase": "end",
               "requirement": {
-                "empty_ok": [],
+                "empty_ok": [
+                  "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
+                ],
                 "retryable": [
                   "工件 scp 到 mmv 失败（本地保留）"
                 ],
@@ -2499,7 +2501,9 @@
           ]
         },
         "failure": {
-          "empty_ok": [],
+          "empty_ok": [
+            "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
+          ],
           "retryable": [
             "工件 scp 到 mmv 失败（本地保留）"
           ],
@@ -2543,8 +2547,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "81b523d620c0e285cbe03f72618a8a0acf37249e",
-      "contract_sha256": "39cec905679c33eee394e7f1dfd9e33d00451fd12703b9e81761f58ea685de22"
+      "method_revision": "b52df3747fdf0a60ce8df8768fce836645087da1",
+      "contract_sha256": "5296205f03d47668a13734df852bf7974e9457a14bf514a92a1539672ab0a483"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2608,7 +2612,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2634,7 +2638,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2660,7 +2664,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2686,7 +2690,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2712,11 +2716,11 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
-          "allow_empty": false
+          "allow_empty": true
         }
       }
     },
@@ -2736,11 +2740,11 @@
       "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
-      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
       "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
@@ -2760,10 +2764,10 @@
       "services/phone-adb-controller/leadgen-queue.js": "29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "a765bbca056db747e568d47a2d71f1a92e93d1e16ebeec38cd74524c66b733c3",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "7544a6c7dea95489a6cdb57626026b506d17685fc17c151e7c5303a5a0f1ac73",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "82549a3342659b7bb1397ca5e9c7a6f8be4342ecfeee5200c0f67583982bf2eb",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "554c43a388f81a2542c71a1467b5eef33083b3de5d14e623c8fc3fb18d487968",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "ca381f41355ddcb2fc44a6d02aea0fc3500c0c708d51adee2f3f3a0a401a69be",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "2e56b48bfb003768ae67071e20e4fe3af61526bd01613ca81b15df8c5d48989b",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "786c8fd52c6c0f92f1091561776ca5ff388d0261a028320d2d3c8c58718b26f1"
     }
   }

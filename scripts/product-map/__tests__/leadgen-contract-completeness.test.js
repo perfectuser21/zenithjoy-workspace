@@ -53,14 +53,15 @@ test('共享预检的定时闸不误写成手动活动条件', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
   const preflight = doc.activities.find(activity => activity.key === 'preflight');
   assert.ok(preflight.preconditions.every(condition => !condition.includes('harvest-cron.sh:')));
-  assert.ok(preflight.preconditions.some(condition => condition.includes('正式API派单')));
+  assert.ok(preflight.preconditions.some(condition =>
+    condition.includes('Brain 正式派单') && condition.includes('原绝对 deadline')));
 });
 
 test('104 订单生命周期与发送结果由完整合同规定', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_lead_outreach.yaml'), 'utf8'));
   const activity = Object.fromEntries(doc.activities.filter(a => a.key).map(a => [a.key, a]));
   assert.ok(!activity.preflight.outputs.some(output => output.type === 'OutreachOrder'));
-  assert.equal(activity.preflight.version, '5.1.0');
+  assert.equal(activity.preflight.version, '5.2.0');
   assert.equal(activity.preflight.compatibility, 'breaking');
   assert.ok(activity.send_dm.inputs.some(input => input.type === 'OutreachOrder'));
   assert.equal(activity.send_dm.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
