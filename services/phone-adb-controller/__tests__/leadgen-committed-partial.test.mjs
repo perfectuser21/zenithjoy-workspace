@@ -55,6 +55,11 @@ test('same-policy cached qualification preserves its producer and scores current
  assert.equal(r.scored,1);assert.equal(f.modelCalls,1);assert.equal(f.video.judgment_config.run_id,'cached102');assert.deepEqual(f.row.recipient_evidence,proof);
  assert.equal((await queueRequest(f.pool,f.input('score_readback'))).verified,true);assert.equal(f.modelCalls,1);
 });
+test('ordinary current comments may reuse a same-policy qualification from a formal upstream-bound run',async()=>{
+ const f=cachedFixture();f.priorSources[0].source_run='formal101';
+ assert.equal((await queueRequest(f.pool,f.input('score'),f.deps)).scored,1);
+ assert.equal(f.video.judgment_config.run_id,'cached102');assert.equal(f.row.recipient_evidence.scope.source_run,null);assert.equal(f.modelCalls,1);
+});
 for(const [name,change] of [
  ['missing source',f=>f.priorSources=[]],['ambiguous source',f=>f.priorSources.push(structuredClone(f.priorSources[0]))],
  ['wrong company',f=>{f.priorSources[0].company_id='other';f.priorSources[0].snapshot.company_id='other';}],
@@ -66,6 +71,11 @@ for(const [name,change] of [
  ['wrong current VID',f=>f.row.recipient_evidence.scope.video_id='7704584547186793911'],
  ['wrong binding',f=>f.row.recipient_evidence.company_binding.company_id='other'],
  ['unmatched video',f=>f.video.judgment_status='rejected'],
+ ['malformed old upstream',f=>f.priorSources[0].source_run='../invalid'],
+ ['self-referencing old upstream',f=>f.priorSources[0].source_run='cached102'],
+ ['missing old source mode',f=>delete f.priorSources[0].source_run],
+ ['nonordinary current source',f=>f.source.source_run='formal101'],
+ ['nonordinary current target',f=>f.target.source_run=batch],
 ])test('cached qualification refuses '+name+' without scoring',async()=>{
  const f=cachedFixture();change(f);await assert.rejects(queueRequest(f.pool,f.input('score'),f.deps),/COMMITTED_PARTIAL|RECIPIENT_/);assert.equal(f.modelCalls,0);assert.equal(f.updates.length,0);
 });
