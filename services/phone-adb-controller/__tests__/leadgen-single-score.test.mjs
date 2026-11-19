@@ -34,6 +34,11 @@ test('single scoring uses one structured model request even on low confidence',a
  const result=await judge.judgeCommentOnce('怎么报名？',row.source_video,'公司画像',{scoringRules:rules,apiKey:'fixture-only',httpPost:async()=>{calls++;return {id:'one-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:JSON.stringify({grade:'A',policy_evidence:{audience_id:audience.id,matched_rule:signal,comment_signal:'怎么报名？',video_signal:'怎么报名',exclusion_rule:null,reason:'本人询问报名'}})}}]};}});
  assert.equal(result.grade,'A');assert.equal(calls,1);assert.equal(result.audit.response_id,'one-response');
 });
+test('single scoring sends persisted transcript as context in its only model request',async()=>{
+ const rules=snapshot.runtime_config.comment_scoring,audience=rules.audiences[0],transcript='真实转写：本视频介绍报名流程和课程内容。';let calls=0,request;
+ const result=await judge.judgeCommentOnce('怎么报名？',row.source_video,'公司画像',{videoTranscript:transcript,scoringRules:rules,apiKey:'fixture-only',httpPost:async(url,body)=>{calls++;request=body;return {id:'transcript-response',model:judge.COMMANDER_MODEL,choices:[{message:{content:JSON.stringify({grade:'B',policy_evidence:{audience_id:audience.id,matched_rule:audience.fields['人群描述'],comment_signal:'怎么报名？',video_signal:null,exclusion_rule:null,reason:'依据原文'}})}}]};}});
+ assert.equal(result.grade,'B');assert.equal(calls,1);assert.ok(request.messages[0].content.includes(transcript));assert.ok(request.messages[0].content.includes(row.source_video));
+});
 
 test('invalid single model response stops without calling a fallback model',async()=>{
  let calls=0;await assert.rejects(judge.judgeCommentOnce('怎么报名？',row.source_video,'公司画像',{scoringRules:snapshot.runtime_config.comment_scoring,apiKey:'fixture-only',httpPost:async()=>{calls++;return {id:'bad',model:judge.COMMANDER_MODEL,choices:[{message:{content:'not json'}}]};}}));assert.equal(calls,1);
