@@ -2608,7 +2608,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2634,7 +2634,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2660,7 +2660,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2686,7 +2686,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2712,7 +2712,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -2737,11 +2737,12 @@
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "4c80b5e5c4d70a24cbfd64339eab29ab68dbf748586be4216aa5e907e01d632b",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe",
-      "services/phone-adb-controller/leadgen-foundation/context.mjs": "7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "f52e73399e75a4e5d91a770ba19e8eb79a85c83c2f58ee745e618563f400c679",
+      "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "03a71ce5519faed6f3d2ed95bbc1c2d79296b8e1d529414229ef8f894de97cbb",
+      "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
       "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
       "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
       "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d",
