@@ -3,7 +3,7 @@
   "activities": {
     "douyin_video_discovery.collect_videos": {
       "activity_version": "5.4.0",
-      "contract_digest": "a7c691a9adf89016a058b28ceed8be1973512751f8c3223642f9aa9b60b4f96d",
+      "contract_digest": "60d944525b95fa00de3fb5c342c07444058b2b3a29aeb328bbaeca584095c4c9",
       "method_version": "0.11.0",
       "skill": {
         "name": "douyin-leadgen-activity-101-collect-videos",
