@@ -17,6 +17,9 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   if(workflow==='101'){
    assert.match(tools,/discover_readback.*include_handoff:true/);
    assert.match(tools,/inspect_videos.*include_discovery_protection:true/);
+   assert.match(tools,/invoke.*evidence_ref.*receipts\//);
+   assert.match(tools,/不必重新读取原回执/);
+   assert.match(tools,/discovery_metrics_observed_at/);
    assert.ok(a.receipt.files['business-runtime/discovery-metrics-queue.js']);
   }
   for(const runtime of Object.values(a.profile.skill_runtime.activities)){
