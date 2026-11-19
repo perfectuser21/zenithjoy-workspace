@@ -89,3 +89,42 @@ test('current run progress exposes activity starts and terminal status without m
  assert.equal((await readFacts(request('run.progress'),bad)).status,'unavailable');
  assert.equal((await readFacts(request('run.progress',{run_id:'foreign'}),deps)).status,'unavailable');
 });
+
+test('run identity proves the same independently persisted Foundation Run without forwarding its full payload',async()=>{
+ const identity={task_id:'task',run_id:'run'}, calls=[];
+ const assigned={...identity,input:{run_tag:'run'},definition:{workflow_id:'workflow',release_id:'release',workflow_definition_version_id:'definition'},
+  run:{...identity,input:{run_tag:'run'}},runtime:{command_secret:'not-for-the-checker'}};
+ const deps={readAuthority:async()=>context,brainGet:async endpoint=>{
+  calls.push(endpoint);
+  return {task:{id:'task',status:'in_progress',payload:{private_configuration:'must-not-forward'},result:{foundation_runner:assigned}}};
+ }};
+ const receipt=await readFacts(request('run.identity'),deps);
+ assert.equal(receipt.status,'available');
+ assert.deepEqual(receipt.facts,{...identity,run_tag:'run',task_status:'in_progress',workflow_id:'workflow',release_id:'release',workflow_definition_version_id:'definition'});
+ assert.deepEqual(calls,['/tasks/task']);
+ assert.equal((await readFacts(request('run.identity',{task_id:'foreign'}),deps)).status,'unavailable');
+ assert.equal(calls.length,1);
+ assigned.run.run_id='foreign';
+ assert.equal((await readFacts(request('run.identity'),deps)).status,'unavailable');
+});
+
+test('the frozen receipt inventory keeps a real source path and unknown action without exposing arguments',async()=>{
+ const {listHostReceipts}=await import('../leadgen-foundation/checker-facts-runtime.mjs');
+ const {mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync,symlinkSync}=await import('node:fs');
+ const {join}=await import('node:path'), {tmpdir}=await import('node:os');
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'checker-receipts-'))), directory=join(root,'receipts');
+ try{
+  mkdirSync(directory,{mode:0o700});
+  const identity={task_id:'task',run_id:'run',run_tag:'run'};
+  const create=(name,target=identity)=>writeFileSync(join(directory,name),JSON.stringify({binding:{identity:target,activity:'preflight',kind:'phone',
+   args:['account-current','sensitive-argument']},state:'unknown',started_at:123.45,result:null}),{mode:0o600});
+  create('account-current.json');
+  const items=listHostReceipts(root,identity);
+  assert.deepEqual(items,[{path:'receipts/account-current.json',activity:'preflight',kind:'phone',operation:'account-current',state:'unknown',started_at:123.45}]);
+  create('foreign.json',{...identity,run_id:'foreign'});
+  assert.throws(()=>listHostReceipts(root,identity),/FACT_RUNTIME_UNAVAILABLE/);
+  rmSync(join(directory,'foreign.json'));
+  symlinkSync(join(directory,'account-current.json'),join(directory,'alias.json'));
+  assert.throws(()=>listHostReceipts(root,identity),/FACT_RUNTIME_UNAVAILABLE/);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});

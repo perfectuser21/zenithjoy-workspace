@@ -3,6 +3,28 @@ import fs from'node:fs';import path from'node:path';import{createHash}from'node:
 const HERE=path.dirname(fileURLToPath(import.meta.url)),hash=x=>createHash('sha256').update(x).digest('hex');
 const need=x=>{if(!x)throw Error('FACT_RUNTIME_UNAVAILABLE');};
 function privateBytes(file){const s=fs.lstatSync(file);need(s.isFile()&&!s.isSymbolicLink()&&s.uid===process.getuid()&&(s.mode&0o077)===0);return fs.readFileSync(file,'utf8');}
+export function listHostReceipts(root,identity){
+ const directory=path.join(root,'receipts');
+ need(fs.realpathSync(directory)===directory);
+ const files=fs.readdirSync(directory).filter(name=>name.endsWith('.json')).sort();
+ need(files.length<=500);
+ let total=0;
+ return files.map(name=>{
+  need(/^[A-Za-z0-9_.-]+\.json$/.test(name));
+  const file=path.join(directory,name),size=fs.lstatSync(file).size;
+  total+=size;need(size<=2*1024*1024&&total<=12*1024*1024);
+  const raw=JSON.parse(privateBytes(file)),binding=raw.binding??{},bound=binding.identity;
+  need(bound&&['task_id','run_id','run_tag'].every(key=>typeof identity[key]==='string'&&identity[key]===bound[key])
+   &&/^[a-z][a-z0-9_]{0,79}$/.test(binding.activity??'')&&/^[a-z][a-z0-9_-]{0,79}$/.test(binding.kind??'')
+   &&['terminal','unknown','prepared'].includes(raw.state)
+   &&Number.isFinite(raw.started_at));
+  const operation=binding.args?.[0];
+  return {path:'receipts/'+name,activity:binding.activity,kind:binding.kind,
+   ...(typeof operation==='string'&&/^[A-Za-z0-9][A-Za-z0-9_/-]{0,63}$/.test(operation)?{operation}:{}),
+   state:raw.state,started_at:raw.started_at,...(Number.isFinite(raw.ended_at)?{ended_at:raw.ended_at}:{}),
+   ...(Number.isInteger(raw.result?.exit_code)?{exit_code:raw.result.exit_code}:{})};
+ });
+}
 export function readFrozenContext(file,expectedSha){
  need(path.isAbsolute(file)&&fs.realpathSync(file)===file&&/^[a-f0-9]{64}$/.test(expectedSha??''));
  const bytes=privateBytes(file);need(hash(bytes)===expectedSha);return JSON.parse(bytes);
@@ -37,6 +59,7 @@ export const factDependencies={
   const raw=line.slice(line.indexOf('=')+1);let token;try{token=JSON.parse(raw);}catch{token=raw.replace(/^['"]|['"]$/g,'');}
   return boundedJson('http://127.0.0.1:5221/api/brain'+endpoint,{headers:{'X-Internal-Token':token}});
  },
+ hostReceipts(identity){return listHostReceipts(HERE,identity);},
  async nativeRead(c,run){
   runtime(c);need(c.transport==='local');
   const facts=await new Promise((resolve,reject)=>{

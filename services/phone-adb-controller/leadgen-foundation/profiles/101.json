@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.preflight",
-            "contract_digest": "20713d380f2bcd65265f9826607078e2189dca291fe78a7612d0afdb0dd0c86f"
+            "contract_digest": "652caf0f29eeaeecef19aab95553d48e8feca161c35f029c184f6c2acfa13044"
           },
           "document": {
             "key": "preflight",
@@ -33,7 +33,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.5.0",
+            "version": "2.6.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -86,9 +86,9 @@
               },
               {
                 "type": "Run",
-                "destination": "本轮运行账本，交给后续采集 Activity",
+                "destination": "底座已分配并持久化的同一Run身份，供后续Activity交接",
                 "cardinality": "one",
-                "effect": "create",
+                "effect": "update",
                 "fields": [
                   "run_tag",
                   "profile",
@@ -97,6 +97,7 @@
               }
             ],
             "preconditions": [
+              "run.identity 读回底座已经持久化的本轮Task/run，须与 checker-input/identity.json 的原任务和原Run一致。本活动交同一身份，不另建业务Run。冻结的预期账号与配置摘要由 identity.json 提供，同时核公司登记的启用账号；不读取包含凭据的完整宿主配置。",
               "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
               "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。"
             ],
@@ -115,7 +116,7 @@
               },
               {
                 "probe": "pf_lock_acquired",
-                "asserts": "本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。"
+                "asserts": "本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。 用 host.receipts 找到本轮真实取得回执路径并逐份读取，与当前设备/中央锁读回交叉核验；同一身份已安全取得的锁只读回。"
               }
             ],
             "execution": {
@@ -135,7 +136,7 @@
             },
             "idempotency": {
               "dedupe_key": "Run.run_tag",
-              "on_duplicate": "reject"
+              "on_duplicate": "skip"
             },
             "failure": {
               "empty_ok": [],
@@ -154,7 +155,7 @@
                 }
               },
               "fatal": [
-                "run_tag 重复"
+                "冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果"
               ]
             },
             "side_effects": [],
@@ -353,14 +354,20 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
+              "requirement": "run.identity 读回底座已经持久化的本轮Task/run，须与 checker-input/identity.json 的原任务和原Run一致。本活动交同一身份，不另建业务Run。冻结的预期账号与配置摘要由 identity.json 提供，同时核公司登记的启用账号；不读取包含凭据的完整宿主配置。",
               "source_pointer": "/preconditions/0"
             },
             {
               "id": "preconditions_1",
               "phase": "start",
-              "requirement": "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。",
+              "requirement": "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
               "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "preconditions_2",
+              "phase": "start",
+              "requirement": "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。",
+              "source_pointer": "/preconditions/2"
             },
             {
               "id": "outputs_0",
@@ -397,9 +404,9 @@
               "phase": "end",
               "requirement": {
                 "type": "Run",
-                "destination": "本轮运行账本，交给后续采集 Activity",
+                "destination": "底座已分配并持久化的同一Run身份，供后续Activity交接",
                 "cardinality": "one",
-                "effect": "create",
+                "effect": "update",
                 "fields": [
                   "run_tag",
                   "profile",
@@ -440,7 +447,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "pf_lock_acquired",
-                "asserts": "本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。"
+                "asserts": "本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。 用 host.receipts 找到本轮真实取得回执路径并逐份读取，与当前设备/中央锁读回交叉核验；同一身份已安全取得的锁只读回。"
               },
               "source_pointer": "/postconditions/3"
             },
@@ -449,7 +456,7 @@
               "phase": "end",
               "requirement": {
                 "dedupe_key": "Run.run_tag",
-                "on_duplicate": "reject"
+                "on_duplicate": "skip"
               },
               "source_pointer": "/idempotency"
             },
@@ -473,7 +480,7 @@
                   }
                 },
                 "fatal": [
-                  "run_tag 重复"
+                  "冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果"
                 ]
               },
               "source_pointer": "/failure"
@@ -497,7 +504,7 @@
             }
           },
           "fatal": [
-            "run_tag 重复"
+            "冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果"
           ]
         },
         "runtime": {
@@ -1217,7 +1224,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "75da544d82f1c8505356a58b1efdbb8ab0ccf7bf7c68ced2c9130f9472f9124a"
+            "contract_digest": "547cca99c53e40dfbb78dd9fb3896db0d186403daf1c4ce23099542676e8f051"
           },
           "document": {
             "key": "cleanup",
@@ -1234,7 +1241,7 @@
               "current_skill_verified": false
             },
             "order": 5,
-            "version": "2.5.0",
+            "version": "2.6.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -1273,7 +1280,7 @@
               },
               {
                 "type": "Run",
-                "destination": "本轮运行账本的终态",
+                "destination": "交付本轮收尾Activity状态及可读回证据，由宿主验收后计算Workflow终态",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -1282,6 +1289,7 @@
               }
             ],
             "preconditions": [
+              "run.identity 核对本轮身份。以 run.progress 和 host.receipts 核对业务Activity是否开工及本轮真实工具动作；结合当前原生操作数、设备锁和适用业务资源，判断是否有本人资源待处理。",
               "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。"
             ],
             "postconditions": [
@@ -1416,7 +1424,7 @@
               },
               {
                 "key": "finalize_run",
-                "name": "终态回执",
+                "name": "收尾回执",
                 "order": 4,
                 "reads": [
                   "Run.run_tag"
@@ -1424,7 +1432,7 @@
                 "writes": [
                   "Run.status"
                 ],
-                "check": "记录真实终态与实际成果数，合法empty/partial/failed皆可收尾，不伪造非零产物。",
+                "check": "记录本收尾Activity的真实状态、资源和实际成果数；未开工无本轮动作和资源可以交empty。Workflow终态由宿主验收后产生，本活动不将其作为前提。",
                 "implementation": {
                   "status": "implemented",
                   "ref": "leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）"
@@ -1473,8 +1481,14 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。",
+              "requirement": "run.identity 核对本轮身份。以 run.progress 和 host.receipts 核对业务Activity是否开工及本轮真实工具动作；结合当前原生操作数、设备锁和适用业务资源，判断是否有本人资源待处理。",
               "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。",
+              "source_pointer": "/preconditions/1"
             },
             {
               "id": "outputs_0",
@@ -1495,7 +1509,7 @@
               "phase": "end",
               "requirement": {
                 "type": "Run",
-                "destination": "本轮运行账本的终态",
+                "destination": "交付本轮收尾Activity状态及可读回证据，由宿主验收后计算Workflow终态",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -1612,8 +1626,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "b52df3747fdf0a60ce8df8768fce836645087da1",
-      "contract_sha256": "524e258fbfb1046b400b05aed76143cdda17a8ff5fc24a19da0fffbbf1096afb"
+      "method_revision": "6a0d59300b01d3491b9d2dbaaecd6861c02e217b",
+      "contract_sha256": "da664b5f59c01e3467684cac791cbca21894dc91071b6498862a1e916420a676"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -1674,7 +1688,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -1700,7 +1714,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -1726,7 +1740,7 @@
                 "command": "@node",
                 "entry": "checker-facts-entry.mjs",
                 "timeout_ms": 120000,
-                "description": "只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+                "description": "只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
               }
             }
           },
@@ -1753,8 +1767,8 @@
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "0b893b269ce18ccbfa2b765d58cefd1cb476c45ef9507b601847764a55a31fd1",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "5df85e53cd0ad29e60b28f708b38b58bb238a07539cc1a2548d11a7a12b9f0ba",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "554574c9b34997f6f4f29b7015b07706a894f106924d142a5fb3ed972e444652",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
       "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
@@ -1775,8 +1789,8 @@
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "31ed4a2f2b750c21a2ad28e497a8125f03d64d550f94e2a5057628766446668b",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "7544a6c7dea95489a6cdb57626026b506d17685fc17c151e7c5303a5a0f1ac73",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "2e56b48bfb003768ae67071e20e4fe3af61526bd01613ca81b15df8c5d48989b"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "eef4d1f2b4f83ff0de96a3a9a353f571041b87d0bd91630f3f4c2ef19fc4ec9e",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "eed9c7e8734cffe2f464a2cdbdfda111ca5cf366f8eada8e789eb885eb29d927"
     }
   }
 }

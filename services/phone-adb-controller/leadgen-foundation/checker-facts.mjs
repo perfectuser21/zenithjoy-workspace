@@ -37,6 +37,16 @@ async function runProgress(bound,deps){
   attempts:ledger.attempts.map(entry=>pick(entry,[...lifecycle,'kind'])),
   observations:ledger.observations.map(entry=>pick(entry,[...lifecycle,'kind','phase']))};
 }
+async function assignedRun(bound,deps){
+ const response=await deps.brainGet('/tasks/'+encodeURIComponent(bound.t.task_id),bound.c);
+ const task=response.task??response,runner=task.result?.foundation_runner,run=runner?.run,definition=runner?.definition;
+ const {task_id,run_id}=bound.t;
+ requireCondition(task.id===task_id&&runner?.task_id===task_id&&runner.run_id===run_id
+  &&run?.task_id===task_id&&run.run_id===run_id&&run.input?.run_tag===bound.run&&typeof task.status==='string'
+  &&['workflow_id','release_id','workflow_definition_version_id'].every(key=>typeof definition?.[key]==='string'&&definition[key].length>0));
+ return{task_id,run_id,run_tag:bound.run,task_status:task.status,workflow_id:definition.workflow_id,
+  release_id:definition.release_id,workflow_definition_version_id:definition.workflow_definition_version_id};
+}
 async function pgRead(bound,args,deps){
  const query=queryFor(bound,args),pool=await deps.loadPool(bound.c);let client;
  try{client=await pool.connect();await client.query('BEGIN READ ONLY');await client.query("SET LOCAL statement_timeout='10000ms'");
@@ -57,6 +67,10 @@ export async function readFacts(request,deps){
    else {requireCondition(args.resource==='device_lock'&&args.task_id===undefined);endpoint='/device-locks';}
    source='brain:'+endpoint;facts=await deps.brainGet(endpoint,b.c);
    if(args.resource==='device_lock')facts={locks:(facts.locks??[]).filter(x=>x.device_name===b.c.serial)};
+  }else if(request.operation==='run.identity'){
+   exact(args,[]);source='brain:foundation_runner';facts=await assignedRun(b,deps);
+  }else if(request.operation==='host.receipts'){
+   exact(args,[]);source='host:receipts';facts={receipts:deps.hostReceipts(b.t)};
   }else if(request.operation==='run.progress'){
    exact(args,[]);source='kernel-ledger:'+b.run;facts=await runProgress(b,deps);
   }else if(request.operation==='qualification.origin'){
@@ -74,7 +88,7 @@ export async function readFacts(request,deps){
   requireCondition(facts!==undefined);return{status:'available',source,facts};
  }catch(error){return{status:'unavailable',source:'facts:unavailable',facts:null,reason:error.message==='FACT_SCOPE'?'FACT_SCOPE_REJECTED':'FACT_READ_UNAVAILABLE'};}
 }
-export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
+export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
 export async function serveFacts({contextFile,contextSha256,readLedger}){
  let input='';for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>2*1024*1024)throw Error('FACT_INPUT_LIMIT');}
  const {factDependencies,readFrozenContext}=await import('./checker-facts-runtime.mjs');
