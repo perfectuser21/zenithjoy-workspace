@@ -50,6 +50,18 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
    const foreign=run(host,{activity:'collection',args:[strict[0],'7722222222222222222',...strict.slice(2)]});
    refused(foreign,/VIDEO_SCOPE/);assert.deepEqual(foreign.receipts,{});
   });
+  if(workflow==='102') await t.test('the existing one-capture run budget cannot be reset by changing Activity',()=>{
+   const args=['record-start','$RUN-v$VID-capture'];
+   for(const unknown of [false,true]) {
+    const r=run(host,{activity:'qualification',next_activity:'collection',args,unknown});
+    assert.equal(r.first.dispatches,1);assert.equal(r.calls.length,1);
+    assert.match(r.other.error,/SINGLE_CAPTURE_OR_SEEK_LIMIT|PRIOR_ACTION_UNKNOWN/);
+   }
+  });
+  if(workflow==='101') await t.test('a Workflow without a configured capture budget gains no invented single-capture limit',()=>{
+   const r=run(host,{activity:'preflight',next_activity:'collect_videos',args:['record-start','$RUN-capture']});
+   assert.equal(r.first.rc,0);assert.equal(r.other.rc,0,r.other.error);assert.equal(r.calls.length,2);
+  });
   await t.test('cleanup cannot start ordinary or unknown operations after business deadline', () => {
    for (const args of [['tap','100','200'],['future-phone-operation']]) {
     const r=run(host,{activity:'cleanup',late:true,args}); refused(r,/ABSOLUTE_DEADLINE/);

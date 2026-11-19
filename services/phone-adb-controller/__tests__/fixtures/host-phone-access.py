@@ -49,7 +49,13 @@ def invoke(name, supplied):
     return {'rc': rc, 'stdout': out.getvalue(), 'error': error, 'dispatches': len(calls)}
 first = invoke('phone-action', args)
 replay = invoke('phone-action', args) if case.get('replay') else None
-other = invoke('phone-new-action', args) if case.get('unknown') else None
+other = None
+if case.get('next_activity'):
+    activity = case['next_activity']; os.environ['COMMANDER_ACTIVITY_KEY'] = activity
+    input_file.write_text(json.dumps({'activity_key': activity, 'identity': identity}))
+    other = invoke('phone-new-action', args)
+elif case.get('unknown'):
+    other = invoke('phone-new-action', args)
 receipts = {p.name: json.loads(p.read_text()) for p in (root/'receipts').glob('*.json')}
 print(json.dumps({'first': first, 'replay': replay, 'other': other, 'calls': calls, 'locks': locks,
                   'gets': gets, 'receipts': receipts, 'controller': c['phone_controller'],
