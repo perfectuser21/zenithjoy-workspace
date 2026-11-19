@@ -12393,3 +12393,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "实际四Workflow装配宿主及tools.main验证通用手机接入、原参数身份/绝对截止和unknown保护；任务与锁读取及最终原生child为隔离替身，无手机或业务PG。"
+
+  - id: activity-104-state
+    path: services/phone-adb-controller/__tests__/activity-104-state.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "104精确原订单与PG触达事实幂等、错身份/未知不写、只读取证；可选本人scratch真实事务与COMMIT回复丢失回归"
