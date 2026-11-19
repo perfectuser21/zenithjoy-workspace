@@ -58,41 +58,72 @@ source_for() {
   git -C "$REPO" show "$sha:deploy/docker-compose.prod-api.yml" | cmp - "$dir/deploy/docker-compose.prod-api.yml" || fail 'cached production compose differs from candidate'
 }
 override() {
-  # An ordinary API update preserves the already-enabled private capability.
-  # Freeze a per-target copy from the verified predecessor, never a live symlink.
-  if [[ "$ACTION" == promote && "$1" != "${CURRENT:-}" && ! -e "$RELEASES/$1/video-tools.json" && -f "$RELEASES/${CURRENT:-}/canvas-plan.json" ]]; then
-    node "$RELEASES/$1/source/scripts/deploy/video-tools-release.mjs" inherit "$RELEASES" "$CURRENT" "$1"
+  local source=$1
+  if [[ "$ACTION" == promote && "$1" != "$CURRENT" && ! -e "$RELEASES/$1/video-tools.json" && ! -L "$RELEASES/$1/video-tools.json" ]]; then
+    source=$CURRENT
   fi
-  python3 - "$RELEASES/$1/image.json" "$2" <<'PY'
-import json,sys,os,hashlib,stat
-p,image=sys.argv[1:]
-root=os.path.dirname(p); result={'services':{'zenithjoy-api-prod':{'image':image}}}
-overlay=root+'/video-tools.json'
-if os.path.lexists(overlay):
-    st=os.lstat(overlay)
-    assert stat.S_ISREG(st.st_mode) and not stat.S_ISLNK(st.st_mode) and stat.S_IMODE(st.st_mode)==0o600 and st.st_uid==os.geteuid(), 'unsafe private video overlay'
-    value=json.load(open(overlay)); prepared=json.load(open(root+'/video-tools-prepared.json'))
-    actual=hashlib.sha256(json.dumps(value,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
-    assert prepared.get('api_source_commit',prepared['source_commit'])==os.path.basename(root) and prepared['overlay_sha256']==actual, 'prepared overlay source or hash changed'
-    manifest=root+'/release.json'
-    if os.path.exists(manifest):
-        saved=json.load(open(manifest))
-        assert saved.get('video_tools_sha256')==actual, 'retained video configuration changed'
-    assert set(value)=={'services','networks'} and set(value['services'])=={'zenithjoy-api-prod'}, 'unexpected video overlay scope'
-    assert set(value['services']['zenithjoy-api-prod'])=={'environment','networks'}, 'unexpected API override'
-    result['services']['zenithjoy-api-prod'].update(value['services']['zenithjoy-api-prod'])
-    result['networks']=value['networks']
-with open(p+'.tmp','w') as f: json.dump(result,f)
-os.replace(p+'.tmp',p)
+  python3 - "$RELEASES/$1/image.json" "$2" "$RELEASES/$source" <<'PY'
+import hashlib, json, os, stat, sys, tempfile
+
+path, image, source = sys.argv[1:]
+service = 'zenithjoy-api-prod'
+
+def private_bytes(path):
+    st = os.lstat(path)
+    assert stat.S_ISREG(st.st_mode) and stat.S_IMODE(st.st_mode) == 0o600 and st.st_uid == os.geteuid(), 'unsafe private video configuration'
+    with open(path, 'rb') as handle:
+        return handle.read()
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+manifest = os.path.join(source, 'release.json')
+saved = json.load(open(manifest)) if os.path.isfile(manifest) else None
+legacy = os.path.join(source, 'video-tools.json')
+retained = os.path.join(source, 'image.json')
+values = {}
+if os.path.lexists(legacy):
+    overlay = json.loads(private_bytes(legacy))
+    prepared = json.loads(private_bytes(os.path.join(source, 'video-tools-prepared.json')))
+    actual = digest(json.dumps(overlay, ensure_ascii=False, separators=(',', ':')).encode())
+    assert prepared.get('api_source_commit', prepared['source_commit']) == os.path.basename(source) and prepared['overlay_sha256'] == actual, 'prepared overlay source or hash changed'
+    if saved is not None:
+        assert saved.get('video_tools_sha256') == actual, 'retained video configuration changed'
+    assert set(overlay) == {'services', 'networks'} and set(overlay['services']) == {service}, 'unexpected video overlay scope'
+    assert set(overlay['services'][service]) == {'environment', 'networks'}, 'unexpected API override'
+    values = overlay['services'][service]['environment']
+elif os.path.lexists(retained) or (saved and 'api_override_sha256' in saved):
+    raw = private_bytes(retained)
+    if saved and 'api_override_sha256' in saved:
+        assert saved['api_override_sha256'] == digest(raw), 'retained API override changed'
+    values = json.loads(raw)['services'][service].get('environment', {})
+
+assert isinstance(values, dict), 'invalid private environment'
+provider_keys = (
+    'DASHSCOPE_API_KEY', 'DASHSCOPE_BASE_URL', 'DASHSCOPE_WORKSPACE_ID',
+    'ALIYUN_ACCESS_KEY_ID', 'ALIYUN_ACCESS_KEY_SECRET', 'ALI_VIDEO_HTTPS_PROXY',
+    'COS_SECRET_ID', 'COS_SECRET_KEY', 'COS_BUCKET', 'COS_REGION', 'STAFF_EMAILS',
+)
+environment = {key: values[key] for key in provider_keys if key in values}
+assert all(isinstance(value, str) for value in environment.values()), 'invalid provider environment'
+# Empty values override inherited env_file settings on retained releases.
+environment.update(CREATIVE_CANVAS_INSTANCES='{}', CREATIVE_CANVAS_SERVICE_TOKENS='{}', CREATIVE_CANVAS_ALLOWED_ORIGINS='')
+result = {'services': {service: {'image': image, 'environment': environment}}}
+with tempfile.NamedTemporaryFile(mode='w', dir=os.path.dirname(path), delete=False) as handle:
+    json.dump(result, handle)
+    temporary = handle.name
+os.replace(temporary, path)
 PY
 }
 record() {
   python3 - "$RELEASES/$1/release.json" "$1" "$2" "$PROJECT" "$3" <<'PY'
-import json,sys,os
+import hashlib,json,sys,os
 p,sha,image,project,verified=sys.argv[1:]
 data=dict(sha=sha,image=image,project=project,verified=verified=='true')
 prepared=os.path.dirname(p)+'/video-tools-prepared.json'
 if os.path.exists(prepared): data['video_tools_sha256']=json.load(open(prepared))['overlay_sha256']
+with open(os.path.join(os.path.dirname(p), 'image.json'), 'rb') as config:
+    data['api_override_sha256'] = hashlib.sha256(config.read()).hexdigest()
 with open(p+'.tmp','w') as f: json.dump(data,f)
 os.replace(p+'.tmp',p)
 PY
@@ -107,9 +138,6 @@ verify() {
   for ((i=0; i<${ZJ_HEALTH_ATTEMPTS:-30}; i++)); do
     status=$(docker inspect "$SERVICE" --format '{{.State.Health.Status}}' 2>/dev/null || true)
     if [[ "$status" == healthy ]] && [[ "$(health_sha 2>/dev/null || true)" == "$sha" ]]; then
-      if [[ -f "$RELEASES/$sha/canvas-plan.json" ]]; then
-        node "$RELEASES/$sha/source/scripts/deploy/video-tools-release.mjs" verify "$RELEASES/$sha/canvas-plan.json" || return 1
-      fi
       return 0
     fi
     sleep "${ZJ_HEALTH_INTERVAL:-5}"
@@ -238,9 +266,6 @@ else
   fi
   source_for "$TARGET"
   override "$TARGET" "$IMAGE"
-  if [[ -f "$RELEASES/$TARGET/canvas-plan.json" ]]; then
-    node "$RELEASES/$TARGET/source/scripts/deploy/video-tools-release.mjs" verify-instances "$RELEASES/$TARGET/canvas-plan.json" || fail 'private employee canvases are not ready'
-  fi
   record "$TARGET" "$IMAGE" false
   check_space
   # Reuse the accepted image's locked dependencies with a clean fixed archive.
@@ -277,7 +302,7 @@ recover() {
   trap - EXIT INT TERM
   if [[ "$SWITCHED" == true ]]; then
     echo "Activation failed; restoring retained image for $CURRENT" >&2
-    if compose "$CURRENT" up -d --no-build --pull never "$SERVICE" && verify "$CURRENT"; then
+    if override "$CURRENT" "$OLD_IMAGE" && compose "$CURRENT" up -d --no-build --pull never "$SERVICE" && verify "$CURRENT"; then
       restore_ledger
       echo "Previous production restored: $CURRENT" >&2
     else

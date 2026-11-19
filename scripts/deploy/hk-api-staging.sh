@@ -65,14 +65,9 @@ PREVIOUS_SNAPSHOT=$(mktemp "$RELEASES/.previous-config.XXXXXX")
 PREVIOUS_FLAGS=()
 for file in "${PREVIOUS_CONFIG[@]}"; do PREVIOUS_FLAGS+=(-f "$file"); done
 docker compose -p "$PROJECT" "${PREVIOUS_FLAGS[@]}" config --format json > "$PREVIOUS_SNAPSHOT"
-python3 - "$PREVIOUS_SNAPSHOT" "$PREVIOUS_IMAGE" <<'PY'
-import json,sys
-p,image=sys.argv[1:];d=json.load(open(p));assert 'zenithjoy-api-staging' in d.get('services',{}), 'previous staging configuration missing'
-d['services']['zenithjoy-api-staging']['image']=image
-with open(p,'w') as f:json.dump(d,f)
-PY
+RELEASE_HELPER="$SOURCE/scripts/deploy/video-tools-release.mjs"
+node "$RELEASE_HELPER" restore-stage-without-comfy "$SERVICE" "$PREVIOUS_IMAGE" "$PREVIOUS_SNAPSHOT" "$PREVIOUS_SNAPSHOT"
 PREVIOUS_CONFIG=("$PREVIOUS_SNAPSHOT")
-printf '{"services":{"zenithjoy-api-staging":{"image":"%s"}}}\n' "$IMAGE" > "$RELEASES/$SHA/image.json"
 ROLLBACK_OVERRIDE=$(mktemp "$RELEASES/.rollback.XXXXXX")
 printf '{"services":{"zenithjoy-api-staging":{"image":"%s"}}}\n' "$PREVIOUS_IMAGE" > "$ROLLBACK_OVERRIDE"
 docker tag "$PREVIOUS_IMAGE" "zenithjoy-api-staging:rollback-$SHA"
@@ -94,15 +89,7 @@ INSPECT_LAYERS_HASH=$(docker image inspect "$IMAGE" --format '{{json .RootFS.Lay
 [[ "$INSPECT_LAYERS_HASH" == "$EXPECTED_LAYERS_HASH" ]] || { echo 'Loaded image layers mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || { echo 'Image platform mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$SHA" ]] || { echo 'Image SHA label mismatch' >&2; exit 1; }
-# Ordinary API releases keep the private configuration of the healthy active
-# predecessor. A candidate with an explicitly prepared canvas takes precedence.
-if [[ "$PREVIOUS_SHA" != "$SHA" && ! -f "$RELEASES/$SHA/canvas-plan.json" && -f "$RELEASES/$PREVIOUS_SHA/canvas-plan.json" ]]; then
-  node "$SOURCE/scripts/deploy/video-tools-release.mjs" inherit-staging "$RELEASES" "$PREVIOUS_SHA" "$SHA"
-fi
-if [[ -f "$RELEASES/$SHA/canvas-plan.json" ]]; then
-  node "$SOURCE/scripts/deploy/video-tools-release.mjs" verify-instances "$RELEASES/$SHA/canvas-plan.json"
-  node "$SOURCE/scripts/deploy/video-tools-release.mjs" merge-image "$RELEASES" "$SHA" "$LOADED_IMAGE" "$SERVICE"
-fi
+node "$RELEASE_HELPER" stage-without-comfy "$SERVICE" "$LOADED_IMAGE" "$PREVIOUS_SNAPSHOT" "$RELEASES/$SHA/image.json"
 AVAILABLE_KB=$(df -Pk "$RELEASES" | awk 'NR==2 {print $4}')
 [[ "$AVAILABLE_KB" =~ ^[0-9]+$ && "$AVAILABLE_KB" -ge 524288 ]] || { echo 'Insufficient staging disk space after build: require 512 MiB free' >&2; exit 1; }
 # Archive only the migration sources and TypeScript configuration from the
@@ -155,10 +142,6 @@ for ((i=0; i<${ZJ_HEALTH_ATTEMPTS:-30}; i++)); do
     python3 -c "import json,sys; print(json.load(sys.stdin).get('build',{}).get('sha',''))" 2>/dev/null || true)
   CURRENT_IMAGE=$(docker inspect "$SERVICE" --format '{{.Image}}' 2>/dev/null || true)
   if [[ "$STATUS" == healthy && "$GOT_SHA" == "$SHA" && "$CURRENT_IMAGE" == "$LOADED_IMAGE" ]]; then
-    if [[ -f "$RELEASES/$SHA/canvas-plan.json" ]] && ! node "$SOURCE/scripts/deploy/video-tools-release.mjs" verify "$RELEASES/$SHA/canvas-plan.json"; then
-      rollback_previous || true
-      exit 1
-    fi
     printf '{"target":"api","environment":"staging","sha":"%s","health":"healthy"}\n' "$SHA"
     exit 0
   fi

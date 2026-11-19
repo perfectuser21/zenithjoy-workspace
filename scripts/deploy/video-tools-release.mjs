@@ -1,6 +1,6 @@
 // Private deployment material. Never print a plan: it contains service credentials.
-import {createHash} from 'node:crypto';
-import {readFileSync, lstatSync, realpathSync, mkdirSync, writeFileSync, existsSync} from 'node:fs';
+import {createHash, randomUUID} from 'node:crypto';
+import {readFileSync, lstatSync, realpathSync, mkdirSync, writeFileSync, existsSync, renameSync, unlinkSync} from 'node:fs';
 import {join, resolve, basename, dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
@@ -9,6 +9,13 @@ const need=(ok,message)=>{if(!ok)throw Error('Video tools release refused: '+mes
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const credentials=['DASHSCOPE_API_KEY','ALIYUN_ACCESS_KEY_ID','ALIYUN_ACCESS_KEY_SECRET',
   'COS_SECRET_ID','COS_SECRET_KEY','COS_BUCKET','COS_REGION'];
+const providerOptions=['DASHSCOPE_BASE_URL','DASHSCOPE_WORKSPACE_ID','ALI_VIDEO_HTTPS_PROXY'];
+const retiredCanvasEnvironment={
+  CREATIVE_CANVAS_INSTANCES:'{}',
+  CREATIVE_CANVAS_SERVICE_TOKENS:'{}',
+  CREATIVE_CANVAS_ALLOWED_ORIGINS:'',
+};
+const canvasNetwork = name => /^(?:zj-canvas-(?:stage-)?[a-f0-9]{12}-[a-f0-9]{20}-net|(?:zenithjoy-)?canvas-staging-net)$/.test(name);
 export function createPlan(roster,{sha,image,base}){
   need(/^[a-f0-9]{40}$/.test(sha)&&roster?.source_commit===sha&&roster.schema_version===1,'fixed source mismatch');
   need(/^sha256:[a-f0-9]{64}$/.test(image),'immutable canvas image required');
@@ -45,7 +52,7 @@ export function createPlan(roster,{sha,image,base}){
   }
   const providerEnv={};
   for(const key of credentials){need(typeof roster.providers?.[key]==='string'&&roster.providers[key].trim()&&!/[\r\n\0$]/.test(roster.providers[key]),'missing or unsafe provider credential: '+key);providerEnv[key]=roster.providers[key];}
-  for(const key of ['DASHSCOPE_BASE_URL','DASHSCOPE_WORKSPACE_ID','ALI_VIDEO_HTTPS_PROXY']){
+  for(const key of providerOptions){
     if(roster.providers[key]!==undefined){need(typeof roster.providers[key]==='string'&&!/[\r\n\0]/.test(roster.providers[key]),'invalid production provider setting');providerEnv[key]=roster.providers[key];}
   }
   need(new Set(Object.values(instances)).size===Object.keys(instances).length,'shared retained canvas instance');
@@ -155,6 +162,42 @@ export function mergeImage(root,sha,image,service){
   // configuration it includes is bound to the immutable prepared plan above.
   writeFileSync(file,JSON.stringify(output)+'\n',{mode:0o600});
 }
+function stageWithoutCanvas(service, image, input, file, restore) {
+  need(service==='zenithjoy-api-staging'&&/^sha256:[a-f0-9]{64}$/.test(image),'fixed staging image required');
+  const previous=JSON.parse(readPrivate(input));
+  const previousService=previous.services?.[service];
+  need(previousService&&typeof previousService==='object','previous staging service missing');
+  const previousEnv=previousService.environment||{};
+  need(typeof previousEnv==='object'&&!Array.isArray(previousEnv),'invalid staging environment');
+  const unsetCanvas=Object.keys(retiredCanvasEnvironment).some(key=>Object.hasOwn(previousEnv,key));
+  let output;
+  if(restore) {
+    previousService.image=image;
+    if(unsetCanvas) Object.assign(previousEnv,retiredCanvasEnvironment);
+    if(previousService.environment||unsetCanvas) previousService.environment=previousEnv;
+    if(Array.isArray(previousService.networks)) previousService.networks=previousService.networks.filter(name=>!canvasNetwork(name));
+    else for(const name of Object.keys(previousService.networks||{})) {
+      if(canvasNetwork(name)||canvasNetwork(previous.networks?.[name]?.name||'')) delete previousService.networks[name];
+    }
+    for(const name of Object.keys(previous.networks||{})) {
+      if(canvasNetwork(name)||canvasNetwork(previous.networks[name]?.name||'')) delete previous.networks[name];
+    }
+    output=previous;
+  } else {
+    const environment={...retiredCanvasEnvironment};
+    for(const key of [...credentials,...providerOptions,'STAFF_EMAILS']) {
+      const value=previousEnv[key];
+      if(value!==undefined&&value!==null) {
+        need(typeof value==='string'&&!/[\r\n\0]/.test(value),'unsafe staging provider setting: '+key);
+        environment[key]=value.replaceAll('$','$$$$');
+      }
+    }
+    output={services:{[service]:{image,environment}}};
+  }
+  const temporary=file+'.'+randomUUID();
+  writeFileSync(temporary,JSON.stringify(output)+'\n',{flag:'wx',mode:0o600});
+  try { renameSync(temporary,file); } finally { if(existsSync(temporary)) unlinkSync(temporary); }
+}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   try{
     const [action,...args]=process.argv.slice(2);
@@ -170,6 +213,8 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
       inheritPrepared(...args.slice(0,3));
     }else if(action==='inherit-staging'){
       inheritPrepared(...args.slice(0,3),'staging');
+    }else if(action==='stage-without-comfy'||action==='restore-stage-without-comfy'){
+      stageWithoutCanvas(...args.slice(0,4),action==='restore-stage-without-comfy');
     }else throw Error('usage: prepare ROOT ROSTER SHA IMAGE | verify PLAN | verify-instances PLAN');
   }catch(error){console.error(error.message);process.exitCode=1;}
 }
