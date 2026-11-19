@@ -16,7 +16,7 @@ function fixture(outcome='sent'){
  fields['回复结果']=`[104 ${outcome}:${t.run_tag}:${c.source_commit}] ${hash(fields['话术内容'])} 送达未证`;
  const journal={scope:{...t,company_id:c.company_id,tenant_id:c.tenant_id,line:c.line,source:c.source_commit,profile:c.profile,serial:c.serial,sender_id:c.sender_id,profile_url:s.profile_url,record_id:s.record_id,comment_id:s.comment_id,target_douyin_id:s.target_douyin_id,message_sha256:hash(fields['话术内容'])},terminal_outcome:outcome,terminal_fields:structuredClone(fields)};
  journal.action_key=hash(canonical(journal.scope));
- const native={verified:true,outcome,sent_at_ms:Date.parse(fields['触达时间'])},record={record_id:s.record_id,fields};
+ const native={source_verified:true,outcome,sent_at_ms:Date.parse(fields['触达时间'])},record={record_id:s.record_id,fields};
  const counts={writes:0,connections:0,active:0},control={loseCommit:false,duplicateOutbox:false},queries=[];
  const pool={async connect(){counts.connections++;counts.active++;let closed=false;return {release(){assert.equal(closed,false);closed=true;counts.active--;},async query(sql,args=[]){queries.push({sql,args});
   if(/^(BEGIN|ROLLBACK|SET LOCAL)/.test(sql))return {rows:[]};
@@ -44,7 +44,7 @@ for(const outcome of ['restricted','rate_limited'])test('PG '+outcome+' is block
  const f=fixture(outcome),r=await syncLeadResult(f.args);assert.equal(r.lead.status,'触达受阻');assert.equal(r.lead.send_status,'发送失败');assert.equal(r.delivery_verified,false);
 });
 test('PG unknown or unproven native outcome performs zero database operations',async()=>{
- for(const mutate of [f=>f.journal.terminal_outcome='unknown',f=>f.native.verified=false,f=>f.native.outcome='unknown']){
+ for(const mutate of [f=>f.journal.terminal_outcome='unknown',f=>f.native.source_verified=false,f=>f.native.outcome='unknown']){
   const f=fixture();mutate(f);await assert.rejects(syncLeadResult(f.args),/LEAD_NATIVE_TERMINAL/);assert.equal(f.counts.connections,0);
  }
 });

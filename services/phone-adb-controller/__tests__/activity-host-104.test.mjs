@@ -60,7 +60,7 @@ test('original prepared order recovery never repeats PUT and unknown never clear
  const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),s=f.context.verification['104'];
  const row={record_id:s.record_id,fields:{'抖音号':s.target_douyin_id,'主页链接':s.profile_url,'状态':'待触达','发送状态':'未发送'}};
  const counts={put:0,get:0,native:0};let outcome='unknown';
- const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[structuredClone(row)],get:async()=>{counts.get++;return structuredClone(row);},fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,fields)=>{counts.put++;Object.assign(row.fields,fields);if(counts.put===1)throw Error('response-lost-after-committed-put');}},freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),checkPreflight:async()=>({verified:true}),checkNative:async()=>{counts.native++;return {verified:outcome==='sent',outcome,sent_at_ms:Date.now()};},close:async()=>{}};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[structuredClone(row)],get:async()=>{counts.get++;return structuredClone(row);},fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,fields)=>{counts.put++;Object.assign(row.fields,fields);if(counts.put===1)throw Error('response-lost-after-committed-put');}},freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),readSendFacts:async()=>{counts.native++;return {source_verified:outcome==='sent',outcome,sent_at_ms:Date.now()};},close:async()=>{}};
  const args={context:f.context,scope:s,artifact_dir:path.join(f.root,'orders'),evidence:{}};
  assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(counts.put,1);
  assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(counts.put,1);
@@ -146,7 +146,7 @@ test('original order adapter keeps same-UID prohibition and daily 100 limit with
  const own={record_id:scope.record_id,fields:{'抖音号':scope.target_douyin_id,'主页链接':scope.profile_url,'状态':'待触达','发送状态':'未发送'}};
  const makeOther=i=>({record_id:'previous-order-'+i,fields:{'抖音号':'other-person-'+i,'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 unknown:old-run:old-source]','状态':'触达中'}});
  let prior=[makeOther(0)],row=own;const args={context:f.context,scope,artifact_dir:path.join(f.root,'budget-orders'),evidence:{}};
- const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0}),checkPreflight:async()=>({verified:true}),close:async()=>{}};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),close:async()=>{}};
  assert.equal((await request({...args,op:'inspect'},deps)).status,'ready');assert.equal(puts,0);
  prior[0].fields['抖音号']=scope.target_douyin_id;await assert.rejects(request({...args,op:'claim'},deps),/RECIPIENT_RESERVED/);assert.equal(puts,0);
  prior=[makeOther(0)];assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(puts,1);
@@ -167,8 +167,8 @@ function stateFixture(f){
  const counts={put:0,pg:0};
  const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,
  api:{all:async()=>[structuredClone(row)],get:async()=>structuredClone(row),fields:async()=>[{field_name:'触达时间',type:1}],put:async(_id,v)=>{counts.put++;Object.assign(row.fields,v);}},
- freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),checkPreflight:async()=>({verified:true}),
- checkNative:async()=>({verified:true,outcome:'sent',sent_at_ms:1795000000000}),syncLead:async()=>{counts.pg++;return {lead:{id:s.lead_id,status:'已触达'}};},readLead:async()=>({lead:{id:s.lead_id}}),close:async()=>{}};
+ freshRuntime:async()=>({verified:true,pause:false,halt:false,today_dm_attempts:0,today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),
+ readSendFacts:async()=>({source_verified:true,outcome:'sent',sent_at_ms:1795000000000}),syncLead:async()=>{counts.pg++;return {lead:{id:s.lead_id,status:'已触达'}};},readLead:async()=>({lead:{id:s.lead_id}}),close:async()=>{}};
  return {row,counts,deps,args:{context:f.context,scope:s,artifact_dir:path.join(f.root,'orders'),evidence:{}}};
 }
 test('104 own unprepared claim releases once through assembled adapter and returns original readback',async()=>{

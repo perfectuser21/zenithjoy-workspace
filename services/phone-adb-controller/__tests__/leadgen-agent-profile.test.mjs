@@ -1,7 +1,9 @@
 import test from'node:test';import assert from'node:assert/strict';import fs from'node:fs';import{fileURLToPath}from'node:url';import{parse}from'yaml';
+import{createHash}from'node:crypto';
 import{projectAgentProfile,verifyAgentProfile}from'../leadgen-foundation/profile-contract.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url)),names=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'];
 const documents=Object.fromEntries(names.map(n=>[n,parse(fs.readFileSync(root+'product-map/contracts/'+n+'.yaml','utf8'))]));
+const digest=x=>createHash('sha256').update(JSON.stringify(x,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v)).digest('hex');
 const original=i=>JSON.parse(fs.readFileSync(root+'services/phone-adb-controller/leadgen-foundation/profiles/'+i+'.json'));
 for(const [i,workflow]of names.entries())test('Workflow '+(101+i)+' derives its entire acceptance and budget from the actual authority',()=>{
  const p=projectAgentProfile(original(101+i),{documents,workflow});assert.equal(verifyAgentProfile(p,{documents,workflow}),true);
@@ -15,6 +17,6 @@ for(const [i,workflow]of names.entries())test('Workflow '+(101+i)+' derives its 
 test('actual registered B authority drift and incomplete criteria are rejected',()=>{
  const workflow=names[1],p=projectAgentProfile(original(102),{documents,workflow});const changed=structuredClone(documents);changed[workflow].activities.find(x=>x.key==='dedup').postconditions[0].asserts+=' changed';
  assert.throws(()=>verifyAgentProfile(p,{documents:changed,workflow}),/CONTRACT_AUTHORITY_DRIFT/);
- const removed=structuredClone(p);removed.contract.activities[0].acceptance.criteria.pop();assert.throws(()=>verifyAgentProfile(removed,{documents,workflow}),/CONTRACT_ACCEPTANCE_DRIFT/);
+ const removed=structuredClone(p);removed.contract.activities[0].acceptance.criteria.pop();removed.profile.leadgen.contract_sha256=digest(removed.contract);assert.throws(()=>verifyAgentProfile(removed,{documents,workflow}),/CONTRACT_ACCEPTANCE_DRIFT/);
  const budget=structuredClone(p);budget.contract.activities[0].budget.max_duration_s++;assert.throws(()=>verifyAgentProfile(budget,{documents,workflow}),/PROFILE_CONTRACT/);
 });

@@ -69,7 +69,7 @@ export async function readLeadResult({pool,context:c,scope:s}){
 }
 function terminalFields(c,s,j,row,native){
  const t=scopeOf(c,s),outcome=j?.terminal_outcome;
- need(['sent','restricted','rate_limited'].includes(outcome)&&native?.verified===true&&native.outcome===outcome,'LEAD_NATIVE_TERMINAL');
+ need(['sent','restricted','rate_limited'].includes(outcome)&&native?.source_verified===true&&native.outcome===outcome,'LEAD_NATIVE_TERMINAL');
  need(j.scope?.task_id===t.task_id&&j.scope?.run_id===t.run_id&&j.scope?.run_tag===t.run_tag&&j.scope?.company_id===c.company_id&&j.scope?.tenant_id===c.tenant_id&&j.scope?.record_id===s.record_id&&j.scope?.comment_id===s.comment_id&&j.scope?.target_douyin_id===s.target_douyin_id,'LEAD_ACTION_SCOPE');
  need(j.scope.source===(c.marker_source||c.source_commit)&&j.scope.line===c.line&&j.scope.profile===c.profile&&j.scope.serial===c.serial&&j.scope.sender_id===c.sender_id&&j.scope.profile_url===s.profile_url&&j.action_key===hash(canonical(j.scope)),'LEAD_ACTION_SCOPE');
  need(row?.record_id===s.record_id&&j.terminal_fields&&equal(row,j.terminal_fields),'LEAD_ORDER_TERMINAL');
