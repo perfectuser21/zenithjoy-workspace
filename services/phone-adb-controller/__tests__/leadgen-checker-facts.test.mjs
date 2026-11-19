@@ -44,3 +44,18 @@ test('authority is required and merged output cannot replace frozen tenant, scop
  }
  const db=database();delete db.readAuthority;assert.equal((await readFacts(request('pg.rows',{relation:'videos'}),db)).status,'unavailable');assert.equal(db.calls.length,0);
 });
+
+test('103 bound comments resolve original video facts without eligibility filters',async()=>{
+ const db=database([{transcript:'original words'}]);const c={...context,assigned_workflow:'103',tasks:{103:context.tasks[102]},verification:{103:{comment_ids:['00000000-0000-4000-8000-000000000001']}}};db.readAuthority=async()=>c;
+ const out=await readFacts({...request('pg.rows',{relation:'videos'}),context:c},db);
+ assert.equal(out.status,'available');const q=db.calls.find(x=>x.sql?.includes('FROM zenithjoy.leadgen_videos'));assert.match(q.sql,/leadgen_comments/);assert.match(q.sql,/source_video_url/);assert.ok(q.args.some(x=>Array.isArray(x)&&x.includes(c.verification[103].comment_ids[0])));assert.doesNotMatch(q.sql,/judgment_status\s*=/);
+});
+test('current company configuration remains visible before a run snapshot exists',async()=>{
+ const db=database([{config_status:'disabled',config_version:34}]);
+ const out=await readFacts(request('pg.rows',{relation:'company'}),db);assert.equal(out.status,'available');assert.equal(out.facts.rows[0].config_status,'disabled');
+ const q=db.calls.find(x=>x.sql?.includes('tenant_company_profiles'));assert.deepEqual(q.args,['fixture-company','fixture-tenant']);assert.doesNotMatch(q.sql,/config_status\s*=/);
+});
+test('PG evidence records actual connection identity and transaction read-only state',async()=>{
+ const db=database();const out=await readFacts(request('pg.rows',{relation:'videos'}),db);
+ assert.ok(db.calls.some(x=>x.sql?.includes('current_database()')&&x.sql.includes('transaction_read_only')));assert.ok(Object.hasOwn(out.facts,'connection'));
+});
