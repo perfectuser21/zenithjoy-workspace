@@ -124,14 +124,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -152,7 +152,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -288,13 +288,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_video_processing.preflight": {
@@ -420,14 +420,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -448,7 +448,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -584,7 +584,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
+        "reviewed_by": "session:cloud-phone-verify-20261117",
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
+      }
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.3.0",
@@ -709,14 +716,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -737,7 +744,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -873,13 +880,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1010,14 +1017,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -1038,7 +1045,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -1174,13 +1181,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_video_processing.collection": {
@@ -1306,14 +1313,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -1334,7 +1341,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -1470,13 +1477,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1602,14 +1609,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -1630,7 +1637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -1766,7 +1773,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
+        "reviewed_by": "session:cloud-phone-verify-20261117",
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
+      }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.9.0",
@@ -1896,14 +1910,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -1924,7 +1938,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -2060,13 +2074,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2197,14 +2211,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -2225,7 +2239,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -2361,13 +2375,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2493,14 +2507,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -2521,7 +2535,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -2657,7 +2671,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
+        "reviewed_by": "session:cloud-phone-verify-20261117",
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
+      }
     },
     "douyin_lead_outreach.send_dm": {
       "activity_version": "6.1.0",
@@ -2782,14 +2803,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -2810,7 +2831,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -2946,13 +2967,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3078,14 +3099,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -3106,7 +3127,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -3242,13 +3263,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已逐项核对，变化仅在宿主装配与独立事实读取。此 Activity 的完整契约、执行 Skill、业务工具和交付判定保持原字节。",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "6adf2cc34443b6efcbaf17618f022208c65f503e7cb793ec1a64a41ea961d7d1",
-        "current_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3374,14 +3395,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "9a02941d698bfd8f0d1b02245957cc93708112207f1ba7a8ae3951c233d1fabc"
+          "sha256": "f0d98c62436d060877ebd5796fc64fa8250d263fbfa07ed13cdf1851d13999eb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "8cb99bf38a099b3c86e4c850234e4c2612193f264188f22ee05cc88ac1f83faa"
+          "sha256": "5a7612b5d7c764e3d73ee155bf6c6e78d9249d0f76a2fdbfcb680baa684bb48a"
         },
         {
           "kind": "code",
@@ -3402,7 +3423,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "023cce73ba95ed4fde62f40229582210b83382b50cf2519abe3051fb4a46ab44"
+          "sha256": "5f781fb513cacb412e7d1b0de216f2ee2f297f3a0dc68ea1946e58ba3f148a88"
         },
         {
           "kind": "code",
@@ -3538,7 +3559,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc"
+      "code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "公共交付说明独立生成，Checker 指引更明确，原工具原件和运行权限保持原字节。逐项核对执行 Skill 和完整契约没有业务变化。",
+        "reviewed_by": "session:cloud-phone-verify-20261117",
+        "previous_code_digest": "d3e85ab52e65aeb1db14c176d589d87e771bde6acc032775bf9585e398245ecc",
+        "current_code_digest": "564dcb1b9cae2523638af1d07e00ebd690dc91fcf49366dd8e476393c9c4d802"
+      }
     }
   },
   "workflows": {
