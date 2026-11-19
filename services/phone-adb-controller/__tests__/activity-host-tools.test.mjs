@@ -163,6 +163,7 @@ test('102 typed host retains COS and original methods while rendering current in
  assert.equal(v.result.error,'BUSINESS_ACTIVITY_SCOPE');assert.equal(v.result.data.dispatched,false);
  assert.deepEqual(v.result.data.allowed_operations,['claim_videos','inspect_videos','renew_video']);assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});
  assert.equal(r.replay.stdout,r.first.stdout);assert.equal(r.second.rc,0);assert.deepEqual(r.calls,{dispatch:1,credentials:1,resource:1});
+ assert.doesNotMatch(r.instructions,/native_artifacts\.py|artifact_checker|gate-contract\.md/);
  assert.equal(r.original,fixture102.files['TOOLS.txt'].source);assert.match(r.tools,/COS_SECRET_ID/);assert.match(r.tools,/COS_SECRET_KEY/);
  assert.match(r.instructions,/7711111111111111111/);assert.match(r.instructions,/37/);assert.match(r.instructions,/fixture-new-run/);assert.match(r.instructions,/a{40}/);
  for(const old of ['7707600173446204723','原97e','r7原件','caa47f8ba3ae','00:58','至少14秒','约90秒墙钟'])assert.ok(!r.instructions.includes(old),old);
