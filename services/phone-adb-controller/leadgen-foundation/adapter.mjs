@@ -54,6 +54,7 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
   recoverHost({directory:hostRoot,identity,expectedFiles});prepareProof(context);verifyRuntime(context);
  };
  const skill_runtime=structuredClone(profile.skill_runtime);
+ skill_runtime.tools='agent-tools.txt';
  if(workflow==='104'){const command=path.join(hostRoot,'codex-exact');need(!!(fs.statSync(command).mode&0o100),'CODEX_EXECUTABLE');skill_runtime.codex={...skill_runtime.codex,env_keys:[...new Set([...(skill_runtime.codex?.env_keys??[]),...EXACT_ENV_KEYS])],command,command_sha256:hash(fs.readFileSync(command))};}
  skill_runtime.host_tools={...skill_runtime.host_tools,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath)),entry:'invoke.mjs'};
  for(const spec of Object.values(skill_runtime.activities)){need(spec.checker?.mode==='agent','AGENT_CHECKER_REQUIRED');spec.checker.evidence.provider={...spec.checker.evidence.provider,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath))};}

@@ -95,7 +95,7 @@ export async function assembleSources({context:c,profile,contract,hostRoot,ident
    files[file]=files[file].replace(legacy,"path.join(profileRoot,'native-identity.py')").replace('c.verification.artifact_checker','c.verification.native_identity_reader');
    const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
   }
-  files['TOOLS.txt']+='\n交付协议：最终只输出一个 JSON 对象，成功提案必须包含顶层 `outputs`。\n'
+  files['agent-tools.txt']=files['TOOLS.txt']+'\n交付协议：最终只输出一个 JSON 对象，成功提案必须包含顶层 `outputs`。\n'
    +'`outputs` 的键是合同声明的对象类型，值按 cardinality 提交单对象或数组；字段使用当前合同中的原名。把已核实的字段放进对象，禁止只写在提案顶层、解释文字或 metrics。\n'
    +'按工具实际回执填写 `evidence`：列出本次真实文件的相对路径及其用途，例如从工具响应 receipt 得到的 receipts/ 实际文件名。不要猜测路径或用旧运行证据；外部原件说明实际工具和证据标识。交付不齐时如实报告，独立 Checker 仍逐项核验。\n';
   delete c.checker_media_tool;
