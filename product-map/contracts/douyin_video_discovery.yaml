@@ -1,5 +1,5 @@
 version: 1
-runtime: { "kind": "commander-foundation-v1", "profile_ref": { "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:64f8b6edeec82146106fab851304d1bf9fb828644795c1926831af81b8020d7b" }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "keyword", "search_filters", "max_candidates" ], "properties": { "keyword": { "type": "string", "minLength": 1, "maxLength": 100 }, "search_filters": { "type": "object" }, "max_candidates": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/101.json, revision: 564be76576744f976b18e6bb04d7f7e6cb316398, digest: sha256:f37d55215a95ee872d1339291f9d228d90a1e4ee9ef1c4bd1b98a88b8b169452 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "keyword", "search_filters", "max_candidates" ], "properties": { "keyword": { "type": "string", "minLength": 1, "maxLength": 100 }, "search_filters": { "type": "object" }, "max_candidates": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/101.json
 implementation:
@@ -170,537 +170,216 @@ activities:
       executor_kind: agent
       protocol: json-stdio-v1
     implementation_bindings:
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:64f8b6edeec82146106fab851304d1bf9fb828644795c1926831af81b8020d7b" }
-      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:85eaad92ab2b25740e53a1044163cf2d259526f1a941d9bc8ddf2fc746fd6c6f" }
-      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:49d82c198deff99c2794cb4cf5256c1604ac3be41664d5d020e67fe8d7ec6dca" }
-      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:bfa727c5e003884f0210a0e2b01186f17844311cf8bbbb1ecf038165cfba7236" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/worker.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/freeze.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/asr.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-authorization-intent.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-upstream-source.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-pg.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-tools.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-tool-result.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-104.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-runtime.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-transport.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-outreach-scope.js", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7" }
-      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/package.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8" }
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-execution.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/profiles/101.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:f37d55215a95ee872d1339291f9d228d90a1e4ee9ef1c4bd1b98a88b8b169452
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer-authority.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-104-context.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer-host.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-104-runtime.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer-private-env.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-104-state-wiring.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer-protocol.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-104-state.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer-runtime.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-104-transport.py
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer-transport.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-host-104.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-peer.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-host-pg.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-phone-audio-transfer.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-host-tools.py
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:7f249d234165ad92187194d5550cd07ff1596e31781877baa6db176855a69f03
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-operation-admission.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-native-facts.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-scope-admission.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-native-identity.py
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-runtime.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-tool-result.py
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-vision.mjs
-        revision: contract
+        path: services/phone-adb-controller/activity-upstream-source.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-vision-step.py
-        revision: contract
+        path: services/phone-adb-controller/judge-comment.js
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/locate-element.py
-        revision: contract
+        path: services/phone-adb-controller/leadgen-authorization-intent.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-clip-state.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-committed-partial.js
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-adb-read.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:a0961d14e3c9de21a62d1313fe6acb3c501325c82e4d69e4d83170541839af59
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-command-source.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:05fe1c3b071f5277eb5f07f9580447286f071fec7cdeb91ee9a8e847e888d37c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/adb-shell-v2.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:a20a13b86b37dda11bc5f8dc5f78c52b471923542983ee13677da40d9deda326
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/adb-shell-v2-protocol.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:0bc6908d5db8f79661c8c036b8970caa1ee6fc7563a566561c4e0dbddb3dfd65
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-local-producer.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:cdaca246c291dadd5b0be4dd25cc9aa1e46c34140717f3d54da1e568e2cb10fe
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-ui.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/context.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-ui-step.py
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-search-macros.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-search-step.py
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-link-macros.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-link-step.py
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-queue.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-preflight-adapter.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-phone-link-resolver.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/sources/101.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:01b6e261cf13545e8e51722ef51c821609bc874a0b403de0f2615bb392ee48db
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/clipboard-widget-cancel.py
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/sources/102.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/native-phone-command-sources.json
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/sources/103.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/native-phone-reviews/jinoshengyuan-work-sdk36-xian-m4.json
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/sources/104.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/native-phone-pillow-mmv.json
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/native-phone-pillow-xian-m4.json
-        revision: contract
+        path: services/phone-adb-controller/leadgen-foundation/worker.mjs
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/native-phone-reviews/xiaolongxia-sdk35-xian-m4.md
-        revision: contract
+        path: services/phone-adb-controller/leadgen-outreach-scope.js
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/native-phone-reviews/cloud-phone-test-sdk31.md
-        revision: contract
+        path: services/phone-adb-controller/leadgen-queue.js
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:29c9a3cd9c91dbeb48265058bb100c2604de6408d3ead40c71f6b577c36da26c
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-scoring-workflow.mjs
-        revision: contract
+        path: services/phone-adb-controller/leadgen-score-context.js
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-scoring-runtime.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-scoring-producers.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-scoring-control.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-activity-authority.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-task-lease.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-scoring-readback.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-judge.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-local-leaves.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-local-step.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-metadata.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-native-domain.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-pg-stream.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-phone-driver.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-control-scope.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-phone-scope.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/preflight-control-hosts.json
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-pg-dependencies.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/preflight-pg-lock.json
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-root.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runtime-receipts.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/ledger.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/verify-step.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/checks/probes-lib.js
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/discovery-cleanup-readback.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/common-runner/source.json
-        revision: contract
+        path: services/phone-adb-controller/package.json
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
-        revision: contract
-        name: douyin-leadgen-activity-101-collect-videos
-        version: 0.9.0
-      - kind: code
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:31ed4a2f2b750c21a2ad28e497a8125f03d64d550f94e2a5057628766446668b
+      - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-parent-loop.mjs
-        revision: contract
-      - kind: code
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:a765bbca056db747e568d47a2d71f1a92e93d1e16ebeec38cd74524c66b733c3
+      - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-broker-client.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/control-acceptance-tools.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runner-official-commander.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-agent-control.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-gateway-runtime.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-gateway-runtime.json
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-commander-sdk.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-model-turn.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/raw-turn-budget.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander-bounded-owner.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-gateway-dependencies.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/vendor/official-gateway-sdk.json
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/vendor/official-gateway-client.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/vendor/official-gateway-client.LICENSE.txt
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-executor.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-primary-broker.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-agent-tools.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-agent-artifacts.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/own-accounts-lib.js
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-recovery.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-broker.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-skill-tool.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-skill-agent.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-client.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/native-operation-receipt.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/collection-phone-scope.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/collection-acceptance-probe.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/config/collection-phone-hosts.json
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-video-action.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/collection-leaf-producer.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runtime-outbox.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runtime-binding.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-rpc.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander/wf-agent-handoff.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander/wf-agent-lib.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runtime-definition.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runtime-host.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/runtime-release.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/douyin-phone-adb
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/search-video-tab.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-lib.sh
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-helper.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-workflow.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-handlers.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/adb-existing-route.py
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-scoring-handler.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-policy-review.js
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/capture-strategy.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-activity.sh
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-commander.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander-model-receipt.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-owner-read-connection.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/official-skill-owner.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander-owner-state.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander-owner-lock.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/commander-owner-reconcile.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-discovery.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/discovery-metrics.js
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/discovery-metrics-queue.js
-        revision: contract
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
+        revision: 564be76576744f976b18e6bb04d7f7e6cb316398
+        digest: sha256:ca381f41355ddcb2fc44a6d02aea0fc3500c0c708d51adee2f3f3a0a401a69be
     model:
       - provider: openrouter
         model: bytedance/ui-tars-1.5-7b
