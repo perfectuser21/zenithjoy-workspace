@@ -70,3 +70,22 @@ test('media metadata names are bounded to this run and cannot launch caller comm
  assert.equal((await readFacts(request('media.inspect',{name:'run-v7709208240869657011.wav'}),deps)).status,'available');
  for(const args of [{name:'foreign.wav'},{name:'run/../clip.wav'},{name:'run-clip.wav',command:'arbitrary'}])assert.equal((await readFacts(request('media.inspect',args),deps)).status,'unavailable');assert.equal(calls.length,1);
 });
+
+
+test('current run progress exposes activity starts and terminal status without model usage or verdicts',async()=>{
+ const identity={task_id:'task',run_id:'run'};
+ const deps={readAuthority:async()=>context,readLedger:async bound=>{
+  assert.deepEqual(bound,identity);
+  return {identity,calls:[{role:'checker',activity_key:'preflight',status:'completed'},
+   {role:'activity',activity_key:'cleanup',action_id:'action',status:'prepared',dispatch_status:'unknown',started_at_ms:123,usage:{internal:42}}],
+   attempts:[],observations:[{activity_key:'preflight',kind:'checker',phase:'start',status:'blocked',started_at_ms:100}]};
+ }};
+ const answer=await readFacts(request('run.progress'),deps);
+ assert.equal(answer.status,'available');
+ assert.deepEqual(answer.facts.activity_calls,[{activity_key:'cleanup',action_id:'action',status:'prepared',dispatch_status:'unknown',started_at_ms:123}]);
+ assert.equal(answer.facts.observations[0].activity_key,'preflight');
+ assert.doesNotMatch(JSON.stringify(answer),/usage|internal|verdict/);
+ const bad={...deps,readLedger:async()=>({identity:{task_id:'foreign',run_id:'run'},calls:[],attempts:[],observations:[]})};
+ assert.equal((await readFacts(request('run.progress'),bad)).status,'unavailable');
+ assert.equal((await readFacts(request('run.progress',{run_id:'foreign'}),deps)).status,'unavailable');
+});

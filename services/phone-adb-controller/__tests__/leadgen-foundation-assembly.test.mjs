@@ -6,6 +6,20 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   const before=Date.now(),a=await prepareLeadgenHost(f);assert.equal(a.receipt.status,'assembled_not_started');
   assert.ok(a.receipt.assembled_at_ms>=before);assert.equal(a.context.run_start_ts,undefined);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);
+  const binding=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'checker-input/identity.json'),'utf8'));
+  assert.deepEqual(binding.binding,a.receipt.identity);
+  assert.equal(binding.business_deadline_ms,f.run.deadline_ms);
+  assert.equal(binding.cleanup_deadline_ms,f.run.cleanup_deadline_ms);
+  assert.equal(binding.expected_sender_id,a.context.sender_id??a.context.account);
+  assert.equal(binding.binding_key,f.run.input.binding_key);
+  assert.equal(binding.credentials,undefined);
+  if(workflow==='104'){
+   assert.equal(binding.approved_send.asset_sha256,a.context.authorization_asset.sha256);
+   assert.equal(binding.approved_send.root_task_id,f.run.task_id);
+   assert.equal(binding.approved_send.max_send_attempts,1);
+   assert.equal(binding.approved_send.message,undefined);
+   assert.equal(binding.approved_send.path,undefined);
+  }
   assert.deepEqual(fs.readdirSync(path.join(a.profile.cwd,'receipts')),['.keep']);assert.deepEqual(fs.readdirSync(path.join(a.profile.cwd,'outreach-receipts')),['.keep']);
   const contextFile=path.join(a.profile.cwd,'context.json'),bytes=fs.readFileSync(contextFile),mtime=fs.statSync(contextFile).mtimeMs;
   const {canonical}=await import('../leadgen-foundation/context.mjs');f.run.input=JSON.parse(canonical(f.run.input));
