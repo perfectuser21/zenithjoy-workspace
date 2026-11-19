@@ -20,6 +20,8 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
    assert.match(tools,/invoke.*evidence_ref.*receipts\//);
    assert.match(tools,/不必重新读取原回执/);
    assert.match(tools,/discovery_metrics_observed_at/);
+   assert.match(tools,/收尾.*snapshot-evidence.*fetch-native/);
+   assert.match(tools,/run\.progress.*Checker/);
    assert.ok(a.receipt.files['business-runtime/discovery-metrics-queue.js']);
   }
   for(const runtime of Object.values(a.profile.skill_runtime.activities)){
