@@ -475,6 +475,7 @@ def adb_shim(argv):
                     local, remote = (rest[1], rest[2]) if rest[0] == 'forward' else (rest[2], rest[1])
                     allowed = bool(re.fullmatch(r'tcp:[0-9]{1,5}', local) and
                                    re.fullmatch(r'localabstract:scrcpy_[0-9a-f]{8}', remote))
+                    if allowed and rest[0] == 'forward': argv = ['-s', serial, 'forward', '--no-rebind', local, remote]
         if not allowed:
             raise RuntimeFailure('ADB shim refuses unrelated command or target')
         require_adb_client(config['adb_bin'])
@@ -485,7 +486,6 @@ def adb_shim(argv):
     except (RuntimeFailure, OSError, ValueError) as error:
         print('pinned ADB shim refused: ' + str(error), file=sys.stderr)
         return 75 if getattr(error, 'unknown', False) else 64
-
 
 def main(argv=None):
     import runpy

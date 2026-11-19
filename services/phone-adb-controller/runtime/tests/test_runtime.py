@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 import socket
+import subprocess
 import threading
 import unittest
 from types import SimpleNamespace
@@ -195,6 +196,46 @@ class ShimTests(RuntimeFixture):
         return self.shim(['-s', self.config['serial'], 'push',
                           str(self.package / 'scrcpy-server'),
                           '/data/local/tmp/scrcpy-server.jar'])
+
+    def test_forward_create_never_rebinds_another_mapping(self):
+        mapping = self.remote / 'forward.json'
+        original = {'tcp:27183': 'localabstract:another_owner'}
+        mapping.write_text(json.dumps(original))
+        def execute(path, argv, env):
+            result = subprocess.run(argv, executable=path, env=env, capture_output=True, timeout=3)
+            raise SystemExit(result.returncode)
+        with patch.object(self.runtime.os, 'execve', side_effect=execute):
+            for port, expected in [('27183', 1), ('27184', 0)]:
+                with self.assertRaises(SystemExit) as stopped:
+                    self.shim(['-s', self.config['serial'], 'forward', 'tcp:'+port, 'localabstract:scrcpy_12345678'])
+                self.assertEqual(stopped.exception.code, expected)
+                self.assertEqual(json.loads(mapping.read_text())['tcp:27183'], original['tcp:27183'])
+        self.assertEqual(json.loads(mapping.read_text())['tcp:27184'], 'localabstract:scrcpy_12345678')
+        rows = [json.loads(line) for line in self.log.read_text().splitlines()]
+        self.assertTrue(all(row[6:8] == ['forward', '--no-rebind'] for row in rows))
+
+    def test_forward_protection_does_not_expand_commands_or_change_removal(self):
+        prefix = ['-s', self.config['serial']]
+        with patch.object(self.runtime.os, 'execve') as execute:
+            for rest in [['forward', '--remove-all'], ['forward', '--no-rebind', 'tcp:27183', 'localabstract:scrcpy_12345678'],
+                         ['forward', 'tcp:27183', 'localabstract:foreign'], ['forward', 'tcp:27183', 'tcp:1234']]:
+                self.assertEqual(self.shim(prefix+rest), 64)
+                execute.assert_not_called()
+            self.assertEqual(self.shim(['-s', 'foreign', 'forward', 'tcp:27183', 'localabstract:scrcpy_12345678']), 64)
+            execute.assert_not_called()
+            for rest in [['forward', '--remove', 'tcp:27183'], ['reverse', 'localabstract:scrcpy_12345678', 'tcp:27183'],
+                         ['reverse', '--remove', 'localabstract:scrcpy_12345678']]:
+                self.shim(prefix+rest)
+                self.assertEqual(execute.call_args.args[1][5:], prefix+rest)
+                execute.reset_mock()
+
+    def test_forward_guard_failures_never_exec(self):
+        args = ['-s', self.config['serial'], 'forward', 'tcp:27183', 'localabstract:scrcpy_12345678']
+        for guard in ['require_owner', 'verify_runtime', 'require_existing_server']:
+            with patch.object(self.runtime, guard, side_effect=self.runtime.RuntimeFailure('fixture denied')), \
+                 patch.object(self.runtime.os, 'execve') as execute:
+                self.assertEqual(self.shim(args), 64)
+                execute.assert_not_called()
 
     def test_exact_push_only_reuses_bound_prestage_receipt(self):
         self.prepare_stage()
