@@ -233,3 +233,10 @@ test('104 lead readback returns raw facts and never performs a write',async()=>{
  const f=setup();await candidate(f);const {request}=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/order-adapter.mjs')));const x=stateFixture(f);
  const r=await request({...x.args,op:'lead_readback'},x.deps);assert.equal(r.lead_readback.lead.id,x.args.scope.lead_id);assert.equal(x.counts.put,0);assert.equal(x.counts.pg,0);assert.equal(Object.hasOwn(r,'verified'),false);
 });
+
+test('current assembled 104 contains source facts and no legacy independent business judges',async()=>{
+ const f=setup();await candidate(f);
+ for(const name of ['checker.mjs','cleanup-result.mjs','native-readback.mjs','outreach104/checker104.mjs','outreach104/preserved-checker.mjs','outreach104/native-checker.py','outreach104/native-checker.mjs'])assert.equal(fs.existsSync(path.join(f.targetRoot,name)),false,name);
+ const deps=fs.readFileSync(path.join(f.targetRoot,'outreach104/runtime-deps.mjs'),'utf8'),adapter=fs.readFileSync(path.join(f.targetRoot,'outreach104/order-adapter.mjs'),'utf8');
+ assert.match(deps,/readSendFacts/);assert.match(adapter,/native\.source_verified/);assert.doesNotMatch(adapter,/native\.verified/);
+});
