@@ -181,6 +181,19 @@ test('Workflow索引和Activity未知标题、错版本或缺文件均拒绝，�
  assert.notEqual(digest(changed),digest(original));assert.notEqual(changed.skill.activities[0].sha256,original.skill.activities[0].sha256);
 });
 
+test('101逐VID证据段完整纳入验收，并保留历史版本及未知标题校验',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const method='services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md';
+ const read=path=>readFileSync(new URL('../../../'+path,import.meta.url));
+ const raw=read(method).toString(),section='逐VID交付与证据索引';
+ const block=raw.match(/^## 逐VID交付与证据索引\n([\s\S]*?)(?=^## )/m)[1];
+ const check=content=>skillAcceptanceDefinition('douyin_video_discovery',p=>p===method?Buffer.from(content):read(p));
+ assert.deepEqual(check(raw).checks.filter(c=>c.section==='douyin_video_discovery.collect_videos/'+section).map(c=>c.text),block.trim().split(/\n\s*\n/).map(s=>s.trim()));
+ assert.ok(!check(raw.replace('## '+section+'\n'+block,'')).checks.some(c=>c.section.endsWith('/'+section)));
+ assert.throws(()=>check(raw.replace('## '+section+'\n','## 未声明证据段\n')),/未知或重复/);
+});
+
 test('判重来源分支标题新旧恰一且正文完整进入验收，双标题或缺标题仍拒绝',async()=>{
  const {readFileSync}=await import('node:fs');const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
  const key='douyin_video_processing',method='services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md';
