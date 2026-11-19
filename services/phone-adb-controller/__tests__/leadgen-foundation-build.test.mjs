@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFileSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
 import {buildFoundationBundle,WORKFLOWS} from '../leadgen-foundation/build.mjs';import {hash} from '../leadgen-foundation/context.mjs';
+import {projectAgentProfile} from '../leadgen-foundation/profile-contract.mjs';
 const prefix='services/phone-adb-controller/leadgen-foundation',repo=fileURLToPath(new URL('../../../',import.meta.url));
 test('four published profiles freeze source closure and central skills without an instance identity',()=>{
  for(const [id,key]of Object.entries(WORKFLOWS)){
@@ -23,12 +24,16 @@ function fixture(){
  for(const [r,remote]of [[code,'zenithjoy-workspace'],[skills,'zenithjoy-skills']]){fs.mkdirSync(r);git(r,'init','-q');git(r,'config','user.name','Fixture');git(r,'config','user.email','fixture@example.invalid');git(r,'remote','add','origin','https://github.com/perfectuser21/'+remote+'.git');}
  const commit=r=>{git(r,'add','.');git(r,'-c','core.hooksPath=/dev/null','commit','-qm','test: fixture');return git(r,'rev-parse','HEAD');};
  const skill='documented method';put(skills,'distribution/catalog.json',JSON.stringify({version:1,profiles:{zenithjoy:{files:[{path:'services/phone-adb-controller/skills/method/SKILL.md',source:'business-skills/zenithjoy/services/phone-adb-controller/skills/method/SKILL.md',sha256:hash(skill)}]}}}));put(skills,'business-skills/zenithjoy/services/phone-adb-controller/skills/method/SKILL.md',skill);const methodRevision=commit(skills);put(code,'.skills-source.json',JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',revision:methodRevision,profile:'zenithjoy',loader_sha256:'a'.repeat(64)}));
+ const activity={key:'business',version:'1.0.0',budget:{max_duration_s:10,heartbeat_s:1},inputs:[{type:'Input',fields:['id']}],outputs:[{type:'Output',fields:['id']}],preconditions:[{probe:'input',asserts:'input exists'}],postconditions:[{probe:'output',asserts:'output exists'}],side_effects:[{kind:'internal_write',target:'fixture',description:'fixture scope'}],idempotency:{dedupe_key:'id',on_duplicate:'skip'},failure:{empty_ok:[],retryable:[],fatal:[],needs_human:{cases:[]}}};
+ const authority=Object.fromEntries(Object.values(WORKFLOWS).map(key=>[key,{activities:[structuredClone(activity)]}]));authority[WORKFLOWS['101']].activities=[{ref:WORKFLOWS['102']+'.business'}];
  for(const [id,key]of Object.entries(WORKFLOWS)){
-  put(code,prefix+'/profiles/'+id+'.json',JSON.stringify({schema_version:1,contract:{workflow:key},profile:{leadgen:{workflow:id,method_repository:'perfectuser21/zenithjoy-skills',method_revision:methodRevision},files:{'source.mjs':hash('export {};'),'services/phone-adb-controller/skills/method/SKILL.md':hash(skill)}}}));
+  const base={schema_version:1,contract:{workflow:key,activities:[{key:'business',runtime:{phase:'source'},budget:activity.budget}]},profile:{skill_runtime:{activities:{business:{checker:{timeout_ms:10000}}}},leadgen:{workflow:id,method_repository:'perfectuser21/zenithjoy-skills',method_revision:methodRevision},files:{'source.mjs':hash('export {};'),'services/phone-adb-controller/skills/method/SKILL.md':hash(skill)}}};
+  put(code,prefix+'/profiles/'+id+'.json',JSON.stringify(projectAgentProfile(base,{documents:authority,workflow:key})));
   put(code,prefix+'/schemas/'+id+'.json','{"type":"object"}');
  }
  put(code,'source.mjs','export {};');const profileRevision=commit(code);put(code,'business.mjs','export const business = true;');
- for(const [id,key]of Object.entries(WORKFLOWS)){const profilePath=prefix+'/profiles/'+id+'.json';put(code,'product-map/contracts/'+key+'.yaml',JSON.stringify({activities:[{key:'business',implementation_bindings:[{kind:'code',repo:'perfectuser21/zenithjoy-workspace',revision:'contract',path:'business.mjs'},{kind:'skill',repo:'perfectuser21/zenithjoy-workspace',revision:'contract',path:'services/phone-adb-controller/skills/method/SKILL.md'}]}],runtime:{kind:'commander-foundation-v1',profile_ref:{repo:'perfectuser21/zenithjoy-workspace',path:profilePath,revision:profileRevision,digest:'sha256:'+hash(fs.readFileSync(path.join(code,profilePath)))},timeout_ms:2400000,input_schema:{type:'object'}}}));}
+ for(const [id,key]of Object.entries(WORKFLOWS)){const profilePath=prefix+'/profiles/'+id+'.json';put(code,'product-map/contracts/'+key+'.yaml',JSON.stringify({activities:[{...structuredClone(activity),implementation_bindings:[{kind:'code',repo:'perfectuser21/zenithjoy-workspace',revision:'contract',path:'business.mjs'},{kind:'skill',repo:'perfectuser21/zenithjoy-workspace',revision:'contract',path:'services/phone-adb-controller/skills/method/SKILL.md'}]}],runtime:{kind:'commander-foundation-v1',profile_ref:{repo:'perfectuser21/zenithjoy-workspace',path:profilePath,revision:profileRevision,digest:'sha256:'+hash(fs.readFileSync(path.join(code,profilePath)))},timeout_ms:2400000,input_schema:{type:'object'}}}));}
+ const first='product-map/contracts/'+WORKFLOWS['101']+'.yaml',one=JSON.parse(fs.readFileSync(path.join(code,first)));one.activities=[{ref:WORKFLOWS['102']+'.business'}];put(code,first,JSON.stringify(one));
  const revision=commit(code);
  return {root,code,skills,revision,profileRevision,methodRevision,git,put,commit,close:()=>fs.rmSync(root,{recursive:true,force:true})};
 }
@@ -72,5 +77,11 @@ test('publisher installation follows explicit shared Activity refs and rejects b
   assert.equal(b.workflows[0].definition_bindings.length,2);assert.ok(b.workflows[0].definition_bindings.every(x=>x.revision===b.revision));
   const q='product-map/contracts/'+WORKFLOWS['102']+'.yaml',other=JSON.parse(fs.readFileSync(path.join(f.code,q)));other.activities[0].implementation_bindings[0].digest='sha256:'+'0'.repeat(64);f.put(f.code,q,JSON.stringify(other));f.commit(f.code);
   assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'bad-binding')}),/BUILD_BINDING_DIGEST/);assert.equal(fs.existsSync(path.join(f.root,'bad-binding')),false);
+ }finally{f.close();}
+});
+
+test('bundle rejects profile acceptance from a different authoritative B before writing',()=>{
+ const f=fixture();try{const p='product-map/contracts/'+WORKFLOWS['102']+'.yaml',d=JSON.parse(fs.readFileSync(path.join(f.code,p)));d.activities[0].postconditions[0].asserts='new authoritative requirement';f.put(f.code,p,JSON.stringify(d));f.commit(f.code);
+  assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'semantic-drift')}),/CONTRACT_AUTHORITY_DRIFT/);assert.equal(fs.existsSync(path.join(f.root,'semantic-drift')),false);
  }finally{f.close();}
 });
