@@ -85,6 +85,9 @@ export async function assembleSources({context:c,profile,hostRoot,initializeProo
    if(workflow==='102')for(const [name,bytes]of Object.entries(sourceArchive(path.join(HERE,'sources/asr.json'))))files['asr-runtime/'+name]=bytes;
   }
   if(workflow==='102'){
+   const file='collection-evidence/runtime-deps.mjs',legacy="path.join(profileRoot,'skills/douyin-leadgen-commander/scripts/native_artifacts.py')";
+   need(files[file].split(legacy).length===2,'NATIVE_CHECKER_LAYOUT');
+   files[file]=files[file].replace(legacy,"path.join(profileRoot,'native_artifacts.py')");
    const producer=c.input_provenance?.producer;resolveProducerIdentity(c,'dedup',{run:producer?.run_tag,run_id:producer?.run_id});
    files['production-readback-local.mjs']=wireProducerReadback(files['production-readback-local.mjs']);
    files['activity-upstream-source.mjs']=fs.readFileSync(path.join(HERE,'../activity-upstream-source.mjs'),'utf8');

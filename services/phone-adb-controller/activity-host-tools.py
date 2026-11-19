@@ -7,6 +7,11 @@ import pathlib
 import re
 import stat
 import sys
+import time
+import http.client
+import urllib.error
+import threading
+import queue
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BASE_SHA = {
@@ -26,6 +31,67 @@ spec.loader.exec_module(typed)
 PreDispatchRejected = typed.PreDispatchRejected
 emit_pre_dispatch_rejection = typed.emit_pre_dispatch_rejection
 scope_rejection = typed.scope_rejection
+
+
+class TaskAuthorityUnavailable(Exception):
+    """Only the read-only Task admission stage can issue this refusal."""
+    def __init__(self, reason, attempts):
+        self.reason, self.attempts = reason, attempts
+
+
+def bounded_task_read(read_task, route, budget):
+    # A trickling response cannot reset the admission wall deadline. The daemon can only GET;
+    # it never owns dispatch or writes a business receipt, and process exit does not wait for it.
+    result = queue.Queue(maxsize=1)
+    def read():
+        try:result.put((True, read_task(route, timeout=budget)))
+        except Exception as error:result.put((False, error))
+    threading.Thread(target=read, daemon=True).start()
+    try:ok, value = result.get(timeout=budget)
+    except queue.Empty:raise TaskAuthorityUnavailable('budget_exhausted', 1) from None
+    if not ok:raise value
+    return value
+
+
+def task_authority(context, read_task, activity):
+    absolute = context['cleanup_deadline_ms'] if activity == 'cleanup' else context['business_deadline_ms']
+    end = time.monotonic() + min(20, max(0, (absolute-time.time()*1000)/1000))
+    remaining = lambda: min(end-time.monotonic(), (absolute-time.time()*1000)/1000)
+    attempts = 0
+    for identity in dict.fromkeys([context['root_task_id'], context['tasks'][context['assigned_workflow']]['task_id']]):
+        for attempt in range(2):
+            budget = remaining()
+            if budget <= 0:
+                raise TaskAuthorityUnavailable('budget_exhausted', attempts)
+            attempts += 1
+            try:
+                value = bounded_task_read(read_task, 'tasks/'+identity, budget)
+            except Exception as error:
+                # HTTP status, malformed JSON, DNS, timeouts and arbitrary OSError are not transient admission retries.
+                if type(error) is TaskAuthorityUnavailable:
+                    raise TaskAuthorityUnavailable(error.reason, attempts) from None
+                cause = error.reason if type(error) is urllib.error.URLError else error
+                if type(cause) not in (http.client.RemoteDisconnected, ConnectionResetError, ConnectionAbortedError):
+                    raise
+                if attempt == 1 or remaining() <= 8:
+                    raise TaskAuthorityUnavailable('transport_unavailable' if attempt else 'retry_budget_insufficient', attempts) from None
+                time.sleep(8)
+                continue
+            if remaining() <= 0:
+                raise TaskAuthorityUnavailable('budget_exhausted', attempts)
+            value = value.get('task', value)
+            if value['status'] != 'in_progress' or value['claimed_by'] != context['actor']:
+                raise ValueError('TASK_AUTHORITY')
+            break
+
+
+def authority_refusal(error):
+    return {'state': 'terminal', 'result': {'exit_code': 75, 'data': {
+        'code': 'TASK_AUTHORITY_TRANSPORT_UNAVAILABLE', 'phase': 'pre_dispatch',
+        'dispatched': False, 'business_receipt_created': False, 'authority_status': 'unavailable',
+        'reason': error.reason, 'attempts': error.attempts, 'retryable': True,
+        'retry_requires_new_action': True,
+        'tool_hint': '本动作在任务鉴权阶段未派发；同action只读回原拒绝，新action才重新鉴权。不得自动重开Activity或重试任何副作用未知动作。'}}}
 
 
 def read_business_input(args, *, activity, allowed_operations):
@@ -49,6 +115,26 @@ def read_business_input(args, *, activity, allowed_operations):
     return value
 
 
+
+
+def require_recording_identity(c, activity, kind, args):
+    # Match the original native recording checker, not every phone evidence identifier.
+    if c.get('assigned_workflow') != '102' or activity != 'qualification' or kind != 'phone' or not args or args[0] != 'record-start':
+        return
+    method = method_input102(c)
+    run, video = method['run_tag'], method['video_id']
+    if len(args) < 2 or not args[1].startswith(run+'-') or '-v'+video+'-' not in args[1]:
+        error = scope_rejection('RECORDING_SCOPE_MISMATCH')
+        error.details = {'expected_run': run, 'video_id': video,
+                         'evidence_id_example': run+'-v'+video+'-capture',
+                         'tool_hint': 'record-start尚未派发或计入单次录制；必须使用本run前缀并包含-v本VID-。用新action名纠正；同action不可改参数，已派发或未知录制不得另起。'}
+        raise error
+
+
+def recording_identity_refusal(error):
+    return {'state': 'terminal', 'result': {'exit_code': 2, 'error': error.code,
+        'data': {'phase': 'pre_dispatch', 'dispatched': False, 'business_receipt_created': False,
+                 'external_effect': 'none', 'correction_requires_new_action_name': True, **error.details}}}
 
 
 def record_start_diagnostic(c, activity, kind, args, result):
@@ -161,10 +247,12 @@ def render102(original, method):
     prefix = prefix.replace('覆盖全片或本轮明确前90秒（较短者）', '覆盖本轮冻结输入指定的完整视频')
     prefix = prefix.replace('方法见本文末尾本轮58秒视频补充', '方法见本文末尾由本轮冻结输入生成的补充')
     prefix = prefix.replace('（覆盖kind=full_video时替代旧90秒描述）', '（coverage.kind=full_video）')
+    prefix = replace_once(prefix, '字段按冻结gate-contract.md及native_artifacts.py', '字段按本宿主冻结的native_artifacts.py；实际入口由context.verification.artifact_checker的精确路径及SHA绑定')
     m = method
     return prefix + '\n本轮102冻结执行输入：\n' + json.dumps(m, ensure_ascii=False, sort_keys=True) + '\n' + '\n'.join([
         'TOOLS-base.txt保留完整历史来源及摘要，仅供来源审计；其中旧VID、旧录制、旧时长、旧source、旧run和诊断PTS均不是本轮执行指令或证据。',
         '先读本轮qualification_input、source_duration_evidence及101完整原件链；只处理上述唯一VID。公司、账号、SDK和音轨以本轮原生读回为准。',
+        f'本轮唯一record-start的EID格式为{m["run_tag"]}-v{m["video_id"]}-capture；原验收要求run前缀及-vVID-段。派发前拒绝不占录制次数，纠正必须新action；录制已派发或unknown不得换EID追加。',
         '先完成双锁、公司、VID、工具签名和fresh原生唯一enabled SeekBar/实屏轨道定位。必要同VID页面恢复严格沿前述一次恢复范围；不复制历史坐标。',
         f'唯一一次capture上限{m["capture_max_seconds"]}秒，单次ASR和单次主判。所有准备在record-start前完成；ready后以同EID record-status确认，再连贯执行唯一向左全轨swipe-evidence，时长<=1500ms，无补滑或二次capture。',
         '录制前不归零；录制期间不调用有no_active_capture守卫的native-audio-evidence，不打开分享页；完成上文唯一归零操作后不再操作手机或改变播放。不得以STOPPED position=0或tap/swipe成功代替原录制零点证据。',
@@ -201,6 +289,25 @@ def replace_once(text, old, new):
     return text.replace(old, new, 1)
 
 
+def patch_task_authority(tools, *, main_only=False):
+    tools = replace_once(tools, 'def brain(route,body=None):', 'def brain(route,body=None,*,timeout=20):')
+    tools = replace_once(tools, 'urllib.request.urlopen(req,timeout=20)', 'urllib.request.urlopen(req,timeout=timeout)')
+    if not main_only:
+        tools = replace_once(tools, """def task_authority(c):
+ for key in [c['root_task_id'],c['tasks'][c['assigned_workflow']]['task_id']]:
+  x=brain('tasks/'+key);x=x.get('task',x)
+  if x['status']!='in_progress' or x['claimed_by']!=c['actor']:raise ValueError('TASK_AUTHORITY')""", """def task_authority(c):
+ return _host.task_authority(c,brain,os.environ.get('COMMANDER_ACTIVITY_KEY'))""")
+    tools = replace_once(tools, " task_authority(c);deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']", """ deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']
+ try:task_authority(c)
+ except _host.TaskAuthorityUnavailable as error:
+  if type(error) is not _host.TaskAuthorityUnavailable:raise
+  print(json.dumps(_host.authority_refusal(error),ensure_ascii=False));return 75""")
+    if main_only:
+        tools = replace_once(tools, ' try:task_authority(c)', ' try:_host.task_authority(c,brain,key)')
+    return tools
+
+
 def patch_sources(tools, scope):
     tools = replace_once(tools, 'from tool_scope import phone_args,scoped_business,READ', '''from tool_scope import phone_args,scoped_business,READ,OPS
 import importlib.util
@@ -210,6 +317,12 @@ PreDispatchRejected=_host.PreDispatchRejected
 emit_pre_dispatch_rejection=_host.emit_pre_dispatch_rejection
 read_business_input=_host.read_business_input
 scope_rejection=_host.scope_rejection''')
+    tools = patch_task_authority(tools)
+    tools = replace_once(tools, " if time.time()*1000>=deadline:raise ValueError('ABSOLUTE_DEADLINE')", """ try:_host.require_recording_identity(c,key,kind,args)
+ except PreDispatchRejected as error:
+  if type(error) is not PreDispatchRejected:raise
+  print(json.dumps(_host.recording_identity_refusal(error),ensure_ascii=False));return 2
+ if time.time()*1000>=deadline:raise ValueError('ABSOLUTE_DEADLINE')""")
     tools = replace_once(tools, " c=read(P/'context.json');f=", " _host.verify_host(P,OPS)\n c=read(P/'context.json');f=")
     tools = replace_once(tools, "  i=scoped_business(c,key,json.loads(args[0]))", "  parsed=read_business_input(args,activity=key,allowed_operations=OPS.get(key,set()))\n  i=scoped_business(c,key,parsed,reject=scope_rejection)")
     tools = replace_once(tools, "  # A policy error before launching an operation has no external operation in flight.\n  if isinstance(e,ValueError):atomic(action,{'binding':bind,'state':'terminal','started_at':started_at,'result':{'exit_code':2,'error':str(e)},'ended_at':time.time()})", "  if type(e) is PreDispatchRejected:\n   return emit_pre_dispatch_rejection(e,action=action,binding=bind,started_at=started_at,persist=atomic)")

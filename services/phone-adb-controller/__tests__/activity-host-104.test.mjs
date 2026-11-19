@@ -7,7 +7,12 @@ const implementation=new URL('../activity-host-104.mjs',import.meta.url),hash=x=
 const roots=[];const toolchain=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'activity104-tools-')));roots.push(toolchain);
 // CI toolcache may share writable or hardlinked interpreters. Own immutable copies for admission fixtures.
 const sources={node:fs.realpathSync(process.execPath),python:fs.realpathSync(spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).stdout.trim())};
-for(const [name,source]of Object.entries(sources)){fs.copyFileSync(source,path.join(toolchain,name));fs.chmodSync(path.join(toolchain,name),0o700);}
+for(const [name,source]of Object.entries(sources)){
+ // Apple's Python locates its dylib relative to the executable; a relocated binary is not runnable.
+ const file=path.join(toolchain,name);
+ if(name==='python')fs.writeFileSync(file,"#!/bin/sh\nexec '"+source.replaceAll("'","'\\''")+"' \"$@\"\n");else fs.copyFileSync(source,file);
+ fs.chmodSync(file,0o700);
+}
 const node=path.join(toolchain,'node'),python=path.join(toolchain,'python');
 function setup(){
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'activity104-')));roots.push(root);
