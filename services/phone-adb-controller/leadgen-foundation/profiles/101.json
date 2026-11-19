@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "0de9f476281247843fd03daded0e2f8f4e1124815daf333bb784fed1ac6cfea1"
+            "contract_digest": "f6b829906433171a32294c79d633d29fbc94fc43f5060862f51cbba06d2a16f6"
           },
           "document": {
             "key": "collect_videos",
@@ -649,7 +649,7 @@
               },
               {
                 "probe": "videos_readback",
-                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现查前后保护字段，保留既有处理状态、转写、实采comment_count及评论已采VID的原批次。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集评论保留自己的原来源，视频进度状态沿用写前值。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
               },
               {
                 "probe": "line_key_not_null",
@@ -707,7 +707,7 @@
               {
                 "kind": "internal_write",
                 "target": "pg zenithjoy.leadgen_videos",
-                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及历史来源，评论已采视频保留原harvest_batch。"
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及评论行的历史来源。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
               }
             ],
             "invokers": [
@@ -1112,7 +1112,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "videos_readback",
-                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现查前后保护字段，保留既有处理状态、转写、实采comment_count及评论已采VID的原批次。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集评论保留自己的原来源，视频进度状态沿用写前值。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
               },
               "source_pointer": "/postconditions/3"
             },
@@ -1131,7 +1131,7 @@
               "requirement": {
                 "kind": "internal_write",
                 "target": "pg zenithjoy.leadgen_videos",
-                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及历史来源，评论已采视频保留原harvest_batch。"
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及评论行的历史来源。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
               },
               "source_pointer": "/side_effects/0"
             },
@@ -1627,7 +1627,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "af558b6e13f5046ad3690980044ca6a3be22ed0c",
-      "contract_sha256": "8746c4ca5e1fe13a1ea278417efcfac1522e833cbadd6f10aeee7ac24b41e657"
+      "contract_sha256": "f2ac7212af4f5c8ee4360c2920217db0d946590ae94084bb6350780cade254fc"
     },
     "skill_runtime": {
       "control_dir": "control",

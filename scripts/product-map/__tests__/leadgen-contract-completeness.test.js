@@ -59,6 +59,10 @@ test('101 按原Video字段交接指标结构，原XML由通用Checker独立读�
   assert.match(check.asserts, /outputs\.Video/);
   assert.match(check.asserts, /仅原始XML .*evidence\.xml.*可由原件引用交付/);
   assert.match(check.asserts, /原XML.*SHA256.*持久行/);
+  const readback = collect.postconditions.find(condition => condition.probe === 'videos_readback');
+  assert.match(readback.asserts, /写前 process_status 为“评论已采”/);
+  assert.match(readback.asserts, /部分采集评论.*进度状态沿用写前值/);
+  assert.match(collect.side_effects[0].description, /写前 process_status 为“评论已采”/);
 });
 
 test('共享预检的定时闸不误写成手动活动条件', () => {
