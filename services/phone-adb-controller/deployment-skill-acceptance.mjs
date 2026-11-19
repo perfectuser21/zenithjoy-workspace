@@ -21,7 +21,8 @@ function indexedAcceptance(key,path,bytes,text,readFile){
   const blocks=content.trim().split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
   for(const block of blocks)checks.push({id:digest(section+'\n'+block),section,text:block});
  };
- for(const [,name,body]of parseSections(text,['活动组织','输入与交接',...(/^## 工作流之间的异步交接$/m.test(text)?['工作流之间的异步交接']:[]),'实现与状态','历史宿主兼容声明']))add('Workflow/'+name,body);
+ const contractSections=raw=>/^## 合同、执行提案与独立验收$/m.test(raw)?['合同、执行提案与独立验收']:[];
+ for(const [,name,body]of parseSections(text,[...contractSections(text),'活动组织','输入与交接',...(/^## 工作流之间的异步交接$/m.test(text)?['工作流之间的异步交接']:[]),'实现与状态',contractSections(text).length?'宿主恢复能力声明':'历史宿主兼容声明']))add('Workflow/'+name,body);
  const base=path.slice(0,path.lastIndexOf('/')),manifestPath=base+'/references/activity-methods.json',manifestBytes=readFile(manifestPath);
  let manifest;try{manifest=JSON.parse(Buffer.from(manifestBytes).toString('utf8'));}catch{need(false,'Activity清单无效');}
  need(manifest.workflow_key===key&&Array.isArray(manifest.activities)&&manifest.activities.length>0,'Activity清单身份无效');
@@ -42,7 +43,7 @@ function indexedAcceptance(key,path,bytes,text,readFile){
    &&header.match(/^  activity_ref: (\S+)$/m)?.[1]===row.activity_ref
    &&/^  method_role: single-activity$/m.test(header),'Activity方法身份或版本不符');
   const dedupSection=/^## 来源证明与认领分支$/m.test(body)?'来源证明与认领分支':'明示producer交接';
-  for(const [,name,content]of parseSections(body,['执行上下文与工具边界','输入与交付','操作',...(row.skill_name==='douyin-leadgen-activity-101-collect-videos'?['有界首屏输入']:row.skill_name==='douyin-leadgen-activity-102-dedup'?[dedupSection]:[]),'成功条件','副作用','结果与验收','宿主恢复声明']))add(row.activity_ref+'/'+name,content);
+  for(const [,name,content]of parseSections(body,[...contractSections(body),'执行上下文与工具边界','输入与交付','操作',...(row.skill_name==='douyin-leadgen-activity-101-collect-videos'?['有界首屏输入']:row.skill_name==='douyin-leadgen-activity-102-dedup'?[dedupSection]:[]),'成功条件','副作用','结果与验收',contractSections(body).length?'宿主恢复能力声明':'宿主恢复声明']))add(row.activity_ref+'/'+name,content);
   const supporting=[];
   for(const match of body.matchAll(/\]\((references\/[^)]+)\)/g)){
    const rel=match[1];need(/^references\/[a-z0-9-]+\.md$/.test(rel),'Activity支持文件路径无效');
