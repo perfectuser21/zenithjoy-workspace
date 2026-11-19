@@ -57,7 +57,7 @@ export function prepareProof(context,{initialize=false}={}){
  }
 }
 /** Only assembles frozen source. No phone, database, model or message operation occurs here. */
-export async function assembleSources({context:c,profile,contract,hostRoot,identity,bindingKey,initializeProof=true}){
+export async function assembleSources({context:c,profile,contract,input,hostRoot,identity,bindingKey,initializeProof=true}){
  const workflow=c.assigned_workflow,files=sourceArchive(path.join(HERE,'sources',workflow+'.json'));
  for(const [name,expected]of Object.entries(profile.files).filter(([name])=>name.startsWith('services/phone-adb-controller/skills/'))){
   const bytes=fs.readFileSync(path.join(profile.cwd,name),'utf8');need(hash(bytes)===expected,'SKILL_SOURCE');files[name]=bytes;
@@ -131,6 +131,10 @@ export async function assembleSources({context:c,profile,contract,hostRoot,ident
    evidence.approved_send={asset_sha256:c.authorization_asset.sha256,...Object.fromEntries(fields.map(key=>[key,approved[key]]))};
   }
   files['checker-input/identity.json']=JSON.stringify(evidence,null,2)+'\n';
+  if(workflow==='101'){
+   const request={task_id:identity.task_id,run_id:identity.run_id,line:c.line,...input};
+   files['checker-input/input.json']=canonical(request)+'\n';
+  }
   const kernel=path.join(profile.runtimeRoot,'scripts/commander-workflow/skill-worker.mjs');
   let exactEnv={};
   if(workflow==='104'){

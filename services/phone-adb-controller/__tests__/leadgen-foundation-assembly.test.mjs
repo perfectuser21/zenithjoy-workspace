@@ -84,6 +84,22 @@ test('102 execution readback and Checker use the same raw fact implementation, w
   assert.match(fs.readFileSync(path.join(a.profile.cwd,'collection-readback.mjs'),'utf8'),/relation.*comments/);
  }finally{f.close();}
 });
+test('101 start Checker receives the original frozen search request',async()=>{
+ const f=await foundationFixture('101');try{
+  const a=await prepareLeadgenHost(f),name='checker-input/input.json';
+  const bytes=fs.readFileSync(path.join(a.profile.cwd,name));
+  assert.deepEqual(JSON.parse(bytes),{
+   task_id:f.run.task_id,run_id:f.run.run_id,run_tag:f.run.run_id,
+   line:a.context.line,binding_key:f.run.input.binding_key,business:f.run.input.business,
+  });
+  assert.equal(a.receipt.files[name],createHash('sha256').update(bytes).digest('hex'));
+  const evidence=a.profile.skill_runtime.activities.collect_videos.checker.evidence;
+  assert.ok(evidence.roots.includes('checker-input'));
+  assert.match(evidence.provider.description,/read_file.*checker-input\/input\.json/);
+  fs.appendFileSync(path.join(a.profile.cwd,name),' ');
+  await assert.rejects(a.verifySource(),/LEADGEN_RECOVERY_SOURCE/);
+ }finally{f.close();}
+});
 test('102 emitted upstream scope carries controlled producer run identity for the actual reader',async()=>{
  const f=await foundationFixture('102');try{
   const a=await prepareLeadgenHost(f),c=JSON.parse(fs.readFileSync(path.join(a.profile.cwd,'context.json'))),video=c.verification['102'].video_ids[0];

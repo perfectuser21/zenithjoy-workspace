@@ -131,14 +131,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -295,7 +295,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.0",
@@ -427,14 +434,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -591,13 +598,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_video_processing.dedup": {
@@ -730,14 +737,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -894,13 +901,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1038,14 +1045,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -1202,13 +1209,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_video_processing.collection": {
@@ -1341,14 +1348,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -1505,13 +1512,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1644,14 +1651,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -1808,13 +1815,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1952,14 +1959,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -2116,13 +2123,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2260,14 +2267,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -2424,13 +2431,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2563,14 +2570,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -2727,13 +2734,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2866,14 +2873,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -3030,13 +3037,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3169,14 +3176,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -3333,13 +3340,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3472,14 +3479,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "488331323dae2f8e749d58525599467c15e127d2ed698ec7980d61b30f7504a9"
+          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "53fac2a8af1ac47b1208f241eb6a51d1c1a8ce733d87b1f9b2a3a28f379f41ae"
+          "sha256": "f16d9616336181e5db3d9a9aac8e7d818480d393fcb77e3bbc6153c1e2adb1c3"
         },
         {
           "kind": "code",
@@ -3636,13 +3643,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+      "code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保留实际活动契约、Skill和业务API。只读接入新旧视频链接键的兼容，以及回执索引排除非传输附件；共享Checker仍读原件独立验收。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "d79bfde50e683a80e426e73c9078da2720820a83107410ccc7c3531938aae87a",
-        "current_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503"
+        "reason": "复核共享宿主仅在101组装时提供冻结搜索原件和只读入口。活动契约、Skill、业务执行工具和Checker判定方式均保持兼容。",
+        "reviewed_by": "codex:cloud-phone-verify-20261117",
+        "previous_code_digest": "7d66264e61218cfce3582ad6354317297340a3681e6c54313772b9b42cf15503",
+        "current_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa"
       }
     }
   },
