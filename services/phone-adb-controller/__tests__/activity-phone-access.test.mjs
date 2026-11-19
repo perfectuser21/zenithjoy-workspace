@@ -23,6 +23,7 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
   const instructions=readFileSync(host.profile.cwd+'/TOOLS.txt','utf8');
   assert.match(instructions,/不再按Activity列手机命令名单/);
   assert.match(instructions,/commenter-profile-card-link VID UID NICKNAME_B64 BODY_SHA EID/);
+  assert.match(instructions,/text-input UTF8_TEXT/);
   assert.match(instructions,/不是|不代表已有数据库评论ID/);
   for (const activity of activities[workflow]) await t.test(`${activity} admits an existing tap with frozen owner`, () => {
    const r=run(host,{activity,args:['tap','100','200'],replay:true}); admitted(r);
@@ -30,6 +31,12 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
    assert.equal(argv[argv.indexOf('--profile')+1],r.profile);
    assert.equal(argv[argv.indexOf('--lock-owner')+1],r.owner);
    assert.equal(r.replay.stdout,r.first.stdout); assert.equal(r.replay.dispatches,1);
+  });
+  await t.test('ordinary screenshot, text, swipe and back reuse the controller ABI',()=>{
+   for(const args of [['snapshot-evidence','$RUN-screen'],['text-input','测试文字'],['swipe','20','30','20','10','100'],['back']]) {
+    const r=run(host,{activity:'cleanup',args});admitted(r);assert.ok(r.locks.length>0);
+    if(args[0]!=='back') assert.equal(r.calls[0].argv[r.calls[0].argv.indexOf('--lock-owner')+1],r.owner);
+   }
   });
   if(workflow==='102') await t.test('collection can call existing native profile link APIs with run evidence and original owner ABI',()=>{
    const strict=['commenter-profile-card-link','$VID','target-uid','bmFtZQ==','a'.repeat(64),'$RUN-resume1-person'];

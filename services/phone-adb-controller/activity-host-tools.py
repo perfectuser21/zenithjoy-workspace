@@ -31,6 +31,12 @@ spec.loader.exec_module(typed)
 PreDispatchRejected = typed.PreDispatchRejected
 emit_pre_dispatch_rejection = typed.emit_pre_dispatch_rejection
 scope_rejection = typed.scope_rejection
+PHONE_INSTRUCTIONS = '''手机工具统一使用commander_host_tools.invoke(kind="phone", action_name, args=[命令,参数...])，不再按Activity列手机命令名单；按当前Skill操作。
+已有通用接口：snapshot-evidence EID；ui-evidence EID；tap X Y；tap-evidence X Y EID [WAIT_MS]；swipe X1 Y1 X2 Y2 MS；swipe-evidence X1 Y1 X2 Y2 MS EID [WAIT_MS]；back；back-evidence EID；text-input UTF8_TEXT。
+已有原生主页取链：commenter-profile-card-link VID UID NICKNAME_B64 BODY_SHA EID，原工具要求EID以本run_tag+-resume1-开头；这是原工具证据命名，不代表已有数据库评论ID。commenter-card-link EID要求已在正确用户主页。真实URL只能读原生输出，不拼造。
+EID仍须本run_tag前缀；设备/profile/controller/账号来源和owner由宿主绑定，不能传入覆盖。普通/未知手机操作受business_deadline约束；仅原READ与本人停止录制、exact释放、关闭应用、安全归位可使用cleanup_deadline。
+with-lock外部COMMAND、账号切换和显式发送不通过此通用入口开放；显式外发仍走已有授权入口。普通点击不保证自动识别所有外发语义，必须遵守任务授权。
+未知动作不能同名或换名重放；原业务OPS、录制次数、验收Checker与Skill/Contract保持。'''
 
 
 class TaskAuthorityUnavailable(Exception):
@@ -53,8 +59,8 @@ def bounded_task_read(read_task, route, budget):
     return value
 
 
-def task_authority(context, read_task, activity):
-    absolute = context['cleanup_deadline_ms'] if activity == 'cleanup' else context['business_deadline_ms']
+def task_authority(context, read_task, activity, *, deadline_ms=None):
+    absolute = deadline_ms if deadline_ms is not None else context['cleanup_deadline_ms'] if activity == 'cleanup' else context['business_deadline_ms']
     end = time.monotonic() + min(20, max(0, (absolute-time.time()*1000)/1000))
     remaining = lambda: min(end-time.monotonic(), (absolute-time.time()*1000)/1000)
     attempts = 0
@@ -280,7 +286,7 @@ def instructions(ops, original, method=None):
     active = original
     if method:
         active = original+'\n本轮103冻结执行输入：\n'+json.dumps(method, ensure_ascii=False, sort_keys=True)+'\n' if method.get('workflow') == '103' else render102(original, method)
-    return active+'\n冻结Activity业务操作与拒绝回执补充：\n'+'\n'.join(lines)+'\n'
+    return active+'\n冻结Activity业务操作与拒绝回执补充：\n'+'\n'.join(lines)+'\n'+PHONE_INSTRUCTIONS+'\n'
 
 
 def replace_once(text, old, new):
@@ -308,6 +314,41 @@ def patch_task_authority(tools, *, main_only=False):
     return tools
 
 
+def patch_phone_access(tools, scope):
+    """Share the existing phone API, without an Activity command admission table."""
+    start, end = scope.index('PHONE={'), scope.index('GUARDED=')
+    scope = scope[:start]+scope[end:]
+    start, end = scope.index(' allowed=PHONE.get(activity,set())'), scope.index(" if activity=='qualification'")
+    scope = scope[:start]+''' if not args or not re.fullmatch('[a-z][a-z0-9-]*',args[0]):raise ValueError('PHONE_COMMAND_ARGUMENT')
+ if args[0] in {'with-lock','account-switch','private-message-send','lock-release','lock-reap','lock-cleanup','lock-quarantine'}:raise ValueError('PHONE_AUTHORIZED_ENTRY_REQUIRED')
+ if any(re.fullmatch(r'--(?:profile|lock-owner|outward|allow-repeat)(?:=.*)?',v) for v in args[1:]):raise ValueError('PHONE_OVERRIDE_FORBIDDEN')
+'''+scope[end:]
+    # ABI knowledge only: these existing commands accept --lock-owner; others retain host lock admission.
+    at = scope.index('OPS=')
+    scope = 'import re\n'+scope[:at]+'''GUARDED.update({'tap','tap-snapshot','tap-evidence','locate-tap','text-input','media-push','swipe','commenter-profile-card-link','evidence-bundle','open-search','search-video-tab','search-time-layer','search-video-cards','open-video','back-to-results','on-search-results','detail-restored','back-evidence'})
+EIDS.update({'commenter-profile-card-link':5,'commenter-card-link':1,'locate':2,'locate-tap':2,'open-user-profile':2,'set-playback-speed':2,'evidence-bundle':1,'profile-video-cards':1,'search-grid-scroll':1})
+def phone_deadline(c,activity,kind,args):
+ if kind!='phone':return c['cleanup_deadline_ms'] if activity=='cleanup' else c['business_deadline_ms']
+ if args and args[0] in READ|{'record-stop','lock-release-exact','close-app','return-safe-desktop'}:return c['cleanup_deadline_ms']
+ return min(c['business_deadline_ms'],c['cleanup_deadline_ms'])
+'''+scope[at:]
+    scope = replace_once(scope, "if cmd=='open-video' and", "if cmd in {'open-video','commenter-profile-card-link'} and")
+    tools = replace_once(tools, 'from tool_scope import phone_args,scoped_business,READ', 'from tool_scope import phone_args,scoped_business,READ,phone_deadline')
+    tools = replace_once(tools, " deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']", ''' deadline=phone_deadline(c,key,kind,args)
+ if kind=='phone':
+  try:phone_args(c,key,args)
+  except ValueError as error:
+   print(json.dumps({'state':'terminal','result':{'exit_code':2,'error':str(error),'data':{'phase':'pre_dispatch','dispatched':False,'business_receipt_created':False,'correction_requires_new_action_name':True}}}));return 2
+ if time.time()*1000>=deadline:raise ValueError('ABSOLUTE_DEADLINE')''')
+    tools = replace_once(tools, ' try:task_authority(c)', ' try:task_authority(c,deadline_ms=deadline)') if ' try:task_authority(c)' in tools else replace_once(tools, ' try:_host.task_authority(c,brain,key)', ' try:_host.task_authority(c,brain,key,deadline_ms=deadline)')
+    if 'def task_authority(c):\n return _host.task_authority' in tools:
+        tools = replace_once(tools, 'def task_authority(c):\n return _host.task_authority(c,brain,os.environ.get(\'COMMANDER_ACTIVITY_KEY\'))', "def task_authority(c,*,deadline_ms=None):\n return _host.task_authority(c,brain,os.environ.get('COMMANDER_ACTIVITY_KEY'),deadline_ms=deadline_ms)")
+    tools = replace_once(tools, '  return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=420)', '''  remaining=(phone_deadline(c,key,kind,args)-time.time()*1000)/1000
+  if remaining<=0:raise ValueError('ABSOLUTE_DEADLINE')
+  return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=min(420,remaining))''')
+    return tools, scope
+
+
 def patch_sources(tools, scope):
     tools = replace_once(tools, 'from tool_scope import phone_args,scoped_business,READ', '''from tool_scope import phone_args,scoped_business,READ,OPS
 import importlib.util
@@ -332,7 +373,7 @@ scope_rejection=_host.scope_rejection''')
     scope = replace_once(scope, 'def scoped_business(c,activity,i):', 'def scoped_business(c,activity,i,*,reject=ValueError):')
     start = scope.index('def scoped_business(')
     scope = scope[:start]+scope[start:].replace('raise ValueError(', 'raise reject(')
-    return tools, scope
+    return patch_phone_access(tools, scope)
 
 
 
