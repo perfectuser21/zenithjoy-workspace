@@ -58,6 +58,23 @@ for (const workflow of Object.keys(activities)) test(`${workflow} actual host sh
     assert.match(r.other.error,/SINGLE_CAPTURE_OR_SEEK_LIMIT|PRIOR_ACTION_UNKNOWN/);
    }
   });
+  if(workflow==='102') await t.test('deterministic capture budget rejection leaves cleanup available without clearing real unknowns',()=>{
+   for(const unknown of [false,true]) {
+    const r=run(host,{activity:'qualification',next_activity:'collection',args:['record-start','$RUN-v$VID-capture'],unknown,cleanup_after:true});
+    assert.equal(r.other.dispatches,1);
+    assert.equal(r.receipts['phone-new-action.json'],undefined);
+    if(unknown) {
+     assert.match(r.other.error,/PRIOR_ACTION_UNKNOWN/);assert.match(r.cleanup.error,/PRIOR_ACTION_UNKNOWN/);
+     assert.equal(r.receipts['phone-action.json'].state,'unknown');assert.equal(r.calls.length,1);
+    } else {
+     assert.equal(r.other.rc,2,r.other.error);const rejection=JSON.parse(r.other.stdout);
+     assert.equal(rejection.result.data.dispatched,false);assert.equal(rejection.result.data.phase,'pre_dispatch');
+     assert.match(rejection.result.error,/SINGLE_CAPTURE_OR_SEEK_LIMIT/);
+     assert.equal(r.cleanup.rc,0,r.cleanup.error);assert.equal(r.calls.length,2);
+     assert.equal(r.receipts['phone-cleanup.json'].state,'terminal');
+    }
+   }
+  });
   if(workflow==='101') await t.test('a Workflow without a configured capture budget gains no invented single-capture limit',()=>{
    const r=run(host,{activity:'preflight',next_activity:'collect_videos',args:['record-start','$RUN-capture']});
    assert.equal(r.first.rc,0);assert.equal(r.other.rc,0,r.other.error);assert.equal(r.calls.length,2);

@@ -56,7 +56,12 @@ if case.get('next_activity'):
     other = invoke('phone-new-action', args)
 elif case.get('unknown'):
     other = invoke('phone-new-action', args)
+cleanup = None
+if case.get('cleanup_after'):
+    os.environ['COMMANDER_ACTIVITY_KEY'] = 'cleanup'
+    input_file.write_text(json.dumps({'activity_key': 'cleanup', 'identity': identity}))
+    cleanup = invoke('phone-cleanup', ['close-app'])
 receipts = {p.name: json.loads(p.read_text()) for p in (root/'receipts').glob('*.json')}
 print(json.dumps({'first': first, 'replay': replay, 'other': other, 'calls': calls, 'locks': locks,
-                  'gets': gets, 'receipts': receipts, 'controller': c['phone_controller'],
+                  'cleanup': cleanup, 'gets': gets, 'receipts': receipts, 'controller': c['phone_controller'],
                   'profile': c['profile'], 'owner': c['local_owner']}))
