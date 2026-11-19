@@ -19,6 +19,9 @@ export function listHostReceipts(root,identity){
   // Original phone command evidence shares the directory with the host transport ledger.
   if(Object.keys(raw).sort().join(',')==='args,exit_code,stderr,stdout'
    &&Array.isArray(raw.args)&&Number.isInteger(raw.exit_code)&&typeof raw.stdout==='string'&&typeof raw.stderr==='string')return [];
+  // Non-private attachments can be read by exact path, but are not transport receipts.
+  if((stat.mode&0o077)&&raw&&typeof raw==='object'
+   &&!['binding','state','started_at','ended_at'].some(key=>Object.hasOwn(raw,key)))return [];
   const binding=raw.binding??{},bound=binding.identity;
   need(!(stat.mode&0o077)&&bound&&['task_id','run_id','run_tag'].every(key=>typeof identity[key]==='string'&&identity[key]===bound[key])
    &&/^[a-z][a-z0-9_]{0,79}$/.test(binding.activity??'')&&/^[a-z][a-z0-9_-]{0,79}$/.test(binding.kind??'')
