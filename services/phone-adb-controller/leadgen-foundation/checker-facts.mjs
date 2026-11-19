@@ -17,10 +17,11 @@ function queryFor(bound,args){
  exact(args,['relation']);const{c,run,videoIds,commentIds}=bound;
  // All identifiers are literals. Caller-provided scope and SQL are not accepted.
  const queries={
-  videos:{sql:'SELECT * FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND (video_id=ANY($2::text[]) OR discovery_metrics->>\'run\'=$3 OR harvest_batch=$3) ORDER BY video_id LIMIT 501',values:[c.line,videoIds,run]},
+  videos:{sql:'SELECT * FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND (video_id=ANY($2::text[]) OR discovery_metrics->>\'run\'=$3 OR harvest_batch=$3 OR EXISTS (SELECT 1 FROM zenithjoy.leadgen_comments cm WHERE cm.line_key=leadgen_videos.line_key AND cm.id=ANY($4::uuid[]) AND cm.source_video_url=leadgen_videos.video_url)) ORDER BY video_id LIMIT 501',values:[c.line,videoIds,run,commentIds]},
   comments:{sql:'SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND (id=ANY($2::uuid[]) OR harvest_batch=$3) ORDER BY id LIMIT 501',values:[c.line,commentIds,run]},
   outbox:{sql:'SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND (comment_id=ANY($2::uuid[]) OR run_tag=$3) ORDER BY id LIMIT 501',values:[c.line,commentIds,run]},
   leads:{sql:'SELECT l.* FROM zenithjoy.leadgen_leads l WHERE l.line_key=$1 AND EXISTS (SELECT 1 FROM zenithjoy.leadgen_bridge_outbox o WHERE o.line_key=l.line_key AND o.lead_id=l.id AND (o.comment_id=ANY($2::uuid[]) OR o.run_tag=$3)) ORDER BY l.id LIMIT 501',values:[c.line,commentIds,run]},
+  company:{sql:'SELECT p.*,v.snapshot AS version_snapshot FROM zenithjoy.tenant_company_profiles p LEFT JOIN zenithjoy.company_config_versions v ON v.company_id=p.company_id AND v.tenant_id=p.tenant_id AND v.version=p.config_version WHERE p.company_id=$1 AND p.tenant_id=$2 LIMIT 501',values:[c.company_id,c.tenant_id]},
   policy:{sql:'SELECT company_id,tenant_id,version,run_id,source_run,snapshot FROM zenithjoy.company_config_runs WHERE company_id=$1 AND tenant_id=$2 AND run_id=ANY($3::text[]) ORDER BY run_id LIMIT 501',values:[c.company_id,c.tenant_id,unique([run,c.input_provenance?.producer?.run_tag,...Object.values(bound.s.sources??{})])]},
  };
  requireCondition(Object.hasOwn(queries,args.relation));return queries[args.relation];
@@ -29,8 +30,10 @@ const captureLine=bound=>bound.c.line;
 async function pgRead(bound,args,deps){
  const query=queryFor(bound,args),pool=await deps.loadPool(bound.c);let client;
  try{client=await pool.connect();await client.query('BEGIN READ ONLY');await client.query("SET LOCAL statement_timeout='10000ms'");
+  const connection=(await client.query("SELECT current_database() AS database,current_schema() AS schema,current_user AS role,current_setting('transaction_read_only') AS transaction_read_only,transaction_timestamp() AS snapshot_at")).rows;
+  requireCondition(connection.length===1&&connection[0].transaction_read_only==='on');
   const rows=(await client.query(query.sql,query.values)).rows;requireCondition(Array.isArray(rows));
-  return{rows:rows.slice(0,500),truncated:rows.length>500,observed_at:new Date().toISOString(),query_sha256:createHash('sha256').update(query.sql).digest('hex'),scope:{line:captureLine(bound),run:bound.run}};
+  return{connection:connection[0],rows:rows.slice(0,500),truncated:rows.length>500,observed_at:new Date().toISOString(),query_sha256:createHash('sha256').update(query.sql).digest('hex'),scope:{line:captureLine(bound),run:bound.run}};
  }finally{if(client){try{await client.query('ROLLBACK');}finally{client.release();}}await pool.end();}
 }
 export async function readFacts(request,deps){
@@ -54,7 +57,7 @@ export async function readFacts(request,deps){
   requireCondition(facts!==undefined);return{status:'available',source,facts};
  }catch(error){return{status:'unavailable',source:'facts:unavailable',facts:null,reason:error.message==='FACT_SCOPE'?'FACT_SCOPE_REJECTED':'FACT_READ_UNAVAILABLE'};}
 }
-export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
+export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
 export async function serveFacts({contextFile,contextSha256}){
  let input='';for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>2*1024*1024)throw Error('FACT_INPUT_LIMIT');}
  const {factDependencies,readFrozenContext}=await import('./checker-facts-runtime.mjs');

@@ -1,5 +1,5 @@
 version: 1
-runtime: {"kind":"commander-foundation-v1","profile_ref":{"repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/profiles/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c0546bec4b38e33b2c28bdf63691b1c2430e8cf7844611ff45aa61681cd4e17d"},"timeout_ms":2400000,"cleanup_timeout_ms":600000,"commander_timeout_ms":60000,"input_schema":{"type":"object","additionalProperties":false,"required":["binding_key","business"],"properties":{"binding_key":{"type":"string","pattern":"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$"},"business":{"type":"object","additionalProperties":false,"required":["scope"],"properties":{"scope":{"type":"object","additionalProperties":false,"required":["record_id","comment_id","lead_id","target_douyin_id","profile_url","source_102_run","source_103_run"],"properties":{"record_id":{"type":"string","minLength":1},"comment_id":{"type":"string","minLength":1},"lead_id":{"type":"string","minLength":1},"target_douyin_id":{"type":"string","minLength":1},"profile_url":{"type":"string","minLength":1},"source_102_run":{"type":"string","minLength":1},"source_103_run":{"type":"string","minLength":1}}}}}}}}
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c0546bec4b38e33b2c28bdf63691b1c2430e8cf7844611ff45aa61681cd4e17d" }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope" ], "properties": { "scope": { "type": "object", "additionalProperties": false, "required": [ "record_id", "comment_id", "lead_id", "target_douyin_id", "profile_url", "source_102_run", "source_103_run" ], "properties": { "record_id": { "type": "string", "minLength": 1 }, "comment_id": { "type": "string", "minLength": 1 }, "lead_id": { "type": "string", "minLength": 1 }, "target_douyin_id": { "type": "string", "minLength": 1 }, "profile_url": { "type": "string", "minLength": 1 }, "source_102_run": { "type": "string", "minLength": 1 }, "source_103_run": { "type": "string", "minLength": 1 } } } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/104.json
 implementation:
@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.8.0
+  version: 0.9.0
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -20,9 +20,6 @@ source_repo: perfectuser21/zenithjoy-workspace
 checks: services/phone-adb-controller/checks/douyin-lead-outreach.yaml
 dod_promotion:
   min_consecutive_pass: 20
-runner:
-  entry: leadgen-workflow.mjs
-  queue: pending_leads
 on_status:
   done: next
   retry: retry
@@ -30,7 +27,7 @@ on_status:
   empty: next
   partial: stop
   needs_review: pause
-always_run: [cleanup]
+always_run: [ cleanup ]
 trigger_inputs:
   - Lead
   - Account
@@ -50,7 +47,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 5.0.1
+    version: 5.1.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -98,22 +95,22 @@ activities:
           - profile
           - serial
     preconditions:
-      - 显式LEADGEN_SEND=1授权本批触达；账号风险flag及当日日上限仍生效，无授权零发送
-      - 真实读取限额与发送账号，不符合时禁止取单发送
-      - 本段核冻结公司版本、发送账号、原政策与批准话术；原订单与收件人资格由下一段领取时校验，不修改旧 protected/已发单
+      - 本run有真实批准资产/intent绑定公司、发送账号、目标和批准正文；本轮发送上限与每日上限从该资产及现行政策读取，不从旧固定60/10推定。
+      - 真实账号风险/暂停状态及原额度可读，不符合时禁止取单发送。
+      - 只核本次上下文与政策；原订单与目标资格在领取时验证，不修改protected/已发或unknown订单。
     postconditions:
       - probe: pf_device_verified
-        asserts: 本轮设备 serial 的原生在线与身份核验结果 metrics.device_verified 等于 1
+        asserts: 设备原生在线且真实硬件/路由与授权设备一致。
       - probe: pf_account_verified
-        asserts: 手机原生登录账号与本轮冻结 profile 相符，metrics.account_verified 等于 1
+        asserts: 原生登录发送账号、公司/租户、批准正文和当前政策版本一致；资产授权及每日/本轮剩余额度有独立来源。
       - probe: pf_call_idle
-        asserts: 手机不在通话中，metrics.call_state_idle 等于 1
+        asserts: 手机当前不在通话中，未知不当idle。
       - probe: pf_lock_acquired
-        asserts: 本轮执行者实际持有设备锁，metrics.lock_acquired 等于 1
+        asserts: 本run取得精确双锁并保来源回执，实际owner/租约一致；预检不领取旁单、不发送。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → preflight独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 300
       heartbeat_s: 60
@@ -143,40 +140,40 @@ activities:
       - code
     runtime:
       phase: setup
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/profiles/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c0546bec4b38e33b2c28bdf63691b1c2430e8cf7844611ff45aa61681cd4e17d"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a54624304c1e61109f60c3bf5991f627b4ee3b22bab1c2c148dfe58e69302649"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:09283328a490eacff1ace56113a53dd8722c7674056e097ebc07acefbe7e8499"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:05873299afb2d85b75d1231db9eefc89375a4752823f3328d1d473425cbb52e8"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:23156ee226582ba12c037242e6a35f9d399060fe28f7cc3bde50639a781808ef"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/context.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/worker.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/adapter.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/assembly.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/freeze.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/asr.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/101.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/101.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-authorization-intent.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-upstream-source.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-pg.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-tools.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-tool-result.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-104.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-context.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-runtime.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-transport.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-outreach-scope.js","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/package.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"}
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c0546bec4b38e33b2c28bdf63691b1c2430e8cf7844611ff45aa61681cd4e17d" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a54624304c1e61109f60c3bf5991f627b4ee3b22bab1c2c148dfe58e69302649" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:09283328a490eacff1ace56113a53dd8722c7674056e097ebc07acefbe7e8499" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:05873299afb2d85b75d1231db9eefc89375a4752823f3328d1d473425cbb52e8" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:23156ee226582ba12c037242e6a35f9d399060fe28f7cc3bde50639a781808ef" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/worker.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/freeze.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/asr.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-authorization-intent.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-upstream-source.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-pg.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-tools.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-tool-result.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-104.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-runtime.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-transport.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-outreach-scope.js", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/package.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8" }
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/official-phone-execution.mjs
@@ -490,7 +487,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 1.1.0
+        version: 1.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -671,20 +668,16 @@ activities:
           - Device.serial
         writes:
           - Device.lock_holder
-        check: lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）
+        check: 取得本run精确双锁，租约按本次冻结配置，不能覆盖他人。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            preflight.acquire_device_lock（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.acquire_device_lock（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.lock_acquired
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: refresh_lock_heartbeat
         name: 锁心跳续期
         order: 2
@@ -695,18 +688,13 @@ activities:
         check: lock-refresh 后锁文件 mtime 更新
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            preflight.refresh_lock_heartbeat（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.refresh_lock_heartbeat（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
-          at: cleanup
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: log
-            regex: 锁心跳续期3次仍未确认成功
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: verify_device_identity
         name: 验设备身份
         order: 3
@@ -717,17 +705,13 @@ activities:
         check: adb get-state == device 且 serial 与声明一致
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            preflight.verify_device_identity（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.verify_device_identity（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.device_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: verify_call_idle
         name: 验通话空闲
         order: 4
@@ -738,17 +722,13 @@ activities:
         check: telephony call_state == IDLE
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            preflight.verify_call_idle（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.verify_call_idle（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.call_state_idle
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: read_account_mark
         name: 读账号标记(我页)
         order: 5
@@ -759,18 +739,13 @@ activities:
         check: 我页抖音号 in profile 的注册账号列表(account-current + account_registered)
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            preflight.read_account_mark（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.read_account_mark（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-account-profile.xml"
-            match: 抖音号：
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: open_run_ledger
         name: 开账本
         order: 6
@@ -781,24 +756,16 @@ activities:
           - Run.run_tag
           - Run.profile
           - Run.serial
-        check: ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron
-          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即
-          0）
+        check: 保存真实本次设备、账号、通话、锁及批准资产原件，不以旧cron日志或固定指标代替。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            preflight.open_run_ledger（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.open_run_ledger（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: ledger
-            stage: preflight
-            field: status
-            equals: completed
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: check_breaker_and_cap
         name: 熔断与日限额闸
         order: 7
@@ -806,19 +773,16 @@ activities:
           - Account.dm_paused
           - Account.daily_cap
         writes: []
-        check: 选单时已排除熔断/当日停发/撞上限账号，全部不可用时 NO_SENDER 即停
+        check: 按真实批准资产/现行政策读取风险与额度，不使用旧60/10固定上限。
         implementation:
           status: implemented
           ref: outreach-tick.sh:218-303
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: log
-            regex: 已熔断\(见|已因风控停发\(见|已达阶梯上限
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: verify_sender_account
         name: 验发送账号
         order: 8
@@ -832,12 +796,9 @@ activities:
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: log
-            regex: 失败\(account_mismatch\)
-            expect:
-              op: <=
-              value: 0
+            type: none
     commander:
       entry: activity-commander.mjs
   - key: send_dm
@@ -851,7 +812,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 6.0.2
+    version: 6.1.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -926,25 +887,22 @@ activities:
           - message
           - result
     preconditions:
-      - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until
-        未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
-        daily_cap（config/dm-rate-ramp.json）；不可用账号在取单前经 --exclude 排除
-      - 触达等级 ∈ 该业务线 outreachGrades（选单时过滤，决策 67762358；老数据无等级前缀放行）
-      - 线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）
-      - 话术库有可用话术
-      - 普通company_queue模式按公司现行已核资格队列及排序领取最多一单；exact单条验收模式必须从LEADGEN_OUTREACH_SCOPE_FILE私有0600 JSON文件冻结唯一飞书record_id、comment_id、公司、102来源、103标记来源、目标及发送设备身份；续跑不符或目标订单不存在/不合格即拒发，不得退回公司队列
-      - exact模式只领取精确匹配冻结范围的该公司canonical订单；两种模式均校对发送账号、目标、原资格及批准话术快照，先永久预留，后执行一次手机发送
+      - 发送账号风险与暂停状态允许，本run批准资产/intent的每日和本轮上限仍有余额；公司数值不写死在通用Contract。
+      - 冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。
+      - 批准正文、发送账号、目标、公司及原订单/102/103来源与冻结范围完全一致。
+      - ordinary公司队列与exact原单模式按各自冻结授权选单，不从exact失败回退旁单；先永久预留，再执行唯一手机发送。
+      - 未知/已prepared/已发动作仅按原幂等状态读回，不能重发；Checker只读取证不授发送权。
     postconditions:
       - probe: out_zero_send_while_paused
-        asserts: 暂停时零发送；未发送阶段只记skipped
+        asserts: 暂停/未授权/额度不足阶段零发送；未发送如实标记，不造成功。
       - probe: out_order_scope_verified
-        asserts: 普通模式由原公司资格队列选单；exact模式本run冻结的飞书record_id、comment_id、公司及102/103来源与原出站映射和订单精确相符，旁单零领取
+        asserts: 实际领取原单与批准公司、目标及102/103来源一致，旁单零领取；发送不超过本轮与每日批准上限。
       - probe: out_delivery_result_verified
-        asserts: 原生发送前后 XML、目标和发送账号身份、批准话术及限制结果独立核验通过；未知结果不算发送，亦不宣称对方送达
+        asserts: 真实发送前后原生证据、当前收件人与发送账号、批准正文及限制提示完整。结果未知不报成功且不重发；出现气泡不宣称对方已送达。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → send_dm独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 1500
       heartbeat_s: 60
@@ -953,10 +911,10 @@ activities:
         - device:<serial>
         - outreach-tick mkdir 锁（35 分钟尸锁）
       limits:
-        - name: daily_cap_ceiling
-          value: 60
-        - name: max_attempts_per_order
-          value: 10
+        - name: daily_cap
+          value: 批准资产/intent与现行公司政策给定，每日真实发送数不得超过
+        - name: run_cap
+          value: 本次批准资产/intent给定，单动作状态机及未知不重发保持
     idempotency:
       dedupe_key: OutreachOrder.lead_record_id
       on_duplicate: reject
@@ -965,16 +923,14 @@ activities:
         - NO_PENDING 无待触达单
         - restricted 对方仅互关（不计成功）
       retryable:
-        - lock_busy 设备被采收占用 → 回队列
-        - rate_limited 当天停发
-        - requeue_transient 两轮后转受阻
-        - device_ui 手机界面读取失败（回队列，不废线索；连续3次软熔断2小时自动恢复）
+        - lock_busy等仅在已证未prepared且未发送的本人原单，按本run冻结runtime授权有界重试；不得另行扩次数。
+        - rate_limited按现行政策停发；prepared、已发或未知只读原动作，不回队列重发。
       needs_human:
         cases:
-          - account_mismatch 登错号（一次即熔断）
-          - other 连续 2 次未识别失败 → 熔断
+          - account_mismatch账号身份不符停止
+          - 原动作结果未知，保留原订单与证据，不重发
           - TARGET_ABSENT
-          - NO_SCRIPT 话术缺失
+          - NO_SCRIPT批准正文缺失
         alert:
           channel: bark
           object: 熔断即 Bark（notify-bark.js，去重 24h）
@@ -987,9 +943,9 @@ activities:
       - code
     runtime:
       phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1304,7 +1260,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-send-dm
-        version: 1.3.0
+        version: 1.4.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -1476,17 +1432,13 @@ activities:
         check: 预写触达中后回读，状态/分发号/话术ID 三项一致，否则 CLAIM_FAILED 不发
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            send_dm.pick_order（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.pick_order（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.orders_prepared
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: send_private_message
         name: 发私信
         order: 2
@@ -1498,17 +1450,13 @@ activities:
         check: 输入框回读 == 审批话术，发送后气泡可见
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            send_dm.send_private_message（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.send_private_message（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.message_delta_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: verify_delivery
         name: 核验发送UI及限制提示
         order: 3
@@ -1519,18 +1467,13 @@ activities:
         check: 现场无「暂无法给对方发送消息」「发送消息过于频繁」
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            send_dm.verify_delivery（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.verify_delivery（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
-          reason: 发送前无同正文历史气泡，发送后新增气泡或明确限制；原始XML留存。不宣称对方送达。
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.delivery_result_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
     commander:
       entry: activity-commander.mjs
   - key: write_back
@@ -1544,7 +1487,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 3
-    version: 4.0.1
+    version: 4.1.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -1600,23 +1543,19 @@ activities:
         fields:
           - status
           - send_status
-          - script_id
-          - sender_id
+          - script_version
+          - feishu_record_id
           - reached_at
     preconditions:
-      - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until
-        未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
-        daily_cap（config/dm-rate-ramp.json）；不可用账号在取单前经 --exclude 排除
-      - 触达等级 ∈ 该业务线 outreachGrades（选单时过滤，决策 67762358；老数据无等级前缀放行）
-      - 线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）
-      - 话术库有可用话术
+      - 已有本run原订单永久预留及实际发送/受阻/未知原件；不重新执行发送准入或再发一次消息。
+      - PG线索、Feishu原订单、发送账号、话术版本及原收件人关联可从真实持久来源核对。
     postconditions:
       - probe: out_no_stuck_inflight
-        asserts: 本run认领原Feishu订单回读真实终态；未知保持永久prepared，不自动重排；未发送不造成功
+        asserts: 原Feishu订单与PG线索触达状态都写回并独立读取真实一致结果，含状态/send_status/reached_at及原单与话术版本关联；sender_id/script_id从真实原订单关联核验，不虚构PG列。未知保留prepared/发送待核实、不重新发送；未发送不得造成功或送达。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → write_back独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 1500
       heartbeat_s: 60
@@ -1624,44 +1563,32 @@ activities:
       locks:
         - device:<serial>
         - outreach-tick mkdir 锁（35 分钟尸锁）
-      limits:
-        - name: daily_cap_ceiling
-          value: 60
-        - name: max_attempts_per_order
-          value: 10
+      limits: []
     idempotency:
       dedupe_key: OutreachOrder.lead_record_id
       on_duplicate: reject
     failure:
-      empty_ok:
-        - NO_PENDING 无待触达单
-        - restricted 对方仅互关（不计成功）
+      empty_ok: []
       retryable:
-        - lock_busy 设备被采收占用 → 回队列
-        - rate_limited 当天停发
-        - requeue_transient 两轮后转受阻
-        - device_ui 手机界面读取失败（回队列，不废线索；连续3次软熔断2小时自动恢复）
+        - 只允许原订单和PG的幂等读回/写回；prepared或结果未知保留原动作，绝不回到发送队列。
       needs_human:
         cases:
-          - account_mismatch 登错号（一次即熔断）
-          - other 连续 2 次未识别失败 → 熔断
-          - TARGET_ABSENT
-          - NO_SCRIPT 话术缺失
+          - 原发送事实或订单关联未知，保留prepared并报告
         alert:
           channel: bark
-          object: 熔断即 Bark（notify-bark.js，去重 24h）
+          object: 原动作写回未确认留痕
       fatal: []
     side_effects:
       - kind: internal_write
-        target: line-routes.js绑定的原Feishu线索表
-        description: 真实发送UI或受限结果回填；未知保留发送待核实不重新发送，不宣称送达
+        target: 原Feishu订单及该公司PG线索
+        description: 依据原发送事实写回两处状态与关联，未知保留prepared且不重新发送
     invokers:
       - code
     runtime:
       phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1976,7 +1903,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-write-back
-        version: 1.1.0
+        version: 1.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -2141,21 +2068,16 @@ activities:
           - Lead.reached_at
           - Lead.sender_id
           - Lead.script_id
-        check: 真实发送回写已触达；互关或限流回写触达受阻；未知保留永久prepared，不自动重排
+        check: 按原发送证据写回并独立读取原Feishu订单和PG线索状态/时间/话术版本及原单关联；未知保留不重发。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            write_back.write_back_result（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js write_back.write_back_result（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-write_back-readback.json"
-            match: '"verified"\s*:\s*true'
-            expect:
-              op: ">="
-              value: 1
+            type: none
     commander:
       entry: activity-commander.mjs
   - key: cleanup
@@ -2169,7 +2091,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 3.2.1
+    version: 3.3.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -2205,15 +2127,15 @@ activities:
       - 本 run 各阶段已写工件或已判失败
     postconditions:
       - probe: cl_app_closed
-        asserts: 收尾真实调用关闭抖音且 metrics.close_app_attempts 不少于 1
+        asserts: 真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。
       - probe: cl_lock_released
-        asserts: 本轮设备锁已实际释放，metrics.lock_released 等于 1
+        asserts: 只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。
       - probe: cl_safe_desktop_visible
-        asserts: 收尾后原生核验手机在安全桌面，metrics.safe_desktop_visible 等于 1
+        asserts: 原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → cleanup独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 120
       heartbeat_s: 30
@@ -2240,9 +2162,9 @@ activities:
       - code
     runtime:
       phase: finalize
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -2557,7 +2479,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.4.0
+        version: 0.5.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -2727,17 +2649,13 @@ activities:
         check: 前台不再是 com.ss.android.ugc.aweme
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            cleanup.close_app（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.close_app（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.close_app_attempts
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: release_lock
         name: 放锁
         order: 2
@@ -2745,41 +2663,32 @@ activities:
           - Device.lock_holder
         writes:
           - Device.lock_holder
-        check: 锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警
+        check: 仅精确释放本人已确认可释放的资源；未知保留并报告，不宽杀、不按TTL抢占。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            cleanup.release_lock（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.release_lock（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.lock_released
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: return_safe_desktop
         name: 回安全桌面
         order: 3
         reads:
           - Device.serial
         writes: []
-        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode
-          厂商launcher）
+        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            cleanup.return_safe_desktop（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.return_safe_desktop（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.safe_desktop_visible
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: finalize_run
         name: 终态回执
         order: 4
@@ -2787,19 +2696,15 @@ activities:
           - Run.run_tag
         writes:
           - Run.status
-        check: n_items>0 且 n_files>=n_items（workflow-result.sh:194）
+        check: 记录真实终态与实际成果数，合法empty/partial/failed皆可收尾，不伪造非零产物。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
-            cleanup.finalize_run（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.finalize_run（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: ledger
-            field: items_total
-            expect:
-              op: ">="
-              value: 1
+            type: none
     commander:
       entry: activity-commander.mjs

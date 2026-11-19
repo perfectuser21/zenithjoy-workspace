@@ -1,5 +1,5 @@
 version: 1
-runtime: {"kind":"commander-foundation-v1","profile_ref":{"repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/profiles/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:e17945e3e0e898c2aa29ea9314dc45e1225bae761b1f53376ca76df6ca103529"},"timeout_ms":2400000,"cleanup_timeout_ms":600000,"commander_timeout_ms":60000,"input_schema":{"type":"object","additionalProperties":false,"required":["binding_key","business"],"properties":{"binding_key":{"type":"string","pattern":"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$"},"business":{"type":"object","additionalProperties":false,"required":["scope","comment_limit","producer_key"],"properties":{"scope":{"type":"object","required":["video_ids","upstream","qualification_input"],"properties":{"video_ids":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"string","pattern":"^[0-9]{16,24}$"}},"upstream":{"type":"object","minProperties":1,"maxProperties":1,"additionalProperties":{"type":"object","additionalProperties":false,"required":["run"],"properties":{"run":{"type":"string","minLength":1}},"description":"只选择已批准来源run_tag；内部run_id由宿主从受控producer推导。"}},"qualification_input":{"type":"object"}}},"comment_limit":{"type":"integer","minimum":1,"maximum":100},"qualification_coverage_seconds":{"type":"integer","minimum":1,"maximum":300},"input_provenance":{"type":"object"},"producer_key":{"type":"string","pattern":"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$","description":"受控本机配置内已完成101 manifest/result来源的索引；不接受用户文件路径或源码身份。"}}}}}}
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:e17945e3e0e898c2aa29ea9314dc45e1225bae761b1f53376ca76df6ca103529" }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope", "comment_limit", "producer_key" ], "properties": { "scope": { "type": "object", "required": [ "video_ids", "upstream", "qualification_input" ], "properties": { "video_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "pattern": "^[0-9]{16,24}$" } }, "upstream": { "type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": { "type": "object", "additionalProperties": false, "required": [ "run" ], "properties": { "run": { "type": "string", "minLength": 1 } }, "description": "只选择已批准来源run_tag；内部run_id由宿主从受控producer推导。" } }, "qualification_input": { "type": "object" } } }, "comment_limit": { "type": "integer", "minimum": 1, "maximum": 100 }, "qualification_coverage_seconds": { "type": "integer", "minimum": 1, "maximum": 300 }, "input_provenance": { "type": "object" }, "producer_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$", "description": "受控本机配置内已完成101 manifest/result来源的索引；不接受用户文件路径或源码身份。" } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/102.json
 implementation:
@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.11.1
+  version: 0.12.0
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -20,9 +20,6 @@ source_repo: perfectuser21/zenithjoy-workspace
 checks: services/phone-adb-controller/checks/douyin-video-processing.yaml
 dod_promotion:
   min_consecutive_pass: 20
-runner:
-  entry: leadgen-workflow.mjs
-  queue: pending_videos
 on_status:
   done: next
   retry: retry
@@ -30,7 +27,7 @@ on_status:
   empty: next
   partial: stop
   needs_review: pause
-always_run: [cleanup]
+always_run: [ cleanup ]
 recovery:
   total_timeout_sec: 10020
   cleanup_timeout_sec: 120
@@ -44,34 +41,11 @@ inputs:
   - type: CommentSampleRequest
     cardinality: one
     optional: true
-    fields:
-      [
-        run_tag,
-        source_run,
-        profile,
-        serial,
-        line,
-        comment_limit,
-        collection_budget_s
-      ]
+    fields: [ run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s ]
   - type: HistoricalComment
     cardinality: many
     optional: true
-    fields:
-      [
-        id,
-        line_key,
-        run_tag,
-        source_run,
-        video_id,
-        video_url,
-        schema_version,
-        status,
-        douyin_id,
-        body,
-        history_sha256,
-        coverage
-      ]
+    fields: [ id, line_key, run_tag, source_run, video_id, video_url, schema_version, status, douyin_id, body, history_sha256, coverage ]
 activities:
   - key: preflight
     name: 预检
@@ -85,7 +59,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.3.0
+    version: 2.4.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -130,21 +104,21 @@ activities:
           - profile
           - serial
     preconditions:
-      - 仅旧定时采收入口 wf-run.sh 的发起闸在 8-22 点让路；手动或 Brain 派发的 101/102 Activity 预检不以此为条件
-      - 仅旧定时采收入口 wf-run.sh 用 kpi-gate.js 判断当日 KPI，达标则退让、不可达则按默认词数继续；手动或 Brain 派发不以此为条件
+      - 本次真实Task/run、公司、租户、业务线、设备与账号来源已冻结且可读取；缺失不凭历史实例补造。
+      - 业务Agent仅在本次授权和原绝对deadline内执行；旧定时器时段或KPI退让不作为正式API派单的业务准入。
     postconditions:
       - probe: pf_device_verified
-        asserts: 本轮设备 serial 的原生在线与身份核验结果 metrics.device_verified 等于 1
+        asserts: 设备原生在线，硬件身份与受控ADB路由和本次设备绑定一致。
       - probe: pf_account_verified
-        asserts: 手机原生登录账号与本轮冻结 profile 相符，metrics.account_verified 等于 1
+        asserts: 手机原生登录账号与本次注册账号及公司/租户绑定一致，读取本run冻结政策版本，不借旧快照替代。
       - probe: pf_call_idle
-        asserts: 手机不在通话中，metrics.call_state_idle 等于 1
+        asserts: 当前手机不在通话中，未知状态不得等同idle。
       - probe: pf_lock_acquired
-        asserts: 本轮执行者实际持有设备锁，metrics.lock_acquired 等于 1
+        asserts: 本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → preflight独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 600
       heartbeat_s: 60
@@ -174,41 +148,41 @@ activities:
       - code
     runtime:
       phase: setup
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/profiles/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:e17945e3e0e898c2aa29ea9314dc45e1225bae761b1f53376ca76df6ca103529"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:85eaad92ab2b25740e53a1044163cf2d259526f1a941d9bc8ddf2fc746fd6c6f"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:2d086959696b5931da3bd0736a375fce9d74a3274cf86907ee153ed42d3ac556"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c6ad9d3f1865817170c45eadd05aeaf4653c53a199dc8db96ec0d1ae548ce8cd"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:af84f8098be50b79c6aed185656c1a125dba5095c6b3f70535571cdff4e52009"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:bfa727c5e003884f0210a0e2b01186f17844311cf8bbbb1ecf038165cfba7236"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/context.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/worker.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/adapter.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/assembly.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/freeze.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/asr.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/101.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/101.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-authorization-intent.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-upstream-source.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-pg.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-tools.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-tool-result.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-104.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-context.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-runtime.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-transport.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-outreach-scope.js","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/package.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"}
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:e17945e3e0e898c2aa29ea9314dc45e1225bae761b1f53376ca76df6ca103529" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:85eaad92ab2b25740e53a1044163cf2d259526f1a941d9bc8ddf2fc746fd6c6f" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:2d086959696b5931da3bd0736a375fce9d74a3274cf86907ee153ed42d3ac556" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c6ad9d3f1865817170c45eadd05aeaf4653c53a199dc8db96ec0d1ae548ce8cd" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:af84f8098be50b79c6aed185656c1a125dba5095c6b3f70535571cdff4e52009" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:bfa727c5e003884f0210a0e2b01186f17844311cf8bbbb1ecf038165cfba7236" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/worker.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/freeze.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/asr.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-authorization-intent.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-upstream-source.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-pg.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-tools.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-tool-result.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-104.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-runtime.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-transport.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-outreach-scope.js", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/package.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8" }
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/official-phone-execution.mjs
@@ -498,7 +472,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-preflight
-        version: 0.8.0
+        version: 0.9.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -739,20 +713,16 @@ activities:
           - Device.serial
         writes:
           - Device.lock_holder
-        check: lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）
+        check: 实际锁owner与本run一致，使用本次冻结租约且不覆盖他人。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            preflight.acquire_device_lock（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.acquire_device_lock（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.lock_acquired
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: refresh_lock_heartbeat
         name: 锁心跳续期
         order: 2
@@ -763,18 +733,13 @@ activities:
         check: lock-refresh 后锁文件 mtime 更新
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
-          at: cleanup
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: log
-            regex: 锁心跳续期3次仍未确认成功
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: verify_device_identity
         name: 验设备身份
         order: 3
@@ -785,17 +750,13 @@ activities:
         check: adb get-state == device 且 serial 与声明一致
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            preflight.verify_device_identity（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_device_identity（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.device_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: verify_call_idle
         name: 验通话空闲
         order: 4
@@ -806,17 +767,13 @@ activities:
         check: telephony call_state == IDLE
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            preflight.verify_call_idle（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_call_idle（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.call_state_idle
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: read_account_mark
         name: 读账号标记(我页)
         order: 5
@@ -827,18 +784,13 @@ activities:
         check: 我页抖音号 in profile 的注册账号列表(account-current + account_registered)
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            preflight.read_account_mark（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.read_account_mark（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-account-profile.xml"
-            match: 抖音号：
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: open_run_ledger
         name: 开账本
         order: 6
@@ -849,24 +801,16 @@ activities:
           - Run.run_tag
           - Run.profile
           - Run.serial
-        check: ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron
-          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即
-          0）
+        check: 保存本轮真实设备、账号、通话与锁的原始证据；未知明确记录，不从旧harvest日志或固定指标宣称成功。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            preflight.open_run_ledger（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.open_run_ledger（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: ledger
-            stage: preflight
-            field: status
-            equals: completed
-            expect:
-              op: ==
-              value: 1
+            type: none
     commander:
       entry: activity-commander.mjs
   - key: dedup
@@ -880,7 +824,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.2.1
+    version: 3.3.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -907,19 +851,19 @@ activities:
           - comment_count
           - keyword
     preconditions:
-      - 自家号名单必须可读取
-      - 101冻结身份和本批VID清单校验成功，PG按VID独立读回无缺行
+      - 本run公司政策与自家号名单可读取；101冻结身份、确切VID及其原始发现证据与PG逐ID读回一致。
+      - input_provenance.producer是普通来源证明，不自动启用producer_descriptor特殊认领例外。普通路径按本次exactIDs且source_run:null认领；仅显式冻结producer_descriptor才适用其来源状态要求。
     postconditions:
       - probe: dedup_historical_filter_verified
-        asserts: PG按实际VID读回已采与拒绝状态、自家作者配置、本批VID交接证据
+        asserts: PG逐VID核实已采、拒绝和当前处理状态；按VID过滤重复，不以同标题合并不同视频；合法空集合保留实际筛选原因。
       - probe: dedup_own_filter_verified
-        asserts: PG按实际VID读回已采与拒绝状态、自家作者配置、本批VID交接证据
+        asserts: 自家作者过滤依据本次已核作者身份与公司配置，不能按标题或昵称猜作者。
       - probe: dedup_run_dedup_verified
-        asserts: PG按实际VID读回已采与拒绝状态、自家作者配置、本批VID交接证据
+        asserts: 本批VID不重复，实际可处理集合有本run精确认领与租约证据；合法缓存保留原judgment run，普通101来源证明不得误当必须pending/原101harvest_batch的特殊授权。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → dedup独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 600
       heartbeat_s: 60
@@ -952,9 +896,9 @@ activities:
       - agent
     runtime:
       phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1209,7 +1153,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-dedup
-        version: 0.7.0
+        version: 0.8.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/producer-descriptor.mjs
@@ -1467,13 +1411,10 @@ activities:
           ref: leadgen-workflow.mjs intake：inspect_videos按本批明确VID读回PG
         uses_llm: false
         dod:
-          mode: hard
+          mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.historical_filter_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: filter_own_accounts
         name: 自家号过滤
         order: 2
@@ -1486,13 +1427,10 @@ activities:
           ref: leadgen-workflow.mjs intake：101实际作者与own-accounts配置比对
         uses_llm: false
         dod:
-          mode: hard
+          mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.own_filter_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: filter_current_run
         name: 本轮重复过滤
         order: 3
@@ -1505,13 +1443,10 @@ activities:
           ref: leadgen-workflow.mjs intake：核验上游captures和videos实际VID一致性
         uses_llm: false
         dod:
-          mode: hard
+          mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.run_dedup_verified
-            expect:
-              op: ==
-              value: 1
+            type: none
     commander:
       entry: activity-commander.mjs
   - key: qualification
@@ -1525,7 +1460,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 3
-    version: 3.4.2
+    version: 3.5.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1559,19 +1494,18 @@ activities:
           - judgment_reason
           - transcript
     preconditions:
-      - SDK≥33使用playback_dup；SDK31仅使用精确SHA固定的已验output_pcm_sdk31运行时，缺原件或SDK32保持pending
-      - 从PG认领pending视频，租约绑定本run
-      - 深链打开后current-video-link读到的实际video_id必须等于认领ID，不能认控制器回显的期望ID
-      - 缓存matched旧判断仅在本轮对同VID重新核原生身份且旧judgment_config与本轮冻结公司、租户、版本、政策一致时可复用；旧PG判断run保持原值
+      - 本次设备能力及实际捕获路径可用；具体SDK和编码实现属于受控能力配置，未经实测能力不能冒可用。
+      - 本run已精确认领目标VID，当前租约及当前原生视频身份一致；不认期望VID回显。
+      - 缓存matched仅在同公司/租户/政策版本与原结论一致、本次原生VID身份及来源独立成立时复用；旧judgment run保持原值，不重复评分。
     postconditions:
       - probe: qual_none_pending
-        asserts: 本批已认领视频中 judgment_status 仍为 pending 的 PG 独立读回条数为 0
+        asserts: 每个交给collection的VID必须有合法matched判断及真实读回；技术捕获/ASR失败为unknown而非内容rejected。真实no_speech单独记录，冻结政策未明确替代处理时不自动作内容拒绝，未确认不得交下游。
       - probe: qual_reason_present
-        asserts: 本批已有资格结论的视频在 PG 中的 judgment_reason 全部非空；显式采样时本轮qualification主span另绑定run/binding/SHA、逐VID原生身份核验、fresh/cached模式及旧judgment run，缺私有原件或回执不能交collection
+        asserts: 新判断绑定本次真实内容覆盖、有效音频、ASR响应、公司政策与唯一主判原件；不以墙钟时长或标题代替覆盖/转写。缓存绑定原judgment run及原媒体/ASR/政策证据，并有本轮原生VID身份；理由与持久结论逐VID读回，缺证据不能通过。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → qualification独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 1800
       heartbeat_s: 60
@@ -1579,8 +1513,8 @@ activities:
       locks:
         - device:<serial>
       limits:
-        - name: record_budget_s_per_video
-          value: 10-105（(时长+2)/3+5）
+        - name: capture_budget
+          value: 以本run冻结单次capture上限及绝对deadline为界，按真实内容覆盖验收，不按旧倍速公式推定
     idempotency:
       dedupe_key: Video.line_key+Video.video_id
       on_duplicate: skip
@@ -1589,8 +1523,7 @@ activities:
         - 本批无 pending 视频
       retryable:
         - 转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）
-        - 判定 API 故障（OpenRouter 402/429/网络）留 pending，judgment_reason
-          记「判定异常(待重判)」（judge-video.js markVideoJudgeError）
+        - 判定 API 故障（OpenRouter 402/429/网络）留 pending，judgment_reason 记「判定异常(待重判)」（judge-video.js markVideoJudgeError）
         - 录音死寂（harvest-keyword.sh 电平打点）
       needs_human:
         cases:
@@ -1608,9 +1541,9 @@ activities:
       - agent
     runtime:
       phase: per_item
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1865,7 +1798,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-qualification
-        version: 0.7.0
+        version: 0.8.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/producer-descriptor.mjs
@@ -2172,20 +2105,16 @@ activities:
           - Video.comment_count
         writes:
           - Video.judgment_status
-        check: 实际current-video-link回读content_type=video且video_id与认领ID完全一致，图文或空身份在录音前排除；零评论以开评论区真实结果处理
+        check: 当前原生VID等于认领VID且确为视频，零评论按真实评论页结果处理。
         implementation:
           status: implemented
           ref: queued-video-lib.sh qv_verify_video：原始控制器输出与期望/实际ID写入独立工件，失败覆盖旧成功
         uses_llm: false
         dod:
-          mode: hard
+          mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-identity-*.json"
-            match: '"verified"\s*:\s*true[\s\S]*"content_type"\s*:\s*"video"'
-            expect:
-              op: ">="
-              ref: metrics.videos_verified
+            type: none
       - key: unmute_before_record
         name: 录前取消静音
         order: 2
@@ -2193,60 +2122,48 @@ activities:
           - Video.video_url
           - Device.lock_holder
         writes: []
-        check: 本run逐VID实际record-start媒体音量回读为正整数；未知或零不得通过，音轨静音不能替代媒体音量证据
+        check: 本次实际媒体音量与音轨状态可读回，未知或静音如实记录，不能伪装有效音频。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            qualification.unmute_before_record（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.unmute_before_record（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.media_volume_failures
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: record_triple_speed
         name: 采集口播音频
         order: 3
         reads:
           - Video.video_url
         writes: []
-        check: 真实媒体时长 ≥ 预算的 80%；SDK31须唯一pcm_s16le音轨、无视频轨及首末固定运行时原件，SDK≥33保留原录屏音轨约束
+        check: 本次媒体原件证明目标内容真实覆盖与起止位置，遵守冻结单次capture上限及原deadline，不以墙钟或预算比例替代。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            qualification.record_triple_speed（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.record_triple_speed（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: log
-            regex: audio_rejected reason=short_or_unknown_duration
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: extract_audio
         name: 提取16k音频
         order: 4
         reads:
           - Video.video_id
         writes: []
-        check: 送ASR的本轮音频必须有16kHz音轨且电平非死寂；实际静音仅允许本run租约PG拒绝与独立读回，不得标题或旧转写兜底matched
+        check: 从原媒体提取可验证音频；技术失败unknown，真实no_speech保留原证据，不使用标题或旧转写伪称本次ASR。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            qualification.extract_audio（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.extract_audio（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.recording_outcomes_failures
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: transcribe
         name: 通义ASR转写
         order: 5
@@ -2254,25 +2171,16 @@ activities:
           - Video.video_id
         writes:
           - Video.transcript
-        check: 可用本轮音轨正常转写；空/静音 → rejected。静音在ASR前用本轮录音核验拒绝事实终结，保旧transcript但不冒充本轮ASR完成
+        check: ASR只消费本次可验证音频；技术失败unknown，no_speech按冻结政策明确处理，未声明时不自动rejected。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            qualification.transcribe（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.transcribe（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch =
-              '$RUN_TAG' AND judgment_status <> 'pending' AND
-              coalesce(transcript, '') = '' AND coalesce(judgment_reason, '')
-              NOT LIKE '转写为空%' AND coalesce(judgment_reason, '') NOT LIKE
-              'V2便宜闸%' AND coalesce(judgment_reason, '') NOT LIKE
-              '本轮录音核验拒绝:静音音轨%'
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: judge_content
         name: 意向判定
         order: 6
@@ -2282,22 +2190,16 @@ activities:
         writes:
           - Video.judgment_status
           - Video.judgment_reason
-        check: judgment_status ∈ {matched, rejected} 且 judgment_reason 非空
+        check: 唯一业务主判保存真实matched/rejected与理由；合法缓存保留原判断来源，不增加评分调用。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            qualification.judge_content（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.judge_content（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch =
-              '$RUN_TAG' AND judgment_status <> 'pending' AND
-              coalesce(judgment_reason, '') = ''
-            expect:
-              op: <=
-              value: 0
+            type: none
     commander:
       entry: activity-commander.mjs
   - key: collection
@@ -2311,7 +2213,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 2.7.2
+    version: 2.8.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -2323,16 +2225,7 @@ activities:
         source: 本次任务冻结的采样请求
         cardinality: one
         optional: true
-        fields:
-          [
-            run_tag,
-            source_run,
-            profile,
-            serial,
-            line,
-            comment_limit,
-            collection_budget_s
-          ]
+        fields: [ run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s ]
       - type: Video
         source: 本轮资格判定通过的视频及原生身份读回
         cardinality: many
@@ -2397,35 +2290,33 @@ activities:
         fields:
           - process_status
     preconditions:
-      - MMV102原生收件人来源须使用首个设备动作前冻结到company_config_runs.task_inputs的本run profile/serial，实号核对后生成私有company-binding工件；capture/parse显式消费，PG提交只读原102快照重验唯一verified enabled抖音账号及公司/租户/平台，不能由原件自报profile授权；旧M4无新绑定保持原静态路径
-      - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，可选collection_budget_s仅显式配置时冻结为1..6720整数，默认480和进程960保持，显式进程预算加480收尾并受Activity/真实全局剩余时间限制；配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
-      - 仅matched视频可采评论
-      - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
-      - 可选HistoricalComment是只读PG系统输入，持本run matched租约且source_run受信VID清单后queue
-        comment_history读取，非用户CLI或qualification输出；当前唯一line+VID+exactURL绑定，旧短链仅标题窄候选后受信只读HEAD实际VID相同才纳入私有工件，unknown仍走原路径，schema或scope异常拒绝
-      - 历史命中仍需当前评论人的新鲜actualOID和严格返回评论面板，完整正文相等后才免重复名片动作
-      - NativeRecipientEvidence是现采集Step附带可选原件，不新增UI动作/不改12列LEAD；锁内person-profile/returned+after-card实际VID+重开评论成功后才产出，缺原件unknown不ready
+      - 仅消费合法matched及本run处理租约；合法同政策缓存保留原judgment run和证据，不强改成本run；本次原生VID和来源另行核实。
+      - 本run profile/serial/公司/租户/账号来自首个设备动作前冻结的真实输入，收件人证据不能自报授权。
+      - 最高限额、目标配额与实际已提交数分别记录；显式目标及预算来自冻结输入，不自增上限或延长原deadline。
+      - 评论身份、完整正文、真实profileUrl和recipientEvidence绑定当前VID/UID及现场返回评论页证据；可选profileLinkEvidence不是新评论必须已有PG ID的恢复凭据。
+      - 历史去重只读原PG事实并核完整身份与本次来源；只有完整正文与新鲜原生身份一致才能免重复取链，未知不得冒历史命中。
+      - 确切已提交评论可以committed_partial交103；不能因整个102未成功而隐瞒已提交事实，也不能把partial冒全部完成。
     postconditions:
       - probe: coll_only_matched
-        asserts: 已标记为评论采集完成的视频中，资格不为 matched 的 PG 独立读回条数为 0
+        asserts: 交付评论仅来自合法matched视频；合法缓存的原判断run及政策/原证据保持，不能改历史run以通过。
       - probe: coll_video_binding_consistent
-        asserts: 本批已采评论绑定的真实 VID 与其来源视频一致，PG 独立核验不一致条数为 0
+        asserts: 每条实际评论的VID、原生UID、完整正文、主页URL与原来源一致，PG逐行读回无身份错配。
       - probe: coll_rescan_rate
-        asserts: 真实身份错位后的重定位次数与合格视频数之比 metrics.rescan_rate 不超过 0.3
+        asserts: 真实身份错位后的重定位次数与实际合格视频数有原始记录，其比率不超过原0.3上限；无合格视频时说明不适用依据，不能编计数。
       - probe: comments_readback
-        asserts: 本批已提交评论在 zenithjoy.leadgen_comments 的独立读回条数不少于 metrics.comments_collected
+        asserts: PG逐精确ID读取实际新提交评论及其完整recipientEvidence，与本次原生证据/主页URL相符；执行提案、计数或工具exit0不能替代持久行。 按当前原生作者UID及冻结自有账号清单过滤作者本人和自有账号，不用昵称猜测；已提交集合不得含被排除对象。
       - probe: sampling_readback_verified
-        asserts: 仅显式采样时每个qualified视频须达冻结配额或真实footer/no_comments，逐完整身份独立PG读回；本run精确评论ID集、规范PG行摘要及新增/历史数进入同run/binding/SHA的collection主span；其逐VID资格身份须与qualification主span精确一致，旧matched仅核本轮资格并保留旧判断run；总POST小于3MB，供跨机103核验；默认无采样required=0不声称采样通过
+        asserts: 本次最高限额、目标配额、实际distinct数、真实footer/no_comments及stop_reason分别有证据。未达目标的已提交成果为partial，不报全部完成；视频只有真实穷尽才能评论已采，明确采样不伪称穷尽。
       - probe: history_scope_verified
-        asserts: 本次qualified实际required_count等于私有PG历史工件scope验证数量，0等于0为显式无样本，不当评分样本
+        asserts: 可选历史集合限定同line/VID/真实URL及本次受信来源，未启用时提供本次未启用事实，不强造历史证据。
       - probe: history_consumption_readback
-        asserts: 每个已尝试合格视频的历史消费皆独立PG读回成功，schema或新鲜证据失败不算通过，unknown无skip
+        asserts: 历史消费逐精确ID核验完整身份与当前原生证据，不把未核历史表总数计入本次目标。
       - probe: history_no_failures
-        asserts: 历史schema/租约/VIDURL/新鲜身份及独立读回无失败，不迁移旧评论批次和评分状态
+        asserts: 历史读回失败或身份未知保持unknown，不降级为已消费；103只消费已独立确认的精确持久ID。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → collection独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 7200
       heartbeat_s: 300
@@ -2464,9 +2355,9 @@ activities:
       - agent
     runtime:
       phase: per_item
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -2721,7 +2612,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.9.0
+        version: 0.10.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/runtime-receipts.mjs
@@ -2983,24 +2874,16 @@ activities:
           - Video.video_url
           - Video.judgment_status
         writes: []
-        check: 本run逐VID有评论时必须原生评论header和输入面板，旧n条评论与新exact评论n均可见；
-          仅已证零评论可用本run同VID的精确零占位before原XML及identity原件哈希证明替代该VID面板，未知/缺按钮不算零；实际VID仍须qv新鲜nonce与identity sidecar核验，可选历史不替代核验
+        check: 本run逐VID有评论时必须原生评论header和输入面板，旧n条评论与新exact评论n均可见； 仅已证零评论可用本run同VID的精确零占位before原XML及identity原件哈希证明替代该VID面板，未知/缺按钮不算零；实际VID仍须qv新鲜nonce与identity sidecar核验，可选历史不替代核验
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.open_comment_section（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.open_comment_section（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-v*-collection-comments-panel.xml"
-            zero_comment_alternative: verified_video_ui_v1
-            match: '(?=[\s\S]*<node(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/(?:ety|e19|eyi)")(?=[^>]*\bclass="android\.widget\.EditText")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)(?:<node(?=[^>]*\btext="[0-9万.]+条评论")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/title")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>|<node(?=[^>]*\btext="评论
-              [0-9万.]+")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ez-")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)'
-            expect:
-              op: ">="
-              ref: metrics.videos_processed
+            type: none
       - key: collect_comments
         name: 采集评论
         order: 2
@@ -3018,22 +2901,16 @@ activities:
           - Comment.dedup_key
           - Comment.harvest_batch
           - Comment.line_key
-        check: 逐屏整行去重，连续 2
-          屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过；仅本run同VID的精确零占位before原XML和identity原件hash证明齐全时，可替代该VID逐屏原件；零结果不计采得评论或配额
+        check: 逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过；仅本run同VID的精确零占位before原XML和identity原件hash证明齐全时，可替代该VID逐屏原件；零结果不计采得评论或配额
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.collect_comments（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.collect_comments（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}*-screen*-comments.xml"
-            zero_comment_alternative: verified_video_ui_v1
-            expect:
-              op: ">="
-              ref: metrics.videos_processed
+            type: none
       - key: verify_commenter_identity
         name: 评论人身份验证
         order: 3
@@ -3041,23 +2918,16 @@ activities:
           - Comment.nickname
         writes:
           - Comment.douyin_id
-        check: 主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link
-          仍是本视频，漂移即本视频剩余评论作废(0929修，见下
-          known_gaps)；历史匹配也必须新鲜actualOID逐字核验及严格评论面板返回，profile和returned原工件hash独立关联
+        check: 主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link 仍是本视频，漂移即本视频剩余评论作废(0929修，见下 known_gaps)；历史匹配也必须新鲜actualOID逐字核验及严格评论面板返回，profile和returned原工件hash独立关联
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.verify_commenter_identity（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.verify_commenter_identity（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}*-person*-profile.xml"
-            match: 抖音号：
-            expect:
-              op: ">="
-              ref: metrics.comments_collected
+            type: none
       - key: resolve_profile_link
         name: 客户主页直链
         order: 4
@@ -3065,21 +2935,16 @@ activities:
           - Comment.douyin_id
         writes:
           - Comment.profile_url
-        check: 分享名片 →
-          sec_uid，剪贴板守卫回读；失败重试3次(同commenter-identity套路)，3次仍失败才降级为线索保留但链接为空；仅可信同VID+actualOID+完整body历史经新鲜验证后免重复card，独立PG消费证据必须成立
+        check: 取得当前评论人的真实主页URL并绑定完整recipientEvidence；新评论无需预先已有comment_id。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.resolve_profile_link（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.resolve_profile_link（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: tsv
-            regex: ^LEAD\t([^\t]*\t){7}{word}\t[^\t]*\t\t
-            expect:
-              op: <=
-              value: 0
+            type: none
       - key: mark_video_collected
         name: 标记视频已采
         order: 5
@@ -3089,43 +2954,32 @@ activities:
         writes:
           - Video.process_status
           - Video.comment_count
-        check: process_status=评论已采
-          只写给matched且原默认完整采集或新鲜footer视频；采样quota_reached走collect_partial不写全采状态，fulfilled_sample_video_ids仅本run已核目标，不全局排除；评论提交事务重验历史PGid/OID/fullbody/视频归属，comment_count只写本次distinct已核历史加新覆盖，历史4条加新0条写4，不把未核旧UI总数当历史覆盖
+        check: 仅真实footer/穷尽且评论事务已提交时标评论已采；采样或未达目标保partial和实际停止原因。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.mark_video_collected（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.mark_video_collected（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/4及原始证据验收。
           readback:
-            type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch =
-              '$RUN_TAG' AND process_status = '评论已采'
-            expect:
-              op: ">="
-              ref: metrics.videos_collected
+            type: none
       - key: return_to_results
         name: 归位回结果页
         order: 6
         reads:
           - Video.video_url
         writes: []
-        check: 新0102保留身份错位兜底率质量代理。rescan_rate/identity_rescan_rate仅为真实身份失败重定位调用数除以合格视频数，
-          正常空头像恢复另如实计avatar_recovery_count，不计为身份错位；原0.3阈值不变。此代理不构成搜索结果页实际归位证据。
+        check: 新0102保留身份错位兜底率质量代理。rescan_rate/identity_rescan_rate仅为真实身份失败重定位调用数除以合格视频数， 正常空头像恢复另如实计avatar_recovery_count，不计为身份错位；原0.3阈值不变。此代理不构成搜索结果页实际归位证据。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.return_to_results（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.return_to_results（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.rescan_rate
-            expect:
-              op: <=
-              value: 0.3
+            type: none
       - key: push_raw_comments
         name: 评论落池
         order: 7
@@ -3138,27 +2992,18 @@ activities:
           - Comment.dedup_key
           - Comment.line_key
           - Comment.recipient_evidence
-        check: 评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数
-          PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit
-          1；保本次LEAD观察comments_collected及原PG门槛，新增comments_inserted/history_verified/coverage分列，历史不输出新LEAD或迁旧batch；可选recipient原件严格绑定line/run/source_run/profile/VID/UID/全文SHA、私有文件真实RUN_DIR和hash，异常拒绝
+        check: 评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数 PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit 1；保本次LEAD观察comments_collected及原PG门槛，新增comments_inserted/history_verified/coverage分列，历史不输出新LEAD或迁旧batch；可选recipient原件严格绑定line/run/source_run/profile/VID/UID/全文SHA、私有文件真实RUN_DIR和hash，异常拒绝
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh
-            collection.push_raw_comments（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh collection.push_raw_comments（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。
           readback:
-            type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_comments WHERE harvest_batch =
-              '$RUN_TAG'
-            expect:
-              op: ">="
-              ref: metrics.comments_collected
+            type: none
     known_gaps:
-      - gap: coll_video_binding_consistent
-          只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是
-          harvest-keyword.sh video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验
+      - gap: coll_video_binding_consistent 只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是 harvest-keyword.sh video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验
         task: 878fe194
     commander:
       entry: activity-commander.mjs
@@ -3174,7 +3019,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 5
-    version: 2.3.0
+    version: 2.4.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -3210,15 +3055,15 @@ activities:
       - 本 run 各阶段已写工件或已判失败
     postconditions:
       - probe: cl_app_closed
-        asserts: 收尾真实调用关闭抖音且 metrics.close_app_attempts 不少于 1
+        asserts: 真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。
       - probe: cl_lock_released
-        asserts: 本轮设备锁已实际释放，metrics.lock_released 等于 1
+        asserts: 只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。
       - probe: cl_safe_desktop_visible
-        asserts: 收尾后原生核验手机在安全桌面，metrics.safe_desktop_visible 等于 1
+        asserts: 原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: phone
-      via: leadgen-workflow.mjs → cleanup独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 300
       heartbeat_s: 30
@@ -3245,9 +3090,9 @@ activities:
       - code
     runtime:
       phase: finalize
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -3526,7 +3371,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-cleanup
-        version: 0.8.0
+        version: 0.9.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -3772,12 +3617,9 @@ activities:
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.close_app_attempts
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: release_lock
         name: 放锁
         order: 2
@@ -3785,41 +3627,32 @@ activities:
           - Device.lock_holder
         writes:
           - Device.lock_holder
-        check: 锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警
+        check: 仅精确释放本人已确认可释放的资源；未知保留并报告，不宽杀、不按TTL抢占。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            cleanup.release_lock（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.release_lock（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.lock_released
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: return_safe_desktop
         name: 回安全桌面
         order: 3
         reads:
           - Device.serial
         writes: []
-        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode
-          厂商launcher）
+        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            cleanup.return_safe_desktop（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.return_safe_desktop（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: metric
-            ref: metrics.safe_desktop_visible
-            expect:
-              op: ==
-              value: 1
+            type: none
       - key: finalize_run
         name: 终态回执
         order: 4
@@ -3827,19 +3660,15 @@ activities:
           - Run.run_tag
         writes:
           - Run.status
-        check: n_items>0 且 n_files>=n_items（workflow-result.sh:194）
+        check: 记录真实终态与实际成果数，合法empty/partial/failed皆可收尾，不伪造非零产物。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            cleanup.finalize_run（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。
           readback:
-            type: ledger
-            field: items_total
-            expect:
-              op: ">="
-              value: 1
+            type: none
     commander:
       entry: activity-commander.mjs

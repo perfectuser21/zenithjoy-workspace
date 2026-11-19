@@ -34,11 +34,12 @@ export async function loadActivityHostPg(context){
  return module.loadPreflightPg({runtimeRoot:context.runtime_root,frozen:context.verification.pg});
 }
 function replaceOnce(text,before,after){need(text.split(before).length===2,'BASE_WIRING');return text.replace(before,after);}
-export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,sourceCommit,expectedSource,expectedDeployment,workflow='101'}){
- need(['101','102','103'].includes(workflow),'WORKFLOW');
+export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,sourceCommit,expectedSource,expectedDeployment,workflow='101',checkerMode='script'}){
+ need(['101','102','103'].includes(workflow),'WORKFLOW');need(['script','agent'].includes(checkerMode),'CHECKER_MODE');
  need(/^[a-f0-9]{40}$/.test(sourceCommit||''),'SOURCE');runtime(baseRoot);runtime(runtimeRoot);
  need(typeof targetRoot==='string'&&path.isAbsolute(targetRoot)&&!fs.existsSync(targetRoot),'TARGET');
- const base=workflow==='102'?{...BASE,...BASE102}:BASE;
+ const hostBase=checkerMode==='agent'?{'business.mjs':BASE['business.mjs']}:BASE;
+ const base=workflow==='102'?{...hostBase,...BASE102}:hostBase;
  const files={};for(const [name,digest]of Object.entries(base)){const bytes=regular(path.join(baseRoot,name));need(hash(bytes)===digest,'BASE');files[name]=bytes.toString();}
  const module=await dependency(runtimeRoot,expectedSource);
  const pg={deployment:{source_commit:sourceCommit},preflight_pg:module.preflightPgLockIdentity({runtimeRoot})};
@@ -48,12 +49,14 @@ export async function assembleActivityPgHost({baseRoot,targetRoot,runtimeRoot,so
  files['business.mjs']=replaceOnce(files['business.mjs'],
   "const require=createRequire(path.join(c.runtime_root,'package.json')),pool=require('./leadgen-db-connect.js').getPool();",
   "const require=createRequire(path.join(c.runtime_root,'package.json')),{Pool}=await loadActivityHostPg(c),pool=new Pool(process.env.DATABASE_URL?{connectionString:process.env.DATABASE_URL}:{host:process.env.PGHOST,port:Number(process.env.PGPORT||5432),user:process.env.PGUSER,password:process.env.PGPASSWORD,database:process.env.PGDATABASE||'zenithjoy'});");
+ if(checkerMode==='script'){
  files['checker.mjs']=replaceOnce(files['checker.mjs'],
   "const require=createRequire(path.join(c.runtime_root,'package.json')),{Pool}=require('pg');",
   "const {Pool}=await loadActivityHostPg(c);").replace("import {createRequire} from 'node:module';\n",'');
  files['production-readback-local.mjs']=replaceOnce(files['production-readback-local.mjs'],"const {Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);");
  files['cleanup-result.mjs']=replaceOnce(files['cleanup-result.mjs'],"const require=createRequire(c.runtime_root+'/package.json'),{Pool}=require('pg');","const {Pool}=await loadActivityHostPg(c);").replace("import {createRequire} from 'node:module';",'');
- for(const name of Object.keys(BASE))files[name]="import {loadActivityHostPg} from './activity-host-pg.mjs';\n"+files[name];
+ }
+ for(const name of Object.keys(hostBase))files[name]="import {loadActivityHostPg} from './activity-host-pg.mjs';\n"+files[name];
  if(workflow==='102'){
   const oldRoot='/Users/administrator/.local/share/zenithjoy/leadgen-api-candidates/composite-97eac7e35dc3-phone-caa47f8ba3ae/services/phone-adb-controller';
   for(const name of ['qualification/runtime-deps.mjs','collection-evidence/runtime-deps.mjs']){

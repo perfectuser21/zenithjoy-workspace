@@ -1,8 +1,8 @@
-import test from'node:test';import assert from'node:assert/strict';import fs from'node:fs';import{spawnSync}from'node:child_process';import Ajv from'ajv';
+import test from'node:test';import assert from'node:assert/strict';import fs from'node:fs';import{spawnSync}from'node:child_process';import Ajv from'ajv/dist/2020.js';
 import{loadContractsFromDisk}from'../contracts-lib.mjs';import{planFor,foundationPlan}from'../wf-plan.mjs';
 test('agent activity runtime has the existing worker protocol and no legacy script entry',()=>{
  const s=JSON.parse(fs.readFileSync(new URL('../../../product-map/contracts/activity-contract.schema.json',import.meta.url)));
- const validate=new Ajv({strict:false}).compile({...s,$ref:'#/$defs/runtime'});
+ const validate=new Ajv({strict:false}).compile(s.$defs.runtime);
  assert.equal(validate({phase:'source',entry:'services/phone-adb-controller/leadgen-foundation/worker.mjs',executor_kind:'agent',protocol:'json-stdio-v1'}),true);
  assert.equal(validate({phase:'source',entry:'legacy.sh'}),true);
  assert.equal(validate({phase:'source',entry:'other.mjs',executor_kind:'agent',protocol:'json-stdio-v1'}),false);

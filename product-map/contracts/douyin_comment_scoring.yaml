@@ -1,6 +1,6 @@
 # 四流程独立契约：同一智能获客能力，每活动Commander，PG交接。
 version: 1
-runtime: {"kind":"commander-foundation-v1","profile_ref":{"repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/profiles/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:328019acadf11b8705ce42bc2f4e3304878f0ee6a7c72ed36388cc4ca5e38392"},"timeout_ms":2400000,"cleanup_timeout_ms":600000,"commander_timeout_ms":60000,"input_schema":{"type":"object","additionalProperties":false,"required":["binding_key","business"],"properties":{"binding_key":{"type":"string","pattern":"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$"},"business":{"type":"object","additionalProperties":false,"required":["scope"],"properties":{"scope":{"type":"object","additionalProperties":false,"required":["input_mode","comment_ids","sources"],"properties":{"input_mode":{"const":"committed_partial_ids"},"comment_ids":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"string","pattern":"^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$"}},"sources":{"type":"object","minProperties":1,"maxProperties":1,"additionalProperties":{"type":"string","minLength":1}}}}}}}}}
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:328019acadf11b8705ce42bc2f4e3304878f0ee6a7c72ed36388cc4ca5e38392" }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope" ], "properties": { "scope": { "type": "object", "additionalProperties": false, "required": [ "input_mode", "comment_ids", "sources" ], "properties": { "input_mode": { "const": "committed_partial_ids" }, "comment_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "pattern": "^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$" } }, "sources": { "type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } } } } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/103.json
 implementation:
@@ -13,7 +13,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.18.0
+  version: 0.19.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -21,9 +21,6 @@ source_repo: perfectuser21/zenithjoy-workspace
 checks: services/phone-adb-controller/checks/douyin-comment-scoring.yaml
 dod_promotion:
   min_consecutive_pass: 20
-runner:
-  entry: leadgen-workflow.mjs
-  queue: pending_comments
 on_status:
   done: next
   retry: retry
@@ -47,7 +44,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.8.0
+    version: 2.9.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -84,18 +81,19 @@ activities:
           - judgment_config
           - promoted
     preconditions:
-      - 从PG认领待分拣评论，带关联视频标题与转写
-      - 普通来源视频须同102批次、matched且PG状态评论已采。正式102配额抽样可在视频仍待判定时仅消费collection主span逐视频点名的精确评论ID：必须核Brain原run绑定与全部pass/verified回执、资格及采集两主span同run/binding/SHA逐VID身份和旧判断run一致、冻结采样上限及101来源、公司/租户/版本/政策、配额=新增+历史、PG规范行摘要和原生身份；配额与footer/no_comments混合时只接纳quota_reached精确ID；历史行保留旧批次且只准本103新评分。软预算/失败102不得借待判定状态进入。金诺102d跨SHA只限Issue 3004abdb-d5b8-448c-b35c-58203ef84e1d固定run、绑定、VID和五条原件；金诺原102g失败run的VID7699489394579915663及三条固定原生评论仍仅经用户决定、旧执行实时停止、v14冻结政策、无旧outbox及db_audit接纳回执绑定单一103 run显式领取。两种例外均不伪造视频评论已采或改旧102结论
-      - 模型不可达、HTTP/网络异常、证据非法或评分输出无效留待重试，不伪造C级成功，不转人工评分
+      - 精确评论ID、公司/租户与实际102来源可独立核验；普通committed_partial来源不要求整个102成功，但仅消费真实已提交且来源/资格/原生身份完整的行。
+      - 评分输入包括原评论正文、对应视频标题与转写，来自真实持久来源；缺失不能由标题或猜测补造。
+      - 按本次冻结公司政策执行唯一业务评分；已有评分或不确定动作先只读恢复，不重新评分。
+      - 模型/HTTP/证据/输出异常保留未决，不伪造C级、不相关或人工评分。
     postconditions:
       - probe: scores_readback
-        asserts: 认领评论ID的relevance、intent_grade、原文依据、唯一评分响应身份及冻结公司版本在PG原子保存并读回；评分后不追加模型审核；本活动只交评分、不创建线索或outbox，标记直接消费原评分
+        asserts: 精确ID的真实relevance/intent_grade、原文依据、模型响应及公司版本已持久化并读回；输入视频标题和转写来源可核。一次业务评分后不追加评分模型QC，Checker只读原结果与证据，本活动不创建Lead/outbox。
       - probe: exclusion_readback
-        asserts: 新评分为不相关时保存relevance=不相关且intent_grade为空，不创建Lead/outbox；技术失败不写成排除。历史已排除记录保留原审计并可只读恢复，无需新增模型复核
+        asserts: 不相关保存原政策要求的排除事实且无Lead/outbox，技术失败不写排除；旧行保历史来源，纯排除与空队列分别说明，不冒评分成功。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: mmv
-      via: leadgen-workflow.mjs → scoring独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 1800
       heartbeat_s: 120
@@ -103,8 +101,8 @@ activities:
       locks: []
       limits: []
     idempotency:
-      dedupe_key: Lead.line_key+Lead.douyin_id
-      on_duplicate: merge
+      dedupe_key: Comment.line_key+Comment.id
+      on_duplicate: skip
     failure:
       empty_ok:
         - 本批无待分拣评论
@@ -125,38 +123,38 @@ activities:
       - agent
     runtime:
       phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/profiles/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:328019acadf11b8705ce42bc2f4e3304878f0ee6a7c72ed36388cc4ca5e38392"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:26f46bb668c5ce3efb2d192c370a34fbed92acf5d5020eb35f199ef4b364c4b5"}
-      - {"purpose":"foundation_host","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:8a247698a61b2e009f55f5342042ae0e46fc706a450c3730cf702c1dabf72dae"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/context.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/worker.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/adapter.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/assembly.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/freeze.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/asr.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/sources/101.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/103.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/102.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/104.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-foundation/schemas/101.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-authorization-intent.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-upstream-source.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-pg.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-tools.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-tool-result.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-host-104.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-context.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-runtime.mjs","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/activity-104-transport.py","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/leadgen-outreach-scope.js","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7"}
-      - {"purpose":"foundation_host","kind":"code","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/package.json","revision":"f60e046cdd774e460257a1790e12d2f835a1044b","digest":"sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"}
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/profiles/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:328019acadf11b8705ce42bc2f4e3304878f0ee6a7c72ed36388cc4ca5e38392" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:26f46bb668c5ce3efb2d192c370a34fbed92acf5d5020eb35f199ef4b364c4b5" }
+      - { "purpose": "foundation_host", "kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:8a247698a61b2e009f55f5342042ae0e46fc706a450c3730cf702c1dabf72dae" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:7561c9e462d92ba77036f57b7b9829c8c225c490467cd6e5ecb3ed1c9eb6dfa8" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/worker.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a7db9eb9a29945c27ac76460123626d7908b87a3bdf11063f60eb83f17e6cdd3" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:ab4286d60bd2e3d44a0db7cf7adaf572f3cf4fc5ca29d68d38cdf7b94e8bce93" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/freeze.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0e4e9530616bca27acd52d89ad7732711432fb7dce16456c748bddf6940b2f03" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dea5e89a0e02559589cc5b8d0d0b1cedf3a478fa9023f5dba24edf0869cc9deb" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a0a2f4476116d8c82d57211148ca46c2e87b5cc9723e9708d0003a4fc7405df4" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/asr.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:a261193ae018c3ea7c0529b1f9087f21f52d14ea796d1a7899749180e096efed" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/103.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/102.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/104.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-foundation/schemas/101.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-authorization-intent.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-upstream-source.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:98d4f66f6d5740ab437588041cfb1523f876fdd789be7982915b7c77fcde76df" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-pg.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:5afe7cb048d9588dc95d3e911d4c813d39da816c847fdabdfd23730db2c5997a" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-tools.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:2ca08a718a7f3f1174bfbcb1da3f16775fa1fb270c3d3cd5efea54c936b5e166" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-tool-result.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-host-104.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:76df0b8cf91cc71a4a529ea83aa5b8e571a9d8f6c52496b89f9e37b43630ee38" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-context.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-runtime.mjs", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/activity-104-transport.py", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/leadgen-outreach-scope.js", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7" }
+      - { "purpose": "foundation_host", "kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/package.json", "revision": "f60e046cdd774e460257a1790e12d2f835a1044b", "digest": "sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8" }
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/official-phone-execution.mjs
@@ -418,7 +416,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.17.0
+        version: 0.18.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -679,20 +677,16 @@ activities:
           - Comment.process_status
           - Comment.dedup_key
         writes: []
-        check: 取到的行 process_status 全为 待分拣
+        check: 按冻结精确ID及真实来源读取待处理行；已有评分或未知动作只读恢复，不重新评分。
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            scoring.scan_pending（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js scoring.scan_pending（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: log
-            regex: "^SORT_STATS "
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: judge_grade
         name: 模型三合一判级
         order: 2
@@ -713,25 +707,15 @@ activities:
         uses_llm: true
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-scoring-readback.json"
-            match: '"verified"\s*:\s*true'
-            expect:
-              op: ">="
-              value: 1
+            type: none
     known_gaps:
-      - gap: 关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring
-          是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）
+      - gap: 关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）
         task: 34f69930
-      - gap: scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C
-          级为当前映射，五档分级落地（决策 b93422c6）后重新定义
+      - gap: scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义
         task: 4ca3b584
-      - gap: "0929实证:
-          决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outre\
-          achGrades)，评论判级层(judge-comment.js:19
-          GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不\
-          是两层各干各的"
+      - gap: "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的"
         task: 4ca3b584
     commander:
       entry: activity-commander.mjs
@@ -746,7 +730,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.9.0
+    version: 3.10.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -823,23 +807,20 @@ activities:
           - fields_sha256
           - feishu_record_id
     preconditions:
-      - 带company_binding的评论须按原102 harvest_batch只读既有PG冻结来源与选定设备，缺失不得补造历史run或仅信评论内绑定；当前评分政策仍独立冻结，来源公司/租户必须相同；103配送和读回沿同来源，104云profile仍未获授权
-      - 评分行须有已保存的评分、原文依据、真实模型响应和冻结公司身份，原评论与来源视频仍须同102身份；历史行保留旧harvest_batch，仅限正式回执精确ID集且本103新评分。普通视频须评论已采；正式102配额抽样视频可保持待判定，但评分及标记阶段都要核Brain pass/verified、资格与采集两主span同run/binding/SHA逐VID身份、旧判断run与PG冻结公司/租户/版本/政策、逐视频配额与PG规范行摘要及原生评论身份；金诺102d跨SHA仅限固定历史桥。缺评分来源证据、软预算及失败102不得推进线索；金诺102g隔离视频仍须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定，其他隔离视频阻断
-      - 评论 process_status=待分拣
-      - 已排除评论保持 relevance/intent_grade 为空，不进入 Lead、outbox 或后续104；纯排除批次标记人空消费为正常完成
-      - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
-      - 同line原锁目录使用内核advisory
-        guard与私有owner/PID；只在同机确证死者后恢复，活owner/权限未知/旧无owner目录不清理，不按TTL抢锁
+      - 普通committed_partial精确ID及原102来源、公司/租户/政策与原生身份完整；来源证明不改变历史harvest_batch，失败整个102不自动否定已独立核验的提交。
+      - 消费已有唯一评分及原文/模型响应，不再次调用评分模型；技术失败或评分来源未知不能标记为已处理。
+      - 只对政策相关的实际对象创建Lead和配送；不相关合法处理单列，不以空队列冒成功。
+      - 收件人资格取真实原生主页及本次冻结公司政策；缺证unknown，不修改原评分来迎合资格。
+      - 保原line订单锁/owner与幂等边界，未知或活owner不清理，不按TTL抢占。
     postconditions:
       - probe: pool_advanced
-        asserts: 认领ID在PG独立读回，评论完成必须以线索已落实为前提
+        asserts: 相关对象的Lead实际落地后才推进评论，原UID、评分和同事务outbox逐ID可读；不相关对象不得有Lead/outbox，合法排除单列完成。
       - probe: bridge_readback
-        asserts: 本run实际outbox IDs及同事务comment→lead映射独立PG读回；confirmed还须真实Feishu
-          marker/UID/全payload与持久字段SHA，unknown POST不重发
+        asserts: 实际outbox IDs及comment→lead映射可读；配送confirmed还需真实Feishu GET的原marker/UID/字段与持久payload一致。未知POST仅只读查原动作，绝不重发；bridge_readback按实际outbox ids查询。
     execution:
-      primary_kind: code
+      primary_kind: agent
       location: mmv
-      via: leadgen-workflow.mjs → mark_leads独立活动 → 持久化队列读回
+      via: Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。
     budget:
       max_duration_s: 1800
       heartbeat_s: 120
@@ -867,16 +848,15 @@ activities:
         description: 按人身份去重保留人，重复出现计数；线索落地后才推进评论已分拣
       - kind: external_visible
         target: 原Feishu line-routes线索表
-        description: 本103 mark活动消费durable
-          outbox；原fields/1Pcache/orderLock复用，attempted先持久再单POST，全池UID+nick去重不修改protected/已发；未知仅GET读回
+        description: 本103 mark活动消费durable outbox；原fields/1Pcache/orderLock复用，attempted先持久再单POST，全池UID+nick去重不修改protected/已发；未知仅GET读回
     invokers:
       - code
       - agent
     runtime:
       phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
+      entry: services/phone-adb-controller/leadgen-foundation/worker.mjs
+      executor_kind: agent
+      protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1143,7 +1123,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.18.0
+        version: 0.19.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-parent-loop.mjs
@@ -1425,23 +1405,16 @@ activities:
           - RecipientQualification.status
           - OutreachBridgeIntent.payload_sha256
           - OutreachBridgeIntent.state
-        check: 仅待分拣且已保存合法单次评分的相关(A/B/C级)：新建（状态=待触达）或已有行
-          repeat_hits+1，按抖音号去重；不相关及已排除均不建Lead/outbox，含C级仍留档；真实lead
-          UID读回防昵称别名，独立recipient资格不改grade；同事务保存outbox再推进，正常103消费原Feishu桥
+        check: 仅待分拣且已保存合法单次评分的相关(A/B/C级)：新建（状态=待触达）或已有行 repeat_hits+1，按抖音号去重；不相关及已排除均不建Lead/outbox，含C级仍留档；真实lead UID读回防昵称别名，独立recipient资格不改grade；同事务保存outbox再推进，正常103消费原Feishu桥
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            mark_leads.upsert_lead（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js mark_leads.upsert_lead（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-mark_leads-readback.json"
-            match: '"verified"\s*:\s*true'
-            expect:
-              op: ">="
-              value: 1
+            type: none
       - key: advance_pool
         name: 推进池状态
         order: 2
@@ -1453,30 +1426,19 @@ activities:
         check: 线索落地之后才推进 已分拣（永远最后一步）；outbox故障整体回滚，独立PG逐ID回读及bridge处置不通过不得报完成
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js
-            mark_leads.advance_pool（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js mark_leads.advance_pool（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
+          reason: 旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。
           readback:
-            type: evidence
-            glob: "{tag}-mark_leads-readback.json"
-            match: '"verified"\s*:\s*true'
-            expect:
-              op: ">="
-              value: 1
+            type: none
     known_gaps:
-      - gap: 关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring
-          是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）
+      - gap: 关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）
         task: 34f69930
-      - gap: scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C
-          级为当前映射，五档分级落地（决策 b93422c6）后重新定义
+      - gap: scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义
         task: 4ca3b584
-      - gap: "0929实证:
-          决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outre\
-          achGrades)，评论判级层(judge-comment.js:19
-          GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不\
-          是两层各干各的"
+      - gap: "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的"
         task: 4ca3b584
     commander:
       entry: activity-commander.mjs

@@ -36,6 +36,7 @@ function stagesOf(acts, kind) {
 }
 
 export function planFor(ctx, capId, { allowMissing = false } = {}) {
+  if(ctx.contracts[capId]?.runtime?.kind==='commander-foundation-v1')return {ok:false,errors:['FOUNDATION_API_ONLY: 使用正式Foundation API与冻结profile，不执行旧wf-run'],activities:[]};
   const r = assemble(ctx, capId);
   if (!r.ok) return { ok: false, errors: r.errors, activities: r.activities };
   const acts = r.activities;
@@ -95,7 +96,12 @@ export function renderEnv(env) {
   return Object.entries(env).map(([k, v]) => `${k}=${sq(v)}`).join('\n') + '\n';
 }
 
+export function foundationPlan(capId){
+ if(!/^[a-z][a-z0-9_]+$/.test(capId))throw Error('FOUNDATION_PLAN_KEY');
+ return `# Foundation ${capId}：仅原API/profile入口，禁止旧wf-run\nprintf '%s\\n' 'FOUNDATION_API_ONLY' >&2\nreturn 64 2>/dev/null || exit 64\n`;
+}
 function planFile(ctx, capId) {
+  if(ctx.contracts[capId]?.runtime?.kind==='commander-foundation-v1')return {ok:true,text:foundationPlan(capId)};
   const r = planFor(ctx, capId, { allowMissing: true });
   if (!r.ok) return r;
   return { ...r, text: `# 由 scripts/product-map/wf-plan.mjs --write 从 product-map/contracts/${capId}.yaml 生成，勿手改\n${renderEnv(r.env)}` };

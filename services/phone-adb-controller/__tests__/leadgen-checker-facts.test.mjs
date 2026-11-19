@@ -2,13 +2,13 @@ import test from'node:test';import assert from'node:assert/strict';
 import {readFacts}from'../leadgen-foundation/checker-facts.mjs';
 const context={assigned_workflow:'102',line:'fixture-line',company_id:'fixture-company',tenant_id:'fixture-tenant',tasks:{102:{task_id:'task',run_id:'run',run_tag:'run'}},verification:{102:{video_ids:['7709208240869657011']}}};
 const request=(operation,args={})=>({identity:{task_id:'task',run_id:'run'},nonce:'fixture-nonce',context,operation,args});
-function database(rows=[]){const calls=[];return{calls,readAuthority:async()=>context,loadPool:async()=>({connect:async()=>({query:async(sql,args)=>{calls.push({sql,args});return{rows:sql.startsWith('SELECT')?rows:[]};},release(){calls.push({release:true});}}),end:async()=>calls.push({end:true})})};}
+function database(rows=[]){const calls=[];return{calls,readAuthority:async()=>context,loadPool:async()=>({connect:async()=>({query:async(sql,args)=>{calls.push({sql,args});return{rows:sql.includes('current_database()')?[{database:'fixture',schema:'public',role:'readonly',transaction_read_only:'on',snapshot_at:'fixture'}]:sql.startsWith('SELECT')?rows:[]};},release(){calls.push({release:true});}}),end:async()=>calls.push({end:true})})};}
 test('raw scoped PG rows are returned without business verdict or changed-state filtering',async()=>{
  const rows=[{video_id:'7709208240869657011',judgment_status:'rejected',process_status:'unexpected',transcript:null}],db=database(rows);
  const out=await readFacts(request('pg.rows',{relation:'videos'}),db);
  assert.equal(out.status,'available');assert.deepEqual(out.facts.rows,rows);assert.equal(out.verified,undefined);assert.equal(out.outcome,undefined);assert.equal(out.checks,undefined);
  assert.equal(db.calls[0].sql,'BEGIN READ ONLY');assert.ok(db.calls.some(x=>x.sql==='ROLLBACK'));
- const q=db.calls.find(x=>x.sql?.startsWith('SELECT'));assert.ok(q.args.includes('fixture-line'));assert.match(q.sql,/video_id=ANY/);assert.doesNotMatch(q.sql,/judgment_status\s*=/);
+ const q=db.calls.find(x=>x.sql?.includes('FROM zenithjoy.leadgen_videos'));assert.ok(q.args.includes('fixture-line'));assert.match(q.sql,/video_id=ANY/);assert.doesNotMatch(q.sql,/judgment_status\s*=/);
 });
 test('unknown operation, arbitrary SQL, foreign IDs and different task identity never open a connection',async()=>{
  for(const r of [request('pg.write'),request('pg.rows',{relation:'videos',sql:'DELETE FROM anything'}),request('pg.rows',{relation:'videos',ids:['other']}),{...request('pg.rows',{relation:'videos'}),identity:{task_id:'foreign',run_id:'run'}}]){
