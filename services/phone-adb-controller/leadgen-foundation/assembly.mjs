@@ -6,6 +6,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {assembleActivityPgHost} from '../activity-host-pg.mjs';
 import {resolveProducerIdentity} from '../activity-upstream-source.mjs';
 import {assembleActivity104Host} from '../activity-host-104.mjs';
+import {validateAuthorization} from '../activity-104-context.mjs';
 import {hash,need,canonical} from './context.mjs';
 import {relative} from './freeze.mjs';
 import {businessModuleSources} from './business-module-sources.mjs';
@@ -56,7 +57,7 @@ export function prepareProof(context,{initialize=false}={}){
  }
 }
 /** Only assembles frozen source. No phone, database, model or message operation occurs here. */
-export async function assembleSources({context:c,profile,contract,hostRoot,initializeProof=true}){
+export async function assembleSources({context:c,profile,contract,hostRoot,identity,bindingKey,initializeProof=true}){
  const workflow=c.assigned_workflow,files=sourceArchive(path.join(HERE,'sources',workflow+'.json'));
  for(const [name,expected]of Object.entries(profile.files).filter(([name])=>name.startsWith('services/phone-adb-controller/skills/'))){
   const bytes=fs.readFileSync(path.join(profile.cwd,name),'utf8');need(hash(bytes)===expected,'SKILL_SOURCE');files[name]=bytes;
@@ -100,14 +101,27 @@ export async function assembleSources({context:c,profile,contract,hostRoot,initi
   files['context.json']=JSON.stringify(c,null,2)+'\n';
   for(const name of ['checker-facts.mjs','checker-facts-runtime.mjs','checker-file-facts.mjs'])files[name]=fs.readFileSync(path.join(HERE,name),'utf8');
   const authority="const contextFile=new URL('./context.json',import.meta.url).pathname,contextSha256="+JSON.stringify(hash(files['context.json']))+";\n";
-  files['checker-facts-entry.mjs']="import {serveFacts} from './checker-facts.mjs';\n"+authority+"await serveFacts({contextFile,contextSha256});\n";
+  const ledgerModule=pathToFileURL(path.join(profile.runtimeRoot,'src/orchestrator/commander-usage-ledger.js')).href;
+  // The kernel ledger is outside the mutable evidence roots offered to the Checker.
+  const boundLedger=path.join(profile.cwd,relative(profile.skill_runtime.control_dir),identity.run_id,'ledger');
+  files['checker-facts-entry.mjs']="import {serveFacts} from './checker-facts.mjs';\n"+authority+
+   `const readLedger=async identity=>{const {readRunLedger}=await import(${JSON.stringify(ledgerModule)});return readRunLedger({directory:${JSON.stringify(boundLedger)},identity});};\n`+
+   "await serveFacts({contextFile,contextSha256,readLedger});\n";
   for(const [name,operation,args]of [['native-inspect.mjs','native.read',{}],['collection-readback.mjs','pg.rows',{relation:'comments'}]]){
    files[name]="import fs from 'node:fs';import {readFacts} from './checker-facts.mjs';import {factDependencies,readFrozenContext} from './checker-facts-runtime.mjs';\n"+authority+
     "const c=readFrozenContext(contextFile,contextSha256),input=JSON.parse(fs.readFileSync(0,'utf8')),t=c.tasks[c.assigned_workflow];const r=await readFacts({identity:t,nonce:'executor-fact-read',context:input,operation:"+JSON.stringify(operation)+",args:"+JSON.stringify(args)+"},{...factDependencies,readAuthority:async()=>c});console.log(JSON.stringify(r));if(r.status!=='available')process.exitCode=2;\n";
   }
   for(const directory of ['native','receipts','qualification-receipts','collection-evidence-receipts','outreach-receipts'])files[directory+'/.keep']='';
   files['checker-input/contract.json']=JSON.stringify(contract,null,2)+'\n';
-  files['checker-input/identity.json']=JSON.stringify({tasks:c.tasks,line:c.line,company_id:c.company_id,tenant_id:c.tenant_id,profile:c.profile,serial:c.serial},null,2)+'\n';
+  const evidence={binding:identity,binding_key:bindingKey,tasks:c.tasks,line:c.line,company_id:c.company_id,tenant_id:c.tenant_id,
+   profile:c.profile,host:c.host,serial:c.serial,adb_serial:c.adb_serial,expected_sender_id:c.sender_id??c.account,
+   business_deadline_ms:c.business_deadline_ms,cleanup_deadline_ms:c.cleanup_deadline_ms};
+  if(workflow==='104'){
+   const approved=validateAuthorization(c);
+   const fields=['root_task_id','decision_id','company_id','tenant_id','sender_id','record_id','comment_id','lead_id','message_sha256','max_new_recipients','max_send_attempts','test_execution_daily_cap'];
+   evidence.approved_send={asset_sha256:c.authorization_asset.sha256,...Object.fromEntries(fields.map(key=>[key,approved[key]]))};
+  }
+  files['checker-input/identity.json']=JSON.stringify(evidence,null,2)+'\n';
   const kernel=path.join(profile.runtimeRoot,'scripts/commander-workflow/skill-worker.mjs');
   let exactEnv={};
   if(workflow==='104'){

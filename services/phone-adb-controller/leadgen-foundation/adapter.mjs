@@ -30,14 +30,15 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  const identity={task_id:run.task_id,run_id:run.run_id,workflow,configuration_sha256:built.configuration_sha256,binding_sha256:built.binding_sha256,
   input_sha256:built.input_sha256,profile_sha256:hash(canonical(profile.files))};
  let receipt,context=built.context,expectedFiles;verifyRuntime(context);
+ const assembly={context,profile,contract:run.contract,hostRoot,identity,bindingKey:run.input.binding_key};
  if(fs.existsSync(hostRoot)){
   // Reconstruct only in a new temporary directory. Never trust an editable receipt
   // to nominate replacement source hashes or repair missing executed evidence.
   prepareProof(context);
-  const files=await assembleSources({context,profile,contract:run.contract,hostRoot,initializeProof:false});expectedFiles=Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]));
+  const files=await assembleSources({...assembly,initializeProof:false});expectedFiles=Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]));
   receipt=recoverHost({directory:hostRoot,identity,expectedFiles});
  }else{
-  const files=await assembleSources({context,profile,contract:run.contract,hostRoot});
+  const files=await assembleSources(assembly);
   receipt=freezeHost({directory:hostRoot,identity,files,executableFiles:workflow==='104'?['codex-exact']:[]});expectedFiles=Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]));
  }
  if(workflow==='102'){

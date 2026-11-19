@@ -27,6 +27,16 @@ function queryFor(bound,args){
  requireCondition(Object.hasOwn(queries,args.relation));return queries[args.relation];
 }
 const captureLine=bound=>bound.c.line;
+async function runProgress(bound,deps){
+ const identity={task_id:bound.t.task_id,run_id:bound.t.run_id};
+ const ledger=await deps.readLedger(identity);
+ requireCondition(canonical(ledger.identity)===canonical(identity));
+ const pick=(value,keys)=>Object.fromEntries(keys.filter(key=>Object.hasOwn(value,key)).map(key=>[key,value[key]]));
+ const lifecycle=['activity_key','action_id','attempt','status','started_at_ms','ended_at_ms'];
+ return {identity,activity_calls:ledger.calls.filter(call=>call.role==='activity').map(call=>pick(call,[...lifecycle,'dispatch_status'])),
+  attempts:ledger.attempts.map(entry=>pick(entry,[...lifecycle,'kind'])),
+  observations:ledger.observations.map(entry=>pick(entry,[...lifecycle,'kind','phase']))};
+}
 async function pgRead(bound,args,deps){
  const query=queryFor(bound,args),pool=await deps.loadPool(bound.c);let client;
  try{client=await pool.connect();await client.query('BEGIN READ ONLY');await client.query("SET LOCAL statement_timeout='10000ms'");
@@ -47,6 +57,8 @@ export async function readFacts(request,deps){
    else {requireCondition(args.resource==='device_lock'&&args.task_id===undefined);endpoint='/device-locks';}
    source='brain:'+endpoint;facts=await deps.brainGet(endpoint,b.c);
    if(args.resource==='device_lock')facts={locks:(facts.locks??[]).filter(x=>x.device_name===b.c.serial)};
+  }else if(request.operation==='run.progress'){
+   exact(args,[]);source='kernel-ledger:'+b.run;facts=await runProgress(b,deps);
   }else if(request.operation==='qualification.origin'){
    exact(args,['video_id']);requireCondition(typeof args.video_id==='string');const rows=(await pgRead(b,{relation:'videos'},deps)).rows.filter(r=>r.video_id===args.video_id);requireCondition(rows.length===1);
    source='qualification-origin:'+args.video_id;facts=await deps.originRead(b.c,rows[0].judgment_config?.run_id,args.video_id);
@@ -62,10 +74,10 @@ export async function readFacts(request,deps){
   requireCondition(facts!==undefined);return{status:'available',source,facts};
  }catch(error){return{status:'unavailable',source:'facts:unavailable',facts:null,reason:error.message==='FACT_SCOPE'?'FACT_SCOPE_REJECTED':'FACT_READ_UNAVAILABLE'};}
 }
-export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
-export async function serveFacts({contextFile,contextSha256}){
+export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
+export async function serveFacts({contextFile,contextSha256,readLedger}){
  let input='';for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>2*1024*1024)throw Error('FACT_INPUT_LIMIT');}
  const {factDependencies,readFrozenContext}=await import('./checker-facts-runtime.mjs');
- const deps={...factDependencies,readAuthority:async()=>readFrozenContext(contextFile,contextSha256)};
+ const deps={...factDependencies,readLedger,readAuthority:async()=>readFrozenContext(contextFile,contextSha256)};
  process.stdout.write(JSON.stringify(await readFacts(JSON.parse(input),deps))+'\n');
 }

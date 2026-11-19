@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.9.0
+  version: 0.9.1
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -47,7 +47,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 5.1.0
+    version: 5.2.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -56,12 +56,11 @@ activities:
       agent: 获客采收员
     inputs:
       - type: Device
-        source: 设备台账及本轮原生设备锁
+        source: 本轮冻结设备台账与授权设备标识；本轮锁在预检执行时取得
         cardinality: one
         fields:
           - serial
           - host
-          - lock_holder
       - type: Account
         source: 该公司已启用的发送账号配置
         cardinality: one
@@ -95,8 +94,8 @@ activities:
           - profile
           - serial
     preconditions:
-      - 本run有真实批准资产/intent绑定公司、发送账号、目标和批准正文；本轮发送上限与每日上限从该资产及现行政策读取，不从旧固定60/10推定。
-      - 真实账号风险/暂停状态及原额度可读，不符合时禁止取单发送。
+      - 从 checker-input/identity.json 的已绑定授权摘要和原单确认本轮公司、发送账号、目标和批准正文摘要；本轮发送上限和每日上限取批准资产及现行政策。
+      - 开工前从公司配置确认发送账号的风险、暂停状态和原额度配置；设备上的当前登录、实际风险与剩余额度由预检执行后取证，不符合时禁止取单发送。
       - 只核本次上下文与政策；原订单与目标资格在领取时验证，不修改protected/已发或unknown订单。
     postconditions:
       - probe: pf_device_verified
@@ -149,7 +148,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 1.2.0
+        version: 1.3.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1389,7 +1388,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 3.3.0
+    version: 3.4.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1398,11 +1397,10 @@ activities:
       agent: 获客采收员
     inputs:
       - type: Device
-        source: 本轮触达预检取得的设备与锁
+        source: 本 run 的冻结设备标识；实际锁归属从台账和本地原件查，不以已取锁作为开始条件
         cardinality: one
         fields:
           - serial
-          - lock_holder
       - type: Run
         source: 本轮触达运行账本及发送结果
         cardinality: one
@@ -1422,14 +1420,14 @@ activities:
         fields:
           - status
     preconditions:
-      - 本 run 各阶段已写工件或已判失败
+      - 从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。
     postconditions:
       - probe: cl_app_closed
-        asserts: 真实关闭本次App并保存动作/当前前台证据，不把日志标记当关闭事实。
+        asserts: 如果 App 由本轮打开，须真实关闭并保存动作及前台原件。独立证据证实未开工且无本轮动作时，不操作 App，不把日志标记当关闭事实。
       - probe: cl_lock_released
         asserts: 只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。
       - probe: cl_safe_desktop_visible
-        asserts: 原生证据显示安全桌面，允许合法空成果或上游失败的正常收尾；如仍有未知资源状态明确报告，不能以n_items>0伪门槛阻止清理。
+        asserts: 本轮确曾操作 App 时，用原生证据核对归位；独立证据确认未开工且无本轮动作时无需回桌面。未知资源状态需报告，不因没有业务成果阻断收尾。
     execution:
       primary_kind: agent
       location: phone
@@ -1445,7 +1443,8 @@ activities:
       dedupe_key: Run.run_tag
       on_duplicate: skip
     failure:
-      empty_ok: []
+      empty_ok:
+        - 独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。
       retryable:
         - 工件 scp 到 mmv 失败（本地保留）
       needs_human:
@@ -1469,7 +1468,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.5.0
+        version: 0.6.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
