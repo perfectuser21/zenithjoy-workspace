@@ -89,3 +89,20 @@ test('预检未开工时，无本轮资源可收尾；已有副作用仍要按�
   assert.ok(cleanup.postconditions.some(p=>p.probe==='cl_app_closed'&&/本轮打开/.test(p.asserts)),key);
  }
 });
+
+test('预检交接已分配Run，收尾只交自己的Activity状态',()=>{
+ const ctx=loadContractsFromDisk();
+ for(const key of ['douyin_video_processing','douyin_lead_outreach']){
+  const {activities}=ctx.contracts[key];
+  const preflight=activities.find(a=>a.key==='preflight'), cleanup=activities.find(a=>a.key==='cleanup');
+  const runHandoff=preflight.outputs.find(o=>o.type==='Run'), closeReceipt=cleanup.outputs.find(o=>o.type==='Run');
+  assert.equal(runHandoff.effect,'update');
+  assert.match(runHandoff.destination,/同一Run.*交接/);
+  assert.ok(preflight.preconditions.some(p=>p.includes('run.identity')));
+  assert.ok(preflight.postconditions.some(p=>p.probe==='pf_lock_acquired'&&p.asserts.includes('host.receipts')));
+  assert.match(closeReceipt.destination,/收尾Activity状态/);
+  const finalize=cleanup.steps.find(step=>step.key==='finalize_run');
+  assert.match(finalize.check,/Workflow终态由宿主/);
+  assert.doesNotMatch(finalize.check,/记录真实终态/);
+ }
+});
