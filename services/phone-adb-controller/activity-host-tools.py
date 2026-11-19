@@ -7,6 +7,11 @@ import pathlib
 import re
 import stat
 import sys
+import time
+import http.client
+import urllib.error
+import threading
+import queue
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BASE_SHA = {
@@ -26,6 +31,67 @@ spec.loader.exec_module(typed)
 PreDispatchRejected = typed.PreDispatchRejected
 emit_pre_dispatch_rejection = typed.emit_pre_dispatch_rejection
 scope_rejection = typed.scope_rejection
+
+
+class TaskAuthorityUnavailable(Exception):
+    """Only the read-only Task admission stage can issue this refusal."""
+    def __init__(self, reason, attempts):
+        self.reason, self.attempts = reason, attempts
+
+
+def bounded_task_read(read_task, route, budget):
+    # A trickling response cannot reset the admission wall deadline. The daemon can only GET;
+    # it never owns dispatch or writes a business receipt, and process exit does not wait for it.
+    result = queue.Queue(maxsize=1)
+    def read():
+        try:result.put((True, read_task(route, timeout=budget)))
+        except Exception as error:result.put((False, error))
+    threading.Thread(target=read, daemon=True).start()
+    try:ok, value = result.get(timeout=budget)
+    except queue.Empty:raise TaskAuthorityUnavailable('budget_exhausted', 1) from None
+    if not ok:raise value
+    return value
+
+
+def task_authority(context, read_task, activity):
+    absolute = context['cleanup_deadline_ms'] if activity == 'cleanup' else context['business_deadline_ms']
+    end = time.monotonic() + min(20, max(0, (absolute-time.time()*1000)/1000))
+    remaining = lambda: min(end-time.monotonic(), (absolute-time.time()*1000)/1000)
+    attempts = 0
+    for identity in dict.fromkeys([context['root_task_id'], context['tasks'][context['assigned_workflow']]['task_id']]):
+        for attempt in range(2):
+            budget = remaining()
+            if budget <= 0:
+                raise TaskAuthorityUnavailable('budget_exhausted', attempts)
+            attempts += 1
+            try:
+                value = bounded_task_read(read_task, 'tasks/'+identity, budget)
+            except Exception as error:
+                # HTTP status, malformed JSON, DNS, timeouts and arbitrary OSError are not transient admission retries.
+                if type(error) is TaskAuthorityUnavailable:
+                    raise TaskAuthorityUnavailable(error.reason, attempts) from None
+                cause = error.reason if type(error) is urllib.error.URLError else error
+                if type(cause) not in (http.client.RemoteDisconnected, ConnectionResetError, ConnectionAbortedError):
+                    raise
+                if attempt == 1 or remaining() <= 8:
+                    raise TaskAuthorityUnavailable('transport_unavailable' if attempt else 'retry_budget_insufficient', attempts) from None
+                time.sleep(8)
+                continue
+            if remaining() <= 0:
+                raise TaskAuthorityUnavailable('budget_exhausted', attempts)
+            value = value.get('task', value)
+            if value['status'] != 'in_progress' or value['claimed_by'] != context['actor']:
+                raise ValueError('TASK_AUTHORITY')
+            break
+
+
+def authority_refusal(error):
+    return {'state': 'terminal', 'result': {'exit_code': 75, 'data': {
+        'code': 'TASK_AUTHORITY_TRANSPORT_UNAVAILABLE', 'phase': 'pre_dispatch',
+        'dispatched': False, 'business_receipt_created': False, 'authority_status': 'unavailable',
+        'reason': error.reason, 'attempts': error.attempts, 'retryable': True,
+        'retry_requires_new_action': True,
+        'tool_hint': '本动作在任务鉴权阶段未派发；同action只读回原拒绝，新action才重新鉴权。不得自动重开Activity或重试任何副作用未知动作。'}}}
 
 
 def read_business_input(args, *, activity, allowed_operations):
@@ -210,6 +276,18 @@ PreDispatchRejected=_host.PreDispatchRejected
 emit_pre_dispatch_rejection=_host.emit_pre_dispatch_rejection
 read_business_input=_host.read_business_input
 scope_rejection=_host.scope_rejection''')
+    tools = replace_once(tools, 'def brain(route,body=None):', 'def brain(route,body=None,*,timeout=20):')
+    tools = replace_once(tools, 'urllib.request.urlopen(req,timeout=20)', 'urllib.request.urlopen(req,timeout=timeout)')
+    tools = replace_once(tools, """def task_authority(c):
+ for key in [c['root_task_id'],c['tasks'][c['assigned_workflow']]['task_id']]:
+  x=brain('tasks/'+key);x=x.get('task',x)
+  if x['status']!='in_progress' or x['claimed_by']!=c['actor']:raise ValueError('TASK_AUTHORITY')""", """def task_authority(c):
+ return _host.task_authority(c,brain,os.environ.get('COMMANDER_ACTIVITY_KEY'))""")
+    tools = replace_once(tools, " task_authority(c);deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']", """ deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']
+ try:task_authority(c)
+ except _host.TaskAuthorityUnavailable as error:
+  if type(error) is not _host.TaskAuthorityUnavailable:raise
+  print(json.dumps(_host.authority_refusal(error),ensure_ascii=False));return 75""")
     tools = replace_once(tools, " c=read(P/'context.json');f=", " _host.verify_host(P,OPS)\n c=read(P/'context.json');f=")
     tools = replace_once(tools, "  i=scoped_business(c,key,json.loads(args[0]))", "  parsed=read_business_input(args,activity=key,allowed_operations=OPS.get(key,set()))\n  i=scoped_business(c,key,parsed,reject=scope_rejection)")
     tools = replace_once(tools, "  # A policy error before launching an operation has no external operation in flight.\n  if isinstance(e,ValueError):atomic(action,{'binding':bind,'state':'terminal','started_at':started_at,'result':{'exit_code':2,'error':str(e)},'ended_at':time.time()})", "  if type(e) is PreDispatchRejected:\n   return emit_pre_dispatch_rejection(e,action=action,binding=bind,started_at=started_at,persist=atomic)")
