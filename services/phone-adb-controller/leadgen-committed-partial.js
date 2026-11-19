@@ -16,13 +16,15 @@ function explicitIds(input,sourceRun){
  if(input.ids!==undefined&&(!Array.isArray(input.ids)||input.ids.some(id=>!ids.includes(id))))fail('IDS_OUTSIDE_SCOPE');
  return ids;
 }
-async function readFrozen(pool,lineKey,run){
+async function readFrozen(pool,lineKey,run,{qualificationOrigin=false}={}){
  if(!RUN.test(run||''))fail('RUN_INVALID');
  const rows=(await pool.query(`SELECT company_id,tenant_id,version,run_id,source_run,snapshot,task_inputs
    FROM zenithjoy.company_config_runs WHERE run_id=$1
    AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;
  const f=rows[0],s=f?.snapshot;
- if(rows.length!==1||f.run_id!==run||f.source_run!==null||!s||s.config_status!=='enabled'
+ const sourceModeValid=f?.source_run===null||(qualificationOrigin&&typeof f?.source_run==='string'
+   &&RUN.test(f.source_run)&&f.source_run!==run);
+ if(rows.length!==1||f.run_id!==run||!sourceModeValid||!s||s.config_status!=='enabled'
    ||typeof s.company_id!=='string'||!s.company_id||typeof s.tenant_id!=='string'||!s.tenant_id
    ||!Number.isSafeInteger(s.version)||s.version<1||f.company_id!==s.company_id
    ||f.tenant_id!==s.tenant_id||Number(f.version)!==s.version||!s.policy_id
@@ -59,7 +61,8 @@ async function readOne(pool,{lineKey,id,run,requireLease=false}){
  const video=videos[0];
  if(requireLease&&(row.harvest_batch!==run||video.process_status!==`处理中:${run}`))fail('LEASE_NOT_OWNED');
  const qualificationRun=video.judgment_config?.run_id;
- const qualificationSource=qualificationRun===source.run_id?source:await readFrozen(pool,lineKey,qualificationRun);
+ // 旧判定可来自普通或有上游的正式运行；本次评论/评分来源仍必须是普通模式。
+ const qualificationSource=qualificationRun===source.run_id?source:await readFrozen(pool,lineKey,qualificationRun,{qualificationOrigin:true});
  if(!samePolicy(qualificationSource.snapshot,source.snapshot))fail('QUALIFICATION_POLICY_MISMATCH');
  const binding=await readCollectionAccountBinding(pool,{lineKey,run:row.harvest_batch,sourceRun:null});
  return {row,source,video,binding,qualificationSource};
