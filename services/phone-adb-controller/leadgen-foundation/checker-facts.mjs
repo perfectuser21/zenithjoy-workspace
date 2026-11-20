@@ -4,6 +4,36 @@ const requireCondition=x=>{if(!x)throw Error('FACT_SCOPE');};
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x);
 const exact=(value,keys)=>requireCondition(object(value)&&Object.keys(value).every(k=>keys.includes(k)));
 const canonical=x=>JSON.stringify(x&&typeof x==='object'?Array.isArray(x)?x.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(x).sort().map(k=>[k,JSON.parse(canonical(x[k]))])):x);
+function requestedFields(fields){
+ if(fields===undefined)return null;
+ requireCondition(Array.isArray(fields)&&fields.length>0&&fields.length<=32);
+ const root=new Map(),reserved=new Set(['__proto__','prototype','constructor']);
+ for(const field of fields){
+  requireCondition(typeof field==='string'&&field.length<=160);
+  const parts=field.split('.');
+  requireCondition(parts.length<=12&&parts.every(k=>/^[A-Za-z_][A-Za-z0-9_-]*$/.test(k)&&!reserved.has(k)));
+  let tree=root;
+  for(const [index,key] of parts.entries()){
+   if(index===parts.length-1){requireCondition(!tree.has(key));tree.set(key,null);break;}
+   if(!tree.has(key))tree.set(key,new Map());
+   tree=tree.get(key);requireCondition(tree!==null);
+  }
+ }
+ return root;
+}
+function selectFacts(value,fields){
+ if(fields===null||value===null)return value;
+ if(Array.isArray(value)){
+  requireCondition(value.every(item=>item===null||object(item)||Array.isArray(item)));
+  return value.map(item=>selectFacts(item,fields));
+ }
+ if(!object(value))return undefined;
+ return Object.fromEntries([...fields].flatMap(([key,children])=>{
+  if(!Object.hasOwn(value,key))return [];
+  const selected=selectFacts(value[key],children);
+  return selected===undefined?[]:[[key,selected]];
+ }));
+}
 const AUTHORITY_KEYS=['assigned_workflow','tasks','line','company_id','tenant_id','credentials','runtime_root','verification','input_provenance','serial','adb_serial','native_root','profile','source_commit','phone_controller','python','authorization_asset'];
 const unique=x=>[...new Set(x.filter(v=>typeof v==='string'&&v.length>0))];
 function scope(request,c){
@@ -59,7 +89,9 @@ async function pgRead(bound,args,deps){
 export async function readFacts(request,deps){
  let source='facts:unavailable';
  try{
-  const b=scope(request,await deps.readAuthority()),args=request.args??{};let facts;
+  const b=scope(request,await deps.readAuthority()),provided=request.args??{};
+  requireCondition(object(provided));
+  const {fields,...args}=provided,projection=requestedFields(fields);let facts;
   if(request.operation==='pg.rows'){source='postgres:zenithjoy.'+String(args.relation??'');facts=await pgRead(b,args,deps);}
   else if(request.operation==='brain.get'){
    exact(args,['resource','task_id']);let endpoint;
@@ -85,10 +117,10 @@ export async function readFacts(request,deps){
    requireCondition(b.recordIds.includes(args.record_id)||rows.some(r=>r.feishu_record_id===args.record_id));
    source='feishu:record:'+args.record_id;facts=await deps.feishuGet(args.record_id,b.c);
   }else throw Error('FACT_SCOPE');
-  requireCondition(facts!==undefined);return{status:'available',source,facts};
+  requireCondition(facts!==undefined);return{status:'available',source,facts:selectFacts(facts,projection)};
  }catch(error){return{status:'unavailable',source:'facts:unavailable',facts:null,reason:error.message==='FACT_SCOPE'?'FACT_SCOPE_REJECTED':'FACT_READ_UNAVAILABLE'};}
 }
-export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
+export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。可在任意读操作的 args.fields 传最多32个点路径字段，例如 rows.video_id、connection.snapshot_at。数组适用同字段列表，按原顺序和原值返回；缺失字段不会填造。选择字段只减少响应，仍按原授权执行。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
 export async function serveFacts({contextFile,contextSha256,readLedger}){
  let input='';for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>2*1024*1024)throw Error('FACT_INPUT_LIMIT');}
  const {factDependencies,readFrozenContext}=await import('./checker-facts-runtime.mjs');

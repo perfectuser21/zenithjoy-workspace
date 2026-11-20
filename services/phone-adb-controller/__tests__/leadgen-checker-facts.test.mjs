@@ -130,3 +130,30 @@ test('the frozen receipt inventory keeps a real source path and unknown action w
   assert.throws(()=>listHostReceipts(root,identity),/FACT_RUNTIME_UNAVAILABLE/);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
+
+test('fact selection retains exact PG row values and drops unrelated large fields', async () => {
+  const rows = [{video_id:'first', updated_at:'2026-11-20T08:10:00Z', transcript:null, discovery_metrics:'x'.repeat(100000)},
+    {video_id:'second', updated_at:'2026-11-20T08:11:00Z', transcript:'words', discovery_metrics:'y'.repeat(100000)}];
+  const db = database(rows);
+  const out = await readFacts(request('pg.rows', {relation:'videos', fields:['rows.video_id','rows.updated_at','rows.transcript','rows.discovery_metrics.another_field','connection.transaction_read_only']}), db);
+  assert.equal(out.status, 'available');
+  assert.deepEqual(out.facts, {connection:{transaction_read_only:'on'}, rows:rows.map(({video_id,updated_at,transcript})=>({video_id,updated_at,transcript}))});
+  assert.equal(db.calls[0].sql, 'BEGIN READ ONLY');
+  assert.ok(db.calls.some(c=>c.sql==='ROLLBACK'));
+});
+
+test('fact selection retains nested approved task input without returning the contract blob', async () => {
+  const input = {business:{scope:{video_ids:['a']}}};
+  const deps = {readAuthority:async()=>context, brainGet:async()=>({task:{id:'task', result:{foundation_runner:{run:{input, contract:'x'.repeat(100000)}}}}})};
+  const out = await readFacts(request('brain.get', {resource:'task',fields:['task.id','task.result.foundation_runner.run.input']}), deps);
+  assert.deepEqual(out.facts, {task:{id:'task',result:{foundation_runner:{run:{input}}}}});
+});
+
+test('invalid field selectors and foreign authority do not reach a source', async () => {
+  const db = database();
+  for(const fields of [[], 'rows', ['rows.__proto__.secret'], ['rows.constructor.name'], ['rows.*'], ['rows[0].video_id']]) {
+    assert.equal((await readFacts(request('pg.rows',{relation:'videos',fields}),db)).status,'unavailable');
+  }
+  assert.equal((await readFacts({...request('pg.rows',{relation:'videos',fields:['rows.video_id']}),identity:{task_id:'foreign',run_id:'run'}},db)).status,'unavailable');
+  assert.deepEqual(db.calls,[]);
+});
