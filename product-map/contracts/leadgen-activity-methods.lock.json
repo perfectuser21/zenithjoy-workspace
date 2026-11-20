@@ -61,7 +61,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -236,7 +236,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_video_processing.preflight": {
@@ -364,7 +364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -539,7 +539,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -598,13 +598,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_video_processing.dedup": {
@@ -667,7 +667,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -842,7 +842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -901,31 +901,31 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_video_processing.qualification": {
-      "activity_version": "3.5.7",
-      "contract_digest": "470dccaf7fa8e5966193f332021ea2261009223e1b3ca7f347103b1f25167287",
-      "method_version": "0.8.7",
+      "activity_version": "3.5.8",
+      "contract_digest": "869418f65c9fa94eb4cf7886b9d33ecdda91e6cecdfd0a4659e54c024c3d4e4f",
+      "method_version": "0.8.8",
       "skill": {
         "name": "douyin-leadgen-activity-102-qualification",
-        "version": "0.8.7",
+        "version": "0.8.8",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
-        "sha256": "3e11c44ba9b87170b0f7fea09e4f8508999193230ee11bdadd79b2113637f460",
+        "sha256": "ab8182ae1fb2a6ac5b04402193a69a52d30663d3c3e88e79eda5dd5c73895815",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/references/sdk31-capture.md",
             "sha256": "12aea23db4edcce7e42cf683be4980eefd927ae73cacd0867b87a24b3a99dc6e"
           }
         ],
-        "content_digest": "75186ba34269d182213edea4a449118f1fbd1551663edd4c5babfe7f374adcd3"
+        "content_digest": "1be0bfed2d89d8d5d916c8fda9802812e7a52a633267ca4c0d1055668b1a584e"
       },
       "code_bindings": [
         {
@@ -975,7 +975,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -1150,7 +1150,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -1209,14 +1209,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
-      }
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.8.4",
@@ -1278,7 +1271,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -1453,7 +1446,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -1512,13 +1505,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1581,7 +1574,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -1756,7 +1749,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -1815,13 +1808,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1889,7 +1882,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -2064,7 +2057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -2123,13 +2116,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2197,7 +2190,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -2372,7 +2365,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -2431,13 +2424,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2500,7 +2493,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -2675,7 +2668,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -2734,13 +2727,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2803,7 +2796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -2978,7 +2971,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -3037,13 +3030,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3106,7 +3099,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -3281,7 +3274,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -3340,13 +3333,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3409,7 +3402,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4"
+          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
         },
         {
           "kind": "code",
@@ -3584,7 +3577,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "96fec98609c66b9dc689ed48319ea983c3432f0448a21db22c99d6c948f13618"
+          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
         },
         {
           "kind": "code",
@@ -3643,13 +3636,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
+        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
+        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
+        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
       }
     }
   },
@@ -3704,28 +3697,28 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.13.17",
+        "version": "0.13.18",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "7a83b28ec602f621b5dc7f6725984b90c6c4817f1b839289bf66d72190a87f91",
+        "sha256": "246d1fc5a9027d059fe2ba09920892f778e91d5a3c498a3fa01dab90e1db4ebc",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-            "sha256": "7c98da2c166f6d5f25ddec7727950f45687dcfd3808b06d1ebd15e5161384c1b"
+            "sha256": "f365ec40f1dd2b0eaa53723884ad29d8e748086f3c9d67876864cbb63e9f57a1"
           }
         ],
-        "content_digest": "a481d6fa48bee9ee21e2e5882916eeb8b134d4640a1c5bc770cdd5390325ebfc"
+        "content_digest": "b41b1abffd6b98a97d0393a81050a80914d10c4105adedb4578631222f07fe38"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.12.17",
+        "version": "0.12.18",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "641715fb8869562c5643a56432b5f19d57a5f3db79eb0b6ea0cc6ac593775e97",
+        "sha256": "ce76116b3fc92b69844645ad77753a1b8742900907b95edac3d271ba897ff48c",
         "support_files": [],
-        "content_digest": "082ed8e31c0336c5168f2b7ce0400f98205aa16be29bfc834a6312376106b38e"
+        "content_digest": "7e90f3cd2ea3ae8bb82f640ba860b171a9b3f44c7e7bf83381fc3e8b817b21cb"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-        "sha256": "7c98da2c166f6d5f25ddec7727950f45687dcfd3808b06d1ebd15e5161384c1b"
+        "sha256": "f365ec40f1dd2b0eaa53723884ad29d8e748086f3c9d67876864cbb63e9f57a1"
       },
       "activities": [
         {
@@ -3743,7 +3736,7 @@
         {
           "activity_ref": "douyin_video_processing.qualification",
           "skill_name": "douyin-leadgen-activity-102-qualification",
-          "skill_version": "0.8.7",
+          "skill_version": "0.8.8",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md"
         },
         {
