@@ -914,7 +914,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.qualification",
-            "contract_digest": "b7afb7c5d229d99b812b2721a1c5ba415d88773e5b58545940b0593ade720e21"
+            "contract_digest": "ceabb76ba97daa64f9112e2265bb5dca9dbd94ce02b2c4578203166481639f0c"
           },
           "document": {
             "key": "qualification",
@@ -930,7 +930,7 @@
               "current_skill_verified": false
             },
             "order": 3,
-            "version": "3.5.5",
+            "version": "3.5.6",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -984,11 +984,11 @@
             "postconditions": [
               {
                 "probe": "qual_none_pending",
-                "asserts": "每个交给collection的VID必须有合法matched判断及真实读回；技术捕获/ASR失败为unknown而非内容rejected。真实no_speech单独记录，冻结政策未明确替代处理时不自动作内容拒绝，未确认不得交下游。 先取目标行读回与本轮主判；本条的覆盖部分复用下一条验证的同一回执。"
+                "asserts": "每个交给collection的VID必须有合法matched判断及真实读回；技术捕获/ASR失败为unknown而非内容rejected。真实no_speech单独记录，冻结政策未明确替代处理时不自动作内容拒绝，未确认不得交下游。 先取目标行读回与本轮主判；本条的覆盖部分复用下一条验证的同一回执。 复用下面逐项核对的原始证据，避免重复调用。"
               },
               {
                 "probe": "qual_reason_present",
-                "asserts": "新判断绑定本次原生VID、实际授权捕获路径、真实内容覆盖、有效音频、ASR响应、公司政策与唯一主判原件；不以期望VID回显、墙钟时长或标题代替实际证据。缓存绑定同公司和租户的原judgment run及原媒体/ASR/政策证据，并有本轮原生VID身份；未核实不得复用，保持原判断run且不重复评分。理由与持久结论逐VID读回，缺证据不能通过。 首先用 read_file 读 receipts/coverage-five-frames.jpg（工具返回图像）和 receipts/coverage-five-frames.json。观察并在证据中写出 A 的播放器显示，循环时 B 和 E 的可见画面文字是否相同，C 和 D 的画面如何不同；结合 JSON 每个原帧 PTS 验证 A 归零、B 开头、C 中间、D 末尾、E 同一视频回到开头之间是连续完整周期；未循环时检查 E 的真实播放完成证据。由 media.inspect（只传 JSON recording.name 给 args.name）核原录像 sha256 和音视频流，图像回执 sha256 核 JSON sheet_sha256。核本轮授权捕获路径须读 receipts/qual-record-start.json、receipts/qual-record-stop.json 和 receipts/qual-extract-audio.json 的原始回执。从录制启动回执 stdout 取 capture_runtime_evidence_file 的 basename 和 sha256，读 native/加该 basename 的原运行 JSON 并核对 SHA。结合 capture_audio_sdk、原生录制客户端/服务端、UID及媒体引用，核本轮实际授权捕获路径；原生VID、主判、ASR继续沿当轮原件核对。缓存专属历史读取仅用于缓存。以证据本身作判，不能只用片长、预测值或匹配判定替代完整周期。"
+                "asserts": "新判断绑定本次原生VID、实际授权捕获路径、真实内容覆盖、有效音频、ASR响应、公司政策与唯一主判原件；不以期望VID回显、墙钟时长或标题代替实际证据。缓存绑定同公司和租户的原judgment run及原媒体/ASR/政策证据，并有本轮原生VID身份；未核实不得复用，保持原判断run且不重复评分。理由与持久结论逐VID读回，缺证据不能通过。 首先用 read_file 读 receipts/coverage-five-frames.jpg（工具返回图像）和 receipts/coverage-five-frames.json。观察并在证据中写出 A 的播放器显示，循环时 B 和 E 的可见画面文字是否相同，C 和 D 的画面如何不同；结合 JSON 每个原帧 PTS 验证 A 归零、B 开头、C 中间、D 末尾、E 同一视频回到开头之间是连续完整周期；未循环时检查 E 的真实播放完成证据。由 media.inspect（只传 JSON recording.name 给 args.name）核原录像 sha256 和音视频流，图像回执 sha256 核 JSON sheet_sha256。核本轮授权捕获路径须读 receipts/qual-record-start.json、receipts/qual-record-stop.json 和 receipts/qual-extract-audio.json 的原始回执。从录制启动回执 stdout 取 capture_runtime_evidence_file 的 basename 和 sha256，读 native/加该 basename 的原运行 JSON 并核对 SHA。结合 capture_audio_sdk、原生录制客户端/服务端、UID及媒体引用，核本轮实际授权捕获路径；原生VID、主判、ASR继续沿当轮原件核对。缓存专属历史读取仅用于缓存。以证据本身作判，不能只用片长、预测值或匹配判定替代完整周期。 文件名从本轮已提交的 proof 操作回执取真实路径。调用 host.receipts 定位本轮 qualification 的 kind=proof 成功回执，用 read_file 读取该回执，从 binding.args 中的 qualification_evidence.video_identity、record_start、record_stop、capture_runtime、sdk、audio_start、audio_end、coverage_json、coverage_image、recording、audio 逐项获取原件。另从同一 host.receipts 列表按 activity=qualification、kind=qualify、operation=当前VID、state=terminal、exit_code=0 定位唯一正式调用原回执，按返回的 path 读取；judge-response.json 仅是主判响应。不要猜文件名。ASR 原响应先用 qualification.origin，args 为 video_id=当前VID、document=asr-response.json，fields 取 origin.run_id、origin.video_id、document.sha256、document.data.http_status、document.data.provider_received、document.data.body.output.text。核实响应状态、转写与原件摘要，复用此结果，成功时不用整份含逐字时间轴的响应。核每个原件 Task/run、真实成功状态和摘要；若引用是本 run 根下的绝对路径，向 read_file 传本运行证据根下的相对路径。用 media.inspect 只传 recording/audio 的文件名，通过本轮原件核音视频时长与轨数；用五帧图和 JSON 的实际 PTS 对照合同其余要求。 幂等证据与本条复用。以 brain.get resource=task 的 result.foundation_runner.run.input.business.scope.video_ids、本轮成功主判 journal 及 host.receipts 中本轮同 VID 的操作数量核对。只有真实重复输入出现时核对跳过；单个唯一键从当前执行记录确认只有一次 ASR 和一次主判，无须实际制造重复输入。 如果合成图可读性不足，按刚读过的五帧 JSON 中 panels[].frame 的相对路径，用 read_file 查看所需原始单帧。优先核 A 的播放器时钟和 B/E 的相同内容；只在图像实际可读后判断视觉覆盖，仍用对应原帧 PTS 核对。"
               }
             ],
             "execution": {
@@ -1288,7 +1288,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "qual_none_pending",
-                "asserts": "每个交给collection的VID必须有合法matched判断及真实读回；技术捕获/ASR失败为unknown而非内容rejected。真实no_speech单独记录，冻结政策未明确替代处理时不自动作内容拒绝，未确认不得交下游。 先取目标行读回与本轮主判；本条的覆盖部分复用下一条验证的同一回执。"
+                "asserts": "每个交给collection的VID必须有合法matched判断及真实读回；技术捕获/ASR失败为unknown而非内容rejected。真实no_speech单独记录，冻结政策未明确替代处理时不自动作内容拒绝，未确认不得交下游。 先取目标行读回与本轮主判；本条的覆盖部分复用下一条验证的同一回执。 复用下面逐项核对的原始证据，避免重复调用。"
               },
               "source_pointer": "/postconditions/0"
             },
@@ -1297,7 +1297,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "qual_reason_present",
-                "asserts": "新判断绑定本次原生VID、实际授权捕获路径、真实内容覆盖、有效音频、ASR响应、公司政策与唯一主判原件；不以期望VID回显、墙钟时长或标题代替实际证据。缓存绑定同公司和租户的原judgment run及原媒体/ASR/政策证据，并有本轮原生VID身份；未核实不得复用，保持原判断run且不重复评分。理由与持久结论逐VID读回，缺证据不能通过。 首先用 read_file 读 receipts/coverage-five-frames.jpg（工具返回图像）和 receipts/coverage-five-frames.json。观察并在证据中写出 A 的播放器显示，循环时 B 和 E 的可见画面文字是否相同，C 和 D 的画面如何不同；结合 JSON 每个原帧 PTS 验证 A 归零、B 开头、C 中间、D 末尾、E 同一视频回到开头之间是连续完整周期；未循环时检查 E 的真实播放完成证据。由 media.inspect（只传 JSON recording.name 给 args.name）核原录像 sha256 和音视频流，图像回执 sha256 核 JSON sheet_sha256。核本轮授权捕获路径须读 receipts/qual-record-start.json、receipts/qual-record-stop.json 和 receipts/qual-extract-audio.json 的原始回执。从录制启动回执 stdout 取 capture_runtime_evidence_file 的 basename 和 sha256，读 native/加该 basename 的原运行 JSON 并核对 SHA。结合 capture_audio_sdk、原生录制客户端/服务端、UID及媒体引用，核本轮实际授权捕获路径；原生VID、主判、ASR继续沿当轮原件核对。缓存专属历史读取仅用于缓存。以证据本身作判，不能只用片长、预测值或匹配判定替代完整周期。"
+                "asserts": "新判断绑定本次原生VID、实际授权捕获路径、真实内容覆盖、有效音频、ASR响应、公司政策与唯一主判原件；不以期望VID回显、墙钟时长或标题代替实际证据。缓存绑定同公司和租户的原judgment run及原媒体/ASR/政策证据，并有本轮原生VID身份；未核实不得复用，保持原判断run且不重复评分。理由与持久结论逐VID读回，缺证据不能通过。 首先用 read_file 读 receipts/coverage-five-frames.jpg（工具返回图像）和 receipts/coverage-five-frames.json。观察并在证据中写出 A 的播放器显示，循环时 B 和 E 的可见画面文字是否相同，C 和 D 的画面如何不同；结合 JSON 每个原帧 PTS 验证 A 归零、B 开头、C 中间、D 末尾、E 同一视频回到开头之间是连续完整周期；未循环时检查 E 的真实播放完成证据。由 media.inspect（只传 JSON recording.name 给 args.name）核原录像 sha256 和音视频流，图像回执 sha256 核 JSON sheet_sha256。核本轮授权捕获路径须读 receipts/qual-record-start.json、receipts/qual-record-stop.json 和 receipts/qual-extract-audio.json 的原始回执。从录制启动回执 stdout 取 capture_runtime_evidence_file 的 basename 和 sha256，读 native/加该 basename 的原运行 JSON 并核对 SHA。结合 capture_audio_sdk、原生录制客户端/服务端、UID及媒体引用，核本轮实际授权捕获路径；原生VID、主判、ASR继续沿当轮原件核对。缓存专属历史读取仅用于缓存。以证据本身作判，不能只用片长、预测值或匹配判定替代完整周期。 文件名从本轮已提交的 proof 操作回执取真实路径。调用 host.receipts 定位本轮 qualification 的 kind=proof 成功回执，用 read_file 读取该回执，从 binding.args 中的 qualification_evidence.video_identity、record_start、record_stop、capture_runtime、sdk、audio_start、audio_end、coverage_json、coverage_image、recording、audio 逐项获取原件。另从同一 host.receipts 列表按 activity=qualification、kind=qualify、operation=当前VID、state=terminal、exit_code=0 定位唯一正式调用原回执，按返回的 path 读取；judge-response.json 仅是主判响应。不要猜文件名。ASR 原响应先用 qualification.origin，args 为 video_id=当前VID、document=asr-response.json，fields 取 origin.run_id、origin.video_id、document.sha256、document.data.http_status、document.data.provider_received、document.data.body.output.text。核实响应状态、转写与原件摘要，复用此结果，成功时不用整份含逐字时间轴的响应。核每个原件 Task/run、真实成功状态和摘要；若引用是本 run 根下的绝对路径，向 read_file 传本运行证据根下的相对路径。用 media.inspect 只传 recording/audio 的文件名，通过本轮原件核音视频时长与轨数；用五帧图和 JSON 的实际 PTS 对照合同其余要求。 幂等证据与本条复用。以 brain.get resource=task 的 result.foundation_runner.run.input.business.scope.video_ids、本轮成功主判 journal 及 host.receipts 中本轮同 VID 的操作数量核对。只有真实重复输入出现时核对跳过；单个唯一键从当前执行记录确认只有一次 ASR 和一次主判，无须实际制造重复输入。 如果合成图可读性不足，按刚读过的五帧 JSON 中 panels[].frame 的相对路径，用 read_file 查看所需原始单帧。优先核 A 的播放器时钟和 B/E 的相同内容；只在图像实际可读后判断视觉覆盖，仍用对应原帧 PTS 核对。"
               },
               "source_pointer": "/postconditions/1"
             },
@@ -2556,8 +2556,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "d0412b4398dcc840722e5fc115beca3f8c5cbb10",
-      "contract_sha256": "279ea9bf0cd2cb6b9263e3258c600052252662ee932493713b60ab6021be0a4c"
+      "method_revision": "d5f6e6729af5111861d89cfbf09d6d0b3abd4c24",
+      "contract_sha256": "162a28c0d2cf42b07777137cd892f93681b3373bf925b21d55516bd03f540d55"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2754,7 +2754,7 @@
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
       "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
@@ -2778,7 +2778,7 @@
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "c6b27f2bf028abaca8caa2cbf37bfee9ea5577393160f1158760cbacf605c30f",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "54961cb16ddeb956ddcc3035173f6ab9838027f837378c6a7e964ebf7bb8c9ad",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "5faaed45a4ad9f9fa33f750b45b97f519f72850e7844a5e7c1c184d0d66714b3"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "fadc3c9c5769a13c115f34a870ede7fa6ff2a4f32aa5e858255619f41cecb9ea"
     }
   }
 }

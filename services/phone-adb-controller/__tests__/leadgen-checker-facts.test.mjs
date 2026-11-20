@@ -65,6 +65,23 @@ test('qualification origin uses bound PG identity rather than caller supplied ru
  const out=await readFacts(request('qualification.origin',{video_id:'7709208240869657011'}),db);assert.equal(out.status,'available');assert.equal(calls.length,1);assert.equal(calls[0].run,'22222222-2222-4222-8222-222222222222');
  for(const args of [{video_id:'foreign'},{video_id:'7709208240869657011',run_id:'forged'},{video_id:'7709208240869657011',path:'/tmp/forged'}])assert.equal((await readFacts(request('qualification.origin',args),db)).status,'unavailable');assert.equal(calls.length,1);
 });
+test('qualification origin projects the original ASR response without including its full recognition body',async()=>{
+ const videoId='7709208240869657011',runId='22222222-2222-4222-8222-222222222222';
+ const db=database([{video_id:videoId,judgment_config:{run_id:runId}}]);
+ const document={sha256:'fixture-response',data:{http_status:200,body:{output:{text:'recognized',sentence:['verbose']}}}};
+ db.originRead=async(_context,run,video)=>({origin:{run_id:run,video_id:video},documents:{'asr-response.json':document}});
+ const args={video_id:videoId,document:'asr-response.json',fields:['origin.run_id','document.sha256','document.data.http_status','document.data.body.output.text']};
+ const out=await readFacts(request('qualification.origin',args),db);
+ assert.equal(out.status,'available');
+ assert.deepEqual(out.facts,{origin:{run_id:runId},document:{sha256:document.sha256,data:{http_status:200,body:{output:{text:'recognized'}}}}});
+ const full=await readFacts(request('qualification.origin',{video_id:videoId}),db);
+ assert.deepEqual(full.facts.documents['asr-response.json'],document);
+ for(const document of ['../asr-response.json','unregistered.json',null]){
+  const calls=db.calls.length;
+  assert.equal((await readFacts(request('qualification.origin',{...args,document}),db)).status,'unavailable');
+  assert.equal(db.calls.length,calls);
+ }
+});
 test('media metadata names are bounded to this run and cannot launch caller commands',async()=>{
  const calls=[],deps={readAuthority:async()=>context,mediaRead:async(c,name)=>{calls.push(name);return{metadata:{streams:[]}};}};
  assert.equal((await readFacts(request('media.inspect',{name:'run-v7709208240869657011.wav'}),deps)).status,'available');
