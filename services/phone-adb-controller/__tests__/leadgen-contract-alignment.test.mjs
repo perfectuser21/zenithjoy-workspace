@@ -27,6 +27,13 @@ test('cleanup permits legitimate empty work and protects unresolved prepared sid
 test('dedup source proof does not implicitly grant the special producer descriptor path',()=>{
  const a=activity('douyin_video_processing','dedup');assert.match(text(a.preconditions),/input_provenance/);assert.match(text(a.preconditions),/producer_descriptor/);assert.match(text(a.postconditions),/认领/);
 });
+test('102 dedup keeps persisted collected count separate from the page total',()=>{
+ const a=activity('douyin_video_processing','dedup');
+ const criterion=a.postconditions.find(item=>item.probe==='dedup_historical_filter_verified');
+ assert.match(criterion.asserts,/outputs\.Video的comment_count.*认领后PG只读快照的comment_count逐条相等/);
+ assert.match(criterion.asserts,/持久读回的0为有效值/);
+ assert.match(criterion.asserts,/原生页面评论总数另作普通或深采策略证据，不填入comment_count/);
+});
 test('scoring deduplicates exact comment IDs rather than merging people into Leads',()=>{
  const a=activity('douyin_comment_scoring','scoring');assert.equal(a.idempotency.dedupe_key,'Comment.line_key+Comment.id');assert.notEqual(a.idempotency.on_duplicate,'merge');
 });
