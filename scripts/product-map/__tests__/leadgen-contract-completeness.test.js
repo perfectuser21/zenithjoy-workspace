@@ -139,3 +139,15 @@ test('103 评分与线索交付分段验收', () => {
   assert.match(scoring.postconditions.find(condition => condition.probe === 'scores_readback').asserts, /本活动不创建Lead/);
   assert.ok(markLeads.postconditions.length > 0);
 });
+
+test('102 判定和采集按本轮操作查验账号和链接回执', () => {
+  const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
+  for (const key of ['qualification', 'collection']) {
+    const preconditions = doc.activities.find(activity => activity.key === key).preconditions.join(' ');
+    assert.match(preconditions, /host\.receipts/);
+    assert.match(preconditions, /preflight.{0,60}phone(?:\/|.{0,20}=)account-current/);
+    assert.match(preconditions, /(?:Task\/run|run_id.{0,15}task_id)/);
+    assert.doesNotMatch(preconditions, /receipts\/(?:pf-account-current|qual-current-link)\.json/);
+    if (key === 'collection') assert.match(preconditions, /qualification.{0,40}phone\/current-video-link/);
+  }
+});
