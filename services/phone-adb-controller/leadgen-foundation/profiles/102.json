@@ -1394,7 +1394,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.collection",
-            "contract_digest": "87dce530611af801f5889f0880165c5d28da9498c62cf77de788fb6258df5304"
+            "contract_digest": "fb8a2769e2f6d4486364792f9e082ef9b0eb29c29022cf50c889b8b9def0b7f9"
           },
           "document": {
             "key": "collection",
@@ -1410,7 +1410,7 @@
               "current_skill_verified": false
             },
             "order": 4,
-            "version": "2.8.1",
+            "version": "2.8.2",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -1522,9 +1522,9 @@
               }
             ],
             "preconditions": [
-              "开工只接收本轮已独立验收的合法matched及仍有效的本run处理租约。合法同政策缓存保留原judgment run和证据；采集活动自己核对本次原生VID。",
-              "本run profile/serial/公司/租户/账号来自首个设备动作前冻结的真实输入，收件人证据不能自报授权。",
-              "读取冻结的最高限额、显式目标和预算，不自增上限或延长原deadline。评论原件、历史命中、已提交数量与partial交接在采集执行后验收。"
+              "开工只使用已由宿主交接的本轮 context.Video 与真实只读事实，不读执行者自报结论。用 run.progress 的 observations 核 qualification/end 的时间早于 collection/start，并与传入本轮的 Video VID和 matched 交叉核对；观察状态本身仅反映检查调用生命周期。用 pg.rows relation=videos 一次读取 connection.snapshot_at 和 rows.video_id, rows.line_key, rows.video_url, rows.judgment_status, rows.judgment_config.run_id, rows.updated_at, rows.process_status, rows.harvest_batch。以快照时间减本轮目标行 updated_at 核15分钟租约、状态与批次，再用 receipts/qual-current-link.json 的原生规范链接复核同VID；采集执行时自己重新核原生VID，开工不要求尚未生成的采集执行回执。合法缓存保留原判断run和证据。",
+              "以 checker-input/identity.json 为首个设备动作之前宿主冻结的绑定，核其 run、公司、租户、业务线、设备、预期账号与本次输入；用 run.progress 首个 preflight 活动调用时点与 Brain Task 的 created_at、started_at 对照。以 receipts/pf-account-current.json 本轮实际账号和已读设备锁回执交叉核对，评论原件不得用于授予任何权限。",
+              "一次 brain.get resource=task，args.fields=id、created_at、started_at、result.foundation_runner.run.run_id、result.foundation_runner.run.deadline_ms、result.foundation_runner.run.input.run_tag、result.foundation_runner.run.input.binding_key、result.foundation_runner.run.input.business.comment_limit、result.foundation_runner.run.input.business.scope.collection_scope、result.foundation_runner.run.input.business.scope.source_run、result.foundation_runner.run.input.business.scope.video_ids、result.foundation_runner.run.input.business.scope.upstream。用同一回执及冻结 checker 请求 context.budget.max_duration_s 和 remaining_duration_s 核验本轮采样目标、真实来源、数量上限与剩余窗口。普通 persisted_run 的 source_run 可以为 null，目标上游按 scope.upstream 对照。可选 HistoricalComment 只在本轮真实提供该对象或冻结输入显式启用历史消耗时要求输入条目；无历史输入不读取全库，采集后发现的历史命中仍须验收。不得增加配额或延长任何截止。"
             ],
             "postconditions": [
               {
@@ -1934,19 +1934,19 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "开工只接收本轮已独立验收的合法matched及仍有效的本run处理租约。合法同政策缓存保留原judgment run和证据；采集活动自己核对本次原生VID。",
+              "requirement": "开工只使用已由宿主交接的本轮 context.Video 与真实只读事实，不读执行者自报结论。用 run.progress 的 observations 核 qualification/end 的时间早于 collection/start，并与传入本轮的 Video VID和 matched 交叉核对；观察状态本身仅反映检查调用生命周期。用 pg.rows relation=videos 一次读取 connection.snapshot_at 和 rows.video_id, rows.line_key, rows.video_url, rows.judgment_status, rows.judgment_config.run_id, rows.updated_at, rows.process_status, rows.harvest_batch。以快照时间减本轮目标行 updated_at 核15分钟租约、状态与批次，再用 receipts/qual-current-link.json 的原生规范链接复核同VID；采集执行时自己重新核原生VID，开工不要求尚未生成的采集执行回执。合法缓存保留原判断run和证据。",
               "source_pointer": "/preconditions/0"
             },
             {
               "id": "preconditions_1",
               "phase": "start",
-              "requirement": "本run profile/serial/公司/租户/账号来自首个设备动作前冻结的真实输入，收件人证据不能自报授权。",
+              "requirement": "以 checker-input/identity.json 为首个设备动作之前宿主冻结的绑定，核其 run、公司、租户、业务线、设备、预期账号与本次输入；用 run.progress 首个 preflight 活动调用时点与 Brain Task 的 created_at、started_at 对照。以 receipts/pf-account-current.json 本轮实际账号和已读设备锁回执交叉核对，评论原件不得用于授予任何权限。",
               "source_pointer": "/preconditions/1"
             },
             {
               "id": "preconditions_2",
               "phase": "start",
-              "requirement": "读取冻结的最高限额、显式目标和预算，不自增上限或延长原deadline。评论原件、历史命中、已提交数量与partial交接在采集执行后验收。",
+              "requirement": "一次 brain.get resource=task，args.fields=id、created_at、started_at、result.foundation_runner.run.run_id、result.foundation_runner.run.deadline_ms、result.foundation_runner.run.input.run_tag、result.foundation_runner.run.input.binding_key、result.foundation_runner.run.input.business.comment_limit、result.foundation_runner.run.input.business.scope.collection_scope、result.foundation_runner.run.input.business.scope.source_run、result.foundation_runner.run.input.business.scope.video_ids、result.foundation_runner.run.input.business.scope.upstream。用同一回执及冻结 checker 请求 context.budget.max_duration_s 和 remaining_duration_s 核验本轮采样目标、真实来源、数量上限与剩余窗口。普通 persisted_run 的 source_run 可以为 null，目标上游按 scope.upstream 对照。可选 HistoricalComment 只在本轮真实提供该对象或冻结输入显式启用历史消耗时要求输入条目；无历史输入不读取全库，采集后发现的历史命中仍须验收。不得增加配额或延长任何截止。",
               "source_pointer": "/preconditions/2"
             },
             {
@@ -2556,8 +2556,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "fe0cd2b8e4016bb501a96c8a201a894bce0f66b9",
-      "contract_sha256": "4a456fa4a800ad8a028bfa7306e796e49951396ff0ac80dadc41542567e7bf64"
+      "method_revision": "a1e659ae85ec037324b5224f19bb13206cc09e04",
+      "contract_sha256": "8f9a89ac96ab3a0d3ff72cff802c500c4aabced7982a6d37961054fa23588083"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2775,7 +2775,7 @@
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "b72782f8be66cb0b00e7457f3ace96a7130218908eacde93cee3c128b789f8e9",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "fd731c78ab58eda87b30be22ddacdaac45f5014ab9fb5f33dcec5775c5921427",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "54961cb16ddeb956ddcc3035173f6ab9838027f837378c6a7e964ebf7bb8c9ad",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "40854b49e07d975eccc53fcc2792c720300f8c5a93cbc1caa8432edaa2e9958e"
