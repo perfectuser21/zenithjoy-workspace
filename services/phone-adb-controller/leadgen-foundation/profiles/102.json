@@ -1394,7 +1394,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.collection",
-            "contract_digest": "ec0af4065618c5c977257d8cb5bb8bba5fd0fbfe9bfe9087c02f90aaade10ec4"
+            "contract_digest": "b0333f9c9aa145e7cc34781a8d155005a71f3df260b287528958052ff6a70a06"
           },
           "document": {
             "key": "collection",
@@ -1437,7 +1437,7 @@
               },
               {
                 "type": "Video",
-                "source": "本轮资格判定通过的视频及原生身份读回",
+                "source": "本轮宿主独立验收后的资格交接提供 video_id 和 judgment_status。以同 VID 的授权 PostgreSQL 快照提供 line_key 和 video_url，并以本轮原生分享回执核对规范链接。四项共同组成逻辑采集输入，不要求资格交接对象重复带上 PostgreSQL 两项。",
                 "cardinality": "many",
                 "fields": [
                   "line_key",
@@ -1854,7 +1854,7 @@
               "phase": "start",
               "requirement": {
                 "type": "Video",
-                "source": "本轮资格判定通过的视频及原生身份读回",
+                "source": "本轮宿主独立验收后的资格交接提供 video_id 和 judgment_status。以同 VID 的授权 PostgreSQL 快照提供 line_key 和 video_url，并以本轮原生分享回执核对规范链接。四项共同组成逻辑采集输入，不要求资格交接对象重复带上 PostgreSQL 两项。",
                 "cardinality": "many",
                 "fields": [
                   "line_key",
@@ -2557,7 +2557,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "a1e659ae85ec037324b5224f19bb13206cc09e04",
-      "contract_sha256": "1a702a289c3e5a3d76061e6006e5cee807157fc0d7cab8985e81183cfe7eddce"
+      "contract_sha256": "8cc80a795487311902c253d63b43690510fd8683485162d53dcb5a2770c4f1cb"
     },
     "skill_runtime": {
       "control_dir": "control",
