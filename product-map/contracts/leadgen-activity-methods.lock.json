@@ -159,7 +159,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_video_processing.preflight": {
@@ -462,7 +462,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -598,13 +598,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_video_processing.dedup": {
@@ -765,7 +765,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -901,18 +901,18 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.5.6",
-      "contract_digest": "308de8b52dab631600837c23911eb94e89709d2308085b706afb7e2af4a00433",
+      "contract_digest": "16efbd37224790b16be51eea58bc9f84a8eaed16426c796bdd97a364c3c103f8",
       "method_version": "0.8.6",
       "skill": {
         "name": "douyin-leadgen-activity-102-qualification",
@@ -1073,7 +1073,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -1209,7 +1209,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.8.3",
@@ -1369,7 +1369,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -1505,13 +1505,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1672,7 +1672,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -1808,13 +1808,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1980,7 +1980,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -2116,13 +2116,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2288,7 +2288,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -2424,13 +2424,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2591,7 +2591,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -2727,13 +2727,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2894,7 +2894,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -3030,13 +3030,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3197,7 +3197,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -3333,13 +3333,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3500,7 +3500,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs",
           "revision": "contract",
-          "sha256": "276e52df699760c13516c15b3fb894d7b6d004d4ca20be98ff299d40a573b52f"
+          "sha256": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439"
         },
         {
           "kind": "code",
@@ -3636,13 +3636,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+      "code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码改动只在102资格阶段按当前运行过滤读回字段，此 Activity 的工具投影和 Skill 未改变。",
+        "reason": "既有只读证据操作保持原调用兼容。显式指定固定响应文件时，在同视频与原判定运行约束中可选择输出字段。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "88fd7144e9ffc9403b5dfefe4274db65888710ab8d46831a734ae1d715893a02",
-        "current_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3"
+        "previous_code_digest": "d9fb88756d02f048b729c49ed61514f90a1c4698d8f0569f6700fa0f2b41c1d3",
+        "current_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb"
       }
     }
   },
