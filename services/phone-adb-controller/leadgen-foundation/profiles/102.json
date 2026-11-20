@@ -2556,7 +2556,7 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "ca5cc9905400a961da526c7c15476ffc6e170d41",
+      "method_revision": "fe0cd2b8e4016bb501a96c8a201a894bce0f66b9",
       "contract_sha256": "4a456fa4a800ad8a028bfa7306e796e49951396ff0ac80dadc41542567e7bf64"
     },
     "skill_runtime": {
@@ -2778,7 +2778,7 @@
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "b72782f8be66cb0b00e7457f3ace96a7130218908eacde93cee3c128b789f8e9",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "54961cb16ddeb956ddcc3035173f6ab9838027f837378c6a7e964ebf7bb8c9ad",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "a17ab9c04c0296f8cb09a2327c43ae459e765be16fd956d2f51d9e49c89c721a"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "40854b49e07d975eccc53fcc2792c720300f8c5a93cbc1caa8432edaa2e9958e"
     }
   }
 }
