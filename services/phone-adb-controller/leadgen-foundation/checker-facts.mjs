@@ -106,8 +106,16 @@ export async function readFacts(request,deps){
   }else if(request.operation==='run.progress'){
    exact(args,[]);source='kernel-ledger:'+b.run;facts=await runProgress(b,deps);
   }else if(request.operation==='qualification.origin'){
-   exact(args,['video_id']);requireCondition(typeof args.video_id==='string');const rows=(await pgRead(b,{relation:'videos'},deps)).rows.filter(r=>r.video_id===args.video_id);requireCondition(rows.length===1);
-   source='qualification-origin:'+args.video_id;facts=await deps.originRead(b.c,rows[0].judgment_config?.run_id,args.video_id);
+   exact(args,['video_id','document']);
+   requireCondition(typeof args.video_id==='string'&&(args.document===undefined||['asr-response.json','judge-response.json','journal.json'].includes(args.document)));
+   const rows=(await pgRead(b,{relation:'videos'},deps)).rows.filter(r=>r.video_id===args.video_id);requireCondition(rows.length===1);
+   source='qualification-origin:'+args.video_id;
+   const originals=await deps.originRead(b.c,rows[0].judgment_config?.run_id,args.video_id);
+   if(args.document===undefined) facts=originals;
+   else {
+    const document=originals.documents?.[args.document];requireCondition(object(document));
+    facts={origin:originals.origin,document};
+   }
   }else if(request.operation==='media.inspect'){
    exact(args,['name']);requireCondition(typeof args.name==='string'&&args.name.startsWith(b.run+'-')&&/^[A-Za-z0-9_.-]+$/.test(args.name));source='media:'+args.name;facts=await deps.mediaRead(b.c,args.name);
   }else if(request.operation==='native.read'){exact(args,[]);source='native:'+b.c.serial;facts=await deps.nativeRead(b.c,b.run);}
