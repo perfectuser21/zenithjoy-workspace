@@ -914,7 +914,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.qualification",
-            "contract_digest": "05e5a4510b707fb098b09105cc410f7a0f5a18dade9d5795d9f53a2c65e7f226"
+            "contract_digest": "1579503f5cdf3241c43977551e7488ae50727895e9a8c55cba328fba965c0ef4"
           },
           "document": {
             "key": "qualification",
@@ -930,7 +930,7 @@
               "current_skill_verified": false
             },
             "order": 3,
-            "version": "3.5.1",
+            "version": "3.5.2",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -977,8 +977,8 @@
               }
             ],
             "preconditions": [
-              "开工前核同一设备在线、账号和本run锁仍有效，并读取已冻结的批准捕获配置、覆盖范围及次数。实际原生身份、设备捕获路径和媒体可用性由本Activity执行后取证。",
-              "本run已按同业务线精确认领目标VID，当前owner、批次、租约与判重交付一致。开工前读取已冻结的VID和真实链接，本Activity导航和捕获前另核当前原生VID。",
+              "核同一设备在线、账号和本 run 的设备锁。批准的捕获计划从通用只读事实入口 brain.get（args={resource:'task'}）读取本 Task 的 result.foundation_runner.run.input.business.scope.qualification_input，核对 run、VID、coverage（含来源时长锚、录制上限和调用次数）。计划里尚无本轮媒体与实际起止锚属正常，实际原生身份、捕获路径与覆盖证据由本 Activity 执行后验收。",
+              "核同业务线、同 VID、真实链接和本 run 精确认领。用通用只读事实入口 pg.rows（args={relation:'videos'}），在同一结果内用 connection.snapshot_at 减目标行 updated_at，按冻结的 15 分钟普通认领有效期核时效。目标行 process_status 为本 run 的处理中状态，harvest_batch 与本 run 一致，并与判重交付、原认领回执核对；普通认领回执没有独立 expires_at 字段。实际导航后和录制前另行核当前原生 VID。 真实链接以判重已经验收的同 VID 原生分享回执为据。可用 host.receipts 列出本轮真实调用，再用 read_file 读判重成功的 current-video-link 回执，核 video_id、URL 与数据库行一致。资格开始前没有本 Activity 的独立核链回执。",
               "冻结的同公司、租户及政策可核对。旧matched只作为可选缓存候选；其原件和本次原生身份由本Activity核对后决定是否复用。"
             ],
             "postconditions": [
@@ -1252,13 +1252,13 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "开工前核同一设备在线、账号和本run锁仍有效，并读取已冻结的批准捕获配置、覆盖范围及次数。实际原生身份、设备捕获路径和媒体可用性由本Activity执行后取证。",
+              "requirement": "核同一设备在线、账号和本 run 的设备锁。批准的捕获计划从通用只读事实入口 brain.get（args={resource:'task'}）读取本 Task 的 result.foundation_runner.run.input.business.scope.qualification_input，核对 run、VID、coverage（含来源时长锚、录制上限和调用次数）。计划里尚无本轮媒体与实际起止锚属正常，实际原生身份、捕获路径与覆盖证据由本 Activity 执行后验收。",
               "source_pointer": "/preconditions/0"
             },
             {
               "id": "preconditions_1",
               "phase": "start",
-              "requirement": "本run已按同业务线精确认领目标VID，当前owner、批次、租约与判重交付一致。开工前读取已冻结的VID和真实链接，本Activity导航和捕获前另核当前原生VID。",
+              "requirement": "核同业务线、同 VID、真实链接和本 run 精确认领。用通用只读事实入口 pg.rows（args={relation:'videos'}），在同一结果内用 connection.snapshot_at 减目标行 updated_at，按冻结的 15 分钟普通认领有效期核时效。目标行 process_status 为本 run 的处理中状态，harvest_batch 与本 run 一致，并与判重交付、原认领回执核对；普通认领回执没有独立 expires_at 字段。实际导航后和录制前另行核当前原生 VID。 真实链接以判重已经验收的同 VID 原生分享回执为据。可用 host.receipts 列出本轮真实调用，再用 read_file 读判重成功的 current-video-link 回执，核 video_id、URL 与数据库行一致。资格开始前没有本 Activity 的独立核链回执。",
               "source_pointer": "/preconditions/1"
             },
             {
@@ -2146,7 +2146,7 @@
         "key": "cleanup",
         "order": 5,
         "budget": {
-          "max_duration_s": 300,
+          "max_duration_s": 480,
           "heartbeat_s": 30
         },
         "acceptance": {
@@ -2154,7 +2154,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "ff13a6ff9a6bce2e8236f13230c386b1066be267cead4cab960f02d5860254a1"
+            "contract_digest": "6fc33f63cc5d71ffaf7764636a7905480de2397f40670cd735479d825283f3c6"
           },
           "document": {
             "key": "cleanup",
@@ -2171,7 +2171,7 @@
               "current_skill_verified": false
             },
             "order": 5,
-            "version": "2.6.1",
+            "version": "2.6.2",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -2242,7 +2242,7 @@
               "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
             },
             "budget": {
-              "max_duration_s": 300,
+              "max_duration_s": 480,
               "heartbeat_s": 30
             },
             "resources": {
@@ -2556,8 +2556,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "0c68d67dfecb6ea374f0c88465ecfd8ebfc8d05e",
-      "contract_sha256": "2a327894d9be667da7d7803bcbbaf702cf1c3d233e98335bcbd68c18b5b9dd20"
+      "method_revision": "7857650f14fcbc8b37021c9b786fa15b21bf05bb",
+      "contract_sha256": "6dd4fd01d142b5609bf4fd26c152efd5fefcb4568f2f356a4745aaa28c9b42d8"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2774,11 +2774,11 @@
       "services/phone-adb-controller/leadgen-queue.js": "ea3b2fa871b4d0c7a2b177378d07bdf3e16583d3a1b997762666bf1690086ddc",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "ed03c323cd9c75e9c94a58d6f72e7fdd6a509904996514dbdadf84bc4aa37c82",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "b72782f8be66cb0b00e7457f3ace96a7130218908eacde93cee3c128b789f8e9",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "54961cb16ddeb956ddcc3035173f6ab9838027f837378c6a7e964ebf7bb8c9ad",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "b3b62cd43b1cd7bab3377bc5a8eb9946f1e1a786e517f4e326fe47f8ac1d4054"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "2c9f91264a5b7fa516c065ac9505ce4df488120e4b4ab6b75dcbc8d21b915f8e"
     }
   }
 }
