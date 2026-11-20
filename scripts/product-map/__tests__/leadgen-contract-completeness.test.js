@@ -166,3 +166,12 @@ test('102 合法空结果收尾及采集账号使用同轮原件', () => {
   assert.match(account.source, /douyin_id= 与 sender_id 一致.*非空 nickname=/);
   assert.match(collection.preconditions[0], /只接收.*matched/);
 });
+
+test('101 工具说明使用本次冻结关键词和筛选', () => {
+  const file = resolve(root, 'services/phone-adb-controller/leadgen-foundation/sources/101.json');
+  const { source } = JSON.parse(readFileSync(file, 'utf8')).files['TOOLS.txt'];
+  assert.match(source, /context\.keyword/);
+  assert.match(source, /context\.search_filters/);
+  assert.doesNotMatch(source, /本轮来源：.*已启用关键词/);
+  assert.doesNotMatch(source, /search-time-layer one_week EID most_liked/);
+});
