@@ -1213,7 +1213,7 @@
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.8.2",
-      "contract_digest": "ec0af4065618c5c977257d8cb5bb8bba5fd0fbfe9bfe9087c02f90aaade10ec4",
+      "contract_digest": "b0333f9c9aa145e7cc34781a8d155005a71f3df260b287528958052ff6a70a06",
       "method_version": "0.10.2",
       "skill": {
         "name": "douyin-leadgen-activity-102-collection",
