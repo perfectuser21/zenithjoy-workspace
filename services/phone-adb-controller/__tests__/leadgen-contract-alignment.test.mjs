@@ -11,10 +11,18 @@ test('qualification keeps technical/no-speech unknown distinct from a policy rej
 });
 test('102 qualification verifies capture and current media identity after its executor runs',()=>{
  const a=activity('douyin_video_processing','qualification');
- assert.match(text(a.preconditions),/核同一设备在线、账号和本run锁仍有效/);
- assert.match(text(a.preconditions),/实际原生身份、设备捕获路径和媒体可用性由本Activity执行后取证/);
+ assert.match(a.preconditions[0],/brain\.get.*result\.foundation_runner\.run\.input\.business\.scope\.qualification_input/);
+ assert.match(a.preconditions[0],/实际原生身份、捕获路径与覆盖证据由本 Activity 执行后验收/);
+ assert.match(a.preconditions[1],/pg\.rows.*connection\.snapshot_at.*updated_at.*15 分钟/);
+ assert.match(a.preconditions[1],/host\.receipts.*current-video-link/);
  assert.match(text(a.postconditions),/本次原生VID、实际授权捕获路径、真实内容覆盖/);
  assert.match(text(a.postconditions),/未核实不得复用，保持原判断run且不重复评分/);
+});
+test('shared phone cleanup leaves time for device actions and the independent acceptance before the workflow cleanup deadline',()=>{
+ const workflow=load('douyin_video_processing');
+ const cleanup=workflow.activities.find(a=>a.key==='cleanup');
+ assert.equal(cleanup.budget.max_duration_s,480);
+ assert.ok(cleanup.budget.max_duration_s*1000 < workflow.runtime.cleanup_timeout_ms);
 });
 test('102 collection admits verified qualification before creating commenter evidence',()=>{
  const a=activity('douyin_video_processing','collection');
