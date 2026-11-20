@@ -9,6 +9,19 @@ test('qualification keeps technical/no-speech unknown distinct from a policy rej
  assert.doesNotMatch(text(a.steps),/空\/静音 → rejected|静音.*PG拒绝|真实媒体时长 ≥ 预算的 80%/);
  assert.match(text(a.postconditions),/no_speech/);assert.match(text(a.postconditions),/unknown/);
 });
+test('102 qualification verifies capture and current media identity after its executor runs',()=>{
+ const a=activity('douyin_video_processing','qualification');
+ assert.match(text(a.preconditions),/核同一设备在线、账号和本run锁仍有效/);
+ assert.match(text(a.preconditions),/实际原生身份、设备捕获路径和媒体可用性由本Activity执行后取证/);
+ assert.match(text(a.postconditions),/本次原生VID、实际授权捕获路径、真实内容覆盖/);
+ assert.match(text(a.postconditions),/未核实不得复用，保持原判断run且不重复评分/);
+});
+test('102 collection admits verified qualification before creating commenter evidence',()=>{
+ const a=activity('douyin_video_processing','collection');
+ assert.match(text(a.preconditions),/已独立验收的合法matched及仍有效的本run处理租约/);
+ assert.match(text(a.postconditions),/recipientEvidence和返回评论页原件/);
+ assert.match(text(a.postconditions),/确切已提交且独立核验的评论可用committed_partial交103/);
+});
 test('103 explicitly accepts validated partial IDs without requiring the entire 102 run to pass',()=>{
  for(const key of ['scoring','mark_leads']){
   const a=activity('douyin_comment_scoring',key);assert.match(text(a.preconditions),/committed_partial/);
