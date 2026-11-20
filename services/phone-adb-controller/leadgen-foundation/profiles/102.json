@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.dedup",
-            "contract_digest": "4f0f656a4c04d1be233cdfdea165f050d52dbc7a4412258192844042acf06bed"
+            "contract_digest": "4e6559cc3ecba82fc3a7f2914e3fcd25cdeb06a94c92484f5f5b619dfbdd2b6d"
           },
           "document": {
             "key": "dedup",
@@ -550,7 +550,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "3.3.1",
+            "version": "3.3.2",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -593,7 +593,7 @@
             "postconditions": [
               {
                 "probe": "dedup_historical_filter_verified",
-                "asserts": "PG逐VID核实已采、拒绝和当前处理状态；按VID过滤重复，不以同标题合并不同视频；合法空集合保留实际筛选原因。"
+                "asserts": "PG逐VID核实已采、拒绝和当前处理状态；按VID过滤重复，不以同标题合并不同视频；合法空集合保留实际筛选原因。正式outputs.Video的comment_count应与同业务线、同VID认领后PG只读快照的comment_count逐条相等，有持久读回的0为有效值。原生页面评论总数另作普通或深采策略证据，不填入comment_count；证据不足保持未决。"
               },
               {
                 "probe": "dedup_own_filter_verified",
@@ -793,7 +793,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "dedup_historical_filter_verified",
-                "asserts": "PG逐VID核实已采、拒绝和当前处理状态；按VID过滤重复，不以同标题合并不同视频；合法空集合保留实际筛选原因。"
+                "asserts": "PG逐VID核实已采、拒绝和当前处理状态；按VID过滤重复，不以同标题合并不同视频；合法空集合保留实际筛选原因。正式outputs.Video的comment_count应与同业务线、同VID认领后PG只读快照的comment_count逐条相等，有持久读回的0为有效值。原生页面评论总数另作普通或深采策略证据，不填入comment_count；证据不足保持未决。"
               },
               "source_pointer": "/postconditions/0"
             },
@@ -2577,8 +2577,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "f86bb46fce23fbca9fc75fb97a483300a722e764",
-      "contract_sha256": "b7afc96c65b829d17795aef61a06759381df44275a77ebbf0ee1192d6edb3e4d"
+      "method_revision": "e82cf412fa34d647f88b139aa7388f7396cf8ea1",
+      "contract_sha256": "22f5455ca7548014cc70a4b6cf1f9bd7d29cec0c16602b73242eaeeac8b46d83"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2797,7 +2797,7 @@
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "ed03c323cd9c75e9c94a58d6f72e7fdd6a509904996514dbdadf84bc4aa37c82",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "82549a3342659b7bb1397ca5e9c7a6f8be4342ecfeee5200c0f67583982bf2eb",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "18dd1dc1858a26fb66eca915e9a5f5afd74b298f6649a5ffdc5f8ecf6f2a726a",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "72f16c40905a13ca3abb348f6a49156dcb3063d730cfbc9af5980caa6c813cbf",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "786c8fd52c6c0f92f1091561776ca5ff388d0261a028320d2d3c8c58718b26f1"
     }
