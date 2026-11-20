@@ -912,7 +912,7 @@
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.5.6",
-      "contract_digest": "16efbd37224790b16be51eea58bc9f84a8eaed16426c796bdd97a364c3c103f8",
+      "contract_digest": "ceabb76ba97daa64f9112e2265bb5dca9dbd94ce02b2c4578203166481639f0c",
       "method_version": "0.8.6",
       "skill": {
         "name": "douyin-leadgen-activity-102-qualification",
