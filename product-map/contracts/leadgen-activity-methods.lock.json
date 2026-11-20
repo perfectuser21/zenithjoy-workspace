@@ -897,21 +897,21 @@
       "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
     },
     "douyin_video_processing.qualification": {
-      "activity_version": "3.5.0",
-      "contract_digest": "13360c7ac731ecdcf8f0f3eaa51e1f1f9c9e1c4bc1e122c2c6a1a9bc8d202c56",
-      "method_version": "0.8.0",
+      "activity_version": "3.5.1",
+      "contract_digest": "05e5a4510b707fb098b09105cc410f7a0f5a18dade9d5795d9f53a2c65e7f226",
+      "method_version": "0.8.1",
       "skill": {
         "name": "douyin-leadgen-activity-102-qualification",
-        "version": "0.8.0",
+        "version": "0.8.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
-        "sha256": "786c8fd52c6c0f92f1091561776ca5ff388d0261a028320d2d3c8c58718b26f1",
+        "sha256": "b3b62cd43b1cd7bab3377bc5a8eb9946f1e1a786e517f4e326fe47f8ac1d4054",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/references/sdk31-capture.md",
             "sha256": "12aea23db4edcce7e42cf683be4980eefd927ae73cacd0867b87a24b3a99dc6e"
           }
         ],
-        "content_digest": "847fc9a770ce8c11d33997462e1d07eeb36404f398f70f5f3cca14618c6f5d3c"
+        "content_digest": "00ddb211b7bcac88790f9b392a4e010f1ca0f9928a12f788044de033f6cd1484"
       },
       "code_bindings": [
         {
@@ -1195,26 +1195,19 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
-        "reviewed_by": "codex:cloud-phone-verify-20261117",
-        "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
-      }
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
     },
     "douyin_video_processing.collection": {
-      "activity_version": "2.8.0",
-      "contract_digest": "0faebeb212d0b92af194ca69f2c847c5d47da8411f1c79a54da69a0ab8add1ab",
-      "method_version": "0.10.0",
+      "activity_version": "2.8.1",
+      "contract_digest": "87dce530611af801f5889f0880165c5d28da9498c62cf77de788fb6258df5304",
+      "method_version": "0.10.1",
       "skill": {
         "name": "douyin-leadgen-activity-102-collection",
-        "version": "0.10.0",
+        "version": "0.10.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md",
-        "sha256": "82549a3342659b7bb1397ca5e9c7a6f8be4342ecfeee5200c0f67583982bf2eb",
+        "sha256": "b72782f8be66cb0b00e7457f3ace96a7130218908eacde93cee3c128b789f8e9",
         "support_files": [],
-        "content_digest": "0dbf991aa8faebe56ef6dc193fe753f917de529bdec146350d9eeda367ba1190"
+        "content_digest": "70959ed7e83dd5ba80d19ad81487eb810fc2ca58abde7b537278d758a3a106ad"
       },
       "code_bindings": [
         {
@@ -1498,14 +1491,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "复核仅补充现有只读工具的指标观测时间，以及101搜索和收尾原件的交付方法。活动契约、Skill方法、业务写入及通用Checker判定边界保持兼容。",
-        "reviewed_by": "codex:cloud-phone-verify-20261117",
-        "previous_code_digest": "abbe3a13ee0e1c80cb9ca1746d54d055df96a197f649cb10dbf48987af59b0fa",
-        "current_code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
-      }
+      "code_digest": "98c1a33432018cea7630a98619d89e691739cfe86e653a9372055569da5e2c3c"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.6.1",
@@ -3683,28 +3669,28 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.13.9",
+        "version": "0.13.10",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "944163464618ac4d2dbb78e41469986a9e642d7a3011cbda12cef3eff163d704",
+        "sha256": "9bb2a819aff61f00f06c19cea92935aca7a69b897e2da5a5aa1f288f97786777",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-            "sha256": "47d3d646cd8d16d0dff521d959e7c67ccf03d445f5c61960007acb256b04b6bb"
+            "sha256": "ddbff2ab810d7bc72bcd8e19c1de95a7e963d7ca0d6638096b2e8ea5de49cf69"
           }
         ],
-        "content_digest": "8625fcca48f8b469e45e9bb68e1a0c3351c4feb51f4f0957dc90da8566e605d2"
+        "content_digest": "e2fc5900e3966981c73e5d081520456a59ea4403afc4c1c27fa18dc7abf7f3fe"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.12.9",
+        "version": "0.12.10",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "0386aeb416c5c5b29d910b4fe2c7ba5300277f60a9d447e6fa52ac8437e097e6",
+        "sha256": "33623537679a5ef1eaeb5d41c0a55b9b70e795a4551992c73c46dc780322932d",
         "support_files": [],
-        "content_digest": "16218bec0066e5fb6f43fc3007dab6ac9a776a60466347fc4026da8ac80128ff"
+        "content_digest": "bf09402f7a2a61da350d41557c244a1104c1ea1673c1b96c174f2a3c6a80feba"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-        "sha256": "47d3d646cd8d16d0dff521d959e7c67ccf03d445f5c61960007acb256b04b6bb"
+        "sha256": "ddbff2ab810d7bc72bcd8e19c1de95a7e963d7ca0d6638096b2e8ea5de49cf69"
       },
       "activities": [
         {
@@ -3722,13 +3708,13 @@
         {
           "activity_ref": "douyin_video_processing.qualification",
           "skill_name": "douyin-leadgen-activity-102-qualification",
-          "skill_version": "0.8.0",
+          "skill_version": "0.8.1",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md"
         },
         {
           "activity_ref": "douyin_video_processing.collection",
           "skill_name": "douyin-leadgen-activity-102-collection",
-          "skill_version": "0.10.0",
+          "skill_version": "0.10.1",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md"
         },
         {
