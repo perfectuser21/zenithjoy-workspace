@@ -918,14 +918,14 @@
         "name": "douyin-leadgen-activity-102-qualification",
         "version": "0.8.4",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
-        "sha256": "a17ab9c04c0296f8cb09a2327c43ae459e765be16fd956d2f51d9e49c89c721a",
+        "sha256": "40854b49e07d975eccc53fcc2792c720300f8c5a93cbc1caa8432edaa2e9958e",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/references/sdk31-capture.md",
             "sha256": "12aea23db4edcce7e42cf683be4980eefd927ae73cacd0867b87a24b3a99dc6e"
           }
         ],
-        "content_digest": "f4edef437b0c0d0d84d9004f453c0137c5d325345f64fce848acb60f8e894144"
+        "content_digest": "417c48b575275a436b2fa36119bca7d57b3398bbd719814908efe08569f555e1"
       },
       "code_bindings": [
         {
