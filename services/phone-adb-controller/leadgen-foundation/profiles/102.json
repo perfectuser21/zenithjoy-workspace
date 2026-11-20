@@ -914,7 +914,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.qualification",
-            "contract_digest": "ceabb76ba97daa64f9112e2265bb5dca9dbd94ce02b2c4578203166481639f0c"
+            "contract_digest": "470dccaf7fa8e5966193f332021ea2261009223e1b3ca7f347103b1f25167287"
           },
           "document": {
             "key": "qualification",
@@ -930,7 +930,7 @@
               "current_skill_verified": false
             },
             "order": 3,
-            "version": "3.5.6",
+            "version": "3.5.7",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -1017,7 +1017,8 @@
             },
             "failure": {
               "empty_ok": [
-                "本批无 pending 视频"
+                "本批无 pending 视频",
+                "本轮已认领目标逐一具备真实持久读回和原始证据，全部按冻结政策判为 rejected 时，保留逐项真实结果。Checker 在 qualification/end 全部条款通过后必须以 empty 交付并保留 Video 证据，进入 cleanup；有 matched 则正常推进，存在 unknown 或其它未决项不能判 empty。"
               ],
               "retryable": [
                 "转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）",
@@ -1325,7 +1326,8 @@
               "phase": "end",
               "requirement": {
                 "empty_ok": [
-                  "本批无 pending 视频"
+                  "本批无 pending 视频",
+                  "本轮已认领目标逐一具备真实持久读回和原始证据，全部按冻结政策判为 rejected 时，保留逐项真实结果。Checker 在 qualification/end 全部条款通过后必须以 empty 交付并保留 Video 证据，进入 cleanup；有 matched 则正常推进，存在 unknown 或其它未决项不能判 empty。"
                 ],
                 "retryable": [
                   "转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）",
@@ -1349,7 +1351,8 @@
         },
         "failure": {
           "empty_ok": [
-            "本批无 pending 视频"
+            "本批无 pending 视频",
+            "本轮已认领目标逐一具备真实持久读回和原始证据，全部按冻结政策判为 rejected 时，保留逐项真实结果。Checker 在 qualification/end 全部条款通过后必须以 empty 交付并保留 Video 证据，进入 cleanup；有 matched 则正常推进，存在 unknown 或其它未决项不能判 empty。"
           ],
           "retryable": [
             "转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）",
@@ -1394,7 +1397,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.collection",
-            "contract_digest": "27505e195f50abb3914e7f1d1fca58ff8cdeed173263652a61198371f63ef182"
+            "contract_digest": "54014cfd574ffd558f7094ef56cb3a2ccf85f90319cec36442ff33b69f205127"
           },
           "document": {
             "key": "collection",
@@ -1410,7 +1413,7 @@
               "current_skill_verified": false
             },
             "order": 4,
-            "version": "2.8.3",
+            "version": "2.8.4",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -1457,7 +1460,7 @@
               },
               {
                 "type": "Account",
-                "source": "本轮原生核验的抖音账号",
+                "source": "逻辑采集账号由宿主交接的 context.Account.sender_id 与本轮 preflight 的 phone/account-current 唯一成功终态原始回执共同组成。复用下方开工核验所读原件，确认 Task/run、操作、退出码，且 stdout 的 douyin_id= 与 sender_id 一致，取同一 stdout 的非空 nickname= 作为昵称。无需宿主对象重复包含昵称；若已包含则必须与原件相同。",
                 "cardinality": "one",
                 "fields": [
                   "sender_id",
@@ -1884,7 +1887,7 @@
               "phase": "start",
               "requirement": {
                 "type": "Account",
-                "source": "本轮原生核验的抖音账号",
+                "source": "逻辑采集账号由宿主交接的 context.Account.sender_id 与本轮 preflight 的 phone/account-current 唯一成功终态原始回执共同组成。复用下方开工核验所读原件，确认 Task/run、操作、退出码，且 stdout 的 douyin_id= 与 sender_id 一致，取同一 stdout 的非空 nickname= 作为昵称。无需宿主对象重复包含昵称；若已包含则必须与原件相同。",
                 "cardinality": "one",
                 "fields": [
                   "sender_id",
@@ -2556,8 +2559,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "d5f6e6729af5111861d89cfbf09d6d0b3abd4c24",
-      "contract_sha256": "162a28c0d2cf42b07777137cd892f93681b3373bf925b21d55516bd03f540d55"
+      "method_revision": "9acdafb0cd9a267cb6c2c6ea1c1f619c9fa1463a",
+      "contract_sha256": "8e6ffdad1fa473b31525bdc7041f7747185a30505c5b4c9ab42768d1eca02524"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2775,10 +2778,10 @@
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "c6b27f2bf028abaca8caa2cbf37bfee9ea5577393160f1158760cbacf605c30f",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "1760c5dcad570d8e51834046f379989a1dbe6b62ef447b5f4ab2230b0c9862a6",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "54961cb16ddeb956ddcc3035173f6ab9838027f837378c6a7e964ebf7bb8c9ad",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "fadc3c9c5769a13c115f34a870ede7fa6ff2a4f32aa5e858255619f41cecb9ea"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "3e11c44ba9b87170b0f7fea09e4f8508999193230ee11bdadd79b2113637f460"
     }
   }
 }

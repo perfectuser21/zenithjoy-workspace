@@ -151,3 +151,18 @@ test('102 判定和采集按本轮操作查验账号和链接回执', () => {
     if (key === 'collection') assert.match(preconditions, /qualification.{0,40}phone\/current-video-link/);
   }
 });
+
+
+test('102 合法空结果收尾及采集账号使用同轮原件', () => {
+  const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
+  const qualification = doc.activities.find(activity => activity.key === 'qualification');
+  const collection = doc.activities.find(activity => activity.key === 'collection');
+  const account = collection.inputs.find(input => input.type === 'Account');
+  const empty = qualification.failure.empty_ok.find(reason => reason.includes('全部按冻结政策判为 rejected'));
+  assert.match(empty ?? '', /全部条款通过后必须以 empty .*进入 cleanup/);
+  assert.match(empty, /存在 unknown .*不能判 empty/);
+  assert.deepEqual(account.fields, ['sender_id', 'nickname']);
+  assert.match(account.source, /context\.Account\.sender_id.*phone\/account-current/);
+  assert.match(account.source, /douyin_id= 与 sender_id 一致.*非空 nickname=/);
+  assert.match(collection.preconditions[0], /只接收.*matched/);
+});
