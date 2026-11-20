@@ -16,7 +16,8 @@ const BASE={
 const PG_SOURCE=['preflight-pg-dependencies.mjs','preflight-pg-lock.json'];
 const BASE102={
  'qualification/runtime-deps.mjs':'25f883023d2b9e38912586bc69b103d7f6b69d5c17dad30201f6644123b49a11',
- 'qualification/helper.mjs':'ec62b2045d6525fa3905658d8c40b5d3e62b3642abf72b7aae9002aef2d64243',
+ 'qualification/helper.mjs':'4cdea99a2bb1cefa73712bc243719ee3bf6b7ade0115a92dd0d763a2d0942934',
+ 'qualification/visual-evidence.mjs':'c9856cba758087d07bdc449544c3b74c76609a20757c58c13387d6eb0e9766b6',
  'collection-evidence/runtime-deps.mjs':'e4212d2945f9f27c0302dcb8365cd443bc836e247399cfc357d21eec5453b597',
 };
 function regular(file){const s=fs.lstatSync(file);need(s.isFile()&&!s.isSymbolicLink()&&s.nlink===1&&s.uid===process.getuid()&&!(s.mode&0o022),'FILE');return fs.readFileSync(file);}
