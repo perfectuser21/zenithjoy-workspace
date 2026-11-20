@@ -15,7 +15,7 @@ import queue
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BASE_SHA = {
-    'TOOLS.txt': 'c9f28373276f203ab6dcdf77dcd67a0e6965aef7ba8febf376f7441ae9b9b712',
+    'TOOLS.txt': 'f6378da58d257da73d6b84e019e1a683b5e6f912ab810aa2232726c1594fbc3a',
     'tools.py': '53ac7b51b19e0e65f6031d07135bb4cd677b8dee27590b987d49de59e8bcc352',
     'tool_scope.py': 'b5d39b61efc42dac48ca76a3d77d7f1bef63eed734ea076231facaf554b6386b',
 }

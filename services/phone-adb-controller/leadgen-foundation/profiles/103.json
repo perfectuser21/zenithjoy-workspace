@@ -1041,7 +1041,7 @@
       "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
       "services/phone-adb-controller/activity-host-104.mjs": "6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7",
       "services/phone-adb-controller/activity-host-pg.mjs": "10b24799f67c0ed37ffcb50e0dd5ce7f347dfb5b6c57e4d7592e3eed9ef5ccc4",
-      "services/phone-adb-controller/activity-host-tools.py": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37",
+      "services/phone-adb-controller/activity-host-tools.py": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55",
       "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
       "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
       "services/phone-adb-controller/activity-tool-result.py": "c49adcc34027f4fb52c39964d86fbf532ecee9fbb6309be9e51e869abc5dae0b",
