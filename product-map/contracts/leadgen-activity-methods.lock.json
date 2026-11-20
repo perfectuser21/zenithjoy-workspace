@@ -68,7 +68,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_video_processing.preflight": {
@@ -371,7 +371,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -598,13 +598,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_video_processing.dedup": {
@@ -674,7 +674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -901,13 +901,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_video_processing.qualification": {
@@ -982,7 +982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -1209,13 +1209,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_video_processing.collection": {
@@ -1285,7 +1285,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -1512,13 +1512,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1588,7 +1588,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -1815,13 +1815,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1896,7 +1896,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -2123,13 +2123,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2204,7 +2204,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -2431,13 +2431,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2507,7 +2507,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -2734,13 +2734,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2810,7 +2810,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -3037,13 +3037,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3113,7 +3113,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -3340,13 +3340,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3416,7 +3416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "e658db2551b7d03c0019aa9222bfda3877a9b0bc59338750a6714ea0200dea37"
+          "sha256": "5898d0b2c12db55338da263f50eeaee0af36922a04cb4507d54766b9938c7e55"
         },
         {
           "kind": "code",
@@ -3643,13 +3643,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77",
+      "code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主固定闭包仅 101 工具说明使用本次冻结关键词和筛选，运行协议、工具实现和 Activity 契约内容保持同一版本；正式真机效果另验。",
+        "reason": "代码闭包仅固定101工具说明和对应校验摘要；同一宿主装配及守卫119项回归通过。执行协议、工具行为和契约无变更，真机仍需复验。",
         "reviewed_by": "session:cloud-phone-verify-20261117",
         "previous_code_digest": "332607f1759d065369a893ab5b7b8c95b10552dade560373a9320591df9a8beb",
-        "current_code_digest": "bb6c73165b94c40533c4b6296f78c14732cf9b46ab54e9112b2d5917fc080c77"
+        "current_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836"
       }
     }
   },
