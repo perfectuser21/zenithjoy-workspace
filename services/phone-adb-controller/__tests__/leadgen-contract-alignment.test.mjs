@@ -37,3 +37,15 @@ test('104 failures never implicitly requeue a prepared or unknown send',()=>{
 test('collection acceptance retains author and own-account filtering independently of legacy step checks',()=>{
  const a=activity('douyin_video_processing','collection');assert.match(text(a.postconditions),/作者UID/);assert.match(text(a.postconditions),/自有账号/);
 });
+
+test('101 and 102 use the shared preflight lock check with original tool receipts and independent status',()=>{
+ const discover=activity('douyin_video_discovery','preflight')
+   ?? load('douyin_video_discovery').activities.find(item=>item.ref==='douyin_video_processing.preflight');
+ assert.equal(discover.ref,'douyin_video_processing.preflight');
+ const lock=activity('douyin_video_processing','preflight').postconditions.find(item=>item.probe==='pf_lock_acquired');
+ assert.match(lock.asserts,/宿主工具取得回执/);
+ assert.match(lock.asserts,/native\.read/);
+ assert.match(lock.asserts,/brain\.get\(device_lock\)/);
+ assert.match(lock.asserts,/不是本 run 下的 native\//);
+ assert.match(lock.asserts,/身份不符或锁已过期则不得通过/);
+});
