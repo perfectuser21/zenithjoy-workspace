@@ -2159,7 +2159,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "547cca99c53e40dfbb78dd9fb3896db0d186403daf1c4ce23099542676e8f051"
+            "contract_digest": "ff13a6ff9a6bce2e8236f13230c386b1066be267cead4cab960f02d5860254a1"
           },
           "document": {
             "key": "cleanup",
@@ -2176,7 +2176,7 @@
               "current_skill_verified": false
             },
             "order": 5,
-            "version": "2.6.0",
+            "version": "2.6.1",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -2215,7 +2215,7 @@
               },
               {
                 "type": "Run",
-                "destination": "交付本轮收尾Activity状态及可读回证据，由宿主验收后计算Workflow终态",
+                "destination": "收尾 Activity 的执行结果。Checker 用本轮原生归位、资源释放与读回回执核实状态。动作成功且适用资源义务均已处理时可核实 success，收尾验收和整条 Workflow 的终态由宿主在本次检查之后生成，无须另有收尾成功回执。",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -2234,7 +2234,7 @@
               },
               {
                 "probe": "cl_lock_released",
-                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。"
+                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。 先用本轮宿主调用清单与业务行读回判断是否存在 claim。若本轮仅执行发现与只读，调用未包含认领，行状态也没有本轮处理租约，则业务 claim 释放不适用；需要核对本轮实际持有的设备锁。102 若实际认领，则仍需对相应 claim 独立查验。"
               },
               {
                 "probe": "cl_safe_desktop_visible",
@@ -2265,15 +2265,15 @@
                 "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
               ],
               "retryable": [
-                "工件 scp 到 mmv 失败（本地保留）"
+                "若本轮工件传输动作实际失败，则保留原件并按适用路径处理；以原传输返回和本轮文件事实核实。"
               ],
               "needs_human": {
                 "cases": [
-                  "finalize 自检 artifact_count_mismatch"
+                  "本轮快照和实际传输、独立可读的工件发生数量不一致，或关键归位工件缺失。使用实际需要的工件、传输回执及独立读回核对；没有旧 finalize 脚本的单独自检回执不构成失败。"
                 ],
                 "alert": {
                   "channel": "brain_alert",
-                  "object": "Brain 终态 failed 回执（workflow-result.sh:200）"
+                  "object": "本次收尾的原失败回执与待处置工件标识"
                 }
               },
               "fatal": []
@@ -2444,7 +2444,7 @@
               "phase": "end",
               "requirement": {
                 "type": "Run",
-                "destination": "交付本轮收尾Activity状态及可读回证据，由宿主验收后计算Workflow终态",
+                "destination": "收尾 Activity 的执行结果。Checker 用本轮原生归位、资源释放与读回回执核实状态。动作成功且适用资源义务均已处理时可核实 success，收尾验收和整条 Workflow 的终态由宿主在本次检查之后生成，无须另有收尾成功回执。",
                 "cardinality": "one",
                 "effect": "update",
                 "fields": [
@@ -2467,7 +2467,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "cl_lock_released",
-                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。"
+                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。 先用本轮宿主调用清单与业务行读回判断是否存在 claim。若本轮仅执行发现与只读，调用未包含认领，行状态也没有本轮处理租约，则业务 claim 释放不适用；需要核对本轮实际持有的设备锁。102 若实际认领，则仍需对相应 claim 独立查验。"
               },
               "source_pointer": "/postconditions/1"
             },
@@ -2497,15 +2497,15 @@
                   "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
                 ],
                 "retryable": [
-                  "工件 scp 到 mmv 失败（本地保留）"
+                  "若本轮工件传输动作实际失败，则保留原件并按适用路径处理；以原传输返回和本轮文件事实核实。"
                 ],
                 "needs_human": {
                   "cases": [
-                    "finalize 自检 artifact_count_mismatch"
+                    "本轮快照和实际传输、独立可读的工件发生数量不一致，或关键归位工件缺失。使用实际需要的工件、传输回执及独立读回核对；没有旧 finalize 脚本的单独自检回执不构成失败。"
                   ],
                   "alert": {
                     "channel": "brain_alert",
-                    "object": "Brain 终态 failed 回执（workflow-result.sh:200）"
+                    "object": "本次收尾的原失败回执与待处置工件标识"
                   }
                 },
                 "fatal": []
@@ -2519,15 +2519,15 @@
             "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
           ],
           "retryable": [
-            "工件 scp 到 mmv 失败（本地保留）"
+            "若本轮工件传输动作实际失败，则保留原件并按适用路径处理；以原传输返回和本轮文件事实核实。"
           ],
           "needs_human": {
             "cases": [
-              "finalize 自检 artifact_count_mismatch"
+              "本轮快照和实际传输、独立可读的工件发生数量不一致，或关键归位工件缺失。使用实际需要的工件、传输回执及独立读回核对；没有旧 finalize 脚本的单独自检回执不构成失败。"
             ],
             "alert": {
               "channel": "brain_alert",
-              "object": "Brain 终态 failed 回执（workflow-result.sh:200）"
+              "object": "本次收尾的原失败回执与待处置工件标识"
             }
           },
           "fatal": []
@@ -2561,8 +2561,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "af558b6e13f5046ad3690980044ca6a3be22ed0c",
-      "contract_sha256": "6c263dc0d2970654b1b787f9c7346492df8ca0013804eef456642d125eea02a5"
+      "method_revision": "27fb555c2092a22439f61b621a8038eb93cb29d3",
+      "contract_sha256": "3271b0f1aa8ad6054ff2d59aa7e38cf5e0232d8959b5618a61dad562c4ecf392"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2779,7 +2779,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "ea3b2fa871b4d0c7a2b177378d07bdf3e16583d3a1b997762666bf1690086ddc",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "eef4d1f2b4f83ff0de96a3a9a353f571041b87d0bd91630f3f4c2ef19fc4ec9e",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "ed03c323cd9c75e9c94a58d6f72e7fdd6a509904996514dbdadf84bc4aa37c82",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "82549a3342659b7bb1397ca5e9c7a6f8be4342ecfeee5200c0f67583982bf2eb",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "554c43a388f81a2542c71a1467b5eef33083b3de5d14e623c8fc3fb18d487968",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "eed9c7e8734cffe2f464a2cdbdfda111ca5cf366f8eada8e789eb885eb29d927",

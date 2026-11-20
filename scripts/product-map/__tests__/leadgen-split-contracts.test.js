@@ -100,7 +100,7 @@ test('预检交接已分配Run，收尾只交自己的Activity状态',()=>{
   assert.match(runHandoff.destination,/同一Run.*交接/);
   assert.ok(preflight.preconditions.some(p=>p.includes('run.identity')));
   assert.ok(preflight.postconditions.some(p=>p.probe==='pf_lock_acquired'&&p.asserts.includes('host.receipts')));
-  assert.match(closeReceipt.destination,/收尾Activity状态/);
+  assert.match(closeReceipt.destination,/收尾\s*Activity\s*(?:状态|的执行结果)/);
   const finalize=cleanup.steps.find(step=>step.key==='finalize_run');
   assert.match(finalize.check,/Workflow终态由宿主/);
   assert.doesNotMatch(finalize.check,/记录真实终态/);

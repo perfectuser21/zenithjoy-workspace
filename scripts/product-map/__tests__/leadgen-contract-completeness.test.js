@@ -77,6 +77,17 @@ test('共享预检的定时闸不误写成手动活动条件', () => {
     condition.includes('Brain 正式派单') && condition.includes('原绝对 deadline')));
 });
 
+test('101 与 102 共用收尾契约并按本轮真实资源核验', () => {
+  const discovery = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_discovery.yaml'), 'utf8'));
+  const processing = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
+  assert.ok(discovery.activities.some(activity => activity.ref === 'douyin_video_processing.cleanup'));
+  const cleanup = processing.activities.find(activity => activity.key === 'cleanup');
+  assert.match(cleanup.outputs.find(output => output.type === 'Run').destination, /本次检查之后生成.*无须另有收尾成功回执/);
+  const lock = cleanup.postconditions.find(condition => condition.probe === 'cl_lock_released');
+  assert.match(lock.asserts, /业务 claim 释放不适用.*102 若实际认领.*独立查验/);
+  assert.match(cleanup.failure.needs_human.cases.join(' '), /独立可读的工件.*旧 finalize 脚本/);
+});
+
 test('104 订单生命周期与发送结果由完整合同规定', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_lead_outreach.yaml'), 'utf8'));
   const activity = Object.fromEntries(doc.activities.filter(a => a.key).map(a => [a.key, a]));
