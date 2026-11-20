@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.dedup",
-            "contract_digest": "877b38901f07a0842ccba29b3927394574e1548360ff21ffe885b8d41c54a03d"
+            "contract_digest": "4f0f656a4c04d1be233cdfdea165f050d52dbc7a4412258192844042acf06bed"
           },
           "document": {
             "key": "dedup",
@@ -550,7 +550,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "3.3.0",
+            "version": "3.3.1",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -575,9 +575,9 @@
             "outputs": [
               {
                 "type": "Video",
-                "destination": "zenithjoy.leadgen_videos 的本轮待判定集合",
+                "destination": "zenithjoy.leadgen_videos 的本轮已认领视频集合",
                 "cardinality": "many",
-                "effect": "create",
+                "effect": "update",
                 "fields": [
                   "video_id",
                   "author",
@@ -597,11 +597,11 @@
               },
               {
                 "probe": "dedup_own_filter_verified",
-                "asserts": "自家作者过滤依据本次已核作者身份与公司配置，不能按标题或昵称猜作者。"
+                "asserts": "核对精确VID绑定的原生视频及作者入口、原生作者主页标注的抖音号原件，并与本轮冻结的同公司已启用且已核验抖音号按同身份命名空间比对。标题、昵称或未经映射的sec_uid不能代替已核作者身份；证据不足保持未决。"
               },
               {
                 "probe": "dedup_run_dedup_verified",
-                "asserts": "本批VID不重复，实际可处理集合有本run精确认领与租约证据；合法缓存保留原judgment run，普通101来源证明不得误当必须pending/原101harvest_batch的特殊授权。"
+                "asserts": "本批VID不重复，实际可处理集合有本run精确认领原始回执，且PG只读快照逐VID核对同业务线、本run owner和批次。当前普通租约通过行updated_at加冻结队列的15分钟重领阈值，与数据库snapshot_at比较核验有效性；明确到期回执存在时按冻结协议核对。合法缓存保留原judgment run，普通101来源证明不得误当必须pending/原101harvest_batch的特殊授权。"
               }
             ],
             "execution": {
@@ -646,7 +646,13 @@
                 "hash_mismatch 词单在 run 中被改"
               ]
             },
-            "side_effects": [],
+            "side_effects": [
+              {
+                "kind": "internal_write",
+                "target": "zenithjoy.leadgen_videos",
+                "description": "通过既有事务精确认领已存在的逐VID记录，更新处理状态、本轮批次和更新时间。本run续期仅刷新本owner记录的更新时间。保留101发现来源和合法缓存的原判定run，按同VID、同业务线和本run owner读回。"
+              }
+            ],
             "invokers": [
               "code",
               "agent"
@@ -695,10 +701,10 @@
                   "Video.author"
                 ],
                 "writes": [],
-                "check": "按101实际作者证据读取自家号配置，不以标题判断",
+                "check": "读取101逐VID原件或本Activity授权补读的原生作者身份，按同身份命名空间与本轮冻结的已启用且已核验公司抖音账号比较",
                 "implementation": {
                   "status": "implemented",
-                  "ref": "leadgen-workflow.mjs intake：101实际作者与own-accounts配置比对"
+                  "ref": "douyin-leadgen-activity-102-dedup/SKILL.md：作者原生身份与自家号过滤"
                 },
                 "uses_llm": false,
                 "dod": {
@@ -770,9 +776,9 @@
               "phase": "end",
               "requirement": {
                 "type": "Video",
-                "destination": "zenithjoy.leadgen_videos 的本轮待判定集合",
+                "destination": "zenithjoy.leadgen_videos 的本轮已认领视频集合",
                 "cardinality": "many",
-                "effect": "create",
+                "effect": "update",
                 "fields": [
                   "video_id",
                   "author",
@@ -796,7 +802,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "dedup_own_filter_verified",
-                "asserts": "自家作者过滤依据本次已核作者身份与公司配置，不能按标题或昵称猜作者。"
+                "asserts": "核对精确VID绑定的原生视频及作者入口、原生作者主页标注的抖音号原件，并与本轮冻结的同公司已启用且已核验抖音号按同身份命名空间比对。标题、昵称或未经映射的sec_uid不能代替已核作者身份；证据不足保持未决。"
               },
               "source_pointer": "/postconditions/1"
             },
@@ -805,9 +811,19 @@
               "phase": "end",
               "requirement": {
                 "probe": "dedup_run_dedup_verified",
-                "asserts": "本批VID不重复，实际可处理集合有本run精确认领与租约证据；合法缓存保留原judgment run，普通101来源证明不得误当必须pending/原101harvest_batch的特殊授权。"
+                "asserts": "本批VID不重复，实际可处理集合有本run精确认领原始回执，且PG只读快照逐VID核对同业务线、本run owner和批次。当前普通租约通过行updated_at加冻结队列的15分钟重领阈值，与数据库snapshot_at比较核验有效性；明确到期回执存在时按冻结协议核对。合法缓存保留原judgment run，普通101来源证明不得误当必须pending/原101harvest_batch的特殊授权。"
               },
               "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "side_effects_0",
+              "phase": "end",
+              "requirement": {
+                "kind": "internal_write",
+                "target": "zenithjoy.leadgen_videos",
+                "description": "通过既有事务精确认领已存在的逐VID记录，更新处理状态、本轮批次和更新时间。本run续期仅刷新本owner记录的更新时间。保留101发现来源和合法缓存的原判定run，按同VID、同业务线和本run owner读回。"
+              },
+              "source_pointer": "/side_effects/0"
             },
             {
               "id": "idempotency",
@@ -2561,8 +2577,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "a76d1477d22bccc376c771aecb562e971b10c4af",
-      "contract_sha256": "a5341b0e3f752e7ddab521f21bf33560495376117de367ed7f3754384ff2205d"
+      "method_revision": "f86bb46fce23fbca9fc75fb97a483300a722e764",
+      "contract_sha256": "b7afc96c65b829d17795aef61a06759381df44275a77ebbf0ee1192d6edb3e4d"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2781,7 +2797,7 @@
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "ed03c323cd9c75e9c94a58d6f72e7fdd6a509904996514dbdadf84bc4aa37c82",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "82549a3342659b7bb1397ca5e9c7a6f8be4342ecfeee5200c0f67583982bf2eb",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "554c43a388f81a2542c71a1467b5eef33083b3de5d14e623c8fc3fb18d487968",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "18dd1dc1858a26fb66eca915e9a5f5afd74b298f6649a5ffdc5f8ecf6f2a726a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "786c8fd52c6c0f92f1091561776ca5ff388d0261a028320d2d3c8c58718b26f1"
     }
