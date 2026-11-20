@@ -90,6 +90,9 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
    files['business.mjs']=replaceRequired(files['business.mjs'],"createRequire(path.join(c.runtime_root,'package.json'))","createRequire(path.join(root,'business-runtime/package.json'))");
   }
   if(workflow==='102'){
+   const baseOptions='{sourceCommit:c.source_commit,execution}';
+   const qualificationOptions="{sourceCommit:c.source_commit,execution,qualificationResultReadback:stage==='102'&&input.op==='inspect_videos'&&process.argv[2]==='--qualification-result-readback'}";
+   files['business.mjs']=replaceRequired(files['business.mjs'],baseOptions,qualificationOptions);
    const file='collection-evidence/runtime-deps.mjs',legacy="path.join(profileRoot,'skills/douyin-leadgen-commander/scripts/native_artifacts.py')";
    need(files[file].split(legacy).length===2,'NATIVE_IDENTITY_LAYOUT');
    files[file]=files[file].replace(legacy,"path.join(profileRoot,'native-identity.py')").replace('c.verification.artifact_checker','c.verification.native_identity_reader');
@@ -109,7 +112,9 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
    +'按已返回的真实证据和合同判断完成状态，已有视频的本轮观测写入和读回也可以完成；是否新增单独据原写入回执计数。\n'
    +'收尾若本轮确实操作过App，用 close-app 和 return-safe-desktop 的原前台回执；持有资源时在归位后用 phone 的 snapshot-evidence 获得本次桌面截图，再用 fetch-native 保存到 native 证据根。引用原释放回执、锁空读回和本次归位证据。\n'
    +'run.progress 是独立Checker的只读核对入口；执行Agent根据本轮收尾工具结果交付Run状态，不要求提前读取该活动或Workflow的验收终态。\n';
-  if(workflow==='102')files['agent-tools.txt']+='\n判重原始来源和本 run 普通认领范围已经冻结到 checker-input/upstream.json。读取该文件和当前数据库事实；其中 claim 是开工输入，不是已认领的回执。\n';
+  if(workflow==='102')files['agent-tools.txt']+='\n判重原始来源和本 run 普通认领范围已经冻结到 checker-input/upstream.json。读取该文件和当前数据库事实；其中 claim 是开工输入，不是已认领的回执。\n'
+   +'qualification 在已完成主判后通过 business 的 inspect_videos 查询本轮已认领的同一 VID，真实返回 judgment_status、judgment_reason、transcript。\n'
+   +'将三字段填进 outputs.Video 并引用实际工具返回的读回回执。仅补读回和交付，不重复录制、ASR 或主判。\n';
   delete c.checker_media_tool;
   const probe=['/opt/homebrew/bin/ffprobe','/usr/bin/ffprobe'].find(p=>fs.existsSync(p));
   if(probe){const executable=fs.realpathSync(probe);c.checker_media_tool={path:executable,sha256:hash(fs.readFileSync(executable))};}
