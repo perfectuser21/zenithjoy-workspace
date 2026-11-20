@@ -387,6 +387,10 @@ scope_rejection=_host.scope_rejection''')
     tools = replace_once(tools, "   if source.is_symlink() or not source.is_file() or source.resolve().parent!=source_root:raise ValueError('NATIVE_LOCAL_SOURCE')", "   _host.require_local_native_source(source,source_root)")
     tools = replace_once(tools, " out={'binding':bind,'state':'terminal'", " diagnostic=_host.record_start_diagnostic(c,key,kind,args,result)\n if diagnostic:result={**result,'data':diagnostic}\n out={'binding':bind,'state':'terminal'")
     tools = replace_once(tools, "'stderr':result.get('stderr','')[-1200:]},ensure_ascii=False)", "'stderr':result.get('stderr','')[-1200:],**({'result':{'data':diagnostic}} if diagnostic else {})},ensure_ascii=False)")
+    tools = replace_once(tools, "  return subprocess.run([c['node'],str(P/'business.mjs')],input=json.dumps(i),capture_output=True,text=True,env=environment(c),timeout=420)", """  command=[c['node'],str(P/'business.mjs')]
+  if c['assigned_workflow']=='102' and key=='qualification' and i['op']=='inspect_videos':
+   command.append('--qualification-result-readback')
+  return subprocess.run(command,input=json.dumps(i),capture_output=True,text=True,env=environment(c),timeout=420)""")
     scope = replace_once(scope, 'def scoped_business(c,activity,i):', 'def scoped_business(c,activity,i,*,reject=ValueError):')
     start = scope.index('def scoped_business(')
     scope = scope[:start]+scope[start:].replace('raise ValueError(', 'raise reject(')

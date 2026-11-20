@@ -38,6 +38,7 @@ sys.path.insert(0,str(target));transport=types.ModuleType('local_transport')
 def forbidden(*a):raise AssertionError('external transport is forbidden')
 transport.local_command=forbidden;transport.pinned_transport=forbidden;sys.modules['local_transport']=transport
 activity='mark_leads' if workflow=='103' else ('dedup' if workflow=='102' else 'collect_videos')
+if mode=='qualification-owned-readback':activity='qualification'
 (target/'context.json').write_text(json.dumps(c));(target/'input.json').write_text(json.dumps({'activity_key':activity,'identity':c['tasks'][workflow]}));os.environ['COMMANDER_ACTIVITY_INPUT_FILE']=str(target/'input.json');os.environ['COMMANDER_ACTIVITY_KEY']=activity
 if mode=='proof-removed':proof.unlink()
 if mode=='context-drift':
@@ -52,6 +53,8 @@ def dispatch(*args,**kw):
  calls['dispatch']+=1
  if mode=='after-dispatch':raise ValueError('BUSINESS_ACTIVITY_SCOPE')
  if mode=='network':raise OSError('network')
+ if mode in ('qualification-owned-readback','dedup-normal-readback'):
+  return {'exit_code':0,'data':{'flags':args[0][2:],'request':json.loads(kw['input'])}}
  return {'exit_code':0,'data':{'fixture':True}}
 m.resource_authority=resource;m.environment=environment;m.subprocess.run=dispatch
 if mode=='same-text':m.invoke=lambda *args:(_ for _ in ()).throw(ValueError('BUSINESS_ACTIVITY_SCOPE'))
@@ -63,6 +66,8 @@ if mode in ['persist-failure','fetch-persist-failure']:
  m.atomic=atomic
 def call(name,op):
  value={'op':op}
+ if mode in ('qualification-owned-readback','dedup-normal-readback'):
+  value['video_ids']=['7711111111111111111']
  if mode.startswith('metrics-'):
   value={'op':mode[8:],'video':{'video_id':'7711111111111111111','video_url':'https://www.douyin.com/video/7711111111111111111'}}
   if name=='corrected':value['video']['metrics']={'schema':'test-opaque-original','evidence':{'xml':'fixture original XML'},'digest':'a'*64}
@@ -319,4 +324,17 @@ for(const mode of ['diagnostic-wrong-activity','diagnostic-other-command','diagn
 });
 test('different Workflow cannot acquire 102 native record diagnostic fields',()=>{
  const r=probe('diagnostic-normal','101');assert.equal(r.receipt.result?.data?.diagnostic_files,undefined);
+});
+
+test('assembled 102 only grants full result readback to the claimed qualification Activity',()=>{
+ const qualification=probe('qualification-owned-readback','102');
+ const dedup=probe('dedup-normal-readback','102');
+ assert.equal(qualification.first.rc,0,qualification.first.error);
+ assert.equal(dedup.first.rc,0,dedup.first.error);
+ const scoped=qualification.first.receipt.result.data;
+ const ordinary=dedup.first.receipt.result.data;
+ assert.deepEqual(scoped.flags,['--qualification-result-readback']);
+ assert.deepEqual(ordinary.flags,[]);
+ assert.deepEqual(scoped.request,{op:'inspect_videos',video_ids:['7711111111111111111'],line:'fixture',run:'fixture-new-run'});
+ assert.deepEqual(ordinary.request,scoped.request);
 });

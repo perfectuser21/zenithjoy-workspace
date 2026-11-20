@@ -550,3 +550,19 @@ test('101 can read exact protected old fields, observation time and a transcript
  assert.deepEqual(calls[1].args,['jinuo',[id]]);
  assert.ok(calls.every(({sql})=>sql.startsWith('SELECT')));
 });
+
+test('the frozen qualification host can read back the declared verdict, reason and transcript', async () => {
+ const id = '7709208240869657011';
+ const requested = {op:'inspect_videos',line:'jinuo',run:'fixture102',video_ids:[id]};
+ const record = {video_id:id,judgment_status:'matched'};
+ const persisted = {judgment_reason:'fixture persisted reason',transcript:'fixture persisted transcript'};
+ const pool={query:async(sql,args)=>{
+  assert.match(sql,/^SELECT/);
+  const enriched=sql.includes('judgment_reason')&&sql.includes('transcript');
+  assert.deepEqual(args,enriched?['jinuo',[id],'fixture102','处理中:fixture102']:['jinuo',[id]]);
+  if(enriched)assert.match(sql,/harvest_batch=\$3 AND process_status=\$4/);
+  return {rows:[{...record,...(enriched?persisted:{})}]};
+ }};
+ assert.deepEqual(await queueRequest(pool,{...requested,include_qualification_result:true}),[record]);
+ assert.deepEqual(await queueRequest(pool,requested,{qualificationResultReadback:true}),[{...record,...persisted}]);
+});

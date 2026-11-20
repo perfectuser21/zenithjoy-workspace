@@ -162,9 +162,14 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   }
   if(op==='inspect_videos'){
     if(videoIds===null)throw Error('缺明确视频ID清单');
+    const qualificationReadback=deps.qualificationResultReadback===true;
+    if(qualificationReadback&&(!validRun(run)||videoIds.length!==1))throw Error('QUALIFICATION_READBACK_SCOPE');
+    const qualificationColumns=qualificationReadback?',judgment_reason,transcript':'';
+    const ownership=qualificationReadback?' AND harvest_batch=$3 AND process_status=$4':'';
+    const parameters=qualificationReadback?[lineKey,videoIds,run,'处理中:'+run]:[lineKey,videoIds];
     const protection=input.include_discovery_protection===true?",comment_count,encode(sha256(convert_to(transcript,'UTF8')),'hex') AS transcript_sha256,discovery_metrics->>'observed_at' AS discovery_metrics_observed_at":"";
-    return (await pool.query(`SELECT video_id,line_key,judgment_status,judgment_config,process_status,harvest_batch${protection}
-      FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])`,[lineKey,videoIds])).rows;
+    return (await pool.query(`SELECT video_id,line_key,judgment_status,judgment_config,process_status,harvest_batch${protection}${qualificationColumns}
+      FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])${ownership}`,parameters)).rows;
   }
   if(op==='sample_readback'){
     if(!sourceRun||!/^\d{16,24}$/.test(input.video_id||'')||typeof input.video_url!=='string')throw Error('RPC_SAMPLE_SCOPE_INVALID');
