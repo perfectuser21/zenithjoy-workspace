@@ -34,6 +34,15 @@ test('102 dedup keeps persisted collected count separate from the page total',()
  assert.match(criterion.asserts,/持久读回的0为有效值/);
  assert.match(criterion.asserts,/原生页面评论总数另作普通或深采策略证据，不填入comment_count/);
 });
+test('102 dedup uses the transaction row and leaves time for the independent checker',()=>{
+ const flow=load('douyin_video_processing');
+ const dedup=flow.activities.find(item=>item.key==='dedup');
+ const criterion=dedup.postconditions.find(item=>item.probe==='dedup_historical_filter_verified');
+ assert.match(criterion.asserts,/claim_videos数据库RETURNING回执/);
+ assert.match(criterion.asserts,/inspect_videos不返回该字段.*Checker须以独立PG读回核对/);
+ assert.equal(dedup.budget.max_duration_s,780);
+ assert.equal(flow.runtime.timeout_ms,2400000);
+});
 test('scoring deduplicates exact comment IDs rather than merging people into Leads',()=>{
  const a=activity('douyin_comment_scoring','scoring');assert.equal(a.idempotency.dedupe_key,'Comment.line_key+Comment.id');assert.notEqual(a.idempotency.on_duplicate,'merge');
 });
