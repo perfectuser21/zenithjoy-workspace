@@ -25,33 +25,33 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "62c43dae53f804c4a6225d6a6f2984281ced3b3172fee2ec0d01cf5fee3d636f",
+      "sha256": "2a455c9513f6aefca264d1cc20a8a62e13ed8d3d23f4c9ec896d04240082dc26",
       "activities": {
-        "scoring": "5cca6eed3e8aeafe7ca3af06bd2a34e7269fca4e2c926b00b20a929f14b0fd7c",
+        "scoring": "ef8444bb92b33bf1349c54f19cab090b2d360b621b9732dafc6672bf03d5cc77",
         "mark_leads": "f33adedc48efe0c6beba656650e31cbc97ebc0b6ca69d489ef948839dca5656e"
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "f756eb930f457783e5866fbba2ffa3e84490365801f70022aa3d2a05fc0b681f",
+      "sha256": "194217d143dc7ed670aff66737350f8ee99049ee02b68ae97e669e14e6ed05e6",
       "activities": {
-        "preflight": "9ae9183b27847dafb41cc7254633fbf65bfeddca479527742b63533d08b67d74",
+        "preflight": "43f56c95a96a7997f31204688c6abd83c5a6a8af004f44369338f62824a5d6d9",
         "send_dm": "def35185edbb310f981ac62f495a79663551c4d98dbca99323e86255bc5f1324",
         "write_back": "92f4e6022a2ebdc50bd5113f789c78dbd3b6d6282c6c1c9589c53c5cb8411e47",
         "cleanup": "64a1bcd5029f7ee0883786b1635ad9ee21ef42095ee0852e244ff94c2455fe0d"
       }
     },
     "douyin_video_discovery": {
-      "sha256": "ed5d2a73111763ca16926ab94e068bde54f33801d05f2fac502577acb5af2dd2",
+      "sha256": "ffd8e0b0e77c23f9e40e0b92940bb11c7f7225c7186074e57247bfb1a76c516e",
       "activities": {
-        "preflight": "bf62c4ed29f10078262370d9df3ef4abb843413965d2296dad7235f8b9371f42",
-        "collect_videos": "a6f190230f0133388b268cb07ddb7e7a70e607ea400df737e6ef077d76328e5a",
+        "preflight": "710e6f6c7d345924f933d5d96e9daf311900b12bf12448592c789b02e473e8dc",
+        "collect_videos": "96b3ff82b258197d80a18c55a3cece0c7c46605713dd236db39e9233a0e6da5f",
         "cleanup": "1cfb884ae98f03a154a07da26f7e6daed373af2a3cfd215c8d87cb69c63ea91c"
       }
     },
     "douyin_video_processing": {
-      "sha256": "79ff4bded7a6dd8fe8685b9df51cc3622f8ff6724ff5927eef7fd945154abc19",
+      "sha256": "1d8fafaa6642ec46fa965fa5d119d65ded270092ccbe1210b5362fde599b8f84",
       "activities": {
-        "preflight": "bf62c4ed29f10078262370d9df3ef4abb843413965d2296dad7235f8b9371f42",
+        "preflight": "710e6f6c7d345924f933d5d96e9daf311900b12bf12448592c789b02e473e8dc",
         "dedup": "75ffe559e9ab1d8421868538c775df7ff0ae8363b85e5469f63aba52279c02c2",
         "qualification": "a061359ae8780e1067d6fa8ac9dfc4c52176cd9ad95718f2f463d6a4fb791e5b",
         "collection": "775d3b2faf3c5252ca970c69a2b7d9b856389441369a13180b2b4ceca5521c6b",

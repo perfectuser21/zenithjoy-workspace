@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.preflight",
-            "contract_digest": "652caf0f29eeaeecef19aab95553d48e8feca161c35f029c184f6c2acfa13044"
+            "contract_digest": "c12e3bd693af30a84b208fdaafe479a86ea2ce1097482fa535a68a77d1d9d590"
           },
           "document": {
             "key": "preflight",
@@ -33,7 +33,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.6.0",
+            "version": "2.6.1",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -116,7 +116,7 @@
               },
               {
                 "probe": "pf_lock_acquired",
-                "asserts": "本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。 用 host.receipts 找到本轮真实取得回执路径并逐份读取，与当前设备/中央锁读回交叉核验；同一身份已安全取得的锁只读回。"
+                "asserts": "本轮执行者实际持有同一设备的本地锁和中央租约。先用 host.receipts 定位并读取本轮本地与中央锁的宿主工具取得回执，确认真实调用成功且绑定同一 Task/run/设备。再用 native.read 核对同一 profile、硬件 serial、实际本地 owner、锁有效且不陈旧，用 brain.get(device_lock) 核对同一硬件 serial、Task owner、租约版本及有效期。宿主取得回执和两路独立状态满足上述条件即可；手机网关回执正文中的绝对路径是来源信息，不是本 run 下的 native/ 文件，不用改写路径或补造附件。缺任一取得回执或独立状态、身份不符或锁已过期则不得通过。"
               }
             ],
             "execution": {
@@ -447,7 +447,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "pf_lock_acquired",
-                "asserts": "本轮执行者实际持有精确本地与中央设备锁；Task/run/profile/serial与取得回执一致，租约有效且后续可追溯。 用 host.receipts 找到本轮真实取得回执路径并逐份读取，与当前设备/中央锁读回交叉核验；同一身份已安全取得的锁只读回。"
+                "asserts": "本轮执行者实际持有同一设备的本地锁和中央租约。先用 host.receipts 定位并读取本轮本地与中央锁的宿主工具取得回执，确认真实调用成功且绑定同一 Task/run/设备。再用 native.read 核对同一 profile、硬件 serial、实际本地 owner、锁有效且不陈旧，用 brain.get(device_lock) 核对同一硬件 serial、Task owner、租约版本及有效期。宿主取得回执和两路独立状态满足上述条件即可；手机网关回执正文中的绝对路径是来源信息，不是本 run 下的 native/ 文件，不用改写路径或补造附件。缺任一取得回执或独立状态、身份不符或锁已过期则不得通过。"
               },
               "source_pointer": "/postconditions/3"
             },
@@ -2561,8 +2561,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "27fb555c2092a22439f61b621a8038eb93cb29d3",
-      "contract_sha256": "3271b0f1aa8ad6054ff2d59aa7e38cf5e0232d8959b5618a61dad562c4ecf392"
+      "method_revision": "a76d1477d22bccc376c771aecb562e971b10c4af",
+      "contract_sha256": "a5341b0e3f752e7ddab521f21bf33560495376117de367ed7f3754384ff2205d"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2782,7 +2782,7 @@
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "ed03c323cd9c75e9c94a58d6f72e7fdd6a509904996514dbdadf84bc4aa37c82",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "82549a3342659b7bb1397ca5e9c7a6f8be4342ecfeee5200c0f67583982bf2eb",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "554c43a388f81a2542c71a1467b5eef33083b3de5d14e623c8fc3fb18d487968",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "eed9c7e8734cffe2f464a2cdbdfda111ca5cf366f8eada8e789eb885eb29d927",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "786c8fd52c6c0f92f1091561776ca5ff388d0261a028320d2d3c8c58718b26f1"
     }
   }
