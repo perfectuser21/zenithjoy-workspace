@@ -20,3 +20,10 @@ test('actual registered B authority drift and incomplete criteria are rejected',
  const removed=structuredClone(p);removed.contract.activities[0].acceptance.criteria.pop();removed.profile.leadgen.contract_sha256=digest(removed.contract);assert.throws(()=>verifyAgentProfile(removed,{documents,workflow}),/CONTRACT_ACCEPTANCE_DRIFT/);
  const budget=structuredClone(p);budget.contract.activities[0].budget.max_duration_s++;assert.throws(()=>verifyAgentProfile(budget,{documents,workflow}),/PROFILE_CONTRACT/);
 });
+
+test('102 collection projects an explicit stop probe for the independent cleanup window',()=>{
+ const workflow=names[1],p=projectAgentProfile(original(102),{documents,workflow});
+ assert.deepEqual(p.profile.skill_runtime.activities.collection.stop_checker,
+  {command:'@node',entry:'collection-stop-entry.mjs',timeout_ms:45000});
+ assert.equal(p.profile.skill_runtime.activities.qualification.stop_checker,undefined);
+});

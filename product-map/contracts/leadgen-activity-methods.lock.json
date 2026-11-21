@@ -131,14 +131,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -194,7 +194,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -295,7 +295,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.1",
@@ -427,14 +434,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -442,6 +449,13 @@
           "path": "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs",
           "revision": "contract",
           "sha256": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs",
+          "revision": "contract",
+          "sha256": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952"
         },
         {
           "kind": "code",
@@ -490,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -591,13 +605,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
       }
     },
     "douyin_video_processing.dedup": {
@@ -730,14 +744,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -745,6 +759,13 @@
           "path": "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs",
           "revision": "contract",
           "sha256": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs",
+          "revision": "contract",
+          "sha256": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952"
         },
         {
           "kind": "code",
@@ -793,7 +814,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -894,13 +915,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1038,14 +1059,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -1053,6 +1074,13 @@
           "path": "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs",
           "revision": "contract",
           "sha256": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs",
+          "revision": "contract",
+          "sha256": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952"
         },
         {
           "kind": "code",
@@ -1101,7 +1129,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -1202,19 +1230,26 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
+      }
     },
     "douyin_video_processing.collection": {
-      "activity_version": "2.8.4",
-      "contract_digest": "54014cfd574ffd558f7094ef56cb3a2ccf85f90319cec36442ff33b69f205127",
-      "method_version": "0.10.4",
+      "activity_version": "2.8.5",
+      "contract_digest": "224d84316beed830fb802a723b2a2482265d13ca6d26d2f1ae43892cbce835fd",
+      "method_version": "0.10.5",
       "skill": {
         "name": "douyin-leadgen-activity-102-collection",
-        "version": "0.10.4",
+        "version": "0.10.5",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md",
-        "sha256": "1760c5dcad570d8e51834046f379989a1dbe6b62ef447b5f4ab2230b0c9862a6",
+        "sha256": "ef728813f36c7cfc7574e27b8842394f4d69a4087a9f95578a4fca500f35d0ca",
         "support_files": [],
-        "content_digest": "93f65a43a98a680698fc82f452df22b88981d82e400b1a1b7867e227452a21bf"
+        "content_digest": "64093aacc85372f086e1147f6da5b973e5913bffe065cb4388f3f511c5b2b142"
       },
       "code_bindings": [
         {
@@ -1334,14 +1369,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -1349,6 +1384,13 @@
           "path": "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs",
           "revision": "contract",
           "sha256": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs",
+          "revision": "contract",
+          "sha256": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952"
         },
         {
           "kind": "code",
@@ -1397,7 +1439,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -1498,14 +1540,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
-      }
+      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.6.2",
@@ -1637,14 +1672,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -1652,6 +1687,13 @@
           "path": "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs",
           "revision": "contract",
           "sha256": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs",
+          "revision": "contract",
+          "sha256": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952"
         },
         {
           "kind": "code",
@@ -1700,7 +1742,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -1801,13 +1843,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1945,14 +1987,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -2008,7 +2050,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -2109,13 +2151,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2253,14 +2295,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -2316,7 +2358,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -2417,13 +2459,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2556,14 +2598,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -2619,7 +2661,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -2720,13 +2762,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2859,14 +2901,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -2922,7 +2964,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -3023,13 +3065,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3162,14 +3204,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -3225,7 +3267,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -3326,13 +3368,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3465,14 +3507,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
           "revision": "contract",
-          "sha256": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5"
+          "sha256": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2"
+          "sha256": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416"
         },
         {
           "kind": "code",
@@ -3528,7 +3570,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d"
+          "sha256": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff"
         },
         {
           "kind": "code",
@@ -3629,13 +3671,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
+        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
+        "reviewed_by": "codex-core-linux-independent",
+        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
+        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
       }
     }
   },
@@ -3690,28 +3732,28 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.13.18",
+        "version": "0.13.19",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "246d1fc5a9027d059fe2ba09920892f778e91d5a3c498a3fa01dab90e1db4ebc",
+        "sha256": "444e775323824dc98d51eef406578cccc41ecc5b05520be8999e811fefda6eee",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-            "sha256": "f365ec40f1dd2b0eaa53723884ad29d8e748086f3c9d67876864cbb63e9f57a1"
+            "sha256": "70c7c25623b8e3b0c3d9ba1788516f2dfc8ed032ee4dacc41217ba908f0cb272"
           }
         ],
-        "content_digest": "b41b1abffd6b98a97d0393a81050a80914d10c4105adedb4578631222f07fe38"
+        "content_digest": "de30c84afb967c011eaf3885289e029f137a0fb359d71fed2200b7b4ff0f0fce"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.12.18",
+        "version": "0.12.19",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "ce76116b3fc92b69844645ad77753a1b8742900907b95edac3d271ba897ff48c",
+        "sha256": "73f38423fccbc342cc91a69d9bda561ac60995f0f6da2e2d4bb806dc6ad29bd5",
         "support_files": [],
-        "content_digest": "7e90f3cd2ea3ae8bb82f640ba860b171a9b3f44c7e7bf83381fc3e8b817b21cb"
+        "content_digest": "2f7152245a373b4dd702aab75fb3f045c695b2008cb1e8756c5eca8bafc39dff"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-        "sha256": "f365ec40f1dd2b0eaa53723884ad29d8e748086f3c9d67876864cbb63e9f57a1"
+        "sha256": "70c7c25623b8e3b0c3d9ba1788516f2dfc8ed032ee4dacc41217ba908f0cb272"
       },
       "activities": [
         {
@@ -3735,7 +3777,7 @@
         {
           "activity_ref": "douyin_video_processing.collection",
           "skill_name": "douyin-leadgen-activity-102-collection",
-          "skill_version": "0.10.4",
+          "skill_version": "0.10.5",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md"
         },
         {

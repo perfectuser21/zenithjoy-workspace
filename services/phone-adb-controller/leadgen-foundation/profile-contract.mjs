@@ -14,6 +14,7 @@ export function projectAgentProfile(original,{documents,workflow}){
   const spec=result.profile.skill_runtime.activities[key];
   // No duplicated check-ID table. The adapter binds the installed Node identity and per-run provider.
   spec.checker={mode:'agent',timeout_ms:spec.checker.timeout_ms,evidence:{roots:['checker-input','native','receipts','qualification-receipts','collection-evidence-receipts','outreach-receipts'],provider:{command:'@node',entry:'checker-facts-entry.mjs',timeout_ms:120000,description:FACT_TOOL_DESCRIPTION}}};
+  if(workflow==='douyin_video_processing'&&key==='collection')spec.stop_checker={command:'@node',entry:'collection-stop-entry.mjs',timeout_ms:45000};
   spec.allow_empty=!!emptyAllowed(document);
   return{key,order:index+1,budget:structuredClone(document.budget),acceptance,failure:structuredClone(document.failure),runtime};
  });

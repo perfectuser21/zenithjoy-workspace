@@ -63,6 +63,14 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
   provider.description+=' 采集开工时用 read_file 读取 checker-input/input.json。它是本轮冻结的派单原始业务输入及绑定业务线，请从 business 中核对关键词、筛选和数量上限。';
  }
  if(workflow==='102'){
+  const collection=skill_runtime.activities.collection;
+  if(collection.stop_checker){
+   const stop=collection.stop_checker,node=fs.realpathSync(process.execPath),nodeDigest=hash(fs.readFileSync(node));
+   const trustedCommand=stop.command==='@node'&&stop.command_sha256===undefined
+    ||stop.command===node&&stop.command_sha256===nodeDigest;
+   need(trustedCommand&&stop.entry==='collection-stop-entry.mjs'&&stop.timeout_ms===45000&&receipt.files[stop.entry],'COLLECTION_STOP_PROFILE');
+   collection.stop_checker={...stop,command:node,command_sha256:nodeDigest};
+  }
   const provider=skill_runtime.activities.dedup.checker.evidence.provider;
   provider.description+=' 判重请先用 read_file 读取 checker-input/upstream.json。handoff 是本次冻结的101原交付，我方当前持久记录另外用 pg.rows 获取。claim 是已冻结的本轮普通认领输入；开工时尚无真实认领回执。历史交付的原生XML包含页面作者和评论数，PG已采评论数是另一个字段。';
  }

@@ -12314,6 +12314,15 @@ tests:
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "正式每run装配、冻结身份与来源、恢复拒覆盖；离线假外部副作用，不声明生产验收"
 
+  - id: leadgen-collection-stop
+    path: services/phone-adb-controller/__tests__/leadgen-collection-stop.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "102源动作超时后的只读停稳取证，覆盖原身份、锁、设备和未知进程拒绝"
+
   - id: leadgen-foundation-assembly
     path: services/phone-adb-controller/__tests__/leadgen-foundation-assembly.test.mjs
     type: integration
@@ -12483,3 +12492,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "已裁定四Workflow语义及步骤义务迁移；隔离回归不冒生产验收"
+
+  - id: collection-link-handoff
+    path: services/phone-adb-controller/__tests__/collection-link-handoff.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "采集入口复用条件与Skill一致；实际原件技术读取拒绝错VID/run/hash，不替代通用Agent实测"

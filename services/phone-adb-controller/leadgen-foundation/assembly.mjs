@@ -127,6 +127,11 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   files['checker-facts-entry.mjs']="import {serveFacts} from './checker-facts.mjs';\n"+authority+
    `const readLedger=async identity=>{const {readRunLedger}=await import(${JSON.stringify(ledgerModule)});return readRunLedger({directory:${JSON.stringify(boundLedger)},identity});};\n`+
    "await serveFacts({contextFile,contextSha256,readLedger});\n";
+  if(workflow==='102'&&profile.skill_runtime.activities.collection.stop_checker){
+   files['collection-stop.mjs']=fs.readFileSync(path.join(HERE,'collection-stop.mjs'),'utf8');
+   files['collection-stop-entry.mjs']="import fs from 'node:fs';import {attestCollectionStopped} from './collection-stop.mjs';import {factDependencies,readFrozenContext} from './checker-facts-runtime.mjs';\n"+authority+
+    "const context=readFrozenContext(contextFile,contextSha256);const request=JSON.parse(fs.readFileSync(0,'utf8'));console.log(JSON.stringify(await attestCollectionStopped(request,context,factDependencies)));\n";
+  }
   for(const [name,operation,args]of [['native-inspect.mjs','native.read',{}],['collection-readback.mjs','pg.rows',{relation:'comments'}]]){
    files[name]="import fs from 'node:fs';import {readFacts} from './checker-facts.mjs';import {factDependencies,readFrozenContext} from './checker-facts-runtime.mjs';\n"+authority+
     "const c=readFrozenContext(contextFile,contextSha256),input=JSON.parse(fs.readFileSync(0,'utf8')),t=c.tasks[c.assigned_workflow];const r=await readFacts({identity:t,nonce:'executor-fact-read',context:input,operation:"+JSON.stringify(operation)+",args:"+JSON.stringify(args)+"},{...factDependencies,readAuthority:async()=>c});console.log(JSON.stringify(r));if(r.status!=='available')process.exitCode=2;\n";

@@ -3,6 +3,12 @@ import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost,createRuntime} from '../leadgen-foundation/adapter.mjs';
 for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} real source assembly is isolated, reusable and effect free`,async()=>{
  const f=await foundationFixture(workflow);try{
+  if(workflow==='102'){
+   // The real Foundation Worker expands @node and pins the executable before calling the adapter.
+   const stop=f.profile.skill_runtime.activities.collection.stop_checker;
+   stop.command=fs.realpathSync(process.execPath);
+   stop.command_sha256=createHash('sha256').update(fs.readFileSync(stop.command)).digest('hex');
+  }
   const before=Date.now(),a=await prepareLeadgenHost(f);assert.equal(a.receipt.status,'assembled_not_started');
   assert.ok(a.receipt.assembled_at_ms>=before);assert.equal(a.context.run_start_ts,undefined);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);
@@ -24,6 +30,16 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
    assert.match(tools,/run\.progress.*Checker/);
    assert.ok(a.receipt.files['business-runtime/discovery-metrics-queue.js']);
   }
+  if(workflow==='102'){
+   const stop=a.profile.skill_runtime.activities.collection.stop_checker;
+   assert.equal(stop.command,process.execPath);
+   assert.equal(stop.command_sha256,createHash('sha256').update(fs.readFileSync(process.execPath)).digest('hex'));
+   for(const name of [stop.entry,'collection-stop.mjs']){
+    assert.equal(a.receipt.files[name],createHash('sha256').update(fs.readFileSync(path.join(a.profile.cwd,name))).digest('hex'));
+   }
+   const refused=spawnSync(stop.command,[path.join(a.profile.cwd,stop.entry)],{input:'{}',encoding:'utf8',timeout:5000});
+   assert.equal(refused.status,1);assert.match(refused.stderr,/COLLECTION_STOP_UNCONFIRMED/);assert.equal(refused.stdout,'');
+  }else assert.equal(a.receipt.files['collection-stop-entry.mjs'],undefined);
   for(const runtime of Object.values(a.profile.skill_runtime.activities)){
    assert.match(runtime.checker.evidence.provider.description,/先读 proposal.evidence/);
    assert.match(runtime.checker.evidence.provider.description,/只核对本轮实际适用的失败和幂等条件/);
