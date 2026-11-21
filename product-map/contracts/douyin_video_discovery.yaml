@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.12.8
+  version: 0.12.9
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -52,7 +52,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 5.4.0
+    version: 5.5.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -111,6 +111,160 @@ activities:
           - status
           - stop_reason
           - all_results_scanned
+    delivery:
+      schema:
+        type: object
+        properties:
+          outputs:
+            type: object
+            properties:
+              Run:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    minLength: 1
+                  stop_reason:
+                    type: string
+                    minLength: 1
+                  all_results_scanned:
+                    type: boolean
+                required:
+                  - status
+                  - stop_reason
+                  - all_results_scanned
+                additionalProperties: false
+              Video:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    video_id:
+                      type: string
+                      pattern: ^[0-9]{19,20}$
+                    video_url:
+                      type: string
+                      minLength: 1
+                    title:
+                      type: string
+                      minLength: 1
+                    author:
+                      type: string
+                      minLength: 1
+                    keyword:
+                      type: string
+                      minLength: 1
+                    line_key:
+                      type: string
+                      minLength: 1
+                    comment_count:
+                      type: integer
+                      minimum: 0
+                    harvest_batch:
+                      type: string
+                      minLength: 1
+                    discovery_metrics:
+                      type: object
+                      properties:
+                        digest:
+                          type: string
+                          minLength: 1
+                        evidence:
+                          type: object
+                          properties:
+                            sha256:
+                              type: string
+                              minLength: 1
+                          required:
+                            - sha256
+                      required:
+                        - digest
+                        - evidence
+                  required:
+                    - video_id
+                    - video_url
+                    - title
+                    - author
+                    - keyword
+                    - line_key
+                    - comment_count
+                    - harvest_batch
+                    - discovery_metrics
+                maxItems: 100
+            required:
+              - Run
+              - Video
+            additionalProperties: false
+          evidence:
+            type: object
+            required:
+              - run
+            properties:
+              run:
+                type: object
+                properties:
+                  video_page_xml:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  cards_xml:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  filters_receipt:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  selected_page:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  results_page:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                required:
+                  - video_page_xml
+                  - cards_xml
+                  - filters_receipt
+                  - selected_page
+                  - results_page
+                additionalProperties: false
+            patternProperties:
+              ^[0-9]{19,20}$:
+                type: object
+                properties:
+                  share_xml:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  link_receipt:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  write_receipt:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  readback_receipt:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                required:
+                  - share_xml
+                  - link_receipt
+                  - write_receipt
+                  - readback_receipt
+                additionalProperties: false
+            additionalProperties: false
+            maxProperties: 101
+        required:
+          - outputs
+          - evidence
+        additionalProperties: false
+      item_scope:
+        collection: Video
+        id_field: video_id
     preconditions:
       - 设备预检通过，持有本run设备锁
       - 关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤
@@ -175,7 +329,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.11.0
+        version: 0.12.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs

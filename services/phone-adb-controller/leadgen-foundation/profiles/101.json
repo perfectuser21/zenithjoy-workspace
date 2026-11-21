@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "60d944525b95fa00de3fb5c342c07444058b2b3a29aeb328bbaeca584095c4c9"
+            "contract_digest": "747931cd6b241877d269eafe8e8edadb283d33f2f974ec4bdfbac5a00620ab65"
           },
           "document": {
             "key": "collect_videos",
@@ -550,7 +550,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "5.4.0",
+            "version": "5.5.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -630,6 +630,213 @@
                 ]
               }
             ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "outputs": {
+                    "type": "object",
+                    "properties": {
+                      "Run": {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "stop_reason": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "all_results_scanned": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "stop_reason",
+                          "all_results_scanned"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "Video": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "video_id": {
+                              "type": "string",
+                              "pattern": "^[0-9]{19,20}$"
+                            },
+                            "video_url": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "author": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "keyword": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "line_key": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "comment_count": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "harvest_batch": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "discovery_metrics": {
+                              "type": "object",
+                              "properties": {
+                                "digest": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "evidence": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sha256": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "sha256"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "digest",
+                                "evidence"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "video_id",
+                            "video_url",
+                            "title",
+                            "author",
+                            "keyword",
+                            "line_key",
+                            "comment_count",
+                            "harvest_batch",
+                            "discovery_metrics"
+                          ]
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "Run",
+                      "Video"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "run"
+                    ],
+                    "properties": {
+                      "run": {
+                        "type": "object",
+                        "properties": {
+                          "video_page_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "cards_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "filters_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "selected_page": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "results_page": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          }
+                        },
+                        "required": [
+                          "video_page_xml",
+                          "cards_xml",
+                          "filters_receipt",
+                          "selected_page",
+                          "results_page"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "patternProperties": {
+                      "^[0-9]{19,20}$": {
+                        "type": "object",
+                        "properties": {
+                          "share_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "link_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "write_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "readback_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          }
+                        },
+                        "required": [
+                          "share_xml",
+                          "link_receipt",
+                          "write_receipt",
+                          "readback_receipt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false,
+                    "maxProperties": 101
+                  }
+                },
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "additionalProperties": false
+              },
+              "item_scope": {
+                "collection": "Video",
+                "id_field": "video_id"
+              }
+            },
             "preconditions": [
               "设备预检通过，持有本run设备锁",
               "关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤"
@@ -1626,8 +1833,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "2ce31a00da0d3517c2424651a37c9ca73ec9fc31",
-      "contract_sha256": "78a7eb915b35b66d9a5917245fd628285f43c35c9b92d92ad8335258d6d89b6a"
+      "method_revision": "72a0c290771394e68d6d78f1ecd42cd73fe00fc4",
+      "contract_sha256": "c9ce6c0cde5ace8e97ae74ec36cdcfaf6fa5436ac0006e14c41fc1391b399fe9"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -1789,7 +1996,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "3ae77e425b6a3f3041d28c5c6b36ba80223213d7bec328b84e7fea4e43e4f734",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "8d5b4381c8543f2d127394280cd27df855945b4e38a80325b6a75981a94b6908",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "add3b11fd033c16dff9c0b8f0d2ab31668e95581c3624ee082c6d81fe0e6255e",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a"
     }
