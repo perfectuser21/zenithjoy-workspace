@@ -1397,7 +1397,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.collection",
-            "contract_digest": "54014cfd574ffd558f7094ef56cb3a2ccf85f90319cec36442ff33b69f205127"
+            "contract_digest": "224d84316beed830fb802a723b2a2482265d13ca6d26d2f1ae43892cbce835fd"
           },
           "document": {
             "key": "collection",
@@ -1413,7 +1413,7 @@
               "current_skill_verified": false
             },
             "order": 4,
-            "version": "2.8.4",
+            "version": "2.8.5",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -1525,7 +1525,7 @@
               }
             ],
             "preconditions": [
-              "开工只接收本轮已独立验收的合法matched及仍有效的本run处理租约。核对已由宿主交接的本轮 context.Video 与真实只读事实，不读执行者自报结论。用 run.progress 的 observations 核 qualification/end 的时间早于 collection/start，并与传入本轮的 Video VID和 matched 交叉核对；观察状态本身仅反映检查调用生命周期。用 pg.rows relation=videos 一次读取 connection.snapshot_at 和 rows.video_id, rows.line_key, rows.video_url, rows.judgment_status, rows.judgment_config.run_id, rows.updated_at, rows.process_status, rows.harvest_batch。以快照时间减本轮目标行 updated_at 核15分钟租约、状态与批次，一次 host.receipts 定位本轮 qualification 的 phone/current-video-link 成功终态回执，按实际 path 用 read_file 读取；核原件的 Task/run、操作、真实退出码和原生规范链接，复核同 VID；采集执行时自己重新核原生VID，开工不要求尚未生成的采集执行回执。合法缓存保留原判断run和证据。",
+              "开工只接收本轮已独立验收的合法matched及仍有效的本run处理租约。核对已由宿主交接的本轮 context.Video 与真实只读事实，不读执行者自报结论。用 run.progress 的 observations 核 qualification/end 的时间早于 collection/start，并与传入本轮的 Video VID和 matched 交叉核对；观察状态本身仅反映检查调用生命周期。用 pg.rows relation=videos 一次读取 connection.snapshot_at 和 rows.video_id, rows.line_key, rows.video_url, rows.judgment_status, rows.judgment_config.run_id, rows.updated_at, rows.process_status, rows.harvest_batch。以快照时间减本轮目标行 updated_at 核15分钟租约、状态与批次，一次 host.receipts 定位本轮 qualification 的 phone/current-video-link 成功终态回执，按实际 path 用 read_file 读取；核原件的 Task/run、操作、真实退出码和原生规范链接，复核同 VID；开工不要求尚未生成的采集执行回执。执行时按后置条款的页面连续性规则选择复用或重取，START 不要求尚未生成的采集当前 UI 或取链回执。合法缓存保留原判断run和证据。",
               "以 checker-input/identity.json 为首个设备动作之前宿主冻结的绑定，核其 run、公司、租户、业务线、设备、预期账号与本次输入；用 run.progress 首个 preflight 活动调用时点与 Brain Task 的 created_at、started_at 对照。复用本次 host.receipts 定位本轮 preflight 的 phone/account-current 唯一成功终态回执，按实际 path 用 read_file 读取；核原件的 Task/run、操作、退出码及 douyin_id=，与冻结账号及设备锁回执交叉核对，评论原件不得用于授予任何权限。",
               "一次 brain.get resource=task，args.fields=id、created_at、started_at、result.foundation_runner.run.run_id、result.foundation_runner.run.deadline_ms、result.foundation_runner.run.input.run_tag、result.foundation_runner.run.input.binding_key、result.foundation_runner.run.input.business.comment_limit、result.foundation_runner.run.input.business.scope.collection_scope、result.foundation_runner.run.input.business.scope.source_run、result.foundation_runner.run.input.business.scope.video_ids、result.foundation_runner.run.input.business.scope.upstream。用同一回执及冻结 checker 请求 context.budget.max_duration_s 和 remaining_duration_s 核验本轮采样目标、真实来源、数量上限与剩余窗口。普通 persisted_run 的 source_run 可以为 null，目标上游按 scope.upstream 对照。可选 HistoricalComment 只在本轮真实提供该对象或冻结输入显式启用历史消耗时要求输入条目；无历史输入不读取全库，采集后发现的历史命中仍须验收。不得增加配额或延长任何截止。"
             ],
@@ -1536,7 +1536,7 @@
               },
               {
                 "probe": "coll_video_binding_consistent",
-                "asserts": "每条实际评论的VID、原生UID、完整正文、真实主页URL、recipientEvidence和返回评论页原件与原来源一致，PG逐行读回无身份错配。可选profileLinkEvidence不是新评论必须已有PG ID的恢复凭据。"
+                "asserts": "每条实际评论的VID、原生UID、完整正文、真实主页URL、recipientEvidence和返回评论页原件与原来源一致，PG逐行读回无身份错配。可选profileLinkEvidence不是新评论必须已有PG ID的恢复凭据。 采集入口先核页面连续性，再复用已验收的视频身份原件：同一 Task/run、VID、设备与本轮锁 owner/有效租约均一致；通过宿主真实工具序列与当前原生 UI 核对，确认从资格取链后没有切换视频、外部接管或未知导航，当前仍为原视频详情或其评论页。仅同标题、昵称或 Agent 自述不能证明连续性。满足这些条件时，保留资格回执原路径及 SHA-256，交由 Checker 读取原件，不重复调用 current-video-link 或重开详情；不得复制改名、改 EID 或宣称是新采集回执。任一身份不符、原件缺失/摘要不符、锁发生交接或无法证明页面连续性时，按原路径重新核实和取链；不能仅用旧链接放行。此复用仅免去采集入口重复取链，不替代采集后逐评论的原生 UID、全文、真实主页 URL、返回评论页和同视频配对证据。"
               },
               {
                 "probe": "coll_rescan_rate",
@@ -1937,7 +1937,7 @@
             {
               "id": "preconditions_0",
               "phase": "start",
-              "requirement": "开工只接收本轮已独立验收的合法matched及仍有效的本run处理租约。核对已由宿主交接的本轮 context.Video 与真实只读事实，不读执行者自报结论。用 run.progress 的 observations 核 qualification/end 的时间早于 collection/start，并与传入本轮的 Video VID和 matched 交叉核对；观察状态本身仅反映检查调用生命周期。用 pg.rows relation=videos 一次读取 connection.snapshot_at 和 rows.video_id, rows.line_key, rows.video_url, rows.judgment_status, rows.judgment_config.run_id, rows.updated_at, rows.process_status, rows.harvest_batch。以快照时间减本轮目标行 updated_at 核15分钟租约、状态与批次，一次 host.receipts 定位本轮 qualification 的 phone/current-video-link 成功终态回执，按实际 path 用 read_file 读取；核原件的 Task/run、操作、真实退出码和原生规范链接，复核同 VID；采集执行时自己重新核原生VID，开工不要求尚未生成的采集执行回执。合法缓存保留原判断run和证据。",
+              "requirement": "开工只接收本轮已独立验收的合法matched及仍有效的本run处理租约。核对已由宿主交接的本轮 context.Video 与真实只读事实，不读执行者自报结论。用 run.progress 的 observations 核 qualification/end 的时间早于 collection/start，并与传入本轮的 Video VID和 matched 交叉核对；观察状态本身仅反映检查调用生命周期。用 pg.rows relation=videos 一次读取 connection.snapshot_at 和 rows.video_id, rows.line_key, rows.video_url, rows.judgment_status, rows.judgment_config.run_id, rows.updated_at, rows.process_status, rows.harvest_batch。以快照时间减本轮目标行 updated_at 核15分钟租约、状态与批次，一次 host.receipts 定位本轮 qualification 的 phone/current-video-link 成功终态回执，按实际 path 用 read_file 读取；核原件的 Task/run、操作、真实退出码和原生规范链接，复核同 VID；开工不要求尚未生成的采集执行回执。执行时按后置条款的页面连续性规则选择复用或重取，START 不要求尚未生成的采集当前 UI 或取链回执。合法缓存保留原判断run和证据。",
               "source_pointer": "/preconditions/0"
             },
             {
@@ -2002,7 +2002,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "coll_video_binding_consistent",
-                "asserts": "每条实际评论的VID、原生UID、完整正文、真实主页URL、recipientEvidence和返回评论页原件与原来源一致，PG逐行读回无身份错配。可选profileLinkEvidence不是新评论必须已有PG ID的恢复凭据。"
+                "asserts": "每条实际评论的VID、原生UID、完整正文、真实主页URL、recipientEvidence和返回评论页原件与原来源一致，PG逐行读回无身份错配。可选profileLinkEvidence不是新评论必须已有PG ID的恢复凭据。 采集入口先核页面连续性，再复用已验收的视频身份原件：同一 Task/run、VID、设备与本轮锁 owner/有效租约均一致；通过宿主真实工具序列与当前原生 UI 核对，确认从资格取链后没有切换视频、外部接管或未知导航，当前仍为原视频详情或其评论页。仅同标题、昵称或 Agent 自述不能证明连续性。满足这些条件时，保留资格回执原路径及 SHA-256，交由 Checker 读取原件，不重复调用 current-video-link 或重开详情；不得复制改名、改 EID 或宣称是新采集回执。任一身份不符、原件缺失/摘要不符、锁发生交接或无法证明页面连续性时，按原路径重新核实和取链；不能仅用旧链接放行。此复用仅免去采集入口重复取链，不替代采集后逐评论的原生 UID、全文、真实主页 URL、返回评论页和同视频配对证据。"
               },
               "source_pointer": "/postconditions/1"
             },
@@ -2559,8 +2559,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "72a0c290771394e68d6d78f1ecd42cd73fe00fc4",
-      "contract_sha256": "2a8bcac4665f46f32b7f6ec10af2feac21b900322440a4943024691b7a9946e4"
+      "method_revision": "d520fb5602fcd7b5f8d61fca141dfc3682f4e655",
+      "contract_sha256": "59f05d4da6eb9148d4c74c8a481582583f7724a8acb94089a4c199a784a3c8d4"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2706,7 +2706,12 @@
               }
             }
           },
-          "allow_empty": true
+          "allow_empty": true,
+          "stop_checker": {
+            "command": "@node",
+            "entry": "collection-stop-entry.mjs",
+            "timeout_ms": 45000
+          }
         },
         "cleanup": {
           "workflow": "102",
@@ -2753,8 +2758,8 @@
       "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
-      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "5218d75f971dd34eebbf964989e3aa8060d3bedf8ba4e46e370916ca9643b8a5",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "58d767362e27fcad722278176064985267b2143e1a0a740faa43b4b05340d5e2",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "c2d4d47f34185298ce23c422480d8f7d1033f90cd198f82db1d70aada6d9f940",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
@@ -2762,7 +2767,7 @@
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
       "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
       "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
-      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "1bcda4351b96c0c913b783527cad01a176229add6a78313448c6e662b280b70d",
+      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff",
       "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
       "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
       "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
@@ -2778,10 +2783,11 @@
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "1760c5dcad570d8e51834046f379989a1dbe6b62ef447b5f4ab2230b0c9862a6",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "ef728813f36c7cfc7574e27b8842394f4d69a4087a9f95578a4fca500f35d0ca",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "54961cb16ddeb956ddcc3035173f6ab9838027f837378c6a7e964ebf7bb8c9ad",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "ab8182ae1fb2a6ac5b04402193a69a52d30663d3c3e88e79eda5dd5c73895815"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "ab8182ae1fb2a6ac5b04402193a69a52d30663d3c3e88e79eda5dd5c73895815",
+      "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952"
     }
   }
 }
