@@ -943,7 +943,7 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "d520fb5602fcd7b5f8d61fca141dfc3682f4e655",
+      "method_revision": "750d925f575de1b45bf4659cab95f9ca1cf9b6c1",
       "contract_sha256": "d691f880b2941a60a921caa81c9d8895465a1fb9cf58d9b39c1cc2e1d558a918"
     },
     "skill_runtime": {
@@ -1050,7 +1050,7 @@
       "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
-      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "c2d4d47f34185298ce23c422480d8f7d1033f90cd198f82db1d70aada6d9f940",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",

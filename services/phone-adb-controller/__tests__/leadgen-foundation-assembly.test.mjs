@@ -3,6 +3,12 @@ import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost,createRuntime} from '../leadgen-foundation/adapter.mjs';
 for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} real source assembly is isolated, reusable and effect free`,async()=>{
  const f=await foundationFixture(workflow);try{
+  if(workflow==='102'){
+   // The real Foundation Worker expands @node and pins the executable before calling the adapter.
+   const stop=f.profile.skill_runtime.activities.collection.stop_checker;
+   stop.command=fs.realpathSync(process.execPath);
+   stop.command_sha256=createHash('sha256').update(fs.readFileSync(stop.command)).digest('hex');
+  }
   const before=Date.now(),a=await prepareLeadgenHost(f);assert.equal(a.receipt.status,'assembled_not_started');
   assert.ok(a.receipt.assembled_at_ms>=before);assert.equal(a.context.run_start_ts,undefined);assert.equal(a.context.tasks[workflow].run_tag,f.run.run_id);
   assert.equal(a.context.actor,'foundation:fixture-machine');assert.equal(a.context.root_task_id,f.run.task_id);

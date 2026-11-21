@@ -65,9 +65,11 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  if(workflow==='102'){
   const collection=skill_runtime.activities.collection;
   if(collection.stop_checker){
-   need(collection.stop_checker.command==='@node'&&collection.stop_checker.entry==='collection-stop-entry.mjs'
-    &&collection.stop_checker.timeout_ms===45000&&receipt.files[collection.stop_checker.entry],'COLLECTION_STOP_PROFILE');
-   collection.stop_checker={...collection.stop_checker,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath))};
+   const stop=collection.stop_checker,node=fs.realpathSync(process.execPath),nodeDigest=hash(fs.readFileSync(node));
+   const trustedCommand=stop.command==='@node'&&stop.command_sha256===undefined
+    ||stop.command===node&&stop.command_sha256===nodeDigest;
+   need(trustedCommand&&stop.entry==='collection-stop-entry.mjs'&&stop.timeout_ms===45000&&receipt.files[stop.entry],'COLLECTION_STOP_PROFILE');
+   collection.stop_checker={...stop,command:node,command_sha256:nodeDigest};
   }
   const provider=skill_runtime.activities.dedup.checker.evidence.provider;
   provider.description+=' 判重请先用 read_file 读取 checker-input/upstream.json。handoff 是本次冻结的101原交付，我方当前持久记录另外用 pg.rows 获取。claim 是已冻结的本轮普通认领输入；开工时尚无真实认领回执。历史交付的原生XML包含页面作者和评论数，PG已采评论数是另一个字段。';
