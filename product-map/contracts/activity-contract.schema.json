@@ -217,6 +217,22 @@
         },
         "retry_safe": { "type": "boolean" },
         "implementation_bindings": { "type": "array", "items": { "$ref": "#/$defs/implementationBinding" } },
+        "delivery": {
+          "type": "object", "additionalProperties": false, "required": ["schema"],
+          "properties": {
+            "schema": {
+              "type": "object", "required": ["type"],
+              "properties": { "type": { "const": "object" } }
+            },
+            "item_scope": {
+              "type": "object", "additionalProperties": false, "required": ["collection", "id_field"],
+              "properties": {
+                "collection": { "type": "string", "minLength": 1 },
+                "id_field": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
         "key": { "$ref": "#/$defs/key" },
         "name": { "type": "string", "minLength": 2 },
         "promise": { "type": "string", "minLength": 8 },
