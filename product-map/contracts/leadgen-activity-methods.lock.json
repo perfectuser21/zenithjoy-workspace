@@ -2,16 +2,16 @@
   "schema_version": 1,
   "activities": {
     "douyin_video_discovery.collect_videos": {
-      "activity_version": "5.4.0",
-      "contract_digest": "60d944525b95fa00de3fb5c342c07444058b2b3a29aeb328bbaeca584095c4c9",
-      "method_version": "0.11.0",
+      "activity_version": "5.5.0",
+      "contract_digest": "747931cd6b241877d269eafe8e8edadb283d33f2f974ec4bdfbac5a00620ab65",
+      "method_version": "0.12.0",
       "skill": {
         "name": "douyin-leadgen-activity-101-collect-videos",
-        "version": "0.11.0",
+        "version": "0.12.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md",
-        "sha256": "8d5b4381c8543f2d127394280cd27df855945b4e38a80325b6a75981a94b6908",
+        "sha256": "add3b11fd033c16dff9c0b8f0d2ab31668e95581c3624ee082c6d81fe0e6255e",
         "support_files": [],
-        "content_digest": "56a0366da51e623e7b8e2bf4d6fbca0c796183464ff877dbc53ca63e22f83093"
+        "content_digest": "c28481cce17bd53c1d080f031aca9dd78e9db435f0923c03a1d93d8031015f1d"
       },
       "code_bindings": [
         {
@@ -295,14 +295,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享封包新增 102 资格视听验证文件及对应装配摘要；其余 Activity 的执行逻辑与协议未改。已有运行使用原固定版本。",
-        "reviewed_by": "session:cloud-phone-verify-20261117",
-        "previous_code_digest": "0fdce860adb6cd062f037b30a9598ade4ffb6ea554dc5c0675a336030fa3d836",
-        "current_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
-      }
+      "code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898"
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.1",
@@ -3650,28 +3643,28 @@
     "douyin_video_discovery": {
       "workflow_skill": {
         "name": "douyin-leadgen-101",
-        "version": "0.12.8",
+        "version": "0.12.9",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/SKILL.md",
-        "sha256": "1d759a144188e36651ed9773b8ccea5a92391e3f8d0b510de9354336c25013e2",
+        "sha256": "d0847bbef298fb7bae7c02e09313cf6773f922244716aef76b7a358739cd6b47",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
-            "sha256": "95af1f7483405b366346c9581f833286f6f74e762144f9bdcf71e1a4249c7bcd"
+            "sha256": "79b877d2ee4547b6df397cb6432547d4f866093392915ce7970fcadff402d703"
           }
         ],
-        "content_digest": "c13933d360ba4c6c804a017060d654ef4cdf00a74c90eb78ff073fa51c210a89"
+        "content_digest": "c3122e5cffd4a54ab07d626e4ebb2fddcf0ef94f9f940236e9c6aa2e12a3b88d"
       },
       "commander_skill": {
         "name": "wf-douyin_video_discovery",
-        "version": "0.12.8",
+        "version": "0.12.9",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_discovery/SKILL.md",
-        "sha256": "88913906a6cd67ff2d87b1b87edd0c9bf29e6974f256bc028e52040bf40fe8f3",
+        "sha256": "1c610daf2ac9f2c01428710e178d22ea24f1fa72649447c5b82c2ef0a633bb70",
         "support_files": [],
-        "content_digest": "70f98df31b9182e921d4d7f6f638c88e702a78901a674ed1af08dd2f9edc0fff"
+        "content_digest": "b9921440f8136d26f7a7bd4d22891aeb5a5096c7c773bc40d066f9a614752ffc"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
-        "sha256": "95af1f7483405b366346c9581f833286f6f74e762144f9bdcf71e1a4249c7bcd"
+        "sha256": "79b877d2ee4547b6df397cb6432547d4f866093392915ce7970fcadff402d703"
       },
       "activities": [
         {
@@ -3683,7 +3676,7 @@
         {
           "activity_ref": "douyin_video_discovery.collect_videos",
           "skill_name": "douyin-leadgen-activity-101-collect-videos",
-          "skill_version": "0.11.0",
+          "skill_version": "0.12.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md"
         },
         {

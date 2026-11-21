@@ -943,7 +943,7 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "2ce31a00da0d3517c2424651a37c9ca73ec9fc31",
+      "method_revision": "72a0c290771394e68d6d78f1ecd42cd73fe00fc4",
       "contract_sha256": "d691f880b2941a60a921caa81c9d8895465a1fb9cf58d9b39c1cc2e1d558a918"
     },
     "skill_runtime": {
