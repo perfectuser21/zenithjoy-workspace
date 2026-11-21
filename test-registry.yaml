@@ -12483,3 +12483,12 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "已裁定四Workflow语义及步骤义务迁移；隔离回归不冒生产验收"
+
+  - id: collection-link-handoff
+    path: services/phone-adb-controller/__tests__/collection-link-handoff.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
+    note: "采集入口复用条件与Skill一致；实际原件技术读取拒绝错VID/run/hash，不替代通用Agent实测"

@@ -10,7 +10,7 @@ import YAML from 'yaml';
 const contract=YAML.parse(readFileSync(new URL('../../../product-map/contracts/douyin_video_processing.yaml',import.meta.url),'utf8'));
 const collection=contract.activities.find(a=>a.key==='collection');
 const skill=readFileSync(new URL('../skills/douyin-leadgen-activity-102-collection/SKILL.md',import.meta.url),'utf8');
-const policy=collection.preconditions.join('\n');
+const policy=collection.postconditions.find(p=>p.probe==='coll_video_binding_consistent').asserts;
 
 test('采集入口方法与冻结合同同时声明已验收视频原件的有条件复用',()=>{
  for(const text of [skill,policy]){
@@ -21,7 +21,8 @@ test('采集入口方法与冻结合同同时声明已验收视频原件的有�
   assert.match(text,/无法证明.*重新.*取链/);
  }
  assert.doesNotMatch(skill,/采集 Agent 启动后再对当前页面重新核原生 VID/);
- assert.doesNotMatch(policy,/采集执行时自己重新核原生VID/);
+ assert.doesNotMatch(collection.preconditions.join('\n'),/采集执行时自己重新核原生VID/);
+ assert.match(collection.preconditions.join('\n'),/START 不要求尚未生成的采集当前 UI 或取链回执/);
 });
 
 test('连续性证据未知或错身份不能用同标题替代，保留当前页面核对',()=>{
