@@ -32,14 +32,16 @@ test('102 collection projects an explicit stop probe for the independent cleanup
 test('101 页签与首屏卡片允许同一次运行的截图证据，同时保留成对的原生 XML',()=>{
  const workflow=names[0], profile=projectAgentProfile(original(101),{documents,workflow});
  const activity=profile.contract.activities.find(candidate=>candidate.key==='collect_videos');
- const schema=activity.acceptance.document.delivery.schema.properties.evidence.properties.run;
- const validate=new Ajv({strict:true}).compile(schema);
+ const validate=new Ajv({strict:true}).compile(activity.acceptance.document.delivery.schema);
+ const outputs={Run:{status:'partial',stop_reason:'fixture',all_results_scanned:false},Video:[]};
+ const validateRun=run=>validate({outputs,evidence:{run}});
  const common={filters_receipt:'receipts/filter.json',selected_page:'native/selected.png',results_page:'native/results.png'};
  const screenshots={video_page_screenshot:'native/video-tab.png',cards_screenshot:'native/cards.png'};
  const xml={video_page_xml:'native/video-tab.xml',cards_xml:'native/cards.xml'};
- assert.equal(validate({...common,...xml}),true);
- assert.equal(validate({...common,...screenshots}),true,JSON.stringify(validate.errors));
- assert.equal(validate({...common,video_page_screenshot:screenshots.video_page_screenshot}),false);
- assert.equal(validate({...common,video_page_xml:xml.video_page_xml,cards_screenshot:screenshots.cards_screenshot}),false);
- assert.equal(validate({...common,...screenshots,cards_screenshot:'receipts/summary.json'}),false);
+ assert.equal(validateRun({...common,...xml}),true);
+ assert.equal(validateRun({...common,...screenshots}),true,JSON.stringify(validate.errors));
+ assert.equal(validateRun({...common,video_page_screenshot:screenshots.video_page_screenshot}),false);
+ assert.equal(validateRun({...common,video_page_xml:xml.video_page_xml,cards_screenshot:screenshots.cards_screenshot}),false);
+ assert.equal(validateRun({...common,...screenshots,cards_screenshot:'receipts/summary.json'}),false);
+ assert.equal(validateRun({...screenshots,selected_page:common.selected_page,results_page:common.results_page}),false);
 });
