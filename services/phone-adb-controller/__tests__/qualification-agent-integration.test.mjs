@@ -36,7 +36,9 @@ test('候选仅改 qualification，冻结 Agent 证据并拒绝旧 Judge 工具'
   assert.doesNotMatch(revised.files['agent-tools.txt'],/tools.py qualify ACTION_NAME|一次ASR\+一次主判/);
 
   const qualification = revised.contract.activities.find(a=>a.key==='qualification');
-  assert.equal(qualification.runtime.checker_repair.effect_scope,'host_tools');
+  assert.equal(qualification.runtime.checker_repair,undefined,
+    '首次资格执行必须保有默认工具，不能依据仅覆盖宿主工具的证明自动重跑');
+  assert.match(revised.files['agent-tools.txt'],/cleanup.*snapshot-evidence.*fetch-native/);
   assert.match(JSON.stringify(qualification.acceptance.document),/Activity Agent/);
   assert.doesNotMatch(JSON.stringify(qualification.acceptance.document),/逐VID核对原生结构化主判选择和置信度/);
   assert.doesNotMatch(JSON.stringify(qualification.acceptance.document),/kind=qualify[、，。]/);

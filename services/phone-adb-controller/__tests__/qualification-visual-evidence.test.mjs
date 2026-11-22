@@ -191,7 +191,7 @@ test('102 资格准备交付原政策、转写和两处画面证据，不调用�
   assert.equal(asrCalls,1);
 });
 
-test('102 Agent 结论必须持同一动作同一尝试的受管准备原件，重入只读 owner 写回',async t=>{
+for (const attempt of [1, 2]) test(`102 Agent 第 ${attempt} 次执行使用同一动作的准备原件，重入只读 owner 写回`,async t=>{
   const f=await fixture(t,{activityAgent:true}),counts={asr:0,judge:0,commit:0};
   const previous=process.env.COMMANDER_ACTIVITY_INPUT_FILE;
   t.after(()=>{if(previous===undefined)delete process.env.COMMANDER_ACTIVITY_INPUT_FILE;else process.env.COMMANDER_ACTIVITY_INPUT_FILE=previous;});
@@ -212,9 +212,9 @@ test('102 Agent 结论必须持同一动作同一尝试的受管准备原件，�
   const receipts=path.join(dir,'host-tools');
   fs.mkdirSync(receipts,{recursive:true,mode:0o700});
   const inputFile=path.join(dir,'activity-input.json'),bindingFile=path.join(dir,'host-tools-binding.json'),receipt=path.join(receipts,'prepare-for-agent.json');
-  const identity={task_id:task.task_id,run_id:task.run_id,activity_key:activity,action_id:action,attempt:2,
+  const identity={task_id:task.task_id,run_id:task.run_id,activity_key:activity,action_id:action,attempt,
     definition_sha256:'b'.repeat(64),input_sha256:'c'.repeat(64)};
-  const frozen={activity_key:activity,identity,transport:'codex-cli',context:{execution_attempt:2},activity_contract:{runtime:{checker_repair:{effect_scope:'host_tools'}}}};
+  const frozen={activity_key:activity,identity,transport:'codex-cli',context:{execution_attempt:attempt},activity_contract:{runtime:attempt===1?{}:{checker_repair:{effect_scope:'host_tools'}}}};
   const put=(name,data)=>{const body=JSON.stringify(data);fs.writeFileSync(name,body,{mode:0o600});return hash(body);};
   const inputSha=put(inputFile,frozen);
   const binding={activity_key:activity,identity,cwd:host,entry:'invoke.mjs',directory:receipts,input_file:inputFile,input_sha256:inputSha,
@@ -259,7 +259,7 @@ test('102 Agent 结论必须持同一动作同一尝试的受管准备原件，�
   const result=await f.main(submit,deps);
   assert.equal(result.verdict,'matched');
   assert.equal(result.decision_provenance.authority.action_id,action);
-  assert.equal(result.decision_provenance.authority.attempt,2);
+  assert.equal(result.decision_provenance.authority.attempt,attempt);
   assert.equal(result.decision_provenance.preparation.stdout_sha256,raw);
   assert.equal(result.native_artifacts.judge,null,'保持 Judge 响应的旧语义，不合成旧响应');
   assert.equal((await f.main(submit,deps)).verdict,'matched');

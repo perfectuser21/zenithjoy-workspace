@@ -1369,11 +1369,6 @@
             "failed": "stop",
             "partial": "stop",
             "retry": "pause"
-          },
-          "checker_repair": {
-            "effect_scope": "host_tools",
-            "max_attempts": 2,
-            "retry_safe": true
           }
         }
       },
@@ -2552,7 +2547,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "a4e6631eb5caae21655a23fbcde767e4f3cc6b4c",
-      "contract_sha256": "69b5d5a50b575127053751ff0ce0ea041cfc855bac2d14e80d110500b57caaa7"
+      "contract_sha256": "b409ac32dd24c8be821958f62cf182325e5ec72cd7f62bb0d5a06db4451d4477"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2783,8 +2778,8 @@
       "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952",
       "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs": "012a9609a3e457079c9486307fa9d73547162a7498a0413947067b67a4f23210",
       "services/phone-adb-controller/leadgen-foundation/qualification-agent-assembly.mjs": "b502a5fdcb003e41bca5ca63640e61fadbec241cedb72db99254eeb1f286ef84",
-      "services/phone-adb-controller/qualification-agent-candidate.mjs": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7",
-      "services/phone-adb-controller/qualification-agent-decision.mjs": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b",
+      "services/phone-adb-controller/qualification-agent-candidate.mjs": "aeed6f9555b424ca38bd0a20a0a8c13957ac4bdc5115a00f685f68e231b99d48",
+      "services/phone-adb-controller/qualification-agent-decision.mjs": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a",
       "services/phone-adb-controller/qualification-agent-overlay.mjs": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
     }
   }

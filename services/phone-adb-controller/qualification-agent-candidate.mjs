@@ -41,7 +41,6 @@ export function qualificationAgentContract(contract) {
   document.failure.needs_human.alert.object = '沿资格 Activity 回执向 Commander 升级真实失败原因。';
   target.failure = structuredClone(document.failure);
   target.acceptance = generateAcceptance({documents:{[workflow]:{activities:[document]}},workflow,activity});
-  target.runtime.checker_repair = {effect_scope:'host_tools',max_attempts:2,retry_safe:true};
   return result;
 }
 
@@ -112,7 +111,7 @@ export function deriveQualificationAgentHost({files, expected, frozenContract, c
     Object.keys(files).length===Object.keys(expected).length &&
     Object.entries(files).every(([name,bytes])=>hash(bytes)===expected[name]),'SOURCE');
   const target = frozenContract?.activities?.find(item=>item.key===activity);
-  need(frozenContract?.workflow===workflow && target?.runtime?.checker_repair?.effect_scope==='host_tools' &&
+  need(frozenContract?.workflow===workflow &&
     target?.acceptance?.document?.version==='3.6.0','CONTRACT');
   const tools = qualificationAgentTools(hostTools);
   const result = {...files};
@@ -145,6 +144,10 @@ export function deriveQualificationAgentHost({files, expected, frozenContract, c
     '只有合法音频传 qualify-prepare 并读取返回的原 dossier_ref 和 dossier_sha256。由同一 Activity Agent 按 Skill 完成业务语义判断后提交，不确定保 unknown。');
   result['agent-tools.txt']=replaceOnce(instructions,'102新增既有kind为qualify、collection-evidence、collection-readback',
     '102新增可用 kind 为 qualify-prepare、qualify-submit、collection-evidence、collection-readback');
+  if (!target.runtime.checker_repair) {
+    result['agent-tools.txt'] += '\n资格执行可用当前 Agent 的常规文件与媒体工具读取本轮冻结输入、原始材料和证据；业务动作仍使用注册的 commander_host_tools。\n'
+      + 'cleanup：本轮操作过 App 时，保留关闭和归位的原操作回执。在归位后、释放设备前，用 phone 的 snapshot-evidence 生成以本轮 run_tag 加连字符开头的桌面截图，再用 fetch-native 归档到本轮 native 证据根。交工具实际返回的归档原件路径，勿引用固定文件名。\n';
+  }
   const manifest = JSON.parse(text('activity-host-tools.json'));
   for(const name of Object.keys(manifest.sha256))manifest.sha256[name]=hash(result[name]);
   result['activity-host-tools.json']=JSON.stringify(manifest,null,2)+'\n';
