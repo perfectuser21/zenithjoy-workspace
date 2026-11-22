@@ -286,7 +286,7 @@ def instructions(ops, original, method=None):
               '只按原合同和当前Skill交付证据，不修改合同、Skill、上下文、工具或Checker；是否通过仍由独立Checker判定。']
     active = original
     if method:
-        active = original+'\n本轮103冻结执行输入：\n'+json.dumps(method, ensure_ascii=False, sort_keys=True)+'\n' if method.get('workflow') == '103' else render102(original, method)
+        active = original+'\n本轮103冻结执行输入：\n'+json.dumps(method, ensure_ascii=False, sort_keys=True)+'\n' if method.get('workflow') == '103' else render102(replace_once(original, typed.COLLECTION_INLINE_GUIDANCE, typed.COLLECTION_REFERENCE_GUIDANCE), method)
     return active+'\n冻结Activity业务操作与拒绝回执补充：\n'+'\n'.join(lines)+'\n'+PHONE_INSTRUCTIONS+'\n'
 
 
@@ -382,7 +382,7 @@ scope_rejection=_host.scope_rejection''')
   print(json.dumps(_host.recording_identity_refusal(error),ensure_ascii=False));return 2
  if time.time()*1000>=deadline:raise ValueError('ABSOLUTE_DEADLINE')""")
     tools = replace_once(tools, " c=read(P/'context.json');f=", " _host.verify_host(P,OPS)\n c=read(P/'context.json');f=")
-    tools = replace_once(tools, "  i=scoped_business(c,key,json.loads(args[0]))", "  parsed=read_business_input(args,activity=key,allowed_operations=OPS.get(key,set()))\n  i=scoped_business(c,key,parsed,reject=scope_rejection)")
+    tools = replace_once(tools, "  i=scoped_business(c,key,json.loads(args[0]))", "  parsed=read_business_input(args,activity=key,allowed_operations=OPS.get(key,set()))\n  i=scoped_business(c,key,_host.typed.resolve_collection_evidence(P,c,key,parsed),reject=scope_rejection)")
     tools = replace_once(tools, "  # A policy error before launching an operation has no external operation in flight.\n  if isinstance(e,ValueError):atomic(action,{'binding':bind,'state':'terminal','started_at':started_at,'result':{'exit_code':2,'error':str(e)},'ended_at':time.time()})", "  if type(e) is PreDispatchRejected:\n   return emit_pre_dispatch_rejection(e,action=action,binding=bind,started_at=started_at,persist=atomic)")
     tools = replace_once(tools, "   if source.is_symlink() or not source.is_file() or source.resolve().parent!=source_root:raise ValueError('NATIVE_LOCAL_SOURCE')", "   _host.require_local_native_source(source,source_root)")
     tools = replace_once(tools, " out={'binding':bind,'state':'terminal'", " diagnostic=_host.record_start_diagnostic(c,key,kind,args,result)\n if diagnostic:result={**result,'data':diagnostic}\n out={'binding':bind,'state':'terminal'")

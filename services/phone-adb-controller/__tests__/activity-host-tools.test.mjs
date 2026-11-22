@@ -169,6 +169,8 @@ test('102 typed host retains COS and original methods while rendering current in
  assert.deepEqual(v.result.data.allowed_operations,['claim_videos','inspect_videos','renew_video']);assert.deepEqual(r.before,{dispatch:0,credentials:0,resource:0});
  assert.equal(r.replay.stdout,r.first.stdout);assert.equal(r.second.rc,0);assert.deepEqual(r.calls,{dispatch:1,credentials:1,resource:1});
  assert.doesNotMatch(r.instructions,/native_artifacts\.py|artifact_checker|gate-contract\.md/);
+ assert.match(r.instructions,/collect_partial\.comments\[0\]传recipientEvidenceAction/);
+ assert.doesNotMatch(r.instructions,/读该JSON并原样放/);
  assert.equal(r.original,fixture102.files['TOOLS.txt'].source);assert.match(r.tools,/COS_SECRET_ID/);assert.match(r.tools,/COS_SECRET_KEY/);
  assert.match(r.instructions,/7711111111111111111/);assert.match(r.instructions,/37/);assert.match(r.instructions,/fixture-new-run/);assert.match(r.instructions,/a{40}/);
  for(const old of ['7707600173446204723','原97e','r7原件','caa47f8ba3ae','00:58','至少14秒','约90秒墙钟'])assert.ok(!r.instructions.includes(old),old);
@@ -337,4 +339,55 @@ test('assembled 102 only grants full result readback to the claimed qualificatio
  assert.deepEqual(ordinary.flags,[]);
  assert.deepEqual(scoped.request,{op:'inspect_videos',video_ids:['7711111111111111111'],line:'fixture',run:'fixture-new-run'});
  assert.deepEqual(ordinary.request,scoped.request);
+});
+
+test('102 collect_partial hydrates the exact owned evidence through its bound collection action',()=>{
+ const script=String.raw`import hashlib,importlib.util,json,pathlib,sys,tempfile
+spec=importlib.util.spec_from_file_location('admission',sys.argv[1])
+module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+identity={'task_id':'test-task','run_id':'test-run','run_tag':'test-run'}
+video='7711111111111111111'; url='https://www.douyin.com/video/'+video
+eid='test-run-v'+video+'-collection-person1-t1'
+body='测试评论'; digest=lambda buf:hashlib.sha256(buf).hexdigest()
+context={'assigned_workflow':'102','tasks':{'102':identity},'line':'fixture','profile':'phone'}
+evidence={'status':'verified','scope':{'run':'test-run','line_key':'fixture','profile':'phone','video_id':video,'video_url':url,'source_run':None,
+ 'douyin_id':'test-uid','nickname':'测试用户','comment_body_sha256':digest(body.encode()),'profile_eid':eid},'raw':{'profile':'X'*50000}}
+with tempfile.TemporaryDirectory() as d:
+ root=pathlib.Path(d).resolve(); (root/'receipts').mkdir()
+ directory=root/'collection-evidence-receipts'/eid
+ directory.mkdir(parents=True)
+ asset=directory/(eid+'-recipient-fixture.json')
+ asset.write_text(json.dumps(evidence,ensure_ascii=False)); asset.chmod(0o600)
+ response={'status':'evidence_built','video_id':video,'body_sha256':digest(body.encode()),'evidence':{'path':str(asset),'sha256':digest(asset.read_bytes())}}
+ receipt={'state':'terminal','binding':{'kind':'collection-evidence','activity':'collection','identity':identity,
+    'args':[json.dumps({'profile_eid':eid})]},'result':{'exit_code':0,'stdout':json.dumps(response)}}
+ path=root/'receipts/capture-comment.json'
+ def persist():path.write_text(json.dumps(receipt)); path.chmod(0o600)
+ persist()
+ row={'nickname':'测试用户','douyinId':'test-uid','commentBody':body,'recipientEvidenceAction':'capture-comment'}
+ request={'op':'collect_partial','video_id':video,'video_url':url,'source_run':None,'comments':[row]}
+ verify=module.resolve_collection_evidence
+ hydrated=verify(root,context,'collection',request)
+ assert hydrated['comments']==[{k:v for k,v in row.items() if k!='recipientEvidenceAction'}|{'recipientEvidence':evidence}]
+ assert 'recipientEvidence' not in row
+ inline={**request,'comments':[hydrated['comments'][0]]}
+ assert verify(root,context,'collection',inline)==inline
+ def denied(value=request):
+  try:verify(root,context,'collection',value)
+  except module.PreDispatchRejected as e:assert e.code=='COLLECTION_EVIDENCE_REFERENCE_INVALID'
+  else:raise AssertionError('reference must be rejected before dispatch')
+ denied({**request,'comments':[{**row,'recipientEvidenceAction':'../capture-comment'}]})
+ denied({**request,'comments':[{**row,'recipientEvidence':evidence}]})
+ denied({**request,'comments':[{**row,'commentBody':'changed'}]})
+ receipt['binding']['identity']={**identity,'run_id':'outside'};persist();denied()
+ receipt['binding']['identity']=identity;persist()
+ saved=asset.with_name('real.json');asset.rename(saved);asset.symlink_to(saved)
+ denied();asset.unlink();saved.rename(asset)
+ asset.write_text('changed');denied()
+ print('safe')
+ `;
+ const source=new URL('../activity-tool-result.py',import.meta.url).pathname;
+ const result=spawnSync('/usr/bin/python3',['-c',script,source],{encoding:'utf8',timeout:10000});
+ assert.equal(result.status,0,result.stderr);
+ assert.equal(result.stdout.trim(),'safe');
 });
