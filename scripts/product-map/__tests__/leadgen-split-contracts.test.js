@@ -45,7 +45,10 @@ test('评分与标记人按run真实认领ID读回，不借历史batch假扮本�
  const current=loadContractsFromDisk().contracts.douyin_comment_scoring;
  const score=current.activities.find(a=>a.key==='scoring');
  assert.ok(score.preconditions.some(p=>/精确评论ID.*真实已提交/.test(p)));
- assert.ok(score.postconditions.some(p=>p.probe==='scores_readback'&&/精确ID.*已持久化并读回/.test(p.asserts)));
+ const readback=score.postconditions.find(p=>p.probe==='scores_readback');
+ assert.ok(readback);
+ assert.match(readback.asserts,/精确ID.*relevance\/intent_grade.*公司版本.*评分结果摘要.*从PG原记录读回/);
+ assert.match(readback.asserts,/同任务、同run、同Activity、同动作/);
  const currentMark=current.activities.find(a=>a.key==='mark_leads');
  assert.ok(currentMark.preconditions.some(p=>/精确ID.*不改变历史harvest_batch/.test(p)));
  assert.ok(currentMark.postconditions.some(p=>p.probe==='pool_advanced'&&/同事务outbox逐ID可读/.test(p.asserts)));
