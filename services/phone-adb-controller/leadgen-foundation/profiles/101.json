@@ -534,7 +534,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "747931cd6b241877d269eafe8e8edadb283d33f2f974ec4bdfbac5a00620ab65"
+            "contract_digest": "4e518ca2501960af87da60239be4dcc6504c4bea693a24082ef119b95aa9b072"
           },
           "document": {
             "key": "collect_videos",
@@ -550,7 +550,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "5.5.0",
+            "version": "5.6.0",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -762,6 +762,18 @@
                             "minLength": 1,
                             "maxLength": 512
                           },
+                          "video_page_screenshot": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "pattern": "\\.png$"
+                          },
+                          "cards_screenshot": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "pattern": "\\.png$"
+                          },
                           "filters_receipt": {
                             "type": "string",
                             "minLength": 1,
@@ -779,11 +791,31 @@
                           }
                         },
                         "required": [
-                          "video_page_xml",
-                          "cards_xml",
                           "filters_receipt",
                           "selected_page",
                           "results_page"
+                        ],
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "video_page_xml": true,
+                              "cards_xml": true
+                            },
+                            "required": [
+                              "video_page_xml",
+                              "cards_xml"
+                            ]
+                          },
+                          {
+                            "properties": {
+                              "video_page_screenshot": true,
+                              "cards_screenshot": true
+                            },
+                            "required": [
+                              "video_page_screenshot",
+                              "cards_screenshot"
+                            ]
+                          }
                         ],
                         "additionalProperties": false
                       }
@@ -848,7 +880,7 @@
               },
               {
                 "probe": "source_completed",
-                "asserts": "用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致，来源读取成功且无旧入口回退。真实no_cards可empty，须保存原生空结果与停止原因；未加载不能当空。"
+                "asserts": "用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致。视频页签和筛选后首屏卡片可用同一轮原生截图成对交付，Checker核对前台抖音、搜索词、已选中的视频页签及本轮实际卡片，证据必须支持原槽位和业务结论；只显示加载、缺关键词或看不清页签均不得通过。真实no_cards可empty，须保存同一搜索范围的原生空结果与停止原因；未加载不能当空。"
               },
               {
                 "probe": "disc_candidates_persisted",
@@ -1301,7 +1333,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "source_completed",
-                "asserts": "用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致，来源读取成功且无旧入口回退。真实no_cards可empty，须保存原生空结果与停止原因；未加载不能当空。"
+                "asserts": "用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致。视频页签和筛选后首屏卡片可用同一轮原生截图成对交付，Checker核对前台抖音、搜索词、已选中的视频页签及本轮实际卡片，证据必须支持原槽位和业务结论；只显示加载、缺关键词或看不清页签均不得通过。真实no_cards可empty，须保存同一搜索范围的原生空结果与停止原因；未加载不能当空。"
               },
               "source_pointer": "/postconditions/1"
             },
@@ -1833,8 +1865,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "8c0460a298769725322cbe881ba3d447690b1621",
-      "contract_sha256": "c9ce6c0cde5ace8e97ae74ec36cdcfaf6fa5436ac0006e14c41fc1391b399fe9"
+      "method_revision": "7c090977622ea6ecaf411c085bb45f9cd220e0a9",
+      "contract_sha256": "83fa5b1a44972ed155da849cefcf1dbd647aa2949c72dd038b6fe53004f00a5e"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -1996,7 +2028,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "3ae77e425b6a3f3041d28c5c6b36ba80223213d7bec328b84e7fea4e43e4f734",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "add3b11fd033c16dff9c0b8f0d2ab31668e95581c3624ee082c6d81fe0e6255e",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "695373ed10e018c2d26e6832448d126781b3d05ea71c5bfcb86af68e89d278a2",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a"
     }
