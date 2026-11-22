@@ -15,14 +15,14 @@ import queue
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BASE_SHA = {
-    'TOOLS.txt': 'f6378da58d257da73d6b84e019e1a683b5e6f912ab810aa2232726c1594fbc3a',
+    'TOOLS.txt': 'ebf471fb00a441f70af33019d7f5271e5342c33cfa459c9f580a3804df189695',
     'tools.py': '53ac7b51b19e0e65f6031d07135bb4cd677b8dee27590b987d49de59e8bcc352',
-    'tool_scope.py': 'b5d39b61efc42dac48ca76a3d77d7f1bef63eed734ea076231facaf554b6386b',
+    'tool_scope.py': 'd749f352fa037f73996493e8b441d550aac327b23c951ceb01c596aa5d458073',
 }
 BASE_SHA102 = {
     'TOOLS.txt': '16fef3edcf1b3f9043c62df020abb484647f0a5d2e643b3ae661d5a1b9141282',
     'tools.py': 'eded963eea2d469182eb6367a679e8b01d14594a70cc91775e733d29d5850698',
-    'tool_scope.py': BASE_SHA['tool_scope.py'],
+    'tool_scope.py': 'b5d39b61efc42dac48ca76a3d77d7f1bef63eed734ea076231facaf554b6386b',
 }
 BASE_SHA103 = {**BASE_SHA102, 'TOOLS.txt': 'eea676142e7e50920bc5631b1388425140b0c74a8d84c20c5e9a34c173d96d16'}
 spec = importlib.util.spec_from_file_location('activity_host_typed', ROOT/'activity-tool-result.py')

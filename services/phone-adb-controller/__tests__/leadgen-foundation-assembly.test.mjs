@@ -21,6 +21,22 @@ for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} rea
   assert.match(tools,/`outputs` 的键是合同声明的对象类型/);
   assert.match(tools,/按工具实际回执填写 `evidence`/);
   if(workflow==='101'){
+   const phoneScope=spawnSync('python3',['-c',`
+import json,sys
+from tool_scope import phone_args
+c=json.load(open('context.json'))
+run=c['tasks']['101']['run_tag']
+for command in ('search-video-tab','search-video-cards'):
+ try: phone_args(c,'collect_videos',[command,run+'-fixture'])
+ except ValueError as e:
+  assert str(e)=='DISCOVERY_VISUAL_OPERATION_REQUIRED',str(e)
+ else: raise AssertionError(command+' must fail before dispatch')
+for args in [['foreground'],['snapshot-evidence',run+'-fixture'],['tap-evidence','100','100',run+'-fixture']]:
+ assert phone_args(c,'collect_videos',args)
+`],{cwd:a.profile.cwd,encoding:'utf8'});
+   assert.equal(phoneScope.status,0,phoneScope.stderr);
+   assert.match(sourceTools,/foreground.*snapshot-evidence.*tap-evidence/);
+   assert.doesNotMatch(sourceTools,/→search-video-tab|→search-video-cards/);
    assert.match(tools,/discover_readback.*include_handoff:true/);
    assert.match(tools,/inspect_videos.*include_discovery_protection:true/);
    assert.match(tools,/invoke.*evidence_ref.*receipts\//);

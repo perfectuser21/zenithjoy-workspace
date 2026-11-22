@@ -68,7 +68,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -229,7 +229,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -295,7 +295,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9"
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "仅收紧101视频页与首屏的采集工具路线，使用现有截图和坐标操作，输入输出、证据契约与落库保护保持一致。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.1",
@@ -364,7 +371,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -532,7 +539,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -598,13 +605,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+      "code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
-        "current_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+        "current_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19"
       }
     },
     "douyin_video_processing.dedup": {
@@ -674,7 +681,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -842,7 +849,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -908,13 +915,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+      "code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
-        "current_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+        "current_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19"
       }
     },
     "douyin_video_processing.qualification": {
@@ -989,7 +996,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -1157,7 +1164,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -1223,13 +1230,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+      "code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
-        "current_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+        "current_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19"
       }
     },
     "douyin_video_processing.collection": {
@@ -1299,7 +1306,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -1467,7 +1474,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -1533,13 +1540,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+      "code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
-        "current_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "已核对真实回执，业务提交的原件读取改为持久动作引用。兼容原内联形式，继续走原作用域、身份、权限和数据库事务。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+        "current_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19"
       },
       "method_compatibility": {
         "kind": "contract_preserving",
@@ -1617,7 +1624,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -1785,7 +1792,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -1851,13 +1858,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+      "code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
-        "current_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "60f5152981e89e7faa707a1543c6ef05459d6a2032433df3894fcadf64cb9b6b",
+        "current_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1932,7 +1939,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -2093,7 +2100,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -2159,13 +2166,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
-        "current_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2240,7 +2247,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -2401,7 +2408,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -2467,13 +2474,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
-        "current_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2543,7 +2550,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -2704,7 +2711,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -2770,13 +2777,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
-        "current_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2846,7 +2853,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -3007,7 +3014,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -3073,13 +3080,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
-        "current_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3149,7 +3156,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -3310,7 +3317,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -3376,13 +3383,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
-        "current_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3452,7 +3459,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33"
+          "sha256": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5"
         },
         {
           "kind": "code",
@@ -3613,7 +3620,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/101.json",
           "revision": "contract",
-          "sha256": "b1fc4897a500d03eedbacf42720d44bbfc1d179a9079257f89f00e0cd967f365"
+          "sha256": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149"
         },
         {
           "kind": "code",
@@ -3679,13 +3686,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+      "code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
-        "current_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
-        "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "共用工具只识别 102 collection 的提交证据引用，当前 Activity 的 Skill、契约、原参数路径及执行行为一致。"
+        "reason": "共享真机工具校验源码重新冻结。行为改动仅限101视频采集旧入口，当前Activity的输入输出、方法和验收条件不变。",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "1a5a25acfd7976e57bea6949187e63746a2fa7dbd9432b67ba7dbbfa464546f9",
+        "current_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6"
       }
     }
   },
