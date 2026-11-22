@@ -298,7 +298,7 @@
       "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
         "current_code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
@@ -328,6 +328,41 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs",
+          "revision": "contract",
+          "sha256": "012a9609a3e457079c9486307fa9d73547162a7498a0413947067b67a4f23210"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-assembly.mjs",
+          "revision": "contract",
+          "sha256": "b502a5fdcb003e41bca5ca63640e61fadbec241cedb72db99254eeb1f286ef84"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
+          "revision": "contract",
+          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
+          "revision": "contract",
+          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-overlay.mjs",
+          "revision": "contract",
+          "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -613,13 +648,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997",
+      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997"
+        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
       }
     },
     "douyin_video_processing.dedup": {
@@ -638,6 +673,41 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs",
+          "revision": "contract",
+          "sha256": "012a9609a3e457079c9486307fa9d73547162a7498a0413947067b67a4f23210"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-assembly.mjs",
+          "revision": "contract",
+          "sha256": "b502a5fdcb003e41bca5ca63640e61fadbec241cedb72db99254eeb1f286ef84"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
+          "revision": "contract",
+          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
+          "revision": "contract",
+          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-overlay.mjs",
+          "revision": "contract",
+          "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -923,13 +993,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997",
+      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997"
+        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1291,6 +1361,41 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs",
+          "revision": "contract",
+          "sha256": "012a9609a3e457079c9486307fa9d73547162a7498a0413947067b67a4f23210"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-assembly.mjs",
+          "revision": "contract",
+          "sha256": "b502a5fdcb003e41bca5ca63640e61fadbec241cedb72db99254eeb1f286ef84"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
+          "revision": "contract",
+          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
+          "revision": "contract",
+          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-overlay.mjs",
+          "revision": "contract",
+          "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -1576,13 +1681,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997",
+      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997"
+        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
       },
       "method_compatibility": {
         "kind": "contract_preserving",
@@ -1609,6 +1714,41 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs",
+          "revision": "contract",
+          "sha256": "012a9609a3e457079c9486307fa9d73547162a7498a0413947067b67a4f23210"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-foundation/qualification-agent-assembly.mjs",
+          "revision": "contract",
+          "sha256": "b502a5fdcb003e41bca5ca63640e61fadbec241cedb72db99254eeb1f286ef84"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
+          "revision": "contract",
+          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
+          "revision": "contract",
+          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-agent-overlay.mjs",
+          "revision": "contract",
+          "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -1894,13 +2034,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997",
+      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "0b9d58185b1920e1e6e8fbf2dfd87ad8163f7fdb9378e6887ba2e8491f2a4997"
+        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1924,6 +2064,41 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/judge-recipient.js",
+          "revision": "contract",
+          "sha256": "55f23c1e70c8c1f04fa7c83153c124598bc2c30b2d4c5b7111be4f57d5a27b87"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-agent-score.js",
+          "revision": "contract",
+          "sha256": "467f213183943d2dbdbb4eb41faf806b158bb00e0eb48c0b445ba123a5b5ff39"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-outreach-bridge.js",
+          "revision": "contract",
+          "sha256": "21036ea7ad0bb18ca70ab00bab536a70f2a01e578df3527ad1faeb27d1a8af35"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-policy-review.js",
+          "revision": "contract",
+          "sha256": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-score-exclusion.js",
+          "revision": "contract",
+          "sha256": "95c83f218d0bac4b8afbf663eccac801399785f56f178b998ed1e12ca5496d81"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -2202,7 +2377,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
+      "code_digest": "a1e372bfad8c8b1ec2ad2538c4b1b35b3893cefaa56952ff3a15bb122c60bc52"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.10.0",
@@ -2225,6 +2400,41 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/judge-recipient.js",
+          "revision": "contract",
+          "sha256": "55f23c1e70c8c1f04fa7c83153c124598bc2c30b2d4c5b7111be4f57d5a27b87"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-agent-score.js",
+          "revision": "contract",
+          "sha256": "467f213183943d2dbdbb4eb41faf806b158bb00e0eb48c0b445ba123a5b5ff39"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-outreach-bridge.js",
+          "revision": "contract",
+          "sha256": "21036ea7ad0bb18ca70ab00bab536a70f2a01e578df3527ad1faeb27d1a8af35"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-policy-review.js",
+          "revision": "contract",
+          "sha256": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-score-exclusion.js",
+          "revision": "contract",
+          "sha256": "95c83f218d0bac4b8afbf663eccac801399785f56f178b998ed1e12ca5496d81"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -2503,13 +2713,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929",
+      "code_digest": "a1e372bfad8c8b1ec2ad2538c4b1b35b3893cefaa56952ff3a15bb122c60bc52",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
-        "current_code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
+        "current_code_digest": "a1e372bfad8c8b1ec2ad2538c4b1b35b3893cefaa56952ff3a15bb122c60bc52"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2528,6 +2738,20 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-frozen-policy-evidence.js",
+          "revision": "contract",
+          "sha256": "58dd38ccb9dd784348de253790887a26ccef62e7b740f822938aae495e4fe2a7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-policy-review.js",
+          "revision": "contract",
+          "sha256": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -2806,13 +3030,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929",
+      "code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
-        "current_code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
+        "current_code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2831,6 +3055,20 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-frozen-policy-evidence.js",
+          "revision": "contract",
+          "sha256": "58dd38ccb9dd784348de253790887a26ccef62e7b740f822938aae495e4fe2a7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-policy-review.js",
+          "revision": "contract",
+          "sha256": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -3109,7 +3347,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
+      "code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f"
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "4.1.0",
@@ -3127,6 +3365,20 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-frozen-policy-evidence.js",
+          "revision": "contract",
+          "sha256": "58dd38ccb9dd784348de253790887a26ccef62e7b740f822938aae495e4fe2a7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-policy-review.js",
+          "revision": "contract",
+          "sha256": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -3405,13 +3657,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929",
+      "code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
-        "current_code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
+        "current_code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3430,6 +3682,20 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-frozen-policy-evidence.js",
+          "revision": "contract",
+          "sha256": "58dd38ccb9dd784348de253790887a26ccef62e7b740f822938aae495e4fe2a7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-policy-review.js",
+          "revision": "contract",
+          "sha256": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-context.mjs",
           "revision": "contract",
           "sha256": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"
@@ -3708,13 +3974,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929",
+      "code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合候选重冻宿主实现来源；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
+        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
         "previous_code_digest": "e3c0b27b7cc21c4adb6b121e569a0064a419d9e68e53e96ce9b6158e470644b6",
-        "current_code_digest": "d8e844c73f1be419290c71312a12f290e572ceb88279af5ee2f8c540c1850929"
+        "current_code_digest": "421f54c7811a7a2e1e5433b72c4f3163def7afdc71d2e4f81f8eceab1a6b7c2f"
       }
     }
   },

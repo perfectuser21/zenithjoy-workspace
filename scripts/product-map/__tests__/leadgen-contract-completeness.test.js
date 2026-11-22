@@ -96,7 +96,7 @@ test('104 订单生命周期与发送结果由完整合同规定', () => {
   assert.equal(activity.preflight.compatibility, 'breaking');
   assert.ok(activity.send_dm.inputs.some(input => input.type === 'OutreachOrder'));
   assert.equal(activity.send_dm.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.send_dm.version, '6.1.0');
+  assert.equal(activity.send_dm.version, '6.1.1');
   assert.equal(activity.send_dm.compatibility, 'breaking');
   assert.equal(activity.write_back.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
   assert.equal(activity.write_back.version, '4.1.0');
