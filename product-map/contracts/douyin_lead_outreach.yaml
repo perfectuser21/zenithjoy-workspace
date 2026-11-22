@@ -49,6 +49,20 @@ activities:
     order: 1
     version: 5.3.1
     required_host_tools: ["phone", "brain", "fetch-native", "outreach", "outreach-proof"]
+    delivery: &activity_handoff
+      schema:
+        type: object
+        additionalProperties: false
+        required: [outputs, evidence]
+        properties:
+          outputs: { type: object }
+          evidence:
+            type: object
+            minProperties: 1
+            additionalProperties:
+              type: object
+              minProperties: 1
+              additionalProperties: { type: string, minLength: 1 }
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -755,6 +769,7 @@ activities:
     order: 2
     version: 6.1.2
     required_host_tools: ["phone", "fetch-native", "outreach", "outreach-phone", "outreach-proof"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -1135,6 +1150,7 @@ activities:
     order: 3
     version: 4.1.1
     required_host_tools: ["outreach"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -1448,6 +1464,7 @@ activities:
     order: 4
     version: 3.5.1
     required_host_tools: ["native-readback", "phone", "brain", "outreach", "fetch-native"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward

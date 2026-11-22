@@ -46,6 +46,20 @@ activities:
     order: 1
     version: 2.10.1
     required_host_tools: ["business"]
+    delivery: &activity_handoff
+      schema:
+        type: object
+        additionalProperties: false
+        required: [outputs, evidence]
+        properties:
+          outputs: { type: object }
+          evidence:
+            type: object
+            minProperties: 1
+            additionalProperties:
+              type: object
+              minProperties: 1
+              additionalProperties: { type: string, minLength: 1 }
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -669,6 +683,7 @@ activities:
     order: 2
     version: 3.10.1
     required_host_tools: ["business"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward

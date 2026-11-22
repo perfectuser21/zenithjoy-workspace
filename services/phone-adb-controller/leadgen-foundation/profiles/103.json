@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_comment_scoring.yaml",
             "activity_ref": "douyin_comment_scoring.scoring",
-            "contract_digest": "5898437d1082b30b9a3af280fbf05573577e30dcba83889fb3fae4f73c84244f"
+            "contract_digest": "45b4da2527b83cb8c32bab70ae4e628ef3ba48ee6d2f14aafa943c0cf247c497"
           },
           "document": {
             "key": "scoring",
@@ -36,6 +36,33 @@
             "required_host_tools": [
               "business"
             ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "properties": {
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            },
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -409,7 +436,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_comment_scoring.yaml",
             "activity_ref": "douyin_comment_scoring.mark_leads",
-            "contract_digest": "8a3d5b3a6104cd91ac517174d0ae4944599377c6dcaf588459bb39405f3b0c72"
+            "contract_digest": "1934f9365c5aff2891879721da4caa6b56687a58c09453cb342dc06f9c8404e0"
           },
           "document": {
             "key": "mark_leads",
@@ -429,6 +456,33 @@
             "required_host_tools": [
               "business"
             ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "properties": {
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            },
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -949,8 +1003,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "fc902334f0e705062563b7d70e22cd0da74d07c0",
-      "contract_sha256": "a9c46bd01ed2e2cbfcfabbcef09144cdf86c9aaac9992630672d1963de59769f",
+      "method_revision": "c6bf651ad3986c7ff2cb25bcf5b8c1848787aa4b",
+      "contract_sha256": "e32312931861cef0572b820bff84b242f87f8bd25c7b0667172daea6739ff910",
       "agent_score_mode": "activity-agent-v1"
     },
     "skill_runtime": {
@@ -1086,8 +1140,8 @@
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/leadgen-score-exclusion.js": "95c83f218d0bac4b8afbf663eccac801399785f56f178b998ed1e12ca5496d81",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "e70e17ec7b92bee16235c5eccba114d0efc91a55a0a91aef2a0cda1cd4abd39b",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "8126e41a2c08315a38abbab1a928a40bda3c85c05b7c12387fcd9af3f2d41e2d"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "aadf8639bbc0805f4b61bf3d324c46c9a613a021981243902f54c86619d95253",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "44ecd62674faf3b0866ba9a74fe0e1e97b177a13e53813d8765827b1d3ef16e3"
     }
   }
 }

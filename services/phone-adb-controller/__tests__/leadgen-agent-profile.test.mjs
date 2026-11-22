@@ -56,3 +56,14 @@ test('所有工作流的宿主工具注册从各自冻结活动契约投影', ()
   assert.deepEqual(projected.profile.skill_runtime.host_tools.kinds,expected);
  }
 });
+
+test('每个注册活动都用已有通用交件协议，产出与证据分开提交', () => {
+ for (const [i,workflow] of names.entries()) {
+  const profile=projectAgentProfile(original(101+i),{documents,workflow});
+  for (const activity of profile.contract.activities) {
+   const schema=activity.acceptance.document.delivery?.schema;
+   assert.ok(schema?.properties?.outputs && schema.properties.evidence, workflow+'.'+activity.key);
+   assert.ok(schema.required.includes('outputs') && schema.required.includes('evidence'));
+  }
+ }
+});

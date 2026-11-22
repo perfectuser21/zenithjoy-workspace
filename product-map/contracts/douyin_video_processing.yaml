@@ -61,6 +61,20 @@ activities:
     order: 1
     version: 2.6.2
     required_host_tools: ["phone", "brain", "business", "native-readback"]
+    delivery: &activity_handoff
+      schema:
+        type: object
+        additionalProperties: false
+        required: [outputs, evidence]
+        properties:
+          outputs: { type: object }
+          evidence:
+            type: object
+            minProperties: 1
+            additionalProperties:
+              type: object
+              minProperties: 1
+              additionalProperties: { type: string, minLength: 1 }
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -757,6 +771,7 @@ activities:
     order: 2
     version: 3.3.4
     required_host_tools: ["business", "phone", "fetch-native"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1085,6 +1100,7 @@ activities:
     order: 3
     version: 3.6.1
     required_host_tools: ["phone", "business", "fetch-native", "proof", "qualify-prepare", "qualify-submit"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1473,6 +1489,7 @@ activities:
     order: 4
     version: 2.8.6
     required_host_tools: ["phone", "business", "fetch-native", "collection-evidence", "collection-readback"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1956,6 +1973,7 @@ activities:
     order: 5
     version: 2.6.3
     required_host_tools: ["native-readback", "phone", "brain", "business", "fetch-native"]
+    delivery: *activity_handoff
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
