@@ -1,5 +1,10 @@
 """Typed local admission rejection; never infer dispatch state from error text."""
+import hashlib
 import json
+import os
+import pathlib
+import re
+import stat
 import time
 
 
@@ -72,6 +77,89 @@ def read_business_input(args, *, activity, allowed_operations):
                          'tool_hint': 'Task身份由宿主task_authority每次自动核验；无business task_read。preflight从brain args=[device-locks]开始，business仅使用allowed_operations。'}
         raise error
     return value
+
+
+COLLECTION_INLINE_GUIDANCE = '读该JSON并原样放collect_partial.comments[0].recipientEvidence'
+COLLECTION_REFERENCE_GUIDANCE = (
+    '普通102的collect_partial.comments[0]传recipientEvidenceAction，值为本轮成功构造该份证据的'
+    'collection-evidence动作名称。宿主读取并校验完整原件；不要把工具回显或原始JSON复制进参数'
+)
+
+
+def _owned_collection_json(file, *, sha256=None):
+    metadata = file.lstat()
+    if (not stat.S_ISREG(metadata.st_mode) or file.resolve(strict=True) != file
+            or metadata.st_uid != os.getuid() or metadata.st_nlink != 1 or metadata.st_mode & 0o022):
+        raise ValueError('untrusted evidence file')
+    fields = ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+    def identity(value):
+        return tuple(getattr(value, field) for field in fields)
+    expected = identity(metadata)
+    with os.fdopen(os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 'rb') as stream:
+        if identity(os.fstat(stream.fileno())) != expected:
+            raise ValueError('evidence changed before read')
+        raw = stream.read(2 * 1024 * 1024 + 1)
+        if identity(os.fstat(stream.fileno())) != expected or identity(file.lstat()) != expected:
+            raise ValueError('evidence changed while reading')
+    if len(raw) != metadata.st_size or len(raw) > 2 * 1024 * 1024:
+        raise ValueError('invalid evidence size')
+    if sha256 is not None and hashlib.sha256(raw).hexdigest() != sha256:
+        raise ValueError('evidence changed')
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError('evidence must be an object')
+    return value
+
+
+def _collection_evidence_for_comment(root, context, request, comment):
+    action = comment['recipientEvidenceAction']
+    if ('recipientEvidence' in comment or not isinstance(action, str)
+            or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', action)):
+        raise ValueError('invalid evidence action')
+    receipt = _owned_collection_json(root / 'receipts' / (action + '.json'))
+    binding, result = receipt['binding'], receipt['result']
+    identity = context['tasks']['102']
+    if (receipt['state'] != 'terminal' or result['exit_code'] != 0
+            or binding['identity'] != identity or binding['kind'] != 'collection-evidence'
+            or binding['activity'] != 'collection' or len(binding['args']) != 1):
+        raise ValueError('not an owned completed evidence action')
+    observed = json.loads(result['stdout'])
+    body_sha256 = hashlib.sha256(comment['commentBody'].encode()).hexdigest()
+    eid = json.loads(binding['args'][0])['profile_eid']
+    if (observed['status'] != 'evidence_built' or observed['video_id'] != request['video_id']
+            or observed['body_sha256'] != body_sha256 or not re.fullmatch(r'[A-Za-z0-9_-]{1,180}', eid)
+            or not eid.startswith(identity['run_tag'] + '-')):
+        raise ValueError('evidence result scope changed')
+    proof = observed['evidence']
+    file = pathlib.Path(proof['path'])
+    sha256 = proof['sha256']
+    if (file.parent != root / 'collection-evidence-receipts' / eid
+            or not file.name.startswith(eid + '-recipient-') or file.suffix != '.json'
+            or not re.fullmatch(r'[a-f0-9]{64}', sha256)):
+        raise ValueError('evidence file scope changed')
+    evidence = _owned_collection_json(file, sha256=sha256)
+    expected = {'run': identity['run_tag'], 'profile': context['profile'], 'line_key': context['line'],
+                'video_id': request['video_id'], 'video_url': request['video_url'], 'source_run': request.get('source_run'),
+                'nickname': comment['nickname'], 'douyin_id': comment['douyinId'],
+                'comment_body_sha256': body_sha256, 'profile_eid': eid}
+    if evidence['status'] != 'verified' or any(evidence['scope'].get(k) != v for k, v in expected.items()):
+        raise ValueError('evidence does not describe this comment')
+    return {key: value for key, value in comment.items() if key != 'recipientEvidenceAction'} | {'recipientEvidence': evidence}
+
+
+def resolve_collection_evidence(root, context, activity, request):
+    comments = request.get('comments')
+    if (not isinstance(comments, list)
+            or not any(isinstance(row, dict) and 'recipientEvidenceAction' in row for row in comments)):
+        return request
+    if (context.get('assigned_workflow'), activity, request.get('op')) != ('102', 'collection', 'collect_partial'):
+        raise scope_rejection('COLLECTION_EVIDENCE_REFERENCE_INVALID')
+    try:
+        rows = [_collection_evidence_for_comment(root, context, request, row)
+                if isinstance(row, dict) and 'recipientEvidenceAction' in row else row for row in comments]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        raise scope_rejection('COLLECTION_EVIDENCE_REFERENCE_INVALID') from error
+    return {**request, 'comments': rows}
 
 
 def emit_pre_dispatch_rejection(error, *, action, binding, started_at, persist):
