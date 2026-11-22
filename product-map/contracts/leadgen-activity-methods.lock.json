@@ -61,7 +61,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.preflight": {
@@ -364,7 +364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -605,13 +605,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
-        "current_code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.dedup": {
@@ -674,7 +674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -915,13 +915,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
-        "current_code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.qualification": {
@@ -989,7 +989,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -1230,13 +1230,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
-        "current_code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "核对当前请求序列化字节与原运行输入，保持 Activity 契约、Skill、外部请求内容及落库语义，成功响应的原回执增补可核验摘要。"
+        "reason": "核对序列化请求和原运行输入，保持既有 Activity 契约、Skill、外部请求内容及落库语义，成功响应的原回执增补可核验摘要。同步宿主对新模块的冻结校验。"
       }
     },
     "douyin_video_processing.collection": {
@@ -1299,7 +1299,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -1540,13 +1540,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
-        "current_code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1609,7 +1609,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -1850,13 +1850,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
-        "current_code_digest": "e3a2163c12cfe034794abf4ddd281463bd11f9f18a45cc1e7c8c5740d8ebbd71",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1924,7 +1924,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -2158,13 +2158,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2232,7 +2232,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -2466,13 +2466,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2535,7 +2535,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -2769,13 +2769,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2838,7 +2838,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -3072,13 +3072,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3141,7 +3141,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -3375,13 +3375,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3444,7 +3444,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -3678,13 +3678,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
-        "current_code_digest": "222bf914f83e4929cddc212612144616342c9599d0be74afd533e523ad1a559e",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
         "reviewed_by": "Codex /root/review_102_receipt",
-        "reason": "解包对照确认共用冻结归档仅修改 102 资格主判的三个内部模块，本 Activity 的 Skill、契约和可执行行为不变。"
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     }
   },
