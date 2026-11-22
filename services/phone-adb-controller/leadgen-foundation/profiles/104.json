@@ -589,7 +589,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_lead_outreach.yaml",
             "activity_ref": "douyin_lead_outreach.send_dm",
-            "contract_digest": "9b557cc1f22979c9189307ff048624a1e1089d2a2a53abb2dedd8123d88eac25"
+            "contract_digest": "ba8491b4e07328ff82e5e2169fb44ef970808b59fa7fe404af5dad96ea4d8f75"
           },
           "document": {
             "key": "send_dm",
@@ -605,7 +605,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "6.1.0",
+            "version": "6.1.1",
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -679,7 +679,7 @@
               },
               {
                 "type": "RecipientQualification",
-                "source": "原订单关联的该公司已通过原生身份核验的资格快照",
+                "source": "原订单关联的公司资格、103 评分存档与已核实的原生身份",
                 "cardinality": "one",
                 "fields": [
                   "company_id",
@@ -706,7 +706,7 @@
             ],
             "preconditions": [
               "发送账号风险与暂停状态允许，本run批准资产/intent的每日和本轮上限仍有余额；公司数值不写死在通用Contract。",
-              "冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。",
+              "冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。领取前由宿主读回同一原评论、原订单及当前冻结政策，可验证历史 provider 原始响应标识或宿主绑定的 Agent scoring 身份与输入、答案摘要。证据缺失、不符或未知时阻断并保留原单。",
               "批准正文、发送账号、目标、公司及原订单/102/103来源与冻结范围完全一致。",
               "ordinary公司队列与exact原单模式按各自冻结授权选单，不从exact失败回退旁单；先永久预留，再执行唯一手机发送。",
               "未知/已prepared/已发动作仅按原幂等状态读回，不能重发；Checker只读取证不授发送权。"
@@ -969,7 +969,7 @@
               "phase": "start",
               "requirement": {
                 "type": "RecipientQualification",
-                "source": "原订单关联的该公司已通过原生身份核验的资格快照",
+                "source": "原订单关联的公司资格、103 评分存档与已核实的原生身份",
                 "cardinality": "one",
                 "fields": [
                   "company_id",
@@ -988,7 +988,7 @@
             {
               "id": "preconditions_1",
               "phase": "start",
-              "requirement": "冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。",
+              "requirement": "冻结政策允许目标等级且真实原单收件人资格有效，原UID与HTTPS主页链接一致。领取前由宿主读回同一原评论、原订单及当前冻结政策，可验证历史 provider 原始响应标识或宿主绑定的 Agent scoring 身份与输入、答案摘要。证据缺失、不符或未知时阻断并保留原单。",
               "source_pointer": "/preconditions/1"
             },
             {
@@ -1953,8 +1953,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "d2676c3d5aa843d0965d98b199762a9de7c26746",
-      "contract_sha256": "52e403f8fbe48429176581128df83516aee4ef44891b964700904e547e8dc7b5"
+      "method_revision": "a4e6631eb5caae21655a23fbcde767e4f3cc6b4c",
+      "contract_sha256": "4e9614299a90c31283931ef6c0ba46fc7c566580077c60b8b91ef7efbc9d9fd8"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2107,9 +2107,9 @@
       "services/phone-adb-controller/activity-104-state-wiring.mjs": "dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1",
       "services/phone-adb-controller/activity-104-state.mjs": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6",
       "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
-      "services/phone-adb-controller/activity-host-104.mjs": "6fbdf55d22a52be040ac8129c5b3ed470854f803e709e7385cc91d919ada79b7",
+      "services/phone-adb-controller/activity-host-104.mjs": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103",
       "services/phone-adb-controller/activity-host-pg.mjs": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79",
-      "services/phone-adb-controller/activity-host-tools.py": "c75d0f38173e7255cf2c7a1612f6916a2e363e814cb2013372311b6d30b315a5",
+      "services/phone-adb-controller/activity-host-tools.py": "323731b500fc695a8538a382809ccf23c592bfa2dfe54b7d58c915687e597325",
       "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
       "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
       "services/phone-adb-controller/activity-tool-result.py": "4cc6c52836034af0b998142e1f6c435732102f60481c60a15fd747b25e711cc3",
@@ -2117,10 +2117,10 @@
       "services/phone-adb-controller/discovery-metrics-queue.js": "7f6b4ba23aabc0b4acba54ae9778bde992d3c3716a3281d8135c3dee2157ac59",
       "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
-      "services/phone-adb-controller/leadgen-committed-partial.js": "03cc3d9cf3c081e1575dde04a863dcad762ce97133bd52ad5eaae9aa5e2ab7d9",
+      "services/phone-adb-controller/leadgen-committed-partial.js": "e5b443ecf4b0c0f6ee4cd9580883539f267cf41609016bcba02b26e4ce51230b",
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "aa1fe8e35c91a31f1735309fca37fdafeb493da24867deee83ad992b31261416",
-      "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "77381598a1b043389bcdc14cba51f8e262fed01fe7f2dbed78d6605ad7d4988b",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "158e713fff46c66ff3d4f94d4414deba5cb4f81add6f9ccc03a24ef4a53fc909",
+      "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
@@ -2138,13 +2138,15 @@
       "services/phone-adb-controller/leadgen-foundation/sources/104.json": "69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb",
       "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98",
       "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
+      "services/phone-adb-controller/leadgen-frozen-policy-evidence.js": "58dd38ccb9dd784348de253790887a26ccef62e7b740f822938aae495e4fe2a7",
       "services/phone-adb-controller/leadgen-outreach-scope.js": "c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7",
-      "services/phone-adb-controller/leadgen-queue.js": "3ae77e425b6a3f3041d28c5c6b36ba80223213d7bec328b84e7fea4e43e4f734",
-      "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
+      "services/phone-adb-controller/leadgen-policy-review.js": "86140f4dfcc9c25ed663b7c9a649ef47482211c34744d3c5ae525a11656775be",
+      "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
+      "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md": "031edefcb428c6556a0e03eea25a692bd95007aa9e7fd39c203f5b2a65605748",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md": "13f95b96c702024c5f95ae56f8aae3cfbfa391314bc2d4d57f5320bf2af03189",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md": "d9360fefc9beb660f364735b72b1c4c1026b136fbb63176a3fc789ac66c4fdbe",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md": "cfd4fc636d21802a88ee18772a4f57ff02752371bafa0bedeb6725aa26b5408d",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md": "cc189fdf8d48482768128388720f2f569bd7b0fb2f3ecc14066e7fc08a0059b0"
     }
   }

@@ -43,15 +43,21 @@ export async function native103PgFixture(t,{Pool:OwnedPool=Pool}={}){
  const task={id:scope.task_id,status:'in_progress',...claim,lease_until:new Date(scope.receipt_deadline_ms+60000).toISOString(),payload:{workflow_key:scope.workflow,source_commit:source.commit,run_tag:scope.run,profile:scope.profile,company_line:scope.line,scope:{source_run:scope.source_run,limit:scope.limit}}};
  const readSource=(path,...args)=>path===join(root,'deployment-manifest.json')?JSON.stringify({source_commit:source.commit}):readFileSync(path,...args);
  return {root,source,scope,readSource,directory:join(directory,'ledger'),createPool,assertAuthority:async()=>structuredClone(task),task,company,id,calls,control,allocated:()=>allocated,
-  async seedNative(){
+  async seedNative({sourceRun='source101'}={}){
    const sha=text=>createHash('sha256').update(text).digest('hex'),vid='7617837149999841201',prefix=`source102-v${vid}-collection`,profile='xiaolongxia';
    const raw={profile:readFileSync(new URL('./honor-e1b-recipient/profile.xml',import.meta.url),'utf8'),returned:readFileSync(new URL('./honor-e1b-recipient/returned.xml',import.meta.url),'utf8').replaceAll('测试完整评论 首评','在哪里报名')};
-   const binding={company_id:company.company_id,tenant_id:company.tenant_id,version:company.version,line_key:'yuesheng',run_id:'source102',source_run:'source101',profile,device_serial:'4311010223',douyin_id:'fixture-sender',verification_status:'verified',enabled:true};
+   const binding={company_id:company.company_id,tenant_id:company.tenant_id,version:company.version,line_key:'yuesheng',run_id:'source102',source_run:sourceRun,profile,device_serial:'4311010223',douyin_id:'fixture-sender',verification_status:'verified',enabled:true};
    company.runtime_config.routing.profiles=[profile];company.runtime_config.platform_accounts=[{...binding,platform:'douyin'}];
-   const evidence={version:1,status:'verified',scope:{line_key:'yuesheng',run:'source102',source_run:'source101',video_id:vid,video_url:url,profile,douyin_id:'fixture-account-102',nickname:'测试评论人',comment_body_sha256:sha('在哪里报名'),comment_encoding:'canonical',profile_eid:prefix+'-person1-t1',video_identity_eid:prefix+'-after-card1'},raw,sha256:{profile:sha(raw.profile),returned:sha(raw.returned)},company_binding:binding,video_identity:{verified:true,content_type:'video',expected_video_id:vid,observed_video_id:vid,evidence_id:prefix+'-after-card1'}};
+   const evidence={version:1,status:'verified',scope:{line_key:'yuesheng',run:'source102',source_run:sourceRun,video_id:vid,video_url:url,profile,douyin_id:'fixture-account-102',nickname:'测试评论人',comment_body_sha256:sha('在哪里报名'),comment_encoding:'canonical',profile_eid:prefix+'-person1-t1',video_identity_eid:prefix+'-after-card1'},raw,sha256:{profile:sha(raw.profile),returned:sha(raw.returned)},company_binding:binding,video_identity:{verified:true,content_type:'video',expected_video_id:vid,observed_video_id:vid,evidence_id:prefix+'-after-card1'}};
    await admin.query(`UPDATE ${schema}.leadgen_comments SET nickname='测试评论人',douyin_id='fixture-account-102',profile_url='https://www.douyin.com/user/fixture-account-102',recipient_evidence=$2 WHERE id=$1`,[id,evidence]);
    await admin.query(`UPDATE ${schema}.tenant_company_profiles SET runtime_config=$1`,[company.runtime_config]);
-   await admin.query(`UPDATE ${schema}.company_config_runs SET snapshot=$1,source_run='source101',task_inputs=$2 WHERE run_id='source102'`,[company,{device_binding:{profile,device_serial:'4311010223'}}]);
+   await admin.query(`UPDATE ${schema}.company_config_runs SET snapshot=$1,source_run=$2,task_inputs=$3 WHERE run_id='source102'`,[company,sourceRun,{device_binding:{profile,device_serial:'4311010223'}}]);
+   if(sourceRun===null){
+    await admin.query(`UPDATE ${schema}.leadgen_videos SET transcript=$1,judgment_config=$2 WHERE video_id=$3`,
+      ['今天是人工智能报名课程。',{...binding,policy_id:company.policy_id},vid]);
+    await admin.query(`INSERT INTO ${schema}.company_config_runs VALUES($1,$2,1,$3,$4,'{}',null)`,
+      [company.company_id,company.tenant_id,scope.run,company]);
+   }
    return evidence;
   },async readRows(){return {comments:(await admin.query(`SELECT * FROM ${schema}.leadgen_comments`)).rows,leads:(await admin.query(`SELECT * FROM ${schema}.leadgen_leads`)).rows,outbox:(await admin.query(`SELECT * FROM ${schema}.leadgen_bridge_outbox`)).rows};}};
 }

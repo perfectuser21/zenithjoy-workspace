@@ -7,7 +7,7 @@ const {readCollectionAccountBinding}=require('./company-config-lib.js');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RUN=/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/;
 const fail=code=>{throw Error(`COMMITTED_PARTIAL_${code}`);};
-const OPS=new Set(['score_scope','score','score_recovery','score_exclusion_readback','policy_review','score_readback','mark_leads','mark_readback']);
+const OPS=new Set(['score_scope','score','score_input','score_submit','score_recovery','score_exclusion_readback','policy_review','score_readback','mark_leads','mark_readback']);
 function explicitIds(input,sourceRun){
  if(!Object.hasOwn(input,'committed_partial_ids'))return null;
  const ids=input.committed_partial_ids;
@@ -190,4 +190,4 @@ async function prepareNewCommentMetadata(comment,owned,{lineKey,run,binding,veri
  return {...comment,accountType:original.account_type,profileIp:original.profile_ip,region:original.region};
 }
 
-module.exports={explicitIds,admittedRows,contains,certify,certificationReadback,metadataSnapshot,metadataSnapshotHash,completeMetadata,metadataReadback,verifyCompletedMetadata,validateNewCommentMetadata,prepareNewCommentMetadata};
+module.exports={explicitIds,readFrozen,admittedRows,contains,certify,certificationReadback,metadataSnapshot,metadataSnapshotHash,completeMetadata,metadataReadback,verifyCompletedMetadata,validateNewCommentMetadata,prepareNewCommentMetadata};

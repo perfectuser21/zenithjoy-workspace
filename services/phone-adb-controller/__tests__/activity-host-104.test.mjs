@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
-import {createHash} from 'node:crypto';import {pathToFileURL} from 'node:url';import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';import {spawnSync} from 'node:child_process';
 const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/activity-host-104.json',import.meta.url)));
 const implementation=new URL('../activity-host-104.mjs',import.meta.url),hash=x=>createHash('sha256').update(x).digest('hex');
 const roots=[];const toolchain=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'activity104-tools-')));roots.push(toolchain);
@@ -36,6 +37,48 @@ test('real frozen 104 accepts an explicit current runtime before any PG or order
  const api=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/runtime-deps.mjs')));
  // The original source fails RUNTIME_NOT_PINNED; new source must validate the separately frozen context first.
  await assert.rejects(api.createRuntimeDeps(f.context,f.context.verification['104']),/PARENT_CREDENTIAL_ENV_REQUIRED/);
+});
+test('104 packaged qualification reads legacy and bound 103 Agent scores without spoofing a provider response',async()=>{
+ const f=setup();
+ for(const name of ['company-config-lib.js','judge-comment.js'])fs.writeFileSync(path.join(f.context.runtime_root,name),'module.exports={}');
+ fs.writeFileSync(path.join(f.context.runtime_root,'leadgen-policy-review.js'),"throw Error('old phone scoring verifier loaded')");
+ const receipt=await candidate(f);
+ const packagePath=path.join(f.targetRoot,'business-runtime/package.json');
+ const files=['leadgen-policy-review.js','leadgen-score-context.js','leadgen-frozen-policy-evidence.js'];
+ for(const name of files){
+  const relative='business-runtime/'+name;
+  assert.ok(receipt.sha256[relative],`missing frozen score source ${name}`);
+  assert.equal(receipt.sha256[relative],hash(fs.readFileSync(path.join(f.targetRoot,relative))));
+ }
+ const runtime=fs.readFileSync(path.join(f.targetRoot,'outreach104/runtime-deps.mjs'),'utf8');
+ assert.match(runtime,/score=createRequire\(new URL\('\.\.\/business-runtime\/package\.json',import\.meta\.url\)\)\('\.\/leadgen-policy-review\.js'\)/);
+ assert.doesNotMatch(runtime,/score=req\(/);
+ assert.match(runtime,/const result=await score\.verifyStoredScore\(comment,frozen\[0\]\.snapshot\)/);
+ const policy=createRequire(packagePath)('./leadgen-policy-review.js');
+ const snapshot={company_id:'company',tenant_id:'tenant',version:4,policy_id:'policy',
+  runtime_config:{comment_scoring:{audiences:[{id:'audience',fields:{'意向信号':'咨询流程'}}]}}};
+ const agentIdentity={task_id:'11111111-1111-4111-8111-111111111111',run_id:'22222222-2222-4222-8222-222222222222',activity_key:'scoring',action_id:'score-action',attempt:1,tool_action:'score-submit'};
+ const row={id:'33333333-3333-4333-8333-333333333333',line_key:'fixture',harvest_batch:'source102',
+  comment_body:'我想咨询流程',source_video:'报名流程介绍',source_video_url:'https://v.douyin.com/test/'};
+ const proof={audience_id:'audience',matched_rule:'咨询流程',comment_signal:'咨询流程',video_signal:'流程介绍',exclusion_rule:null,reason:'咨询与视频相关'};
+ const agent={provider:'codex',agent_identity:agentIdentity,input_sha256:'a'.repeat(64),answer_sha256:'b'.repeat(64),
+  policy_reference_mode:'frozen-fields-v1',policy_evidence:proof};
+ const legacy={model:'legacy-model',response_id:'legacy-response'};
+ const save=audit=>{
+  const result={grade:'A',relevance:'相关',reason:proof.reason,audit};
+  return {...row,relevance:result.relevance,intent_grade:result.grade,judgment_reason:result.reason,
+   judgment_config:policy.makeSingleScoreAudit(row,snapshot,result,{run_id:agentIdentity.run_id,
+     company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id})};
+ };
+ const original=save(legacy),bound=save(agent);
+ assert.equal(policy.verifyStoredScore(original,snapshot).response_id,'legacy-response');
+ assert.deepEqual(policy.verifyStoredScore(bound,snapshot).agent_identity,agentIdentity);
+ assert.equal(policy.verifyStoredScore(bound,snapshot).provider,'codex');
+ assert.equal(policy.verifyStoredScore(bound,snapshot).response_id,undefined);
+ assert.equal(policy.verifyStoredScore({...bound,comment_body:'被替换的评论'},snapshot).status,'unknown');
+ assert.equal(policy.verifyStoredScore(save({...agent,agent_identity:{...agentIdentity,activity_key:'send_dm'}}),snapshot).status,'unknown');
+ assert.equal(policy.verifyStoredScore(save({...agent,response_id:'fake-provider-id'}),snapshot).status,'unknown');
+ assert.equal(policy.verifyStoredScore(save({...legacy,response_id:undefined}),snapshot).status,'unknown');
 });
 test('wrong authorization/root/order/source rejects before runtime module execution',async()=>{
  const f=setup();await candidate(f);const api=await import(pathToFileURL(path.join(f.targetRoot,'outreach104/runtime-deps.mjs')));
@@ -115,7 +158,7 @@ test('actual assembled runtime loads admitted PG closure; bad scope dispatches z
  try{
   const wrong={...f.context,company_id:'other'};await assert.rejects(api.createRuntimeDeps(wrong,wrong.verification['104']),/104_CONTEXT_CHANGED/);assert.deepEqual(globalThis.activity104Effects,{module:0,order:0,query:0});
   await assert.rejects(api.createRuntimeDeps(f.context,{...f.context.verification['104'],record_id:'other'}),/104_CONTEXT_SCOPE/);assert.equal(globalThis.activity104Effects.module,0);
-  const d=await api.createRuntimeDeps(f.context,f.context.verification['104']);await d.close();assert.deepEqual(globalThis.activity104Effects,{module:6,order:1,query:0});
+  const d=await api.createRuntimeDeps(f.context,f.context.verification['104']);await d.close();assert.deepEqual(globalThis.activity104Effects,{module:5,order:1,query:0});
  }finally{for(const[k,v]of Object.entries(env))if(v===undefined)delete process.env[k];else process.env[k]=v;delete globalThis.activity104Effects;}
 });
 

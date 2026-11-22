@@ -77,6 +77,33 @@ test('没有同Source发行的模型/parser/订单域时score首IO拒；不能�
  r.seal();
 });
 
+test('真实PG：103 Agent 提交丢失回执后只读回，双并发和旧评分审计兼容',async t=>{
+ const f=await fixture(t);f.scope.run=randomUUID();await f.seedNative({sourceRun:null});
+ const a=await f.createPool(),b=await f.createPool();
+ t.after(async()=>{await Promise.all([a.transport.close(),b.transport.close()]);});
+ const {queueRequest}=require('../leadgen-queue.js');
+ const identity={task_id:f.scope.task_id,run_id:f.scope.run,activity_key:'scoring',action_id:'bound-score',attempt:1,tool_action:'submit-score'};
+ let hiddenModelCalls=0;
+ const deps={execution:{task_id:identity.task_id,run_id:identity.run_id,run:f.scope.run,line:f.scope.line},
+  agentScoreIdentity:identity,freezeCompanyConfig:async()=>f.company,
+  judgeComment:async()=>{hiddenModelCalls++;throw Error('unexpected model effect');}};
+ const base={line:f.scope.line,run:f.scope.run,ids:[f.id],sources:{[f.id]:'source102'},committed_partial_ids:[f.id],limit:1};
+ const original=await queueRequest(a.pool,{...base,op:'score_input'},deps);
+ assert.equal(original.comment_body,'在哪里报名');assert.equal(original.video_transcript,'今天是人工智能报名课程。');
+ const submit={...base,op:'score_submit',input_sha256:original.input_sha256,score:{grade:'A',policy_evidence:{
+   audience_id:'audience',matched_rule:'报名',comment_signal:'报名',video_signal:'人工智能',
+   exclusion_rule:null,reason:'评论者询问报名方式'}}};
+ f.control.loseScoreResultCommit=true;
+ const results=await Promise.allSettled([queueRequest(a.pool,submit,deps),queueRequest(b.pool,submit,deps)]);
+ assert.equal(results.filter(x=>x.status==='rejected'&&x.reason.message==='FIXTURE_SCORE_RESULT_ACK_LOST').length,1);
+ assert.equal(results.filter(x=>x.status==='fulfilled'&&x.value.already_committed===true).length,1);
+ const recovered=await queueRequest(a.pool,{...base,op:'score_recovery'},deps);
+ assert.equal(recovered.scored,1);assert.equal(recovered.verified,true);
+ const read=await f.readRows();
+ assert.equal(read.comments[0].judgment_config.model_audit.provider,'codex');assert.equal(read.comments[0].judgment_config.model_audit.response_id,undefined);
+ assert.equal(f.calls.filter(sql=>sql.includes('SET relevance=')).length,1);
+ assert.equal(hiddenModelCalls,0);assert.equal(read.outbox.length,0);assert.equal(read.leads.length,0);
+});
 test('两Activity完整业务fixture：单次评分/原生parser/标人事务/原订单锁/同marker Feishu读回',async t=>{
  assert.equal(typeof producerModule.startNativeScoringProducers,'function','缺父owned模型/Python/订单producer，不能启用普通103');
  const f=await fixture(t);await f.seedNative();

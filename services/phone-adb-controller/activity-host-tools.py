@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import os
 import re
 import stat
 import sys
@@ -242,9 +243,12 @@ def method_input103(context):
             or any(not isinstance(task.get(k), str) or not task[k].strip() for k in ['task_id', 'run_id', 'run_tag'])
             or type(c.get('verification', {}).get('policy_version')) is not int or c['verification']['policy_version'] < 1):
         raise ValueError('ACTIVITY_HOST_103_INPUT_INVALID')
-    return {'workflow': '103', 'comment_ids': ids, 'sources': sources,
+    method = {'workflow': '103', 'comment_ids': ids, 'sources': sources,
             'source_commit': source, 'task': task, 'policy_version': c['verification']['policy_version'],
             'input_mode': 'committed_partial_ids', 'source_run': None, 'limit': 1, 'budget_max': 1}
+    if c['verification'].get('agent_score_mode') == 'activity-agent-v1':
+        method['agent_score_mode'] = 'activity-agent-v1'
+    return method
 
 
 def render102(original, method):
@@ -284,9 +288,19 @@ def instructions(ops, original, method=None):
               '101的discover与discover_readback都必须传video.metrics：同一完整原始metrics对象。discover_readback使用原discover请求中的video及metrics，不只传video_id/video_url；不得重做已成功discover或自行补造metrics。',
               'ACTION_NAME是持久动作身份：同名同参数只读回。仅terminal且data.dispatched=false可按allowed_operations修正并使用新action_name；unknown不得换名重发。',
               '只按原合同和当前Skill交付证据，不修改合同、Skill、上下文、工具或Checker；是否通过仍由独立Checker判定。']
+    if method and method.get('workflow') == '103' and 'score_input' in ops.get('scoring', []):
+        lines += ['Agent评分入口：company_config 冻结政策后用 score_input 读取唯一评论原文、视频标题与转写、政策；使用同一 ids/sources/committed_partial_ids。',
+                  '若冻结Skill要求Agent评分，只评定一次；用 score_submit 传原 input_sha256 和 score={grade,policy_evidence}。后者字段为 audience_id, matched_rule, comment_signal, video_signal, exclusion_rule, reason。不得自填模型响应ID。',
+                  'score_submit 写库时不会运行任何模型；回执未知只执行原 score_recovery / score_readback。旧 score 只供原方法兼容。']
     active = original
+    if method and method.get('agent_score_mode') == 'activity-agent-v1':
+        lines[-1] = 'score_submit 写库时不会运行任何模型；回执未知只执行原 score_recovery / score_readback。'
+        active = replace_once(active, 'score必须传op=score,ids同清单,sources同冻结映射,committed_partial_ids同清单,source_run=null,limit=1,budget_max=1；',
+                              'score_input必须传原冻结范围；用score_submit交本Activity的结论和原输入摘要；')
+        active = replace_once(active, 'score_scope→score（ids,sources,limit1,budget_max1）',
+                              'score_input→本Activity评分一次→score_submit')
     if method:
-        active = original+'\n本轮103冻结执行输入：\n'+json.dumps(method, ensure_ascii=False, sort_keys=True)+'\n' if method.get('workflow') == '103' else render102(replace_once(original, typed.COLLECTION_INLINE_GUIDANCE, typed.COLLECTION_REFERENCE_GUIDANCE), method)
+        active = active+'\n本轮103冻结执行输入：\n'+json.dumps(method, ensure_ascii=False, sort_keys=True)+'\n' if method.get('workflow') == '103' else render102(replace_once(original, typed.COLLECTION_INLINE_GUIDANCE, typed.COLLECTION_REFERENCE_GUIDANCE), method)
     return active+'\n冻结Activity业务操作与拒绝回执补充：\n'+'\n'.join(lines)+'\n'+PHONE_INSTRUCTIONS+'\n'
 
 
@@ -363,6 +377,42 @@ def phone_deadline(c,activity,kind,args):
     tools = replace_once(tools, '  return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=420)', '''  remaining=(phone_deadline(c,key,kind,args)-time.time()*1000)/1000
   if remaining<=0:raise ValueError('ABSOLUTE_DEADLINE')
   return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=min(420,remaining))''')
+    return tools, scope
+
+
+def agent_score_identity(c, activity):
+    task = c['tasks']['103']
+    try:
+        current = json.loads(pathlib.Path(os.environ['COMMANDER_ACTIVITY_INPUT_FILE']).read_text())
+        identity = current['identity']
+        action = sys.argv[2]
+        attempt = identity.get('attempt', 1)
+        if (current['activity_key'] != activity or activity != 'scoring'
+                or current.get('transport') != 'codex-cli'
+                or any(identity.get(key) != task[key] for key in ('task_id', 'run_id'))
+                or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', identity.get('action_id', ''))
+                or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', action)
+                or type(attempt) is not int or attempt < 1):
+            raise ValueError('AGENT_SCORE_SCOPE')
+    except (KeyError, IndexError, TypeError, ValueError, OSError) as error:
+        raise scope_rejection('AGENT_SCORE_HOST_IDENTITY') from error
+    return {key: identity[key] for key in ('task_id', 'run_id', 'action_id')} | {
+        'activity_key': activity, 'attempt': attempt, 'tool_action': action}
+
+
+def patch_agent_score(tools, scope, *, use_agent_only=False):
+    legacy = '' if use_agent_only else "'score',"
+    scope = replace_once(scope, "'scoring':{'company_config','score_scope','score',",
+                         "'scoring':{'company_config','score_scope',"+legacy+"'score_input','score_submit',")
+    tools = replace_once(tools, "  command=[c['node'],str(P/'business.mjs')]",
+        """  command=[c['node'],str(P/'business.mjs')]
+  score_identity=_host.agent_score_identity(c,key) if i['op'] in {'score_input','score_submit'} else None""")
+    tools = replace_once(tools, "  return subprocess.run(command,input=json.dumps(i),capture_output=True,text=True,env=environment(c),timeout=420)",
+        """  env=environment(c)
+  if score_identity is not None:
+   env['ZJ_103_AGENT_SCORE_IDENTITY']=json.dumps(score_identity,sort_keys=True)
+  return subprocess.run(command,input=json.dumps(i),capture_output=True,text=True,env=env,timeout=420)""")
+    tools = replace_once(tools, 'len(encoded)<12000 else', "len(encoded)<12000 or (kind=='business' and json.loads(args[0]).get('op')=='score_input') else")
     return tools, scope
 
 
@@ -471,6 +521,8 @@ def assemble(base, target, *, workflow='101', context=None):
     if context is not None:
         verify_proof_manifest(context, target)
     tools, scope = patch_sources(raw['tools.py'], raw['tool_scope.py'])
+    if workflow == '103':
+        tools, scope = patch_agent_score(tools, scope, use_agent_only=method.get('agent_score_mode') == 'activity-agent-v1')
     ops = business_ops(scope)
     files = {'tools.py': tools, 'tool_scope.py': scope, 'TOOLS.txt': instructions(ops, raw['TOOLS.txt'], method), 'TOOLS-base.txt': raw['TOOLS.txt'],
              'activity-host-tools.py': pathlib.Path(__file__).read_text(),

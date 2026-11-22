@@ -12,7 +12,7 @@ for(const [i,workflow]of names.entries())test('Workflow '+(101+i)+' derives its 
   assert.equal(a.order,n+1);assert.deepEqual(a.budget,a.acceptance.document.budget);assert.deepEqual(a.failure,a.acceptance.document.failure);
   assert.ok(a.acceptance.criteria.some(x=>x.source_pointer.startsWith('/outputs/')));const spec=p.profile.skill_runtime.activities[a.key];
   assert.equal(spec.checker.mode,'agent');assert.equal(spec.checker.entry,undefined);assert.equal(spec.checker.required_checks,undefined);
-  assert.equal(spec.allow_empty,a.failure.empty_ok.length>0);assert.equal(a.runtime.checker_repair,original(101+i).contract.activities.find(x=>x.key===a.key).runtime.checker_repair);
+  assert.equal(spec.allow_empty,a.failure.empty_ok.length>0);assert.deepEqual(a.runtime.checker_repair,original(101+i).contract.activities.find(x=>x.key===a.key).runtime.checker_repair);
  }
 });
 test('actual registered B authority drift and incomplete criteria are rejected',()=>{
