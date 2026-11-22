@@ -1865,7 +1865,7 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "7c090977622ea6ecaf411c085bb45f9cd220e0a9",
+      "method_revision": "d2676c3d5aa843d0965d98b199762a9de7c26746",
       "contract_sha256": "83fa5b1a44972ed155da849cefcf1dbd647aa2949c72dd038b6fe53004f00a5e"
     },
     "skill_runtime": {
@@ -2028,7 +2028,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "3ae77e425b6a3f3041d28c5c6b36ba80223213d7bec328b84e7fea4e43e4f734",
       "services/phone-adb-controller/leadgen-score-context.js": "ddaf64748ce057d1a3c3f6fea915120a513279d1927d9d66e633b95509c6cabc",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "695373ed10e018c2d26e6832448d126781b3d05ea71c5bfcb86af68e89d278a2",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "872b30b050f008601b69893895eb717c19a543a36c6d43bbe7af9fff9e88961a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "d57b28135f4192242b643899f71b2a20cfc8a08fec9a2421cb786f9df3838e06",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a"
     }
