@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.12.11
+  version: 0.12.12
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -52,7 +52,8 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 5.6.0
+    version: 5.6.1
+    required_host_tools: ["phone", "business", "metrics", "fetch-native", "proof"]
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -342,7 +343,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.13.1
+        version: 0.13.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs

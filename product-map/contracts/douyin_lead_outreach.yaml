@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.9.3
+  version: 0.9.4
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -47,7 +47,8 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 5.3.0
+    version: 5.3.1
+    required_host_tools: ["phone", "brain", "fetch-native", "outreach", "outreach-proof"]
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -157,7 +158,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 1.4.0
+        version: 1.4.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -752,7 +753,8 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 6.1.1
+    version: 6.1.2
+    required_host_tools: ["phone", "fetch-native", "outreach", "outreach-phone", "outreach-proof"]
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -900,7 +902,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-send-dm
-        version: 1.4.1
+        version: 1.4.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1131,7 +1133,8 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 3
-    version: 4.1.0
+    version: 4.1.1
+    required_host_tools: ["outreach"]
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -1247,7 +1250,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-write-back
-        version: 1.2.0
+        version: 1.2.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1443,7 +1446,8 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 3.5.0
+    version: 3.5.1
+    required_host_tools: ["native-readback", "phone", "brain", "outreach", "fetch-native"]
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1532,7 +1536,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.7.0
+        version: 0.7.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs

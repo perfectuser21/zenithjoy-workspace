@@ -111,8 +111,10 @@ export function deriveQualificationAgentHost({files, expected, frozenContract, c
     Object.keys(files).length===Object.keys(expected).length &&
     Object.entries(files).every(([name,bytes])=>hash(bytes)===expected[name]),'SOURCE');
   const target = frozenContract?.activities?.find(item=>item.key===activity);
+  const document = target?.acceptance?.document;
+  const required = document?.required_host_tools;
   need(frozenContract?.workflow===workflow &&
-    target?.acceptance?.document?.version==='3.6.0','CONTRACT');
+    (required === undefined ? document?.version==='3.6.0' : newTools.every(tool=>required.includes(tool))),'CONTRACT');
   const tools = qualificationAgentTools(hostTools);
   const result = {...files};
   const text = name => result[name].toString('utf8');
