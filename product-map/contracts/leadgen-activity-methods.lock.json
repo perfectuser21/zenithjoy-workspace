@@ -344,14 +344,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
           "revision": "contract",
-          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+          "sha256": "aeed6f9555b424ca38bd0a20a0a8c13957ac4bdc5115a00f685f68e231b99d48"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
           "revision": "contract",
-          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+          "sha256": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a"
         },
         {
           "kind": "code",
@@ -648,13 +648,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+      "code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
-        "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
+        "previous_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+        "current_code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
+        "reason": "102 资格恢复常规文件和媒体工具，102 收尾补充本轮截图归档。现有业务输入输出、宿主调用和独立验收契约保持一致。"
       }
     },
     "douyin_video_processing.dedup": {
@@ -689,14 +689,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
           "revision": "contract",
-          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+          "sha256": "aeed6f9555b424ca38bd0a20a0a8c13957ac4bdc5115a00f685f68e231b99d48"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
           "revision": "contract",
-          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+          "sha256": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a"
         },
         {
           "kind": "code",
@@ -993,13 +993,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+      "code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
-        "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
+        "previous_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+        "current_code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
+        "reason": "102 资格恢复常规文件和媒体工具，102 收尾补充本轮截图归档。现有业务输入输出、宿主调用和独立验收契约保持一致。"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1326,14 +1326,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
           "revision": "contract",
-          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+          "sha256": "aeed6f9555b424ca38bd0a20a0a8c13957ac4bdc5115a00f685f68e231b99d48"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
           "revision": "contract",
-          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+          "sha256": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a"
         },
         {
           "kind": "code",
@@ -1343,7 +1343,14 @@
           "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
         }
       ],
-      "code_digest": "bd093f94b495276cb731286d200ab039c7bee250c0771d1e8adf277b1f7438ca"
+      "code_digest": "66957146852c0a64eb12443b23ad75cf7907530420f5c836d6569d909cee0347",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reviewed_by": "codex:team1",
+        "previous_code_digest": "bd093f94b495276cb731286d200ab039c7bee250c0771d1e8adf277b1f7438ca",
+        "current_code_digest": "66957146852c0a64eb12443b23ad75cf7907530420f5c836d6569d909cee0347",
+        "reason": "102 资格恢复常规文件和媒体工具，102 收尾补充本轮截图归档。现有业务输入输出、宿主调用和独立验收契约保持一致。"
+      }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.8.5",
@@ -1377,14 +1384,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
           "revision": "contract",
-          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+          "sha256": "aeed6f9555b424ca38bd0a20a0a8c13957ac4bdc5115a00f685f68e231b99d48"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
           "revision": "contract",
-          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+          "sha256": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a"
         },
         {
           "kind": "code",
@@ -1681,13 +1688,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+      "code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
-        "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
+        "previous_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+        "current_code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
+        "reason": "102 资格恢复常规文件和媒体工具，102 收尾补充本轮截图归档。现有业务输入输出、宿主调用和独立验收契约保持一致。"
       },
       "method_compatibility": {
         "kind": "contract_preserving",
@@ -1730,14 +1737,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-candidate.mjs",
           "revision": "contract",
-          "sha256": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7"
+          "sha256": "aeed6f9555b424ca38bd0a20a0a8c13957ac4bdc5115a00f685f68e231b99d48"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/qualification-agent-decision.mjs",
           "revision": "contract",
-          "sha256": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b"
+          "sha256": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a"
         },
         {
           "kind": "code",
@@ -2034,13 +2041,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+      "code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "补齐同工作流冻结依赖的代码来源列表；此Activity的Skill、验收、输入输出契约均与对照版本一致。",
         "reviewed_by": "codex:team1",
-        "previous_code_digest": "d039387c48cea61c9dc27e8d1130013fcd68a90354be7ded8eabfdb9cd39af19",
-        "current_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8"
+        "previous_code_digest": "791a9220f889532fd3e7818b0754b9687ea94f38e814302d7deb00b1effaecc8",
+        "current_code_digest": "9939544714c799499d77a73d79f69cc231195ae03d56ece1bb1845110bee181d",
+        "reason": "102 资格恢复常规文件和媒体工具，102 收尾补充本轮截图归档。现有业务输入输出、宿主调用和独立验收契约保持一致。"
       }
     },
     "douyin_comment_scoring.scoring": {
