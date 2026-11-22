@@ -134,3 +134,19 @@ for(const [label,change] of [
   assert.equal(receipts[0].provider_received,'not_sent');
   assert.equal(receipts[0].request_evidence,undefined);
 });
+
+test('未收到主判响应时不交可供验收的正面回执',async t=>{
+  const f=await fixture(t),receipts=[];
+  const evidence={transcript:'原始转写',visual:{sha256:'a'.repeat(64),frames:[{label:'B',pts_seconds:10,text:'画面证据'}]}};
+  const {primaryJudgeEvidence}=await import(pathToFileURL(path.join(
+    path.dirname(f.input.artifact_dir),'host/qualification/visual-evidence.mjs')));
+  const httpPost=f.createAuditedHttp({
+    stage:'judge',audit:receipt=>receipts.push(receipt),judgeEvidence:evidence,timeout:()=>1000,
+    fetchImpl:async()=>{throw Error('test connection lost');},
+  });
+  await assert.rejects(judge.judgePrimary(primaryJudgeEvidence(evidence.transcript,evidence.visual),
+    'fixture policy',{apiKey:'fixture',httpPost}),/PROVIDER_REQUEST_UNCONFIRMED/);
+  assert.equal(receipts.length,1);
+  assert.equal(receipts[0].provider_received,'unknown');
+  assert.equal(receipts[0].request_evidence,undefined);
+});
