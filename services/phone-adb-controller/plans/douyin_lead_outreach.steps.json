@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_lead_outreach",
   "brain_workflow_key": "douyin_lead_outreach",
-  "contract_sha256": "0d7f676dc71da0bce97e6dd51f4201cad6dd4ede373d811445608b6bdaf11157",
+  "contract_sha256": "c7e97196d680b4173895791ec499b27066a37adebb5b278a84952e29978b4531",
   "promotion": {
     "min_consecutive_pass": 20
   },
