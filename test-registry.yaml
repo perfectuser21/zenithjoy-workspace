@@ -12061,6 +12061,15 @@ tests:
     execution: "ci-l3-code.yml / openclaw-scripts-test discovers the pinned 102 qualification helper regression"
     note: "同片视听输入一次提交，防止恢复重复主判，拒绝缺失或串片证据；不访问真机或模型"
 
+  - id: qualification-activity-agent-freeze
+    path: services/phone-adb-controller/__tests__/qualification-agent-integration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test discovers the frozen qualification adapter test"
+    note: "102资格Activity原件交接、范围拒绝、原宿主散列恢复与长转写；不接触真机、业务数据库或外部模型"
+
   - id: compose-comment-native-handoff
     path: services/phone-adb-controller/__tests__/compose-comments.test.mjs
     type: integration
