@@ -217,6 +217,10 @@
         },
         "retry_safe": { "type": "boolean" },
         "implementation_bindings": { "type": "array", "items": { "$ref": "#/$defs/implementationBinding" } },
+        "required_host_tools": {
+          "type": "array", "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-zA-Z0-9_-]{1,100}$" }
+        },
         "delivery": {
           "type": "object", "additionalProperties": false, "required": ["schema"],
           "properties": {

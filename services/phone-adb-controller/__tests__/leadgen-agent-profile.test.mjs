@@ -45,3 +45,25 @@ test('101 页签与首屏卡片允许同一次运行的截图证据，同时保�
  assert.equal(validateRun({...common,...screenshots,cards_screenshot:'receipts/summary.json'}),false);
  assert.equal(validateRun({...screenshots,selected_page:common.selected_page,results_page:common.results_page}),false);
 });
+
+test('所有工作流的宿主工具注册从各自冻结活动契约投影', () => {
+ const byWorkflow={101:'douyin_video_discovery',102:'douyin_video_processing',103:'douyin_comment_scoring',104:'douyin_lead_outreach'};
+ for (const [id,workflow] of Object.entries(byWorkflow)) {
+  const profile=JSON.parse(fs.readFileSync(new URL('../leadgen-foundation/profiles/'+id+'.json',import.meta.url)));
+  const projected=projectAgentProfile(profile,{documents,workflow});
+  const expected=[...new Set(projected.contract.activities.flatMap(a=>a.acceptance.document.required_host_tools))].sort();
+  assert.ok(projected.contract.activities.every(a=>a.acceptance.document.required_host_tools.length));
+  assert.deepEqual(projected.profile.skill_runtime.host_tools.kinds,expected);
+ }
+});
+
+test('每个注册活动都用已有通用交件协议，产出与证据分开提交', () => {
+ for (const [i,workflow] of names.entries()) {
+  const profile=projectAgentProfile(original(101+i),{documents,workflow});
+  for (const activity of profile.contract.activities) {
+   const schema=activity.acceptance.document.delivery?.schema;
+   assert.ok(schema?.properties?.outputs && schema.properties.evidence, workflow+'.'+activity.key);
+   assert.ok(schema.required.includes('outputs') && schema.required.includes('evidence'));
+  }
+ }
+});

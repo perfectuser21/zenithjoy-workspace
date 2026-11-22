@@ -12,7 +12,6 @@ import {relative} from './freeze.mjs';
 import {businessModuleSources} from './business-module-sources.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const {validateOutreachScope}=createRequire(import.meta.url)('../leadgen-outreach-scope.js');
-export const EXACT_ENV_KEYS=['LEADGEN_OUTREACH_MODE','LEADGEN_OUTREACH_SCOPE_FILE','WF_BRAIN_WORKFLOW','WFR_TAG','P','SERIAL','LEADGEN_LINE'];
 const ASR_TARBALLS=new Set(['cos-nodejs-sdk-v5-3.0.0.tgz','cos-fast-xml-parser-1.0.0.tgz','strnum-1.1.2.tgz'].map(n=>'_dependencies/asr-cos/tarballs/'+n));
 export function sourceArchive(file){
  const doc=JSON.parse(fs.readFileSync(file));need(doc.schema==='leadgen-host-source/v1'&&doc.files,'SOURCE_ARCHIVE');
@@ -81,7 +80,7 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
    const target=path.join(temporary,'outreach');await assembleActivity104Host({baseRoot:base,localBaseRoot:base,targetRoot:target,context:c,
     pgHelper:{path:path.join(HERE,'../activity-host-pg.mjs'),sha256:hash(fs.readFileSync(path.join(HERE,'../activity-host-pg.mjs')))}});
    Object.assign(files,directoryFiles(target));
-   files['TOOLS.txt']+='\n本正式profile由宿主固定为exact范围：outreach-scope.json为原runtime-definition读取的7字段私有文件；LEADGEN_OUTREACH_MODE=exact和LEADGEN_OUTREACH_SCOPE_FILE由独立worker及每次invoke进程绑定，唯一原订单及来源与context.verification[104]一致，批准正文和额度由context.authorization_asset校验。禁止Agent改环境、切company_queue或另选订单；不因Skill的一般示例扩充宿主工具权限。prepared或未知结果仍仅原动作读回，不另用text-input/tap-evidence补发。\n';
+   files['TOOLS.txt']+='\n本正式profile由宿主固定为exact范围：outreach-scope.json为原runtime-definition读取的7字段私有文件；精确范围仅由受管宿主工具启动入口绑定，唯一原订单及来源与context.verification[104]一致，批准正文和额度由context.authorization_asset校验。禁止Agent改环境、切company_queue或另选订单；不因Skill的一般示例扩充宿主工具权限。prepared或未知结果仍仅原动作读回，不另用text-input/tap-evidence补发。\n';
   }else{
    const target=path.join(temporary,'pg');need(c.verification.pg_deployment,'PG_DEPLOYMENT_REQUIRED');
    const pg=await assembleActivityPgHost({baseRoot:base,targetRoot:target,runtimeRoot:c.runtime_root,sourceCommit:c.source_commit,
@@ -120,13 +119,13 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   }
   files['agent-tools.txt']=files['TOOLS.txt']+'\n交付协议：最终只输出一个 JSON 对象，成功提案必须包含顶层 `outputs`。\n'
    +'`outputs` 的键是合同声明的对象类型，值按 cardinality 提交单对象或数组；字段使用当前合同中的原名。把已核实的字段放进对象，禁止只写在提案顶层、解释文字或 metrics。\n'
-   +'按工具实际回执填写 `evidence`：列出本次真实文件的相对路径及其用途，例如从工具响应 receipt 得到的 receipts/ 实际文件名。不要猜测路径或用旧运行证据；外部原件说明实际工具和证据标识。交付不齐时如实报告，独立 Checker 仍逐项核验。\n';
+   +'按工具实际回执填写 `evidence`：列出本次真实文件的相对路径及其用途，例如从工具响应 receipt 得到的 receipts/ 实际文件名。不要猜测路径或用旧运行证据；外部原件说明实际工具和证据标识。交付不齐时如实报告，独立 Checker 仍逐项核验。\n'
+   +'收尾若契约需要本轮桌面截图，归位后、释放设备资源前，使用已注册的 snapshot-evidence 生成以本轮 run_tag 加连字符开头的原图，再用 fetch-native 归档到 native。用工具实际返回的路径交件。\n';
   if(workflow==='101')files['agent-tools.txt']+='\n本101冻结业务工具支持以下只读参数。discover_readback 加 include_handoff:true，返回该VID的真实持久 handoff（含comment_count和完整discovery_metrics）。'
    +'inspect_videos 加 include_discovery_protection:true，只读同一已取链VID的原前后保护字段、转写SHA256与 discovery_metrics_observed_at。保留原生 null，省略缺失不等于0。\n'
    +'invoke 返回 state=terminal、exit_code=0 和实际 evidence_ref 时，保留结果与回执名。在同一101宿主内，该 evidence_ref 的实际文件名对应独立Checker可读的 receipts/ 文件。'
    +'搜索入口、视频页签、筛选和卡片均按各自调用实际返回的文件名引用。执行Agent不必重新读取原回执，也不为补引用重做搜索、筛选或写入。'
    +'按已返回的真实证据和合同判断完成状态，已有视频的本轮观测写入和读回也可以完成；是否新增单独据原写入回执计数。\n'
-   +'收尾若本轮确实操作过App，用 close-app 和 return-safe-desktop 的原前台回执；持有资源时在归位后用 phone 的 snapshot-evidence 获得本次桌面截图，再用 fetch-native 保存到 native 证据根。引用原释放回执、锁空读回和本次归位证据。\n'
    +'run.progress 是独立Checker的只读核对入口；执行Agent根据本轮收尾工具结果交付Run状态，不要求提前读取该活动或Workflow的验收终态。\n';
   if(workflow==='102')files['agent-tools.txt']+='\n判重原始来源和本 run 普通认领范围已经冻结到 checker-input/upstream.json。读取该文件和当前数据库事实；其中 claim 是开工输入，不是已认领的回执。\n'
    +'qualification 在已完成主判后通过 business 的 inspect_videos 查询本轮已认领的同一 VID，真实返回 judgment_status、judgment_reason、transcript。\n'
@@ -172,20 +171,24 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   if(workflow==='104'){
    const s=c.verification['104'],scope={record_id:s.record_id,comment_id:s.comment_id,company_id:c.company_id,source_run:s.source_102_run,mark_run:s.source_103_run,target_douyin_id:s.target_douyin_id,line_key:c.line};
    validateOutreachScope({schema_version:1,...scope,run_tag:c.tasks['104'].run_tag,profile:c.profile,serial:c.serial});
-   const codex=profile.skill_runtime.codex;need(path.isAbsolute(codex?.command??'')&&hash(fs.readFileSync(codex.command))===codex.command_sha256,'CODEX_SOURCE');
    files['outreach-scope.json']=JSON.stringify(scope,null,2)+'\n';
    exactEnv={LEADGEN_OUTREACH_MODE:'exact',LEADGEN_OUTREACH_SCOPE_FILE:path.join(hostRoot,'outreach-scope.json'),WF_BRAIN_WORKFLOW:'douyin_lead_outreach',WFR_TAG:c.tasks['104'].run_tag,P:c.profile,SERIAL:c.serial,LEADGEN_LINE:c.line};
   }
-  if(workflow==='104'){
-   const codex=profile.skill_runtime.codex,quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
-   const verify="import fs from 'node:fs';import {createHash} from 'node:crypto';if(createHash('sha256').update(fs.readFileSync("+JSON.stringify(codex.command)+")).digest('hex')!=="+JSON.stringify(codex.command_sha256)+")throw Error('LEADGEN_CODEX_SOURCE');";
-   files['codex-exact']='#!/bin/sh'+'\nset -e\n'+quote(process.execPath)+' --input-type=module -e '+quote(verify)+'\n'
-    +Object.entries(exactEnv).map(([key,value])=>'export '+key+'='+quote(value)).join('\n')+'\nexec '+quote(codex.command)+' "$@"\n';
-  }
-  const worker='Object.assign(process.env,'+JSON.stringify(exactEnv)+');\nawait import('+JSON.stringify(pathToFileURL(kernel).href)+');\n';
+  const worker='await import('+JSON.stringify(pathToFileURL(kernel).href)+');\n';
   files['worker.mjs']=worker;
   for(const entry of profile.leadgen.worker_entries??[])files[relative(entry)]=worker;
   files['invoke.mjs']="import fs from 'node:fs';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';import path from 'node:path';const root=path.dirname(fileURLToPath(import.meta.url)),c=JSON.parse(fs.readFileSync(path.join(root,'context.json')));const r=spawnSync(c.python,[path.join(root,'tools.py'),...process.argv.slice(2)],{stdio:'inherit',env:{...process.env,..."+JSON.stringify(exactEnv)+"}});process.exit(r.status??1);\n";
+  const hostTools = profile.skill_runtime.host_tools;
+  if (hostTools?.kinds?.some(kind => kind === 'qualify-prepare' || kind === 'qualify-submit')) {
+   const {deriveQualificationAgentHost} = await import('../qualification-agent-candidate.mjs');
+   const decisionSource = 'services/phone-adb-controller/qualification-agent-decision.mjs';
+   const expected = Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, hash(bytes)]));
+   return deriveQualificationAgentHost({
+    files, expected, frozenContract: contract,
+    candidateSource: fs.readFileSync(path.join(profile.cwd, decisionSource), 'utf8'),
+    candidateSha256: profile.files[decisionSource], hostTools,
+   }).files;
+  }
   return files;
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}
 }

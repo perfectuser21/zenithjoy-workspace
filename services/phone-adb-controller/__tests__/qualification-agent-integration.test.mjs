@@ -36,7 +36,7 @@ test('候选仅改 qualification，冻结 Agent 证据并拒绝旧 Judge 工具'
   assert.doesNotMatch(revised.files['agent-tools.txt'],/tools.py qualify ACTION_NAME|一次ASR\+一次主判/);
 
   const qualification = revised.contract.activities.find(a=>a.key==='qualification');
-  assert.equal(qualification.runtime.checker_repair.effect_scope,'host_tools');
+  assert.equal(qualification.runtime.checker_repair,undefined);
   assert.match(JSON.stringify(qualification.acceptance.document),/Activity Agent/);
   assert.doesNotMatch(JSON.stringify(qualification.acceptance.document),/逐VID核对原生结构化主判选择和置信度/);
   assert.doesNotMatch(JSON.stringify(qualification.acceptance.document),/kind=qualify[、，。]/);
@@ -97,7 +97,7 @@ test('独立 102 入口冻结宿主、重启按原散列恢复，并拒绝遗漏
   f.profile.skill_runtime.host_tools={...tools,kinds:[...legacyKinds,'qualify']};
   await assert.rejects(()=>prepareCandidate(f),/QUALIFICATION_AGENT_CANDIDATE_PROFILE/);
   f.profile.skill_runtime.host_tools=qualificationAgentTools(f.profile.skill_runtime.host_tools);
-  const prepared=await prepareCandidate(f);
+  const prepared=await prepareLeadgenHost(f);
   await prepared.verifySource();
   const verified=spawnSync('python3',['-c','from pathlib import Path; import tools; tools._host.verify_host(Path.cwd(),tools.OPS)'],
     {cwd:prepared.profile.cwd,encoding:'utf8',env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});

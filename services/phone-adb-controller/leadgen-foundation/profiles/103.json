@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_comment_scoring.yaml",
             "activity_ref": "douyin_comment_scoring.scoring",
-            "contract_digest": "46bf8b583ee2b10f7481039dc67c734646dfdb32715bb40aaaa199dcf978fd82"
+            "contract_digest": "45b4da2527b83cb8c32bab70ae4e628ef3ba48ee6d2f14aafa943c0cf247c497"
           },
           "document": {
             "key": "scoring",
@@ -32,7 +32,37 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.10.0",
+            "version": "2.10.1",
+            "required_host_tools": [
+              "business"
+            ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "properties": {
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            },
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -406,7 +436,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_comment_scoring.yaml",
             "activity_ref": "douyin_comment_scoring.mark_leads",
-            "contract_digest": "24367209e4631579101500aa41c8e915970524efb746228a7ad1563a2dd0bcff"
+            "contract_digest": "1934f9365c5aff2891879721da4caa6b56687a58c09453cb342dc06f9c8404e0"
           },
           "document": {
             "key": "mark_leads",
@@ -422,7 +452,37 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "3.10.0",
+            "version": "3.10.1",
+            "required_host_tools": [
+              "business"
+            ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "properties": {
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            },
             "agent_recovery": {
               "max_additional_turns": 1
             },
@@ -943,8 +1003,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "a4e6631eb5caae21655a23fbcde767e4f3cc6b4c",
-      "contract_sha256": "17ffb0ead0dd47e2a65e7084faf312b2fda58a302cfde2b8e2b17480ec9c4c3e",
+      "method_revision": "d9a12322c9d5c6bce33f48f8f0a6d04c43503f2a",
+      "contract_sha256": "e32312931861cef0572b820bff84b242f87f8bd25c7b0667172daea6739ff910",
       "agent_score_mode": "activity-agent-v1"
     },
     "skill_runtime": {
@@ -1053,8 +1113,8 @@
       "services/phone-adb-controller/leadgen-agent-score.js": "467f213183943d2dbdbb4eb41faf806b158bb00e0eb48c0b445ba123a5b5ff39",
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/leadgen-committed-partial.js": "e5b443ecf4b0c0f6ee4cd9580883539f267cf41609016bcba02b26e4ce51230b",
-      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "158e713fff46c66ff3d4f94d4414deba5cb4f81add6f9ccc03a24ef4a53fc909",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
@@ -1062,7 +1122,7 @@
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
       "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
       "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
-      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "a66702f481a05be8db0928e3f7f6db86bb49a68919e94f9deb716bb88698aaff",
+      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff",
       "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
       "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
       "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
@@ -1080,8 +1140,8 @@
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/leadgen-score-exclusion.js": "95c83f218d0bac4b8afbf663eccac801399785f56f178b998ed1e12ca5496d81",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "24afc41780c93e7f5edbfb774614dd81ab8b170e08ca3bbcbabf20b206d4d168",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "1832d2fc0f24e5a3f42945fce93671364656dd371c15a0e0eea6d8cc9de5fbd2"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "aadf8639bbc0805f4b61bf3d324c46c9a613a021981243902f54c86619d95253",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "44ecd62674faf3b0866ba9a74fe0e1e97b177a13e53813d8765827b1d3ef16e3"
     }
   }
 }

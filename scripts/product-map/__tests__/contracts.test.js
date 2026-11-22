@@ -60,6 +60,17 @@ test('结构化实现引用允许契约来源版本，拒绝浮动main及越界�
 
 // ── 真实仓库 ────────────────────────────────────────────────────────────────
 
+test('Activity 可声明通用宿主工具能力，重复和非法能力名被拒绝', () => {
+  const ctx = fresh();
+  const activity = act(ctx, 'douyin_video_processing', 'qualification');
+  activity.required_host_tools = ['media-inspect', 'media-frames'];
+  assert.deepEqual(validateContracts(ctx), []);
+  activity.required_host_tools.push('media-inspect');
+  expectError(ctx, /required_host_tools/);
+  activity.required_host_tools = ['../frames'];
+  expectError(ctx, /required_host_tools/);
+});
+
 test('真实契约零错误', () => {
   assert.deepEqual(validateContracts(fresh()), []);
 });

@@ -70,8 +70,7 @@ function readHostBinding(context, inputFile, now) {
         inputFile !== path.join(actionDirectory, 'activity-input.json') ||
         input.activity_key !== 'qualification' || identity.activity_key !== 'qualification' ||
         input.transport !== 'codex-cli' || identity.task_id !== task.task_id || identity.run_id !== task.run_id ||
-        input.context?.execution_attempt !== attempt ||
-        input.activity_contract?.runtime?.checker_repair?.effect_scope !== 'host_tools') throw Error('SCOPE');
+        input.context?.execution_attempt !== attempt) throw Error('SCOPE');
     protectedDirectory(actionDirectory);
     protectedDirectory(directory);
     const sealed = protectedJson(path.join(actionDirectory, 'host-tools-binding.json'));

@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {buildContext,hash,canonical,need,readHostConfiguration} from './context.mjs';
 import {verifyBoundContract} from './profile-contract.mjs';
 import {freezeHost,recoverHost} from './freeze.mjs';
-import {assembleSources,prepareProof,EXACT_ENV_KEYS} from './qualification-agent-assembly.mjs';
+import {assembleSources,prepareProof} from './qualification-agent-assembly.mjs';
 function verifyProfile(profile){
  need(path.isAbsolute(profile.cwd)&&fs.realpathSync(profile.cwd)===profile.cwd,'PROFILE_ROOT');
  for(const [name,digest]of Object.entries(profile.files)){
@@ -39,7 +39,7 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
   receipt=recoverHost({directory:hostRoot,identity,expectedFiles});
  }else{
   const files=await assembleSources(assembly);
-  receipt=freezeHost({directory:hostRoot,identity,files,executableFiles:workflow==='104'?['codex-exact']:[]});expectedFiles=Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]));
+  receipt=freezeHost({directory:hostRoot,identity,files});expectedFiles=Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]));
  }
  if(workflow==='102'){
   // The emitted SDK must satisfy its original complete lock before a worker can act.
@@ -55,7 +55,6 @@ export async function prepareLeadgenHost({profile,run,verifySource=async()=>{},e
  };
  const skill_runtime=structuredClone(profile.skill_runtime);
  skill_runtime.tools='agent-tools.txt';
- if(workflow==='104'){const command=path.join(hostRoot,'codex-exact');need(!!(fs.statSync(command).mode&0o100),'CODEX_EXECUTABLE');skill_runtime.codex={...skill_runtime.codex,env_keys:[...new Set([...(skill_runtime.codex?.env_keys??[]),...EXACT_ENV_KEYS])],command,command_sha256:hash(fs.readFileSync(command))};}
  skill_runtime.host_tools={...skill_runtime.host_tools,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath)),entry:'invoke.mjs'};
  for(const spec of Object.values(skill_runtime.activities)){need(spec.checker?.mode==='agent','AGENT_CHECKER_REQUIRED');spec.checker.evidence.provider={...spec.checker.evidence.provider,command:process.execPath,command_sha256:hash(fs.readFileSync(process.execPath))};}
  if(workflow==='101'){
