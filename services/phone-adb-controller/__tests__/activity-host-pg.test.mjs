@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {installPreflightPg,preflightPgDeployment,preflightPgLockIdentity} from '../preflight-pg-dependencies.mjs';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/activity-host-pg.json',import.meta.url)));
-const fixture102=JSON.parse(readFileSync(new URL('./fixtures/activity-host-102.json',import.meta.url)));
+const fixture102=JSON.parse(readFileSync(new URL('../leadgen-foundation/sources/102.json',import.meta.url)));
 const implementation=new URL('../activity-host-pg.mjs',import.meta.url);
 const sha=b=>createHash('sha256').update(b).digest('hex');
 let f;

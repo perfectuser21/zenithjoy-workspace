@@ -61,7 +61,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -236,7 +236,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.preflight": {
@@ -364,7 +364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -546,7 +546,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -605,13 +605,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
+        "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.dedup": {
@@ -674,7 +674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -856,7 +856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -915,13 +915,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
+        "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_video_processing.qualification": {
@@ -989,7 +989,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -1171,7 +1171,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -1230,13 +1230,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
+        "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "核对序列化请求和原运行输入，保持既有 Activity 契约、Skill、外部请求内容及落库语义，成功响应的原回执增补可核验摘要。同步宿主对新模块的冻结校验。"
       }
     },
     "douyin_video_processing.collection": {
@@ -1299,7 +1299,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -1481,7 +1481,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -1540,7 +1540,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.6.2",
@@ -1602,7 +1609,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -1784,7 +1791,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -1843,13 +1850,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+      "code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 仅 collection 有超时取证配置及生成入口。该活动的方法正文、支持文件、预算、DoD、运行配置与独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617"
+        "previous_code_digest": "fb3312400a3ec9df403158f1613713b78f4a4cfe41f74fe84bd53bd5de7f5617",
+        "current_code_digest": "2f381fe56cc521b2da632a2cdad0c63240981259b0adc46440855fcdeda5f992",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1917,7 +1924,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -2092,7 +2099,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -2151,13 +2158,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2225,7 +2232,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -2400,7 +2407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -2459,13 +2466,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2528,7 +2535,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -2703,7 +2710,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -2762,13 +2769,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2831,7 +2838,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -3006,7 +3013,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -3065,13 +3072,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3134,7 +3141,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -3309,7 +3316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -3368,13 +3375,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3437,7 +3444,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-pg.mjs",
           "revision": "contract",
-          "sha256": "777bc905e3be8c4ae2ec441cdd09a3e38ff1f9c1fee329f15dd23be7f25d0367"
+          "sha256": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79"
         },
         {
           "kind": "code",
@@ -3612,7 +3619,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/sources/102.json",
           "revision": "contract",
-          "sha256": "30c4abd12fbc6ab8bc1e2dc4c346670b16a74ffb5743a4145f286f5fbf418324"
+          "sha256": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7"
         },
         {
           "kind": "code",
@@ -3671,13 +3678,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+      "code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享宿主新增条件仅在 102 collection 的显式配置下触发。该活动的方法闭包、预算、DoD、运行配置及独立验收条件逐项等同于基线。",
-        "reviewed_by": "codex-core-linux-independent",
-        "previous_code_digest": "e9dafdeb6d10aa859f447146a05a47b0ed876d845516750f8eb68af1ee875898",
-        "current_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf"
+        "previous_code_digest": "cddad3f7afce12cb039f22da4d111bc22dc4fba3c910ef9be18f629b30e94ccf",
+        "current_code_digest": "3a12eac8e065fae1300fa259946072cc1d927f82a56ef8e2ee74d70443df3558",
+        "reviewed_by": "Codex /root/review_102_receipt",
+        "reason": "解包对照确认共用归档仅改 102 资格主判的三个内部模块，PG 装配器只换相应的摘要，当前 Activity 的 Skill、契约和执行行为一致。"
       }
     }
   },
