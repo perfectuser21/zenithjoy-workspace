@@ -1,7 +1,7 @@
-import {assembleSources as assembleSharedSources, EXACT_ENV_KEYS, prepareProof} from './assembly.mjs';
+import {assembleSources as assembleSharedSources, prepareProof} from './assembly.mjs';
 import {qualificationAgentTools} from '../qualification-agent-candidate.mjs';
 
-export {EXACT_ENV_KEYS, prepareProof};
+export {prepareProof};
 
 // Keep the legacy entry readable for old callers. New profiles use the shared adapter.
 export function assembleSources(options) {

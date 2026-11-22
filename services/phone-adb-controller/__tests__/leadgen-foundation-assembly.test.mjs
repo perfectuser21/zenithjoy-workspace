@@ -48,6 +48,7 @@ for args in [['foreground'],['snapshot-evidence',run+'-fixture'],['tap-evidence'
    assert.ok(a.receipt.files['business-runtime/discovery-metrics-queue.js']);
   }
   if(workflow==='102'){
+   assert.match(tools,/收尾.*snapshot-evidence.*fetch-native/);
    const stop=a.profile.skill_runtime.activities.collection.stop_checker;
    assert.equal(stop.command,process.execPath);
    assert.equal(stop.command_sha256,createHash('sha256').update(fs.readFileSync(process.execPath)).digest('hex'));
@@ -85,7 +86,8 @@ for args in [['foreground'],['snapshot-evidence',run+'-fixture'],['tap-evidence'
    assert.deepEqual(Object.keys(exact).sort(),['record_id','comment_id','company_id','source_run','mark_run','target_douyin_id','line_key'].sort());
    assert.equal(exact.record_id,f.run.input.business.scope.record_id);assert.equal(exact.source_run,f.run.input.business.scope.source_102_run);
    assert.match(fs.readFileSync(path.join(a.profile.cwd,'invoke.mjs'),'utf8'),/LEADGEN_OUTREACH_MODE/);
-   assert.ok(a.profile.skill_runtime.codex.env_keys.includes('LEADGEN_OUTREACH_SCOPE_FILE'));
+   assert.deepEqual(a.profile.skill_runtime.codex, f.profile.skill_runtime.codex);
+   assert.equal(a.receipt.files['codex-exact'], undefined);
   }
   await a.verifySource();
   for(const name of Object.keys(a.receipt.files).filter(n=>n.endsWith('.mjs')&&!n.startsWith('asr-runtime/'))){const r=spawnSync(process.execPath,['--check',path.join(a.profile.cwd,name)],{encoding:'utf8'});assert.equal(r.status,0,name+': '+r.stderr);}
@@ -106,13 +108,17 @@ test('foundation recovery never recreates missing mutable proof evidence',async(
   await assert.rejects(prepareLeadgenHost(f),/LEADGEN_PROOF_MISSING/);assert.equal(fs.existsSync(proof),false);
  }finally{f.close();}
 });
-test('104 actual Codex child receives frozen exact scope without changing parent environment',async()=>{
+test('104 uses the common Agent launcher while the tool host owns the frozen exact scope',async()=>{
  const f=await foundationFixture('104');try{
   const binary=path.join(f.root,'codex-probe');fs.writeFileSync(binary,'#!/bin/sh\nprintf \'%s\\n\' "$LEADGEN_OUTREACH_MODE" "$LEADGEN_OUTREACH_SCOPE_FILE" "$1"\n',{mode:0o700});
   f.profile.skill_runtime.codex={command:binary,command_sha256:createHash('sha256').update(fs.readFileSync(binary)).digest('hex')};
-  const before=process.env.LEADGEN_OUTREACH_MODE,a=await prepareLeadgenHost(f),probe=spawnSync(a.profile.skill_runtime.codex.command,['probe'],{encoding:'utf8',env:{PATH:process.env.PATH,LEADGEN_OUTREACH_MODE:'company_queue'}});
-  assert.equal(probe.status,0,probe.stderr);assert.deepEqual(probe.stdout.trim().split('\n'),['exact',path.join(a.profile.cwd,'outreach-scope.json'),'probe']);assert.equal(process.env.LEADGEN_OUTREACH_MODE,before);
-  fs.appendFileSync(binary,'\n# changed\n');const drift=spawnSync(a.profile.skill_runtime.codex.command,[],{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/LEADGEN_CODEX_SOURCE/);
+  const before=process.env.LEADGEN_OUTREACH_MODE,a=await prepareLeadgenHost(f),probe=spawnSync(a.profile.skill_runtime.codex.command,['probe'],{encoding:'utf8',env:{PATH:process.env.PATH}});
+  assert.equal(probe.status,0,probe.stderr);assert.equal(probe.stdout,'\n\nprobe\n');
+  assert.equal(a.profile.skill_runtime.codex.command,binary);
+  assert.equal(process.env.LEADGEN_OUTREACH_MODE,before);
+  const invoke=fs.readFileSync(path.join(a.profile.cwd,'invoke.mjs'),'utf8');
+  assert.match(invoke,/"LEADGEN_OUTREACH_MODE":"exact"/);
+  assert.ok(invoke.includes(path.join(a.profile.cwd,'outreach-scope.json')));
  }finally{f.close();}
 });
 test('102 execution readback and Checker use the same raw fact implementation, with no specialized verdict',async()=>{
