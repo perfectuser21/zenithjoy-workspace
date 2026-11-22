@@ -186,6 +186,17 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   files['worker.mjs']=worker;
   for(const entry of profile.leadgen.worker_entries??[])files[relative(entry)]=worker;
   files['invoke.mjs']="import fs from 'node:fs';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';import path from 'node:path';const root=path.dirname(fileURLToPath(import.meta.url)),c=JSON.parse(fs.readFileSync(path.join(root,'context.json')));const r=spawnSync(c.python,[path.join(root,'tools.py'),...process.argv.slice(2)],{stdio:'inherit',env:{...process.env,..."+JSON.stringify(exactEnv)+"}});process.exit(r.status??1);\n";
+  const hostTools = profile.skill_runtime.host_tools;
+  if (hostTools?.kinds?.some(kind => kind === 'qualify-prepare' || kind === 'qualify-submit')) {
+   const {deriveQualificationAgentHost} = await import('../qualification-agent-candidate.mjs');
+   const decisionSource = 'services/phone-adb-controller/qualification-agent-decision.mjs';
+   const expected = Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, hash(bytes)]));
+   return deriveQualificationAgentHost({
+    files, expected, frozenContract: contract,
+    candidateSource: fs.readFileSync(path.join(profile.cwd, decisionSource), 'utf8'),
+    candidateSha256: profile.files[decisionSource], hostTools,
+   }).files;
+  }
   return files;
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}
 }

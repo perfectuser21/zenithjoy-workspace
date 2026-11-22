@@ -1369,11 +1369,6 @@
             "failed": "stop",
             "partial": "stop",
             "retry": "pause"
-          },
-          "checker_repair": {
-            "effect_scope": "host_tools",
-            "max_attempts": 2,
-            "retry_safe": true
           }
         }
       },
@@ -2540,7 +2535,7 @@
     ]
   },
   "profile": {
-    "adapter": "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs",
+    "adapter": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
     "commander": {
       "provider": "codex",
       "model": "gpt-6.1-terra"
@@ -2552,7 +2547,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "a4e6631eb5caae21655a23fbcde767e4f3cc6b4c",
-      "contract_sha256": "69b5d5a50b575127053751ff0ce0ea041cfc855bac2d14e80d110500b57caaa7"
+      "contract_sha256": "b409ac32dd24c8be821958f62cf182325e5ec72cd7f62bb0d5a06db4451d4477"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2752,7 +2747,7 @@
       "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
       "services/phone-adb-controller/leadgen-committed-partial.js": "e5b443ecf4b0c0f6ee4cd9580883539f267cf41609016bcba02b26e4ce51230b",
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "4b9633186bbc1089a648fce276037398e5e01905fefb32ff9e3559f2da1a0a6a",
-      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "158e713fff46c66ff3d4f94d4414deba5cb4f81add6f9ccc03a24ef4a53fc909",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "df4e486f0a47c7b3d2dbbf4f2bfc1826996c8b74b9c730f6804176f135a44cc3",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
       "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
@@ -2781,10 +2776,8 @@
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "75fab14f374fc4f1ce37404a4340f83a88ecb05274bb641accfddb6febad268a",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "4cf336eb1214bc05d48bd2b86e7ba3ebb5d76560aa845742b681d764c959342d",
       "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952",
-      "services/phone-adb-controller/leadgen-foundation/qualification-agent-adapter.mjs": "012a9609a3e457079c9486307fa9d73547162a7498a0413947067b67a4f23210",
-      "services/phone-adb-controller/leadgen-foundation/qualification-agent-assembly.mjs": "b502a5fdcb003e41bca5ca63640e61fadbec241cedb72db99254eeb1f286ef84",
-      "services/phone-adb-controller/qualification-agent-candidate.mjs": "afe07dc3ba150d49d8d0b4a579af68bc403d77b436c517dfe80fcfe03f4ad3f7",
-      "services/phone-adb-controller/qualification-agent-decision.mjs": "e2fbfe9e5f7b770829d28b7d7c47bd342b4e04058251a5f3f96aa5cba3c50b1b",
+      "services/phone-adb-controller/qualification-agent-candidate.mjs": "b9c29a65eaf2784b1931c3df37f5698c61818a55b60b35e79d3a14bdeb50950c",
+      "services/phone-adb-controller/qualification-agent-decision.mjs": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a",
       "services/phone-adb-controller/qualification-agent-overlay.mjs": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
     }
   }
