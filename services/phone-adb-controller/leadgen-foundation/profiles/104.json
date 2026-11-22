@@ -2112,7 +2112,7 @@
       "services/phone-adb-controller/activity-host-tools.py": "4c121888deacf7f100704b092e8504281dff3f655aee0bbbef0b6e2ea4ddac33",
       "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
       "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
-      "services/phone-adb-controller/activity-tool-result.py": "ed0ecb31a0f8159942076a9ef118bb1f3c69b6a8239ca86d0875578ecaed7a74",
+      "services/phone-adb-controller/activity-tool-result.py": "94f09fec1f8e54d38f0c40c5f72b25404571f5275000089d8eef3e4c57aca313",
       "services/phone-adb-controller/activity-upstream-source.mjs": "eabb48fb6c5fe0233b498ce291e828992a094690ab6b2bea0ed2238a3d835e5e",
       "services/phone-adb-controller/discovery-metrics-queue.js": "7f6b4ba23aabc0b4acba54ae9778bde992d3c3716a3281d8135c3dee2157ac59",
       "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",

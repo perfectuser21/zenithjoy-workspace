@@ -91,8 +91,12 @@ def _owned_collection_json(file, *, sha256=None):
     if (not stat.S_ISREG(metadata.st_mode) or file.resolve(strict=True) != file
             or metadata.st_uid != os.getuid() or metadata.st_nlink != 1 or metadata.st_mode & 0o022):
         raise ValueError('untrusted evidence file')
-    with file.open('rb') as stream:
+    with os.fdopen(os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 'rb') as stream:
+        if os.fstat(stream.fileno()) != metadata:
+            raise ValueError('evidence changed before read')
         raw = stream.read(2 * 1024 * 1024 + 1)
+        if os.fstat(stream.fileno()) != metadata or file.lstat() != metadata:
+            raise ValueError('evidence changed while reading')
     if len(raw) != metadata.st_size or len(raw) > 2 * 1024 * 1024:
         raise ValueError('invalid evidence size')
     if sha256 is not None and hashlib.sha256(raw).hexdigest() != sha256:

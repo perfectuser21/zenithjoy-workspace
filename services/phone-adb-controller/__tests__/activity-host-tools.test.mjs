@@ -383,6 +383,15 @@ with tempfile.TemporaryDirectory() as d:
  receipt['binding']['identity']=identity;persist()
  saved=asset.with_name('real.json');asset.rename(saved);asset.symlink_to(saved)
  denied();asset.unlink();saved.rename(asset)
+ original_open=module.os.open
+ alternate=asset.with_name('different-inode.json')
+ alternate.write_bytes(asset.read_bytes());alternate.chmod(0o600)
+ def open_with_swap(filename, flags, *args, **kwargs):
+  if filename==asset:alternate.replace(asset)
+  return original_open(filename,flags,*args,**kwargs)
+ module.os.open=open_with_swap
+ try:denied()
+ finally:module.os.open=original_open
  asset.write_text('changed');denied()
  print('safe')
  `;
