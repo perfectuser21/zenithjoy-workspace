@@ -73,6 +73,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
   const partialIds=committedPartial.explicitIds(input,sourceRun);
   if(partialIds&&input.op!=='score_scope'&&input.ids===undefined)input={...input,ids:partialIds};
+  if(op==='score_input'||op==='score_submit'){
+    const scope={partialIds,identity:deps.agentScoreIdentity,execution:deps.execution};
+    const agent=require('./leadgen-agent-score.js');
+    return op==='score_input'?agent.scoreInput(pool,input,scope):transaction(pool,client=>agent.scoreSubmit(client,input,scope));
+  }
   const partial=partialIds?await committedPartial.admittedRows(pool,{lineKey,run,ids:partialIds}):[];
   if(op==='complete_collected_comment_metadata')return transaction(pool,client=>committedPartial.completeMetadata(client,input,{lineKey,verifyProfileCardLink:deps.verifyProfileCardLink||require('./profile-card-link-evidence.js').verifyProfileCardLink}));
   if(op==='complete_collected_comment_metadata_readback')return transaction(pool,client=>committedPartial.metadataReadback(client,input,{lineKey}));

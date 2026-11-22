@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';
 import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost,createRuntime} from '../leadgen-foundation/adapter.mjs';
+import {buildQualificationAgentOverlay} from '../qualification-agent-overlay.mjs';
 for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} real source assembly is isolated, reusable and effect free`,async()=>{
  const f=await foundationFixture(workflow);try{
   if(workflow==='102'){
@@ -190,6 +191,56 @@ test('foundation recovery survives the official host normalization of equivalent
  }finally{f.close();}
 });
 
+test('103 assembled business host binds Agent scoring to Runner identity and retains complete input',async()=>{
+ const f=await foundationFixture('103');try{
+  const a=await prepareLeadgenHost(f),root=a.profile.cwd;
+  const activity=JSON.parse(fs.readFileSync(path.join(root,'activity-host-tools.json'),'utf8'));
+  for(const operation of ['score','score_input','score_submit']){
+   assert.ok(activity.operations.scoring.includes(operation));
+   assert.equal(activity.operations.mark_leads.includes(operation),false);
+  }
+  for(const module of ['leadgen-agent-score','leadgen-policy-review','leadgen-score-exclusion','judge-recipient','leadgen-outreach-bridge']){
+   assert.match(a.receipt.files[`business-runtime/${module}.js`],/^[a-f0-9]{64}$/);
+  }
+  assert.match(fs.readFileSync(path.join(root,'business.mjs'),'utf8'),/scope\.agentScoreIdentity=JSON\.parse\(process\.env\.ZJ_103_AGENT_SCORE_IDENTITY/);
+  const probe=String.raw`
+import importlib.util, json, os, pathlib, sys
+root=pathlib.Path(sys.argv[1]); sys.path.insert(0,str(root))
+spec=importlib.util.spec_from_file_location("assembled",root/"tools.py")
+tools=importlib.util.module_from_spec(spec); spec.loader.exec_module(tools)
+c=json.loads((root/"context.json").read_text()); task=c["tasks"]["103"]; scope=c["verification"]["103"]
+identity={"task_id":task["task_id"],"run_id":task["run_id"],"action_id":"original-activity","attempt":1}
+file=pathlib.Path(sys.argv[2]); file.write_text(json.dumps({"activity_key":"scoring","identity":identity,"transport":"codex-cli"}))
+os.environ["COMMANDER_ACTIVITY_INPUT_FILE"]=str(file)
+sys.argv=["tools","business","read-score",json.dumps({"op":"score_input","ids":scope["comment_ids"],"committed_partial_ids":scope["comment_ids"],"sources":scope["sources"]})]
+tools.context=lambda:(c,"scoring")
+tools._host.task_authority=lambda *args,**kwargs:None
+tools.task_authority=lambda *args,**kwargs:None
+tools.environment=lambda c:{}
+from types import SimpleNamespace
+def business(command,**kw):
+  assert tuple(command[-1:])==(str(root/"business.mjs"),)
+  assert json.loads(kw["env"]["ZJ_103_AGENT_SCORE_IDENTITY"])=={**identity,"activity_key":"scoring","tool_action":"read-score"}
+  return SimpleNamespace(returncode=0,stdout=json.dumps({"ok":True,"result":{"video_transcript":"X"*16000}}),stderr="")
+tools.subprocess.run=business
+raise SystemExit(tools.main())
+`;
+  const result=spawnSync('/usr/bin/python3',['-c',probe,root,path.join(f.root,'trusted-input.json')],{cwd:f.root,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);const terminal=JSON.parse(result.stdout);
+  assert.equal(JSON.parse(terminal.result.stdout).result.video_transcript.length,16000);
+ }finally{f.close();}
+});
+test('103 frozen Activity Agent profile exposes the pure score tools without the legacy model operation',async()=>{
+ const old=await foundationFixture('103'),next=await foundationFixture('103');
+ try{
+  next.profile.leadgen.agent_score_mode='activity-agent-v1';
+  const prior=await prepareLeadgenHost(old),newHost=await prepareLeadgenHost(next);
+  const readOps=host=>JSON.parse(fs.readFileSync(path.join(host.profile.cwd,'activity-host-tools.json'),'utf8')).operations.scoring;
+  assert.ok(readOps(prior).includes('score'));
+  for(const operation of ['score_input','score_submit','score_recovery','score_readback'])assert.ok(readOps(newHost).includes(operation));
+  assert.equal(readOps(newHost).includes('score'),false);
+ }finally{old.close();next.close();}
+});
 test('generated provider binds frozen context and scorer imports actual new modules outside repository cwd',async()=>{
  const f=await foundationFixture('103');try{
   const a=await prepareLeadgenHost(f),root=a.profile.cwd;
@@ -200,4 +251,23 @@ test('generated provider binds frozen context and scorer imports actual new modu
   const src="import {createRequire} from 'node:module';const r=createRequire("+JSON.stringify(path.join(root,'business-runtime/package.json'))+");const m=r('./leadgen-score-context.js');const t=await m.readScoreTranscript({query:async()=>({rows:[{video_url:'v',title:'t',transcript:'actual text'}]})},'line',{source_video_url:'v',source_video:'t'},[]);if(t!=='actual text')throw Error('TRANSCRIPT');const {loadActivityHostPg}=await import("+JSON.stringify('file://'+path.join(root,'activity-host-pg.mjs'))+");const fs=await import('node:fs');const c=JSON.parse(fs.readFileSync("+JSON.stringify(path.join(root,'context.json'))+"));if(typeof (await loadActivityHostPg(c)).Pool!=='function')throw Error('PG');console.log('loaded');";
   const probe=spawnSync(process.execPath,['--input-type=module','-e',src],{cwd:f.root,env:{PATH:process.env.PATH,NODE_PATH:''},encoding:'utf8'});assert.equal(probe.status,0,probe.stderr);assert.equal(probe.stdout.trim(),'loaded');
  }finally{f.close();}
+});
+
+test('现役 102 装配不包含 Agent 资格提交候选和工具入口',async()=>{
+ const fixture=await foundationFixture('102');
+ try{
+  const assembled=await prepareLeadgenHost(fixture);
+  assert.equal(fs.existsSync(path.join(assembled.profile.cwd,'qualification/agent-decision.mjs')),false);
+  assert.equal(assembled.profile.skill_runtime.host_tools?.kinds?.includes('qualify-submit')??false,false);
+  const helper=fs.readFileSync(path.join(assembled.profile.cwd,'qualification/helper.mjs'),'utf8');
+  const runtimeDeps=fs.readFileSync(path.join(assembled.profile.cwd,'qualification/runtime-deps.mjs'),'utf8');
+  assert.doesNotMatch(helper,/submit_activity_agent/);
+  const proposed=buildQualificationAgentOverlay({helper,runtimeDeps,expected:{
+   helper:assembled.receipt.files['qualification/helper.mjs'],
+   runtimeDeps:assembled.receipt.files['qualification/runtime-deps.mjs'],
+  }});
+  assert.match(proposed.helper,/submit_activity_agent/);
+  assert.match(proposed.runtimeDeps,/activityPolicy:snapshot/);
+  assert.equal(fs.readFileSync(path.join(assembled.profile.cwd,'qualification/helper.mjs'),'utf8'),helper);
+ }finally{fixture.close();}
 });

@@ -11,4 +11,13 @@ async function readScoreTranscript(client,lineKey,row,completedVideos){
  // 未曾持久化的转写明确缺省，不把标题伪装成转写。
  return transcript??null;
 }
-module.exports={readScoreTranscript};
+const uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+const action=/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
+function isAgentScoreIdentity(identity){
+ return Boolean(identity&&Object.keys(identity).sort().join(',')==='action_id,activity_key,attempt,run_id,task_id,tool_action'
+   &&uuid.test(identity.task_id)&&uuid.test(identity.run_id)&&identity.activity_key==='scoring'
+   &&typeof identity.action_id==='string'&&action.test(identity.action_id)
+   &&typeof identity.tool_action==='string'&&action.test(identity.tool_action)
+   &&Number.isSafeInteger(identity.attempt)&&identity.attempt>=1);
+}
+module.exports={readScoreTranscript,isAgentScoreIdentity};

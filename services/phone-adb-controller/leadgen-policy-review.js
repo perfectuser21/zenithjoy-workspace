@@ -181,11 +181,16 @@ function makeSingleScoreAudit(row,snapshot,verdict,evidence){
 }
 function verifyStoredScore(row,snapshot){
   const c=row?.judgment_config,base={id:row?.id,status:'unknown',reason:'stored_score_unverified',model_call_count:0};
+  const model=c?.model_audit;
+  const agent=Boolean(model?.provider==='codex'&&require('./leadgen-score-context.js').isAgentScoreIdentity(model.agent_identity)
+    &&model.agent_identity.run_id===c.run_id
+    &&/^[a-f0-9]{64}$/.test(model.input_sha256||'')&&/^[a-f0-9]{64}$/.test(model.answer_sha256||'')
+    &&model.policy_reference_mode===REFERENCE_MODE&&model.response_id===undefined);
   if(!c||c.scoring_mode!==SINGLE_SCORE_MODE||c.scoring_decision_id!==SINGLE_SCORE_DECISION
     ||!c.run_id||c.company_id!==snapshot?.company_id||c.tenant_id!==snapshot.tenant_id
     ||Number(c.version)!==Number(snapshot.version)||c.policy_id!==snapshot.policy_id
     ||!row.id||!row.comment_body||!row.source_video||!row.source_video_url
-    ||!c.model_audit?.model||!c.model_audit?.response_id
+    ||!(model?.provider==='codex'?agent:model?.model&&model?.response_id)
     ||!['相关','不相关'].includes(row.relevance)
     ||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade)
     ||row.relevance==='不相关'&&row.intent_grade!==null
@@ -193,7 +198,8 @@ function verifyStoredScore(row,snapshot){
   if(c.model_audit.policy_reference_mode===REFERENCE_MODE&&validateFrozenPolicyEvidence({grade:row.relevance==='不相关'?'不相关':row.intent_grade,
     proof:c.model_audit.policy_evidence,rules:snapshot.runtime_config.comment_scoring,comment:row.comment_body,video:row.source_video,requireQuotes:true})!==null)return base;
   return {id:row.id,status:'pass',reason:'stored_score_match',model_call_count:0,review_count:0,
-    model:c.model_audit.model,response_id:c.model_audit.response_id,evidence_sha256:c.score_sha256};
+    ...(agent?{provider:'codex',agent_identity:model.agent_identity}:{model:model.model,response_id:model.response_id}),
+    evidence_sha256:c.score_sha256};
 }
 
 async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){

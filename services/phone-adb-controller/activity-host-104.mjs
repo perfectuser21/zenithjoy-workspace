@@ -3,6 +3,7 @@ import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';
 import {hash,need,regular,asset,scope,validateScope,KEYS} from './activity-104-context.mjs';
 import {wire104State} from './activity-104-state-wiring.mjs';
+import {businessModuleSources} from './leadgen-foundation/business-module-sources.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const BASE={"tools.py": "b198139524d3d3e2eeb13f2c05cce59c9fa8696130d3cb56f82ebf0e6e6bfb9c", "tool_scope.py": "b5d39b61efc42dac48ca76a3d77d7f1bef63eed734ea076231facaf554b6386b", "outreach104/tool_extension.py": "926e9ce8772233da3335bd5238eed6c51087abbe145b60c1385f050b95e0eefa", "outreach104/TOOLS104.txt": "c91f090db35064a0befed28aaae43b7d5f4c89e77f82b4d76c43448626f2a789", "outreach104/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "outreach104/process-lock.mjs": "41ac13250ee3e8dd53fd79f4d1d28882666b02b07f6fdd9779301a84e178fd0c", "outreach104/phone_guard.py": "ce7f448fe869bb31fc5918ad492a86bec66dc3047f624834ce7f3dad94f457fd", "outreach104/outreach-cli.mjs": "22090ee5c825c0929e4e9109f271e87ba67cb7efac8381a53e4432af33a80a60", "outreach104/profile-input.mjs": "01e2f7d52ac1334bf81a476daa969c68f6a312cde73287879427069b8809b13d", "outreach104/runtime-deps.mjs": "e750e1953ed4260870fe3d2383c513c66f1a2811e385987d31e8134bdd8bbd0d", "outreach104/order-adapter.mjs": "05e1f9d24b7aa4e3231d0f8d20ee18c28ab42d5cd4e2f1220d2e1246550a7faa", "outreach104/io.mjs": "1ea9ab3b97469aef3dcc8cba1a81a745685a59697a97d949b3c9e97fbf0800ba"};
 const LOCAL={"local_transport.py": "4ecc7d737a3bf0c4e871bd100c97bfac86a08920b685dff683cfb19309114bfc", "local-transport.mjs": "4805897be1fff7c2cc2b54ff5580897dbd2a3cad5d3e7f85ea0da22d4c7506a0", "lock-readback.mjs": "dc55ce9f47fe186b694b34f1f6a84a89cbf83c880a2b59e6407875c706814897", "native-probe.py": "bd2cce27be94d4997336371a1986d669de29c28916d9a8e87fa42e373def5b5d"};
@@ -18,7 +19,11 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  files['activity-104-runtime.mjs']=regular(path.join(HERE,'activity-104-runtime.mjs')).toString();
  files['activity-104-transport.py']=replace(replace(regular(path.join(HERE,'activity-104-transport.py')).toString(),'ASSEMBLY_REPLACES_BINDING_SHA',bindingHash),'KEYS=[] # ASSEMBLY_REPLACES_KEYS','KEYS='+JSON.stringify(KEYS));
  files['activity-host-pg.mjs']=pg.toString();
+ // 104 reads the same frozen 103 scoring proof format even when the phone runtime is older.
+ Object.assign(files,businessModuleSources(c));
  let r=files['outreach104/runtime-deps.mjs'];
+ r=replace(r,",score=req('./leadgen-policy-review.js')",'');
+ r=replace(r,'const result=await score.verifyStoredScore',"const score=createRequire(new URL('../business-runtime/package.json',import.meta.url))('./leadgen-policy-review.js');\n   const result=await score.verifyStoredScore");
  r=replace(r,"const COMMIT='97eac7e35dc3e098a4d7fdde76cdca6dbfb691fd';\nconst ROOT='/Users/administrator/.local/share/zenithjoy/leadgen-api-candidates/'+COMMIT+'/services/phone-adb-controller';\nconst AUTH='/Users/administrator/.codex-team1/artifacts/leadgen-101-104-foundation-20261114/104-authorized-input.json';\nconst AUTH_SHA='ac20a68a650d830b5a8bf354cbfa3aa0d59d3f8f213636a47fde298f2d7d0037';",'');
  // Remove the M4-only observer; all authorization, qualification and order behavior stays below.
  const start=r.indexOf('const remoteRead='),end=r.indexOf('export async function createRuntimeDeps');need(start>=0&&end>start,'BASE_LAYOUT');r=r.slice(0,start)+r.slice(end);

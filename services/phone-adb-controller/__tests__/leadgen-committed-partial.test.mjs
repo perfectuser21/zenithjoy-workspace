@@ -8,11 +8,11 @@ const require=createRequire(import.meta.url),{queueRequest}=require('../leadgen-
 const id='00000000-0000-4000-8000-000000000221',leadId='00000000-0000-4000-8000-000000000222';
 const vid='7704584547186793910',url=`https://www.douyin.com/video/${vid}`,batch='partial102',run='partial103',line='yuesheng';
 const profile=readFileSync(new URL('./fixtures/honor-ezx-recipient/profile.xml',import.meta.url),'utf8'),returned=readFileSync(new URL('./fixtures/honor-ezx-recipient/returned.xml',import.meta.url),'utf8');
-function fixture(){
+function fixture({runTag=run}={}){
  const snapshot=companyFixture(line);snapshot.config_status='enabled';snapshot.runtime_config.routing={line_key:line,profiles:['xiaolongxia']};snapshot.runtime_config.comment_scoring=structuredClone(originalPolicy.runtime_config.comment_scoring);
  const account={company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,platform:'douyin',profile:'xiaolongxia',device_serial:'physical-test-device',douyin_id:'source-account',verification_status:'verified',enabled:true};snapshot.runtime_config.platform_accounts=[account];
  const frozen=tag=>({company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:tag,source_run:null,snapshot:structuredClone(snapshot),task_inputs:tag===batch?{device_binding:{profile:account.profile,device_serial:account.device_serial}}:{}});
- const source=frozen(batch),target=frozen(run),binding={company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:batch,line_key:line,source_run:null,profile:account.profile,device_serial:account.device_serial,douyin_id:account.douyin_id,verification_status:'verified',enabled:true};
+ const source=frozen(batch),target=frozen(runTag),binding={company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:batch,line_key:line,source_run:null,profile:account.profile,device_serial:account.device_serial,douyin_id:account.douyin_id,verification_status:'verified',enabled:true};
  const prefix=`${batch}-v${vid}-collection`,nickname='测试评论人',body='测试完整评论 首评',douyinId='fixture-account-102';
  const scope={comment_encoding:'canonical',line_key:line,run:batch,source_run:null,video_id:vid,video_url:url,profile:account.profile,douyin_id:douyinId,nickname,comment_body_sha256:native.hash(body),profile_eid:prefix+'-person1-t1',video_identity_eid:prefix+'-after-card1'};
  const evidence={version:1,receipt_id:'00000000-0000-4000-8000-000000000223',status:'verified',scope,company_binding:binding,raw:{profile,returned},sha256:{profile:native.hash(profile),returned:native.hash(returned)},video_identity:{verified:true,content_type:'video',expected_video_id:vid,observed_video_id:vid,evidence_id:scope.video_identity_eid}};
@@ -20,8 +20,9 @@ function fixture(){
  const row={id,line_key:line,harvest_batch:batch,source_video:video.title,source_video_url:url,comment_body:body,nickname,douyin_id:douyinId,profile_url:'https://v.douyin.com/fixture-profile/',recipient_evidence:evidence,collected_at:new Date('2026-11-12T00:00:00Z'),process_status:'待分拣',relevance:null,intent_grade:null,judgment_reason:null,judgment_config:null,dedup_key:'fixture-dedup'};
  const state={source,target,snapshot,video,row,updates:[],modelCalls:0,outbox:[]};
  const client={async query(sql,args=[]){
-  if(sql.includes('company_config_runs'))return {rows:args[0]===batch?[state.source]:args[0]===run?[state.target]:(state.priorSources||[])};
+  if(sql.includes('company_config_runs'))return {rows:args[0]===batch?[state.source]:args[0]===runTag?[state.target]:(state.priorSources||[])};
   if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:sql.includes("process_status='评论已采'")?[]:[state.video]};
+  if(sql.includes('SELECT count(*)::int AS used'))return {rows:[{used:state.row.judgment_config?.run_id===args[1]?1:0}]};
   if(sql.includes('FROM zenithjoy.leadgen_comments')){
    if(sql.includes('FOR UPDATE SKIP LOCKED')&&((Array.isArray(args[2])&&args[2].includes(id))||(sql.includes('relevance IS NULL')?state.row.relevance!==null:state.row.relevance===null)))return {rows:[]};
    return {rows:[structuredClone(state.row)]};
@@ -41,9 +42,74 @@ function fixture(){
  },release(){}};
  state.pool={query:client.query.bind(client),connect:async()=>client};
  state.deps={freezeCompanyConfig:async()=>structuredClone(state.target.snapshot),judgeComment:async()=>{state.modelCalls++;return {grade:'A',relevance:'相关',reason:'本人业务需求',audit:{model:'google/gemini-2.5-flash',response_id:'actual-fixture-response',stage:'single'}};}};
- state.input=op=>({op,line,run,ids:[id],sources:{[id]:batch},committed_partial_ids:[id],limit:1});
+ state.input=op=>({op,line,run:runTag,ids:[id],sources:{[id]:batch},committed_partial_ids:[id],limit:1});
  return state;
 }
+
+const agentIdentity={task_id:'00000000-0000-4000-8000-000000000301',
+ run_id:'00000000-0000-4000-8000-000000000302',activity_key:'scoring',action_id:'score-action',attempt:1,tool_action:'submit-score'};
+function agentScoreFixture(){
+ const f=fixture({runTag:agentIdentity.run_id});
+ f.video.transcript='真实持久转写：课程包括电子表格自动化。';
+ f.deps.agentScoreIdentity=agentIdentity;
+ f.deps.execution={task_id:agentIdentity.task_id,run_id:agentIdentity.run_id,run:agentIdentity.run_id,line};
+ return f;
+}
+function scoreProposal(f){
+ const audience=f.snapshot.runtime_config.comment_scoring.audiences[0];
+ return {grade:'A',policy_evidence:{audience_id:audience.id,
+   matched_rule:audience.fields.人群描述,comment_signal:f.row.comment_body.slice(0,4),
+   video_signal:f.video.title.slice(0,4),exclusion_rule:null,reason:'评论者提出与画像一致的需求'}};
+}
+test('103 Agent reads original comment, same-video title and transcript with frozen policy without model or writes',async()=>{
+ const f=agentScoreFixture();
+ const input=await queueRequest(f.pool,f.input('score_input'),f.deps);
+ assert.equal(input.comment_id,id);assert.equal(input.source_run,batch);
+ assert.equal(input.comment_body,f.row.comment_body);assert.equal(input.video_title,f.video.title);
+ assert.equal(input.video_transcript,f.video.transcript);assert.equal(input.policy.policy_id,f.snapshot.policy_id);
+ assert.match(input.input_sha256,/^[a-f0-9]{64}$/);assert.equal(f.modelCalls,0);assert.equal(f.updates.length,0);
+});
+test('103 Agent submits original evidence once, uses stored-score verification and never invokes another model',async()=>{
+ const f=agentScoreFixture(), input=await queueRequest(f.pool,f.input('score_input'),f.deps);
+ const submission={...f.input('score_submit'),input_sha256:input.input_sha256,score:scoreProposal(f)};
+ const result=await queueRequest(f.pool,submission,f.deps);
+ assert.equal(result.scored,1);assert.equal(result.already_committed,false);assert.deepEqual(result.ids,[id]);
+ const audit=f.row.judgment_config.model_audit;
+ assert.equal(audit.provider,'codex');assert.deepEqual(audit.agent_identity,agentIdentity);
+ assert.equal(audit.response_id,undefined);
+ assert.equal((await queueRequest(f.pool,{...f.input('policy_review'),claim:agentIdentity.run_id})).verified,true);
+ assert.equal((await queueRequest(f.pool,f.input('score_recovery'))).scored,1);
+ assert.equal((await queueRequest(f.pool,f.input('score_readback'))).verified,true);
+ assert.equal((await queueRequest(f.pool,submission,{...f.deps,agentScoreIdentity:{...agentIdentity,tool_action:'lost-ack'}})).already_committed,true);
+ await assert.rejects(queueRequest(f.pool,submission,{...f.deps,agentScoreIdentity:{...agentIdentity,action_id:'different-activity-action'}}),/AGENT_SCORE_ALREADY_SCORED/);
+ await assert.rejects(queueRequest(f.pool,{...submission,agent_identity:agentIdentity},f.deps),/AGENT_SCORE_SCOPE_INVALID/);
+ assert.equal((await queueRequest(f.pool,f.input('mark_leads'),f.deps)).marked,1);
+ assert.equal(f.outbox[0].qualification_status,'passed');assert.equal(f.modelCalls,0);
+ assert.equal(f.updates.filter(x=>x.sql.includes('SET relevance=')).length,1);
+});
+test('103 Agent stored audit rejects a different run even when its digest is recalculated',async()=>{
+ const f=agentScoreFixture(),input=await queueRequest(f.pool,f.input('score_input'),f.deps);
+ await queueRequest(f.pool,{...f.input('score_submit'),input_sha256:input.input_sha256,score:scoreProposal(f)},f.deps);
+ const {verifyStoredScore,makeSingleScoreAudit}=require('../leadgen-policy-review.js');
+ const {configEvidence}=require('../judge-video.js');
+ const audit=structuredClone(f.row.judgment_config.model_audit);
+ audit.agent_identity.run_id='00000000-0000-4000-8000-000000000399';
+ f.row.judgment_config=makeSingleScoreAudit(f.row,f.snapshot,{relevance:f.row.relevance,
+   grade:f.row.intent_grade,reason:f.row.judgment_reason,audit},configEvidence(f.snapshot,agentIdentity.run_id));
+ assert.equal(verifyStoredScore(f.row,f.snapshot).status,'unknown');
+});
+for(const [name,change] of [
+ ['changed video transcript',f=>{f.video.transcript='已变化的转写';}],
+ ['invalid quote',(_f,p)=>{p.policy_evidence.comment_signal='不是原文';}],
+ ['missing trusted host identity',f=>{delete f.deps.agentScoreIdentity;}],
+ ['different trusted execution task',f=>{f.deps.execution.task_id='00000000-0000-4000-8000-000000000399';}],
+ ['changed frozen policy',f=>{f.target.snapshot.version++;}],
+])test('103 Agent submission rejects '+name+' with no writes or model',async()=>{
+ const f=agentScoreFixture(),input=await queueRequest(f.pool,f.input('score_input'),f.deps),score=scoreProposal(f);
+ change(f,score);
+ await assert.rejects(queueRequest(f.pool,{...f.input('score_submit'),input_sha256:input.input_sha256,score},f.deps),/AGENT_SCORE_|COMMITTED_PARTIAL_/);
+ assert.equal(f.modelCalls,0);assert.equal(f.updates.length,0);
+});
 
 test('explicit verified committed partial comment scores once before video is exhausted',async()=>{
  const f=fixture();const r=await queueRequest(f.pool,f.input('score'),f.deps);assert.equal(r.scored,1);assert.equal(f.modelCalls,1);assert.equal(f.video.process_status,'待判定');assert.equal(f.row.judgment_config.scoring_mode,'single-evaluation-v1');

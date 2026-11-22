@@ -59,6 +59,14 @@ export function prepareProof(context,{initialize=false}={}){
 /** Only assembles frozen source. No phone, database, model or message operation occurs here. */
 export async function assembleSources({context:c,profile,contract,input,hostRoot,identity,bindingKey,initializeProof=true}){
  const workflow=c.assigned_workflow,files=sourceArchive(path.join(HERE,'sources',workflow+'.json'));
+ if(workflow==='103'){
+  delete c.verification.agent_score_mode;
+  const scoreMode=profile.leadgen.agent_score_mode;
+  if(scoreMode!==undefined){
+   need(scoreMode==='activity-agent-v1','AGENT_SCORE_MODE');
+   c.verification.agent_score_mode=scoreMode;
+  }
+ }
  for(const [name,expected]of Object.entries(profile.files).filter(([name])=>name.startsWith('services/phone-adb-controller/skills/'))){
   const bytes=fs.readFileSync(path.join(profile.cwd,name),'utf8');need(hash(bytes)===expected,'SKILL_SOURCE');files[name]=bytes;
  }
@@ -88,6 +96,14 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   if(workflow!=='104'){
    Object.assign(files,businessModuleSources(c));
    files['business.mjs']=replaceRequired(files['business.mjs'],"createRequire(path.join(c.runtime_root,'package.json'))","createRequire(path.join(root,'business-runtime/package.json'))");
+  }
+  if(workflow==='103'){
+   files['business.mjs']=replaceRequired(files['business.mjs'],
+    " const result=await require('./leadgen-queue.js').queueRequest(pool,input,{sourceCommit:c.source_commit,execution});",
+    ` const scope={sourceCommit:c.source_commit,execution};
+ if(['score_input','score_submit'].includes(input.op))
+  scope.agentScoreIdentity=JSON.parse(process.env.ZJ_103_AGENT_SCORE_IDENTITY??'null');
+ const result=await require('./leadgen-queue.js').queueRequest(pool,input,scope);`);
   }
   if(workflow==='102'){
    const baseOptions='{sourceCommit:c.source_commit,execution}';
