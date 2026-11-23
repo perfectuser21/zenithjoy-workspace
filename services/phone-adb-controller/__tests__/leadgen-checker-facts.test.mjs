@@ -136,10 +136,16 @@ test('the frozen receipt inventory keeps a real source path and unknown action w
   const create=(name,target=identity)=>writeFileSync(join(directory,name),JSON.stringify({binding:{identity:target,activity:'preflight',kind:'phone',
    args:['account-current','sensitive-argument']},state:'unknown',started_at:123.45,result:null}),{mode:0o600});
   create('account-current.json');
+  const video={video_id:'7710615005992914210',private_value:'never exposed'};
+  writeFileSync(join(directory,'discover-video.json'),JSON.stringify({
+   binding:{identity,activity:'collect_videos',kind:'business',args:[JSON.stringify({op:'discover_video',video})]},
+   state:'terminal',started_at:125,result:{exit_code:0}
+  }),{mode:0o600});
   writeFileSync(join(directory,'cv-filters-original.json'),JSON.stringify({args:['search-time-layer'],exit_code:0,stdout:'live evidence',stderr:''}),{mode:0o644});
   writeFileSync(join(directory,'cv-video-handoff.json'),JSON.stringify([{video_id:'1234567890123456',author:'原作者'}]),{mode:0o644});
   const items=listHostReceipts(root,identity);
-  assert.deepEqual(items,[{path:'receipts/account-current.json',activity:'preflight',kind:'phone',operation:'account-current',state:'unknown',started_at:123.45}]);
+  assert.deepEqual(items,[{path:'receipts/account-current.json',activity:'preflight',kind:'phone',operation:'account-current',state:'unknown',started_at:123.45},
+   {path:'receipts/discover-video.json',activity:'collect_videos',kind:'business',operation:'discover_video',video_id:video.video_id,state:'terminal',started_at:125,exit_code:0}]);
   create('foreign.json',{...identity,run_id:'foreign'});
   assert.throws(()=>listHostReceipts(root,identity),/FACT_RUNTIME_UNAVAILABLE/);
   rmSync(join(directory,'foreign.json'));

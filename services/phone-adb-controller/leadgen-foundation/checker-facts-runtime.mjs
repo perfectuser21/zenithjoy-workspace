@@ -27,9 +27,15 @@ export function listHostReceipts(root,identity){
    &&/^[a-z][a-z0-9_]{0,79}$/.test(binding.activity??'')&&/^[a-z][a-z0-9_-]{0,79}$/.test(binding.kind??'')
    &&['terminal','unknown','prepared'].includes(raw.state)
    &&Number.isFinite(raw.started_at));
-  const operation=binding.args?.[0];
+  const first=binding.args?.[0];
+  let business;
+  if(binding.kind==='business'&&typeof first==='string'&&first.startsWith('{')){
+   try{business=JSON.parse(first);}catch{ /* Preserve the receipt without a decoded operation. */ }
+  }
+  const operation=business?.op??first,videoId=business?.video_id??business?.video?.video_id;
   return [{path:'receipts/'+name,activity:binding.activity,kind:binding.kind,
    ...(typeof operation==='string'&&/^[A-Za-z0-9][A-Za-z0-9_/-]{0,63}$/.test(operation)?{operation}:{}),
+   ...(typeof videoId==='string'&&/^[0-9]{16,24}$/.test(videoId)?{video_id:videoId}:{}),
    state:raw.state,started_at:raw.started_at,...(Number.isFinite(raw.ended_at)?{ended_at:raw.ended_at}:{}),
    ...(Number.isInteger(raw.result?.exit_code)?{exit_code:raw.result.exit_code}:{})}];
  });

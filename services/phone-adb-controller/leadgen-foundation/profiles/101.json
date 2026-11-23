@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "bd6f02945a3caf9cf9302b3cec9f1072cd7e3612c347d28979d934d150b38016"
+            "contract_digest": "41d34cdc80aad991b1c81662f5af8791e680c22f41b20af66fd4019aaed26678"
           },
           "document": {
             "key": "collect_videos",
@@ -770,7 +770,7 @@
             "outputs": [
               {
                 "type": "Video",
-                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取",
+                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取。author 随交付对象提供，以本轮同 VID 原生卡片独立核验；其余持久字段从数据库读回。",
                 "cardinality": "many",
                 "effect": "create",
                 "fields": [
@@ -1115,6 +1115,8 @@
                     "optional": true,
                     "fields": [
                       "/binding/identity",
+                      "/binding/args/0/op",
+                      "/binding/args/0/video/video_id",
                       "/state",
                       "/result/exit_code",
                       "/result/stdout/result/status",
@@ -1200,6 +1202,7 @@
                         "receipts.activity",
                         "receipts.kind",
                         "receipts.operation",
+                        "receipts.video_id",
                         "receipts.state",
                         "receipts.exit_code"
                       ]
@@ -1219,6 +1222,8 @@
                 "criteria": {
                   "outputs_0": [
                     "persisted",
+                    "cards",
+                    "cards_image",
                     "link",
                     "write",
                     "readback"
@@ -1713,7 +1718,7 @@
               "phase": "end",
               "requirement": {
                 "type": "Video",
-                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取",
+                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取。author 随交付对象提供，以本轮同 VID 原生卡片独立核验；其余持久字段从数据库读回。",
                 "cardinality": "many",
                 "effect": "create",
                 "fields": [
@@ -2519,7 +2524,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
-      "contract_sha256": "6a996f72f9289a707f873de17f322fabd9ee0c8be4d890fc4e84e84c7db7a729"
+      "contract_sha256": "45492141795ed2c121da392c4895118b30d2e5373b6056d7880bf3100d6dc6f0"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2660,7 +2665,7 @@
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "651a11963c66b2eaa4d4e4b4debc557fef52ff4c8f4733413ddb8c3b022e227f",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
