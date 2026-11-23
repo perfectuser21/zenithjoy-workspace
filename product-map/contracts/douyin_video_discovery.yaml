@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.12.13
+  version: 0.12.14
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -52,7 +52,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 5.6.1
+    version: 5.6.2
     required_host_tools: ["phone", "business", "metrics", "fetch-native", "proof"]
     agent_recovery:
       max_additional_turns: 1
@@ -256,6 +256,18 @@ activities:
                     type: string
                     minLength: 1
                     maxLength: 512
+                  copy_screen:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  paste_xml:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
+                  reopen_receipt:
+                    type: string
+                    minLength: 1
+                    maxLength: 512
                   write_receipt:
                     type: string
                     minLength: 1
@@ -288,7 +300,7 @@ activities:
       - probe: source_completed
         asserts: 用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致。视频页签和筛选后首屏卡片可用同一轮原生截图成对交付，Checker核对前台抖音、搜索词、已选中的视频页签及本轮实际卡片，证据必须支持原槽位和业务结论；只显示加载、缺关键词或看不清页签均不得通过。真实no_cards可empty，须保存同一搜索范围的原生空结果与停止原因；未加载不能当空。
       - probe: disc_candidates_persisted
-        asserts: 在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。提交集合以本轮回执和数据库为准。
+        asserts: 在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。逐步取链时，读取本轮明确复制成功的原始截图、无提交的聚焦输入框 XML、对应的抖音短链与解析身份，以及同一身份重新打开的原始回执。仅有打开回执、历史剪贴板值或相同标题均不能单独作为取链证明。提交集合以本轮回执和数据库为准。
       - probe: videos_readback
         asserts: 按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。
       - probe: line_key_not_null
@@ -343,7 +355,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.13.2
+        version: 0.13.3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs

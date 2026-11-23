@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "8a87a44b85d3425b1429ed03014e1d49cd53015b88b6673330375ebb86826c8b"
+            "contract_digest": "403c32048adfb7b8a4b7856f196a90ef95bcb263ca875a95b960cc59c71dce6b"
           },
           "document": {
             "key": "collect_videos",
@@ -710,7 +710,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "5.6.1",
+            "version": "5.6.2",
             "required_host_tools": [
               "phone",
               "business",
@@ -1001,6 +1001,21 @@
                             "minLength": 1,
                             "maxLength": 512
                           },
+                          "copy_screen": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "paste_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "reopen_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
                           "write_receipt": {
                             "type": "string",
                             "minLength": 1,
@@ -1051,7 +1066,7 @@
               },
               {
                 "probe": "disc_candidates_persisted",
-                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。提交集合以本轮回执和数据库为准。"
+                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。逐步取链时，读取本轮明确复制成功的原始截图、无提交的聚焦输入框 XML、对应的抖音短链与解析身份，以及同一身份重新打开的原始回执。仅有打开回执、历史剪贴板值或相同标题均不能单独作为取链证明。提交集合以本轮回执和数据库为准。"
               },
               {
                 "probe": "videos_readback",
@@ -1509,7 +1524,7 @@
               "phase": "end",
               "requirement": {
                 "probe": "disc_candidates_persisted",
-                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。提交集合以本轮回执和数据库为准。"
+                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。逐步取链时，读取本轮明确复制成功的原始截图、无提交的聚焦输入框 XML、对应的抖音短链与解析身份，以及同一身份重新打开的原始回执。仅有打开回执、历史剪贴板值或相同标题均不能单独作为取链证明。提交集合以本轮回执和数据库为准。"
               },
               "source_pointer": "/postconditions/2"
             },
@@ -2066,8 +2081,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "fbc69bd122bc2d28187a14fabe036816d24d7e0c",
-      "contract_sha256": "a53cff7c22b3a40c71b3bbdc3e9f14af96b5bd17cf38ba576d106de2c4c5dbab"
+      "method_revision": "8dd308c9691132e133d961d9143638e7c44d951c",
+      "contract_sha256": "f96f24d4b01ac7d39a99a67590cb5f1cb1832b1fab1485fcce74e36cde4531ee"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2229,7 +2244,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "77855b00a38c42e725d3bc68e3d2308724b43ffe916be5ee788d349d3714663f",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "ffd913687e5138ef84e75e64c2a9791c5629276a85faf1548b476289d19e7c00",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "2afb2928825c70bbe23a9a0402d61a961a53d288c22d2b1da9e01d3a12d3ddd0",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f"
     }
