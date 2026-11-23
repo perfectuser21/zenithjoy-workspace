@@ -11,6 +11,7 @@ import sys
 import time
 import http.client
 import urllib.error
+from urllib.parse import urlsplit
 import threading
 import queue
 
@@ -35,6 +36,7 @@ scope_rejection = typed.scope_rejection
 PHONE_INSTRUCTIONS = '''手机工具统一使用commander_host_tools.invoke(kind="phone", action_name, args=[命令,参数...])，不再按Activity列手机命令名单；按当前Skill操作。
 已有通用接口：snapshot-evidence EID；ui-evidence EID；tap X Y；tap-evidence X Y EID [WAIT_MS]；swipe X1 Y1 X2 Y2 MS；swipe-evidence X1 Y1 X2 Y2 MS EID [WAIT_MS]；back；back-evidence EID；text-input UTF8_TEXT。
 已有原生主页取链：commenter-profile-card-link VID UID NICKNAME_B64 BODY_SHA EID，原工具要求EID以本run_tag+-resume1-开头；这是原工具证据命名，不代表已有数据库评论ID。commenter-card-link EID要求已在正确用户主页。真实URL只能读原生输出，不拼造。
+本轮复制的抖音短链用 resolve-share-link HTTPS_SHORT_URL 读取公开跳转头，回执的 canonical_url 和 content_id 供 Skill 核对重开；工具不读手机或写业务。
 EID仍须本run_tag前缀；设备/profile/controller/账号来源和owner由宿主绑定，不能传入覆盖。普通/未知手机操作受business_deadline约束；仅原READ与本人停止录制、exact释放、关闭应用、安全归位可使用cleanup_deadline。
 with-lock外部COMMAND、账号切换和显式发送不通过此通用入口开放；显式外发仍走已有授权入口。普通点击不保证自动识别所有外发语义，必须遵守任务授权。
 未知动作不能同名或换名重放；原业务OPS、录制次数、验收Checker与Skill/Contract保持。'''
@@ -329,6 +331,56 @@ def patch_task_authority(tools, *, main_only=False):
     return tools
 
 
+_PUBLIC_SHORT_LINK = re.compile(r'https://v\.douyin\.com/[A-Za-z0-9_-]{1,80}/?')
+
+
+def is_public_short_link(value):
+    return isinstance(value, str) and _PUBLIC_SHORT_LINK.fullmatch(value) is not None
+
+
+def short_link_head(value, timeout):
+    connection = http.client.HTTPSConnection('v.douyin.com', timeout=timeout)
+    try:
+        connection.request('HEAD', urlsplit(value).path, headers={'User-Agent': 'Mozilla/5.0'})
+        response = connection.getresponse()
+        locations = [value for key, value in response.getheaders() if key.lower() == 'location']
+        return response.status, locations
+    finally:
+        connection.close()
+
+
+def resolve_public_short_link(initial, remaining):
+    deadline = time.monotonic() + min(20, remaining)
+    current = initial
+    error = 'SHORT_LINK_ID_MISSING'
+    for _ in range(2):
+        budget = deadline - time.monotonic()
+        if budget <= 0:
+            error = 'SHORT_LINK_DEADLINE'
+            break
+        try:
+            status, locations = short_link_head(current, min(9, budget))
+        except (OSError, http.client.HTTPException):
+            error = 'SHORT_LINK_NETWORK'
+            break
+        if not 300 <= status < 400 or len(locations) != 1:
+            error = 'SHORT_LINK_REDIRECT'
+            break
+        target = locations[0]
+        match = re.fullmatch(r'https://(?:www\.)?(?:douyin\.com|iesdouyin\.com)/(?:share/)?(video|note)/([0-9]{16,24})/?(?:[?#][^\s]*)?', target)
+        if match:
+            kind, content_id = match.groups()
+            return {'exit_code': 0, 'data': {'short_url': initial,
+                    'canonical_url': f'https://www.douyin.com/{kind}/{content_id}',
+                    'content_id': content_id, 'content_type': kind}}
+        if not is_public_short_link(target) or target == current:
+            error = 'SHORT_LINK_REDIRECT'
+            break
+        current = target
+    return {'exit_code': 2, 'data': {'reason': error}}
+
+
+
 def patch_phone_access(tools, scope):
     """Share the existing phone API, without an Activity command admission table."""
     start, end = scope.index('PHONE={'), scope.index('GUARDED=')
@@ -347,6 +399,9 @@ def phone_deadline(c,activity,kind,args):
  if args and args[0] in READ|{'record-stop','lock-release-exact','close-app','return-safe-desktop'}:return c['cleanup_deadline_ms']
  return min(c['business_deadline_ms'],c['cleanup_deadline_ms'])
 '''+scope[at:]
+    scope = replace_once(scope, " if cmd in EIDS:", ''' if cmd=='resolve-share-link':
+  if c['assigned_workflow']!='101' or activity!='collect_videos' or len(args)!=2 or not re.fullmatch(r'https://v\\.douyin\\.com/[A-Za-z0-9_-]{1,80}/?',args[1]):raise ValueError('SHORT_LINK_SCOPE')
+ if cmd in EIDS:''')
     scope = replace_once(scope, " if cmd=='open-video' and args[1] not in c['verification'].get('102',{}).get('video_ids',[]):raise ValueError('VIDEO_SCOPE')", ''' if cmd in {'open-video','commenter-profile-card-link'}:
   discovering = cmd=='open-video' and c['assigned_workflow']=='101' and activity=='collect_videos'
   if discovering:
@@ -380,6 +435,7 @@ def phone_deadline(c,activity,kind,args):
  started_at=time.time();atomic(action,""")
     tools = replace_once(tools, '  return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=420)', '''  remaining=(phone_deadline(c,key,kind,args)-time.time()*1000)/1000
   if remaining<=0:raise ValueError('ABSOLUTE_DEADLINE')
+  if cmd=='resolve-share-link':return _host.resolve_public_short_link(args[1],remaining)
   return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=min(420,remaining))''')
     return tools, scope
 
