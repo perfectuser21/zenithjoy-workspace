@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.preflight",
-            "contract_digest": "0356f49f277a342cd2920056189e4c6641cd5ce3db38e69b492b641f735fb707"
+            "contract_digest": "4ab50bb428bd42c8488089360fdd1e11f7b81b7181f91af350894c8dbe043244"
           },
           "document": {
             "key": "preflight",
@@ -33,7 +33,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.6.2",
+            "version": "2.6.3",
             "required_host_tools": [
               "phone",
               "brain",
@@ -64,6 +64,133 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "company": {
+                    "scope": "identity",
+                    "role": "company",
+                    "fields": [
+                      "/result/stdout/result/company_id",
+                      "/result/stdout/result/tenant_id",
+                      "/result/stdout/result/version",
+                      "/result/stdout/result/run_id",
+                      "/result/stdout/result/device_binding"
+                    ]
+                  },
+                  "frozen": {
+                    "scope": "identity",
+                    "role": "frozen",
+                    "fields": [
+                      "/profile",
+                      "/serial",
+                      "/adb_serial",
+                      "/expected_sender_id",
+                      "/company_id",
+                      "/tenant_id"
+                    ]
+                  },
+                  "account": {
+                    "scope": "handoff",
+                    "role": "account"
+                  },
+                  "local": {
+                    "scope": "handoff",
+                    "role": "local_acquire"
+                  },
+                  "central_acquire": {
+                    "scope": "handoff",
+                    "role": "central_acquire"
+                  }
+                },
+                "facts": {
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight",
+                        "local_lock",
+                        "account"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "identity": {
+                    "operation": "run.identity",
+                    "args": {}
+                  },
+                  "task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "status",
+                        "result.foundation_runner.run_id",
+                        "result.foundation_runner.task_id"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "activity_calls",
+                        "attempts",
+                        "identity"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "local"
+                  ],
+                  "outputs_1": [
+                    "account",
+                    "company"
+                  ],
+                  "outputs_2": [
+                    "frozen",
+                    "identity",
+                    "native"
+                  ],
+                  "postconditions_0": [
+                    "frozen",
+                    "native"
+                  ],
+                  "postconditions_1": [
+                    "account",
+                    "company",
+                    "identity",
+                    "frozen"
+                  ],
+                  "postconditions_2": [
+                    "native"
+                  ],
+                  "postconditions_3": [
+                    "central_acquire",
+                    "local",
+                    "central",
+                    "native"
+                  ],
+                  "idempotency": [
+                    "identity",
+                    "progress"
+                  ],
+                  "failure": [
+                    "task",
+                    "company",
+                    "native",
+                    "central"
+                  ]
                 }
               }
             },
@@ -1939,8 +2066,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "d9a12322c9d5c6bce33f48f8f0a6d04c43503f2a",
-      "contract_sha256": "14bcf0e63a7822d5172e4a92776ddc7633f12f18e1361737cd645b9212186095"
+      "method_revision": "fbc69bd122bc2d28187a14fabe036816d24d7e0c",
+      "contract_sha256": "a53cff7c22b3a40c71b3bbdc3e9f14af96b5bd17cf38ba576d106de2c4c5dbab"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2104,7 +2231,7 @@
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "77855b00a38c42e725d3bc68e3d2308724b43ffe916be5ee788d349d3714663f",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "2afb2928825c70bbe23a9a0402d61a961a53d288c22d2b1da9e01d3a12d3ddd0",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "f3fccd3643cff03f17a377e0ba99cf7d4c470eca28feb17911b30c2c93f01a5e"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f"
     }
   }
 }
