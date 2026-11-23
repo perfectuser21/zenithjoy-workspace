@@ -46,6 +46,17 @@ if mode=='context-drift':
  else:c['verification']['102']['qualification_input']['coverage']['source_duration_display_seconds']=38
  (target/'context.json').write_text(json.dumps(c))
 spec=importlib.util.spec_from_file_location('host',target/'tools.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+if mode=='reopen-video-scope':
+ from tool_scope import phone_args
+ c['local_owner']='fixture-owner'
+ def probe_open(command,video,run_tag='fixture-new-run'):
+  try:return phone_args(c,activity,[command,video,run_tag+'-reopen','unused','unused',run_tag+'-card'])
+  except ValueError as exc:return str(exc)
+ known='7711111111111111111';discovered='7722222222222222222'
+ print(json.dumps({'known':probe_open('open-video',known),'discovered':probe_open('open-video',discovered),
+                   'bad':probe_open('open-video','not-a-video-id'),'another_run':probe_open('open-video',known,'another-run'),
+                   'card':probe_open('commenter-profile-card-link',discovered)}))
+ sys.exit(0)
 m.task_authority=lambda c,**kw:None;calls={'dispatch':0,'credentials':0,'resource':0}
 def resource(c):calls['resource']+=1
 def environment(c):calls['credentials']+=1;return {}
@@ -148,6 +159,16 @@ print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,
  const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify({... (workflow==='103'?fixture103:(workflow==='102'?fixture102:fixture)),diagnostic:diagnosticFixture}),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
  }finally{rmSync(root,{recursive:true,force:true});}
 }
+test('101 reopens a newly discovered canonical video while 102 retains its frozen upstream scope',()=>{
+ const discovery=probe('reopen-video-scope');
+ assert.ok(Array.isArray(discovery.discovered),discovery.discovered);
+ assert.equal(discovery.bad,'VIDEO_SCOPE');
+ assert.equal(discovery.another_run,'EVIDENCE_RUN_SCOPE');
+ assert.equal(discovery.card,'VIDEO_SCOPE');
+ const processing=probe('reopen-video-scope','102');
+ assert.ok(Array.isArray(processing.known));
+ assert.equal(processing.discovered,'VIDEO_SCOPE');
+});
 test('real assembled collect host emits typed company_config rejection and only dispatches corrected new action',()=>{
  const r=probe();assert.equal(r.first.rc,2,r.first.error);const v=JSON.parse(r.first.stdout);
  assert.equal(v.state,'terminal');assert.equal(v.result.error,'BUSINESS_ACTIVITY_SCOPE');assert.equal(v.result.data.dispatched,false);assert.equal(v.result.data.external_effect,'none');

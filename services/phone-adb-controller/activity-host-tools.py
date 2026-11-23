@@ -347,7 +347,11 @@ def phone_deadline(c,activity,kind,args):
  if args and args[0] in READ|{'record-stop','lock-release-exact','close-app','return-safe-desktop'}:return c['cleanup_deadline_ms']
  return min(c['business_deadline_ms'],c['cleanup_deadline_ms'])
 '''+scope[at:]
-    scope = replace_once(scope, "if cmd=='open-video' and", "if cmd in {'open-video','commenter-profile-card-link'} and")
+    scope = replace_once(scope, " if cmd=='open-video' and args[1] not in c['verification'].get('102',{}).get('video_ids',[]):raise ValueError('VIDEO_SCOPE')", ''' if cmd in {'open-video','commenter-profile-card-link'}:
+  discovering = cmd=='open-video' and c['assigned_workflow']=='101' and activity=='collect_videos'
+  if discovering:
+   if not re.fullmatch(r'[0-9]{16,24}',args[1]):raise ValueError('VIDEO_SCOPE')
+  elif args[1] not in c['verification'].get('102',{}).get('video_ids',[]):raise ValueError('VIDEO_SCOPE')''')
     tools = replace_once(tools, 'from tool_scope import phone_args,scoped_business,READ', 'from tool_scope import phone_args,scoped_business,READ,phone_deadline')
     tools = replace_once(tools, " deadline=c['cleanup_deadline_ms'] if key=='cleanup' else c['business_deadline_ms']", ''' deadline=phone_deadline(c,key,kind,args)
  if kind=='phone':
