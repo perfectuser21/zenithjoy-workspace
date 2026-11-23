@@ -330,3 +330,17 @@ test('Activity continuation is a strict frozen opt-in, not caller-controlled ext
   const bad=fresh();act(bad,'douyin_comment_scoring','scoring').agent_recovery=policy;assert.ok(validateContracts(bad).length>0);
  }
 });
+
+test('完工报告必须覆盖冻结合同的全部完工条款并引用已声明证据', () => {
+  const ctx = fresh();
+  const a = act(ctx, 'douyin_video_processing', 'qualification');
+  const report = { files: { capture: { scope: 'handoff', role: 'coverage' } }, criteria: { postconditions_0: ['capture'] } };
+  a.delivery = { ...a.delivery, report };
+  expectError(ctx, /qualification: delivery.report.criteria/);
+  const ids = ['outputs', 'postconditions', 'side_effects'].flatMap(field => a[field].map((_, index) => field + '_' + index))
+    .concat('idempotency', 'failure');
+  report.criteria = Object.fromEntries(ids.map(id => [id, ['capture']]));
+  assert.deepEqual(validateContracts(ctx), []);
+  report.criteria.postconditions_0 = ['missing'];
+  expectError(ctx, /qualification: delivery.report.criteria/);
+});
