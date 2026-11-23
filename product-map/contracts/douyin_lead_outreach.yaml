@@ -1,5 +1,5 @@
 version: 1
-runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/104.json, revision: 0e8b6c234ab8cd1e8eac3b5edc9f33fb9bea63fd, digest: sha256:9d031150cc4ec0230f1f7bb11dd6fdb6140f720fb85ddb5dc63762e43c8c43de }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope" ], "properties": { "scope": { "type": "object", "additionalProperties": false, "required": [ "record_id", "comment_id", "lead_id", "target_douyin_id", "profile_url", "source_102_run", "source_103_run" ], "properties": { "record_id": { "type": "string", "minLength": 1 }, "comment_id": { "type": "string", "minLength": 1 }, "lead_id": { "type": "string", "minLength": 1 }, "target_douyin_id": { "type": "string", "minLength": 1 }, "profile_url": { "type": "string", "minLength": 1 }, "source_102_run": { "type": "string", "minLength": 1 }, "source_103_run": { "type": "string", "minLength": 1 } } } } } } } }
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/104.json, revision: a441320307f8bb550b6ea5137c8d363655f5e5cc, digest: sha256:57e9f003264a442afb6d63df50b151c9adf34756a1f0831160aa06a6ff923542 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope" ], "properties": { "scope": { "type": "object", "additionalProperties": false, "required": [ "record_id", "comment_id", "lead_id", "target_douyin_id", "profile_url", "source_102_run", "source_103_run" ], "properties": { "record_id": { "type": "string", "minLength": 1 }, "comment_id": { "type": "string", "minLength": 1 }, "lead_id": { "type": "string", "minLength": 1 }, "target_douyin_id": { "type": "string", "minLength": 1 }, "profile_url": { "type": "string", "minLength": 1 }, "source_102_run": { "type": "string", "minLength": 1 }, "source_103_run": { "type": "string", "minLength": 1 } } } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/104.json
 implementation:
@@ -336,8 +336,8 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/104.json
-        revision: 0e8b6c234ab8cd1e8eac3b5edc9f33fb9bea63fd
-        digest: sha256:9d031150cc4ec0230f1f7bb11dd6fdb6140f720fb85ddb5dc63762e43c8c43de
+        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        digest: sha256:57e9f003264a442afb6d63df50b151c9adf34756a1f0831160aa06a6ff923542
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

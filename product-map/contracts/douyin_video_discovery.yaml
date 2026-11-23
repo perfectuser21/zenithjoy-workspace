@@ -1,5 +1,5 @@
 version: 1
-runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/101.json, revision: 0e8b6c234ab8cd1e8eac3b5edc9f33fb9bea63fd, digest: sha256:304f241e28feeaaa40bedd3f0a840d56f643ddb629a89414405d1e962c410ec1 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "keyword", "search_filters", "max_candidates" ], "properties": { "keyword": { "type": "string", "minLength": 1, "maxLength": 100 }, "search_filters": { "type": "object" }, "max_candidates": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/101.json, revision: a441320307f8bb550b6ea5137c8d363655f5e5cc, digest: sha256:9dfcedfa18e800e67e679ecba7e704f56e72342317c3cd7a34f4c7f7522d3a58 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "keyword", "search_filters", "max_candidates" ], "properties": { "keyword": { "type": "string", "minLength": 1, "maxLength": 100 }, "search_filters": { "type": "object" }, "max_candidates": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/101.json
 implementation:
@@ -519,8 +519,8 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/101.json
-        revision: 0e8b6c234ab8cd1e8eac3b5edc9f33fb9bea63fd
-        digest: sha256:304f241e28feeaaa40bedd3f0a840d56f643ddb629a89414405d1e962c410ec1
+        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        digest: sha256:9dfcedfa18e800e67e679ecba7e704f56e72342317c3cd7a34f4c7f7522d3a58
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
