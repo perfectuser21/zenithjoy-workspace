@@ -1,5 +1,5 @@
 version: 1
-runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/102.json, revision: a441320307f8bb550b6ea5137c8d363655f5e5cc, digest: sha256:e2cb75e23d5564f2895ca3db1db1a542aa968627a39821cbb9d56aa226320b52 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope", "comment_limit", "producer_key" ], "properties": { "scope": { "type": "object", "required": [ "video_ids", "upstream", "qualification_input" ], "properties": { "video_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "pattern": "^[0-9]{16,24}$" } }, "upstream": { "type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": { "type": "object", "additionalProperties": false, "required": [ "run" ], "properties": { "run": { "type": "string", "minLength": 1 } }, "description": "只选择已批准来源run_tag；内部run_id由宿主从受控producer推导。" } }, "qualification_input": { "type": "object" } } }, "comment_limit": { "type": "integer", "minimum": 1, "maximum": 100 }, "qualification_coverage_seconds": { "type": "integer", "minimum": 1, "maximum": 300 }, "input_provenance": { "type": "object" }, "producer_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$", "description": "受控本机配置内已完成101 manifest/result来源的索引；不接受用户文件路径或源码身份。" } } } } } }
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/102.json, revision: d55a9c1fa58cfb2aa03709f82577765605f8818b, digest: sha256:7b204e0e776f263d9a347306e0b931bf31e0eb56954b126679c2094ffbb099ce }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "scope", "comment_limit", "producer_key" ], "properties": { "scope": { "type": "object", "required": [ "video_ids", "upstream", "qualification_input" ], "properties": { "video_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "pattern": "^[0-9]{16,24}$" } }, "upstream": { "type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": { "type": "object", "additionalProperties": false, "required": [ "run" ], "properties": { "run": { "type": "string", "minLength": 1 } }, "description": "只选择已批准来源run_tag；内部run_id由宿主从受控producer推导。" } }, "qualification_input": { "type": "object" } } }, "comment_limit": { "type": "integer", "minimum": 1, "maximum": 100 }, "qualification_coverage_seconds": { "type": "integer", "minimum": 1, "maximum": 300 }, "input_provenance": { "type": "object" }, "producer_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$", "description": "受控本机配置内已完成101 manifest/result来源的索引；不接受用户文件路径或源码身份。" } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/102.json
 implementation:
@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.12.25
+  version: 0.12.26
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -448,301 +448,301 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/collection-stop.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/102.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
-        digest: sha256:e2cb75e23d5564f2895ca3db1db1a542aa968627a39821cbb9d56aa226320b52
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
+        digest: sha256:7b204e0e776f263d9a347306e0b931bf31e0eb56954b126679c2094ffbb099ce
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-runtime.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state-wiring.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-transport.py
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-104.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-pg.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-tools.py
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-facts.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-identity.py
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-tool-result.py
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:4cc6c52836034af0b998142e1f6c435732102f60481c60a15fd747b25e711cc3
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-upstream-source.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:eabb48fb6c5fe0233b498ce291e828992a094690ab6b2bea0ed2238a3d835e5e
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/discovery-metrics-queue.js
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:7f6b4ba23aabc0b4acba54ae9778bde992d3c3716a3281d8135c3dee2157ac59
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/judge-comment.js
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-authorization-intent.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-committed-partial.js
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:e5b443ecf4b0c0f6ee4cd9580883539f267cf41609016bcba02b26e4ce51230b
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
-        digest: sha256:83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
+        digest: sha256:651a11963c66b2eaa4d4e4b4debc557fef52ff4c8f4733413ddb8c3b022e227f
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/context.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/101.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/102.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/103.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/104.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/worker.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-scope.js
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-score-context.js
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/package.json
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
-        digest: sha256:2afb2928825c70bbe23a9a0402d61a961a53d288c22d2b1da9e01d3a12d3ddd0
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
+        digest: sha256:f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
-        digest: sha256:46b9d08c756cf62ddbf155dd85b747ffa503b91af3d71c2b167b394c1b3c3e71
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
+        digest: sha256:e8c5635c2dd9f28663295a5d394740fed7d65074785de9680a1e5d289a22d024
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
-        digest: sha256:8f4c27085f87bc628b44087f4547b4eed6a50afcc2313be112baaa20a88a3135
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
+        digest: sha256:0d5cf7f213848b7e0de7c1194afc32b0f92120f6c8a9635ddf78ce369d53fd84
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
-        digest: sha256:20526b98430a112d2c8c2388f24fbe6bc230cf5950943ba060c324a0b5446fa4
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
+        digest: sha256:5a48455deb271b13e7a6231d4579ae48e1946137284dcdf9dd9524e844f01225
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/qualification-agent-candidate.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:52e93e17de062e019e0bf2415579e04f0da6791b10b4cd0bd4a44c9fbadda573
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/qualification-agent-decision.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/qualification-agent-overlay.mjs
-        revision: a441320307f8bb550b6ea5137c8d363655f5e5cc
+        revision: d55a9c1fa58cfb2aa03709f82577765605f8818b
         digest: sha256:14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a
         purpose: foundation_host
     steps:
@@ -864,10 +864,10 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.3.4
+    version: 3.3.5
     required_host_tools: ["business", "phone", "fetch-native"]
-    delivery: &activity_handoff
-      schema:
+    delivery:
+      schema: &activity_handoff_schema
         type: object
         additionalProperties: false
         required: [outputs, evidence]
@@ -880,6 +880,54 @@ activities:
               type: object
               minProperties: 1
               additionalProperties: { type: string, minLength: 1 }
+      report:
+        files:
+          author: { scope: "*", role: author, optional: true }
+          author_ui: { scope: "*", role: author_ui, optional: true }
+          author_image: { scope: "*", role: author_image, optional: true }
+          claim:
+            scope: "*"
+            role: claim
+            optional: true
+            fields: [/binding/identity, /state, /result/exit_code, /result/stdout/result/0/line_key, /result/stdout/result/0/video_id, /result/stdout/result/0/comment_count, /result/stdout/result/0/harvest_batch, /result/stdout/result/0/process_status, /result/stdout/result/0/updated_at]
+          link: { scope: "*", role: link, optional: true }
+          navigation: { scope: "*", role: navigation, optional: true }
+          upstream: { scope: "*", role: upstream, optional: true }
+        facts:
+          persisted:
+            operation: pg.rows
+            args:
+              relation: videos
+              fields: [connection.snapshot_at, connection.transaction_read_only, rows.video_id, rows.line_key, rows.author, rows.keyword, rows.comment_count, rows.process_status, rows.harvest_batch, rows.updated_at, rows.judgment_status, rows.judgment_config, rows.discovery_metrics.company_binding, rows.discovery_metrics.run]
+          company:
+            operation: pg.rows
+            args:
+              relation: company
+              fields: [rows.company_id, rows.tenant_id, rows.config_version, rows.version_snapshot.runtime_config.platform_accounts.id, rows.version_snapshot.runtime_config.platform_accounts.enabled, rows.version_snapshot.runtime_config.platform_accounts.verification_status, rows.version_snapshot.runtime_config.platform_accounts.fields, rows.version_snapshot.runtime_config.platform_accounts.source.platform]
+          policy:
+            operation: pg.rows
+            args:
+              relation: policy
+              fields: [rows.company_id, rows.tenant_id, rows.version, rows.run_id, rows.source_run, rows.snapshot.policy_id, rows.snapshot.runtime_config.platform_accounts.id, rows.snapshot.runtime_config.platform_accounts.enabled, rows.snapshot.runtime_config.platform_accounts.verification_status, rows.snapshot.runtime_config.platform_accounts.fields, rows.snapshot.runtime_config.platform_accounts.source.platform]
+          source_task:
+            operation: brain.get
+            args:
+              resource: task
+              fields: [id, result.foundation_runner.run.input.business.scope.video_ids, result.foundation_runner.run.input.business.scope.upstream, result.foundation_runner.run.input.business.producer_key, result.foundation_runner.run.input.run_tag]
+          actions:
+            operation: host.receipts
+            args: { fields: [receipts.activity, receipts.kind, receipts.operation, receipts.state, receipts.exit_code] }
+          progress:
+            operation: run.progress
+            args: { fields: [identity, activity_calls, attempts] }
+        criteria:
+          outputs_0: [claim, persisted, upstream]
+          postconditions_0: [persisted, claim, source_task]
+          postconditions_1: [author, author_ui, author_image, link, navigation, company, policy]
+          postconditions_2: [source_task, upstream, claim, persisted, actions]
+          side_effects_0: [claim, persisted, upstream, actions]
+          idempotency: [persisted, progress, actions]
+          failure: [persisted, source_task, progress, author, author_ui, author_image]
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -975,7 +1023,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-dedup
-        version: 0.8.5
+        version: 0.8.6
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1206,9 +1254,94 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 3
-    version: 3.6.2
+    version: 3.6.3
     required_host_tools: ["phone", "business", "fetch-native", "proof", "qualify-prepare", "qualify-submit"]
-    delivery: *activity_handoff
+    delivery:
+      schema: *activity_handoff_schema
+      report:
+        files:
+          identity: { scope: "*", role: video_identity, optional: true }
+          coverage: { scope: "*", role: coverage_json, optional: true }
+          archived_coverage: { scope: "*", role: coverage, optional: true }
+          frames: { scope: "*", role: coverage_image, optional: true }
+          asr:
+            scope: "*"
+            role: asr
+            optional: true
+            fields: [/http_status, /provider_received, /body/output/text, /raw_sha256]
+          journal:
+            scope: "*"
+            role: journal
+            optional: true
+            fields: [/scope, /policy, /visual_evidence, /calls, /media, /agent_decision_provenance/dossier_sha256]
+          proof:
+            scope: "*"
+            role: proof
+            optional: true
+            fields: [/binding/identity, /started_at, /ended_at, /binding/args/0/qualification_evidence, /result/exit_code, /result/data/proof_manifest]
+          prepare:
+            scope: "*"
+            role: prepare
+            optional: true
+            fields: [/binding/identity, /ended_at, /result/exit_code, /result/stdout]
+          submit:
+            scope: "*"
+            role: submit
+            optional: true
+            fields: [/binding/identity, /started_at, /ended_at, /state, /result/exit_code, /result/stdout]
+          readback: { scope: "*", role: readback, optional: true }
+          record_start: { scope: "*", role: record_start, optional: true }
+          record_stop: { scope: "*", role: record_stop, optional: true, fields: [/binding/identity, /started_at, /ended_at, /state, /result/exit_code] }
+          extract_audio: { scope: "*", role: extract, optional: true, fields: [/state, /result/exit_code] }
+          capture_runtime: { scope: "*", role: capture_runtime, optional: true }
+          capture_sdk: { scope: "*", role: sdk, optional: true }
+          audio_start: { scope: "*", role: audio_start, optional: true, digest_only: true }
+          audio_end: { scope: "*", role: audio_end, optional: true, digest_only: true }
+        facts:
+          persisted:
+            operation: pg.rows
+            args:
+              relation: videos
+              fields: [connection.transaction_read_only, rows.line_key, rows.video_id, rows.judgment_status, rows.judgment_reason, rows.transcript, rows.judgment_config, rows.process_status, rows.harvest_batch]
+          policy:
+            operation: pg.rows
+            args:
+              relation: policy
+              fields: [rows.company_id, rows.tenant_id, rows.version, rows.run_id, rows.snapshot.policy_id, rows.snapshot.runtime_config.video_judgment.decision_id, rows.snapshot.runtime_config.video_judgment.instructions, rows.snapshot.runtime_config.video_judgment.stage_purpose, rows.snapshot.runtime_config.video_judgment.include_examples, rows.snapshot.runtime_config.video_judgment.exclude_criteria, rows.snapshot.runtime_config.video_judgment.products.name, rows.snapshot.runtime_config.video_judgment.audiences.name]
+          origin:
+            operation: qualification.origin
+            optional: true
+            args:
+              video_id: { "$from": /proposal/outputs/Video/0/video_id }
+              document: asr-response.json
+              fields: [origin.run_id, origin.video_id, document.sha256, document.data.http_status, document.data.provider_received, document.data.body.output.text]
+          recording:
+            operation: media.inspect
+            optional: true
+            args:
+              name: { "$from": /files/coverage/recording/name }
+              fields: [name, sha256, bytes, metadata.format.duration, metadata.streams.codec_type, metadata.streams.codec_name]
+          audio:
+            operation: media.inspect
+            optional: true
+            args:
+              name: { "$from": /files/proof/binding/args/0/qualification_evidence/audio/path, basename: true }
+              fields: [name, sha256, bytes, metadata.format.duration, metadata.streams.codec_type, metadata.streams.codec_name]
+          actions:
+            operation: host.receipts
+            args: { fields: [receipts.activity, receipts.kind, receipts.operation, receipts.state, receipts.exit_code, receipts.started_at, receipts.ended_at] }
+          task:
+            operation: brain.get
+            args:
+              resource: task
+              fields: [id, result.foundation_runner.run.input.business.scope.video_ids]
+        criteria:
+          outputs_0: [persisted, readback, submit]
+          postconditions_0: [persisted, readback, submit, asr, origin]
+          postconditions_1: [persisted, policy, origin, identity, coverage, archived_coverage, frames, asr, journal, proof, prepare, submit, readback, record_start, record_stop, extract_audio, capture_runtime, capture_sdk, audio_start, audio_end, recording, audio, actions]
+          side_effects_0: [persisted, submit, readback]
+          idempotency: [persisted, task, journal, submit, actions]
+          failure: [persisted, readback, origin, asr, journal, actions]
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1407,7 +1540,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-qualification
-        version: 0.9.3
+        version: 0.9.4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -1595,9 +1728,56 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 2.8.6
+    version: 2.8.7
     required_host_tools: ["phone", "business", "fetch-native", "collection-evidence", "collection-readback"]
-    delivery: *activity_handoff
+    delivery:
+      schema: *activity_handoff_schema
+      report:
+        files:
+          delivered:
+            scope: "*"
+            role: "*"
+        facts:
+          videos:
+            operation: pg.rows
+            args:
+              relation: videos
+              fields: [connection.transaction_read_only, rows.video_id, rows.line_key, rows.judgment_status, rows.judgment_config, rows.process_status, rows.harvest_batch, rows.comment_count, rows.author]
+          comments:
+            operation: pg.rows
+            args:
+              relation: comments
+              fields: [connection.transaction_read_only, rows.id, rows.line_key, rows.dedup_key, rows.nickname, rows.douyin_id, rows.profile_url, rows.body, rows.video_id, rows.harvest_batch, rows.recipient_evidence]
+          policy:
+            operation: pg.rows
+            args:
+              relation: policy
+              fields: [rows.company_id, rows.tenant_id, rows.version, rows.run_id, rows.snapshot.policy_id, rows.snapshot.runtime_config.platform_accounts.id, rows.snapshot.runtime_config.platform_accounts.enabled, rows.snapshot.runtime_config.platform_accounts.verification_status, rows.snapshot.runtime_config.platform_accounts.fields, rows.snapshot.runtime_config.platform_accounts.source.platform]
+          task:
+            operation: brain.get
+            args:
+              resource: task
+              fields: [id, result.foundation_runner.run.input.business.comment_limit, result.foundation_runner.run.input.business.scope, result.foundation_runner.run.deadline_ms]
+          actions:
+            operation: host.receipts
+            args: { fields: [receipts.activity, receipts.kind, receipts.operation, receipts.state, receipts.exit_code] }
+          progress:
+            operation: run.progress
+            args: { fields: [identity, activity_calls, attempts] }
+        criteria:
+          outputs_0: [comments, delivered]
+          outputs_1: [videos, delivered]
+          postconditions_0: [videos, policy, delivered]
+          postconditions_1: [videos, comments, delivered, actions, task]
+          postconditions_2: [videos, delivered, actions, progress]
+          postconditions_3: [comments, videos, delivered, policy]
+          postconditions_4: [task, comments, videos, delivered]
+          postconditions_5: [task, delivered, comments]
+          postconditions_6: [task, comments, delivered]
+          postconditions_7: [comments, delivered, actions, progress]
+          side_effects_0: [videos, comments, delivered, actions]
+          idempotency: [comments, delivered]
+          failure: [task, videos, comments, delivered, actions, progress]
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1757,7 +1937,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.10.7
+        version: 0.10.8
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
@@ -2079,9 +2259,51 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 5
-    version: 2.6.3
+    version: 2.6.4
     required_host_tools: ["native-readback", "phone", "brain", "business", "fetch-native"]
-    delivery: *activity_handoff
+    delivery:
+      schema: *activity_handoff_schema
+      report:
+        files:
+          close: { scope: "*", role: close, optional: true }
+          close_app: { scope: "*", role: close_app, optional: true }
+          app_closed: { scope: "*", role: app_closed, optional: true }
+          home: { scope: "*", role: home, optional: true }
+          desktop: { scope: "*", role: desktop, optional: true }
+          desktop_image: { scope: "*", role: desktop_image, optional: true }
+          screenshot: { scope: "*", role: screenshot, optional: true }
+          local_release: { scope: "*", role: local_release, optional: true }
+          local_readback: { scope: "*", role: local_readback, optional: true }
+          central_release: { scope: "*", role: central_release, optional: true }
+          central_readback: { scope: "*", role: central_readback, optional: true }
+          claims_release: { scope: "*", role: video_release, optional: true }
+          claims_readback: { scope: "*", role: video_readback, optional: true }
+        facts:
+          native:
+            operation: native.read
+            args: { fields: [preflight.foreground_package, preflight.hardware_serial, local_lock, operations, active, inflight] }
+          central:
+            operation: brain.get
+            args: { resource: device_lock }
+          claims:
+            operation: pg.rows
+            args:
+              relation: videos
+              fields: [connection.snapshot_at, rows.video_id, rows.line_key, rows.process_status, rows.harvest_batch, rows.updated_at]
+          actions:
+            operation: host.receipts
+            args: { fields: [receipts.activity, receipts.kind, receipts.operation, receipts.state, receipts.exit_code] }
+          progress:
+            operation: run.progress
+            args: { fields: [identity, activity_calls, attempts, observations] }
+        criteria:
+          outputs_0: [native, central, local_release, local_readback, central_release, central_readback]
+          outputs_1: [native, central, claims, actions, progress]
+          postconditions_0: [native, actions, progress, close, close_app, app_closed]
+          postconditions_1: [native, central, claims, actions, progress, local_release, local_readback, central_release, central_readback, claims_release, claims_readback]
+          postconditions_2: [native, actions, progress, home, desktop, desktop_image, screenshot]
+          idempotency: [native, central, claims, actions, progress]
+          failure: [native, central, claims, actions, progress, home, desktop, desktop_image, screenshot]
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -2174,7 +2396,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-cleanup
-        version: 0.11.3
+        version: 0.11.4
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs

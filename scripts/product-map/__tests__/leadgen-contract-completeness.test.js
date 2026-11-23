@@ -107,14 +107,14 @@ test('104 订单生命周期与发送结果由完整合同规定', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_lead_outreach.yaml'), 'utf8'));
   const activity = Object.fromEntries(doc.activities.filter(a => a.key).map(a => [a.key, a]));
   assert.ok(!activity.preflight.outputs.some(output => output.type === 'OutreachOrder'));
-  assert.equal(activity.preflight.version, '5.3.1');
+  assert.equal(activity.preflight.version, '5.3.2');
   assert.equal(activity.preflight.compatibility, 'breaking');
   assert.ok(activity.send_dm.inputs.some(input => input.type === 'OutreachOrder'));
   assert.equal(activity.send_dm.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.send_dm.version, '6.1.2');
+  assert.equal(activity.send_dm.version, '6.1.3');
   assert.equal(activity.send_dm.compatibility, 'breaking');
   assert.equal(activity.write_back.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.write_back.version, '4.1.1');
+  assert.equal(activity.write_back.version, '4.1.2');
   assert.equal(activity.write_back.compatibility, 'breaking');
   assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_delivery_result_verified'));
   assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_order_scope_verified'));
@@ -200,4 +200,22 @@ test('四条获客流程的模型验收允许读取证据所需的五分钟', ()
       .map(([activityKey]) => activityKey);
     assert.deepEqual(tooShort, [], `Workflow ${workflow} 的 Checker 存在低于五分钟的上限`);
   }
+});
+
+test('四条获客流程每个 Activity 的完工条款均接入单份证据报告', () => {
+  const missing = [];
+  for (const workflow of ['101', '102', '103', '104']) {
+    const file = resolve(root, `services/phone-adb-controller/leadgen-foundation/profiles/${workflow}.json`);
+    const { contract } = JSON.parse(readFileSync(file, 'utf8'));
+    for (const { key, acceptance } of contract.activities) {
+      const report = acceptance.document.delivery?.report;
+      const expected = acceptance.criteria.filter(({ phase }) => phase === 'end').map(({ id }) => id).sort();
+      const evidence = new Set([...Object.keys(report?.files ?? {}), ...Object.keys(report?.facts ?? {})]);
+      const actual = Object.keys(report?.criteria ?? {}).sort();
+      const complete = actual.length === expected.length && expected.every((id, index) =>
+        id === actual[index] && report.criteria[id].length > 0 && report.criteria[id].every(label => evidence.has(label)));
+      if (!complete) missing.push(`${workflow}.${key}`);
+    }
+  }
+  assert.deepEqual(missing, []);
 });

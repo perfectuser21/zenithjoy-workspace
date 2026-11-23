@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_comment_scoring.yaml",
             "activity_ref": "douyin_comment_scoring.scoring",
-            "contract_digest": "45b4da2527b83cb8c32bab70ae4e628ef3ba48ee6d2f14aafa943c0cf247c497"
+            "contract_digest": "e98ea9ec849eed4946a817b093bdda34bb85c67bf6701476a7a963ccfe5959c7"
           },
           "document": {
             "key": "scoring",
@@ -32,7 +32,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.10.1",
+            "version": "2.10.2",
             "required_host_tools": [
               "business"
             ],
@@ -60,6 +60,155 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "submitted": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "comments": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "comments",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.harvest_batch",
+                        "rows.source_video_url",
+                        "rows.comment_body",
+                        "rows.douyin_id",
+                        "rows.profile_url",
+                        "rows.process_status",
+                        "rows.relevance",
+                        "rows.intent_grade",
+                        "rows.judgment_reason",
+                        "rows.judgment_config",
+                        "rows.promoted"
+                      ]
+                    }
+                  },
+                  "videos": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.video_id",
+                        "rows.video_url",
+                        "rows.title",
+                        "rows.transcript",
+                        "rows.judgment_status",
+                        "rows.judgment_config",
+                        "rows.process_status"
+                      ]
+                    }
+                  },
+                  "policy": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "policy",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.run_id",
+                        "rows.source_run",
+                        "rows.version",
+                        "rows.snapshot.policy_id",
+                        "rows.snapshot.config_status",
+                        "rows.snapshot.runtime_config.policy_id",
+                        "rows.snapshot.runtime_config.comment_scoring"
+                      ]
+                    }
+                  },
+                  "outbox": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "outbox",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.comment_id"
+                      ]
+                    }
+                  },
+                  "host": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.path",
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "comments",
+                    "submitted"
+                  ],
+                  "postconditions_0": [
+                    "comments",
+                    "videos",
+                    "policy",
+                    "submitted",
+                    "host",
+                    "progress"
+                  ],
+                  "postconditions_1": [
+                    "comments",
+                    "outbox",
+                    "submitted",
+                    "host"
+                  ],
+                  "side_effects_0": [
+                    "comments",
+                    "outbox",
+                    "submitted",
+                    "host"
+                  ],
+                  "idempotency": [
+                    "comments",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "failure": [
+                    "comments",
+                    "outbox",
+                    "policy",
+                    "host",
+                    "submitted"
+                  ]
                 }
               }
             },
@@ -436,7 +585,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_comment_scoring.yaml",
             "activity_ref": "douyin_comment_scoring.mark_leads",
-            "contract_digest": "1934f9365c5aff2891879721da4caa6b56687a58c09453cb342dc06f9c8404e0"
+            "contract_digest": "d13454681979336858ff38baf3e0ba0bb887c3f747752f016a8b190bf76c0e2e"
           },
           "document": {
             "key": "mark_leads",
@@ -452,7 +601,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "3.10.1",
+            "version": "3.10.2",
             "required_host_tools": [
               "business"
             ],
@@ -480,6 +629,189 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "submitted": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "comments": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "comments",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.harvest_batch",
+                        "rows.source_video_url",
+                        "rows.comment_body",
+                        "rows.douyin_id",
+                        "rows.profile_url",
+                        "rows.process_status",
+                        "rows.relevance",
+                        "rows.intent_grade",
+                        "rows.judgment_reason",
+                        "rows.judgment_config",
+                        "rows.promoted"
+                      ]
+                    }
+                  },
+                  "leads": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "leads",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.douyin_id",
+                        "rows.nickname",
+                        "rows.profile_url",
+                        "rows.intent_grade",
+                        "rows.dup_hit_count",
+                        "rows.status",
+                        "rows.send_status",
+                        "rows.script_version",
+                        "rows.reached_at",
+                        "rows.feishu_record_id"
+                      ]
+                    }
+                  },
+                  "outbox": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "outbox",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.comment_id",
+                        "rows.lead_id",
+                        "rows.run_tag",
+                        "rows.source_run",
+                        "rows.qualification_status",
+                        "rows.state",
+                        "rows.payload",
+                        "rows.payload_sha256",
+                        "rows.fields",
+                        "rows.fields_sha256",
+                        "rows.feishu_record_id"
+                      ]
+                    }
+                  },
+                  "policy": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "policy",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.run_id",
+                        "rows.source_run",
+                        "rows.version",
+                        "rows.snapshot.policy_id",
+                        "rows.snapshot.config_status",
+                        "rows.snapshot.runtime_config.policy_id",
+                        "rows.snapshot.runtime_config.comment_scoring"
+                      ]
+                    }
+                  },
+                  "host": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.path",
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "delivery": {
+                    "operation": "feishu.get",
+                    "args": {
+                      "record_id": {
+                        "$from": "/proposal/outputs/OutreachBridgeIntent/0/feishu_record_id"
+                      }
+                    },
+                    "optional": true
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "comments",
+                    "submitted"
+                  ],
+                  "outputs_1": [
+                    "leads",
+                    "comments",
+                    "submitted"
+                  ],
+                  "outputs_2": [
+                    "comments",
+                    "outbox",
+                    "policy",
+                    "submitted"
+                  ],
+                  "outputs_3": [
+                    "outbox",
+                    "submitted",
+                    "delivery"
+                  ],
+                  "postconditions_0": [
+                    "comments",
+                    "leads",
+                    "outbox",
+                    "submitted",
+                    "host"
+                  ],
+                  "postconditions_1": [
+                    "outbox",
+                    "delivery",
+                    "submitted",
+                    "host"
+                  ],
+                  "side_effects_0": [
+                    "comments",
+                    "leads",
+                    "outbox",
+                    "submitted"
+                  ],
+                  "side_effects_1": [
+                    "outbox",
+                    "delivery",
+                    "submitted",
+                    "host"
+                  ],
+                  "idempotency": [
+                    "comments",
+                    "leads",
+                    "outbox",
+                    "host",
+                    "submitted"
+                  ],
+                  "failure": [
+                    "comments",
+                    "outbox",
+                    "host",
+                    "submitted"
+                  ]
                 }
               }
             },
@@ -1003,8 +1335,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "acfff9ca17e428061a3effcf803af4315b256cc3",
-      "contract_sha256": "e32312931861cef0572b820bff84b242f87f8bd25c7b0667172daea6739ff910",
+      "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
+      "contract_sha256": "a73941c26ff2b9acb5b561e5909e28f000cc54821f1835788efa5106df933c8c",
       "agent_score_mode": "activity-agent-v1"
     },
     "skill_runtime": {
@@ -1116,7 +1448,7 @@
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "651a11963c66b2eaa4d4e4b4debc557fef52ff4c8f4733413ddb8c3b022e227f",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
@@ -1140,8 +1472,8 @@
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/leadgen-score-exclusion.js": "95c83f218d0bac4b8afbf663eccac801399785f56f178b998ed1e12ca5496d81",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "aadf8639bbc0805f4b61bf3d324c46c9a613a021981243902f54c86619d95253",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "44ecd62674faf3b0866ba9a74fe0e1e97b177a13e53813d8765827b1d3ef16e3"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md": "1ef2b7c8cb2efb9b847b6eef525feb2c3a61494ecfe151c2cd0e2aab932cc5d4",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md": "0503fd931589350bd69c4c9a8251076d7bb7a2f4c23ba9c17f8ec145c3e8ffe2"
     }
   }
 }

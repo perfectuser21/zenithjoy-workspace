@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "403c32048adfb7b8a4b7856f196a90ef95bcb263ca875a95b960cc59c71dce6b"
+            "contract_digest": "41d34cdc80aad991b1c81662f5af8791e680c22f41b20af66fd4019aaed26678"
           },
           "document": {
             "key": "collect_videos",
@@ -710,7 +710,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "5.6.2",
+            "version": "5.6.3",
             "required_host_tools": [
               "phone",
               "business",
@@ -770,7 +770,7 @@
             "outputs": [
               {
                 "type": "Video",
-                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取",
+                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取。author 随交付对象提供，以本轮同 VID 原生卡片独立核验；其余持久字段从数据库读回。",
                 "cardinality": "many",
                 "effect": "create",
                 "fields": [
@@ -1049,6 +1049,256 @@
               "item_scope": {
                 "collection": "Video",
                 "id_field": "video_id"
+              },
+              "report": {
+                "files": {
+                  "filters": {
+                    "scope": "run",
+                    "role": "filters_receipt"
+                  },
+                  "video_tab": {
+                    "scope": "run",
+                    "role": "video_page_xml",
+                    "optional": true
+                  },
+                  "cards": {
+                    "scope": "run",
+                    "role": "cards_xml",
+                    "optional": true
+                  },
+                  "video_tab_image": {
+                    "scope": "run",
+                    "role": "video_page_screenshot",
+                    "optional": true
+                  },
+                  "cards_image": {
+                    "scope": "run",
+                    "role": "cards_screenshot",
+                    "optional": true
+                  },
+                  "selected_page": {
+                    "scope": "run",
+                    "role": "selected_page"
+                  },
+                  "results_page": {
+                    "scope": "run",
+                    "role": "results_page"
+                  },
+                  "share": {
+                    "scope": "*",
+                    "role": "share_xml",
+                    "optional": true
+                  },
+                  "link": {
+                    "scope": "*",
+                    "role": "link_receipt",
+                    "optional": true
+                  },
+                  "copied": {
+                    "scope": "*",
+                    "role": "copy_screen",
+                    "optional": true
+                  },
+                  "paste": {
+                    "scope": "*",
+                    "role": "paste_xml",
+                    "optional": true
+                  },
+                  "reopened": {
+                    "scope": "*",
+                    "role": "reopen_receipt",
+                    "optional": true
+                  },
+                  "write": {
+                    "scope": "*",
+                    "role": "write_receipt",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/binding/args/0/op",
+                      "/binding/args/0/video/video_id",
+                      "/state",
+                      "/result/exit_code",
+                      "/result/stdout/result/status",
+                      "/result/stdout/result/inserted",
+                      "/result/stdout/result/has_transcript",
+                      "/result/stdout/result/metrics_verified",
+                      "/result/stdout/result/metrics_digest"
+                    ]
+                  },
+                  "readback": {
+                    "scope": "*",
+                    "role": "readback_receipt",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/state",
+                      "/result/exit_code",
+                      "/result/stdout/result/status",
+                      "/result/stdout/result/recovered",
+                      "/result/stdout/result/has_transcript",
+                      "/result/stdout/result/metrics_verified",
+                      "/result/stdout/result/metrics_digest",
+                      "/result/stdout/result/handoff/harvest_batch",
+                      "/result/stdout/result/handoff/comment_count",
+                      "/result/stdout/result/handoff/discovery_metrics/evidence/sha256"
+                    ]
+                  }
+                },
+                "facts": {
+                  "source_task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "result.foundation_runner.run.input.business",
+                        "result.foundation_runner.run.input.run_tag"
+                      ]
+                    }
+                  },
+                  "persisted": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.transaction_read_only",
+                        "scope.line",
+                        "rows.line_key",
+                        "rows.video_id",
+                        "rows.video_url",
+                        "rows.title",
+                        "rows.keyword",
+                        "rows.comment_count",
+                        "rows.discovery_metrics.version",
+                        "rows.discovery_metrics.run",
+                        "rows.discovery_metrics.run_id",
+                        "rows.discovery_metrics.profile",
+                        "rows.discovery_metrics.source_commit",
+                        "rows.discovery_metrics.line_key",
+                        "rows.discovery_metrics.video_id",
+                        "rows.discovery_metrics.video_url",
+                        "rows.discovery_metrics.observed_at",
+                        "rows.discovery_metrics.evidence_id",
+                        "rows.discovery_metrics.likes",
+                        "rows.discovery_metrics.comment_total",
+                        "rows.discovery_metrics.comment_tier",
+                        "rows.discovery_metrics.company_binding",
+                        "rows.discovery_metrics.digest",
+                        "rows.discovery_metrics.evidence.kind",
+                        "rows.discovery_metrics.evidence.sha256",
+                        "rows.harvest_batch",
+                        "rows.author",
+                        "rows.process_status",
+                        "rows.transcript",
+                        "rows.judgment_status"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.video_id",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "persisted",
+                    "cards",
+                    "cards_image",
+                    "link",
+                    "write",
+                    "readback"
+                  ],
+                  "outputs_1": [
+                    "progress",
+                    "actions",
+                    "filters",
+                    "results_page",
+                    "cards",
+                    "cards_image"
+                  ],
+                  "postconditions_0": [
+                    "source_task",
+                    "cards",
+                    "cards_image",
+                    "share",
+                    "link",
+                    "actions",
+                    "persisted"
+                  ],
+                  "postconditions_1": [
+                    "source_task",
+                    "filters",
+                    "selected_page",
+                    "results_page",
+                    "video_tab",
+                    "cards",
+                    "video_tab_image",
+                    "cards_image",
+                    "actions"
+                  ],
+                  "postconditions_2": [
+                    "persisted",
+                    "share",
+                    "link",
+                    "copied",
+                    "paste",
+                    "reopened",
+                    "write",
+                    "readback"
+                  ],
+                  "postconditions_3": [
+                    "persisted",
+                    "write",
+                    "readback",
+                    "filters",
+                    "results_page",
+                    "actions"
+                  ],
+                  "postconditions_4": [
+                    "source_task",
+                    "persisted"
+                  ],
+                  "side_effects_0": [
+                    "persisted",
+                    "write",
+                    "readback"
+                  ],
+                  "idempotency": [
+                    "persisted",
+                    "write",
+                    "readback",
+                    "actions"
+                  ],
+                  "failure": [
+                    "source_task",
+                    "filters",
+                    "results_page",
+                    "cards",
+                    "cards_image",
+                    "progress",
+                    "persisted"
+                  ]
+                }
               }
             },
             "preconditions": [
@@ -1468,7 +1718,7 @@
               "phase": "end",
               "requirement": {
                 "type": "Video",
-                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取",
+                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取。author 随交付对象提供，以本轮同 VID 原生卡片独立核验；其余持久字段从数据库读回。",
                 "cardinality": "many",
                 "effect": "create",
                 "fields": [
@@ -1645,7 +1895,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "87ff73d54ed5b1ea10f11b991262524e4b7d1a785cb8d0e5fbd517d69c59f3cf"
+            "contract_digest": "cfc3899ad416d927584176ef2b2edf5ea3d8161dd23dfb0cca301c6330f0ee20"
           },
           "document": {
             "key": "cleanup",
@@ -1662,7 +1912,7 @@
               "current_skill_verified": false
             },
             "order": 5,
-            "version": "2.6.3",
+            "version": "2.6.4",
             "required_host_tools": [
               "native-readback",
               "phone",
@@ -1694,6 +1944,198 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "close": {
+                    "scope": "*",
+                    "role": "close",
+                    "optional": true
+                  },
+                  "close_app": {
+                    "scope": "*",
+                    "role": "close_app",
+                    "optional": true
+                  },
+                  "app_closed": {
+                    "scope": "*",
+                    "role": "app_closed",
+                    "optional": true
+                  },
+                  "home": {
+                    "scope": "*",
+                    "role": "home",
+                    "optional": true
+                  },
+                  "desktop": {
+                    "scope": "*",
+                    "role": "desktop",
+                    "optional": true
+                  },
+                  "desktop_image": {
+                    "scope": "*",
+                    "role": "desktop_image",
+                    "optional": true
+                  },
+                  "screenshot": {
+                    "scope": "*",
+                    "role": "screenshot",
+                    "optional": true
+                  },
+                  "local_release": {
+                    "scope": "*",
+                    "role": "local_release",
+                    "optional": true
+                  },
+                  "local_readback": {
+                    "scope": "*",
+                    "role": "local_readback",
+                    "optional": true
+                  },
+                  "central_release": {
+                    "scope": "*",
+                    "role": "central_release",
+                    "optional": true
+                  },
+                  "central_readback": {
+                    "scope": "*",
+                    "role": "central_readback",
+                    "optional": true
+                  },
+                  "claims_release": {
+                    "scope": "*",
+                    "role": "video_release",
+                    "optional": true
+                  },
+                  "claims_readback": {
+                    "scope": "*",
+                    "role": "video_readback",
+                    "optional": true
+                  }
+                },
+                "facts": {
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight.foreground_package",
+                        "preflight.hardware_serial",
+                        "local_lock",
+                        "operations",
+                        "active",
+                        "inflight"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "claims": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.snapshot_at",
+                        "rows.video_id",
+                        "rows.line_key",
+                        "rows.process_status",
+                        "rows.harvest_batch",
+                        "rows.updated_at"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "central",
+                    "local_release",
+                    "local_readback",
+                    "central_release",
+                    "central_readback"
+                  ],
+                  "outputs_1": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress"
+                  ],
+                  "postconditions_0": [
+                    "native",
+                    "actions",
+                    "progress",
+                    "close",
+                    "close_app",
+                    "app_closed"
+                  ],
+                  "postconditions_1": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress",
+                    "local_release",
+                    "local_readback",
+                    "central_release",
+                    "central_readback",
+                    "claims_release",
+                    "claims_readback"
+                  ],
+                  "postconditions_2": [
+                    "native",
+                    "actions",
+                    "progress",
+                    "home",
+                    "desktop",
+                    "desktop_image",
+                    "screenshot"
+                  ],
+                  "idempotency": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress"
+                  ],
+                  "failure": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress",
+                    "home",
+                    "desktop",
+                    "desktop_image",
+                    "screenshot"
+                  ]
                 }
               }
             },
@@ -2081,8 +2523,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "acfff9ca17e428061a3effcf803af4315b256cc3",
-      "contract_sha256": "f96f24d4b01ac7d39a99a67590cb5f1cb1832b1fab1485fcce74e36cde4531ee"
+      "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
+      "contract_sha256": "45492141795ed2c121da392c4895118b30d2e5373b6056d7880bf3100d6dc6f0"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2223,7 +2665,7 @@
       "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d",
       "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77",
       "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
-      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "83043fb17ca9f914db1b5fe9522d56835fdb30087d14dc8b47b01f8b7346f0b9",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "651a11963c66b2eaa4d4e4b4debc557fef52ff4c8f4733413ddb8c3b022e227f",
       "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
       "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
       "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
@@ -2244,8 +2686,8 @@
       "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "ffd913687e5138ef84e75e64c2a9791c5629276a85faf1548b476289d19e7c00",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "2afb2928825c70bbe23a9a0402d61a961a53d288c22d2b1da9e01d3a12d3ddd0",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "d66764c9641308a93ce0733e1efc0f4f9e4b06fd6b69ab84e1672163d9272e51",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f"
     }
   }
