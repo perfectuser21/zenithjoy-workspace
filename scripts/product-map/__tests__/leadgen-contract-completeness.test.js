@@ -190,3 +190,14 @@ test('101 工具说明使用本次冻结关键词和筛选', () => {
   assert.doesNotMatch(source, /本轮来源：.*已启用关键词/);
   assert.doesNotMatch(source, /search-time-layer one_week EID most_liked/);
 });
+
+test('四条获客流程的模型验收允许读取证据所需的五分钟', () => {
+  for (const workflow of ['101', '102', '103', '104']) {
+    const file = resolve(root, `services/phone-adb-controller/leadgen-foundation/profiles/${workflow}.json`);
+    const { profile } = JSON.parse(readFileSync(file, 'utf8'));
+    const tooShort = Object.entries(profile.skill_runtime.activities)
+      .filter(([, activity]) => !(activity.checker?.timeout_ms >= 300_000))
+      .map(([activityKey]) => activityKey);
+    assert.deepEqual(tooShort, [], `Workflow ${workflow} 的 Checker 存在低于五分钟的上限`);
+  }
+});

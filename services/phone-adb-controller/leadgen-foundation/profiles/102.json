@@ -2944,7 +2944,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",
@@ -2970,7 +2970,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",
@@ -3001,7 +3001,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",

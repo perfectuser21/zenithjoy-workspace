@@ -2108,7 +2108,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",
@@ -2134,7 +2134,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",
@@ -2160,7 +2160,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",
@@ -2186,7 +2186,7 @@
           "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md",
           "checker": {
             "mode": "agent",
-            "timeout_ms": 120000,
+            "timeout_ms": 300000,
             "evidence": {
               "roots": [
                 "checker-input",
