@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "41d34cdc80aad991b1c81662f5af8791e680c22f41b20af66fd4019aaed26678"
+            "contract_digest": "d8b52455b08d44e29c8e9b4b610f572152210ed66c2e000a593de057642f80aa"
           },
           "document": {
             "key": "collect_videos",
@@ -710,7 +710,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "5.6.3",
+            "version": "5.6.4",
             "required_host_tools": [
               "phone",
               "business",
@@ -1025,13 +1025,25 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 512
+                          },
+                          "prior_state": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "written_state": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
                           }
                         },
                         "required": [
                           "share_xml",
                           "link_receipt",
                           "write_receipt",
-                          "readback_receipt"
+                          "readback_receipt",
+                          "prior_state",
+                          "written_state"
                         ],
                         "additionalProperties": false
                       }
@@ -1142,6 +1154,28 @@
                       "/result/stdout/result/handoff/harvest_batch",
                       "/result/stdout/result/handoff/comment_count",
                       "/result/stdout/result/handoff/discovery_metrics/evidence/sha256"
+                    ]
+                  },
+                  "prior_state": {
+                    "scope": "*",
+                    "role": "prior_state",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
+                      "/result/stdout/result"
+                    ]
+                  },
+                  "written_state": {
+                    "scope": "*",
+                    "role": "written_state",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
+                      "/result/stdout/result"
                     ]
                   }
                 },
@@ -1272,7 +1306,9 @@
                     "readback",
                     "filters",
                     "results_page",
-                    "actions"
+                    "actions",
+                    "prior_state",
+                    "written_state"
                   ],
                   "postconditions_4": [
                     "source_task",
@@ -1281,13 +1317,17 @@
                   "side_effects_0": [
                     "persisted",
                     "write",
-                    "readback"
+                    "readback",
+                    "prior_state",
+                    "written_state"
                   ],
                   "idempotency": [
                     "persisted",
                     "write",
                     "readback",
-                    "actions"
+                    "actions",
+                    "prior_state",
+                    "written_state"
                   ],
                   "failure": [
                     "source_task",
@@ -2523,8 +2563,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
-      "contract_sha256": "45492141795ed2c121da392c4895118b30d2e5373b6056d7880bf3100d6dc6f0"
+      "method_revision": "f5826add7a58311519c7968996107cffabbaf329",
+      "contract_sha256": "4a273f7438274b4638fd7440b284b3bb63048d26851d6ba89e80e1f28765ad5d"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2686,7 +2726,7 @@
       "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "d66764c9641308a93ce0733e1efc0f4f9e4b06fd6b69ab84e1672163d9272e51",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "668731795369b7e16a04b0d5492665a9e9669addb8619210cfe841f6b6f28627",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f"
     }
