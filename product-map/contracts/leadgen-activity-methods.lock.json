@@ -68,7 +68,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -295,7 +295,7 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "85782fa430f04e16b5abe4e04722221246e2cc15c22df87b07620a7262e6249d"
+      "code_digest": "8ab31de26fd21b839601302a588ca2b9144ab445300f27cf5a8d21a5d5df7241"
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.3",
@@ -385,7 +385,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -619,13 +619,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e",
+      "code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "1f0f1dfee674aa150dc6d91e5883f084df4609dbb0a3b1856e0cf5e759f21089",
-        "current_code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e"
+        "current_code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df"
       }
     },
     "douyin_video_processing.dedup": {
@@ -716,7 +716,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -950,13 +950,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e",
+      "code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "1f0f1dfee674aa150dc6d91e5883f084df4609dbb0a3b1856e0cf5e759f21089",
-        "current_code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e"
+        "current_code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1031,7 +1031,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -1286,13 +1286,13 @@
           "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
         }
       ],
-      "code_digest": "0cfa9611cfd6a99c4652a9695693d18b5749a0a0154af46dc196f8b193e28b92",
+      "code_digest": "48ddf6039a8c616f0ab39deb8c6efc63fdcf74bd899016f78b8a7b6247e01b0e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "4943b754ff90aaf0109a23bf9a4e6f6cd8ac5ba8115e09a7a401fbf19691e583",
-        "current_code_digest": "0cfa9611cfd6a99c4652a9695693d18b5749a0a0154af46dc196f8b193e28b92"
+        "current_code_digest": "48ddf6039a8c616f0ab39deb8c6efc63fdcf74bd899016f78b8a7b6247e01b0e"
       }
     },
     "douyin_video_processing.collection": {
@@ -1383,7 +1383,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -1617,13 +1617,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e",
+      "code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "1f0f1dfee674aa150dc6d91e5883f084df4609dbb0a3b1856e0cf5e759f21089",
-        "current_code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e"
+        "current_code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1714,7 +1714,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -1948,13 +1948,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e",
+      "code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "1f0f1dfee674aa150dc6d91e5883f084df4609dbb0a3b1856e0cf5e759f21089",
-        "current_code_digest": "92deb660cc0402e9d262fa6668f662410fb3c0fd88f7954c590964a3c05b3a5e"
+        "current_code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -2064,7 +2064,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -2291,13 +2291,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fe8842484734920ebc4b7c32dd79d95fa311668368706b8ee41876b407dd1cf0",
+      "code_digest": "311b810da2c9709794fad925d9a2b3d15d18694ff0246743b3ac36ddb5f66e77",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "067f677eac7ce535bc018942dfab023e9b76d4f588d9a2a443f3390b6f346120",
-        "current_code_digest": "fe8842484734920ebc4b7c32dd79d95fa311668368706b8ee41876b407dd1cf0"
+        "current_code_digest": "311b810da2c9709794fad925d9a2b3d15d18694ff0246743b3ac36ddb5f66e77"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2407,7 +2407,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -2634,13 +2634,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "fe8842484734920ebc4b7c32dd79d95fa311668368706b8ee41876b407dd1cf0",
+      "code_digest": "311b810da2c9709794fad925d9a2b3d15d18694ff0246743b3ac36ddb5f66e77",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "067f677eac7ce535bc018942dfab023e9b76d4f588d9a2a443f3390b6f346120",
-        "current_code_digest": "fe8842484734920ebc4b7c32dd79d95fa311668368706b8ee41876b407dd1cf0"
+        "current_code_digest": "311b810da2c9709794fad925d9a2b3d15d18694ff0246743b3ac36ddb5f66e77"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2724,7 +2724,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -2951,13 +2951,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea",
+      "code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "5c29e76247edf7c228806e16d7e948a2b5af85a54ace8da5f5fc54f96b278bd9",
-        "current_code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea"
+        "current_code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -3041,7 +3041,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -3268,13 +3268,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea",
+      "code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "5c29e76247edf7c228806e16d7e948a2b5af85a54ace8da5f5fc54f96b278bd9",
-        "current_code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea"
+        "current_code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3358,7 +3358,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -3585,13 +3585,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea",
+      "code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "5c29e76247edf7c228806e16d7e948a2b5af85a54ace8da5f5fc54f96b278bd9",
-        "current_code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea"
+        "current_code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3675,7 +3675,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-tools.py",
           "revision": "contract",
-          "sha256": "c7619e03a100c769fc309471afcd14f576c3f794e050e4a8d1cd25f81608d2e5"
+          "sha256": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9"
         },
         {
           "kind": "code",
@@ -3902,13 +3902,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea",
+      "code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复 101 搜索采集重开新发现视频的入参。其他 Activity 保留原范围、读写及验收；已验证 102 原冻结范围仍拒绝未授权视频。",
+        "reason": "新增能力只供 101 搜索采集使用，解析公开短链并重开本轮视频；保留其他 Activity 原有范围及验收检查。",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "5c29e76247edf7c228806e16d7e948a2b5af85a54ace8da5f5fc54f96b278bd9",
-        "current_code_digest": "5cf8d7a221b46897cc7b388c41651f6370c27cca12a73e06fe084d47297a87ea"
+        "current_code_digest": "f1c65af4921c6c91fff8140a1e05e05e754f519bb6566aa54b0756de5a36d52a"
       }
     }
   },
