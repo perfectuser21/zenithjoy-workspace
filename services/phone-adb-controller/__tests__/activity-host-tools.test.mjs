@@ -46,6 +46,40 @@ if mode=='context-drift':
  else:c['verification']['102']['qualification_input']['coverage']['source_duration_display_seconds']=38
  (target/'context.json').write_text(json.dumps(c))
 spec=importlib.util.spec_from_file_location('host',target/'tools.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+if mode=='public-link-resolution':
+ from tool_scope import phone_args
+ c['local_owner']='fixture-owner'
+ m.resource_authority=lambda c:None
+ def dispatch_unexpected(*args,**kw):raise AssertionError('public link does not call the phone')
+ m.subprocess.run=dispatch_unexpected
+ short='https://v.douyin.com/a2c0/'
+ requests=[]
+ def head(value, timeout):
+  requests.append(value)
+  return (302, ['https://www.iesdouyin.com/share/video/7722222222222222222/'])
+ m._host.short_link_head=head
+ def command(argv):return m.invoke(c,activity,'phone',argv)
+ result=command(['resolve-share-link',short])
+ def refused(value):
+  try:phone_args(c,activity,['resolve-share-link',value])
+  except ValueError as exc:return str(exc)
+  return None
+ def intercept(value,timeout):return (302,['https://evil.invalid/video/7722222222222222222'])
+ m._host.short_link_head=intercept
+ print(json.dumps({'result':result,'requests':requests,'reject':refused('https://evil.invalid/x'),
+                   'redirect':command(['resolve-share-link',short])}))
+ sys.exit(0)
+if mode=='reopen-video-scope':
+ from tool_scope import phone_args
+ c['local_owner']='fixture-owner'
+ def probe_open(command,video,run_tag='fixture-new-run'):
+  try:return phone_args(c,activity,[command,video,run_tag+'-reopen','unused','unused',run_tag+'-card'])
+  except ValueError as exc:return str(exc)
+ known='7711111111111111111';discovered='7722222222222222222'
+ print(json.dumps({'known':probe_open('open-video',known),'discovered':probe_open('open-video',discovered),
+                   'bad':probe_open('open-video','not-a-video-id'),'another_run':probe_open('open-video',known,'another-run'),
+                   'card':probe_open('commenter-profile-card-link',discovered)}))
+ sys.exit(0)
 m.task_authority=lambda c,**kw:None;calls={'dispatch':0,'credentials':0,'resource':0}
 def resource(c):calls['resource']+=1
 def environment(c):calls['credentials']+=1;return {}
@@ -148,6 +182,25 @@ print(json.dumps({'first':first,'before':before,'replay':replay,'second':second,
  const r=spawnSync('/usr/bin/python3',['-c',script,root,helper,mode,workflow],{input:JSON.stringify({... (workflow==='103'?fixture103:(workflow==='102'?fixture102:fixture)),diagnostic:diagnosticFixture}),encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);
  }finally{rmSync(root,{recursive:true,force:true});}
 }
+test('101 scoped host resolves only public Douyin links without dispatching a phone command',()=>{
+ const r=probe('public-link-resolution');
+ assert.equal(r.result.exit_code,0);
+ assert.equal(r.result.data.canonical_url,'https://www.douyin.com/video/7722222222222222222');
+ assert.deepEqual(r.requests,['https://v.douyin.com/a2c0/']);
+ assert.equal(r.reject,'SHORT_LINK_SCOPE');
+ assert.equal(r.redirect.exit_code,2);
+ assert.equal(r.redirect.data.reason,'SHORT_LINK_REDIRECT');
+});
+test('101 reopens a newly discovered canonical video while 102 retains its frozen upstream scope',()=>{
+ const discovery=probe('reopen-video-scope');
+ assert.ok(Array.isArray(discovery.discovered),discovery.discovered);
+ assert.equal(discovery.bad,'VIDEO_SCOPE');
+ assert.equal(discovery.another_run,'EVIDENCE_RUN_SCOPE');
+ assert.equal(discovery.card,'VIDEO_SCOPE');
+ const processing=probe('reopen-video-scope','102');
+ assert.ok(Array.isArray(processing.known));
+ assert.equal(processing.discovered,'VIDEO_SCOPE');
+});
 test('real assembled collect host emits typed company_config rejection and only dispatches corrected new action',()=>{
  const r=probe();assert.equal(r.first.rc,2,r.first.error);const v=JSON.parse(r.first.stdout);
  assert.equal(v.state,'terminal');assert.equal(v.result.error,'BUSINESS_ACTIVITY_SCOPE');assert.equal(v.result.data.dispatched,false);assert.equal(v.result.data.external_effect,'none');
