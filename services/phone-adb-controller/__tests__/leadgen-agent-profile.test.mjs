@@ -67,3 +67,27 @@ test('每个注册活动都用已有通用交件协议，产出与证据分开�
   }
  }
 });
+
+test('101 的已有视频可交写前写后原件并映射到完工报告，空结果可照常交付', () => {
+ const workflow=names[0], profile=projectAgentProfile(original(101),{documents,workflow});
+ const {delivery}=profile.contract.activities.find(activity=>activity.key==='collect_videos').acceptance.document;
+ const validate=new Ajv({strict:true}).compile(delivery.schema);
+ const run={filters_receipt:'receipts/filters.json',selected_page:'native/selected.png',results_page:'native/results.png',
+  video_page_screenshot:'native/video.png',cards_screenshot:'native/cards.png'};
+ const id='7710934084105148379';
+ const group={share_xml:'native/share.xml',link_receipt:'receipts/link.json',write_receipt:'receipts/write.json',
+  readback_receipt:'receipts/readback.json',prior_state:'receipts/before.json',written_state:'receipts/after.json'};
+ const runOutput={status:'completed',stop_reason:'candidate_limit',all_results_scanned:false};
+ const outputs={Run:runOutput,Video:[{video_id:id,video_url:'https://www.douyin.com/video/'+id,title:'测试视频',author:'测试作者',
+  keyword:'测试关键词',line_key:'fixture',comment_count:0,harvest_batch:'fixture-run',
+  discovery_metrics:{digest:'fixture-digest',evidence:{sha256:'fixture-sha256'}}}]};
+ assert.equal(validate({outputs,evidence:{run,[id]:group}}),true,JSON.stringify(validate.errors));
+ for(const role of ['prior_state','written_state']){
+  const incomplete={...group};
+  delete incomplete[role];
+  assert.equal(validate({outputs,evidence:{run,[id]:incomplete}}),false);
+  assert.equal(delivery.report.files[role].role,role);
+  for(const check of ['postconditions_3','side_effects_0','idempotency'])assert.ok(delivery.report.criteria[check].includes(role));
+ }
+ assert.equal(validate({outputs:{Run:{...runOutput,stop_reason:'no_cards'},Video:[]},evidence:{run}}),true,JSON.stringify(validate.errors));
+});
