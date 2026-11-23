@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.dedup",
-            "contract_digest": "ba3ef29eff47b2100b06b37ec31fd80210590f2ac226fb5d16cd64ed0a79c490"
+            "contract_digest": "9f3c92934d673922604c665c69bd9ea0973fd75abbc9c2eda1d979a50a03de28"
           },
           "document": {
             "key": "dedup",
@@ -866,9 +866,11 @@
                     "operation": "host.receipts",
                     "args": {
                       "fields": [
-                        "receipts.action",
-                        "receipts.path",
-                        "receipts.status"
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
                       ]
                     }
                   },
@@ -1295,7 +1297,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.qualification",
-            "contract_digest": "287edaf811964101061533eaacc80ea49bcc5b9bafd399229338709074853ebf"
+            "contract_digest": "10c3309ab8e8e8ec99153fbfefea702c32ac5fcddf8afb22a1d829818f27b3a5"
           },
           "document": {
             "key": "qualification",
@@ -1389,8 +1391,7 @@
                       "/visual_evidence",
                       "/calls",
                       "/media",
-                      "/agent_decision_provenance",
-                      "/decision"
+                      "/agent_decision_provenance/dossier_sha256"
                     ]
                   },
                   "proof": {
@@ -1399,6 +1400,8 @@
                     "optional": true,
                     "fields": [
                       "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
                       "/binding/args/0/qualification_evidence",
                       "/result/exit_code",
                       "/result/data/proof_manifest"
@@ -1410,9 +1413,9 @@
                     "optional": true,
                     "fields": [
                       "/binding/identity",
+                      "/ended_at",
                       "/result/exit_code",
-                      "/result/stdout/dossier_sha256",
-                      "/result/stdout/dossier_ref/sha256"
+                      "/result/stdout"
                     ]
                   },
                   "submit": {
@@ -1421,11 +1424,11 @@
                     "optional": true,
                     "fields": [
                       "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
+                      "/state",
                       "/result/exit_code",
-                      "/result/stdout/verdict",
-                      "/result/stdout/reason",
-                      "/result/stdout/calls",
-                      "/result/stdout/decision_provenance"
+                      "/result/stdout"
                     ]
                   },
                   "readback": {
@@ -1441,12 +1444,23 @@
                   "record_stop": {
                     "scope": "*",
                     "role": "record_stop",
-                    "optional": true
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
+                      "/state",
+                      "/result/exit_code"
+                    ]
                   },
                   "extract_audio": {
                     "scope": "*",
                     "role": "extract",
-                    "optional": true
+                    "optional": true,
+                    "fields": [
+                      "/state",
+                      "/result/exit_code"
+                    ]
                   },
                   "capture_runtime": {
                     "scope": "*",
@@ -1499,7 +1513,13 @@
                         "rows.version",
                         "rows.run_id",
                         "rows.snapshot.policy_id",
-                        "rows.snapshot.runtime_config.video_judgment"
+                        "rows.snapshot.runtime_config.video_judgment.decision_id",
+                        "rows.snapshot.runtime_config.video_judgment.instructions",
+                        "rows.snapshot.runtime_config.video_judgment.stage_purpose",
+                        "rows.snapshot.runtime_config.video_judgment.include_examples",
+                        "rows.snapshot.runtime_config.video_judgment.exclude_criteria",
+                        "rows.snapshot.runtime_config.video_judgment.products.name",
+                        "rows.snapshot.runtime_config.video_judgment.audiences.name"
                       ]
                     }
                   },
@@ -1510,17 +1530,14 @@
                       "video_id": {
                         "$from": "/proposal/outputs/Video/0/video_id"
                       },
-                      "document": "journal.json",
+                      "document": "asr-response.json",
                       "fields": [
-                        "origin",
+                        "origin.run_id",
+                        "origin.video_id",
                         "document.sha256",
-                        "document.data.scope",
-                        "document.data.policy",
-                        "document.data.media",
-                        "document.data.visual_evidence",
-                        "document.data.calls",
-                        "document.data.decision",
-                        "document.data.agent_decision_provenance"
+                        "document.data.http_status",
+                        "document.data.provider_received",
+                        "document.data.body.output.text"
                       ]
                     }
                   },
@@ -1572,6 +1589,16 @@
                         "receipts.ended_at"
                       ]
                     }
+                  },
+                  "task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "result.foundation_runner.run.input.business.scope.video_ids"
+                      ]
+                    }
                   }
                 },
                 "criteria": {
@@ -1619,6 +1646,7 @@
                   ],
                   "idempotency": [
                     "persisted",
+                    "task",
                     "journal",
                     "submit",
                     "actions"
@@ -2087,7 +2115,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.collection",
-            "contract_digest": "d9c532818e53e613a600a756483a0afe542b30b6d8ba8439efd10d778fa23775"
+            "contract_digest": "73391df70b1f37d8b7079ad17c2df2897f460342199493e6804a408cd08c6d1c"
           },
           "document": {
             "key": "collection",
@@ -2215,9 +2243,11 @@
                     "operation": "host.receipts",
                     "args": {
                       "fields": [
-                        "receipts.action",
-                        "receipts.path",
-                        "receipts.status"
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
                       ]
                     }
                   },
@@ -3051,7 +3081,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "bf8c206bfb35cbfdf2447dd1f20d15163679c68394f3b3816b085ca70e2769ac"
+            "contract_digest": "cfc3899ad416d927584176ef2b2edf5ea3d8161dd23dfb0cca301c6330f0ee20"
           },
           "document": {
             "key": "cleanup",
@@ -3208,9 +3238,11 @@
                     "operation": "host.receipts",
                     "args": {
                       "fields": [
-                        "receipts.action",
-                        "receipts.path",
-                        "receipts.status"
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
                       ]
                     }
                   },
@@ -3678,7 +3710,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
-      "contract_sha256": "6bc5f8b98fa914e2ff1294c3f04e8e1eaaf4e160534a012c50e7b7d3728a6da0"
+      "contract_sha256": "1a2b74bb32aef1b7ac2b412b5e45079854f8249de5da002f0b6293ac6ab4cfb0"
     },
     "skill_runtime": {
       "control_dir": "control",

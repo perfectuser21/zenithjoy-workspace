@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_discovery.yaml",
             "activity_ref": "douyin_video_discovery.collect_videos",
-            "contract_digest": "ba0203f45916ff490db6d8b63ccafc4aee0731b2b19c003ea6c3136fee1c4aac"
+            "contract_digest": "bd6f02945a3caf9cf9302b3cec9f1072cd7e3612c347d28979d934d150b38016"
           },
           "document": {
             "key": "collect_videos",
@@ -1161,6 +1161,7 @@
                       "relation": "videos",
                       "fields": [
                         "connection.transaction_read_only",
+                        "scope.line",
                         "rows.line_key",
                         "rows.video_id",
                         "rows.video_url",
@@ -1196,9 +1197,11 @@
                     "operation": "host.receipts",
                     "args": {
                       "fields": [
-                        "receipts.action",
-                        "receipts.path",
-                        "receipts.status"
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
                       ]
                     }
                   },
@@ -1887,7 +1890,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "bf8c206bfb35cbfdf2447dd1f20d15163679c68394f3b3816b085ca70e2769ac"
+            "contract_digest": "cfc3899ad416d927584176ef2b2edf5ea3d8161dd23dfb0cca301c6330f0ee20"
           },
           "document": {
             "key": "cleanup",
@@ -2044,9 +2047,11 @@
                     "operation": "host.receipts",
                     "args": {
                       "fields": [
-                        "receipts.action",
-                        "receipts.path",
-                        "receipts.status"
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
                       ]
                     }
                   },
@@ -2514,7 +2519,7 @@
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
       "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
-      "contract_sha256": "e438fbe3c3a0b7a09ff83472829d0e9bc433bad3a6f96be5afb251becd1b8467"
+      "contract_sha256": "6a996f72f9289a707f873de17f322fabd9ee0c8be4d890fc4e84e84c7db7a729"
     },
     "skill_runtime": {
       "control_dir": "control",
