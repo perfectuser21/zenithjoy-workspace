@@ -69,6 +69,21 @@ test('101 按原Video字段交接指标结构，原XML由通用Checker独立读�
   assert.doesNotMatch(collect.side_effects[0].description, /评论行的历史来源/);
 });
 
+test('101 和 102 的冻结预检复用同一完工报告及账号必需原件', () => {
+  const authority = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
+  const report = authority.activities.find(activity => activity.key === 'preflight').delivery.report;
+  const { scope, role } = report.files.account;
+  assert.deepEqual({ scope, role }, { scope: 'handoff', role: 'account' });
+  assert.ok(report.criteria.outputs_1.includes('account'));
+  assert.ok(report.criteria.postconditions_1.includes('account'));
+  for (const id of [101, 102]) {
+    const file = resolve(root, `services/phone-adb-controller/leadgen-foundation/profiles/${id}.json`);
+    const { contract } = JSON.parse(readFileSync(file, 'utf8'));
+    const preflight = contract.activities.find(activity => activity.key === 'preflight');
+    assert.deepEqual(preflight.acceptance.document.delivery.report, report);
+  }
+});
+
 test('共享预检的定时闸不误写成手动活动条件', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_video_processing.yaml'), 'utf8'));
   const preflight = doc.activities.find(activity => activity.key === 'preflight');
