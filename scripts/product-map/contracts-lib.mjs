@@ -204,7 +204,20 @@ export function validateContracts(ctx) {
     const probesByKey = new Map((checksDoc.probes || []).map((p) => [p.key, p]));
 
     const own = doc.activities.filter((a) => !a.ref);
-    for (const a of own) validateActivity(ctx, capId, a, probesByKey, doc.checks, errors);
+    for (const a of own) {
+      validateActivity(ctx, capId, a, probesByKey, doc.checks, errors);
+      const report = a.delivery?.report;
+      if (report) {
+        const expected = ['outputs', 'postconditions', 'side_effects'].flatMap(field =>
+          (a[field] ?? []).map((_, index) => field + '_' + index)).concat('idempotency', 'failure');
+        const names = [...Object.keys(report.files ?? {}), ...Object.keys(report.facts ?? {})];
+        if (!names.length || names.length > 32 || new Set(names).size !== names.length
+          || Object.keys(report.criteria).length !== expected.length
+          || expected.some(id => !report.criteria[id]?.every(label => names.includes(label)))) {
+          errors.push(`${capId}.${a.key}: delivery.report.criteria 必须覆盖每条完工验收并引用已声明证据`);
+        }
+      }
+    }
 
     const acts = resolveActivities(ctx, capId, errors);
     const keys = acts.map((a) => a.key);
