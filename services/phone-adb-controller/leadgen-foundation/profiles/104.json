@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_lead_outreach.yaml",
             "activity_ref": "douyin_lead_outreach.preflight",
-            "contract_digest": "879ab2e906dfb131a95163d57639ed050dabd9966784356a5b38c42e2681bbb9"
+            "contract_digest": "61ebf231544cb2b3ef96f5f34b36f88ffa328658448aa01877fd05280a25a8d5"
           },
           "document": {
             "key": "preflight",
@@ -32,7 +32,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "5.3.1",
+            "version": "5.3.2",
             "required_host_tools": [
               "phone",
               "brain",
@@ -64,6 +64,128 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "submitted": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight",
+                        "local_lock",
+                        "account",
+                        "operations"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "identity": {
+                    "operation": "run.identity",
+                    "args": {}
+                  },
+                  "host": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.path",
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "company": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "company",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.config_version",
+                        "rows.config_status",
+                        "rows.version_snapshot.runtime_config.policy_id",
+                        "rows.version_snapshot.runtime_config.contact_rules",
+                        "rows.version_snapshot.runtime_config.platform_accounts"
+                      ]
+                    }
+                  },
+                  "order": {
+                    "operation": "feishu.get",
+                    "args": {
+                      "record_id": {
+                        "$from": "/context/verification/104/record_id"
+                      }
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "central",
+                    "submitted"
+                  ],
+                  "outputs_1": [
+                    "native",
+                    "company",
+                    "submitted"
+                  ],
+                  "outputs_2": [
+                    "identity",
+                    "native",
+                    "submitted"
+                  ],
+                  "postconditions_0": [
+                    "identity",
+                    "native",
+                    "submitted"
+                  ],
+                  "postconditions_1": [
+                    "company",
+                    "order",
+                    "native",
+                    "submitted"
+                  ],
+                  "postconditions_2": [
+                    "native",
+                    "submitted"
+                  ],
+                  "postconditions_3": [
+                    "native",
+                    "central",
+                    "host",
+                    "submitted"
+                  ],
+                  "idempotency": [
+                    "identity",
+                    "central",
+                    "host",
+                    "submitted"
+                  ],
+                  "failure": [
+                    "identity",
+                    "company",
+                    "native",
+                    "central",
+                    "host",
+                    "submitted"
+                  ]
                 }
               }
             },
@@ -623,7 +745,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_lead_outreach.yaml",
             "activity_ref": "douyin_lead_outreach.send_dm",
-            "contract_digest": "471bc26ba9861c8638da0f88ae9ad195485ab8c4cd33cc0a9bd6c8faf26be662"
+            "contract_digest": "8de5e0be855da48c763ee2dbc894e6d4af3ddafc0779e91ab62cfdf465595295"
           },
           "document": {
             "key": "send_dm",
@@ -639,7 +761,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "6.1.2",
+            "version": "6.1.3",
             "required_host_tools": [
               "phone",
               "fetch-native",
@@ -671,6 +793,146 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "submitted": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "order": {
+                    "operation": "feishu.get",
+                    "args": {
+                      "record_id": {
+                        "$from": "/context/verification/104/record_id"
+                      }
+                    }
+                  },
+                  "scope": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "outbox",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.comment_id",
+                        "rows.lead_id",
+                        "rows.run_tag",
+                        "rows.source_run",
+                        "rows.qualification_status",
+                        "rows.state",
+                        "rows.payload",
+                        "rows.payload_sha256",
+                        "rows.feishu_record_id"
+                      ]
+                    }
+                  },
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight",
+                        "local_lock",
+                        "account",
+                        "operations"
+                      ]
+                    }
+                  },
+                  "company": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "company",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.config_version",
+                        "rows.config_status",
+                        "rows.version_snapshot.runtime_config.policy_id",
+                        "rows.version_snapshot.runtime_config.contact_rules",
+                        "rows.version_snapshot.runtime_config.platform_accounts"
+                      ]
+                    }
+                  },
+                  "host": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.path",
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "order",
+                    "scope",
+                    "submitted"
+                  ],
+                  "postconditions_0": [
+                    "order",
+                    "company",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "postconditions_1": [
+                    "order",
+                    "company",
+                    "scope",
+                    "host",
+                    "submitted"
+                  ],
+                  "postconditions_2": [
+                    "order",
+                    "native",
+                    "host",
+                    "submitted"
+                  ],
+                  "side_effects_0": [
+                    "order",
+                    "native",
+                    "host",
+                    "submitted"
+                  ],
+                  "idempotency": [
+                    "order",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "failure": [
+                    "order",
+                    "company",
+                    "native",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ]
                 }
               }
             },
@@ -1222,7 +1484,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_lead_outreach.yaml",
             "activity_ref": "douyin_lead_outreach.write_back",
-            "contract_digest": "8c68a1774d44c29e2db773e0d1ac8f189781fc78a9a8b5665ae15c901c0e8fd9"
+            "contract_digest": "7abffa53c104be7b9c0f3938704d6af1826979d84ca54bad0dc4486f2166d7da"
           },
           "document": {
             "key": "write_back",
@@ -1238,7 +1500,7 @@
               "current_skill_verified": false
             },
             "order": 3,
-            "version": "4.1.1",
+            "version": "4.1.2",
             "required_host_tools": [
               "outreach"
             ],
@@ -1266,6 +1528,106 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "submitted": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "order": {
+                    "operation": "feishu.get",
+                    "args": {
+                      "record_id": {
+                        "$from": "/context/verification/104/record_id"
+                      }
+                    }
+                  },
+                  "leads": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "leads",
+                      "fields": [
+                        "connection",
+                        "scope",
+                        "truncated",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.douyin_id",
+                        "rows.nickname",
+                        "rows.profile_url",
+                        "rows.intent_grade",
+                        "rows.dup_hit_count",
+                        "rows.status",
+                        "rows.send_status",
+                        "rows.script_version",
+                        "rows.reached_at",
+                        "rows.feishu_record_id"
+                      ]
+                    }
+                  },
+                  "host": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.path",
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "order",
+                    "submitted"
+                  ],
+                  "outputs_1": [
+                    "leads",
+                    "order",
+                    "submitted"
+                  ],
+                  "postconditions_0": [
+                    "leads",
+                    "order",
+                    "host",
+                    "submitted"
+                  ],
+                  "side_effects_0": [
+                    "leads",
+                    "order",
+                    "host",
+                    "submitted"
+                  ],
+                  "idempotency": [
+                    "order",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "failure": [
+                    "order",
+                    "leads",
+                    "host",
+                    "submitted"
+                  ]
                 }
               }
             },
@@ -1650,7 +2012,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_lead_outreach.yaml",
             "activity_ref": "douyin_lead_outreach.cleanup",
-            "contract_digest": "15abf1bd7b7b1385f3fb5d8c32fe2d8d3b2a7cf4ba906a3af221f792b539c0ee"
+            "contract_digest": "cfe0f43341a8a15ccf763d83695f3b863a1bc111f6255a4c24d2c4095ffcd93e"
           },
           "document": {
             "key": "cleanup",
@@ -1666,7 +2028,7 @@
               "current_skill_verified": false
             },
             "order": 4,
-            "version": "3.5.1",
+            "version": "3.5.2",
             "required_host_tools": [
               "native-readback",
               "phone",
@@ -1698,6 +2060,116 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "submitted": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "order": {
+                    "operation": "feishu.get",
+                    "args": {
+                      "record_id": {
+                        "$from": "/context/verification/104/record_id"
+                      }
+                    },
+                    "optional": true
+                  },
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight",
+                        "local_lock",
+                        "account",
+                        "operations"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "host": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.path",
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "central",
+                    "submitted"
+                  ],
+                  "outputs_1": [
+                    "native",
+                    "central",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "postconditions_0": [
+                    "native",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "postconditions_1": [
+                    "native",
+                    "central",
+                    "order",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "postconditions_2": [
+                    "native",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "idempotency": [
+                    "central",
+                    "native",
+                    "order",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ],
+                  "failure": [
+                    "native",
+                    "central",
+                    "order",
+                    "host",
+                    "progress",
+                    "submitted"
+                  ]
                 }
               }
             },
@@ -2085,8 +2557,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "acfff9ca17e428061a3effcf803af4315b256cc3",
-      "contract_sha256": "a345614449a502e78c6ac9c596d6e32e230864782b605ba74f268fbe7732ba1f"
+      "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
+      "contract_sha256": "e63dbf809550f892bdf2cd9d4731bfdda6245a9cb01e4d20fe7c854955bd30a7"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -2276,10 +2748,10 @@
       "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md": "3c02a3a2a66618d63b58f84ba9a3a3a42619c60284ad0b7bd6139c7b44027dd9",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md": "aa2994b4a471bba58f6cfb226765bba4d2949762e8d0b9c6d4be4340a150c5e7",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md": "4f8d18b15a429c2df0845097322e57a00282669ddd04b3f713f518a2026dc16d",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md": "2b155541c6a0724ea7326fe58c2a0d1829447c2d5292ba2dd0394a7f4c548362"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md": "0a2b7c76170936db56f390761105d1906632f27a26c0f18cbe3b96bb5b9beea8",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md": "bcd7233457b86a2b83ddd75d1f426a7c18bf3be45539bf8cd1a8e9e4a0f65cf0",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md": "c59fa77f40b7c2a2a985d1c6fba542c824275fe650620db3ef4b99df33f91096",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md": "cc0e031ed848d8c7ccb831206bc06d8baba4de80b0a14cac0b8538d54d9a26ee"
     }
   }
 }

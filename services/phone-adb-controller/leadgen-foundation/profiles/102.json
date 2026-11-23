@@ -694,7 +694,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.dedup",
-            "contract_digest": "a32ce2cf6dd55834248aaf968f265807751b36b06d8ff081f7997a8a603bb13a"
+            "contract_digest": "ba3ef29eff47b2100b06b37ec31fd80210590f2ac226fb5d16cd64ed0a79c490"
           },
           "document": {
             "key": "dedup",
@@ -710,7 +710,7 @@
               "current_skill_verified": false
             },
             "order": 2,
-            "version": "3.3.4",
+            "version": "3.3.5",
             "required_host_tools": [
               "business",
               "phone",
@@ -740,6 +740,195 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "author": {
+                    "scope": "*",
+                    "role": "author",
+                    "optional": true
+                  },
+                  "author_ui": {
+                    "scope": "*",
+                    "role": "author_ui",
+                    "optional": true
+                  },
+                  "author_image": {
+                    "scope": "*",
+                    "role": "author_image",
+                    "optional": true
+                  },
+                  "claim": {
+                    "scope": "*",
+                    "role": "claim",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/state",
+                      "/result/exit_code",
+                      "/result/stdout/result/0/line_key",
+                      "/result/stdout/result/0/video_id",
+                      "/result/stdout/result/0/comment_count",
+                      "/result/stdout/result/0/harvest_batch",
+                      "/result/stdout/result/0/process_status",
+                      "/result/stdout/result/0/updated_at"
+                    ]
+                  },
+                  "link": {
+                    "scope": "*",
+                    "role": "link",
+                    "optional": true
+                  },
+                  "navigation": {
+                    "scope": "*",
+                    "role": "navigation",
+                    "optional": true
+                  },
+                  "upstream": {
+                    "scope": "*",
+                    "role": "upstream",
+                    "optional": true
+                  }
+                },
+                "facts": {
+                  "persisted": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.snapshot_at",
+                        "connection.transaction_read_only",
+                        "rows.video_id",
+                        "rows.line_key",
+                        "rows.author",
+                        "rows.keyword",
+                        "rows.comment_count",
+                        "rows.process_status",
+                        "rows.harvest_batch",
+                        "rows.updated_at",
+                        "rows.judgment_status",
+                        "rows.judgment_config",
+                        "rows.discovery_metrics.company_binding",
+                        "rows.discovery_metrics.run"
+                      ]
+                    }
+                  },
+                  "company": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "company",
+                      "fields": [
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.config_version",
+                        "rows.version_snapshot.runtime_config.platform_accounts.id",
+                        "rows.version_snapshot.runtime_config.platform_accounts.enabled",
+                        "rows.version_snapshot.runtime_config.platform_accounts.verification_status",
+                        "rows.version_snapshot.runtime_config.platform_accounts.fields",
+                        "rows.version_snapshot.runtime_config.platform_accounts.source.platform"
+                      ]
+                    }
+                  },
+                  "policy": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "policy",
+                      "fields": [
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.version",
+                        "rows.run_id",
+                        "rows.source_run",
+                        "rows.snapshot.policy_id",
+                        "rows.snapshot.runtime_config.platform_accounts.id",
+                        "rows.snapshot.runtime_config.platform_accounts.enabled",
+                        "rows.snapshot.runtime_config.platform_accounts.verification_status",
+                        "rows.snapshot.runtime_config.platform_accounts.fields",
+                        "rows.snapshot.runtime_config.platform_accounts.source.platform"
+                      ]
+                    }
+                  },
+                  "source_task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "result.foundation_runner.run.input.business.scope.video_ids",
+                        "result.foundation_runner.run.input.business.scope.upstream",
+                        "result.foundation_runner.run.input.business.producer_key",
+                        "result.foundation_runner.run.input.run_tag"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.action",
+                        "receipts.path",
+                        "receipts.status"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "claim",
+                    "persisted",
+                    "upstream"
+                  ],
+                  "postconditions_0": [
+                    "persisted",
+                    "claim",
+                    "source_task"
+                  ],
+                  "postconditions_1": [
+                    "author",
+                    "author_ui",
+                    "author_image",
+                    "link",
+                    "navigation",
+                    "company",
+                    "policy"
+                  ],
+                  "postconditions_2": [
+                    "source_task",
+                    "upstream",
+                    "claim",
+                    "persisted",
+                    "actions"
+                  ],
+                  "side_effects_0": [
+                    "claim",
+                    "persisted",
+                    "upstream",
+                    "actions"
+                  ],
+                  "idempotency": [
+                    "persisted",
+                    "progress",
+                    "actions"
+                  ],
+                  "failure": [
+                    "persisted",
+                    "source_task",
+                    "progress",
+                    "author",
+                    "author_ui",
+                    "author_image"
+                  ]
                 }
               }
             },
@@ -1106,7 +1295,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.qualification",
-            "contract_digest": "62a03beaa83f83f916806f602837bbe17b84caf8f400bad6a9dc280fea66128e"
+            "contract_digest": "287edaf811964101061533eaacc80ea49bcc5b9bafd399229338709074853ebf"
           },
           "document": {
             "key": "qualification",
@@ -1122,7 +1311,7 @@
               "current_skill_verified": false
             },
             "order": 3,
-            "version": "3.6.2",
+            "version": "3.6.3",
             "required_host_tools": [
               "phone",
               "business",
@@ -1155,6 +1344,293 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "identity": {
+                    "scope": "*",
+                    "role": "video_identity",
+                    "optional": true
+                  },
+                  "coverage": {
+                    "scope": "*",
+                    "role": "coverage_json",
+                    "optional": true
+                  },
+                  "archived_coverage": {
+                    "scope": "*",
+                    "role": "coverage",
+                    "optional": true
+                  },
+                  "frames": {
+                    "scope": "*",
+                    "role": "coverage_image",
+                    "optional": true
+                  },
+                  "asr": {
+                    "scope": "*",
+                    "role": "asr",
+                    "optional": true,
+                    "fields": [
+                      "/http_status",
+                      "/provider_received",
+                      "/body/output/text",
+                      "/raw_sha256"
+                    ]
+                  },
+                  "journal": {
+                    "scope": "*",
+                    "role": "journal",
+                    "optional": true,
+                    "fields": [
+                      "/scope",
+                      "/policy",
+                      "/visual_evidence",
+                      "/calls",
+                      "/media",
+                      "/agent_decision_provenance",
+                      "/decision"
+                    ]
+                  },
+                  "proof": {
+                    "scope": "*",
+                    "role": "proof",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/binding/args/0/qualification_evidence",
+                      "/result/exit_code",
+                      "/result/data/proof_manifest"
+                    ]
+                  },
+                  "prepare": {
+                    "scope": "*",
+                    "role": "prepare",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/result/exit_code",
+                      "/result/stdout/dossier_sha256",
+                      "/result/stdout/dossier_ref/sha256"
+                    ]
+                  },
+                  "submit": {
+                    "scope": "*",
+                    "role": "submit",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/result/exit_code",
+                      "/result/stdout/verdict",
+                      "/result/stdout/reason",
+                      "/result/stdout/calls",
+                      "/result/stdout/decision_provenance"
+                    ]
+                  },
+                  "readback": {
+                    "scope": "*",
+                    "role": "readback",
+                    "optional": true
+                  },
+                  "record_start": {
+                    "scope": "*",
+                    "role": "record_start",
+                    "optional": true
+                  },
+                  "record_stop": {
+                    "scope": "*",
+                    "role": "record_stop",
+                    "optional": true
+                  },
+                  "extract_audio": {
+                    "scope": "*",
+                    "role": "extract",
+                    "optional": true
+                  },
+                  "capture_runtime": {
+                    "scope": "*",
+                    "role": "capture_runtime",
+                    "optional": true
+                  },
+                  "capture_sdk": {
+                    "scope": "*",
+                    "role": "sdk",
+                    "optional": true
+                  },
+                  "audio_start": {
+                    "scope": "*",
+                    "role": "audio_start",
+                    "optional": true,
+                    "digest_only": true
+                  },
+                  "audio_end": {
+                    "scope": "*",
+                    "role": "audio_end",
+                    "optional": true,
+                    "digest_only": true
+                  }
+                },
+                "facts": {
+                  "persisted": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.transaction_read_only",
+                        "rows.line_key",
+                        "rows.video_id",
+                        "rows.judgment_status",
+                        "rows.judgment_reason",
+                        "rows.transcript",
+                        "rows.judgment_config",
+                        "rows.process_status",
+                        "rows.harvest_batch"
+                      ]
+                    }
+                  },
+                  "policy": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "policy",
+                      "fields": [
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.version",
+                        "rows.run_id",
+                        "rows.snapshot.policy_id",
+                        "rows.snapshot.runtime_config.video_judgment"
+                      ]
+                    }
+                  },
+                  "origin": {
+                    "operation": "qualification.origin",
+                    "optional": true,
+                    "args": {
+                      "video_id": {
+                        "$from": "/proposal/outputs/Video/0/video_id"
+                      },
+                      "document": "journal.json",
+                      "fields": [
+                        "origin",
+                        "document.sha256",
+                        "document.data.scope",
+                        "document.data.policy",
+                        "document.data.media",
+                        "document.data.visual_evidence",
+                        "document.data.calls",
+                        "document.data.decision",
+                        "document.data.agent_decision_provenance"
+                      ]
+                    }
+                  },
+                  "recording": {
+                    "operation": "media.inspect",
+                    "optional": true,
+                    "args": {
+                      "name": {
+                        "$from": "/files/coverage/recording/name"
+                      },
+                      "fields": [
+                        "name",
+                        "sha256",
+                        "bytes",
+                        "metadata.format.duration",
+                        "metadata.streams.codec_type",
+                        "metadata.streams.codec_name"
+                      ]
+                    }
+                  },
+                  "audio": {
+                    "operation": "media.inspect",
+                    "optional": true,
+                    "args": {
+                      "name": {
+                        "$from": "/files/proof/binding/args/0/qualification_evidence/audio/path",
+                        "basename": true
+                      },
+                      "fields": [
+                        "name",
+                        "sha256",
+                        "bytes",
+                        "metadata.format.duration",
+                        "metadata.streams.codec_type",
+                        "metadata.streams.codec_name"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code",
+                        "receipts.started_at",
+                        "receipts.ended_at"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "persisted",
+                    "readback",
+                    "submit"
+                  ],
+                  "postconditions_0": [
+                    "persisted",
+                    "readback",
+                    "submit",
+                    "asr",
+                    "origin"
+                  ],
+                  "postconditions_1": [
+                    "persisted",
+                    "policy",
+                    "origin",
+                    "identity",
+                    "coverage",
+                    "archived_coverage",
+                    "frames",
+                    "asr",
+                    "journal",
+                    "proof",
+                    "prepare",
+                    "submit",
+                    "readback",
+                    "record_start",
+                    "record_stop",
+                    "extract_audio",
+                    "capture_runtime",
+                    "capture_sdk",
+                    "audio_start",
+                    "audio_end",
+                    "recording",
+                    "audio",
+                    "actions"
+                  ],
+                  "side_effects_0": [
+                    "persisted",
+                    "submit",
+                    "readback"
+                  ],
+                  "idempotency": [
+                    "persisted",
+                    "journal",
+                    "submit",
+                    "actions"
+                  ],
+                  "failure": [
+                    "persisted",
+                    "readback",
+                    "origin",
+                    "asr",
+                    "journal",
+                    "actions"
+                  ]
                 }
               }
             },
@@ -1611,7 +2087,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.collection",
-            "contract_digest": "39d41eed306424d479e5da148c1ce68d3051162519c2a55f160dd0fae94ca469"
+            "contract_digest": "d9c532818e53e613a600a756483a0afe542b30b6d8ba8439efd10d778fa23775"
           },
           "document": {
             "key": "collection",
@@ -1627,7 +2103,7 @@
               "current_skill_verified": false
             },
             "order": 4,
-            "version": "2.8.6",
+            "version": "2.8.7",
             "required_host_tools": [
               "phone",
               "business",
@@ -1659,6 +2135,176 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "delivered": {
+                    "scope": "*",
+                    "role": "*"
+                  }
+                },
+                "facts": {
+                  "videos": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.transaction_read_only",
+                        "rows.video_id",
+                        "rows.line_key",
+                        "rows.judgment_status",
+                        "rows.judgment_config",
+                        "rows.process_status",
+                        "rows.harvest_batch",
+                        "rows.comment_count",
+                        "rows.author"
+                      ]
+                    }
+                  },
+                  "comments": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "comments",
+                      "fields": [
+                        "connection.transaction_read_only",
+                        "rows.id",
+                        "rows.line_key",
+                        "rows.dedup_key",
+                        "rows.nickname",
+                        "rows.douyin_id",
+                        "rows.profile_url",
+                        "rows.body",
+                        "rows.video_id",
+                        "rows.harvest_batch",
+                        "rows.recipient_evidence"
+                      ]
+                    }
+                  },
+                  "policy": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "policy",
+                      "fields": [
+                        "rows.company_id",
+                        "rows.tenant_id",
+                        "rows.version",
+                        "rows.run_id",
+                        "rows.snapshot.policy_id",
+                        "rows.snapshot.runtime_config.platform_accounts.id",
+                        "rows.snapshot.runtime_config.platform_accounts.enabled",
+                        "rows.snapshot.runtime_config.platform_accounts.verification_status",
+                        "rows.snapshot.runtime_config.platform_accounts.fields",
+                        "rows.snapshot.runtime_config.platform_accounts.source.platform"
+                      ]
+                    }
+                  },
+                  "task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "result.foundation_runner.run.input.business.comment_limit",
+                        "result.foundation_runner.run.input.business.scope",
+                        "result.foundation_runner.run.deadline_ms"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.action",
+                        "receipts.path",
+                        "receipts.status"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "comments",
+                    "delivered"
+                  ],
+                  "outputs_1": [
+                    "videos",
+                    "delivered"
+                  ],
+                  "postconditions_0": [
+                    "videos",
+                    "policy",
+                    "delivered"
+                  ],
+                  "postconditions_1": [
+                    "videos",
+                    "comments",
+                    "delivered",
+                    "actions",
+                    "task"
+                  ],
+                  "postconditions_2": [
+                    "videos",
+                    "delivered",
+                    "actions",
+                    "progress"
+                  ],
+                  "postconditions_3": [
+                    "comments",
+                    "videos",
+                    "delivered",
+                    "policy"
+                  ],
+                  "postconditions_4": [
+                    "task",
+                    "comments",
+                    "videos",
+                    "delivered"
+                  ],
+                  "postconditions_5": [
+                    "task",
+                    "delivered",
+                    "comments"
+                  ],
+                  "postconditions_6": [
+                    "task",
+                    "comments",
+                    "delivered"
+                  ],
+                  "postconditions_7": [
+                    "comments",
+                    "delivered",
+                    "actions",
+                    "progress"
+                  ],
+                  "side_effects_0": [
+                    "videos",
+                    "comments",
+                    "delivered",
+                    "actions"
+                  ],
+                  "idempotency": [
+                    "comments",
+                    "delivered"
+                  ],
+                  "failure": [
+                    "task",
+                    "videos",
+                    "comments",
+                    "delivered",
+                    "actions",
+                    "progress"
+                  ]
                 }
               }
             },
@@ -2405,7 +3051,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.cleanup",
-            "contract_digest": "87ff73d54ed5b1ea10f11b991262524e4b7d1a785cb8d0e5fbd517d69c59f3cf"
+            "contract_digest": "bf8c206bfb35cbfdf2447dd1f20d15163679c68394f3b3816b085ca70e2769ac"
           },
           "document": {
             "key": "cleanup",
@@ -2422,7 +3068,7 @@
               "current_skill_verified": false
             },
             "order": 5,
-            "version": "2.6.3",
+            "version": "2.6.4",
             "required_host_tools": [
               "native-readback",
               "phone",
@@ -2454,6 +3100,196 @@
                       }
                     }
                   }
+                }
+              },
+              "report": {
+                "files": {
+                  "close": {
+                    "scope": "*",
+                    "role": "close",
+                    "optional": true
+                  },
+                  "close_app": {
+                    "scope": "*",
+                    "role": "close_app",
+                    "optional": true
+                  },
+                  "app_closed": {
+                    "scope": "*",
+                    "role": "app_closed",
+                    "optional": true
+                  },
+                  "home": {
+                    "scope": "*",
+                    "role": "home",
+                    "optional": true
+                  },
+                  "desktop": {
+                    "scope": "*",
+                    "role": "desktop",
+                    "optional": true
+                  },
+                  "desktop_image": {
+                    "scope": "*",
+                    "role": "desktop_image",
+                    "optional": true
+                  },
+                  "screenshot": {
+                    "scope": "*",
+                    "role": "screenshot",
+                    "optional": true
+                  },
+                  "local_release": {
+                    "scope": "*",
+                    "role": "local_release",
+                    "optional": true
+                  },
+                  "local_readback": {
+                    "scope": "*",
+                    "role": "local_readback",
+                    "optional": true
+                  },
+                  "central_release": {
+                    "scope": "*",
+                    "role": "central_release",
+                    "optional": true
+                  },
+                  "central_readback": {
+                    "scope": "*",
+                    "role": "central_readback",
+                    "optional": true
+                  },
+                  "claims_release": {
+                    "scope": "*",
+                    "role": "video_release",
+                    "optional": true
+                  },
+                  "claims_readback": {
+                    "scope": "*",
+                    "role": "video_readback",
+                    "optional": true
+                  }
+                },
+                "facts": {
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight.foreground_package",
+                        "preflight.hardware_serial",
+                        "local_lock",
+                        "operations",
+                        "active",
+                        "inflight"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "claims": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.snapshot_at",
+                        "rows.video_id",
+                        "rows.line_key",
+                        "rows.process_status",
+                        "rows.harvest_batch",
+                        "rows.updated_at"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.action",
+                        "receipts.path",
+                        "receipts.status"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "central",
+                    "local_release",
+                    "local_readback",
+                    "central_release",
+                    "central_readback"
+                  ],
+                  "outputs_1": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress"
+                  ],
+                  "postconditions_0": [
+                    "native",
+                    "actions",
+                    "progress",
+                    "close",
+                    "close_app",
+                    "app_closed"
+                  ],
+                  "postconditions_1": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress",
+                    "local_release",
+                    "local_readback",
+                    "central_release",
+                    "central_readback",
+                    "claims_release",
+                    "claims_readback"
+                  ],
+                  "postconditions_2": [
+                    "native",
+                    "actions",
+                    "progress",
+                    "home",
+                    "desktop",
+                    "desktop_image",
+                    "screenshot"
+                  ],
+                  "idempotency": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress"
+                  ],
+                  "failure": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress",
+                    "home",
+                    "desktop",
+                    "desktop_image",
+                    "screenshot"
+                  ]
                 }
               }
             },
@@ -2841,8 +3677,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "acfff9ca17e428061a3effcf803af4315b256cc3",
-      "contract_sha256": "09f8caad52c8c96ac794f1869fe848dbdace457ecc87cfd12c0d8650d6710ae1"
+      "method_revision": "2057791e389d1b7ca7a1d1a974cb911c0fb517a3",
+      "contract_sha256": "6bc5f8b98fa914e2ff1294c3f04e8e1eaaf4e160534a012c50e7b7d3728a6da0"
     },
     "skill_runtime": {
       "control_dir": "control",
@@ -3064,11 +3900,11 @@
       "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
       "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "2afb2928825c70bbe23a9a0402d61a961a53d288c22d2b1da9e01d3a12d3ddd0",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "46b9d08c756cf62ddbf155dd85b747ffa503b91af3d71c2b167b394c1b3c3e71",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "8f4c27085f87bc628b44087f4547b4eed6a50afcc2313be112baaa20a88a3135",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md": "e8c5635c2dd9f28663295a5d394740fed7d65074785de9680a1e5d289a22d024",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md": "0d5cf7f213848b7e0de7c1194afc32b0f92120f6c8a9635ddf78ce369d53fd84",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "20526b98430a112d2c8c2388f24fbe6bc230cf5950943ba060c324a0b5446fa4",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md": "5a48455deb271b13e7a6231d4579ae48e1946137284dcdf9dd9524e844f01225",
       "services/phone-adb-controller/leadgen-foundation/collection-stop.mjs": "c243c9072af22e7946f9c36d1c72337979c4076fe36d72517d8d00ab5e231952",
       "services/phone-adb-controller/qualification-agent-candidate.mjs": "52e93e17de062e019e0bf2415579e04f0da6791b10b4cd0bd4a44c9fbadda573",
       "services/phone-adb-controller/qualification-agent-decision.mjs": "58540d1f821c489bc7f619b7beffe190a3088a32c7433ac51d4ec1e8a288764a",
