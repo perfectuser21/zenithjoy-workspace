@@ -91,9 +91,10 @@ test('102 未确认账号不领单，打开及录制只允许原批次实际领�
 
 test('102 只从本轮已停止、带原生播放佐证的音频生成转写',async()=>{
   const {prepareStandaloneCollectionAudio}=await import('../standalone-collection-tools.mjs');
-  const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');
+  const {mkdtempSync,realpathSync,writeFileSync,rmSync}=await import('node:fs');
+  const {tmpdir}=await import('node:os');
   const {join}=await import('node:path');
-  const root=mkdtempSync('/private/tmp/direct-102-audio-');
+  const root=mkdtempSync(join(realpathSync(tmpdir()),'direct-102-audio-'));
   try {
     const recordingId=run+'-capture',path=join(root,recordingId+'.16k.wav');
     const wav=Buffer.alloc(32044);
@@ -123,10 +124,11 @@ test('102 资格提交仅接受原转写和冻结政策的真实引用',async()=
 
 test('102 只在原批次样本达到目标并再次读回后给出成功证据',async()=>{
   const {createStandaloneCollectionTools}=await import('../standalone-collection-tools.mjs');
-  const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');
+  const {mkdtempSync,realpathSync,writeFileSync,rmSync}=await import('node:fs');
+  const {tmpdir}=await import('node:os');
   const {join}=await import('node:path');
   const {createHash}=await import('node:crypto');
-  const root=mkdtempSync('/private/tmp/direct-102-handoff-');
+  const root=mkdtempSync(join(realpathSync(tmpdir()),'direct-102-handoff-'));
   try {
     const commentId='6415775b-7b37-4c55-bf25-d6bad8ed73a7';
     const recordingId=run+'-capture',path=join(root,recordingId+'.16k.wav');
