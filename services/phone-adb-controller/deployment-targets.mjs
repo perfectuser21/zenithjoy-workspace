@@ -12,28 +12,31 @@ const extraKeys=['workflow_report.internal','workflow_commander.internal','douyi
 const need=(v,m)=>{if(!v)throw Error('统一部署: '+m);};
 const same=(a,b)=>digest(a)===digest(b);
 const rowHash=r=>digest({source:{repo:r.source_repo,path:r.source_path,commit:r.source_commit},payload:r.payload});
-export function bindingComponents(definitions,sha,{preflightPgLock}={}){
- const entries=new Map([['repo',{kind:'repo',repo:DEPLOY_REPO,revision:sha}]]);
+export function bindingComponents(definitions,sha,{preflightPgLock,archiveFoundation=false}={}){
+ const entries=new Map([[`repo:${sha}`,{kind:'repo',repo:DEPLOY_REPO,revision:sha}]]);
  for(const a of definitions.activities){
   need(a.payload.implementation_bindings?.some(b=>b.scope==='activity'&&['code','skill'].includes(b.kind)&&b.status==='verified'),'缺Activity固定入口');
   for(const b of a.payload.implementation_bindings){
    if(b.kind==='raw'&&b.status==='unresolved')continue;
-   need(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===DEPLOY_REPO&&b.revision===sha&&/^sha256:[0-9a-f]{64}$/.test(b.digest||'')&&typeof b.path==='string'&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(x=>['.','..',''].includes(x)),'固定binding无效');
-   const value={kind:b.kind,repo:b.repo,path:b.path,revision:b.revision,digest:b.digest},key=b.kind+':'+b.path;
+   need(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===DEPLOY_REPO
+    &&(b.revision===sha||archiveFoundation&&b.purpose==='foundation_host'&&/^[a-f0-9]{40}$/.test(b.revision||''))
+    &&/^sha256:[0-9a-f]{64}$/.test(b.digest||'')&&typeof b.path==='string'&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(x=>['.','..',''].includes(x)),'固定binding无效');
+   if(b.revision!==sha)entries.set('repo:'+b.revision,{kind:'repo',repo:b.repo,revision:b.revision});
+   const value={kind:b.kind,repo:b.repo,path:b.path,revision:b.revision,digest:b.digest},key=`${b.kind}:${b.path}:${b.revision}`;
    need(!entries.has(key)||same(entries.get(key),value),'binding同路径冲突');entries.set(key,value);
   }
  }
- if(preflightPgLock){need(same(preflightPgLock,preflightPgLockIdentity()),'预检依赖Git锁身份不符');const key='code:'+pgLockPath;need(entries.has(key)&&same(entries.get(key),{kind:'code',repo:DEPLOY_REPO,path:pgLockPath,revision:sha,digest:'sha256:'+preflightPgLock.lock_sha256}),'预检依赖缺冻结定义binding');}
- return [...entries.values()].sort((a,b)=>`${a.kind}:${a.path||''}`.localeCompare(`${b.kind}:${b.path||''}`));
+ if(preflightPgLock){need(same(preflightPgLock,preflightPgLockIdentity()),'预检依赖Git锁身份不符');const key=`code:${pgLockPath}:${sha}`;need(entries.has(key)&&same(entries.get(key),{kind:'code',repo:DEPLOY_REPO,path:pgLockPath,revision:sha,digest:'sha256:'+preflightPgLock.lock_sha256}),'预检依赖缺冻结定义binding');}
+ return [...entries.values()].sort((a,b)=>`${a.kind}:${a.path||''}:${a.revision}`.localeCompare(`${b.kind}:${b.path||''}:${b.revision}`));
 }
-function checkScope(e,scope,sha){
+function checkScope(e,scope,sha,{archiveFoundation=false}={}){
  const {snapshot:s,report:r,receipt:c}=e||{};
  need(s?.scope===scope&&s.repo===DEPLOY_REPO&&s.revision===sha&&s.status==='verified'&&Array.isArray(s.gaps)&&!s.gaps.length,'缺同SHA完整'+scope+'快照');
  const {snapshot_sha256,...body}=s;need(snapshot_sha256===digest(body),'快照摘要不符');
  const defs=s.definitions;need(defs?.workflows?.length&&defs.activities?.length,'空定义');
  for(const kind of ['workflows','activities']){need(new Set(defs[kind].map(x=>x.id)).size===defs[kind].length,'重复定义');for(const row of defs[kind])need(row.source_repo===DEPLOY_REPO&&row.source_commit===sha&&row.payload_sha256===rowHash(row),'定义来源漂移');}
  need(r?.protocol==='pilot_release_verification_v1'&&r.purpose==='release_verification'&&r.scope===scope&&same(r.source,{repo:DEPLOY_REPO,head_revision:sha})&&r.verification_status==='verified'&&Array.isArray(r.gaps)&&!r.gaps.length&&r.snapshot_sha256===snapshot_sha256&&r.assertion_source==='current_registration','完整CI来源不符');
- const plan=deploymentAssertionPlan(r,s);
+ const plan=deploymentAssertionPlan(r,s,{archiveFoundation});
  need(r.expected_usages?.length&&r.assertion_plan_sha256===digest(plan),'CI计划摘要不符');
  for(const kind of ['workflows','activities'])need(Array.isArray(r.definition_versions?.[kind])&&new Set(r.definition_versions[kind].map(x=>x.id)).size===r.definition_versions[kind].length&&defs[kind].every(w=>r.definition_versions[kind].some(v=>v.id===w.id&&v.payload_sha256===w.payload_sha256&&v.source_repo===w.source_repo&&v.source_commit===w.source_commit)),'报告缺冻结定义');
  need(c?.purpose==='release_verification'&&c.actor==='pilot_release_verification'&&c.scope==='declared_pilot_regressions'&&c.business_runtime_status==='not_evaluated'&&c.verdict==='PASS'&&same(c.source,r.source)&&c.snapshot_sha256===snapshot_sha256&&c.assertion_plan_sha256===r.assertion_plan_sha256&&c.report_sha256===digest(Buffer.from(JSON.stringify(r))),'CI receipt不符');
@@ -46,17 +49,17 @@ function subset(definitions,workflows){
  const activities=definitions.activities.filter(a=>ids.has(a.id));
  need(ids.size&&activities.length===ids.size&&refs.every(r=>activities.some(a=>a.id===r.activity_version_id&&a.activity_id===r.activity_id&&a.payload.activity_id===r.activity_id)),'活动依赖闭包缺失');return{workflows,activities};
 }
-export function targetDefinitions(bundle,sha,readFile,{preflightPgLock}={}){
- validateDeploymentEvidence(bundle,sha,readFile);
+export function targetDefinitions(bundle,sha,readFile,{preflightPgLock,archiveFoundation=false}={}){
+ validateDeploymentEvidence(bundle,sha,readFile,{archiveFoundation});
  // 第三scope是whole-Pilot门禁，不进入M4/MMV的7/4流程安装闭包。
  checkScope(bundle.patrol,'cecelia-device-patrol-definitions',sha);
- const scopes=[checkScope(bundle,'zenithjoy',sha),checkScope(bundle.commander,'commander-generic',sha)],all={workflows:[],activities:[]};
+ const scopes=[checkScope(bundle,'zenithjoy',sha,{archiveFoundation}),checkScope(bundle.commander,'commander-generic',sha,{archiveFoundation})],all={workflows:[],activities:[]};
  for(const kind of ['workflows','activities']){const rows=new Map();for(const defs of scopes)for(const row of defs[kind]){need(!rows.has(row.id)||same(rows.get(row.id),row),'同ID跨scope冻结冲突');rows.set(row.id,row);}all[kind]=[...rows.values()];}
  const legacy=all.workflows.filter(w=>WORKFLOWS.includes(w.workflow_id));need(legacy.length===4,'缺旧四流程');
  const extras=extraKeys.map(key=>{const found=all.workflows.filter(w=>w.payload.key===key);need(found.length===1,'缺或重复Commander workflow: '+key);return found[0];});
  const mmv=subset(all,[...legacy,...extras]);need(new Set(mmv.workflows.map(w=>w.workflow_id)).size===7,'MMV七流程身份冲突');
  const result={};for(const [target,definitions]of [['xian-m4',subset(all,legacy)],['mmv',mmv]]){
-  const components=bindingComponents(definitions,sha,{preflightPgLock});for(const c of components.filter(c=>c.kind!=='repo'))need('sha256:'+digest(readFile(c.path))===c.digest,'实际源码binding漂移');result[target]={definitions,components};
+  const components=bindingComponents(definitions,sha,{preflightPgLock,archiveFoundation});for(const c of components.filter(c=>c.kind!=='repo'))need('sha256:'+digest(readFile(c.path,c.revision))===c.digest,'实际源码binding漂移');result[target]={definitions,components};
  }return result;
 }
 export function commanderMap(release){
@@ -65,7 +68,7 @@ export function commanderMap(release){
 export function verifyTargetRelease(release,target,sha,expected,environment='production'){
  need((environment==='production'||environment===`staging:${sha}`)&&release?.target===target&&release.environment===environment&&release.payload?.verification?.status==='verified'&&release.manifest_sha256===digest({environment:release.environment,target:release.target,payload:release.payload}),'release目标/摘要/状态错误');
  const preflightPgLock=release.payload.components?.some(c=>c.kind==='code'&&c.path===pgLockPath)?preflightPgLockIdentity():undefined;
- need(same(release.payload.components,bindingComponents(release.payload,sha,{preflightPgLock})),'release组件不等于完整bindings');
+ need(same(release.payload.components,bindingComponents(release.payload,sha,{preflightPgLock,archiveFoundation:environment===`staging:${sha}`})),'release组件不等于完整bindings');
  if(expected)need(same(release.payload.components,expected.components),'release依赖源码组件不等于固定目标');
  for(const r of [...release.payload.workflows,...release.payload.activities])need(r.source_repo===DEPLOY_REPO&&r.source_commit===sha&&r.payload_sha256===rowHash(r),'正式release冻结摘要/来源不符');
  const rows=release.payload.workflows;need(rows.filter(w=>WORKFLOWS.includes(w.workflow_id)).length===4&&rows.length===(target==='mmv'?7:4),'release缺完整目标闭包');
@@ -73,7 +76,7 @@ export function verifyTargetRelease(release,target,sha,expected,environment='pro
  if(expected)need(same([...rows].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.workflows].sort((a,b)=>a.id.localeCompare(b.id)))&&same([...release.payload.activities].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.activities].sort((a,b)=>a.id.localeCompare(b.id))),'Brain回了其它冻结版本');return release;
 }
 export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request,environment='production',businessRunIds,acceptanceTaskIds,preflightPgLock}){
- need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile,{preflightPgLock}),releases={};
+ need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile,{preflightPgLock,archiveFoundation:environment===`staging:${sha}`}),releases={};
  const admission=environment==='production'?await verifyBusinessAdmission({sha,targets,runIds:businessRunIds,acceptanceTaskIds,readFile,request}):null;
  for(const target of ['xian-m4','mmv']){
   const {definitions,components}=targets[target],evidence=target==='mmv'?[bundle,bundle.commander]:[bundle];

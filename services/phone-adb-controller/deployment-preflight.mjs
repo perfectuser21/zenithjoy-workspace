@@ -10,7 +10,7 @@ const SHA=/^[0-9a-f]{40}$/;
 export const WORKFLOWS=[101,102,103,104].map(n=>`b1000000-0000-4000-8000-${String(n).padStart(12,'0')}`);
 const requireThat=(ok,message)=>{if(!ok)throw Error(`部署预检: ${message}`);};
 const equal=(a,b)=>digest(a)===digest(b);
-const key=c=>`${c.kind}:${c.repo}:${c.path||''}`;
+const key=c=>`${c.kind}:${c.repo}:${c.path||''}:${c.revision}`;
 const fixedSourcePath=path=>typeof path==='string'&&path.length>0&&path.length<=1000&&/^[A-Za-z0-9_./-]+$/.test(path)&&path.split('/').every(part=>part&&part!=='.'&&part!=='..');
 function validateResolvedSource(binding){
  if(!Object.hasOwn(binding,'resolved_source'))return;
@@ -40,7 +40,7 @@ function deploymentDefinitions(full,sha){
  const activities=full.activities.filter(a=>referenced.has(a.id));
  return {workflows,activities};
 }
-function componentsFor(definitions,sha){
+function componentsFor(definitions,sha,{archiveFoundation=false}={}){
  requireThat(Array.isArray(definitions?.workflows)&&Array.isArray(definitions?.activities),'缺固定定义');
  requireThat(definitions.workflows.length===WORKFLOWS.length&&WORKFLOWS.every(id=>definitions.workflows.filter(w=>w.workflow_id===id&&w.payload?.workflow_id===id).length===1),'缺四流程唯一Workflow');
  const all=[...definitions.workflows,...definitions.activities],components=new Map();
@@ -58,8 +58,10 @@ function componentsFor(definitions,sha){
   for(const b of a.payload.implementation_bindings){
    // raw是规范化保留的来源描述，不是可执行组件，不能被伪标为已核验。
    if(b.kind==='raw'&&b.status==='unresolved')continue;
-   requireThat(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===DEPLOY_REPO&&b.revision===sha&&/^sha256:[0-9a-f]{64}$/.test(b.digest||''),'实现绑定未核验');
+   requireThat(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===DEPLOY_REPO
+     &&(b.revision===sha||archiveFoundation&&b.purpose==='foundation_host'&&SHA.test(b.revision||''))&&/^sha256:[0-9a-f]{64}$/.test(b.digest||''),'实现绑定未核验');
    requireThat(typeof b.path==='string'&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(p=>['.','..',''].includes(p)),'组件路径无效');
+   if(b.revision!==sha)add({kind:'repo',repo:b.repo,revision:b.revision});
    add({kind:b.kind,repo:b.repo,path:b.path,revision:b.revision,digest:b.digest});
   }
   requireThat(a.payload.implementation_bindings.some(b=>b.scope==='activity'&&['code','skill'].includes(b.kind)&&b.status==='verified'),'缺Activity固定实现');
@@ -67,7 +69,7 @@ function componentsFor(definitions,sha){
  return [...components.values()].sort((a,b)=>key(a).localeCompare(key(b)));
 }
 // 与官方pilotPlanBody/release-proof同形；来源集合必须由本快照完整绑定重建，不能只信报告自证。
-export function deploymentAssertionPlan(report,snapshot){
+export function deploymentAssertionPlan(report,snapshot,{archiveFoundation=false}={}){
  const keys=['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'];
  if(Object.hasOwn(report,'implementation_source_set')){
   const supplied=report.implementation_source_set,activities=snapshot?.definitions?.activities;
@@ -87,31 +89,32 @@ export function deploymentAssertionPlan(report,snapshot){
   requireThat(new Set(expected.map(r=>digest(r))).size===expected.length&&equal(supplied,expected),'实现来源集合与完整固定绑定不符');
   keys.push('implementation_source_set');
  }else{
-  // 旧登记器报告没有来源集合；作者协议及跨版本实现不能删除集合降格。
+  // 旧报告仍按原样验真。候选可另行验证并携带声明过的 Foundation 原始归档。
   requireThat(snapshot?.definitions?.activities?.every(a=>
    a.payload?.registration_protocol!=='definition-freeze-v1'&&(a.payload?.implementation_bindings||[]).every(b=>{
     validateResolvedSource(b);
-    return !['code','skill'].includes(b.kind)||(b.repo===snapshot.repo&&b.revision===snapshot.revision);
+    return !['code','skill'].includes(b.kind)||(b.repo===snapshot.repo&&(b.revision===snapshot.revision
+     ||archiveFoundation&&b.purpose==='foundation_host'&&b.status==='verified'&&SHA.test(b.revision||'')));
    })),'作者协议或跨版本实现缺完整来源集合');
  }
  return Object.fromEntries(keys.map(k=>[k,report[k]]));
 }
-export function validateDeploymentEvidence(bundle,sha,readFile){
+export function validateDeploymentEvidence(bundle,sha,readFile,{archiveFoundation=false}={}){
  requireThat(SHA.test(sha),'DEPLOY_SHA必须固定');
  const {snapshot,report,receipt}=bundle||{};
  requireThat(snapshot?.schema_version===1&&snapshot.scope==='zenithjoy'&&snapshot.repo===DEPLOY_REPO&&snapshot.revision===sha&&snapshot.status==='verified'&&Array.isArray(snapshot.gaps)&&snapshot.gaps.length===0,'快照来源/状态不符');
  const {snapshot_sha256,...body}=snapshot;requireThat(snapshot_sha256===digest(body),'快照摘要不符');
  const definitions=deploymentDefinitions(snapshot.definitions,sha);
- const components=componentsFor(definitions,sha);
+ const components=componentsFor(definitions,sha,{archiveFoundation});
  requireThat(report?.protocol==='pilot_release_verification_v1'&&report.purpose==='release_verification'&&report.scope==='zenithjoy'&&report.source?.repo===DEPLOY_REPO&&report.source.head_revision===sha&&report.verification_status==='verified'&&Array.isArray(report.gaps)&&report.gaps.length===0,'CI来源或状态未核验');
  requireThat(equal(Object.keys(report.source).sort(),['head_revision','repo'])&&report.snapshot_sha256===snapshot_sha256&&report.assertion_source==='current_registration','CI不是本次完整试点发布证据');
- const plan=deploymentAssertionPlan(report,snapshot);
+ const plan=deploymentAssertionPlan(report,snapshot,{archiveFoundation});
  requireThat(Array.isArray(report.expected_usages)&&report.expected_usages.length>0&&report.assertion_plan_sha256===digest(plan),'完整回归计划摘要不符');
  requireThat(receipt?.purpose==='release_verification'&&receipt.actor==='pilot_release_verification'&&receipt.verdict==='PASS'&&receipt.scope==='declared_pilot_regressions'&&receipt.business_runtime_status==='not_evaluated'&&receipt.snapshot_sha256===snapshot_sha256&&receipt.assertion_plan_sha256===report.assertion_plan_sha256&&equal(receipt.source,report.source)&&receipt.report_sha256===digest(Buffer.from(JSON.stringify(report))),'CI回执未核验');
  requireThat(Array.isArray(report.required_assertions)&&report.required_assertions.length>0&&Array.isArray(receipt.assertions)&&receipt.assertions.length>0,'缺真实回归断言');
  requireThat(receipt.assertions.every(a=>a.source_repo===DEPLOY_REPO&&a.source_revision===sha&&a.exit_code===0&&!a.error&&!a.signal&&/^[0-9a-f]{64}$/.test(a.test_sha256||'')),'回归执行证据不符');
  for(const kind of ['workflows','activities'])requireThat(Array.isArray(report.definition_versions?.[kind])&&snapshot.definitions[kind].every(row=>report.definition_versions[kind].some(r=>r.id===row.id&&r.payload_sha256===row.payload_sha256&&r.source_repo===row.source_repo&&r.source_commit===row.source_commit)),'CI不覆盖完整固定定义');
- for(const c of components.filter(c=>c.kind!=='repo'))requireThat('sha256:'+digest(readFile(c.path))===c.digest,'本机部署组件字节不符');
+ for(const c of components.filter(c=>c.kind!=='repo'))requireThat('sha256:'+digest(readFile(c.path,c.revision))===c.digest,'本机部署组件字节不符');
  return {definitions,components};
 }
 function verifyRelease(release,{id,environment,target,manifest}){

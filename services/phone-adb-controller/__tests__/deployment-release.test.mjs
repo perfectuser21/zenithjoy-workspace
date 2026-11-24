@@ -21,6 +21,25 @@ test('真实采集→持久请求→观测精确回读→gate之后才发布mani
  assert.equal(result.release_id,'release-1');assert.equal(result.observation_id,'obs-1');assert.equal(result.target,'xian-m4');assert.deepEqual(f.calls.find(c=>c.body).body.components,f.release.payload.components);
  const stored=JSON.parse(readFileSync(join(f.options.stateDir,readdirSync(f.options.stateDir).find(n=>n.endsWith('.request.json'))),'utf8'));assert.equal(stored.body.collector,'trusted-fixture');assert.equal(stored.body.deployed,undefined);
 });
+test('候选观测为同路径的两个版本分别读回，并拒绝归档冒认当前版本或生产组件',async()=>{
+ const {observeDeployment,candidateArchivePath}=await import(path);
+ for(const scenario of ['candidate','wrong_archive_path','production']){
+  const f=fixture(),{manifest}=f.options,revision='c'.repeat(40),[current]=manifest.files;
+  const archived={...current,source_revision:revision,content_sha256:'d'.repeat(64),deployed_path:scenario==='wrong_archive_path'?'wrong.sh':candidateArchivePath(revision,current.path)};
+  manifest.files.push(archived);
+  f.options.environment=f.release.environment=scenario==='production'?'production':`staging:${manifest.source_commit}`;
+  f.release.payload.components.push({kind:'repo',repo:manifest.source_repo,revision},
+   {kind:'code',repo:manifest.source_repo,revision,path:current.path,digest:`sha256:${archived.content_sha256}`});
+  f.release.manifest_sha256=digest({environment:f.release.environment,target:f.release.target,payload:f.release.payload});
+  if(scenario==='candidate'){
+   await observeDeployment(f.options);
+   assert.deepEqual(f.calls.find(c=>c.body).body.components,f.release.payload.components);
+  }else{
+   await assert.rejects(observeDeployment(f.options),/归档|组件/);
+   assert.equal(f.calls.some(c=>c.body),false);
+  }
+ }
+});
 test('独立依赖缺实际观测或摘要漂移时零中央部署ACK',async()=>{
  const {observeDeployment}=await import(path);
  for(const observed of [undefined,{preflight_pg:{manifest_sha256:'f'.repeat(64)}}]){
