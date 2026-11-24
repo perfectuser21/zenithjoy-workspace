@@ -1,7 +1,7 @@
 import {buildSync} from 'esbuild';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {existsSync,readFileSync,writeFileSync} from 'node:fs';
 import {isBuiltin} from 'node:module';
-import {join,resolve} from 'node:path';
+import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
 import {hash} from './context.mjs';
@@ -25,6 +25,14 @@ export function generateLightweight101Profile(repoRoot=defaultRoot){
   for(const file of Object.keys(metafile.inputs).sort()){
     if(!file.startsWith(sourcePrefix)||file.split('/').includes('..'))throw Error('LIGHT101_SOURCE_SCOPE');
     original.profile.files[file]=hash(read(file));
+    // Node uses the nearest package manifest when loading the original source bytes.
+    for(let directory=dirname(file); `${directory}/`.startsWith(sourcePrefix); directory=dirname(directory)){
+      const manifest=`${directory}/package.json`;
+      if(existsSync(join(repoRoot,manifest))){
+        original.profile.files[manifest]=hash(read(manifest));
+        break;
+      }
+    }
   }
   const files=Object.keys(original.profile.files);
   if(files.length>200||files.filter(name=>name.startsWith(sourcePrefix+'skills/')).length!==originalSkillCount)

@@ -4,7 +4,7 @@ import {copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSyn
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import Ajv from 'ajv';
 import {metricPhoneReceipt} from './helpers/discovery-metrics-fixture.mjs';
@@ -20,6 +20,25 @@ test('轻量 101 生成单独候选配置并冻结受管发现脚本的依赖闭
     assert.match(profile.profile.files['services/phone-adb-controller/'+name],/^[a-f0-9]{64}$/);
   }
   assert.ok(Object.keys(profile.profile.files).length<=200);
+});
+
+test('轻量 101 Worker 可从只含发布清单文件的独立目录加载', t => {
+  const sourceRoot = fileURLToPath(new URL('../../../', import.meta.url));
+  const bundleRoot = mkdtempSync(join(tmpdir(), 'lightweight-101-release-'));
+  t.after(() => rmSync(bundleRoot, {recursive: true, force: true}));
+  const moduleFiles = Object.keys(generateLightweight101Profile().profile.files)
+    .filter(name => /\.(?:[cm]?js|json)$/.test(name));
+  for (const name of moduleFiles) {
+    const destination = join(bundleRoot, name);
+    mkdirSync(dirname(destination), {recursive: true});
+    copyFileSync(join(sourceRoot, name), destination);
+  }
+
+  const entry = join(bundleRoot, 'services/phone-adb-controller/leadgen-foundation/lightweight-101-worker.mjs');
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import(process.argv[1])', entry], {
+    cwd: bundleRoot, encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
 for(const mode of ['capture','complete','missing'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
