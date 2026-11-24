@@ -1,0 +1,23 @@
+name: Single-check 101 release verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/pilot-release-regression.yml
+    with:
+      source_repo: perfectuser21/zenithjoy-workspace
+      scope: leadgen-101-single-check
+      head_revision: ${{ github.sha }}
+      tooling_revision: 0edd6b0f47d972f0ea7d6a11d7d36b5d98f37411
+    secrets:
+      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+      CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+      BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}

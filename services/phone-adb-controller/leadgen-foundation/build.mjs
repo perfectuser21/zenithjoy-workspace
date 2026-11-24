@@ -16,28 +16,41 @@ export const LIGHTWEIGHT_101={
  definitionPath: PREFIX+'/sources/101-lightweight.json',
  profilePath: PREFIX+'/profiles/101-lightweight.json',
 };
-export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot,lightweight101=false}){
+export const SINGLE_CHECK_101={
+ key:'douyin_video_discovery_single_check',
+ definitionPath: PREFIX+'/sources/101-single-check.json',
+ profilePath: PREFIX+'/profiles/101-single-check.json',
+};
+export function verifySingleCheck101Policy(profile){
+ need(profile.leadgen.checker_policy==='workflow_preflight_once'&&profile.leadgen.discovery_variant===undefined,'BUILD_SINGLE_CHECK_PROFILE');
+ const phases=Object.fromEntries(Object.entries(profile.skill_runtime.activities).map(([key,activity])=>[key,activity.checker?.phase_policy??null]));
+ need(canonical(phases)===canonical({preflight:null,collect_videos:'completion_with_inputs',cleanup:'completion_with_inputs'}),'BUILD_SINGLE_CHECK_PROFILE');
+}
+export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot,lightweight101=false,singleCheck101=false}){
  repoIdentity(repoRoot,REPO);repoIdentity(skillsRepo,SKILLS);
  need(git(repoRoot,['status','--porcelain','--untracked-files=normal']).length===0,'BUILD_DIRTY');
  const revision=git(repoRoot,['rev-parse','HEAD']).toString().trim();need(/^[a-f0-9]{40}$/.test(revision),'BUILD_REVISION');
  need(path.isAbsolute(outputRoot)&&!fs.existsSync(outputRoot),'BUILD_TARGET');
  const authority=Object.fromEntries(Object.values(WORKFLOWS).map(key=>[key,parse(read(repoRoot,revision,'product-map/contracts/'+key+'.yaml').toString())]));
- const independent=lightweight101?JSON.parse(read(repoRoot,revision,LIGHTWEIGHT_101.definitionPath).toString()):null;
- if(independent)need(independent.key===LIGHTWEIGHT_101.key&&independent.workflow===WORKFLOWS['101'],'BUILD_LIGHTWEIGHT_DEFINITION');
+ need(!(lightweight101&&singleCheck101),'BUILD_DISCOVERY_VARIANT');
+ const variant=lightweight101?LIGHTWEIGHT_101:singleCheck101?SINGLE_CHECK_101:null;
+ const independent=variant?JSON.parse(read(repoRoot,revision,variant.definitionPath).toString()):null;
+ if(independent)need(independent.key===variant.key&&independent.workflow===WORKFLOWS['101'],'BUILD_LIGHTWEIGHT_DEFINITION');
  const targets=independent?[['101',WORKFLOWS['101']]]:Object.entries(WORKFLOWS);
  const files=new Map(),origins={},workflows=[],revisions=new Set([revision]);
  const add=(sourceRevision,name,bytes,origin,kind=name.endsWith('/SKILL.md')?'skill':'code')=>{relative(name);need(bytes.length<=1024*1024,'BUILD_FILE_SIZE');const key=sourceRevision+':'+name;
   if(files.has(key))need(files.get(key).bytes.equals(bytes)&&files.get(key).kind===kind,'BUILD_COLLISION');else files.set(key,{revision:sourceRevision,name,bytes,kind});origins[key]=origin;};
  for(const [workflow,key]of targets){
-  const contractPath=independent?LIGHTWEIGHT_101.definitionPath:`product-map/contracts/${key}.yaml`;
+  const contractPath=variant?.definitionPath??`product-map/contracts/${key}.yaml`;
   const contract=independent??authority[key],runtime=contract.runtime,ref=runtime?.profile_ref;
-  const profilePath=independent?LIGHTWEIGHT_101.profilePath:`${PREFIX}/profiles/${workflow}.json`;
+  const profilePath=variant?.profilePath??`${PREFIX}/profiles/${workflow}.json`;
   need(runtime?.kind==='commander-foundation-v1'&&ref?.repo===REPO&&ref.path===profilePath&&/^[a-f0-9]{40}$/.test(ref.revision??'')&&/^sha256:[a-f0-9]{64}$/.test(ref.digest??''),'BUILD_RUNTIME');
   const profileRevision=ref.revision,bytes=read(repoRoot,profileRevision,profilePath);need('sha256:'+hash(bytes)===ref.digest,'BUILD_PROFILE_DIGEST');
   const document=JSON.parse(bytes),profile=document.profile;verifyAgentProfile(document,{documents:authority,workflow:key});revisions.add(profileRevision);
   need(document.schema_version===1&&document.contract.workflow===key&&profile.leadgen.workflow===workflow&&profile.leadgen.method_repository===SKILLS,'BUILD_PROFILE');
-  if(independent)need(profile.leadgen.discovery_variant==='lightweight-host-script-v1'
+  if(independent)need((lightweight101?profile.leadgen.discovery_variant==='lightweight-host-script-v1':profile.leadgen.checker_policy==='workflow_preflight_once')
     &&canonical(document.contract.activities.map(a=>a.key))===canonical(independent.activities.map(a=>a.key)),'BUILD_LIGHTWEIGHT_PROFILE');
+  if(singleCheck101)verifySingleCheck101Policy(profile);
   const lock=JSON.parse(read(repoRoot,profileRevision,'.skills-source.json'));need(lock.version===1&&lock.repository===SKILLS&&lock.profile==='zenithjoy'&&/^[a-f0-9]{40}$/.test(lock.revision),'BUILD_SKILL_LOCK');
   const catalog=JSON.parse(read(skillsRepo,lock.revision,'distribution/catalog.json'));need(catalog.version===1&&Array.isArray(catalog.profiles?.zenithjoy?.files),'BUILD_SKILL_CATALOG');
   need(profile.leadgen.method_revision===lock.revision,'BUILD_METHOD_UNREGISTERED');
@@ -101,7 +114,7 @@ export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot,lightweigh
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const [repoRoot,skillsRepo,outputRoot,...rest]=process.argv.slice(2);
- need(repoRoot&&skillsRepo&&outputRoot&&(rest.length===0||rest.length===1&&rest[0]==='--lightweight-101'),'BUILD_USAGE');
- const result=buildFoundationBundle({repoRoot:path.resolve(repoRoot),skillsRepo:path.resolve(skillsRepo),outputRoot:path.resolve(outputRoot),lightweight101:rest.length===1});
+ need(repoRoot&&skillsRepo&&outputRoot&&(rest.length===0||rest.length===1&&['--lightweight-101','--single-check-101'].includes(rest[0])),'BUILD_USAGE');
+ const result=buildFoundationBundle({repoRoot:path.resolve(repoRoot),skillsRepo:path.resolve(skillsRepo),outputRoot:path.resolve(outputRoot),lightweight101:rest[0]==='--lightweight-101',singleCheck101:rest[0]==='--single-check-101'});
  console.log(JSON.stringify({status:result.status,revision:result.revision,workflows:result.workflows.map(w=>w.key),components:result.components.length}));
 }
