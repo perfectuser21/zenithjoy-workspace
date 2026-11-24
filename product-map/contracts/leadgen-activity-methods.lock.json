@@ -40,7 +40,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "bf971db5580128cf4c90e8d318ff35c096623247b713b61a2c60e7505e457e17",
+      "code_digest": "194651d244398f49db163ac5a628f17d334c8cd7d60fd6ea60dccff96a7ece26",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "b0f9f6da6d172e29d2d6a10002654938266948747657ad9943e6eacda0d9c596",
-        "current_code_digest": "bf971db5580128cf4c90e8d318ff35c096623247b713b61a2c60e7505e457e17"
+        "previous_code_digest": "bf971db5580128cf4c90e8d318ff35c096623247b713b61a2c60e7505e457e17",
+        "current_code_digest": "194651d244398f49db163ac5a628f17d334c8cd7d60fd6ea60dccff96a7ece26"
       }
     },
     "douyin_video_processing.preflight": {
@@ -364,7 +364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -626,13 +626,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
-        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
       }
     },
     "douyin_video_processing.dedup": {
@@ -695,7 +695,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -957,13 +957,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
-        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1010,7 +1010,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -1293,13 +1293,13 @@
           "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
         }
       ],
-      "code_digest": "d40428b7f48afd19a473a7fdca89c7f5161a1e12cfd21cbd8447c2b15ac7c106",
+      "code_digest": "765e7df9bc148b119c2512c79ed65e5650ddf831eed6d38442025536b0fa2efe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "2baf7256bcb6a849c18c2db327361607ca6d8fa5e03f631cbb64854e6c5421aa",
-        "current_code_digest": "d40428b7f48afd19a473a7fdca89c7f5161a1e12cfd21cbd8447c2b15ac7c106"
+        "previous_code_digest": "d40428b7f48afd19a473a7fdca89c7f5161a1e12cfd21cbd8447c2b15ac7c106",
+        "current_code_digest": "765e7df9bc148b119c2512c79ed65e5650ddf831eed6d38442025536b0fa2efe"
       }
     },
     "douyin_video_processing.collection": {
@@ -1362,7 +1362,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -1624,13 +1624,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
-        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1693,7 +1693,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -1955,13 +1955,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
-        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -2043,7 +2043,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -2298,13 +2298,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
+      "code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "d517f13f1a45b0b3267d123c383bbcc9996a4734d8f4b64bc5c6df19971f47e7",
-        "current_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1"
+        "previous_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
+        "current_code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2386,7 +2386,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -2641,13 +2641,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
+      "code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "d517f13f1a45b0b3267d123c383bbcc9996a4734d8f4b64bc5c6df19971f47e7",
-        "current_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1"
+        "previous_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
+        "current_code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2703,7 +2703,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -2958,13 +2958,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
-        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -3020,7 +3020,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -3275,13 +3275,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
-        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3337,7 +3337,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -3592,13 +3592,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
-        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3654,7 +3654,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-104-state.mjs",
           "revision": "contract",
-          "sha256": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6"
+          "sha256": "05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a"
         },
         {
           "kind": "code",
@@ -3909,13 +3909,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
         "reviewed_by": "codex",
-        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
-        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
       }
     }
   },
