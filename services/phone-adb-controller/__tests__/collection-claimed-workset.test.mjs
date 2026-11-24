@@ -10,6 +10,12 @@ import {judgeSteps} from '../step-judge.mjs';
 import {handlerZero} from './helpers/no-comments-fixture.mjs';
 import {writeAcceptedDiscoveryResult} from './helpers/discovery-handoff-fixture.mjs';
 const actual=JSON.parse(readFileSync(new URL('./fixtures/claimed-workset-570b.json',import.meta.url)));
+const sdk33Policy=JSON.parse(readFileSync(new URL('../runtime/runtime-policy-sdk33.json',import.meta.url),'utf8'));
+const {client_sha256,server_sha256}=sdk33Policy;
+// Replay the historical workset with a synthetic recording from the current producer.
+const recording={...actual.recording,
+ capture_runtime:{...actual.recording.capture_runtime,client_sha256,server_sha256},
+ capture_runtime_end:{...actual.recording.capture_runtime_end,client_sha256,server_sha256}};
 const steps=historicalSteps('douyin_video_processing');
 const [selected,unclaimed]=actual.source_video_ids,source='cicd2fa_101_rem3_20261025_102551',run=actual.recording.run;
 function fixture(t,{verdict='rejected',claimUnknown=false,qualificationFails=false,collectionFails=false}={}){
@@ -38,7 +44,7 @@ function fixture(t,{verdict='rejected',claimUnknown=false,qualificationFails=fal
     writeFileSync(join(dir,`${run}-identity-${selected}.json`),JSON.stringify({verified:true,
      expected_video_id:selected,observed_video_id:selected,content_type:'video',excluded_non_video:false,
      evidence_id:`${run}-v${selected}-qualification-identity`}),{mode:0o600});
-    writeFileSync(join(dir,`${run}-recording-${selected}.json`),JSON.stringify(actual.recording));
+    writeFileSync(join(dir,`${run}-recording-${selected}.json`),JSON.stringify(recording));
     return {code:0,stdout:`QUAL\t${selected}\t${verdict}\t${actual.reason}\n`,stderr:''};
    }
    assert.equal(args[1],'collection');if(collectionFails)throw Error('EXECUTION_DEADLINE');handlerZero(dir,run,selected);return {code:0,stdout:`COLLECTION\t${selected}\tno_comments\t0\nRESCAN\t${selected}\t0\nAVATAR_RECOVERY\t${selected}\t0\n`,stderr:''};

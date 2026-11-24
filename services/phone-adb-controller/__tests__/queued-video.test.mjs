@@ -1,4 +1,6 @@
 import {zeroControllerCode} from './helpers/no-comments-fixture.mjs';
+import {readFileSync as readPolicyFile} from 'node:fs';
+const sdk33Policy=JSON.parse(readPolicyFile(new URL('../runtime/runtime-policy-sdk33.json',import.meta.url),'utf8'));
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync,mkdirSync,chmodSync,symlinkSync,utimesSync} from 'node:fs';
@@ -11,7 +13,7 @@ const script=path.resolve('services/phone-adb-controller/process-queued-video.sh
 const vid='7646309328911907195';
 // 单元测试明确模拟native controller回执，真实原始SHA由实机独立验收核对。
 function fakeNativeFields(eid,phase,state='started'){
- const prefix=eid+'-playback-'+phase;return ' capture_runtime_client_sha256=952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d capture_runtime_server_sha256=8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+('e'.repeat(64))+' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state='+state+' native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');
+ const prefix=eid+'-playback-'+phase;return ' capture_runtime_client_sha256='+sdk33Policy.client_sha256+' capture_runtime_server_sha256='+sdk33Policy.server_sha256+' capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+('e'.repeat(64))+' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state='+state+' native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');
 }
 function recordedQualification({volume='1',db='-35',startFail=false,speedFail=false,captureMode='playback_dup',captureSdk='36',audioStreams='1',playback=true,endState=3,startExtra=''}={}){
  const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
