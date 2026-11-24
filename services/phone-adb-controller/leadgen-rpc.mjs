@@ -114,7 +114,18 @@ export async function handleRpc(input, deps = {}) {
       return {ok:true,result:{...probes,steps}};
     }
     pool = deps.pool || getPool();
-    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request,{sourceCommit:input.source.commit,execution:input.source.execution,...(fixedPool?standaloneAgentScoringContext({runtimeRoot:root,input}):{}),...(isPublic?{sampledAdmission:{readProof:sourceRun=>readPublicDomainSamplingProof({runtimeRoot:root,sourceRun,lineKey:require('./line-routes.js').routeOf(input.request.line).key})}}:{}),resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec})}) };
+    if (input.kind === 'queue') {
+      const scoring=fixedPool?standaloneAgentScoringContext({runtimeRoot:root,input}):{};
+      if(input.request?.op==='score_committed_scope') {
+        const {selectStandaloneScoringComment}=await import('./standalone-scoring-tools.mjs');
+        return {ok:true,result:await selectStandaloneScoringComment(pool,input.request,scoring)};
+      }
+      return {ok:true,result:await require('./leadgen-queue.js').queueRequest(pool,input.request,{
+        sourceCommit:input.source.commit,execution:input.source.execution,...scoring,
+        ...(isPublic?{sampledAdmission:{readProof:sourceRun=>readPublicDomainSamplingProof({runtimeRoot:root,sourceRun,lineKey:require('./line-routes.js').routeOf(input.request.line).key})}}:{}),
+        resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec}),
+      })};
+    }
     if (input.kind === 'qualify') {
       const args = input.request;
       if (!['judge'].includes(args?.cmd) || !/^\d{16,24}$/.test(args.videoId || '')) throw Error('RPC_QUALIFY_INVALID');

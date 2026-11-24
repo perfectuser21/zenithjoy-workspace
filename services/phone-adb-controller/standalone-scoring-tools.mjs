@@ -1,3 +1,7 @@
+import {isDeepStrictEqual} from 'node:util';
+import partial from './leadgen-committed-partial.js';
+import scoreContext from './leadgen-score-context.js';
+
 const runTag = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const operations = ['score_scope','score_input','score_submit','score_readback','mark_leads','mark_readback','bridge_outreach','bridge_readback'];
@@ -12,6 +16,32 @@ const scoringFailures = new Map([
 ]);
 const idsMatch = (left, right) => Array.isArray(left) && left.length === right.length && left.every((id, index) => id === right[index]);
 const validIds = ids => Array.isArray(ids) && ids.length <= 1 && ids.every(id => typeof id === 'string' && uuid.test(id));
+
+// This projection is exclusive to the direct runtime. Its authority comes from
+// the frozen host, while the shared queue remains bound to the published method.
+export async function selectStandaloneScoringComment(pool,input,{agentScoreIdentity,execution}={}){
+  const {line,run,committed_origin_run:origin}=input;
+  if(input.source_run!==null||input.limit!==1||!scoreContext.isAgentScoreIdentity(agentScoreIdentity)
+    ||agentScoreIdentity.run_id!==run||execution?.task_id!==agentScoreIdentity.task_id
+    ||execution.run_id!==run||execution.run!==run||execution.line!==line) throw Error('AGENT_SCORE_AUTHORITY_REQUIRED');
+  if(!runTag.test(origin||'')||origin===run) throw Error('COMMITTED_PARTIAL_SOURCE_SCOPE');
+  const target=(await partial.readFrozen(pool,line,run)).snapshot;
+  const source=(await partial.readFrozen(pool,line,origin)).snapshot;
+  if(['company_id','tenant_id','version','policy_id'].some(key=>source[key]!==target[key])
+    ||!isDeepStrictEqual(source.runtime_config.comment_scoring,target.runtime_config.comment_scoring)) {
+    throw Error('COMMITTED_PARTIAL_POLICY_MISMATCH');
+  }
+  const rows=(await pool.query(`SELECT id FROM zenithjoy.leadgen_comments
+    WHERE line_key=$1 AND harvest_batch=$2 AND process_status='待分拣'
+      AND relevance IS NULL AND intent_grade IS NULL AND judgment_reason IS NULL AND judgment_config IS NULL
+      AND recipient_evidence->>'status'='verified' AND recipient_evidence ? 'company_binding'
+    ORDER BY collected_at,id LIMIT 1`,[line,origin])).rows;
+  if(!rows.length) return {line,run,source_run:null,ids:[],sources:{}};
+  const admitted=await partial.admittedRows(pool,{lineKey:line,run,ids:[rows[0].id]});
+  if(admitted.length!==1||admitted[0].harvest_batch!==origin) throw Error('COMMITTED_PARTIAL_SOURCE_CHANGED');
+  const id=admitted[0].id;
+  return {line,run,source_run:null,ids:[id],sources:{[id]:origin}};
+}
 
 // Agent 选择业务步骤。宿主使用固定来源、公司与额度调用现有工具，并从同一批记录独立读回。
 export function createStandaloneScoringTools({ scope, rpc, assertAuthority }) {

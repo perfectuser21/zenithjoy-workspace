@@ -9,7 +9,7 @@ const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason
 const commentAdmission=require('./leadgen-comment-admission.js');
 const sampledAdmission=require('./leadgen-sampled-admission.js');
 const committedPartial=require('./leadgen-committed-partial.js');
-const {readScoreTranscript,isAgentScoreIdentity}=require('./leadgen-score-context.js');
+const {readScoreTranscript}=require('./leadgen-score-context.js');
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
@@ -71,14 +71,6 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
-  if(op==='score_committed_scope'){
-    const {agentScoreIdentity,execution}=deps;
-    if(sourceRun!==null||input.limit!==1||!isAgentScoreIdentity(agentScoreIdentity)||agentScoreIdentity.run_id!==run
-      ||execution?.task_id!==agentScoreIdentity.task_id||execution.run_id!==run||execution.run!==run
-      ||execution.line!==input.line)throw Error('AGENT_SCORE_AUTHORITY_REQUIRED');
-    const rows=await committedPartial.eligibleOrigin(pool,{lineKey,run,origin:input.committed_origin_run});
-    return {line:lineKey,run,source_run:null,ids:rows.map(row=>row.id),sources:Object.fromEntries(rows.map(row=>[row.id,row.harvest_batch]))};
-  }
   const partialIds=committedPartial.explicitIds(input,sourceRun);
   if(partialIds&&input.op!=='score_scope'&&input.ids===undefined)input={...input,ids:partialIds};
   if(op==='score_input'||op==='score_submit'){
