@@ -5,6 +5,28 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {digest} from '../runtime-definition.mjs';
 import {freezePublicPreflightRoute} from '../public-preflight-route.mjs';
+import {matchesStandalonePhone} from '../public-domain-profile.mjs';
+
+test('悦升的正式设备登记仅供101和102显式选择托管5045',()=>{
+ const hosts=JSON.parse(readFileSync(new URL('../config/collection-phone-hosts.json',import.meta.url),'utf8')).hosts;
+ const instances=JSON.parse(readFileSync(new URL('../config/adb-host-instances.json',import.meta.url),'utf8')).instances;
+ const device=hosts.filter(row=>row.target==='mmv'&&row.profile==='wuying_android14');
+ const instance=instances.filter(row=>row.instance_id==='mmv-yuesheng-direct');
+ assert.equal(device.length,1);
+ assert.equal(instance.length,1);
+ const [row]=device,[managed]=instance;
+ assert.deepEqual(row.workflow_keys,['douyin_video_discovery','douyin_video_processing']);
+ assert.equal(managed.kind,'managed');
+ assert.equal(managed.policy.endpoint,'tcp:127.0.0.1:5045');
+ const resources={profile:row.profile,serial:row.serial,account:row.expected_account};
+ const scope={...row,policy:managed.policy};
+ for(const workflow of row.workflow_keys){
+  assert.equal(matchesStandalonePhone(hosts,resources,scope,workflow),true);
+  assert.equal(matchesStandalonePhone(hosts,resources,row,workflow),false);
+ }
+ assert.equal(matchesStandalonePhone(hosts,resources,scope,'douyin_lead_outreach'),false);
+});
+
 test('default schema1 route keeps the original global policy without an instance capability',()=>{
  assert.equal(freezePublicPreflightRoute({scope:{policy:{schema_version:1,endpoint:'tcp:127.0.0.1:5041'}}}),null);
 });
