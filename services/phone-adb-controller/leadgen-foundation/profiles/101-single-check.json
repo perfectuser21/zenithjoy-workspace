@@ -1,0 +1,2737 @@
+{
+  "schema_version": 1,
+  "contract": {
+    "workflow": "douyin_video_discovery",
+    "goal": "按批准的本公司搜索范围交出持久化视频",
+    "activities": [
+      {
+        "key": "preflight",
+        "order": 1,
+        "budget": {
+          "max_duration_s": 600,
+          "heartbeat_s": 60
+        },
+        "acceptance": {
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_video_processing.yaml",
+            "activity_ref": "douyin_video_processing.preflight",
+            "contract_digest": "4ab50bb428bd42c8488089360fdd1e11f7b81b7181f91af350894c8dbe043244"
+          },
+          "document": {
+            "key": "preflight",
+            "name": "预检",
+            "promise": "核验采集设备及抖音账号，取得本轮设备锁和可追溯的运行上下文",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_video_discovery",
+                "douyin_video_processing"
+              ],
+              "activity_key": "preflight",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 1,
+            "version": "2.6.3",
+            "required_host_tools": [
+              "phone",
+              "brain",
+              "business",
+              "native-readback"
+            ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "properties": {
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "report": {
+                "files": {
+                  "company": {
+                    "scope": "identity",
+                    "role": "company",
+                    "fields": [
+                      "/result/stdout/result/company_id",
+                      "/result/stdout/result/tenant_id",
+                      "/result/stdout/result/version",
+                      "/result/stdout/result/run_id",
+                      "/result/stdout/result/device_binding"
+                    ]
+                  },
+                  "frozen": {
+                    "scope": "identity",
+                    "role": "frozen",
+                    "fields": [
+                      "/profile",
+                      "/serial",
+                      "/adb_serial",
+                      "/expected_sender_id",
+                      "/company_id",
+                      "/tenant_id"
+                    ]
+                  },
+                  "account": {
+                    "scope": "handoff",
+                    "role": "account"
+                  },
+                  "local": {
+                    "scope": "handoff",
+                    "role": "local_acquire"
+                  },
+                  "central_acquire": {
+                    "scope": "handoff",
+                    "role": "central_acquire"
+                  }
+                },
+                "facts": {
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight",
+                        "local_lock",
+                        "account"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "identity": {
+                    "operation": "run.identity",
+                    "args": {}
+                  },
+                  "task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "status",
+                        "result.foundation_runner.run_id",
+                        "result.foundation_runner.task_id"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "activity_calls",
+                        "attempts",
+                        "identity"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "local"
+                  ],
+                  "outputs_1": [
+                    "account",
+                    "company"
+                  ],
+                  "outputs_2": [
+                    "frozen",
+                    "identity",
+                    "native"
+                  ],
+                  "postconditions_0": [
+                    "frozen",
+                    "native"
+                  ],
+                  "postconditions_1": [
+                    "account",
+                    "company",
+                    "identity",
+                    "frozen"
+                  ],
+                  "postconditions_2": [
+                    "native"
+                  ],
+                  "postconditions_3": [
+                    "central_acquire",
+                    "local",
+                    "central",
+                    "native"
+                  ],
+                  "idempotency": [
+                    "identity",
+                    "progress"
+                  ],
+                  "failure": [
+                    "task",
+                    "company",
+                    "native",
+                    "central"
+                  ]
+                }
+              }
+            },
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "backward",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "获客采收员"
+            },
+            "inputs": [
+              {
+                "type": "Device",
+                "source": "设备台账及原生 ADB 在线核验",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "host"
+                ]
+              },
+              {
+                "type": "Account",
+                "source": "本轮冻结的公司已启用账号配置；预检执行时取手机原生账号，结束时比对",
+                "cardinality": "one",
+                "fields": [
+                  "platform",
+                  "profile",
+                  "sender_id"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Device",
+                "destination": "本轮设备锁和运行上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "online",
+                  "call_state",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Account",
+                "destination": "本轮已核账号上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "logged_in"
+                ]
+              },
+              {
+                "type": "Run",
+                "destination": "底座已分配并持久化的同一Run身份，供后续Activity交接",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "run_tag",
+                  "profile",
+                  "serial"
+                ]
+              }
+            ],
+            "preconditions": [
+              "run.identity 读回底座已经持久化的本轮Task/run，须与 checker-input/identity.json 的原任务和原Run一致。本活动交同一身份，不另建业务Run。冻结的预期账号与配置摘要由 identity.json 提供，同时核公司登记的启用账号；不读取包含凭据的完整宿主配置。",
+              "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
+              "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。"
+            ],
+            "postconditions": [
+              {
+                "probe": "pf_device_verified",
+                "asserts": "设备原生在线，硬件身份与受控ADB路由和本次设备绑定一致。"
+              },
+              {
+                "probe": "pf_account_verified",
+                "asserts": "手机原生登录账号与本次注册账号及公司/租户绑定一致，读取本run冻结政策版本，不借旧快照替代。"
+              },
+              {
+                "probe": "pf_call_idle",
+                "asserts": "当前手机不在通话中，未知状态不得等同idle。"
+              },
+              {
+                "probe": "pf_lock_acquired",
+                "asserts": "本轮执行者实际持有同一设备的本地锁和中央租约。先用 host.receipts 定位并读取本轮本地与中央锁的宿主工具取得回执，确认真实调用成功且绑定同一 Task/run/设备。再用 native.read 核对同一 profile、硬件 serial、实际本地 owner、锁有效且不陈旧，用 brain.get(device_lock) 核对同一硬件 serial、Task owner、租约版本及有效期。宿主取得回执和两路独立状态满足上述条件即可；手机网关回执正文中的绝对路径是来源信息，不是本 run 下的 native/ 文件，不用改写路径或补造附件。缺任一取得回执或独立状态、身份不符或锁已过期则不得通过。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 600,
+              "heartbeat_s": 60
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>"
+              ],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "Run.run_tag",
+              "on_duplicate": "skip"
+            },
+            "failure": {
+              "empty_ok": [],
+              "retryable": [
+                "lock_busy 设备锁被占"
+              ],
+              "needs_human": {
+                "cases": [
+                  "device_offline 设备离线",
+                  "account_mismatch 手机登录号不符",
+                  "call_busy 设备通话中（未挂断的电话）"
+                ],
+                "alert": {
+                  "channel": "bark",
+                  "object": "harvest-cron.sh:121-125 离线升级分身 → Bark"
+                }
+              },
+              "fatal": [
+                "冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果"
+              ]
+            },
+            "side_effects": [],
+            "invokers": [
+              "code"
+            ],
+            "runtime": {
+              "phase": "setup",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "acquire_device_lock",
+                "name": "拿设备锁",
+                "order": 1,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Device.lock_holder"
+                ],
+                "check": "实际锁owner与本run一致，使用本次冻结租约且不覆盖他人。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js preflight.acquire_device_lock（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "refresh_lock_heartbeat",
+                "name": "锁心跳续期",
+                "order": 2,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [
+                  "Device.lock_holder"
+                ],
+                "check": "lock-refresh 后锁文件 mtime 更新",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "verify_device_identity",
+                "name": "验设备身份",
+                "order": 3,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Device.online"
+                ],
+                "check": "adb get-state == device 且 serial 与声明一致",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js preflight.verify_device_identity（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "verify_call_idle",
+                "name": "验通话空闲",
+                "order": 4,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Device.call_state"
+                ],
+                "check": "telephony call_state == IDLE",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js preflight.verify_call_idle（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "read_account_mark",
+                "name": "读账号标记(我页)",
+                "order": 5,
+                "reads": [
+                  "Account.sender_id"
+                ],
+                "writes": [
+                  "Account.logged_in"
+                ],
+                "check": "我页抖音号 in profile 的注册账号列表(account-current + account_registered)",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js preflight.read_account_mark（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "open_run_ledger",
+                "name": "开账本",
+                "order": 6,
+                "reads": [
+                  "Account.profile",
+                  "Device.serial"
+                ],
+                "writes": [
+                  "Run.run_tag",
+                  "Run.profile",
+                  "Run.serial"
+                ],
+                "check": "保存本轮真实设备、账号、通话与锁的原始证据；未知明确记录，不从旧harvest日志或固定指标宣称成功。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js preflight.open_run_ledger（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "设备台账及原生 ADB 在线核验",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "host"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Account",
+                "source": "本轮冻结的公司已启用账号配置；预检执行时取手机原生账号，结束时比对",
+                "cardinality": "one",
+                "fields": [
+                  "platform",
+                  "profile",
+                  "sender_id"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "run.identity 读回底座已经持久化的本轮Task/run，须与 checker-input/identity.json 的原任务和原Run一致。本活动交同一身份，不另建业务Run。冻结的预期账号与配置摘要由 identity.json 提供，同时核公司登记的启用账号；不读取包含凭据的完整宿主配置。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "读取 checker-input/identity.json 与 Brain 本轮 Task 核对 Task/run、公司、租户、业务线、设备和配置中预期账号；不要求已有本次原生账号工件，缺冻结身份不凭历史实例补造。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "preconditions_2",
+              "phase": "start",
+              "requirement": "读取 checker-input/identity.json 的冻结配置摘要、Brain 正式派单和原绝对 deadline，开始时必须还在截止内。此时无需证明 Agent 已执行；底座负责禁止超时运行，旧定时器时段和 KPI 不参与准入。",
+              "source_pointer": "/preconditions/2"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Device",
+                "destination": "本轮设备锁和运行上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "online",
+                  "call_state",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Account",
+                "destination": "本轮已核账号上下文",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "logged_in"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "outputs_2",
+              "phase": "end",
+              "requirement": {
+                "type": "Run",
+                "destination": "底座已分配并持久化的同一Run身份，供后续Activity交接",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "run_tag",
+                  "profile",
+                  "serial"
+                ]
+              },
+              "source_pointer": "/outputs/2"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_device_verified",
+                "asserts": "设备原生在线，硬件身份与受控ADB路由和本次设备绑定一致。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_account_verified",
+                "asserts": "手机原生登录账号与本次注册账号及公司/租户绑定一致，读取本run冻结政策版本，不借旧快照替代。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "postconditions_2",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_call_idle",
+                "asserts": "当前手机不在通话中，未知状态不得等同idle。"
+              },
+              "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "postconditions_3",
+              "phase": "end",
+              "requirement": {
+                "probe": "pf_lock_acquired",
+                "asserts": "本轮执行者实际持有同一设备的本地锁和中央租约。先用 host.receipts 定位并读取本轮本地与中央锁的宿主工具取得回执，确认真实调用成功且绑定同一 Task/run/设备。再用 native.read 核对同一 profile、硬件 serial、实际本地 owner、锁有效且不陈旧，用 brain.get(device_lock) 核对同一硬件 serial、Task owner、租约版本及有效期。宿主取得回执和两路独立状态满足上述条件即可；手机网关回执正文中的绝对路径是来源信息，不是本 run 下的 native/ 文件，不用改写路径或补造附件。缺任一取得回执或独立状态、身份不符或锁已过期则不得通过。"
+              },
+              "source_pointer": "/postconditions/3"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Run.run_tag",
+                "on_duplicate": "skip"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [],
+                "retryable": [
+                  "lock_busy 设备锁被占"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "device_offline 设备离线",
+                    "account_mismatch 手机登录号不符",
+                    "call_busy 设备通话中（未挂断的电话）"
+                  ],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "harvest-cron.sh:121-125 离线升级分身 → Bark"
+                  }
+                },
+                "fatal": [
+                  "冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果"
+                ]
+              },
+              "source_pointer": "/failure"
+            }
+          ]
+        },
+        "failure": {
+          "empty_ok": [],
+          "retryable": [
+            "lock_busy 设备锁被占"
+          ],
+          "needs_human": {
+            "cases": [
+              "device_offline 设备离线",
+              "account_mismatch 手机登录号不符",
+              "call_busy 设备通话中（未挂断的电话）"
+            ],
+            "alert": {
+              "channel": "bark",
+              "object": "harvest-cron.sh:121-125 离线升级分身 → Bark"
+            }
+          },
+          "fatal": [
+            "冻结Task、Run和真实归属存在身份冲突；同一身份恢复只读回已有动作和结果"
+          ]
+        },
+        "runtime": {
+          "phase": "source",
+          "protocol": "json-stdio-v1",
+          "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+          "executor_kind": "agent",
+          "on_status": {
+            "done": "next",
+            "empty": "stop",
+            "needs_review": "pause",
+            "failed": "stop",
+            "partial": "stop",
+            "retry": "pause"
+          }
+        }
+      },
+      {
+        "key": "collect_videos",
+        "order": 2,
+        "budget": {
+          "max_duration_s": 2400,
+          "heartbeat_s": 60
+        },
+        "acceptance": {
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_video_discovery.yaml",
+            "activity_ref": "douyin_video_discovery.collect_videos",
+            "contract_digest": "d8b52455b08d44e29c8e9b4b610f572152210ed66c2e000a593de057642f80aa"
+          },
+          "document": {
+            "key": "collect_videos",
+            "name": "搜索采集视频",
+            "promise": "按本轮关键词和筛选条件交出带原生身份、真实互动指标及持久化读回的视频集合",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_video_discovery"
+              ],
+              "activity_key": "collect_videos",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 2,
+            "version": "5.6.4",
+            "required_host_tools": [
+              "phone",
+              "business",
+              "metrics",
+              "fetch-native",
+              "proof"
+            ],
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "backward",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "获客采收员"
+            },
+            "inputs": [
+              {
+                "type": "Keyword",
+                "source": "本次任务输入或该公司已启用关键词配置",
+                "cardinality": "many",
+                "fields": [
+                  "line_key",
+                  "word"
+                ]
+              },
+              {
+                "type": "Device",
+                "source": "本轮采集预检已核设备及锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Run",
+                "source": "本次冻结运行定义",
+                "cardinality": "one",
+                "fields": [
+                  "run_tag"
+                ]
+              },
+              {
+                "type": "SearchRequest",
+                "source": "本次任务冻结的搜索请求与筛选范围",
+                "cardinality": "one",
+                "fields": [
+                  "keywords",
+                  "sort",
+                  "time_layer",
+                  "location",
+                  "target_count",
+                  "max_duration_s"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Video",
+                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取。author 随交付对象提供，以本轮同 VID 原生卡片独立核验；其余持久字段从数据库读回。",
+                "cardinality": "many",
+                "effect": "create",
+                "fields": [
+                  "line_key",
+                  "video_id",
+                  "video_url",
+                  "title",
+                  "keyword",
+                  "comment_count",
+                  "discovery_metrics",
+                  "harvest_batch",
+                  "author"
+                ]
+              },
+              {
+                "type": "Run",
+                "destination": "以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status",
+                  "stop_reason",
+                  "all_results_scanned"
+                ]
+              }
+            ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "outputs": {
+                    "type": "object",
+                    "properties": {
+                      "Run": {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "stop_reason": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "all_results_scanned": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "stop_reason",
+                          "all_results_scanned"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "Video": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "video_id": {
+                              "type": "string",
+                              "pattern": "^[0-9]{19,20}$"
+                            },
+                            "video_url": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "author": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "keyword": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "line_key": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "comment_count": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "harvest_batch": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "discovery_metrics": {
+                              "type": "object",
+                              "properties": {
+                                "digest": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "evidence": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sha256": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "sha256"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "digest",
+                                "evidence"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "video_id",
+                            "video_url",
+                            "title",
+                            "author",
+                            "keyword",
+                            "line_key",
+                            "comment_count",
+                            "harvest_batch",
+                            "discovery_metrics"
+                          ]
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "Run",
+                      "Video"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "run"
+                    ],
+                    "properties": {
+                      "run": {
+                        "type": "object",
+                        "properties": {
+                          "video_page_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "cards_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "video_page_screenshot": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "pattern": "\\.png$"
+                          },
+                          "cards_screenshot": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "pattern": "\\.png$"
+                          },
+                          "filters_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "selected_page": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "results_page": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          }
+                        },
+                        "required": [
+                          "filters_receipt",
+                          "selected_page",
+                          "results_page"
+                        ],
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "video_page_xml": true,
+                              "cards_xml": true
+                            },
+                            "required": [
+                              "video_page_xml",
+                              "cards_xml"
+                            ]
+                          },
+                          {
+                            "properties": {
+                              "video_page_screenshot": true,
+                              "cards_screenshot": true
+                            },
+                            "required": [
+                              "video_page_screenshot",
+                              "cards_screenshot"
+                            ]
+                          }
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "patternProperties": {
+                      "^[0-9]{19,20}$": {
+                        "type": "object",
+                        "properties": {
+                          "share_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "link_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "copy_screen": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "paste_xml": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "reopen_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "write_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "readback_receipt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "prior_state": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "written_state": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          }
+                        },
+                        "required": [
+                          "share_xml",
+                          "link_receipt",
+                          "write_receipt",
+                          "readback_receipt",
+                          "prior_state",
+                          "written_state"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false,
+                    "maxProperties": 101
+                  }
+                },
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "additionalProperties": false
+              },
+              "item_scope": {
+                "collection": "Video",
+                "id_field": "video_id"
+              },
+              "report": {
+                "files": {
+                  "filters": {
+                    "scope": "run",
+                    "role": "filters_receipt"
+                  },
+                  "video_tab": {
+                    "scope": "run",
+                    "role": "video_page_xml",
+                    "optional": true
+                  },
+                  "cards": {
+                    "scope": "run",
+                    "role": "cards_xml",
+                    "optional": true
+                  },
+                  "video_tab_image": {
+                    "scope": "run",
+                    "role": "video_page_screenshot",
+                    "optional": true
+                  },
+                  "cards_image": {
+                    "scope": "run",
+                    "role": "cards_screenshot",
+                    "optional": true
+                  },
+                  "selected_page": {
+                    "scope": "run",
+                    "role": "selected_page"
+                  },
+                  "results_page": {
+                    "scope": "run",
+                    "role": "results_page"
+                  },
+                  "share": {
+                    "scope": "*",
+                    "role": "share_xml",
+                    "optional": true
+                  },
+                  "link": {
+                    "scope": "*",
+                    "role": "link_receipt",
+                    "optional": true
+                  },
+                  "copied": {
+                    "scope": "*",
+                    "role": "copy_screen",
+                    "optional": true
+                  },
+                  "paste": {
+                    "scope": "*",
+                    "role": "paste_xml",
+                    "optional": true
+                  },
+                  "reopened": {
+                    "scope": "*",
+                    "role": "reopen_receipt",
+                    "optional": true
+                  },
+                  "write": {
+                    "scope": "*",
+                    "role": "write_receipt",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/binding/args/0/op",
+                      "/binding/args/0/video/video_id",
+                      "/state",
+                      "/result/exit_code",
+                      "/result/stdout/result/status",
+                      "/result/stdout/result/inserted",
+                      "/result/stdout/result/has_transcript",
+                      "/result/stdout/result/metrics_verified",
+                      "/result/stdout/result/metrics_digest"
+                    ]
+                  },
+                  "readback": {
+                    "scope": "*",
+                    "role": "readback_receipt",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/state",
+                      "/result/exit_code",
+                      "/result/stdout/result/status",
+                      "/result/stdout/result/recovered",
+                      "/result/stdout/result/has_transcript",
+                      "/result/stdout/result/metrics_verified",
+                      "/result/stdout/result/metrics_digest",
+                      "/result/stdout/result/handoff/harvest_batch",
+                      "/result/stdout/result/handoff/comment_count",
+                      "/result/stdout/result/handoff/discovery_metrics/evidence/sha256"
+                    ]
+                  },
+                  "prior_state": {
+                    "scope": "*",
+                    "role": "prior_state",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
+                      "/result/stdout/result"
+                    ]
+                  },
+                  "written_state": {
+                    "scope": "*",
+                    "role": "written_state",
+                    "optional": true,
+                    "fields": [
+                      "/binding/identity",
+                      "/started_at",
+                      "/ended_at",
+                      "/result/stdout/result"
+                    ]
+                  }
+                },
+                "facts": {
+                  "source_task": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "task",
+                      "fields": [
+                        "id",
+                        "result.foundation_runner.run.input.business",
+                        "result.foundation_runner.run.input.run_tag"
+                      ]
+                    }
+                  },
+                  "persisted": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.transaction_read_only",
+                        "scope.line",
+                        "rows.line_key",
+                        "rows.video_id",
+                        "rows.video_url",
+                        "rows.title",
+                        "rows.keyword",
+                        "rows.comment_count",
+                        "rows.discovery_metrics.version",
+                        "rows.discovery_metrics.run",
+                        "rows.discovery_metrics.run_id",
+                        "rows.discovery_metrics.profile",
+                        "rows.discovery_metrics.source_commit",
+                        "rows.discovery_metrics.line_key",
+                        "rows.discovery_metrics.video_id",
+                        "rows.discovery_metrics.video_url",
+                        "rows.discovery_metrics.observed_at",
+                        "rows.discovery_metrics.evidence_id",
+                        "rows.discovery_metrics.likes",
+                        "rows.discovery_metrics.comment_total",
+                        "rows.discovery_metrics.comment_tier",
+                        "rows.discovery_metrics.company_binding",
+                        "rows.discovery_metrics.digest",
+                        "rows.discovery_metrics.evidence.kind",
+                        "rows.discovery_metrics.evidence.sha256",
+                        "rows.harvest_batch",
+                        "rows.author",
+                        "rows.process_status",
+                        "rows.transcript",
+                        "rows.judgment_status"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.video_id",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "persisted",
+                    "cards",
+                    "cards_image",
+                    "link",
+                    "write",
+                    "readback"
+                  ],
+                  "outputs_1": [
+                    "progress",
+                    "actions",
+                    "filters",
+                    "results_page",
+                    "cards",
+                    "cards_image"
+                  ],
+                  "postconditions_0": [
+                    "source_task",
+                    "cards",
+                    "cards_image",
+                    "share",
+                    "link",
+                    "actions",
+                    "persisted"
+                  ],
+                  "postconditions_1": [
+                    "source_task",
+                    "filters",
+                    "selected_page",
+                    "results_page",
+                    "video_tab",
+                    "cards",
+                    "video_tab_image",
+                    "cards_image",
+                    "actions"
+                  ],
+                  "postconditions_2": [
+                    "persisted",
+                    "share",
+                    "link",
+                    "copied",
+                    "paste",
+                    "reopened",
+                    "write",
+                    "readback"
+                  ],
+                  "postconditions_3": [
+                    "persisted",
+                    "write",
+                    "readback",
+                    "filters",
+                    "results_page",
+                    "actions",
+                    "prior_state",
+                    "written_state"
+                  ],
+                  "postconditions_4": [
+                    "source_task",
+                    "persisted"
+                  ],
+                  "side_effects_0": [
+                    "persisted",
+                    "write",
+                    "readback",
+                    "prior_state",
+                    "written_state"
+                  ],
+                  "idempotency": [
+                    "persisted",
+                    "write",
+                    "readback",
+                    "actions",
+                    "prior_state",
+                    "written_state"
+                  ],
+                  "failure": [
+                    "source_task",
+                    "filters",
+                    "results_page",
+                    "cards",
+                    "cards_image",
+                    "progress",
+                    "persisted"
+                  ]
+                }
+              }
+            },
+            "preconditions": [
+              "设备预检通过，持有本run设备锁",
+              "关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤"
+            ],
+            "postconditions": [
+              {
+                "probe": "discovery_metrics_verified",
+                "asserts": "每个实际VID以原生卡片作者、点开、同次取链及原始指标回执绑定本轮run/attempt和公司；用本轮真实回执路径逐项独立核对。原始指标缺失保留null，不伪造0。"
+              },
+              {
+                "probe": "source_completed",
+                "asserts": "用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致。视频页签和筛选后首屏卡片可用同一轮原生截图成对交付，Checker核对前台抖音、搜索词、已选中的视频页签及本轮实际卡片，证据必须支持原槽位和业务结论；只显示加载、缺关键词或看不清页签均不得通过。真实no_cards可empty，须保存同一搜索范围的原生空结果与停止原因；未加载不能当空。"
+              },
+              {
+                "probe": "disc_candidates_persisted",
+                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。逐步取链时，读取本轮明确复制成功的原始截图、无提交的聚焦输入框 XML、对应的抖音短链与解析身份，以及同一身份重新打开的原始回执。仅有打开回执、历史剪贴板值或相同标题均不能单独作为取链证明。提交集合以本轮回执和数据库为准。"
+              },
+              {
+                "probe": "videos_readback",
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+              },
+              {
+                "probe": "line_key_not_null",
+                "asserts": "本批每个实际持久化VID的line_key与本次业务线一致，未知或缺行不能交接。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 2400,
+              "heartbeat_s": 60
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>"
+              ],
+              "limits": [
+                {
+                  "name": "max_requested_videos",
+                  "value": 1000
+                }
+              ]
+            },
+            "idempotency": {
+              "dedupe_key": "Video.line_key+Video.video_id",
+              "on_duplicate": "merge"
+            },
+            "failure": {
+              "empty_ok": [
+                "no_cards 本词无视频卡片"
+              ],
+              "retryable": [
+                "lock_busy",
+                "WRONG_FOREGROUND",
+                "NO_ROOT",
+                "候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判"
+              ],
+              "needs_human": {
+                "cases": [
+                  "TARGET_ABSENT 连续出现，疑抖音改版"
+                ],
+                "alert": {
+                  "channel": "bark",
+                  "object": "escort 升级（harvest-cron.sh 陪跑员）→ Bark"
+                }
+              },
+              "fatal": [
+                "hash_mismatch 词单在 run 中被改"
+              ]
+            },
+            "side_effects": [
+              {
+                "kind": "internal_write",
+                "target": "pg zenithjoy.leadgen_videos",
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
+              }
+            ],
+            "invokers": [
+              "code",
+              "agent"
+            ],
+            "runtime": {
+              "phase": "source",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "model": [
+              {
+                "provider": "openrouter",
+                "model": "bytedance/ui-tars-1.5-7b",
+                "purpose": "视频 tab / 筛选按钮视觉定位兜底（douyin-phone-adb:905-909）"
+              }
+            ],
+            "steps": [
+              {
+                "key": "open_search",
+                "name": "打开搜索",
+                "order": 1,
+                "reads": [
+                  "Keyword.word",
+                  "Device.lock_holder"
+                ],
+                "writes": [],
+                "check": "搜索框回读 == Keyword.word",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs source：首来源搜索词与视频tab实际核验；其他来源在流式取链时独立核验"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "switch_video_tab",
+                "name": "切视频tab",
+                "order": 2,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [],
+                "check": "视频 tab 节点 selected=true",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.switch_video_tab（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": true,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "open_filter_panel",
+                "name": "点筛选按钮开面板",
+                "order": 3,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [],
+                "check": "筛选面板节点可见",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.open_filter_panel（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": true,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "choose_filters",
+                "name": "选筛选项",
+                "order": 4,
+                "reads": [
+                  "Keyword.word"
+                ],
+                "writes": [],
+                "check": "当前面板选择与本次输入参数一致，不能沿用历史关键词、排序或地区。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.choose_filters（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "apply_filters",
+                "name": "点查看结果",
+                "order": 5,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [],
+                "check": "结果页刷新且筛选标签可见",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.apply_filters（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "extract_video_cards",
+                "name": "抽视频卡片",
+                "order": 6,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [
+                  "Video.title"
+                ],
+                "check": "视频tab和搜索词均已核验；明确空结果可返回0，不将未加载当空",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.extract_video_cards（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "resolve_video_links",
+                "name": "取视频链接",
+                "order": 7,
+                "reads": [
+                  "Video.title"
+                ],
+                "writes": [
+                  "Video.video_id",
+                  "Video.video_url",
+                  "Video.discovery_metrics"
+                ],
+                "check": "每张卡取得真实video_id，并绑定成功取链同次、离开详情前的原生XML指标；不可用结果页或旧重试原件代替",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.resolve_video_links（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "persist_candidates",
+                "name": "写发现工件+落库",
+                "order": 8,
+                "reads": [
+                  "Run.run_tag",
+                  "Video.video_id",
+                  "Keyword.line_key"
+                ],
+                "writes": [
+                  "Video.harvest_batch",
+                  "Video.keyword",
+                  "Video.line_key",
+                  "Video.discovery_metrics"
+                ],
+                "check": "PG逐实际VID读回原始观察与本次来源；新增和重复写入结果分别保存。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.persist_candidates（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "push_videos",
+                "name": "视频持久化读回",
+                "order": 9,
+                "reads": [
+                  "Video.video_id",
+                  "Video.harvest_batch"
+                ],
+                "writes": [
+                  "Video.line_key"
+                ],
+                "check": "新增VID和已存在VID分别读回，既有102进度、comment_count及历史批次不得覆盖。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.push_videos（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "readback_line_key",
+                "name": "业务线读回",
+                "order": 10,
+                "reads": [
+                  "Video.line_key"
+                ],
+                "writes": [],
+                "check": "逐ID读取实际line_key与本次业务线一致。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-discovery.mjs collect_videos.readback_line_key（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/4及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Keyword",
+                "source": "本次任务输入或该公司已启用关键词配置",
+                "cardinality": "many",
+                "fields": [
+                  "line_key",
+                  "word"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "本轮采集预检已核设备及锁",
+                "cardinality": "one",
+                "fields": [
+                  "serial",
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "inputs_2",
+              "phase": "start",
+              "requirement": {
+                "type": "Run",
+                "source": "本次冻结运行定义",
+                "cardinality": "one",
+                "fields": [
+                  "run_tag"
+                ]
+              },
+              "source_pointer": "/inputs/2"
+            },
+            {
+              "id": "inputs_3",
+              "phase": "start",
+              "requirement": {
+                "type": "SearchRequest",
+                "source": "本次任务冻结的搜索请求与筛选范围",
+                "cardinality": "one",
+                "fields": [
+                  "keywords",
+                  "sort",
+                  "time_layer",
+                  "location",
+                  "target_count",
+                  "max_duration_s"
+                ]
+              },
+              "source_pointer": "/inputs/3"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "设备预检通过，持有本run设备锁",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Video",
+                "destination": "zenithjoy.leadgen_videos，供抖音视频处理领取。author 随交付对象提供，以本轮同 VID 原生卡片独立核验；其余持久字段从数据库读回。",
+                "cardinality": "many",
+                "effect": "create",
+                "fields": [
+                  "line_key",
+                  "video_id",
+                  "video_url",
+                  "title",
+                  "keyword",
+                  "comment_count",
+                  "discovery_metrics",
+                  "harvest_batch",
+                  "author"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Run",
+                "destination": "以本Activity的实际操作、提交和读回终态核对执行提案状态和停止原因；独立验收与整条Workflow终态由宿主在验收后计算。",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status",
+                  "stop_reason",
+                  "all_results_scanned"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "discovery_metrics_verified",
+                "asserts": "每个实际VID以原生卡片作者、点开、同次取链及原始指标回执绑定本轮run/attempt和公司；用本轮真实回执路径逐项独立核对。原始指标缺失保留null，不伪造0。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "source_completed",
+                "asserts": "用本轮原始搜索和筛选回执、选中及结果页面证明搜索词和筛选参数与冻结输入一致。视频页签和筛选后首屏卡片可用同一轮原生截图成对交付，Checker核对前台抖音、搜索词、已选中的视频页签及本轮实际卡片，证据必须支持原槽位和业务结论；只显示加载、缺关键词或看不清页签均不得通过。真实no_cards可empty，须保存同一搜索范围的原生空结果与停止原因；未加载不能当空。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "postconditions_2",
+              "phase": "end",
+              "requirement": {
+                "probe": "disc_candidates_persisted",
+                "asserts": "在正式 outputs.Video 的每个对象中逐VID交齐全部合同字段，不能用附件代替字段。comment_count保留原PG实采值，author由原生卡片证实。discovery_metrics包含同VID持久指标的全部业务与来源字段和evidence.kind及evidence.sha256，仅原始XML evidence.xml可由原件引用交付。proposal.evidence逐VID指向本run的原XML及实际工具回执，Checker独立以原XML、SHA256、同次取链、原提交回执、真实读回和持久行核对。逐步取链时，读取本轮明确复制成功的原始截图、无提交的聚焦输入框 XML、对应的抖音短链与解析身份，以及同一身份重新打开的原始回执。仅有打开回执、历史剪贴板值或相同标题均不能单独作为取链证明。提交集合以本轮回执和数据库为准。"
+              },
+              "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "postconditions_3",
+              "phase": "end",
+              "requirement": {
+                "probe": "videos_readback",
+                "asserts": "按每个VID的原提交回执inserted区分新增或已存在，readback的recovered不代替原提交。重复发现须查同VID写前和写后原件。处理状态、转写、实采comment_count保留；写前 process_status 为“评论已采”时保留原harvest_batch，其余状态允许更新到本次发现批次。部分采集阶段的视频进度以该视频写前 process_status 为准。搜索Activity的stop_reason/all_results_scanned以原始搜索和本轮完成数量为据，达到上限不等于全结果扫描。"
+              },
+              "source_pointer": "/postconditions/3"
+            },
+            {
+              "id": "postconditions_4",
+              "phase": "end",
+              "requirement": {
+                "probe": "line_key_not_null",
+                "asserts": "本批每个实际持久化VID的line_key与本次业务线一致，未知或缺行不能交接。"
+              },
+              "source_pointer": "/postconditions/4"
+            },
+            {
+              "id": "side_effects_0",
+              "phase": "end",
+              "requirement": {
+                "kind": "internal_write",
+                "target": "pg zenithjoy.leadgen_videos",
+                "description": "实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；写入表为 zenithjoy.leadgen_videos。根据同VID的提交和写前后回执，核对该视频原有102状态、转写和实采comment_count保留。写前 process_status 为“评论已采”时保留视频原harvest_batch，其余状态允许更新到本次发现批次。"
+              },
+              "source_pointer": "/side_effects/0"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Video.line_key+Video.video_id",
+                "on_duplicate": "merge"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [
+                  "no_cards 本词无视频卡片"
+                ],
+                "retryable": [
+                  "lock_busy",
+                  "WRONG_FOREGROUND",
+                  "NO_ROOT",
+                  "候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "TARGET_ABSENT 连续出现，疑抖音改版"
+                  ],
+                  "alert": {
+                    "channel": "bark",
+                    "object": "escort 升级（harvest-cron.sh 陪跑员）→ Bark"
+                  }
+                },
+                "fatal": [
+                  "hash_mismatch 词单在 run 中被改"
+                ]
+              },
+              "source_pointer": "/failure"
+            }
+          ]
+        },
+        "failure": {
+          "empty_ok": [
+            "no_cards 本词无视频卡片"
+          ],
+          "retryable": [
+            "lock_busy",
+            "WRONG_FOREGROUND",
+            "NO_ROOT",
+            "候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判"
+          ],
+          "needs_human": {
+            "cases": [
+              "TARGET_ABSENT 连续出现，疑抖音改版"
+            ],
+            "alert": {
+              "channel": "bark",
+              "object": "escort 升级（harvest-cron.sh 陪跑员）→ Bark"
+            }
+          },
+          "fatal": [
+            "hash_mismatch 词单在 run 中被改"
+          ]
+        },
+        "runtime": {
+          "phase": "source",
+          "protocol": "json-stdio-v1",
+          "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+          "executor_kind": "agent",
+          "on_status": {
+            "done": "next",
+            "empty": "stop",
+            "needs_review": "pause",
+            "failed": "stop",
+            "partial": "stop",
+            "retry": "pause"
+          }
+        }
+      },
+      {
+        "key": "cleanup",
+        "order": 3,
+        "budget": {
+          "max_duration_s": 480,
+          "heartbeat_s": 30
+        },
+        "acceptance": {
+          "source": {
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "product-map/contracts/douyin_video_processing.yaml",
+            "activity_ref": "douyin_video_processing.cleanup",
+            "contract_digest": "cfc3899ad416d927584176ef2b2edf5ea3d8161dd23dfb0cca301c6330f0ee20"
+          },
+          "document": {
+            "key": "cleanup",
+            "name": "收尾",
+            "promise": "归位采集现场，仅释放本轮拥有的设备锁，并记录可读回的收尾状态",
+            "sample_candidates": {
+              "index": "services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json",
+              "workflow_keys": [
+                "douyin_video_discovery",
+                "douyin_video_processing"
+              ],
+              "activity_key": "cleanup",
+              "owner_labeled": false,
+              "current_skill_verified": false
+            },
+            "order": 5,
+            "version": "2.6.4",
+            "required_host_tools": [
+              "native-readback",
+              "phone",
+              "brain",
+              "business",
+              "fetch-native"
+            ],
+            "delivery": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "outputs",
+                  "evidence"
+                ],
+                "properties": {
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "report": {
+                "files": {
+                  "close": {
+                    "scope": "*",
+                    "role": "close",
+                    "optional": true
+                  },
+                  "close_app": {
+                    "scope": "*",
+                    "role": "close_app",
+                    "optional": true
+                  },
+                  "app_closed": {
+                    "scope": "*",
+                    "role": "app_closed",
+                    "optional": true
+                  },
+                  "home": {
+                    "scope": "*",
+                    "role": "home",
+                    "optional": true
+                  },
+                  "desktop": {
+                    "scope": "*",
+                    "role": "desktop",
+                    "optional": true
+                  },
+                  "desktop_image": {
+                    "scope": "*",
+                    "role": "desktop_image",
+                    "optional": true
+                  },
+                  "screenshot": {
+                    "scope": "*",
+                    "role": "screenshot",
+                    "optional": true
+                  },
+                  "local_release": {
+                    "scope": "*",
+                    "role": "local_release",
+                    "optional": true
+                  },
+                  "local_readback": {
+                    "scope": "*",
+                    "role": "local_readback",
+                    "optional": true
+                  },
+                  "central_release": {
+                    "scope": "*",
+                    "role": "central_release",
+                    "optional": true
+                  },
+                  "central_readback": {
+                    "scope": "*",
+                    "role": "central_readback",
+                    "optional": true
+                  },
+                  "claims_release": {
+                    "scope": "*",
+                    "role": "video_release",
+                    "optional": true
+                  },
+                  "claims_readback": {
+                    "scope": "*",
+                    "role": "video_readback",
+                    "optional": true
+                  }
+                },
+                "facts": {
+                  "native": {
+                    "operation": "native.read",
+                    "args": {
+                      "fields": [
+                        "preflight.foreground_package",
+                        "preflight.hardware_serial",
+                        "local_lock",
+                        "operations",
+                        "active",
+                        "inflight"
+                      ]
+                    }
+                  },
+                  "central": {
+                    "operation": "brain.get",
+                    "args": {
+                      "resource": "device_lock"
+                    }
+                  },
+                  "claims": {
+                    "operation": "pg.rows",
+                    "args": {
+                      "relation": "videos",
+                      "fields": [
+                        "connection.snapshot_at",
+                        "rows.video_id",
+                        "rows.line_key",
+                        "rows.process_status",
+                        "rows.harvest_batch",
+                        "rows.updated_at"
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "operation": "host.receipts",
+                    "args": {
+                      "fields": [
+                        "receipts.activity",
+                        "receipts.kind",
+                        "receipts.operation",
+                        "receipts.state",
+                        "receipts.exit_code"
+                      ]
+                    }
+                  },
+                  "progress": {
+                    "operation": "run.progress",
+                    "args": {
+                      "fields": [
+                        "identity",
+                        "activity_calls",
+                        "attempts",
+                        "observations"
+                      ]
+                    }
+                  }
+                },
+                "criteria": {
+                  "outputs_0": [
+                    "native",
+                    "central",
+                    "local_release",
+                    "local_readback",
+                    "central_release",
+                    "central_readback"
+                  ],
+                  "outputs_1": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress"
+                  ],
+                  "postconditions_0": [
+                    "native",
+                    "actions",
+                    "progress",
+                    "close",
+                    "close_app",
+                    "app_closed"
+                  ],
+                  "postconditions_1": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress",
+                    "local_release",
+                    "local_readback",
+                    "central_release",
+                    "central_readback",
+                    "claims_release",
+                    "claims_readback"
+                  ],
+                  "postconditions_2": [
+                    "native",
+                    "actions",
+                    "progress",
+                    "home",
+                    "desktop",
+                    "desktop_image",
+                    "screenshot"
+                  ],
+                  "idempotency": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress"
+                  ],
+                  "failure": [
+                    "native",
+                    "central",
+                    "claims",
+                    "actions",
+                    "progress",
+                    "home",
+                    "desktop",
+                    "desktop_image",
+                    "screenshot"
+                  ]
+                }
+              }
+            },
+            "agent_recovery": {
+              "max_additional_turns": 1
+            },
+            "compatibility": "backward",
+            "owner": {
+              "department": "line02 智能获客",
+              "agent": "获客采收员"
+            },
+            "inputs": [
+              {
+                "type": "Device",
+                "source": "本 run 的冻结设备标识；实际锁归属从台账和本地原件查，不以已取锁作为开始条件",
+                "cardinality": "one",
+                "fields": [
+                  "serial"
+                ]
+              },
+              {
+                "type": "Run",
+                "source": "本轮运行账本及前序 Activity 结果",
+                "cardinality": "one",
+                "fields": [
+                  "run_tag"
+                ]
+              }
+            ],
+            "outputs": [
+              {
+                "type": "Device",
+                "destination": "设备锁台账与原生释放回执",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lock_holder"
+                ]
+              },
+              {
+                "type": "Run",
+                "destination": "收尾 Activity 的执行结果。Checker 用本轮原生归位、资源释放与读回回执核实状态。动作成功且适用资源义务均已处理时可核实 success，收尾验收和整条 Workflow 的终态由宿主在本次检查之后生成，无须另有收尾成功回执。",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status"
+                ]
+              }
+            ],
+            "preconditions": [
+              "run.identity 核对本轮身份。以 run.progress 和 host.receipts 核对业务Activity是否开工及本轮真实工具动作；结合当前原生操作数、设备锁和适用业务资源，判断是否有本人资源待处理。",
+              "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。"
+            ],
+            "postconditions": [
+              {
+                "probe": "cl_app_closed",
+                "asserts": "如果 App 由本轮打开，须真实关闭并保存动作及前台原件。独立证据证实未开工且无本轮动作时，不操作 App，不把日志标记当关闭事实。"
+              },
+              {
+                "probe": "cl_lock_released",
+                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。 先用本轮宿主调用清单与业务行读回判断是否存在 claim。若本轮仅执行发现与只读，调用未包含认领，行状态也没有本轮处理租约，则业务 claim 释放不适用；需要核对本轮实际持有的设备锁。102 若实际认领，则仍需对相应 claim 独立查验。"
+              },
+              {
+                "probe": "cl_safe_desktop_visible",
+                "asserts": "本轮确曾操作 App 时，用原生证据核对归位；独立证据确认未开工且无本轮动作时无需回桌面。未知资源状态需报告，不因没有业务成果阻断收尾。"
+              }
+            ],
+            "execution": {
+              "primary_kind": "agent",
+              "location": "phone",
+              "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
+            },
+            "budget": {
+              "max_duration_s": 480,
+              "heartbeat_s": 30
+            },
+            "resources": {
+              "locks": [
+                "device:<serial>"
+              ],
+              "limits": []
+            },
+            "idempotency": {
+              "dedupe_key": "Run.run_tag",
+              "on_duplicate": "skip"
+            },
+            "failure": {
+              "empty_ok": [
+                "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
+              ],
+              "retryable": [
+                "若本轮工件传输动作实际失败，则保留原件并按适用路径处理；以原传输返回和本轮文件事实核实。"
+              ],
+              "needs_human": {
+                "cases": [
+                  "本轮快照和实际传输、独立可读的工件发生数量不一致，或关键归位工件缺失。使用实际需要的工件、传输回执及独立读回核对；没有旧 finalize 脚本的单独自检回执不构成失败。"
+                ],
+                "alert": {
+                  "channel": "brain_alert",
+                  "object": "本次收尾的原失败回执与待处置工件标识"
+                }
+              },
+              "fatal": []
+            },
+            "side_effects": [],
+            "invokers": [
+              "code"
+            ],
+            "runtime": {
+              "phase": "finalize",
+              "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+              "executor_kind": "agent",
+              "protocol": "json-stdio-v1"
+            },
+            "steps": [
+              {
+                "key": "close_app",
+                "name": "关App",
+                "order": 1,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [],
+                "check": "前台不再是 com.ss.android.ugc.aweme",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js cleanup.close_app（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "release_lock",
+                "name": "放锁",
+                "order": 2,
+                "reads": [
+                  "Device.lock_holder"
+                ],
+                "writes": [
+                  "Device.lock_holder"
+                ],
+                "check": "仅精确释放本人已确认可释放的资源；未知保留并报告，不宽杀、不按TTL抢占。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js cleanup.release_lock（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "return_safe_desktop",
+                "name": "回安全桌面",
+                "order": 3,
+                "reads": [
+                  "Device.serial"
+                ],
+                "writes": [],
+                "check": "前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js cleanup.return_safe_desktop（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              },
+              {
+                "key": "finalize_run",
+                "name": "收尾回执",
+                "order": 4,
+                "reads": [
+                  "Run.run_tag"
+                ],
+                "writes": [
+                  "Run.status"
+                ],
+                "check": "记录本收尾Activity的真实状态、资源和实际成果数；未开工无本轮动作和资源可以交empty。Workflow终态由宿主验收后产生，本活动不将其作为前提。",
+                "implementation": {
+                  "status": "implemented",
+                  "ref": "leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）"
+                },
+                "uses_llm": false,
+                "dod": {
+                  "mode": "checkpoint",
+                  "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+                  "readback": {
+                    "type": "none"
+                  }
+                }
+              }
+            ],
+            "commander": {
+              "entry": "activity-commander.mjs"
+            }
+          },
+          "criteria": [
+            {
+              "id": "inputs_0",
+              "phase": "start",
+              "requirement": {
+                "type": "Device",
+                "source": "本 run 的冻结设备标识；实际锁归属从台账和本地原件查，不以已取锁作为开始条件",
+                "cardinality": "one",
+                "fields": [
+                  "serial"
+                ]
+              },
+              "source_pointer": "/inputs/0"
+            },
+            {
+              "id": "inputs_1",
+              "phase": "start",
+              "requirement": {
+                "type": "Run",
+                "source": "本轮运行账本及前序 Activity 结果",
+                "cardinality": "one",
+                "fields": [
+                  "run_tag"
+                ]
+              },
+              "source_pointer": "/inputs/1"
+            },
+            {
+              "id": "preconditions_0",
+              "phase": "start",
+              "requirement": "run.identity 核对本轮身份。以 run.progress 和 host.receipts 核对业务Activity是否开工及本轮真实工具动作；结合当前原生操作数、设备锁和适用业务资源，判断是否有本人资源待处理。",
+              "source_pointer": "/preconditions/0"
+            },
+            {
+              "id": "preconditions_1",
+              "phase": "start",
+              "requirement": "从 checker-input/identity.json 核对本 run 和原收尾窗口；用 run.progress 读前序是否启动或结束，并与实际设备锁、原生和业务回执交叉核验，未启动的阶段不要求存在交付物。归属或停稳未知时，只读确认并保留资源。",
+              "source_pointer": "/preconditions/1"
+            },
+            {
+              "id": "outputs_0",
+              "phase": "end",
+              "requirement": {
+                "type": "Device",
+                "destination": "设备锁台账与原生释放回执",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "lock_holder"
+                ]
+              },
+              "source_pointer": "/outputs/0"
+            },
+            {
+              "id": "outputs_1",
+              "phase": "end",
+              "requirement": {
+                "type": "Run",
+                "destination": "收尾 Activity 的执行结果。Checker 用本轮原生归位、资源释放与读回回执核实状态。动作成功且适用资源义务均已处理时可核实 success，收尾验收和整条 Workflow 的终态由宿主在本次检查之后生成，无须另有收尾成功回执。",
+                "cardinality": "one",
+                "effect": "update",
+                "fields": [
+                  "status"
+                ]
+              },
+              "source_pointer": "/outputs/1"
+            },
+            {
+              "id": "postconditions_0",
+              "phase": "end",
+              "requirement": {
+                "probe": "cl_app_closed",
+                "asserts": "如果 App 由本轮打开，须真实关闭并保存动作及前台原件。独立证据证实未开工且无本轮动作时，不操作 App，不把日志标记当关闭事实。"
+              },
+              "source_pointer": "/postconditions/0"
+            },
+            {
+              "id": "postconditions_1",
+              "phase": "end",
+              "requirement": {
+                "probe": "cl_lock_released",
+                "asserts": "只释放本run确实持有且已安全终止的设备/业务资源，精确owner与回执一致；prepared/已发/unknown副作用及其必要保护保留，不释放他人。未prepared且明确本人可释放的claim用原接口释放并读回。 先用本轮宿主调用清单与业务行读回判断是否存在 claim。若本轮仅执行发现与只读，调用未包含认领，行状态也没有本轮处理租约，则业务 claim 释放不适用；需要核对本轮实际持有的设备锁。102 若实际认领，则仍需对相应 claim 独立查验。"
+              },
+              "source_pointer": "/postconditions/1"
+            },
+            {
+              "id": "postconditions_2",
+              "phase": "end",
+              "requirement": {
+                "probe": "cl_safe_desktop_visible",
+                "asserts": "本轮确曾操作 App 时，用原生证据核对归位；独立证据确认未开工且无本轮动作时无需回桌面。未知资源状态需报告，不因没有业务成果阻断收尾。"
+              },
+              "source_pointer": "/postconditions/2"
+            },
+            {
+              "id": "idempotency",
+              "phase": "end",
+              "requirement": {
+                "dedupe_key": "Run.run_tag",
+                "on_duplicate": "skip"
+              },
+              "source_pointer": "/idempotency"
+            },
+            {
+              "id": "failure",
+              "phase": "end",
+              "requirement": {
+                "empty_ok": [
+                  "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
+                ],
+                "retryable": [
+                  "若本轮工件传输动作实际失败，则保留原件并按适用路径处理；以原传输返回和本轮文件事实核实。"
+                ],
+                "needs_human": {
+                  "cases": [
+                    "本轮快照和实际传输、独立可读的工件发生数量不一致，或关键归位工件缺失。使用实际需要的工件、传输回执及独立读回核对；没有旧 finalize 脚本的单独自检回执不构成失败。"
+                  ],
+                  "alert": {
+                    "channel": "brain_alert",
+                    "object": "本次收尾的原失败回执与待处置工件标识"
+                  }
+                },
+                "fatal": []
+              },
+              "source_pointer": "/failure"
+            }
+          ]
+        },
+        "failure": {
+          "empty_ok": [
+            "独立回执可证未开工或未发生副作用，且确认无本轮动作、设备锁或业务租约需处理；不操作设备、不释放其他 owner 的资源。"
+          ],
+          "retryable": [
+            "若本轮工件传输动作实际失败，则保留原件并按适用路径处理；以原传输返回和本轮文件事实核实。"
+          ],
+          "needs_human": {
+            "cases": [
+              "本轮快照和实际传输、独立可读的工件发生数量不一致，或关键归位工件缺失。使用实际需要的工件、传输回执及独立读回核对；没有旧 finalize 脚本的单独自检回执不构成失败。"
+            ],
+            "alert": {
+              "channel": "brain_alert",
+              "object": "本次收尾的原失败回执与待处置工件标识"
+            }
+          },
+          "fatal": []
+        },
+        "runtime": {
+          "phase": "finalize",
+          "protocol": "json-stdio-v1",
+          "entry": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
+          "executor_kind": "agent",
+          "on_status": {
+            "done": "next",
+            "empty": "stop",
+            "needs_review": "pause",
+            "failed": "stop",
+            "partial": "stop",
+            "retry": "pause"
+          }
+        }
+      }
+    ]
+  },
+  "profile": {
+    "adapter": "services/phone-adb-controller/leadgen-foundation/adapter.mjs",
+    "commander": {
+      "provider": "codex",
+      "model": "gpt-6.1-terra"
+    },
+    "leadgen": {
+      "workflow": "101",
+      "worker_entries": [
+        "services/phone-adb-controller/leadgen-foundation/worker.mjs"
+      ],
+      "method_repository": "perfectuser21/zenithjoy-skills",
+      "method_revision": "f5826add7a58311519c7968996107cffabbaf329",
+      "contract_sha256": "4a273f7438274b4638fd7440b284b3bb63048d26851d6ba89e80e1f28765ad5d",
+      "checker_policy": "workflow_preflight_once"
+    },
+    "skill_runtime": {
+      "control_dir": "control",
+      "tools": "TOOLS.txt",
+      "codex": {
+        "command": "@codex",
+        "args": [
+          "-c",
+          "model=\"gpt-6.1-terra\"",
+          "-c",
+          "approval_policy=\"never\""
+        ],
+        "env_keys": []
+      },
+      "host_tools": {
+        "command": "@node",
+        "entry": "invoke.mjs",
+        "kinds": [
+          "brain",
+          "business",
+          "fetch-native",
+          "metrics",
+          "native-readback",
+          "phone",
+          "proof"
+        ],
+        "timeout_ms": 420000,
+        "response_paths": [
+          "state",
+          "result.exit_code",
+          "result.error",
+          "result.data",
+          "result.stdout",
+          "exit_code",
+          "receipt",
+          "large_result_saved",
+          "stdout_preview"
+        ]
+      },
+      "activities": {
+        "preflight": {
+          "workflow": "101",
+          "activity": "preflight",
+          "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md",
+          "checker": {
+            "mode": "agent",
+            "timeout_ms": 300000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。可在任意读操作的 args.fields 传最多32个点路径字段，例如 rows.video_id、connection.snapshot_at。数组适用同字段列表，按原顺序和原值返回；缺失字段不会填造。选择字段只减少响应，仍按原授权执行。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            }
+          },
+          "allow_empty": false
+        },
+        "collect_videos": {
+          "workflow": "101",
+          "activity": "collect_videos",
+          "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md",
+          "checker": {
+            "mode": "agent",
+            "timeout_ms": 300000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。可在任意读操作的 args.fields 传最多32个点路径字段，例如 rows.video_id、connection.snapshot_at。数组适用同字段列表，按原顺序和原值返回；缺失字段不会填造。选择字段只减少响应，仍按原授权执行。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            },
+            "phase_policy": "completion_with_inputs"
+          },
+          "allow_empty": true
+        },
+        "cleanup": {
+          "workflow": "101",
+          "activity": "cleanup",
+          "skill": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md",
+          "checker": {
+            "mode": "agent",
+            "timeout_ms": 300000,
+            "evidence": {
+              "roots": [
+                "checker-input",
+                "native",
+                "receipts",
+                "qualification-receipts",
+                "collection-evidence-receipts",
+                "outreach-receipts"
+              ],
+              "provider": {
+                "command": "@node",
+                "entry": "checker-facts-entry.mjs",
+                "timeout_ms": 120000,
+                "description": "只读取原始事实，不返回业务判定。可在任意读操作的 args.fields 传最多32个点路径字段，例如 rows.video_id、connection.snapshot_at。数组适用同字段列表，按原顺序和原值返回；缺失字段不会填造。选择字段只减少响应，仍按原授权执行。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:\"videos\"|\"comments\"|\"outbox\"|\"leads\"|\"policy\"|\"company\"}；brain.get,args={resource:\"task\",task_id?:本次或受信producer任务ID}或{resource:\"device_lock\"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。"
+              }
+            },
+            "phase_policy": "completion_with_inputs"
+          },
+          "allow_empty": true
+        }
+      }
+    },
+    "files": {
+      "services/phone-adb-controller/activity-104-context.mjs": "9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a",
+      "services/phone-adb-controller/activity-104-runtime.mjs": "876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c",
+      "services/phone-adb-controller/activity-104-state-wiring.mjs": "dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1",
+      "services/phone-adb-controller/activity-104-state.mjs": "87cf928918b1ccd75c79ec156df10112c940c0c7873026257ba5ee33be5587d6",
+      "services/phone-adb-controller/activity-104-transport.py": "23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109",
+      "services/phone-adb-controller/activity-host-104.mjs": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103",
+      "services/phone-adb-controller/activity-host-pg.mjs": "bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79",
+      "services/phone-adb-controller/activity-host-tools.py": "0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9",
+      "services/phone-adb-controller/activity-native-facts.mjs": "cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062",
+      "services/phone-adb-controller/activity-native-identity.py": "8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b",
+      "services/phone-adb-controller/activity-tool-result.py": "4cc6c52836034af0b998142e1f6c435732102f60481c60a15fd747b25e711cc3",
+      "services/phone-adb-controller/activity-upstream-source.mjs": "eabb48fb6c5fe0233b498ce291e828992a094690ab6b2bea0ed2238a3d835e5e",
+      "services/phone-adb-controller/discovery-metrics-queue.js": "7f6b4ba23aabc0b4acba54ae9778bde992d3c3716a3281d8135c3dee2157ac59",
+      "services/phone-adb-controller/judge-comment.js": "bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b",
+      "services/phone-adb-controller/leadgen-authorization-intent.mjs": "063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa",
+      "services/phone-adb-controller/leadgen-committed-partial.js": "e5b443ecf4b0c0f6ee4cd9580883539f267cf41609016bcba02b26e4ce51230b",
+      "services/phone-adb-controller/leadgen-foundation/adapter.mjs": "de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d",
+      "services/phone-adb-controller/leadgen-foundation/assembly.mjs": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f",
+      "services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs": "ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs": "651a11963c66b2eaa4d4e4b4debc557fef52ff4c8f4733413ddb8c3b022e227f",
+      "services/phone-adb-controller/leadgen-foundation/checker-facts.mjs": "916a9e3fd2af9a3bf43a00c32b1f10e43a570c1d9bdc4387dfbc921504177439",
+      "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs": "86a1e45cedc9f64b1b130ebd2685bfdab74cf82a289e3d5bdacb1224fe435603",
+      "services/phone-adb-controller/leadgen-foundation/context.mjs": "4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3",
+      "services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs": "ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402",
+      "services/phone-adb-controller/leadgen-foundation/freeze.mjs": "99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76",
+      "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86",
+      "services/phone-adb-controller/leadgen-foundation/schemas/101.json": "dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27",
+      "services/phone-adb-controller/leadgen-foundation/schemas/102.json": "6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c",
+      "services/phone-adb-controller/leadgen-foundation/schemas/103.json": "0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d",
+      "services/phone-adb-controller/leadgen-foundation/schemas/104.json": "b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd",
+      "services/phone-adb-controller/leadgen-foundation/sources/101.json": "0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149",
+      "services/phone-adb-controller/leadgen-foundation/sources/102.json": "383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7",
+      "services/phone-adb-controller/leadgen-foundation/sources/103.json": "816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9",
+      "services/phone-adb-controller/leadgen-foundation/sources/104.json": "69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb",
+      "services/phone-adb-controller/leadgen-foundation/sources/asr.json": "a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98",
+      "services/phone-adb-controller/leadgen-foundation/worker.mjs": "105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989",
+      "services/phone-adb-controller/leadgen-outreach-scope.js": "c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7",
+      "services/phone-adb-controller/leadgen-queue.js": "ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895",
+      "services/phone-adb-controller/leadgen-score-context.js": "f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91",
+      "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "668731795369b7e16a04b0d5492665a9e9669addb8619210cfe841f6b6f28627",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d",
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f"
+    }
+  }
+}
