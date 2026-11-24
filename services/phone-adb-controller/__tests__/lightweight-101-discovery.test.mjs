@@ -35,7 +35,7 @@ test('轻量 101 Worker 可从只含发布清单文件的独立目录加载', t 
   }
 
   const entry = join(bundleRoot, 'services/phone-adb-controller/leadgen-foundation/lightweight-101-worker.mjs');
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import(process.argv[1])', entry], {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import(process.argv.pop())', entry], {
     cwd: bundleRoot, encoding: 'utf8', timeout: 10000,
   });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
