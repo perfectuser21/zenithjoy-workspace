@@ -108,6 +108,10 @@ test('lightweight 101 source carries an independent key and a fixed closure whil
  assert.equal(source.source,undefined,'a frozen Git source cannot contain its own commit SHA');
  assert.deepEqual(source.activities.map(a=>a.key),profile.contract.activities.map(a=>a.key));
  assert.ok(source.activities.every(a=>a.executor_kind==='agent'));
+ for(const [index,activity] of source.activities.entries()){
+  const steps=profile.contract.activities[index].acceptance.document.steps;
+  assert.deepEqual(activity.steps,steps.map(({key,name,order,dod})=>({key,name,order,dod})));
+ }
  const bindings=source.activities.flatMap(a=>a.implementation_bindings??[]);
  for(const [file,digest] of [[ref.path,hash(bytes)],...Object.entries(profile.profile.files)]){
   assert.ok(bindings.some(b=>b.path===file&&b.revision===ref.revision&&b.digest==='sha256:'+digest),file+' is not bound');

@@ -71,7 +71,81 @@
         "path": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
         "ref": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
         "version": "2.6.3"
-      }
+      },
+      "steps": [
+        {
+          "key": "acquire_device_lock",
+          "name": "拿设备锁",
+          "order": 1,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "refresh_lock_heartbeat",
+          "name": "锁心跳续期",
+          "order": 2,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "verify_device_identity",
+          "name": "验设备身份",
+          "order": 3,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "verify_call_idle",
+          "name": "验通话空闲",
+          "order": 4,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "read_account_mark",
+          "name": "读账号标记(我页)",
+          "order": 5,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "open_run_ledger",
+          "name": "开账本",
+          "order": 6,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        }
+      ]
     },
     {
       "key": "collect_videos",
@@ -88,6 +162,128 @@
         "ref": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
         "version": "5.6.4"
       },
+      "steps": [
+        {
+          "key": "open_search",
+          "name": "打开搜索",
+          "order": 1,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "switch_video_tab",
+          "name": "切视频tab",
+          "order": 2,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "open_filter_panel",
+          "name": "点筛选按钮开面板",
+          "order": 3,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "choose_filters",
+          "name": "选筛选项",
+          "order": 4,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "apply_filters",
+          "name": "点查看结果",
+          "order": 5,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "extract_video_cards",
+          "name": "抽视频卡片",
+          "order": 6,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "resolve_video_links",
+          "name": "取视频链接",
+          "order": 7,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "persist_candidates",
+          "name": "写发现工件+落库",
+          "order": 8,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "push_videos",
+          "name": "视频持久化读回",
+          "order": 9,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/3及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "readback_line_key",
+          "name": "业务线读回",
+          "order": 10,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/4及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        }
+      ],
       "implementation_bindings": [
         {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "revision": "82ad0c6a182a340159fba72edc1461a452cc286f", "path": "services/phone-adb-controller/leadgen-foundation/profiles/101-lightweight.json", "digest": "sha256:4f806723f13e314e72ad1d2637304d56ae84a506cc6a8bc6ecb277b5db56fad9"},
         {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "revision": "82ad0c6a182a340159fba72edc1461a452cc286f", "path": "services/phone-adb-controller/activity-104-context.mjs", "digest": "sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a"},
@@ -237,7 +433,57 @@
         "path": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
         "ref": "services/phone-adb-controller/leadgen-foundation/worker.mjs",
         "version": "2.6.4"
-      }
+      },
+      "steps": [
+        {
+          "key": "close_app",
+          "name": "关App",
+          "order": 1,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/0及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "release_lock",
+          "name": "放锁",
+          "order": 2,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/1及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "return_safe_desktop",
+          "name": "回安全桌面",
+          "order": 3,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        },
+        {
+          "key": "finalize_run",
+          "name": "收尾回执",
+          "order": 4,
+          "dod": {
+            "mode": "checkpoint",
+            "reason": "旧脚本指标不作为独立业务裁判；本步骤真实交付由本Activity权威后置条款/postconditions/2及原始证据验收。",
+            "readback": {
+              "type": "none"
+            }
+          }
+        }
+      ]
     }
   ]
 }
