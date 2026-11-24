@@ -61,6 +61,7 @@ test('two queued videos in one run each deliver their own recording to qualifica
   const ctl=path.join(d,'ctl'), qualify=path.join(d,'qualify'), scp=path.join(d,'scp');
   writeFileSync(ctl,`#!/usr/bin/env node
 const fs=require('fs'),p=require('path');const argv=process.argv.slice(2);if(argv[2]==='--lock-owner')argv.splice(2,2);const [flag,profile,cmd,...args]=argv;const d=process.env.FIXTURE;
+const sdk33Policy = ${JSON.stringify(sdk33Policy)};
 const active=()=>fs.readFileSync(p.join(d,'active'),'utf8');
 fs.appendFileSync(p.join(d,'calls'),JSON.stringify({cmd,args})+'\\n');
 switch(cmd){
