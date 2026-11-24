@@ -423,7 +423,7 @@ activities:
       protocol: json-stdio-v1
     implementation_bindings:
       - kind: code
-        purpose: foundation_host
+        purpose: deployment_lock
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/preflight-pg-lock.json
         revision: contract
