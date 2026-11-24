@@ -117,7 +117,10 @@ export async function handleRpc(input, deps = {}) {
     if (input.kind === 'queue') {
       const scoring=fixedPool?standaloneAgentScoringContext({runtimeRoot:root,input}):{};
       if(input.request?.op==='score_committed_scope') {
-        const {selectStandaloneScoringComment}=await import('./standalone-scoring-tools.mjs');
+        if(!scoring.agentScoreIdentity||!input.source.files.some(file=>file.path==='standalone-scoring-tools.mjs')){
+          throw Error('AGENT_SCORE_AUTHORITY_REQUIRED');
+        }
+        const {selectStandaloneScoringComment}=require('./standalone-scoring-tools.mjs');
         return {ok:true,result:await selectStandaloneScoringComment(pool,input.request,scoring)};
       }
       return {ok:true,result:await require('./leadgen-queue.js').queueRequest(pool,input.request,{
