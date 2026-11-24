@@ -5,7 +5,7 @@
   "capability_id": "a1000000-0000-4000-8000-000000000001",
   "channel": "internal",
   "form": "orchestration",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "runtime": {
     "kind": "commander-foundation-v1",
     "profile_ref": {
