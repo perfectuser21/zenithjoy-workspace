@@ -11,7 +11,7 @@ import {metricPhoneReceipt} from './helpers/discovery-metrics-fixture.mjs';
 import {runLightweightDiscovery101} from '../leadgen-foundation/lightweight-101-discovery.mjs';
 import {generateLightweight101Profile} from '../leadgen-foundation/lightweight-101-release.mjs';
 
-test('轻量 101 生成单独候选配置并固定 Code worker 的依赖闭包',()=>{
+test('轻量 101 生成单独候选配置并冻结受管发现脚本的依赖闭包',()=>{
   const profile=generateLightweight101Profile();
   assert.equal(profile.profile.leadgen.discovery_variant,'lightweight-host-script-v1');
   assert.deepEqual(profile.contract.activities.map(activity=>activity.runtime.executor_kind),['agent','agent','agent']);
