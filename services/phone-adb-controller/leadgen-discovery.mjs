@@ -22,7 +22,7 @@ function effectiveFilters(raw,requested){
   effective[key]=line.slice(i+1).trim();
  }
  if(filterKeys.some(key=>!Object.hasOwn(effective,key)))throw Error('DISCOVERY_FILTER_RECEIPT_MISSING');
- const expected={...requested,duration:'unlimited',scope:'unlimited'};
+ const expected={duration:'unlimited',scope:'unlimited',...requested};
  if(filterKeys.some(key=>effective[key]!==expected[key])||Object.hasOwn(effective,'location_requested')&&effective.location_requested!==requested.location)throw Error('DISCOVERY_FILTER_MISMATCH');
  return Object.fromEntries(filterKeys.map(key=>[key,effective[key]]));
 }
@@ -37,7 +37,7 @@ export function verifyDiscoveryFilterEvidence({runDir,runId,run,profile,sourceCo
  }catch{return false;}
 }
 function validVideoUrl(value,id){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&((u.hostname==='v.douyin.com'&&/^\/[A-Za-z0-9_-]+\/?$/.test(u.pathname))||(['www.douyin.com','douyin.com','www.iesdouyin.com','iesdouyin.com'].includes(u.hostname)&&new RegExp('/video/'+id+'(?:/|$)').test(u.pathname)));}catch{return false;}}
-export function createDiscoveryHandlers({discoveryInput,phone,execute,queue,profile,run,runId=run,sourceCommit=null,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0,captureBudgetMs=0}){
+export function createDiscoveryHandlers({discoveryInput,searchFilters,phone,execute,queue,profile,run,runId=run,sourceCommit=null,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0,captureBudgetMs=0}){
  if(!['keyword','benchmark'].includes(sourceKind))throw Error('发现来源类型无效');
  if(!Array.isArray(sources)||!sources.length)throw Error('发现来源为空');
  if(!Number.isSafeInteger(limit)||limit<0||limit>1000)throw Error('发现成功目标上限无效');
@@ -45,9 +45,13 @@ export function createDiscoveryHandlers({discoveryInput,phone,execute,queue,prof
  const rawInput=discoveryInput?validateDiscoveryInput(discoveryInput):null;
  const attemptsOnly=rawInput?.schema_version===2,attemptLimit=rawInput?.max_attempts??rawInput?.max_candidates;
  const quotaStop=attemptsOnly?'attempt_limit_reached':'candidate_limit_reached';
- const sort=env.LEADGEN_SORT||'latest',time=env.LEADGEN_TIME_LAYER||'six_months',maxScreens=Number(env.LEADGEN_MAX_SCREENS||100);
+ const sort=searchFilters?.sort??(env.LEADGEN_SORT||'latest'),time=searchFilters?.time_layer??(env.LEADGEN_TIME_LAYER||'six_months'),maxScreens=Number(env.LEADGEN_MAX_SCREENS||100);
+ const duration=searchFilters?.duration??'unlimited',scope=searchFilters?.scope??'unlimited';
+ if(searchFilters&&(!['unlimited','under_one_minute','one_to_five_minutes','over_five_minutes'].includes(duration)
+  ||!['unlimited','watched','not_watched','following'].includes(scope)||searchFilters.location!==location))
+  throw Error('搜索筛选范围无效');
  if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!['same_city','unlimited'].includes(location)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
- const requested={sort,time_layer:time,location};
+ const requested={sort,time_layer:time,location,...(searchFilters?{duration,scope}:{})};
  const filterProof={version:1,run_id:runId,run,profile,source_commit:sourceCommit,requested,receipts:[]};
  if(env.WFR_RUN_DIR&&/^[-A-Za-z0-9_]+$/.test(runId||'')){
   const path=join(env.WFR_RUN_DIR,runId+'-filter-readback.json');
@@ -66,7 +70,7 @@ export function createDiscoveryHandlers({discoveryInput,phone,execute,queue,prof
  if(rawInput&&(rawInput.run_tag!==run||rawInput.profile!==profile||rawInput.serial!==env.SERIAL||rawInput.line!==env.LEADGEN_LINE||maxScreens!==1||sourceKind!=='keyword'||JSON.stringify(sources)!==JSON.stringify(rawInput.sources)))throw Error('DISCOVERY_INPUT_SOURCE_MISMATCH');
  const contexts=sources.slice(0,2).map((s,i)=>{const value=typeof s==='string'?s:s?.source??s?.keyword??s?.url;if(typeof value!=='string'||!value.trim())throw Error('发现来源格式无效');return {source:value,keyword:sourceKind==='keyword'?value:'',sourceKind,sourceIndex:i,sourceEncoded:encodeURIComponent(value)};});
  const state={sourceKind,sources:contexts,source_receipts:[],persisted:[],captures:[],zero_comment_candidates:[],failures:[],known_gaps:[],relocation_reveals:[],identity_enrichments:[],counts:{sources:contexts.length,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0,relocation_skipped:0,zero_comments:0},pending_capture:null,source_complete:false,write_complete:false};
- const request={...(rawInput?{...(attemptsOnly?{schema_version:2,max_attempts:attemptLimit}:{max_candidates:attemptLimit}),max_screens:1,source_sha256:rawInput.source_sha256}:{}),keywords:contexts.map(c=>c.source),source_kind:sourceKind,sort,time_layer:time,location,target_count:limit,max_duration_s:Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||2400)};
+ const request={...(rawInput?{...(attemptsOnly?{schema_version:2,max_attempts:attemptLimit}:{max_candidates:attemptLimit}),max_screens:1,source_sha256:rawInput.source_sha256}:{}),keywords:contexts.map(c=>c.source),source_kind:sourceKind,...requested,target_count:limit,max_duration_s:Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||2400)};
  if(!Number.isSafeInteger(request.max_duration_s)||request.max_duration_s<1||request.max_duration_s>2400)throw Error('采集Activity预算须为1至2400秒');
  let firstPage,stopReason=null,allScanned=false;
  const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,request,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,zero_comment_candidates:state.zero_comment_candidates,pending_capture:state.pending_capture,failures:state.failures,known_gaps:state.known_gaps,relocation_reveals:state.relocation_reveals,identity_enrichments:state.identity_enrichments,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
@@ -79,7 +83,7 @@ export function createDiscoveryHandlers({discoveryInput,phone,execute,queue,prof
   const receipt={invocation:filterProof.receipts.length+1,evidence_id:eid+'-filter',source_index:ctx.sourceIndex+1,observed_at:new Date().toISOString(),raw_stdout:null,verified:false};
   filterProof.receipts.push(receipt);saveFilters();
   try{
-   receipt.raw_stdout=await phone('search-time-layer',time,eid+'-filter',sort,'unlimited','unlimited',location);
+   receipt.raw_stdout=await phone('search-time-layer',time,eid+'-filter',sort,duration,scope,location);
    if(typeof receipt.raw_stdout==='string')receipt.raw_sha256=filterHash(receipt.raw_stdout);
    receipt.effective=effectiveFilters(receipt.raw_stdout,requested);receipt.verified=true;
   }catch(error){receipt.error=error.message;throw error;}finally{saveFilters();}

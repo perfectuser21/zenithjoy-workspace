@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFileSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
-import {buildFoundationBundle,WORKFLOWS} from '../leadgen-foundation/build.mjs';import {hash} from '../leadgen-foundation/context.mjs';
+import {buildFoundationBundle,LIGHTWEIGHT_101,WORKFLOWS} from '../leadgen-foundation/build.mjs';import {hash} from '../leadgen-foundation/context.mjs';
 import {projectAgentProfile} from '../leadgen-foundation/profile-contract.mjs';
 const prefix='services/phone-adb-controller/leadgen-foundation',repo=fileURLToPath(new URL('../../../',import.meta.url));
 test('four published profiles freeze source closure and central skills without an instance identity',()=>{
@@ -61,7 +61,8 @@ test('four original product-map contracts pin executable profiles and every prof
  for(const [id,key]of Object.entries(WORKFLOWS)){
   const document=parse(fs.readFileSync(path.join(repo,'product-map/contracts',key+'.yaml'),'utf8')),runtime=document.runtime;
   assert.equal(runtime?.kind,'commander-foundation-v1');assert.match(runtime.profile_ref.revision,/^[a-f0-9]{40}$/);
-  const profileBytes=fs.readFileSync(path.join(repo,runtime.profile_ref.path)),p=JSON.parse(profileBytes).profile;
+  const {revision,path:profilePath}=runtime.profile_ref;
+  const profileBytes=execFileSync('git',['--no-replace-objects','-C',repo,'show',revision+':'+profilePath]),p=JSON.parse(profileBytes).profile;
   assert.equal(runtime.profile_ref.digest,'sha256:'+hash(profileBytes));assert.deepEqual(runtime.input_schema,JSON.parse(fs.readFileSync(path.join(repo,prefix,'schemas',id+'.json'))));
   const bindings=document.activities.flatMap(a=>a.implementation_bindings??[]);
   for(const [name,digest]of [[runtime.profile_ref.path,hash(profileBytes)],...Object.entries(p.files)])assert.ok(bindings.some(b=>b.path===name&&b.revision===runtime.profile_ref.revision&&b.digest==='sha256:'+digest),name+' lacks a frozen definition binding');
@@ -87,4 +88,32 @@ test('bundle rejects profile acceptance from a different authoritative B before 
  const f=fixture();try{const p='product-map/contracts/'+WORKFLOWS['102']+'.yaml',d=JSON.parse(fs.readFileSync(path.join(f.code,p)));d.activities[0].postconditions[0].asserts='new authoritative requirement';f.put(f.code,p,JSON.stringify(d));f.commit(f.code);
   assert.throws(()=>buildFoundationBundle({repoRoot:f.code,skillsRepo:f.skills,outputRoot:path.join(f.root,'semantic-drift')}),/CONTRACT_AUTHORITY_DRIFT/);assert.equal(fs.existsSync(path.join(f.root,'semantic-drift')),false);
  }finally{f.close();}
+});
+
+test('lightweight 101 source carries an independent key and a fixed closure while the product default stays canonical',async()=>{
+ const {parse}=await import('yaml');
+ const source=JSON.parse(fs.readFileSync(path.join(repo,LIGHTWEIGHT_101.definitionPath),'utf8'));
+ const original=parse(fs.readFileSync(path.join(repo,'product-map/contracts',WORKFLOWS['101']+'.yaml'),'utf8'));
+ assert.equal(original.brain_workflow_key,WORKFLOWS['101']);
+ assert.equal(source.workflow,WORKFLOWS['101']);
+ assert.equal(source.key,LIGHTWEIGHT_101.key);
+ assert.notEqual(source.key,original.brain_workflow_key);
+ const ref=source.runtime.profile_ref;
+ assert.equal(ref.path,LIGHTWEIGHT_101.profilePath);
+ assert.notEqual(ref.path,original.runtime.profile_ref.path);
+ const bytes=execFileSync('git',['--no-replace-objects','-C',repo,'show',ref.revision+':'+ref.path]);
+ assert.equal(ref.digest,'sha256:'+hash(bytes));
+ const profile=JSON.parse(bytes);
+ assert.equal(profile.profile.leadgen.discovery_variant,'lightweight-host-script-v1');
+ assert.equal(source.source,undefined,'a frozen Git source cannot contain its own commit SHA');
+ assert.deepEqual(source.activities.map(a=>a.key),profile.contract.activities.map(a=>a.key));
+ assert.ok(source.activities.every(a=>a.executor_kind==='agent'));
+ for(const [index,activity] of source.activities.entries()){
+  const steps=profile.contract.activities[index].acceptance.document.steps;
+  assert.deepEqual(activity.steps,steps.map(({key,name,order,dod})=>({key,name,order,dod})));
+ }
+ const bindings=source.activities.flatMap(a=>a.implementation_bindings??[]);
+ for(const [file,digest] of [[ref.path,hash(bytes)],...Object.entries(profile.profile.files)]){
+  assert.ok(bindings.some(b=>b.path===file&&b.revision===ref.revision&&b.digest==='sha256:'+digest),file+' is not bound');
+ }
 });

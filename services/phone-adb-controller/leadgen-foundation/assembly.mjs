@@ -10,6 +10,7 @@ import {validateAuthorization} from '../activity-104-context.mjs';
 import {hash,need,canonical} from './context.mjs';
 import {relative} from './freeze.mjs';
 import {businessModuleSources} from './business-module-sources.mjs';
+import {lightweight101Entry,lightweight101Tool} from './profile-contract.mjs';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const {validateOutreachScope}=createRequire(import.meta.url)('../leadgen-outreach-scope.js');
 const ASR_TARBALLS=new Set(['cos-nodejs-sdk-v5-3.0.0.tgz','cos-fast-xml-parser-1.0.0.tgz','strnum-1.1.2.tgz'].map(n=>'_dependencies/asr-cos/tarballs/'+n));
@@ -58,6 +59,8 @@ export function prepareProof(context,{initialize=false}={}){
 /** Only assembles frozen source. No phone, database, model or message operation occurs here. */
 export async function assembleSources({context:c,profile,contract,input,hostRoot,identity,bindingKey,initializeProof=true}){
  const workflow=c.assigned_workflow,files=sourceArchive(path.join(HERE,'sources',workflow+'.json'));
+ const scriptEntry=lightweight101Entry(profile,contract.workflow);
+ if(scriptEntry)need(workflow==='101'&&profile.skill_runtime.host_tools.kinds.includes(lightweight101Tool),'LIGHT101_PROFILE');
  if(workflow==='103'){
   delete c.verification.agent_score_mode;
   const scoreMode=profile.leadgen.agent_score_mode;
@@ -89,7 +92,13 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
    const input=path.join(temporary,'context.json');fs.writeFileSync(input,JSON.stringify(c),{mode:0o600});
    const typed=path.join(temporary,'typed');const argv=[path.join(HERE,'../activity-host-tools.py'),base,typed,...(workflow==='101'?[]:[input])];
    const result=spawnSync(c.python,argv,{encoding:'utf8',timeout:15000,maxBuffer:1024*1024,env:{PATH:process.env.PATH,HOME:process.env.HOME,PYTHONDONTWRITEBYTECODE:'1'}});
-   need(result.status===0,'TYPED_ASSEMBLY');Object.assign(files,directoryFiles(typed));localCredentials(files,c);
+   need(result.status===0,'TYPED_ASSEMBLY');Object.assign(files,directoryFiles(typed));
+   if(scriptEntry){
+    const blocked=" if c['assigned_workflow']=='101' and activity=='collect_videos' and args[0] in {'search-video-tab','search-video-cards'}:raise ValueError('DISCOVERY_VISUAL_OPERATION_REQUIRED')\n";
+    files['tool_scope.py']=replaceRequired(files['tool_scope.py'],blocked,
+     ' import os\n'+blocked.replace("and args[0] in","and os.environ.get('LEADGEN_LIGHT101_HOST_CALL')!='1' and args[0] in"));
+   }
+   localCredentials(files,c);
    if(workflow==='102')for(const [name,bytes]of Object.entries(sourceArchive(path.join(HERE,'sources/asr.json'))))files['asr-runtime/'+name]=bytes;
   }
   if(workflow!=='104'){
@@ -177,7 +186,17 @@ export async function assembleSources({context:c,profile,contract,input,hostRoot
   const worker='await import('+JSON.stringify(pathToFileURL(kernel).href)+');\n';
   files['worker.mjs']=worker;
   for(const entry of profile.leadgen.worker_entries??[])files[relative(entry)]=worker;
-  files['invoke.mjs']="import fs from 'node:fs';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';import path from 'node:path';const root=path.dirname(fileURLToPath(import.meta.url)),c=JSON.parse(fs.readFileSync(path.join(root,'context.json')));const r=spawnSync(c.python,[path.join(root,'tools.py'),...process.argv.slice(2)],{stdio:'inherit',env:{...process.env,..."+JSON.stringify(exactEnv)+"}});process.exit(r.status??1);\n";
+  let lightweightDispatch='';
+  if(scriptEntry){
+   const source=pathToFileURL(path.join(profile.cwd,scriptEntry)).href;
+   lightweightDispatch="if(process.argv[2]==="+JSON.stringify(lightweight101Tool)+"){const {runLightweight101HostTool}=await import("+
+    JSON.stringify(source)+");const result=await runLightweight101HostTool(root,process.argv.slice(3));console.log(JSON.stringify(result));process.exit(result.result.exit_code);}";
+   lightweightDispatch+="if(process.env.COMMANDER_ACTIVITY_KEY==='collect_videos'&&process.env.LEADGEN_LIGHT101_HOST_CALL!=='1'){"+
+    "console.log(JSON.stringify({state:'terminal',result:{exit_code:2,error:'LIGHT101_SCRIPT_REQUIRED',data:{phase:'pre_dispatch',dispatched:false}}}));process.exit(2);}";
+   files['agent-tools.txt']+='\n此 101 独立运行方式的 collect_videos 请调用工具 '+lightweight101Tool+
+    ' 一次，action_name 设为 light101，args 为空。只把本次确认并可读回的交付对象和原件引用提交给独立 Checker。脚本拒绝或未知时报告原因，不要改名重做。\n';
+  }
+  files['invoke.mjs']="import fs from 'node:fs';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';import path from 'node:path';const root=path.dirname(fileURLToPath(import.meta.url)),c=JSON.parse(fs.readFileSync(path.join(root,'context.json')));"+lightweightDispatch+"const r=spawnSync(c.python,[path.join(root,'tools.py'),...process.argv.slice(2)],{stdio:'inherit',env:{...process.env,..."+JSON.stringify(exactEnv)+"}});process.exit(r.status??1);\n";
   const hostTools = profile.skill_runtime.host_tools;
   if (hostTools?.kinds?.some(kind => kind === 'qualify-prepare' || kind === 'qualify-submit')) {
    const {deriveQualificationAgentHost} = await import('../qualification-agent-candidate.mjs');

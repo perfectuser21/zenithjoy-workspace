@@ -138,7 +138,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -194,7 +194,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -295,7 +295,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "b0f9f6da6d172e29d2d6a10002654938266948747657ad9943e6eacda0d9c596"
+      "code_digest": "bf971db5580128cf4c90e8d318ff35c096623247b713b61a2c60e7505e457e17",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "b0f9f6da6d172e29d2d6a10002654938266948747657ad9943e6eacda0d9c596",
+        "current_code_digest": "bf971db5580128cf4c90e8d318ff35c096623247b713b61a2c60e7505e457e17"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.6.3",
@@ -455,7 +462,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -518,7 +525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -619,13 +626,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
+      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "宿主回执清单为已验证的业务调用增加操作名和视频ID投影，预检原取证字段、身份校验和设备行为保持兼容。",
-        "reviewed_by": "codex-team1",
-        "previous_code_digest": "d301dc019006cbc50298fa880e4119a0e7757aca964cc531072750404e7b97df",
-        "current_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f"
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
+        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
       }
     },
     "douyin_video_processing.dedup": {
@@ -786,7 +793,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -849,7 +856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -950,7 +957,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f"
+      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
+        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+      }
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.6.3",
@@ -1094,7 +1108,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -1157,7 +1171,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -1279,7 +1293,14 @@
           "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
         }
       ],
-      "code_digest": "2baf7256bcb6a849c18c2db327361607ca6d8fa5e03f631cbb64854e6c5421aa"
+      "code_digest": "d40428b7f48afd19a473a7fdca89c7f5161a1e12cfd21cbd8447c2b15ac7c106",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "2baf7256bcb6a849c18c2db327361607ca6d8fa5e03f631cbb64854e6c5421aa",
+        "current_code_digest": "d40428b7f48afd19a473a7fdca89c7f5161a1e12cfd21cbd8447c2b15ac7c106"
+      }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.8.7",
@@ -1439,7 +1460,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -1502,7 +1523,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -1603,7 +1624,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f"
+      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
+        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.6.4",
@@ -1763,7 +1791,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -1826,7 +1854,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -1927,7 +1955,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f"
+      "code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "d8fc2b4b4a5f6f97cddcc32e1a15d128f4552d4536694a411d0633797f20933f",
+        "current_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b"
+      }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.10.2",
@@ -2106,7 +2141,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -2162,7 +2197,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -2263,7 +2298,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d517f13f1a45b0b3267d123c383bbcc9996a4734d8f4b64bc5c6df19971f47e7"
+      "code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "d517f13f1a45b0b3267d123c383bbcc9996a4734d8f4b64bc5c6df19971f47e7",
+        "current_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.10.2",
@@ -2442,7 +2484,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -2498,7 +2540,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -2599,7 +2641,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "d517f13f1a45b0b3267d123c383bbcc9996a4734d8f4b64bc5c6df19971f47e7"
+      "code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "d517f13f1a45b0b3267d123c383bbcc9996a4734d8f4b64bc5c6df19971f47e7",
+        "current_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.3.2",
@@ -2752,7 +2801,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -2808,7 +2857,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -2909,7 +2958,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2"
+      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
+        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+      }
     },
     "douyin_lead_outreach.send_dm": {
       "activity_version": "6.1.3",
@@ -3062,7 +3118,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -3118,7 +3174,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -3219,7 +3275,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2"
+      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
+        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+      }
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "4.1.2",
@@ -3372,7 +3435,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -3428,7 +3491,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -3529,7 +3592,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2"
+      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
+        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+      }
     },
     "douyin_lead_outreach.cleanup": {
       "activity_version": "3.5.2",
@@ -3682,7 +3752,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/assembly.mjs",
           "revision": "contract",
-          "sha256": "c7b401ef784b0f1b97362aeb2eadc35b540bedfe8d6daacb431338309c03fe77"
+          "sha256": "49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f"
         },
         {
           "kind": "code",
@@ -3738,7 +3808,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/profile-contract.mjs",
           "revision": "contract",
-          "sha256": "1d6b7efb60c2d1fb56e10c431f34efb9df45c5d76bf6188b6b0d14cb79c145ff"
+          "sha256": "b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86"
         },
         {
           "kind": "code",
@@ -3839,7 +3909,14 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2"
+      "code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "已核对共享装配与投影差异。轻量工具仅在明确启用的101候选配置生效。默认配置继续运行原工作器和原检查器，业务合同和技能摘要相同；装配与配置回归通过。",
+        "reviewed_by": "codex",
+        "previous_code_digest": "5b43a2235e483e3251665f835ee6a55486280bf3920ae2a2d7b4d349357845b2",
+        "current_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c"
+      }
     }
   },
   "workflows": {

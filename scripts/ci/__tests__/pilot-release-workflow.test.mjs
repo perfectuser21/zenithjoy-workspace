@@ -97,3 +97,23 @@ test('真实工作流快照转换拒绝空输入、缺失及非对象，不产�
   assert.equal(result.canonical.trim(),'');
  }
 });
+
+test('轻量 101 发布验证绑定单独 scope，仅在 main 显式触发',()=>{
+ const workflow=YAML.parse(readFileSync(new URL('../../../.github/workflows/lightweight-101-release-verification.yml',import.meta.url),'utf8'));
+ const original=config();
+ assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+ assert.deepEqual(workflow.permissions,original.permissions);
+ assert.deepEqual(workflow.jobs,{verify:{
+  if:original.jobs.verify.if,
+  uses:original.jobs.verify.uses,
+  with:{...original.jobs.verify.with,scope:'leadgen-101-lightweight'},
+  secrets:original.jobs.verify.secrets,
+ }});
+ assert.equal(original.jobs.verify.with.scope,'zenithjoy');
+ assert.equal(original.jobs['verify-commander'].with.scope,'commander-generic');
+ assert.equal(original.jobs['verify-patrol-definitions'].with.scope,'cecelia-device-patrol-definitions');
+ const admission=regression().jobs.snapshot.steps.find(s=>s.env?.CALLER_REPO);
+ assert.match(admission.run,/perfectuser21\/zenithjoy-workspace:leadgen-101-lightweight\)/);
+ assert.match(admission.run,/test "\$HEAD" = "\$CALLER_SHA"/);
+ assert.match(admission.run,/git\/ref\/heads\/main/);
+});
