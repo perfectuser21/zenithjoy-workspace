@@ -91,3 +91,9 @@ export function standaloneAgentScoringContext({runtimeRoot,input}){
   execution:{...input.source.execution,task_id:p.task_id},
  };
 }
+
+export function standaloneCollectionClaimScope({runtimeRoot,input}){
+ const {scope}=frozenDomain(readFrozen(dirname(runtimeRoot)));
+ if(input.kind!=='queue'||!['collect_claim','qualification_policy','qualification_submit','collect_comment_readback'].includes(input.request?.op)||scope?.workflow_key!=='douyin_video_processing')fail();
+ return scope;
+}

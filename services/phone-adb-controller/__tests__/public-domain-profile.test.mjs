@@ -339,6 +339,11 @@ test('独立 101 接受发布内登记的 Mac Studio 设备并拒绝借用其他
  const resources={profile:row.profile,serial:row.serial,account:row.expected_account};
  const scope={...row,policy:{...row.policy,schema_version:2,instance_id:'fixture-5044',endpoint:'tcp:127.0.0.1:5044'}};
  assert.equal(matchesStandalonePhone([row],resources,scope),true);
+ assert.equal(matchesStandalonePhone([row],resources,scope,'douyin_video_processing'),false);
+ const approvedForCollection={...row,workflow_keys:[...row.workflow_keys,'douyin_video_processing']};
+ assert.equal(matchesStandalonePhone([approvedForCollection],resources,scope,'douyin_video_processing'),true);
+ assert.equal(matchesStandalonePhone([approvedForCollection],resources,scope,'douyin_lead_outreach'),false);
+
  assert.equal(matchesStandalonePhone([row],resources,{...scope,serial:'other-device'}),false);
  assert.equal(matchesStandalonePhone([row],resources,{...scope,policy:{...scope.policy,schema_version:1}}),false);
  assert.equal(matchesStandalonePhone([],resources,scope),false);

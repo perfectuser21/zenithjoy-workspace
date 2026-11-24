@@ -1,5 +1,5 @@
 import {readPublicDomainSamplingProof} from './public-domain-sampling.mjs';
-import {publicDomainPgRequired,loadPublicDomainPg,verifyPublicDomainTask,verifyPublicDomainCompany,standaloneAgentScoringContext} from './public-domain-pg.mjs';
+import {publicDomainPgRequired,loadPublicDomainPg,verifyPublicDomainTask,verifyPublicDomainCompany,standaloneAgentScoringContext,standaloneCollectionClaimScope} from './public-domain-pg.mjs';
 // mmv执行端：每次请求先核固定发布SHA及完整声明文件，再允许队列或模型动作。
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -115,6 +115,15 @@ export async function handleRpc(input, deps = {}) {
     }
     pool = deps.pool || getPool();
     if (input.kind === 'queue') {
+      const collectOp=input.request?.op;
+      if(['collect_claim','qualification_policy','qualification_submit','collect_comment_readback'].includes(collectOp)){
+        if(!fixedPool||!input.source.files.some(file=>file.path==='standalone-collection-tools.mjs'))throw Error('RPC_COLLECTION_CLAIM_AUTHORITY');
+        const scope=standaloneCollectionClaimScope({runtimeRoot:root,input});
+        const collection=require('./standalone-collection-tools.mjs');
+        const operation={collect_claim:'claimStandaloneCollectionVideo',qualification_policy:'readStandaloneCollectionPolicy',
+          qualification_submit:'recordStandaloneCollectionQualification',collect_comment_readback:'readStandaloneCollectionComment'}[collectOp];
+        return {ok:true,result:await collection[operation](pool,input.request,scope)};
+      }
       const scoring=fixedPool?standaloneAgentScoringContext({runtimeRoot:root,input}):{};
       if(input.request?.op==='score_committed_scope') {
         if(!scoring.agentScoreIdentity||!input.source.files.some(file=>file.path==='standalone-scoring-tools.mjs')){
