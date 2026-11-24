@@ -52,6 +52,17 @@ export function buildStandaloneSkillProfile(options={}){
   &&/^[a-f0-9]{40}$/.test(skill.source_commit||'')&&safe(skill.path)&&skill.path.startsWith('skill/')&&skill.path.endsWith('/SKILL.md')&&HASH.test(skill.sha256||''),'STANDALONE_SKILL');
  return buildProfile({...options,primaryHost:'codex-exec-v1'},skill);
 }
+// 新 Mac Studio 手机必须同时满足发布内手机身份及受保护的托管实例。
+export function matchesStandalonePhone(hosts, resources, scope){
+ const rows=Array.isArray(hosts)?hosts.filter(row=>row.target==='mmv'&&row.profile===resources.profile
+  &&row.serial===resources.serial&&row.expected_account===resources.account
+  &&row.workflow_keys?.includes('douyin_video_discovery')):[];
+ if(rows.length!==1||!scope||scope.policy?.schema_version!==2||!scope.policy.instance_id)return false;
+ const row=rows[0];
+ return ['target','profile','serial','expected_account','evidence_root'].every(key=>scope[key]===row[key])
+  &&['host_id','transport','adb_bin','adb_realpath','adb_sha256'].every(key=>typeof row.policy?.[key]==='string'&&scope.policy[key]===row.policy[key])
+  &&scope.policy.host_id==='mmv'&&scope.policy.transport==='tcp';
+}
 function buildProfile({sourceRoot,frozen,observation,gate,resources,company,commander,profileId,env={},primaryHost,phoneExecution}={},standaloneSkill){
  need(isAbsolute(sourceRoot||'')&&realpathSync(sourceRoot)===sourceRoot,'SOURCE_ROOT');
  need(/^[a-z][a-z0-9-]{0,63}$/.test(profileId||''),'PROFILE_ID');
@@ -70,12 +81,21 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
  const target=({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[resources?.machine];
  need(target&&r.target===target&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
  if(w.payload.key==='douyin_comment_scoring')need(resources.profile==='mmv-scoring'&&resources.serial==='none','SCORING_RESOURCE');
- else if(target==='mmv'&&!phoneExecution)need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
+ const registeredStandalonePhone=Boolean(target==='mmv'&&!phoneExecution&&w.payload.key==='douyin_video_discovery'&&standaloneSkill
+   &&!(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922'));
+ if(w.payload.key!=='douyin_comment_scoring'&&target==='mmv'&&!phoneExecution&&!registeredStandalonePhone)
+  need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
  need(UUID.test(company?.company_id||'')&&UUID.test(company?.tenant_id||'')&&Number.isSafeInteger(company.version)&&company.version>0&&company.policy_id,'COMPANY');
  const files={};
  for(const row of d.files||[]){need(!Object.hasOwn(files,row.deployed_path),'DUPLICATE_FILE');file(sourceRoot,row.deployed_path,row.content_sha256);files[row.deployed_path]=row.content_sha256;}
  for(const [path,hash] of Object.entries(f.files||{}))if(path.startsWith('runtime/')){const name=path.slice(8);file(sourceRoot,name,hash);need(!files[name]||files[name]===hash,'FROZEN_FILE');files[name]=hash;}
  need(Object.keys(files).length&&files['leadgen-public-domain.mjs']&&files['public-domain-authority.mjs']&&files['public-domain-pg.mjs'],'DOMAIN_SOURCE');
+ if(registeredStandalonePhone){
+  const registry='config/collection-phone-hosts.json';
+  need(files[registry],'PHONE_REGISTRY');
+  const hosts=JSON.parse(file(sourceRoot,registry,files[registry])).hosts;
+  need(matchesStandalonePhone(hosts,resources,f.discovery_phone_scope),'PHONE_RESOURCE');
+ }
  if(target==='xian-m4'&&w.payload.key!=='douyin_comment_scoring'){
   const scope=f[w.payload.key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
   const path='config/collection-phone-hosts.json';need(files[path],'PHONE_REGISTRY');

@@ -331,3 +331,16 @@ test('standalone compatibility construction refuses missing or tampered proofs a
   }
  }finally{await f.cleanup();}
 });
+
+test('独立 101 接受发布内登记的 Mac Studio 设备并拒绝借用其他实例',async()=>{
+ const {matchesStandalonePhone}=await import(source.href);
+ const row={target:'mmv',profile:'new_cloud',serial:'fixture-native-device',expected_account:'fixture-user',evidence_root:'/fixture/evidence',
+  workflow_keys:['douyin_video_discovery'],policy:{host_id:'mmv',transport:'tcp',adb_bin:'/fixture/adb',adb_realpath:'/fixture/adb',adb_sha256:'a'.repeat(64)}};
+ const resources={profile:row.profile,serial:row.serial,account:row.expected_account};
+ const scope={...row,policy:{...row.policy,schema_version:2,instance_id:'fixture-5044',endpoint:'tcp:127.0.0.1:5044'}};
+ assert.equal(matchesStandalonePhone([row],resources,scope),true);
+ assert.equal(matchesStandalonePhone([row],resources,{...scope,serial:'other-device'}),false);
+ assert.equal(matchesStandalonePhone([row],resources,{...scope,policy:{...scope.policy,schema_version:1}}),false);
+ assert.equal(matchesStandalonePhone([],resources,scope),false);
+ assert.equal(matchesStandalonePhone([row,row],resources,scope),false);
+});
