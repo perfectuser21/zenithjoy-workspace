@@ -6,6 +6,19 @@ const root=fileURLToPath(new URL('../../../',import.meta.url)),names=['douyin_vi
 const documents=Object.fromEntries(names.map(n=>[n,parse(fs.readFileSync(root+'product-map/contracts/'+n+'.yaml','utf8'))]));
 const digest=x=>createHash('sha256').update(JSON.stringify(x,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v)).digest('hex');
 const original=i=>JSON.parse(fs.readFileSync(root+'services/phone-adb-controller/leadgen-foundation/profiles/'+i+'.json'));
+test('only an explicitly selected 101 profile exposes the lightweight host tool without changing Checker routing',()=>{
+ const candidate=original(101),workflow=names[0],entry='services/phone-adb-controller/leadgen-foundation/lightweight-101-worker.mjs';
+ candidate.profile.leadgen.discovery_variant='lightweight-host-script-v1';
+ candidate.profile.files[entry]='c'.repeat(64);
+ const projected=projectAgentProfile(candidate,{documents,workflow});
+ assert.deepEqual(projected.contract.activities.map(a=>a.runtime.executor_kind),['agent','agent','agent']);
+ assert.ok(projected.profile.skill_runtime.host_tools.kinds.includes('light101-discover'));
+ assert.equal(verifyAgentProfile(projected,{documents,workflow}),true);
+ const invalid=original(102);invalid.profile.leadgen.discovery_variant='lightweight-host-script-v1';
+ assert.throws(()=>projectAgentProfile(invalid,{documents,workflow:names[1]}),/PROFILE_CONTRACT/);
+ delete projected.profile.files[entry];
+ assert.throws(()=>verifyAgentProfile(projected,{documents,workflow}),/PROFILE_CONTRACT/);
+});
 for(const [i,workflow]of names.entries())test('Workflow '+(101+i)+' derives its entire acceptance and budget from the actual authority',()=>{
  const p=projectAgentProfile(original(101+i),{documents,workflow});assert.equal(verifyAgentProfile(p,{documents,workflow}),true);
  for(const [n,a]of p.contract.activities.entries()){

@@ -2,6 +2,40 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {foundationFixture} from './helpers/leadgen-foundation-fixture.mjs';
 import {prepareLeadgenHost,createRuntime} from '../leadgen-foundation/adapter.mjs';
 import {buildQualificationAgentOverlay} from '../qualification-agent-overlay.mjs';
+test('独立 101 profile 装配脚本工具并保留原设备锁准入和 Agent Checker',async()=>{
+ const f=await foundationFixture('101');try{
+  const entry='services/phone-adb-controller/leadgen-foundation/lightweight-101-worker.mjs';
+  const file=path.join(f.profile.cwd,entry);
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  fs.writeFileSync(file,'export async function runLightweight101HostTool() {}');
+  f.profile.files[entry]=createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  f.profile.leadgen.discovery_variant='lightweight-host-script-v1';
+  f.profile.skill_runtime.host_tools.kinds.push('light101-discover');
+  const assembled=await prepareLeadgenHost(f);
+  assert.match(fs.readFileSync(path.join(assembled.profile.cwd,'invoke.mjs'),'utf8'),/runLightweight101HostTool/);
+  assert.equal(assembled.run.contract.activities[1].runtime.executor_kind,'agent');
+  assert.equal(assembled.context.serial,'hardware');
+  assert.equal(assembled.context.adb_serial,'localhost:15555');
+  const skipped=spawnSync(process.execPath,['invoke.mjs','phone','direct','open-search','fixture'],{
+   cwd:assembled.profile.cwd,encoding:'utf8',env:{...process.env,COMMANDER_ACTIVITY_KEY:'collect_videos',LEADGEN_LIGHT101_HOST_CALL:''},
+  });
+  assert.equal(skipped.status,2,skipped.stderr);
+  assert.equal(JSON.parse(skipped.stdout).result.error,'LIGHT101_SCRIPT_REQUIRED');
+  const phone=['-c',`
+import json
+from tool_scope import phone_args
+c=json.load(open('context.json'))
+tag=c['tasks']['101']['run_tag']
+print(json.dumps(phone_args(c,'collect_videos',['search-video-tab',tag+'-vtab'])))
+`];
+  const blocked=spawnSync('python3',phone,{cwd:assembled.profile.cwd,encoding:'utf8'});
+  assert.notEqual(blocked.status,0);
+  assert.match(blocked.stderr,/DISCOVERY_VISUAL_OPERATION_REQUIRED/);
+  const script=spawnSync('python3',phone,{cwd:assembled.profile.cwd,encoding:'utf8',env:{...process.env,LEADGEN_LIGHT101_HOST_CALL:'1'}});
+  assert.equal(script.status,0,script.stderr);
+  assert.deepEqual(JSON.parse(script.stdout).slice(0,4),['--profile','fixture-phone','--lock-owner',assembled.context.local_owner]);
+ }finally{f.close();}
+});
 for(const workflow of ['101','102','103','104'])test(`foundation ${workflow} real source assembly is isolated, reusable and effect free`,async()=>{
  const f=await foundationFixture(workflow);try{
   if(workflow==='102'){

@@ -61,7 +61,8 @@ test('four original product-map contracts pin executable profiles and every prof
  for(const [id,key]of Object.entries(WORKFLOWS)){
   const document=parse(fs.readFileSync(path.join(repo,'product-map/contracts',key+'.yaml'),'utf8')),runtime=document.runtime;
   assert.equal(runtime?.kind,'commander-foundation-v1');assert.match(runtime.profile_ref.revision,/^[a-f0-9]{40}$/);
-  const profileBytes=fs.readFileSync(path.join(repo,runtime.profile_ref.path)),p=JSON.parse(profileBytes).profile;
+  const {revision,path:profilePath}=runtime.profile_ref;
+  const profileBytes=execFileSync('git',['--no-replace-objects','-C',repo,'show',revision+':'+profilePath]),p=JSON.parse(profileBytes).profile;
   assert.equal(runtime.profile_ref.digest,'sha256:'+hash(profileBytes));assert.deepEqual(runtime.input_schema,JSON.parse(fs.readFileSync(path.join(repo,prefix,'schemas',id+'.json'))));
   const bindings=document.activities.flatMap(a=>a.implementation_bindings??[]);
   for(const [name,digest]of [[runtime.profile_ref.path,hash(profileBytes)],...Object.entries(p.files)])assert.ok(bindings.some(b=>b.path===name&&b.revision===runtime.profile_ref.revision&&b.digest==='sha256:'+digest),name+' lacks a frozen definition binding');
