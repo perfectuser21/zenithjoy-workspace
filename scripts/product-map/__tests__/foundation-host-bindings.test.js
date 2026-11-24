@@ -22,6 +22,21 @@ test('purpose cannot hide extra, missing, duplicated or wrongly pinned host sour
   const d=structuredClone(f.document);mutate(d);assert.throws(()=>partitionFoundationBindings({document:d,repoRoot:f.root,read:f.read}),/FOUNDATION_HOST_/);
  }
 });
+test('独立运行依赖随候选提交冻结，保持原业务方法和历史主机文件集合', async t => {
+ const f=fixture(t),{partitionFoundationBindings}=await import(helper);
+ const path='services/phone-adb-controller/preflight-pg-lock.json';
+ const binding={kind:'code',purpose:'foundation_host',repo:f.host[0].repo,path,revision:'contract'};
+ const bindings=f.document.activities[0].implementation_bindings;
+ bindings.push(binding);
+ f.put(path,'固定预检依赖');
+ const check=()=>partitionFoundationBindings({document:f.document,repoRoot:f.root,read:f.read});
+ assert.deepEqual(check().get('work'),f.business);
+ bindings.push({...binding});
+ assert.throws(check,/FOUNDATION_HOST_DEPLOYMENT_LOCK/);
+ bindings.pop();
+ binding.path='unrelated.mjs';
+ assert.throws(check,/FOUNDATION_HOST_COMPONENT_SET/);
+});
 test('host label cannot swallow the business Skill or execute different Skill contents or central origin',async t=>{
  const f=fixture(t),{partitionFoundationBindings}=await import(helper),call=d=>partitionFoundationBindings({document:d,repoRoot:f.root,read:f.read});
  const swallowed=structuredClone(f.document);swallowed.activities[0].implementation_bindings.shift();assert.throws(()=>call(swallowed),/FOUNDATION_HOST_BUSINESS_SKILL/);

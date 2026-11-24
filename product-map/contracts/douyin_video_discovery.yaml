@@ -422,6 +422,11 @@ activities:
       executor_kind: agent
       protocol: json-stdio-v1
     implementation_bindings:
+      - kind: code
+        purpose: foundation_host
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/preflight-pg-lock.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
