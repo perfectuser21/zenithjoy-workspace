@@ -41,7 +41,7 @@ test('轻量 101 Worker 可从只含发布清单文件的独立目录加载', t 
   assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
-for(const mode of ['capture','complete','missing'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
+for(const mode of ['capture','complete','missing','multiple_cards'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
   const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'lightweight-101-')));
   t.after(() => rmSync(workDir, {recursive: true, force: true}));
   const runTag = 'cfc6365c-81ed-4c38-b33d-c1eb2b21ab3a';
@@ -76,7 +76,11 @@ for(const mode of ['capture','complete','missing'])test('101 复用现场取链�
         if(mode!=='missing')result.stdout += 'results_evidence='+nativeFile('results.png')+'\n';
       }
       if (command === 'search-video-tab') result.stdout = 'evidence='+nativeFile('video-tab.xml')+'\n';
-      if (command === 'search-video-cards') result.stdout = '100\t200\t00:20\t视频标题\t视频作者\nvideo_tab=1\nevidence='+nativeFile('cards.xml')+'\n';
+      if (command === 'search-video-cards') {
+        const cards = ['100\t200\t00:20\t视频标题\t视频作者'];
+        if (mode === 'multiple_cards') cards.push('350\t200\t00:24\t第二张卡片\t另一作者');
+        result.stdout = cards.join('\n')+'\nvideo_tab=1\nevidence='+nativeFile('cards.xml')+'\n';
+      }
       if (command === 'search-kw-matches') result.stdout = 'kw_matches=1\n';
       if (command === 'current-video-link') result.stdout = metricPhoneReceipt(
         `content_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/demo/\nreturn_mode=results\n`, evidenceId, context.native_root);
@@ -104,6 +108,11 @@ for(const mode of ['capture','complete','missing'])test('101 复用现场取链�
   };
   const result = await runLightweightDiscovery101({context,workDir,invoke,hostRoot,pause:async () => {}});
   assert.deepEqual(result.videos.map(video => video.videoId), [videoId], JSON.stringify(result.failures));
+  if (mode === 'multiple_cards') {
+    assert.equal(result.counts.cards, 2);
+    assert.equal(result.counts.attempted, 1);
+    assert.equal(events.filter(event => event === 'current-video-link').length, 1);
+  }
   if(mode==='missing'){
     assert.equal(result.evidence_error,'LIGHT101_EVIDENCE_SCOPE');
     assert.equal(result.delivery_evidence,undefined);
