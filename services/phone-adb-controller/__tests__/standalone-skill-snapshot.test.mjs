@@ -26,6 +26,16 @@ test('103 从固定批次创建独立工具宿主并收尾，不获取手机锁'
   assert.equal(out.env.LEADGEN_EXECUTION_TRANSPORT,undefined);
   const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs');
   writeFileSync(join(out.dir,'run-definition.json'),JSON.stringify({...out.snapshot,snapshot_sha256:hash(out.snapshot)}));
+  const {standaloneAgentScoringContext}=await import('../public-domain-pg.mjs');
+  const runtimeRoot=join(out.dir,'runtime');
+  const scope=out.snapshot.standalone_skill.scope;
+  const execution={run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line};
+  const request={op:'score_committed_scope',run:scope.run_tag,line:scope.line,source_run:null,limit:1,committed_origin_run:scope.source_run};
+  const scoreContext=fields=>standaloneAgentScoringContext({runtimeRoot,input:{kind:'queue',source:{execution},request:{...request,...fields}}});
+  assert.equal(scoreContext({}).agentScoreIdentity.task_id,task);
+  assert.equal(scoreContext({}).agentScoreIdentity.run_id,identity.run_id);
+  assert.throws(()=>scoreContext({committed_origin_run:'another-origin'}),/PUBLIC_DOMAIN_PG_SCOPE/);
+  assert.throws(()=>scoreContext({op:'score_submit',sources:{[id()]:'another-origin'}}),/PUBLIC_DOMAIN_PG_SCOPE/);
   let call;
   const runtime=await startStandaloneSkillRuntime({runDirectory:out.dir,environment:out.env,dependencies:{
    hostRegistry:join(root,'registry'),bootstrap:async()=>true,leaseFactory:()=>assert.fail('103 不能领取手机'),
