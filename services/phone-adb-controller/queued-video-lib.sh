@@ -150,16 +150,21 @@ if phases[0]['native_audio_uid']!=phases[1]['native_audio_uid']:sys.exit(1)
 PYNATIVEPAIR
       then playback_ok=1; fi
       if [[ "$stopped" == record_stopped* ]]; then
-        if ! python3 - "$started" "$stopped" "$record_eid" <<'PYCAPTUREPAIR'
-import sys,re
+        if ! python3 - "$started" "$stopped" "$record_eid" "$QV_DIR/runtime" <<'PYCAPTUREPAIR'
+import json,sys,re
+from pathlib import Path
 s,e=[dict(x.split('=',1) for x in raw.split() if '=' in x) for raw in sys.argv[1:3]]
 keys=['capture_audio_mode','capture_audio_sdk','capture_audio_required','capture_audio_sdk_evidence_file','capture_audio_sdk_evidence_sha256']
 assert all(s.get(k) and s.get(k)==e.get(k) for k in keys)
 assert s['capture_audio_required']=='true' and ((s['capture_audio_mode']=='playback_dup' and s['capture_audio_sdk'].isdigit() and int(s['capture_audio_sdk'])>=33) or (s['capture_audio_mode']=='output_pcm_sdk31' and s['capture_audio_sdk']=='31'))
 keys=['capture_runtime_client_sha256','capture_runtime_server_sha256','capture_runtime_evidence_file','capture_runtime_evidence_sha256']
 assert all(s.get(k) and s.get(k)==e.get(k) for k in keys)
-pins=('2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258','764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536') if s['capture_audio_mode']=='output_pcm_sdk31' else ('952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d','8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e')
-assert (s[keys[0]],s[keys[1]])==pins
+sdk31=s['capture_audio_mode']=='output_pcm_sdk31'
+policy_file='runtime-policy.json' if sdk31 else 'runtime-policy-sdk33.json'
+policy=json.loads((Path(sys.argv[4])/policy_file).read_text())
+assert policy['schema']==('scrcpy-sdk31-pinned-v1' if sdk31 else 'scrcpy-sdk33-pinned-v1')
+assert (s[keys[0]],s[keys[1]])==(policy['client_sha256'],policy['server_sha256'])
+assert all(re.fullmatch('[a-f0-9]{64}',s[k]) for k in keys[:2])
 assert s[keys[2]]==sys.argv[3]+'.capture-runtime.json' and re.fullmatch('[a-f0-9]{64}',s[keys[3]])
 if s['capture_audio_mode']=='output_pcm_sdk31':
  assert e.get('decoded_audio_verified')=='true' and e.get('decoder_exit_code')=='0' and e.get('decoded_audio_sample_rate')=='16000'
@@ -194,9 +199,9 @@ PYCAPTUREPAIR
   /bin/rm -f "$error_file"
   # 媒体音量与内容电平分别存证；静音不是模型内容判定，也不得用旧转写伪装本轮ASR。
   [[ -n "${WFR_RUN_DIR:-}" ]] || return 5
-  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" "$first_phase" "$first_rc" "$first_stderr" "$capture_mode" "$capture_sdk" "$capture_required" "$astreams" <<'PYRECORD' || return 5
+  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" "$first_phase" "$first_rc" "$first_stderr" "$capture_mode" "$capture_sdk" "$capture_required" "$astreams" "$capture_ok" <<'PYRECORD' || return 5
 import sys,json,os,tempfile,datetime,math
-d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end,first_phase,first_rc,first_stderr,capture_mode,capture_sdk,capture_required,astreams=sys.argv[1:]
+d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end,first_phase,first_rc,first_stderr,capture_mode,capture_sdk,capture_required,astreams,capture_ok=sys.argv[1:]
 def number(v):
  try:
   n=float(v);return n if math.isfinite(n) else None
@@ -219,8 +224,7 @@ p['native_audio_restored'].update({k:number(end_fields.get('native_audio_restore
 p['native_audio_restored']['package_uid_verified']=end_fields.get('native_audio_restored_package_uid_verified')=='true'
 p['capture_audio_sdk_evidence_file']=capture_fields.get('capture_audio_sdk_evidence_file')
 p['capture_audio_sdk_evidence_sha256']=capture_fields.get('capture_audio_sdk_evidence_sha256')
-pins=('2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258','764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536') if capture_mode=='output_pcm_sdk31' else ('952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d','8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e')
-runtime_ok=(p['capture_runtime']==p['capture_runtime_end'] and (p['capture_runtime']['client_sha256'],p['capture_runtime']['server_sha256'])==pins and p['capture_runtime']['evidence_file']==eid+'.capture-runtime.json' and bool(__import__('re').fullmatch('[a-f0-9]{64}',p['capture_runtime']['evidence_sha256'] or '')))
+runtime_ok=capture_ok=='1' and p['capture_runtime']==p['capture_runtime_end'] and p['capture_runtime']['evidence_file']==eid+'.capture-runtime.json'
 p.update({'capture_audio_mode':capture_mode or None,'capture_audio_sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'capture_audio_required':capture_required=='true','audio_streams':int(astreams) if astreams.isdigit() else None,'capture_audio_verified':((capture_mode=='playback_dup' and capture_sdk.isdigit() and int(capture_sdk)>=33) or (capture_mode=='output_pcm_sdk31' and capture_sdk=='31' and p['video_streams']==0 and p['audio_codec']=='pcm_s16le' and astreams=='1')) and runtime_ok and capture_required=='true' and astreams.isdigit() and int(astreams)>=1 and status=='usable' and p['capture_audio_end']=={'mode':capture_mode,'sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'required':capture_required=='true','sdk_evidence_file':p['capture_audio_sdk_evidence_file'],'sdk_evidence_sha256':p['capture_audio_sdk_evidence_sha256']}})
 p['earliest_error']={'phase':first_phase,'exit_code':int(first_rc),'stderr':first_stderr[-4000:]} if first_phase else None
 for phase,raw in [('start',started),('end',stopped)]:

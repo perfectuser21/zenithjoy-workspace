@@ -1,3 +1,5 @@
+import {readFileSync as readPolicyFile} from 'node:fs';
+const sdk33Policy=JSON.parse(readPolicyFile(new URL('../runtime/runtime-policy-sdk33.json',import.meta.url),'utf8'));
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,symlinkSync,rmSync} from 'node:fs';
@@ -10,7 +12,7 @@ import {samplingAdmissionEvidence} from '../runtime-receipts.mjs';
 const api=await import('../leadgen-agent-artifacts.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return {};throw error;});
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const vid='7637880891511528896',run='source102',eid=`${run}-v${vid}-qualification-record`;
-const pins={33:['952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d','8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e'],31:['2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258','764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536']};
+const pins={33:[sdk33Policy.client_sha256,sdk33Policy.server_sha256],31:['2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258','764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536']};
 function fixture(t,sdk=33){
  const base=mkdtempSync(join(tmpdir(),'agent-artifacts-')),runDir=join(base,'run'),evidenceRoot=join(base,'evidence');mkdirSync(runDir);mkdirSync(evidenceRoot);t.after(()=>rmSync(base,{recursive:true,force:true}));
  const scope={run,video_id:vid,serial:'NO-DEVICE',profile:'legacy',source_commit:'a'.repeat(40),company_id:'company',company_version:3};

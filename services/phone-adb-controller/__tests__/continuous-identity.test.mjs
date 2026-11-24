@@ -1,3 +1,5 @@
+import {readFileSync as readPolicyFile} from 'node:fs';
+const sdk33Policy=JSON.parse(readPolicyFile(new URL('../runtime/runtime-policy-sdk33.json',import.meta.url),'utf8'));
 import {fixtureAdb} from './adb-existing-route.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +15,7 @@ const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
 const fixtures=new URL('./fixtures/',import.meta.url).pathname;
 const vid='7646309328911907195';
 // 单元测试控制器回执为fake；实机录音验收另核原始audio/UID SHA。
-function fakeBoundaryNativeFields(eid,phase){const prefix=eid+'-playback-'+phase;return ' capture_runtime_client_sha256=952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d capture_runtime_server_sha256=8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+('e'.repeat(64))+' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state=started native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');}
+function fakeBoundaryNativeFields(eid,phase){const prefix=eid+'-playback-'+phase;return ' capture_runtime_client_sha256='+sdk33Policy.client_sha256+' capture_runtime_server_sha256='+sdk33Policy.server_sha256+' capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+('e'.repeat(64))+' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state=started native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');}
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
 function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false,guideDismissIdle=false,guideFixture='real-copy-success-guide-13.xml'}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
