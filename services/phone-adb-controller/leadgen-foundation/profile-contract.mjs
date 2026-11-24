@@ -22,12 +22,6 @@ function declaredHostTools(activities,lightweight){
  need(requirements.every(required=>Array.isArray(required)));
  return [...new Set([...requirements.flat(),...(lightweight?[lightweight101Tool]:[])])].sort();
 }
-function checkerPhasePolicy(profile,workflow,key){
- const policy=profile.leadgen?.checker_policy;
- if(policy===undefined)return undefined;
- need(policy==='workflow_preflight_once'&&workflow==='douyin_video_discovery'&&profile.leadgen.discovery_variant===undefined);
- return key==='preflight'?undefined:'completion_with_inputs';
-}
 export function projectAgentProfile(original,{documents,workflow}){
  const result=structuredClone(original),authority=documents[workflow];need(authority&&result.contract.workflow===workflow);
  const lightweight=lightweight101Entry(result.profile,workflow);
@@ -38,8 +32,6 @@ export function projectAgentProfile(original,{documents,workflow}){
   const spec=result.profile.skill_runtime.activities[key];
   // No duplicated check-ID table. The adapter binds the installed Node identity and per-run provider.
   spec.checker={mode:'agent',timeout_ms:spec.checker.timeout_ms,evidence:{roots:['checker-input','native','receipts','qualification-receipts','collection-evidence-receipts','outreach-receipts'],provider:{command:'@node',entry:'checker-facts-entry.mjs',timeout_ms:120000,description:FACT_TOOL_DESCRIPTION}}};
-  const phasePolicy=checkerPhasePolicy(result.profile,workflow,key);
-  if(phasePolicy)spec.checker.phase_policy=phasePolicy;
   if(workflow==='douyin_video_processing'&&key==='collection')spec.stop_checker={command:'@node',entry:'collection-stop-entry.mjs',timeout_ms:45000};
   spec.allow_empty=!!emptyAllowed(document);
   return{key,order:index+1,budget:structuredClone(document.budget),acceptance,failure:structuredClone(document.failure),runtime};
@@ -62,7 +54,6 @@ export function verifyAgentProfile(document,{documents,workflow}){
   need(a.runtime.executor_kind==='agent'&&a.runtime.protocol==='json-stdio-v1'&&a.runtime.entry===agentEntry);
   const spec=document.profile.skill_runtime.activities[a.key],checker=spec?.checker;
   need(spec&&spec.allow_empty===!!emptyAllowed(a.acceptance.document)&&checker?.mode==='agent'&&!('start_checks'in checker)&&!('required_checks'in checker)&&!('entry'in checker)&&!('command'in checker));
-  need(checker.phase_policy===checkerPhasePolicy(document.profile,workflow,a.key));
  }
  return true;
 }

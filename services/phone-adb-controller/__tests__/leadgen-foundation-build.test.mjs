@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFileSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
-import {buildFoundationBundle,LIGHTWEIGHT_101,SINGLE_CHECK_101,WORKFLOWS} from '../leadgen-foundation/build.mjs';import {hash} from '../leadgen-foundation/context.mjs';
+import {buildFoundationBundle,LIGHTWEIGHT_101,SINGLE_CHECK_101,WORKFLOWS,verifySingleCheck101Policy} from '../leadgen-foundation/build.mjs';import {hash} from '../leadgen-foundation/context.mjs';
 import {projectAgentProfile,verifyAgentProfile} from '../leadgen-foundation/profile-contract.mjs';
 const prefix='services/phone-adb-controller/leadgen-foundation',repo=fileURLToPath(new URL('../../../',import.meta.url));
 test('101 single-check profile preserves the same activity contracts and skills',async()=>{
@@ -9,12 +9,13 @@ test('101 single-check profile preserves the same activity contracts and skills'
  const candidate=JSON.parse(fs.readFileSync(path.join(repo,SINGLE_CHECK_101.profilePath),'utf8'));
  const workflow=WORKFLOWS['101'];
  assert.equal(verifyAgentProfile(candidate,{documents,workflow}),true);
+ verifySingleCheck101Policy(candidate.profile);
  assert.deepEqual(candidate.contract,current.contract);
  assert.deepEqual(candidate.profile.files,current.profile.files);
  assert.equal(candidate.profile.skill_runtime.activities.preflight.checker.phase_policy,undefined);
  for(const key of ['collect_videos','cleanup'])assert.equal(candidate.profile.skill_runtime.activities[key].checker.phase_policy,'completion_with_inputs');
  delete candidate.profile.skill_runtime.activities.cleanup.checker.phase_policy;
- assert.throws(()=>verifyAgentProfile(candidate,{documents,workflow}),/PROFILE_CONTRACT/);
+ assert.throws(()=>verifySingleCheck101Policy(candidate.profile),/BUILD_SINGLE_CHECK_PROFILE/);
 });
 test('four published profiles freeze source closure and central skills without an instance identity',()=>{
  const lock=JSON.parse(fs.readFileSync(path.join(repo,'.skills-source.json')));

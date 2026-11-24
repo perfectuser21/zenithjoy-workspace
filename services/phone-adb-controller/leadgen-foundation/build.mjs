@@ -21,6 +21,11 @@ export const SINGLE_CHECK_101={
  definitionPath: PREFIX+'/sources/101-single-check.json',
  profilePath: PREFIX+'/profiles/101-single-check.json',
 };
+export function verifySingleCheck101Policy(profile){
+ need(profile.leadgen.checker_policy==='workflow_preflight_once'&&profile.leadgen.discovery_variant===undefined,'BUILD_SINGLE_CHECK_PROFILE');
+ const phases=Object.fromEntries(Object.entries(profile.skill_runtime.activities).map(([key,activity])=>[key,activity.checker?.phase_policy??null]));
+ need(canonical(phases)===canonical({preflight:null,collect_videos:'completion_with_inputs',cleanup:'completion_with_inputs'}),'BUILD_SINGLE_CHECK_PROFILE');
+}
 export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot,lightweight101=false,singleCheck101=false}){
  repoIdentity(repoRoot,REPO);repoIdentity(skillsRepo,SKILLS);
  need(git(repoRoot,['status','--porcelain','--untracked-files=normal']).length===0,'BUILD_DIRTY');
@@ -45,6 +50,7 @@ export function buildFoundationBundle({repoRoot,skillsRepo,outputRoot,lightweigh
   need(document.schema_version===1&&document.contract.workflow===key&&profile.leadgen.workflow===workflow&&profile.leadgen.method_repository===SKILLS,'BUILD_PROFILE');
   if(independent)need((lightweight101?profile.leadgen.discovery_variant==='lightweight-host-script-v1':profile.leadgen.checker_policy==='workflow_preflight_once')
     &&canonical(document.contract.activities.map(a=>a.key))===canonical(independent.activities.map(a=>a.key)),'BUILD_LIGHTWEIGHT_PROFILE');
+  if(singleCheck101)verifySingleCheck101Policy(profile);
   const lock=JSON.parse(read(repoRoot,profileRevision,'.skills-source.json'));need(lock.version===1&&lock.repository===SKILLS&&lock.profile==='zenithjoy'&&/^[a-f0-9]{40}$/.test(lock.revision),'BUILD_SKILL_LOCK');
   const catalog=JSON.parse(read(skillsRepo,lock.revision,'distribution/catalog.json'));need(catalog.version===1&&Array.isArray(catalog.profiles?.zenithjoy?.files),'BUILD_SKILL_CATALOG');
   need(profile.leadgen.method_revision===lock.revision,'BUILD_METHOD_UNREGISTERED');
