@@ -10,14 +10,15 @@ function fixed(root,revision,p){
  try{return execFileSync('git',['--no-replace-objects','-C',root,'show',revision+':'+p],{encoding:'utf8',maxBuffer:1024*1024,stdio:['ignore','pipe','pipe']});}catch{throw Error('FOUNDATION_HOST_FIXED_SOURCE');}
 }
 /** Deployment dependencies are independently pinned; they never replace a business method binding. */
-export function partitionFoundationBindings({document,repoRoot,read,resolveActivity}){
+export function partitionFoundationBindings({document,repoRoot,read,resolveActivity,historical=false}){
  const own=document.activities.filter(a=>!a.ref),parts=new Map(),host=[],deploymentLocks=[];
  for(const a of own){
   const bindings=a.implementation_bindings??[];
   need(bindings.every(b=>b.purpose===undefined||['foundation_host','deployment_lock'].includes(b.purpose)),'PURPOSE');
   parts.set(a.key,bindings.filter(b=>b.purpose===undefined));
-  host.push(...bindings.filter(b=>b.purpose==='foundation_host'));
-  deploymentLocks.push(...bindings.filter(b=>b.purpose==='deployment_lock'));
+  const isHistoricalLock=b=>historical&&b.purpose==='foundation_host'&&b.path===deploymentLock&&b.revision==='contract';
+  host.push(...bindings.filter(b=>b.purpose==='foundation_host'&&!isHistoricalLock(b)));
+  deploymentLocks.push(...bindings.filter(b=>b.purpose==='deployment_lock'||isHistoricalLock(b)));
  }
  // The dependency descriptor follows the release commit; archived host files stay on their original profile.
  need(deploymentLocks.length<=1&&deploymentLocks.every(b=>b.kind==='code'&&b.repo===repo

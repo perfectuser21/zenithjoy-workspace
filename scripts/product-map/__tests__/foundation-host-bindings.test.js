@@ -36,6 +36,7 @@ test('独立运行依赖随候选提交冻结，保持原业务方法和历史�
  bindings.pop();
  binding.purpose='foundation_host';
  assert.throws(check,/FOUNDATION_HOST_COMPONENT_SET/);
+ assert.deepEqual(partitionFoundationBindings({document:f.document,repoRoot:f.root,read:f.read,historical:true}).get('work'),f.business);
  binding.purpose='deployment_lock';
  binding.path='unrelated.mjs';
  assert.throws(check,/FOUNDATION_HOST_DEPLOYMENT_LOCK/);

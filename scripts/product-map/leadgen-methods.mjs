@@ -38,11 +38,11 @@ function skill(read,path,name){
 }
 
 /** Offline source declaration only. No Activity executor, phone or fallback call. */
-export function collectMethods(root,{read=reader(root)}={}){
+export function collectMethods(root,{read=reader(root),historical=false}={}){
   const docs=Object.fromEntries(owners.map(key=>[key,parse(read('product-map/contracts/'+key+'.yaml').toString())]));
   const activities={},workflows={};
   for(let i=0;i<owners.length;i++){
-    const owner=owners[i],doc=docs[owner],methodBindings=partitionFoundationBindings({document:doc,repoRoot:root,read,resolveActivity:ref=>{const [owner,key]=ref.split('.');return docs[owner]?.activities.find(a=>a.key===key);}});
+    const owner=owners[i],doc=docs[owner],methodBindings=partitionFoundationBindings({document:doc,repoRoot:root,read,historical,resolveActivity:ref=>{const [owner,key]=ref.split('.');return docs[owner]?.activities.find(a=>a.key===key);}});
     if(doc.contract_key!==owner)fail('ACTIVITY_OWNER_INVALID',owner);
     const actual=doc.activities.map(a=>a.ref||owner+'.'+a.key);
     if(!same(actual,slots[i]))fail('ACTIVITY_SLOT_LAYOUT_MISMATCH',owner);
@@ -150,7 +150,7 @@ export function checkMethods(root,{base=null,skillSource}={}){
       return readImplementationSource(root,base,path,{source:skillSource});
     };
     const bytes=optional(readBase,LOCK_PATH);let before=null;
-    if(bytes){before=JSON.parse(bytes);const baseActual=collectMethods(root,{read:readBase}),strippedBase=structuredClone(before);for(const a of Object.values(strippedBase.activities??{})){delete a.code_compatibility;delete a.method_compatibility;}if(!same(baseActual,strippedBase))fail('BASE_METHOD_LOCK_DRIFT');}
+    if(bytes){before=JSON.parse(bytes);const baseActual=collectMethods(root,{read:readBase,historical:true}),strippedBase=structuredClone(before);for(const a of Object.values(strippedBase.activities??{})){delete a.code_compatibility;delete a.method_compatibility;}if(!same(baseActual,strippedBase))fail('BASE_METHOD_LOCK_DRIFT');}
     evolution(lock,before,readBase);
   }
   return {status:'PASS',activities:Object.keys(actual.activities).length,workflow_slots:Object.values(actual.workflows).reduce((n,w)=>n+w.activities.length,0),base,execution_verified:false};
