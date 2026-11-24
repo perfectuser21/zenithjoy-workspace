@@ -88,6 +88,9 @@ test('真实PG：103 Agent 提交丢失回执后只读回，双并发和旧评�
   agentScoreIdentity:identity,freezeCompanyConfig:async()=>f.company,
   judgeComment:async()=>{hiddenModelCalls++;throw Error('unexpected model effect');}};
  const base={line:f.scope.line,run:f.scope.run,ids:[f.id],sources:{[f.id]:'source102'},committed_partial_ids:[f.id],limit:1};
+ const selection={op:'score_committed_scope',line:base.line,run:base.run,limit:1,source_run:null,committed_origin_run:'source102'};
+ assert.deepEqual((await queueRequest(a.pool,selection,deps)).ids,[f.id]);
+ await assert.rejects(queueRequest(a.pool,{...selection,committed_origin_run:'other102'},deps),/COMMITTED_PARTIAL_FROZEN_CONFIG_INVALID/);
  const original=await queueRequest(a.pool,{...base,op:'score_input'},deps);
  assert.equal(original.comment_body,'在哪里报名');assert.equal(original.video_transcript,'今天是人工智能报名课程。');
  const submit={...base,op:'score_submit',input_sha256:original.input_sha256,score:{grade:'A',policy_evidence:{
@@ -99,6 +102,7 @@ test('真实PG：103 Agent 提交丢失回执后只读回，双并发和旧评�
  assert.equal(results.filter(x=>x.status==='fulfilled'&&x.value.already_committed===true).length,1);
  const recovered=await queueRequest(a.pool,{...base,op:'score_recovery'},deps);
  assert.equal(recovered.scored,1);assert.equal(recovered.verified,true);
+ assert.deepEqual((await queueRequest(a.pool,selection,deps)).ids,[]);
  const read=await f.readRows();
  assert.equal(read.comments[0].judgment_config.model_audit.provider,'codex');assert.equal(read.comments[0].judgment_config.model_audit.response_id,undefined);
  assert.equal(f.calls.filter(sql=>sql.includes('SET relevance=')).length,1);
