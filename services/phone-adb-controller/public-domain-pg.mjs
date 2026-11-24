@@ -68,3 +68,26 @@ export function loadPublicDomainPg({runtimeRoot,input,env=process.env}){
  const {Pool}=loadPreflightPg({runtimeRoot,frozen:{...frozen,preflight_pg:frozen.public_pg}});
  return env.DATABASE_URL?new Pool({connectionString:env.DATABASE_URL}):new Pool({host:env.PGHOST,port:Number(env.PGPORT||5432),user:env.PGUSER,password:env.PGPASSWORD,database:env.PGDATABASE||'zenithjoy'});
 }
+
+
+// Derive the scoring action from the same frozen task already verified by RPC.
+// The caller supplies the verdict only. It cannot select another origin or action.
+export function standaloneAgentScoringContext({runtimeRoot,input}){
+ const request=input.request;
+ if(input.kind!=='queue'||!['score_committed_scope','score_input','score_submit'].includes(request?.op))return {};
+ const {p,scope}=frozenDomain(readFrozen(dirname(runtimeRoot)));
+ if(scope?.workflow_key!=='douyin_comment_scoring'||request.run!==scope.run_tag
+  ||request.line!==scope.line||request.source_run!==null||request.limit!==1)fail();
+ if(request.op==='score_committed_scope'){
+  if(request.committed_origin_run!==scope.source_run)fail();
+ }else{
+  const sources=request.sources;
+  if(!sources||typeof sources!=='object'||Array.isArray(sources)||Object.keys(sources).length!==1
+   ||Object.values(sources)[0]!==scope.source_run)fail();
+ }
+ return {
+  agentScoreIdentity:{task_id:p.task_id,run_id:p.run_id,activity_key:'scoring',
+   action_id:'standalone-scoring:'+p.run_id,attempt:1,tool_action:'score_submit'},
+  execution:{...input.source.execution,task_id:p.task_id},
+ };
+}

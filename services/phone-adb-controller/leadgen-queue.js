@@ -71,6 +71,12 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
+  if(op==='score_committed_scope'){
+    if(sourceRun!==null||deps.agentScoreIdentity?.run_id!==run||deps.execution?.task_id!==deps.agentScoreIdentity?.task_id
+      ||deps.execution?.line!==input.line||!deps.agentScoreIdentity?.task_id||limit!==1)throw Error('AGENT_SCORE_AUTHORITY_REQUIRED');
+    const rows=await committedPartial.eligibleOrigin(pool,{lineKey,run,origin:input.committed_origin_run});
+    return {line:lineKey,run,source_run:null,ids:rows.map(row=>row.id),sources:Object.fromEntries(rows.map(row=>[row.id,row.harvest_batch]))};
+  }
   const partialIds=committedPartial.explicitIds(input,sourceRun);
   if(partialIds&&input.op!=='score_scope'&&input.ids===undefined)input={...input,ids:partialIds};
   if(op==='score_input'||op==='score_submit'){

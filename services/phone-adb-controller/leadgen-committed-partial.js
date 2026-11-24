@@ -77,6 +77,20 @@ async function admittedRows(pool,{lineKey,run,ids}){
  }
  return out;
 }
+async function eligibleOrigin(pool,{lineKey,run,origin}){
+ if(!RUN.test(origin||'')||origin===run)fail('SOURCE_SCOPE');
+ const target=await readFrozen(pool,lineKey,run),source=await readFrozen(pool,lineKey,origin);
+ if(!samePolicy(source.snapshot,target.snapshot))fail('POLICY_MISMATCH');
+ const rows=(await pool.query(`SELECT id FROM zenithjoy.leadgen_comments
+  WHERE line_key=$1 AND harvest_batch=$2 AND process_status='待分拣'
+    AND relevance IS NULL AND intent_grade IS NULL AND judgment_reason IS NULL AND judgment_config IS NULL
+    AND recipient_evidence->>'status'='verified' AND recipient_evidence ? 'company_binding'
+  ORDER BY collected_at,id LIMIT 1`,[lineKey,origin])).rows;
+ if(!rows.length)return [];
+ const admitted=await admittedRows(pool,{lineKey,run,ids:[rows[0].id]});
+ if(admitted.length!==1||admitted[0].harvest_batch!==origin)fail('SOURCE_CHANGED');
+ return admitted;
+}
 const identityKeys=['id','line_key','harvest_batch','source_video','source_video_url','douyin_id','nickname','comment_body','profile_url','recipient_evidence'];
 function contains(rows,row){return Boolean(row&&rows.some(a=>identityKeys.every(k=>isDeepStrictEqual(a[k],row[k]))));}
 async function certify(pool,input,{lineKey}){
@@ -190,4 +204,4 @@ async function prepareNewCommentMetadata(comment,owned,{lineKey,run,binding,veri
  return {...comment,accountType:original.account_type,profileIp:original.profile_ip,region:original.region};
 }
 
-module.exports={explicitIds,readFrozen,admittedRows,contains,certify,certificationReadback,metadataSnapshot,metadataSnapshotHash,completeMetadata,metadataReadback,verifyCompletedMetadata,validateNewCommentMetadata,prepareNewCommentMetadata};
+module.exports={explicitIds,readFrozen,admittedRows,eligibleOrigin,contains,certify,certificationReadback,metadataSnapshot,metadataSnapshotHash,completeMetadata,metadataReadback,verifyCompletedMetadata,validateNewCommentMetadata,prepareNewCommentMetadata};

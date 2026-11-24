@@ -61,6 +61,18 @@ function scoreProposal(f){
    matched_rule:audience.fields.人群描述,comment_signal:f.row.comment_body.slice(0,4),
    video_signal:f.video.title.slice(0,4),exclusion_rule:null,reason:'评论者提出与画像一致的需求'}};
 }
+test('103 Codex worker selects only a certified comment from the frozen origin before scoring',async()=>{
+ const f=agentScoreFixture(),request={op:'score_committed_scope',line,run:agentIdentity.run_id,
+  source_run:null,limit:1,committed_origin_run:batch};
+ assert.deepEqual(await queueRequest(f.pool,request,f.deps),{
+  line,run:agentIdentity.run_id,source_run:null,ids:[id],sources:{[id]:batch},
+ });
+ await assert.rejects(queueRequest(f.pool,request),/AGENT_SCORE_AUTHORITY_REQUIRED/);
+ await assert.rejects(queueRequest(f.pool,{...request,committed_origin_run:'other-origin'},f.deps),/COMMITTED_PARTIAL_FROZEN_CONFIG_INVALID/);
+ f.row.recipient_evidence.status='unverified';
+ await assert.rejects(queueRequest(f.pool,request,f.deps),/COMMITTED_PARTIAL_RECIPIENT_UNVERIFIED/);
+ assert.equal(f.updates.length,0);assert.equal(f.modelCalls,0);
+});
 test('103 Agent reads original comment, same-video title and transcript with frozen policy without model or writes',async()=>{
  const f=agentScoreFixture();
  const input=await queueRequest(f.pool,f.input('score_input'),f.deps);

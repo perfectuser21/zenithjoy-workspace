@@ -33,7 +33,7 @@ test('103 从固定批次创建独立工具宿主并收尾，不获取手机锁'
    ipcFactory:async options=>{call=options.call;return {connectionPath:'fixture',close:async()=>({ipc_closed:true})};},
   }});
   assert.deepEqual(await call('inspect',{}),{stage:'103',source_run:'committed-source',
-   business_operations:['score_scope','score','score_readback','mark_leads','mark_readback','bridge_outreach','bridge_readback']});
+   business_operations:['score_scope','score_input','score_submit','score_readback','mark_leads','mark_readback','bridge_outreach','bridge_readback']});
   assert.equal(await runtime.readEvidence(),null);
   assert.deepEqual(await runtime.close(),{task_id:task,run_id:identity.run_id,local_released:true,central_released:true,native_return_unknown:false});
  } finally {rmSync(root,{recursive:true,force:true});}
