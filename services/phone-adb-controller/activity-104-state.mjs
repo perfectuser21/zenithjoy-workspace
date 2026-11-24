@@ -47,7 +47,7 @@ function scopeOf(c,s){
  for(const k of ['record_id','comment_id','lead_id','target_douyin_id','profile_url','source_102_run','source_103_run'])need(typeof s?.[k]==='string'&&s[k],'LEAD_SCOPE');
  need(canonical(s)===canonical(c.verification?.['104']),'LEAD_SCOPE_CHANGED');return t;
 }
-async function originalRows(db,c,s,{lock=false}={}){
+async function originalRows(db,c,s,{lock=false,directRecord}={}){
  scopeOf(c,s);
  const identity=(await db.query('SELECT current_database() AS db')).rows[0];need(identity?.db==='zenithjoy','LEAD_DATABASE');
  const profiles=(await db.query('SELECT company_id,tenant_id,config_version,runtime_config FROM zenithjoy.tenant_company_profiles WHERE company_id=$1',[c.company_id])).rows;
@@ -55,7 +55,15 @@ async function originalRows(db,c,s,{lock=false}={}){
  const outboxes=(await db.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND comment_id=$2 AND lead_id=$3 AND feishu_record_id=$4 AND state='confirmed' AND qualification_status='passed'"+(lock?' FOR SHARE':''),[c.line,s.comment_id,s.lead_id,s.record_id])).rows;
  need(outboxes.length===1,'LEAD_OUTBOX_UNIQUE');const o=outboxes[0],p=o.payload,q=p?.qualification;
  need(bridgeHash(p)===o.payload_sha256&&p.line_key===c.line&&p.lead_id===s.lead_id&&p.comment_id===s.comment_id&&p.target_douyin_id===s.target_douyin_id&&p.profile_url===s.profile_url&&p.comment_run===s.source_102_run&&p.scoring_run===s.source_103_run,'LEAD_OUTBOX_SCOPE');
- need(o.line_key===c.line&&o.comment_id===s.comment_id&&o.lead_id===s.lead_id&&o.feishu_record_id===s.record_id&&o.state==='confirmed'&&o.qualification_status==='passed'&&typeof p.run==='string'&&p.run.length>0&&o.run_tag===p.run&&o.source_run===p.source_run&&p.source_run===s.source_102_run,'LEAD_OUTBOX_LINEAGE');
+ need(o.line_key===c.line&&o.comment_id===s.comment_id&&o.lead_id===s.lead_id&&o.feishu_record_id===s.record_id&&o.state==='confirmed'&&o.qualification_status==='passed'&&typeof p.run==='string'&&p.run.length>0&&o.run_tag===p.run&&o.source_run===p.source_run,'LEAD_OUTBOX_LINEAGE');
+ const exactSource=p.source_run===s.source_102_run;
+ const partialSource=p.source_run===null&&Array.isArray(p.committed_partial_ids)&&p.committed_partial_ids.length===1&&p.committed_partial_ids[0]===s.comment_id;
+ need(exactSource||partialSource,'LEAD_OUTBOX_LINEAGE');
+ if(directRecord){
+  need(o.fields&&Object.keys(o.fields).length>0&&o.fields_sha256===bridgeHash(o.fields),'LEAD_ORDER_SOURCE_FIELDS');
+  const stable=Object.fromEntries(Object.entries(o.fields).filter(([key])=>!['状态','发送状态'].includes(key)));
+  need(equal(directRecord,stable)&&text(directRecord.fields?.['合规核验状态'])===`[103 bridge:${o.id}:${o.payload_sha256}]`,'LEAD_ORDER_SOURCE_FIELDS');
+ }
  need(p.lead_identity?.id===s.lead_id&&p.lead_identity.line_key===c.line&&p.lead_identity.douyin_id===s.target_douyin_id,'LEAD_OUTBOX_LEAD_IDENTITY');
  need(q?.status==='passed'&&q.company_id===c.company_id&&q.tenant_id===c.tenant_id&&Number(q.company_version)===c.verification.policy_version&&q.policy_id===c.verification.policy_id,'LEAD_OUTBOX_COMPANY');
  const rows=(await db.query('SELECT id,line_key,douyin_id,profile_url,status,send_status,reached_at,script_version,feishu_record_id FROM zenithjoy.leadgen_leads WHERE id=$1 AND line_key=$2'+(lock?' FOR UPDATE':''),[s.lead_id,c.line])).rows;
@@ -85,19 +93,42 @@ function terminalFields(c,s,j,row,native){
 const same=(lead,f)=>Object.entries(f).every(([k,v])=>k==='reached_at'?lead[k]!=null&&new Date(lead[k]).toISOString()===v:lead[k]===v);
 /** Original write_back operation calls this only after its terminal original-order GET. */
 export async function syncLeadResult({pool,context:c,scope:s,journal,record,native}){
- const fields=terminalFields(c,s,journal,record,native),db=await pool.connect();let released=false;
+ return persistLeadResult({pool,context:c,scope:s,record,fields:terminalFields(c,s,journal,record,native)});
+}
+
+async function persistLeadResult({pool,context:c,scope:s,record,fields,directRecord,dryRun=false}){
+ const db=await pool.connect();let released=false;
  try{
-  await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='10000ms'");await db.query("SET LOCAL lock_timeout='5000ms'");
-  const before=await originalRows(db,c,s,{lock:true});let changed=false;
+  await db.query(dryRun?'BEGIN READ ONLY':'BEGIN');await db.query("SET LOCAL statement_timeout='10000ms'");await db.query("SET LOCAL lock_timeout='5000ms'");
+  const before=await originalRows(db,c,s,{lock:!dryRun,directRecord});let changed=false;
   if(!same(before.lead,fields)){
    need(before.lead.status==='待触达'&&before.lead.send_status==='未发送'&&before.lead.reached_at==null&&before.lead.script_version==null,'LEAD_RESULT_CONFLICT');
+   if(dryRun){await db.query('ROLLBACK');return {...before,changed:false};}
    const r=await db.query('UPDATE zenithjoy.leadgen_leads SET status=$3,send_status=$4,reached_at=$5,script_version=$6,feishu_record_id=$7,updated_at=now() WHERE id=$1 AND line_key=$2 RETURNING id',[s.lead_id,c.line,fields.status,fields.send_status,fields.reached_at,fields.script_version,fields.feishu_record_id]);
    need(r.rowCount===1,'LEAD_UPDATE_COUNT');changed=true;
   }
+  if(dryRun){await db.query('ROLLBACK');return {...before,changed:false};}
   await db.query('COMMIT');
   db.release();released=true;
   // Independent committed read: a lost COMMIT response throws, never causes a blind second write.
   const result=await readLeadResult({pool,context:c,scope:s});need(same(result.lead,fields),'LEAD_COMMITTED_READBACK');
   return {...result,changed,order_fields:{sender_id:c.sender_id,sender_account_label:text(record.fields['实际分发号']),script_id:text(record.fields['话术ID']),script_version:text(record.fields['话术版本'])},delivery_verified:false};
  }catch(e){if(!released)await db.query('ROLLBACK').catch(()=>{});throw e;}finally{if(!released)db.release();}
+}
+
+
+/** Replay only a completed direct-send Task and an independently retrieved terminal order. */
+export async function recoverDirectSentLead({pool,context:c,scope:s,record,originalTask,decisionId,messageSha256,dryRun=false}){
+ const task=scopeOf(c,s),result=originalTask?.result,detail=result?.status_detail,order=detail?.order;
+ need(originalTask?.id===task.task_id&&task.run_id===task.task_id&&originalTask.status==='completed'&&result?.actor==='codex','DIRECT_TASK_AUTHORITY');
+ need(detail?.send_outcome==='sent'&&detail.native_command_calls===1&&detail.prepared_observed===true&&detail.delivery_verified===false,'DIRECT_SEND_RECEIPT');
+ need(order?.order_id===s.record_id&&order.marker==='sent'&&order.own_marker===true&&order.order_status==='已触达'&&order.send_status==='已发送'&&Number.isSafeInteger(order.timestamp)&&order.timestamp>0,'DIRECT_TASK_ORDER');
+ const f=record?.fields;
+ need(record?.record_id===s.record_id&&f&&text(f['状态'])==='已触达'&&text(f['发送状态'])==='已发送'&&f['触达时间']===order.timestamp,'DIRECT_TERMINAL_ORDER');
+ need(text(f['实际分发号'])===`${c.profile}(${c.sender_id})`&&text(f['抖音号'])===s.target_douyin_id&&text(f['主页链接'])===s.profile_url,'DIRECT_ORDER_IDENTITY');
+ need(typeof decisionId==='string'&&decisionId&&text(f['话术ID'])===`session-${decisionId}`&&text(f['话术版本'])==='task-authorized','DIRECT_ORDER_AUTHORIZATION');
+ const marker=c.marker_source||c.source_commit;
+ need(/^[a-f0-9]{64}$/.test(messageSha256)&&hash(text(f['话术内容']))===messageSha256&&text(f['回复结果'])===`[104 sent:${task.run_tag}:${marker}] ${messageSha256} 送达未证`,'DIRECT_ORDER_CONTENT');
+ const fields={status:'已触达',send_status:'已发送',reached_at:new Date(order.timestamp).toISOString(),script_version:'task-authorized',feishu_record_id:s.record_id};
+ return persistLeadResult({pool,context:c,scope:s,record,fields,directRecord:record,dryRun});
 }

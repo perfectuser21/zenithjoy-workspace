@@ -103,3 +103,46 @@ test('real local scratch transaction persists exact source, replays once, and lo
   const before=JSON.stringify(real);f.native.outcome='unknown';await assert.rejects(syncLeadResult({...f.args,pool}),/LEAD_NATIVE_TERMINAL/);assert.equal(JSON.stringify((await admin.query(`SELECT * FROM ${schema}.leadgen_leads WHERE id=$1`,[f.s.lead_id])).rows[0]),before);
  }finally{if(created)await admin.query('DROP SCHEMA '+schema+' CASCADE');admin.release();await actual.end();}
 });
+test('104 accepts only the exact committed-partial comment as an alternative persisted 102 lineage',async()=>{
+ const f=fixture();
+ f.outbox.source_run=null;
+ f.payload.source_run=null;
+ f.payload.committed_partial_ids=[f.s.comment_id];
+ f.outbox.payload_sha256=hash(canonical(f.payload));
+ assert.equal((await readLeadResult(f.args)).source.source_102_run,f.s.source_102_run);
+ for(const ids of [[],['different'],[f.s.comment_id,'different']]){
+  f.payload.committed_partial_ids=ids;
+  f.outbox.payload_sha256=hash(canonical(f.payload));
+  await assert.rejects(readLeadResult(f.args),/LEAD_OUTBOX_LINEAGE/);
+ }
+});
+test('104 direct-send repair uses the completed original task and verifies the same external order before updating PG once',async()=>{
+ const {recoverDirectSentLead}=await import('../activity-104-state.mjs');
+ const f=fixture();
+ const approval='approval-for-one-order';
+ const terminal=f.record.fields;
+ terminal['话术ID']='session-'+approval;
+ terminal['成功触达']='待确认';
+ terminal['触达时间']=f.native.sent_at_ms;
+ terminal['合规核验状态']=`[103 bridge:${f.outbox.id}:${f.outbox.payload_sha256}]`;
+ f.outbox.fields={'抖音号':f.s.target_douyin_id,'主页链接':f.s.profile_url,'状态':'待触达','发送状态':'未发送'};
+ f.outbox.fields_sha256=hash(canonical(f.outbox.fields));
+
+ const ctx={...f.c,tasks:{104:{task_id:'task104',run_id:'task104',run_tag:'tag104'}}};
+ const originalTask={id:'task104',status:'completed',result:{actor:'codex',status_detail:{
+  order:{order_id:f.s.record_id,marker:'sent',own_marker:true,order_status:'已触达',send_status:'已发送',timestamp:f.native.sent_at_ms},
+  send_outcome:'sent',native_command_calls:1,prepared_observed:true,delivery_verified:false,
+ }}};
+ const args={pool:f.args.pool,context:ctx,scope:f.s,record:f.record,originalTask,decisionId:approval,messageSha256:hash(terminal['话术内容'])};
+ assert.equal((await recoverDirectSentLead({...args,dryRun:true})).lead.send_status,'未发送');
+ assert.equal(f.counts.writes,0);
+ const result=await recoverDirectSentLead(args);
+ assert.equal(result.changed,true);
+ assert.equal((await recoverDirectSentLead(args)).changed,false);
+ assert.equal(f.counts.writes,1);
+ assert.equal(result.lead.send_status,'已发送');
+ const misleading=structuredClone(originalTask);misleading.result.status_detail.native_command_calls=2;
+ await assert.rejects(recoverDirectSentLead({...args,originalTask:misleading}),/DIRECT_/);
+ await assert.rejects(recoverDirectSentLead({...args,messageSha256:'a'.repeat(64)}),/DIRECT_/);
+ assert.equal(f.counts.writes,1);
+});
