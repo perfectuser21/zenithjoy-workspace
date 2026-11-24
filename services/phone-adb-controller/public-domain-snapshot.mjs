@@ -46,9 +46,11 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  if(Object.keys(identity.run_binding.activities).length!==template.activities.length)fail('ACTIVITY_IDENTITY');
  if(!/^[A-Za-z0-9_-]{1,120}$/.test(env.WFR_TAG||'')||!env.P||!env.SERIAL||!env.LEADGEN_LINE||!/^[0-9]+$/.test(env.LEADGEN_LIMIT||''))fail('INPUT');
  // The formal profile's domain configuration is the resource authority, never a request-selected endpoint/account.
+ const standaloneScoring=standalone&&cfg.workflow_key==='douyin_comment_scoring';
  const requiresSource=cfg.workflow_key==='douyin_video_processing'||cfg.workflow_key!=='douyin_video_discovery'&&(env.LEADGEN_SOURCE_RUN!==undefined||input.upstream!==undefined);
  if(requiresSource&&(!/^[A-Za-z0-9_-]{1,120}$/.test(env.LEADGEN_SOURCE_RUN||'')||env.LEADGEN_SOURCE_RUN===env.WFR_TAG))fail('SOURCE_RUN');
- if(requiresSource&&(!input.upstream||!['run_id','task_id'].every(k=>/^[a-f0-9-]{36}$/.test(input.upstream[k]||''))||typeof input.upstream.run_directory!=='string'||!/^[a-f0-9]{64}$/.test(input.upstream.profile_sha256||'')))fail('UPSTREAM');
+ // 独立评分只按派单时已固定的批次及队列原生来源验证消费，不要求另一个宿主的工作目录。
+ if(requiresSource&&(!standaloneScoring||input.upstream!==undefined)&&(!input.upstream||!['run_id','task_id'].every(k=>/^[a-f0-9-]{36}$/.test(input.upstream[k]||''))||typeof input.upstream.run_directory!=='string'||!/^[a-f0-9]{64}$/.test(input.upstream.profile_sha256||'')))fail('UPSTREAM');
  const fixed=cfg.resources;
  const remote=cfg.phone_execution?validatePhoneExecution(cfg.phone_execution,{sourceCommit:template.deployment.source_commit,workflow:cfg.workflow_key,resources:fixed}):null;
  if(remote&&(identity.machine_id!=='us-mac-m4'||cfg.primary_host!=='official-child-v1'||hash(template.phone_execution)!==hash(remote)))fail('PHONE_PEER_WORKER');
