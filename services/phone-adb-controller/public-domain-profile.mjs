@@ -53,10 +53,11 @@ export function buildStandaloneSkillProfile(options={}){
  return buildProfile({...options,primaryHost:'codex-exec-v1'},skill);
 }
 // 新 Mac Studio 手机必须同时满足发布内手机身份及受保护的托管实例。
-export function matchesStandalonePhone(hosts, resources, scope){
+export function matchesStandalonePhone(hosts, resources, scope, workflow='douyin_video_discovery'){
+ if(!['douyin_video_discovery','douyin_video_processing'].includes(workflow))return false;
  const rows=Array.isArray(hosts)?hosts.filter(row=>row.target==='mmv'&&row.profile===resources.profile
   &&row.serial===resources.serial&&row.expected_account===resources.account
-  &&row.workflow_keys?.includes('douyin_video_discovery')):[];
+  &&row.workflow_keys?.includes(workflow)):[];
  if(rows.length!==1||!scope||scope.policy?.schema_version!==2||!scope.policy.instance_id)return false;
  const row=rows[0];
  return ['target','profile','serial','expected_account','evidence_root'].every(key=>scope[key]===row[key])
@@ -81,7 +82,9 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
  const target=({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[resources?.machine];
  need(target&&r.target===target&&resources.line&&resources.profile&&resources.serial&&resources.account,'RESOURCE');
  if(w.payload.key==='douyin_comment_scoring')need(resources.profile==='mmv-scoring'&&resources.serial==='none','SCORING_RESOURCE');
- const registeredStandalonePhone=Boolean(target==='mmv'&&!phoneExecution&&w.payload.key==='douyin_video_discovery'&&standaloneSkill
+ const phoneScope=w.payload.key==='douyin_video_discovery'?f.discovery_phone_scope:f.collection_phone_scope;
+ const registeredStandalonePhone=Boolean(target==='mmv'&&!phoneExecution&&standaloneSkill
+   &&['douyin_video_discovery','douyin_video_processing'].includes(w.payload.key)
    &&!(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922'));
  if(w.payload.key!=='douyin_comment_scoring'&&target==='mmv'&&!phoneExecution&&!registeredStandalonePhone)
   need(resources.profile==='cloud-phone-test'&&resources.serial==='47.100.213.173:10001'&&resources.account==='77980009922','PHONE_RESOURCE');
@@ -94,7 +97,7 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
   const registry='config/collection-phone-hosts.json';
   need(files[registry],'PHONE_REGISTRY');
   const hosts=JSON.parse(file(sourceRoot,registry,files[registry])).hosts;
-  need(matchesStandalonePhone(hosts,resources,f.discovery_phone_scope),'PHONE_RESOURCE');
+  need(matchesStandalonePhone(hosts,resources,phoneScope,w.payload.key),'PHONE_RESOURCE');
  }
  if(target==='xian-m4'&&w.payload.key!=='douyin_comment_scoring'){
   const scope=f[w.payload.key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
