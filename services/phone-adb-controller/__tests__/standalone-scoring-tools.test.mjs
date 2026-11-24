@@ -61,6 +61,9 @@ test('103 空队列、公司漂移或未知配送不能生成完成证据', asyn
   assert.deepEqual(await empty.invoke('score_scope'), { ids: [], sources: {} });
   await assert.rejects(empty.invoke('score_input'), /STANDALONE_SCORING_NO_ELIGIBLE/);
   assert.equal(await empty.readEvidence(), null);
+  const missingSource = fixture({ score_committed_scope: new Error('COMMITTED_PARTIAL_POLICY_MISMATCH') });
+  await assert.rejects(missingSource.invoke('score_scope'), { code:'STANDALONE_SCORING_SOURCE_POLICY_MISMATCH' });
+  assert.equal(await missingSource.readEvidence(), null);
   const wrong = fixture({ company_config: { ...company, version: 35, run_id: scope.run_tag } });
   await assert.rejects(wrong.invoke('score_scope'), /STANDALONE_SCORING_COMPANY/);
   assert.deepEqual(wrong.calls.map(request => request.op), ['company_config']);

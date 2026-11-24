@@ -2,6 +2,14 @@ const runTag = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const operations = ['score_scope','score_input','score_submit','score_readback','mark_leads','mark_readback','bridge_outreach','bridge_readback'];
 const fail = suffix => { throw Object.assign(Error(`STANDALONE_SCORING_${suffix}`), { code: `STANDALONE_SCORING_${suffix}` }); };
+const scoringFailures = new Map([
+  ['AGENT_SCORE_EVIDENCE_INVALID', 'SCORE_EVIDENCE_INVALID'],
+  ['AGENT_SCORE_INPUT_CHANGED', 'SCORE_INPUT_CHANGED'],
+  ['AGENT_SCORE_TRANSCRIPT_REQUIRED', 'SOURCE_TRANSCRIPT_MISSING'],
+  ['COMMITTED_PARTIAL_FROZEN_CONFIG_INVALID', 'SOURCE_CONFIG_INVALID'],
+  ['COMMITTED_PARTIAL_POLICY_MISMATCH', 'SOURCE_POLICY_MISMATCH'],
+  ['COMMITTED_PARTIAL_RECIPIENT_UNVERIFIED', 'SOURCE_RECIPIENT_UNVERIFIED'],
+]);
 const idsMatch = (left, right) => Array.isArray(left) && left.length === right.length && left.every((id, index) => id === right[index]);
 const validIds = ids => Array.isArray(ids) && ids.length <= 1 && ids.every(id => typeof id === 'string' && uuid.test(id));
 
@@ -19,7 +27,14 @@ export function createStandaloneScoringTools({ scope, rpc, assertAuthority }) {
 
   async function queue(op, fields = {}) {
     await assertAuthority();
-    const response = await rpc({ kind:'queue', request:{ op, line, run, source_run:null, limit:1, ...fields } });
+    let response;
+    try {
+      response = await rpc({ kind:'queue', request:{ op, line, run, source_run:null, limit:1, ...fields } });
+    } catch (error) {
+      const reason = scoringFailures.get(error?.message);
+      if (reason) fail(reason);
+      throw error;
+    }
     await assertAuthority();
     if (response?.ok !== true || !response.result || typeof response.result !== 'object') fail('BUSINESS_RECEIPT');
     return response.result;
