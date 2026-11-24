@@ -13,15 +13,17 @@ import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
 import {execInput,createRpc,safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {createStandaloneSkillTools} from './standalone-skill-tools.mjs';
 import {createStandaloneScoringTools} from './standalone-scoring-tools.mjs';
+import {createStandaloneCollectionTools} from './standalone-collection-tools.mjs';
+import {createStandaloneCommentObserver} from './standalone-comment-observer.mjs';
 import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
 export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput}){
  const fixed=frozen.agent_input;
- return async function invoke({command,args,profile,owner}){
+ return async function invoke({command,args,profile,owner,playback}){
   if(profile!==fixed.profile||owner!==fixed.run_tag)fail('SCOPE');
   const call=async(op,values=[])=>{
-   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:environment,timeoutMs:Math.min(360000,(frozen.standalone_skill?.cleanup_deadline_ms??Date.now()+360000)-Date.now())});
+   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,(frozen.standalone_skill?.cleanup_deadline_ms??Date.now()+360000)-Date.now())});
    if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code,diagnostic:{stdout:safeExecutionDiagnostic(result.stdout,environment).slice(-4000),stderr:safeExecutionDiagnostic(result.stderr,environment).slice(-4000)}});return result;
   };
   if(command==='open-search-card'){
@@ -37,7 +39,7 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
   const result=await call(command,args);
   if(command==='account-current'){
    const accounts=[...result.stdout.matchAll(/^douyin_id=(.+)$/gm)].map(m=>m[1]);
-   if(accounts.length!==1||accounts[0]!==frozen.discovery_phone_scope?.expected_account)fail('ACCOUNT');
+   if(accounts.length!==1||accounts[0]!==(frozen.discovery_phone_scope??frozen.collection_phone_scope)?.expected_account)fail('ACCOUNT');
   }
   return result;
  };
@@ -105,14 +107,16 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
  const dir=realpathSync(runDirectory),root=join(dir,'runtime'),frozen=readFrozen(dir),scope=standaloneScope(frozen),identity=frozen.standalone_skill;
  if(dir!==resolve(runDirectory)||realpathSync(root)!==root)fail('DIRECTORY');
  if(scope.workflow_key==='douyin_comment_scoring')return startStandaloneScoringRuntime({dir,root,frozen,scope,identity,environment,dependencies});
- if(scope.workflow_key!=='douyin_video_discovery')fail('DIRECTORY');
+ const collection=scope.workflow_key==='douyin_video_processing';
+ if(!collection&&scope.workflow_key!=='douyin_video_discovery')fail('DIRECTORY');
+ const phoneScope=collection?frozen.collection_phone_scope:frozen.discovery_phone_scope;
  const env={...environment,WF_HOME:root,WF_DEPLOYMENT_ROOT:root,WFR_RUN_DIR:dir,WF_BRAIN_TASK_ID:identity.task_id,WFR_RUN_ID:identity.run_id,WFR_TAG:scope.run_tag,WFR_ATTEMPT:'a1',P:scope.profile,SERIAL:scope.serial,LEADGEN_LINE:scope.line,LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:scope.workflow_key,
-  WF_RUN_START_TS:String(scope.run_start_ts),WF_RUN_MAX_SECONDS:String(scope.run_max_seconds),DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),ZJ_ADB_HOST_CONFIG:frozen.discovery_phone_scope.policy_binding.policy_path,ADB_SERVER_SOCKET:frozen.discovery_phone_scope.policy.endpoint,DOUYIN_ADB_PORT:String(frozen.discovery_phone_scope.policy.port??frozen.discovery_phone_scope.policy.endpoint.split(':').at(-1)),LEADGEN_MMV_DEVICE_RUNTIME:'1',ZJ_EXTERNAL_LEDGER:join(dir,'external-interactions.jsonl')};
+  WF_RUN_START_TS:String(scope.run_start_ts),WF_RUN_MAX_SECONDS:String(scope.run_max_seconds),DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),ZJ_ADB_HOST_CONFIG:phoneScope.policy_binding.policy_path,ADB_SERVER_SOCKET:phoneScope.policy.endpoint,DOUYIN_ADB_PORT:String(phoneScope.policy.port??phoneScope.policy.endpoint.split(':').at(-1)),LEADGEN_MMV_DEVICE_RUNTIME:'1',ZJ_EXTERNAL_LEDGER:join(dir,'external-interactions.jsonl')};
  if(env.BRAIN_INTERNAL_TOKEN!==process.env.BRAIN_INTERNAL_TOKEN)fail('CREDENTIAL_CONTEXT');
  await (dependencies.bootstrap??verifyStandaloneBootstrap)({frozen,scope});
  if(present(join(dir,'standalone-host-started.json')))fail('HOST_ALREADY_STARTED');
  const hostPath=claimStandaloneHost({runId:identity.run_id,runDirectory:dir,frozen,registry:dependencies.hostRegistry}),unknownPath=hostPath.replace(/\.json$/,'.unknown.json');
- let lease,leaf,ipc,local=false,centralHeld=false,centralAttempted=false,unknown=false,revoked=false,revocationFailed=false,closing=false,closingPromise,cleanupActive=false;
+ let lease,leaf,ipc,collectionTools,local=false,centralHeld=false,centralAttempted=false,unknown=false,revoked=false,revocationFailed=false,closing=false,closingPromise,cleanupActive=false;
  const execute=dependencies.execute??execInput;
  // 只准专用测试注入故障；CLI不读取任何此类环境开关。默认失败立即终止专用宿主。
  const revoke=reason=>{
@@ -153,7 +157,8 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    const failed=(reason,error)=>{revoke(reason);firstError??=error;};
    if(ipc)try{await ipc.close();}catch(error){failed('IPC_CLOSE_FAILED',error);}
    if(leafUnknown())revoke('LEAF_UNKNOWN');
-   if(local&&!unknown){cleanupActive=true;try{await guard({cleanup:true});desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});}catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}}
+   if(local&&!unknown){cleanupActive=true;try{await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});}catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}}
+   if(collectionTools&&!unknown)try{await guard({cleanup:true});await collectionTools.releaseOwned();}catch(error){failed('COLLECTION_RELEASE_UNKNOWN',error);}
    if(leaf)try{leaves=await leaf.seal();if(!leaves.requests_returned&&!leaves.empty_requests_returned)revoke('LEAF_SEAL_UNKNOWN');}catch(error){failed('LEAF_SEAL_FAILED',error);}
    if(local&&!unknown)try{
     await controller('lock-release-exact',[scope.run_tag]);const status=await controller('lock-status'),states=status.stdout.split('\n').filter(s=>s.startsWith('lock='));if(states.length!==1||states[0]!=='lock=free')fail('RELEASE_READBACK');local=false;
@@ -176,21 +181,42 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   local=true;const acquired=await controller('lock-acquire-new',[scope.run_tag]),acquiredStates=acquired.stdout.split('\n').filter(s=>s.startsWith('lock='));
   if(acquiredStates.length!==1||acquiredStates[0]!==`lock=acquired owner=${scope.run_tag}`)fail('ACQUIRE_READBACK');
   await guard();
-  leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({directory:join(dir,'standalone-leaves'),policy:frozen.discovery_phone_scope.policy,serial:scope.serial,deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,env,assertAdmission:()=>guard({cleanup:cleanupActive})});Object.assign(env,leaf.env);
+  leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({directory:join(dir,'standalone-leaves'),policy:phoneScope.policy,serial:scope.serial,deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,env,assertAdmission:()=>guard({cleanup:cleanupActive})});Object.assign(env,leaf.env);
   const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
-  const call=createStandaloneSkillTools({frozen,assertAuthority:()=>guard(),phone:createStandalonePhoneProvider({root,environment:env,frozen,execute}),rpc});
+  const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute}),assertAuthority=()=>guard();
+  const phone=collection?async input=>{
+    try{return await invokePhone(input);}
+    catch(error){if(error?.code==='STANDALONE_NATIVE_COMMAND'||leafUnknown())revoke('TOOL_RESULT_UNKNOWN');throw error;}
+  }:invokePhone;
+  if(collection)collectionTools=createStandaloneCollectionTools({scope,assertAuthority,phone,rpc,evidenceRoot:phoneScope.evidence_root,
+    commentObserver:createStandaloneCommentObserver({scope,evidenceRoot:phoneScope.evidence_root,root,frozen,phone,execute}),
+    transcribe:async audio=>{
+      const key=env.DASHSCOPE_API_KEY;
+      if(!key)fail('ASR_CREDENTIAL');
+      const {transcribeAudio,ENDPOINT}=createRequire(import.meta.url)('./transcribe-qwen-audio.js');
+      return transcribeAudio(audio,{apiKey:key,httpPost:async(url,body,credential)=>{
+        const remaining=identity.deadline_ms-Date.now();
+        if(url!==ENDPOINT||remaining<1000)fail('ASR_DEADLINE');
+        const response=await fetch(url,{method:'POST',redirect:'error',headers:{
+          Authorization:'Bearer '+credential,'Content-Type':'application/json',
+        },body:JSON.stringify(body),signal:AbortSignal.timeout(Math.min(75000,remaining))});
+        if(!response.ok)fail('ASR_HTTP');
+        return response.json();
+      }});
+    }});
+  const call=collectionTools?.call??createStandaloneSkillTools({frozen,assertAuthority,phone,rpc});
   const ipcDirectory=join(dir,'standalone-ipc');mkdirSync(ipcDirectory,{mode:0o700});
   ipc=await (dependencies.ipcFactory??serveStandaloneSkillTools)({directory:ipcDirectory,call:async(op,input)=>{
    try{const result=await call(op,input);if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}return result;}
    catch(error){
-    const code=error?.code??'',knownRefusal=['STANDALONE_NATIVE_CLOSING','STANDALONE_NATIVE_WORK_DEADLINE'].includes(code)||code.startsWith('STANDALONE_TOOL_');
+    const code=error?.code??'',knownRefusal=['STANDALONE_NATIVE_CLOSING','STANDALONE_NATIVE_WORK_DEADLINE'].includes(code)||code.startsWith('STANDALONE_TOOL_')||code.startsWith('STANDALONE_COLLECTION_');
     // 队列commit未知由工具层冻结新写并只准原video读回；它不证明原生手机结果未知。
     if(leafUnknown()||op==='phone'&&!knownRefusal)revoke('TOOL_RESULT_UNKNOWN');
     try{appendFileSync(join(dir,'standalone-tool-errors.jsonl'),JSON.stringify({operation:op,code:/^[A-Z0-9_]+$/.test(code)?code:'TOOL_FAILED',at:new Date().toISOString(),...(error?.controller_exit_code!==undefined?{controller_exit_code:error.controller_exit_code,diagnostic:error.diagnostic}:{})})+'\n',{mode:0o600});}catch{revoke('TOOL_DIAGNOSTIC_UNKNOWN');}
     throw error;
    }
   }});
-  return {connectionPath:ipc.connectionPath,close};
+  return {connectionPath:ipc.connectionPath,close,...(collectionTools?{readEvidence:collectionTools.readEvidence}:{})};
  }catch(error){
   if(!unknown)revoke('STARTUP_UNKNOWN');await close();throw error;
  }

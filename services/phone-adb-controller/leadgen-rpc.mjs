@@ -115,11 +115,14 @@ export async function handleRpc(input, deps = {}) {
     }
     pool = deps.pool || getPool();
     if (input.kind === 'queue') {
-      if(input.request?.op==='collect_claim'){
-        if(!fixedPool)throw Error('RPC_COLLECTION_CLAIM_AUTHORITY');
+      const collectOp=input.request?.op;
+      if(['collect_claim','qualification_policy','qualification_submit','collect_comment_readback'].includes(collectOp)){
+        if(!fixedPool||!input.source.files.some(file=>file.path==='standalone-collection-tools.mjs'))throw Error('RPC_COLLECTION_CLAIM_AUTHORITY');
         const scope=standaloneCollectionClaimScope({runtimeRoot:root,input});
-        const {claimStandaloneCollectionVideo}=await import('./standalone-collection-tools.mjs');
-        return {ok:true,result:await claimStandaloneCollectionVideo(pool,input.request,scope)};
+        const collection=require('./standalone-collection-tools.mjs');
+        const operation={collect_claim:'claimStandaloneCollectionVideo',qualification_policy:'readStandaloneCollectionPolicy',
+          qualification_submit:'recordStandaloneCollectionQualification',collect_comment_readback:'readStandaloneCollectionComment'}[collectOp];
+        return {ok:true,result:await collection[operation](pool,input.request,scope)};
       }
       const scoring=fixedPool?standaloneAgentScoringContext({runtimeRoot:root,input}):{};
       if(input.request?.op==='score_committed_scope') {
