@@ -11,25 +11,27 @@ function fixed(root,revision,p){
 }
 /** Deployment dependencies are independently pinned; they never replace a business method binding. */
 export function partitionFoundationBindings({document,repoRoot,read,resolveActivity}){
- const own=document.activities.filter(a=>!a.ref),parts=new Map(),host=[];
+ const own=document.activities.filter(a=>!a.ref),parts=new Map(),host=[],deploymentLocks=[];
  for(const a of own){
   const bindings=a.implementation_bindings??[];
-  need(bindings.every(b=>b.purpose===undefined||b.purpose==='foundation_host'),'PURPOSE');
-  parts.set(a.key,bindings.filter(b=>b.purpose===undefined));host.push(...bindings.filter(b=>b.purpose==='foundation_host'));
+  need(bindings.every(b=>b.purpose===undefined||['foundation_host','deployment_lock'].includes(b.purpose)),'PURPOSE');
+  parts.set(a.key,bindings.filter(b=>b.purpose===undefined));
+  host.push(...bindings.filter(b=>b.purpose==='foundation_host'));
+  deploymentLocks.push(...bindings.filter(b=>b.purpose==='deployment_lock'));
  }
+ // The dependency descriptor follows the release commit; archived host files stay on their original profile.
+ need(deploymentLocks.length<=1&&deploymentLocks.every(b=>b.kind==='code'&&b.repo===repo
+  &&b.path===deploymentLock&&b.revision==='contract'
+  &&Object.keys(b).sort().join(',')==='kind,path,purpose,repo,revision'&&read(b.path).length>0),'DEPLOYMENT_LOCK');
  if(!host.length&&document.runtime?.kind!=='commander-foundation-v1')return parts;
  const ref=document.runtime?.profile_ref;need(document.runtime?.kind==='commander-foundation-v1'&&ref?.repo===repo&&/^sha256:[a-f0-9]{64}$/.test(ref.digest??''),'PROFILE');
  const bytes=fixed(repoRoot,ref.revision,ref.path);need('sha256:'+hash(bytes)===ref.digest,'PROFILE_DIGEST');
  const profile=JSON.parse(bytes),p=profile.profile;need(p?.files&&p.skill_runtime?.activities,'PROFILE');
- const deploymentLocks=host.filter(b=>b.path===deploymentLock&&b.revision==='contract');
- need(deploymentLocks.length<=1&&deploymentLocks.every(b=>b.kind==='code'&&b.repo===repo
-  &&Object.keys(b).sort().join(',')==='kind,path,purpose,repo,revision'&&read(b.path).length>0),'DEPLOYMENT_LOCK');
- const archivedHost=host.filter(b=>!deploymentLocks.includes(b));
  const expected=[{kind:'code',repo,path:ref.path,revision:ref.revision,digest:ref.digest},...Object.entries(p.files).map(([path,digest])=>{
   need(safe(path)&&/^[a-f0-9]{64}$/.test(digest),'PROFILE');return {kind:path.startsWith(skillPrefix)?'skill':'code',repo,path,revision:ref.revision,digest:'sha256:'+digest};
  })],wanted=new Set(expected.map(key));
- need(wanted.size===expected.length&&archivedHost.length===wanted.size&&new Set(archivedHost.map(key)).size===archivedHost.length,'COMPONENT_SET');
- for(const b of archivedHost)need(Object.keys(b).sort().join(',')==='digest,kind,path,purpose,repo,revision'&&wanted.has(key(b)),'COMPONENT');
+ need(wanted.size===expected.length&&host.length===wanted.size&&new Set(host.map(key)).size===host.length,'COMPONENT_SET');
+ for(const b of host)need(Object.keys(b).sort().join(',')==='digest,kind,path,purpose,repo,revision'&&wanted.has(key(b)),'COMPONENT');
  const originalLock=JSON.parse(fixed(repoRoot,ref.revision,'.skills-source.json')),currentLock=JSON.parse(read('.skills-source.json'));
  need(['version','repository','revision','profile','loader_sha256'].every(k=>originalLock[k]===currentLock[k])
   &&p.leadgen?.method_repository===originalLock.repository&&p.leadgen?.method_revision===originalLock.revision,'SKILL_ORIGIN');

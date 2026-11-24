@@ -25,7 +25,7 @@ test('purpose cannot hide extra, missing, duplicated or wrongly pinned host sour
 test('独立运行依赖随候选提交冻结，保持原业务方法和历史主机文件集合', async t => {
  const f=fixture(t),{partitionFoundationBindings}=await import(helper);
  const path='services/phone-adb-controller/preflight-pg-lock.json';
- const binding={kind:'code',purpose:'foundation_host',repo:f.host[0].repo,path,revision:'contract'};
+ const binding={kind:'code',purpose:'deployment_lock',repo:f.host[0].repo,path,revision:'contract'};
  const bindings=f.document.activities[0].implementation_bindings;
  bindings.push(binding);
  f.put(path,'固定预检依赖');
@@ -34,8 +34,11 @@ test('独立运行依赖随候选提交冻结，保持原业务方法和历史�
  bindings.push({...binding});
  assert.throws(check,/FOUNDATION_HOST_DEPLOYMENT_LOCK/);
  bindings.pop();
- binding.path='unrelated.mjs';
+ binding.purpose='foundation_host';
  assert.throws(check,/FOUNDATION_HOST_COMPONENT_SET/);
+ binding.purpose='deployment_lock';
+ binding.path='unrelated.mjs';
+ assert.throws(check,/FOUNDATION_HOST_DEPLOYMENT_LOCK/);
 });
 test('host label cannot swallow the business Skill or execute different Skill contents or central origin',async t=>{
  const f=fixture(t),{partitionFoundationBindings}=await import(helper),call=d=>partitionFoundationBindings({document:d,repoRoot:f.root,read:f.read});

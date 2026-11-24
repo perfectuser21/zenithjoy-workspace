@@ -41,10 +41,10 @@
       }
     },
     "douyin_video_discovery": {
-      "sha256": "ec6a9d07aa5da6855312eb2f5b5e202fe254eccb8b9a8c74f076d2c8fb2d673b",
+      "sha256": "d5f367407f55c19ea214df2ecfddce9f4acb623e3f85ee5253da7a1462fc1337",
       "activities": {
         "preflight": "551bba3f3303c1bc021fc480962631e7a5ff320fbd4f751bf6699808648735b5",
-        "collect_videos": "0b5d0f4ad2fa21f282df47746a5aff2bb8a944007220a908c223c122eab383a2",
+        "collect_videos": "acfc17819e94088d0ed85315110aa8aa3cd3beaf8f8eb19d0a2ddba6f386fc7a",
         "cleanup": "cc36e0442f166e3556cdb5f3d33d86c9bb9b1517eb17dd6d2c3a491ae76b0fac"
       }
     },
