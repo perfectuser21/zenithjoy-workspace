@@ -63,8 +63,8 @@ export async function runLightweightDiscovery101({context,workDir,invoke,hostRoo
     run:runTag,runId:identity.run_id,profile,sourceCommit:context.source_commit,sources:[keyword],
     limit:maxCandidates,location:filters.location,searchFilters:filters,budgetDeadline:deadline,
     discoveryInput:{
-      schema_version:1,workflow_key:'douyin_video_discovery',run_tag:runTag,profile,serial,line,
-      max_candidates:maxCandidates,max_screens:1,source_kind:'keyword',sources:[keyword],
+      schema_version:2,workflow_key:'douyin_video_discovery',run_tag:runTag,profile,serial,line,
+      max_attempts:maxCandidates,max_screens:1,source_kind:'keyword',sources:[keyword],
       source_sha256:createHash('sha256').update(keyword+'\n').digest('hex'),
     },
     env:{
