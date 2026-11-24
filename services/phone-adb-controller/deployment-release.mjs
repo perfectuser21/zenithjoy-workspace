@@ -9,6 +9,10 @@ import {digest} from './runtime-definition.mjs';
 import {atomic} from './runtime-outbox.mjs';
 import {deploymentTarget} from './runtime-host.mjs';
 export {deploymentTarget} from './runtime-host.mjs';
+export function candidateArchivePath(revision,path){
+ if(!/^[a-f0-9]{40}$/.test(revision)||typeof path!=='string'||path.includes('\\')||path.split('/').some(part=>!part||part==='.'||part==='..'))throw Error('非法候选归档路径');
+ return `_foundation_sources/${revision}/${path}`;
+}
 function actualComponents(release,observed,manifest){
  if(observed.source_repo!==manifest.source_repo||observed.source_commit!==manifest.source_commit)throw Error('实际来源与部署commit不符');
  if(digest(observed.files)!==digest(manifest.files))throw Error('实际文件组件与部署manifest不符');
@@ -21,11 +25,18 @@ function actualComponents(release,observed,manifest){
   if(!dependencyComponent||dependencyComponent.digest!=='sha256:'+pg?.lock_sha256||pg.source_commit!==manifest.source_commit)throw Error('依赖来源未绑定中央Git descriptor');
  }
  return (release.payload.components||[]).map(component=>{
-  if(component.repo!==observed.source_repo||component.revision!==observed.source_commit)throw Error('组件来源无实机证据');
-  if(component.kind==='repo')return {kind:'repo',repo:observed.source_repo,revision:observed.source_commit};
-  const entry=observed.files.find(f=>f.path===component.path);
-  if(!['code','skill'].includes(component.kind)||!entry)throw Error('组件缺少实际文件采集');
-  const actual={kind:component.kind,repo:observed.source_repo,path:entry.path,revision:observed.source_commit,digest:`sha256:${entry.content_sha256}`};
+  const historical=component.revision!==observed.source_commit;
+  if(component.repo!==observed.source_repo||historical&&release.environment!==`staging:${observed.source_commit}`)throw Error('组件来源无实机证据');
+  if(component.kind==='repo'){
+   if(historical&&!observed.files.some(f=>f.source_revision===component.revision&&f.deployed_path===candidateArchivePath(component.revision,f.path)))throw Error('归档版本无实际文件');
+   return {kind:'repo',repo:observed.source_repo,revision:component.revision};
+  }
+  const entries=observed.files.filter(f=>f.path===component.path&&(historical
+   ?f.source_revision===component.revision&&f.deployed_path===candidateArchivePath(component.revision,component.path)
+   :f.source_revision===undefined));
+  if(!['code','skill'].includes(component.kind)||entries.length!==1)throw Error('组件缺少实际文件采集');
+  const [entry]=entries;
+  const actual={kind:component.kind,repo:observed.source_repo,path:entry.path,revision:component.revision,digest:`sha256:${entry.content_sha256}`};
   if(digest(actual)!==digest(component))throw Error('组件实际digest与release不符');return actual;
  });
 }

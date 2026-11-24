@@ -1,5 +1,5 @@
 import {readPublicDomainSamplingProof} from './public-domain-sampling.mjs';
-import {publicDomainPgRequired,loadPublicDomainPg,verifyPublicDomainTask,verifyPublicDomainCompany} from './public-domain-pg.mjs';
+import {publicDomainPgRequired,loadPublicDomainPg,verifyPublicDomainTask,verifyPublicDomainCompany,standaloneAgentScoringContext} from './public-domain-pg.mjs';
 // mmv执行端：每次请求先核固定发布SHA及完整声明文件，再允许队列或模型动作。
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -114,7 +114,21 @@ export async function handleRpc(input, deps = {}) {
       return {ok:true,result:{...probes,steps}};
     }
     pool = deps.pool || getPool();
-    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request,{sourceCommit:input.source.commit,execution:input.source.execution,...(isPublic?{sampledAdmission:{readProof:sourceRun=>readPublicDomainSamplingProof({runtimeRoot:root,sourceRun,lineKey:require('./line-routes.js').routeOf(input.request.line).key})}}:{}),resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec})}) };
+    if (input.kind === 'queue') {
+      const scoring=fixedPool?standaloneAgentScoringContext({runtimeRoot:root,input}):{};
+      if(input.request?.op==='score_committed_scope') {
+        if(!scoring.agentScoreIdentity||!input.source.files.some(file=>file.path==='standalone-scoring-tools.mjs')){
+          throw Error('AGENT_SCORE_AUTHORITY_REQUIRED');
+        }
+        const {selectStandaloneScoringComment}=require('./standalone-scoring-tools.mjs');
+        return {ok:true,result:await selectStandaloneScoringComment(pool,input.request,scoring)};
+      }
+      return {ok:true,result:await require('./leadgen-queue.js').queueRequest(pool,input.request,{
+        sourceCommit:input.source.commit,execution:input.source.execution,...scoring,
+        ...(isPublic?{sampledAdmission:{readProof:sourceRun=>readPublicDomainSamplingProof({runtimeRoot:root,sourceRun,lineKey:require('./line-routes.js').routeOf(input.request.line).key})}}:{}),
+        resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec}),
+      })};
+    }
     if (input.kind === 'qualify') {
       const args = input.request;
       if (!['judge'].includes(args?.cmd) || !/^\d{16,24}$/.test(args.videoId || '')) throw Error('RPC_QUALIFY_INVALID');

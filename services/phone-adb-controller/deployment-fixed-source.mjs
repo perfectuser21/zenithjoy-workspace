@@ -80,3 +80,25 @@ export function readDeploymentSource(root,revision,path,{materialize=false}={}){
  const actual=readFileSync(target);if(!actual.equals(expected))throw Error(`部署工作区字节漂移，不属于固定commit: ${path}`);
  return actual;
 }
+
+// 历史固定对象只作为候选附件读出，当前工作树文件不参与也不被覆盖。
+export function readArchivedDeploymentSource(root,revision,path){
+ if(!/^[0-9a-f]{40}$/.test(revision)||typeof path!=='string'||!path||path.includes('\\')
+  ||path.split('/').some(p=>!p||p==='.'||p==='..'))throw Error('非法候选归档来源');
+ const [tree]=git(root,'ls-tree',revision,'--',path).toString('utf8').split('\n');
+ if(tree){
+  const match=/^100(?:644|755) blob ([0-9a-f]{40})\t(.+)$/.exec(tree);
+  if(!match||match[2]!==path)throw Error('候选归档不是固定 Git 文件');
+  return git(root,'cat-file','blob',match[1]);
+ }
+ const cache=resolve(root,'.skills-source'),args=['cat','--workspace',root,'--source',cache,'--ref',revision,'--path',path];
+ let cached=true;
+ try{pinnedCache(root,revision);}catch{cached=false;}
+ if(cached)return execFileSync('python3',['-I','-c',bootstrapCode(root,revision),...args],options());
+ else {
+  const temporary=mkdtempSync(resolve(realpathSync(tmpdir()),'skill-source-archive-'));
+  try{return execFileSync('python3',['-I','-c',coldBootstrapCode(root,revision),...args],
+    {...options(),env:{...fixedSourceEnvironment({network:true}),GIT_ALLOW_PROTOCOL:'ssh',SKILLS_SOURCE_SSH_KEY:bootstrapKey(),TMPDIR:temporary},timeout:120000});}
+  finally{rmSync(temporary,{recursive:true,force:true});}
+ }
+}

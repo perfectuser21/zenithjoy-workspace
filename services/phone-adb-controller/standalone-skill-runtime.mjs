@@ -12,6 +12,7 @@ import {createCentralDeviceLease} from './central-device-lease.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
 import {execInput,createRpc,safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {createStandaloneSkillTools} from './standalone-skill-tools.mjs';
+import {createStandaloneScoringTools} from './standalone-scoring-tools.mjs';
 import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
@@ -70,10 +71,41 @@ export async function verifyStandaloneBootstrap({frozen,scope,read=readBrain}){
  return true;
 }
 
+async function startStandaloneScoringRuntime({dir,root,frozen,scope,identity,environment,dependencies}){
+ const env={...environment,WF_HOME:root,WFR_RUN_DIR:dir,WF_BRAIN_TASK_ID:identity.task_id,WFR_RUN_ID:identity.run_id,WFR_TAG:scope.run_tag,
+  WF_BRAIN_WORKFLOW:scope.workflow_key,LEADGEN_LINE:scope.line,LEADGEN_SOURCE_RUN:scope.source_run};
+ if(env.BRAIN_INTERNAL_TOKEN!==process.env.BRAIN_INTERNAL_TOKEN)fail('CREDENTIAL_CONTEXT');
+ const bootstrap=dependencies.bootstrap??verifyStandaloneBootstrap;
+ await bootstrap({frozen,scope});
+ claimStandaloneHost({runId:identity.run_id,runDirectory:dir,frozen,registry:dependencies.hostRegistry});
+ let closing=false,closePromise;
+ const verify=async()=>{
+  if(closing||Date.now()>=identity.deadline_ms)fail('WORK_DEADLINE');
+  if(readFrozen(dir).snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');
+  await bootstrap({frozen,scope});
+ };
+ const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
+ const tools=createStandaloneScoringTools({scope,assertAuthority:verify,rpc:async request=>{
+  const remaining=identity.deadline_ms-Date.now();if(remaining<=0)fail('WORK_DEADLINE');
+  return rpc(request,{timeoutMs:Math.min(180000,remaining)});
+ }});
+ const directory=join(dir,'standalone-ipc');mkdirSync(directory,{mode:0o700});
+ const ipc=await (dependencies.ipcFactory??serveStandaloneSkillTools)({directory,call:tools.call});
+ return {connectionPath:ipc.connectionPath,readEvidence:tools.readEvidence,close:()=>closePromise??=(async()=>{
+  closing=true;
+  if((await ipc.close())?.ipc_closed!==true)fail('IPC_CLOSE_UNCONFIRMED');
+  const receipt={task_id:identity.task_id,run_id:identity.run_id,local_released:true,central_released:true,native_return_unknown:false};
+  writeFileSync(join(dir,'standalone-cleanup.json'),JSON.stringify(receipt),{flag:'wx',mode:0o600});
+  return receipt;
+ })()};
+}
+
 // 首次资源取得可用；同目录不恢复未知原生动作。恢复需另行核原执行和持久结果。
 export async function startStandaloneSkillRuntime({runDirectory,environment=process.env,dependencies={}}){
  const dir=realpathSync(runDirectory),root=join(dir,'runtime'),frozen=readFrozen(dir),scope=standaloneScope(frozen),identity=frozen.standalone_skill;
- if(dir!==resolve(runDirectory)||realpathSync(root)!==root||scope.workflow_key!=='douyin_video_discovery')fail('DIRECTORY');
+ if(dir!==resolve(runDirectory)||realpathSync(root)!==root)fail('DIRECTORY');
+ if(scope.workflow_key==='douyin_comment_scoring')return startStandaloneScoringRuntime({dir,root,frozen,scope,identity,environment,dependencies});
+ if(scope.workflow_key!=='douyin_video_discovery')fail('DIRECTORY');
  const env={...environment,WF_HOME:root,WF_DEPLOYMENT_ROOT:root,WFR_RUN_DIR:dir,WF_BRAIN_TASK_ID:identity.task_id,WFR_RUN_ID:identity.run_id,WFR_TAG:scope.run_tag,WFR_ATTEMPT:'a1',P:scope.profile,SERIAL:scope.serial,LEADGEN_LINE:scope.line,LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:scope.workflow_key,
   WF_RUN_START_TS:String(scope.run_start_ts),WF_RUN_MAX_SECONDS:String(scope.run_max_seconds),DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),ZJ_ADB_HOST_CONFIG:frozen.discovery_phone_scope.policy_binding.policy_path,ADB_SERVER_SOCKET:frozen.discovery_phone_scope.policy.endpoint,DOUYIN_ADB_PORT:String(frozen.discovery_phone_scope.policy.port??frozen.discovery_phone_scope.policy.endpoint.split(':').at(-1)),LEADGEN_MMV_DEVICE_RUNTIME:'1',ZJ_EXTERNAL_LEDGER:join(dir,'external-interactions.jsonl')};
  if(env.BRAIN_INTERNAL_TOKEN!==process.env.BRAIN_INTERNAL_TOKEN)fail('CREDENTIAL_CONTEXT');

@@ -56,6 +56,25 @@ test('全批CI有其他流程时，只打包目标四获客流程与其完整依
  assert.ok(!out.components.some(c=>c.path?.startsWith('.agents/')));
  assert.equal(f.bundle.snapshot.definitions.workflows.length,5,'原始完整CI快照不修改');
 });
+test('候选校验只为已冻结的旧 Foundation 绑定读取其原始版本；生产平铺路径保持严格',async()=>{
+ const {validateDeploymentEvidence}=await implementation(),f=fixture(),old='b'.repeat(40),historical=Buffer.from('older fixed code\n');
+ const activity=f.bundle.snapshot.definitions.activities[0],binding=activity.payload.implementation_bindings[0];
+ binding.field='implementation_bindings';
+ activity.payload.implementation_bindings.push({...binding,revision:old,digest:'sha256:'+digest(historical),purpose:'foundation_host',index:1});
+ activity.payload_sha256=digest({source:{repo,path:activity.source_path,commit:sha},payload:activity.payload});
+ const sourceSet=activity.payload.implementation_bindings.map(({kind,repo,path,revision,digest,scope,field,index})=>({activity_id:aid,activity_definition_version_id:avId,kind,repo,path,revision,digest,scope,field,...(index!==undefined?{index}:{})}));
+ f.bundle.report.implementation_source_set=sourceSet.sort((a,b)=>digest(a).localeCompare(digest(b)));
+ refreshEvidence(f);
+ const report=f.bundle.report,receipt=f.bundle.receipt;
+ report.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source','implementation_source_set'].map(k=>[k,report[k]])));
+ receipt.assertion_plan_sha256=report.assertion_plan_sha256;receipt.report_sha256=digest(Buffer.from(JSON.stringify(report)));
+ const read=(p,revision)=>{assert.equal(p,file);return revision===old?historical:bytes;};
+ assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,read),/实现绑定未核验/);
+ const candidate=validateDeploymentEvidence(f.bundle,sha,read,{archiveFoundation:true});
+ assert.equal(candidate.components.filter(c=>c.kind==='code').length,2);
+ assert.ok(candidate.components.some(c=>c.kind==='repo'&&c.revision===old));
+ assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,()=>bytes,{archiveFoundation:true}),/本机部署组件字节不符/);
+});
 test('目标四流程缺失/重复或依赖缺失仍拒绝；CI必须覆盖未打包的其他流程',async()=>{
  const {validateDeploymentEvidence}=await implementation();
  for(const mutate of [f=>f.bundle.snapshot.definitions.workflows.shift(),f=>f.bundle.snapshot.definitions.workflows.push(f.bundle.snapshot.definitions.workflows[0]),f=>f.bundle.snapshot.definitions.activities.shift()]){

@@ -6,7 +6,7 @@ import {homedir,tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readDeploymentToken,brainRequest,DEPLOY_REPO} from './deployment-preflight.mjs';
-import {readDeploymentSource,fixedSourceEnvironment,prepareDeploymentSkillSources} from './deployment-fixed-source.mjs';
+import {readDeploymentSource,readArchivedDeploymentSource,fixedSourceEnvironment,prepareDeploymentSkillSources} from './deployment-fixed-source.mjs';
 import {prepareTargetReleases} from './deployment-targets.mjs';
 import {verifyTransactionProtocol} from './deployment-protocol.mjs';
 import {stageCandidate} from './deployment-candidate.mjs';
@@ -52,8 +52,8 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  const preflightPgLock=git('ls-tree','--name-only',sha,'--',dependencyPath)===dependencyPath?
   verifyPreflightPgLock(readDeploymentSource(root,sha,'package-lock.json')):undefined;
  if(preflightPgLock){readDeploymentSource(root,sha,dependencyPath);readDeploymentSource(root,sha,'services/phone-adb-controller/preflight-pg-dependencies.mjs');}
- const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,acceptanceTaskIds,attemptKey,request,preflightPgLock,readFile:path=>{
-  return readDeploymentSource(root,sha,path,{materialize:true});
+ const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,acceptanceTaskIds,attemptKey,request,preflightPgLock,readFile:(path,revision=sha)=>{
+  return revision===sha?readDeploymentSource(root,sha,path,{materialize:true}):readArchivedDeploymentSource(root,revision,path);
  }});
  if(git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署预检期间工作区变化');
  if(mode==='candidate')return stageCandidateFn({root,sha,plan,attemptKey,request,brainUrl});

@@ -5,8 +5,8 @@ import {mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir,homedir} from 'node:os';
 import {digest} from './runtime-definition.mjs';
-import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
-import {observeDeployment} from './deployment-release.mjs';
+import {readDeploymentSource,readArchivedDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
+import {observeDeployment,candidateArchivePath} from './deployment-release.mjs';
 import {commanderMap} from './deployment-targets.mjs';
 import {buildPublishRelease} from './deployment-publish-release.mjs';
 import {installPreflightPg,preflightPgDeployment,verifyPreflightPgLock} from './preflight-pg-dependencies.mjs';
@@ -65,7 +65,14 @@ export function materializeCandidate({root,sha,destination,release}){
  const lock=JSON.parse(readDeploymentSource(root,sha,'.skills-source.json'));
  const catalog=JSON.parse(execFileSync('git',['-C',join(root,'.skills-source'),'show',`${lock.revision}:distribution/catalog.json`],{env:fixedSourceEnvironment(),encoding:'utf8'}));
  for(const entry of catalog.profiles[lock.profile].files)if(entry.path.startsWith(prefix))paths.add(entry.path);
- for(const c of release.payload.components)if(c.kind!=='repo')paths.add(c.path);
+ const archived=new Map();
+ for(const c of release.payload.components)if(c.kind!=='repo'){
+  if(c.revision===sha)paths.add(c.path);
+  else {
+   const archivedPath=candidateArchivePath(c.revision,c.path),existing=archived.get(archivedPath);
+   need(!existing||existing.digest===c.digest,'归档组件字节冲突');archived.set(archivedPath,c);
+  }
+ }
  const files=[];
  for(const path of [...paths].sort()){
   need(!path.startsWith('/')&&!path.split('/').some(p=>['','..','.'].includes(p)),'非法固定源路径');
@@ -73,6 +80,12 @@ export function materializeCandidate({root,sha,destination,release}){
   const bytes=readDeploymentSource(root,sha,path);
   const target=join(destination,deployed_path);mkdirSync(join(target,'..'),{recursive:true});writeFileSync(target,bytes,{mode:0o755,flag:'wx'});
   files.push({path,deployed_path,content_sha256:digest(bytes)});
+ }
+ for(const [deployed_path,component] of [...archived].sort(([a],[b])=>a.localeCompare(b))){
+  const {path,revision}=component,bytes=readArchivedDeploymentSource(root,revision,path),content_sha256=digest(bytes);
+  need(component.digest===`sha256:${content_sha256}`,'归档组件字节不符');
+  const target=join(destination,deployed_path);mkdirSync(join(target,'..'),{recursive:true});writeFileSync(target,bytes,{mode:0o600,flag:'wx'});
+  files.push({path,deployed_path,source_revision:revision,content_sha256});
  }
  need(files.some(f=>f.deployed_path==='leadgen-run.sh')&&files.some(f=>f.deployed_path==='leadgen-rpc.mjs'),'缺候选执行入口');
  return {schema_version:1,source_repo:'perfectuser21/zenithjoy-workspace',source_commit:sha,files};
