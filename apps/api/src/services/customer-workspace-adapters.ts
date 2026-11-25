@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { SourceRow } from './company-source-import';
 import type { WorkspaceAdapter, WorkspaceDefinition, WorkspaceField, WorkspacePlatform } from './customer-workspace';
 
 type Text = { plain_text?: string; text?: { content?: string } };
@@ -8,6 +9,7 @@ type Json = {
   id?: string; table_id?: string; name?: string; field_name?: string; type?: string | number;
   object?: string; archived?: boolean; in_trash?: boolean;
   title?: Text[]; description?: Text[]; parent?: { page_id?: string };
+  record_id?: string; fields?: SourceRow['fields'];
   child_database?: { title?: string }; properties?: Record<string, { type?: string }>;
 };
 const rich = (content: string) => [{ type: 'text', text: { content } }];
@@ -17,7 +19,7 @@ export function workspaceFields(definition: WorkspaceDefinition) { return [...sh
 export function feishuTableName(definition: WorkspaceDefinition, marker: string) {
   return `${definition.name} [cw1-${createHash('sha256').update(marker).digest('hex').slice(0, 20)}]`;
 }
-export function createWorkspaceAdapter(platform: WorkspacePlatform, token: string, fetcher: typeof fetch = fetch): WorkspaceAdapter {
+export function createWorkspaceAdapter(platform: WorkspacePlatform, token: string, fetcher: typeof fetch = fetch): WorkspaceAdapter & { readRows(parent: string, table: string): Promise<SourceRow[]> } {
   if (!token) throw Error('workspace credential missing');
   if (!['notion', 'feishu'].includes(platform)) throw Error('unsupported workspace platform');
   const notion = platform === 'notion';
@@ -52,6 +54,43 @@ export function createWorkspaceAdapter(platform: WorkspacePlatform, token: strin
   }
   const appPath = (parent: string) => `/bitable/v1/apps/${encodeURIComponent(parent)}`;
   return {
+    async readRows(parent, table) {
+      if (!/^[a-zA-Z0-9_-]+$/.test(table)) throw Error('资料表标识不合法');
+      if (!notion) {
+        const tablePath = appPath(parent) + `/tables/${table}`;
+        const [columns, rows] = await Promise.all([pages(tablePath + '/fields'), pages(tablePath + '/records')]);
+        const emptyFields = Object.fromEntries(columns.map(column => {
+          if (!column.field_name) throw Error('飞书字段缺失名称');
+          return [column.field_name, undefined];
+        }));
+        return rows.map(row => {
+          if (!row.record_id || !row.fields) throw Error('飞书记录缺失标识或字段');
+          return { id: row.record_id, fields: { ...emptyFields, ...row.fields } };
+        });
+      }
+      const database = await request('GET', `/databases/${table}`);
+      if (database.archived || database.in_trash || database.parent?.page_id?.replace(/-/g, '').toLowerCase() !== parent) throw Error('资料表不属于已绑定的 Notion 工作台');
+      const rows: SourceRow[] = [];
+      const cursors = new Set<string>();
+      let cursor: string | undefined;
+      do {
+        const result = await request('POST', `/databases/${table}/query`, { page_size: 100, start_cursor: cursor });
+        if (!Array.isArray(result.results) || typeof result.has_more !== 'boolean') throw Error('Notion 记录读回不完整');
+        for (const row of result.results) {
+          if (!row.id || !row.properties) throw Error('Notion 记录缺失标识或字段');
+          if (row.archived || row.in_trash) continue;
+          const fields = Object.fromEntries(Object.entries(row.properties).map(([name, property]) => [
+            name, property.type ? (property as Record<string, unknown>)[property.type] : undefined,
+          ]));
+          rows.push({ id: row.id, fields });
+        }
+        if (!result.has_more) return rows;
+        cursor = result.next_cursor;
+        if (!cursor || cursors.has(cursor) || cursors.size >= 100) throw Error('Notion 资料表分页不完整');
+        cursors.add(cursor);
+      } while (cursor);
+      return rows;
+    },
     async preflight(parent) {
       if (!parent || parent.length > 128 || /[^a-zA-Z0-9_-]/.test(parent)) throw Error('invalid workspace parent');
       const value = await request('GET', notion ? `/pages/${parent}` : appPath(parent));

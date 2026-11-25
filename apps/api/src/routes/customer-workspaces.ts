@@ -2,6 +2,8 @@
 import { Router } from 'express';
 import pool from '../db/connection';
 import { internalAuth } from '../middleware/internal-auth';
+import { SOURCE_TABLES } from '../services/company-source-import';
+import { companyRecord } from './company-profile-validation';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { workspaceTemplate, normalizeWorkspaceParent, WORKSPACE_TEMPLATE_VERSION, type WorkspaceState } from '../services/customer-workspace';
 
@@ -34,6 +36,20 @@ customerWorkspacesRouter.post('/:companyId/bind', async (req, res) => {
   if (body.credential_ref !== undefined && (typeof body.credential_ref !== 'string' || !new RegExp(`^CUSTOMER_WORKSPACE_${String(platform).toUpperCase()}_[A-Z0-9_]{1,100}$`).test(body.credential_ref))) {
     res.status(400).json({ success: false, error: 'WORKSPACE_CREDENTIAL_REFERENCE_INVALID' }); return;
   }
+  const adoption = body.existing_source_tables;
+  const tableMap = companyRecord(adoption);
+  const bindings = SOURCE_TABLES.map(key => tableMap[key]);
+  if (adoption !== undefined && (
+    !body.modules?.includes('leadgen') ||
+    Object.keys(tableMap).length !== SOURCE_TABLES.length ||
+    !bindings.every(id => typeof id === 'string' && (platform === 'notion' ? /^[a-f0-9-]{32,36}$/i : /^tbl[a-zA-Z0-9]{1,64}$/).test(id)) ||
+    new Set(bindings.map(id => String(id).replace(/-/g, '').toLowerCase())).size !== SOURCE_TABLES.length
+  )) {
+    res.status(400).json({ success: false, error: 'EXISTING_SOURCE_TABLE_BINDING_INVALID' }); return;
+  }
+  const resources = adoption === undefined ? {} : Object.fromEntries(SOURCE_TABLES.map((key, index) => [
+    key, { id: String(bindings[index]), status: 'registered' },
+  ]));
   let client;
   try { client = await pool.connect(); }
   catch { res.status(503).json({ success: false, error: 'WORKSPACE_DATABASE_UNAVAILABLE' }); return; }
@@ -41,15 +57,16 @@ customerWorkspacesRouter.post('/:companyId/bind', async (req, res) => {
     await client.query('BEGIN');
     const profile = (await client.query('SELECT company_id,tenant_id,company_name FROM zenithjoy.tenant_company_profiles WHERE company_id=$1 AND tenant_id=$2 FOR SHARE', [req.params.companyId, body.tenant_id])).rows[0];
     if (!profile) { await client.query('ROLLBACK'); res.status(404).json({ success: false, error: 'COMPANY_TENANT_MISMATCH' }); return; }
-    const state: WorkspaceState = { ...profile, platform, parent_id: parentId, template_version: WORKSPACE_TEMPLATE_VERSION, modules: body.modules ?? [], ...(body.credential_ref ? { credential_ref: body.credential_ref } : {}), status: 'pending', resources: {}, data_sync_status: 'not_connected' };
-    await client.query('INSERT INTO zenithjoy.customer_workspaces(company_id,tenant_id,platform,parent_id,template_version,modules,state) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb) ON CONFLICT(company_id,platform) DO NOTHING', [profile.company_id, profile.tenant_id, platform, state.parent_id, state.template_version, JSON.stringify(state.modules), JSON.stringify(state)]);
+    const state: WorkspaceState = { ...profile, platform, parent_id: parentId, template_version: WORKSPACE_TEMPLATE_VERSION, modules: body.modules ?? [], ...(body.credential_ref ? { credential_ref: body.credential_ref } : {}), status: adoption === undefined ? 'pending' : 'structure_ready', resources, data_sync_status: 'not_connected' };
+    await client.query('INSERT INTO zenithjoy.customer_workspaces(company_id,tenant_id,platform,parent_id,template_version,modules,state,status) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8) ON CONFLICT(company_id,platform) DO NOTHING', [profile.company_id, profile.tenant_id, platform, state.parent_id, state.template_version, JSON.stringify(state.modules), JSON.stringify(state), state.status]);
     const existing = (await client.query('SELECT state FROM zenithjoy.customer_workspaces WHERE company_id=$1 AND tenant_id=$2 AND platform=$3 FOR UPDATE', [profile.company_id, profile.tenant_id, platform])).rows[0]?.state as WorkspaceState | undefined;
-    if (!existing || existing.parent_id !== state.parent_id || JSON.stringify(existing.modules) !== JSON.stringify(state.modules) || existing.template_version !== state.template_version || existing.credential_ref !== state.credential_ref) {
+    if (!existing || existing.parent_id !== state.parent_id || JSON.stringify(existing.modules) !== JSON.stringify(state.modules) || existing.template_version !== state.template_version || existing.credential_ref !== state.credential_ref ||
+      adoption !== undefined && SOURCE_TABLES.some(key => existing.resources?.[key]?.id !== state.resources[key]?.id)) {
       await client.query('ROLLBACK'); res.status(409).json({ success: false, error: 'WORKSPACE_BINDING_CONFLICT' }); return;
     }
     await client.query('INSERT INTO zenithjoy.customer_workspace_events(company_id,tenant_id,platform,actor,state) VALUES($1,$2,$3,$4,$5::jsonb)', [profile.company_id, profile.tenant_id, platform, 'internal-service:workspace-binding', JSON.stringify(existing)]);
     await client.query('COMMIT');
-    res.status(202).json({ success: true, data: { ...existing, object_count: definitions.length, worker_enabled: process.env.CUSTOMER_WORKSPACE_PROVISIONING_ENABLED === 'true' } });
+    res.status(202).json({ success: true, data: { ...existing, object_count: adoption === undefined ? definitions.length : SOURCE_TABLES.length, worker_enabled: process.env.CUSTOMER_WORKSPACE_PROVISIONING_ENABLED === 'true' } });
   } catch (error) {
     await client.query('ROLLBACK');
     const duplicate = (error as { code?: string }).code === '23505';

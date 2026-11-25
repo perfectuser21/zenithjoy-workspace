@@ -7,6 +7,7 @@ import { companyAccountDeviceReplacement } from './company-account-device-replac
 import { companyAccountRegistration, companyAccountRegistrationSession } from './company-account-registration';
 import { companyRoutingNormalization, companyRoutingNormalizationReadback } from './company-routing-normalization';
 import { validateCompanyIdentity, validateEnabledCompany, companyRecord, companyObject, type CompanyJsonRecord } from './company-profile-validation';
+import { registerCompanySourceSync } from './company-source-sync';
 import { tenantContext } from '../middleware/tenant-context';
 import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
 
@@ -56,6 +57,8 @@ function snapshot(row: CompanyJsonRecord) {
   const runtime = companyRecord(data.runtime_config);
   return { ...data, version: data.config_version, product_ids: runtime.product_ids ?? [], policy_id: runtime.policy_id ?? null };
 }
+registerCompanySourceSync(companyProfileRouter, snapshot);
+
 function validate(data: CompanyJsonRecord, previous: CompanyJsonRecord): string | null {
   if (typeof data.company_name !== 'string' || !data.company_name.trim()) return 'company_name 必填';
   for (const field of TEXT_FIELDS) if (typeof data[field] !== 'string') return `${field} 必须为文本`;
