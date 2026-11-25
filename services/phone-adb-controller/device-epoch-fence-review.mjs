@@ -2,6 +2,7 @@
 import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,fsyncSync,mkdtempSync,linkSync,unlinkSync,rmSync} from 'node:fs';
 import {join,dirname,resolve,basename} from 'node:path';
 import {userInfo} from 'node:os';
+import {isIPv4} from 'node:net';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {bytes,canonical,digest as sha,writeAll,FENCE_ACTIONS,approvalScopeFor} from './device-epoch-fence-reference.mjs';
 export {bytes};
@@ -37,10 +38,10 @@ export function validateReviewFacts(f,releaseReceipt){
  return {protocol:'device-epoch-fence-review/v1',scope:{maintenance_task_id:m.id,claim:{claimed_by:m.claimed_by,claimed_at:m.claimed_at},original_task_id:o.id,original_run_id:id.run_id,profile_sha256:id.profile_sha256,serial:p.serial,endpoint},central_readback:c,original_execution_stopped:false,remote_quiescence:'unknown',resource_authority:'not_attested'};
 }
 export async function readBrain(path,{deadlineMs,maxAttempts=1}={}){
- need(/^\/api\/brain\/(?:tasks\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/(?:definition|reconciliation)|device-locks)$/.test(path),'BRAIN_READ_PATH');
+ need(/^\/api\/brain\/(?:(?:tasks|pending-actions)\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/(?:definition|reconciliation)|device-locks)$/.test(path),'BRAIN_READ_PATH');
  need([1,2].includes(maxAttempts)&&(deadlineMs===undefined?maxAttempts===1:Number.isSafeInteger(deadlineMs)&&deadlineMs>Date.now()),'BRAIN_READ_BUDGET');
  const token=process.env.BRAIN_INTERNAL_TOKEN;need(typeof token==='string'&&token&&!/[\r\n]/.test(token),'EXPLICIT_CREDENTIAL_REQUIRED');
- const endpoint=path.endsWith('/device-locks')?'device_locks':path.includes('/tasks/')?'task':path.endsWith('/definition')?'definition':'reconciliation';
+ const endpoint=path.endsWith('/device-locks')?'device_locks':path.includes('/tasks/')?'task':path.includes('/pending-actions/')?'pending_action':path.endsWith('/definition')?'definition':'reconciliation';
  const url='http://127.0.0.1:5221'+path,headers={'X-Internal-Token':token};
  for(let attempt=0;attempt<maxAttempts;attempt++){
   const timeoutMs=Math.min(10000,deadlineMs===undefined?10000:deadlineMs-Date.now());need(timeoutMs>0,'BRAIN_READ_BUDGET');
@@ -113,8 +114,56 @@ function readStartupInstance({instanceId,registrySha256,policySha256}){
  need(row.policy.schema_version===2&&row.policy.instance_id===instanceId&&/^tcp:127\.0\.0\.1:[1-9]\d{0,4}$/.test(row.policy.endpoint)&&row.policy.endpoint!=='tcp:127.0.0.1:5041','STARTUP_PRIVATE_ENDPOINT');const partners=registry.instances.filter(r=>row.coexists_with?.includes(r.instance_id)&&r.kind==='external_existing');need(partners.length===1&&partners[0].coexists_with?.includes(instanceId),'STARTUP_COEXISTENCE');const partner=partners[0];return {instance_id:instanceId,policy_path:row.policy_path,endpoint:row.policy.endpoint,registry_sha256:registrySha256,policy_sha256:policySha256,partner:{policy_path:partner.policy_path,policy:partner.policy,actual_policy:JSON.parse(bytes(partner.policy_path))}};
 }
 function loadStartupReceipt(path){const st=lstatSync(path);need((st.mode&0o777)===0o600,'STARTUP_RECEIPT_MODE');return JSON.parse(bytes(path));}
+async function verifyCleanStartupReceipt(receipt,{receiptPath,instanceId,registrySha256,sourceCommit,policySha256,
+ source=reviewSource,instance=readStartupInstance,read=readBrain}){
+ const scope=receipt.scope,issued=Date.parse(receipt.issued_at),expires=Date.parse(receipt.expires_at),now=Date.now();
+ const version=value=>typeof value==='string'&&/^[1-9]\d{0,9}$/.test(value)&&Number(value)<=4294967295;
+ const locator=typeof scope?.adb_serial==='string'&&scope.adb_serial.match(/^([^:]+):([1-9]\d{0,4})$/);
+ need(typeof receiptPath==='string'&&resolve(receiptPath)===receiptPath&&receipt.action==='start_private_server'
+  &&scope?.instance_id===instanceId&&/^[a-z][a-z0-9-]{2,63}$/.test(instanceId||'')
+  &&scope.source_commit===sourceCommit&&/^[a-f0-9]{40}$/.test(sourceCommit||'')
+  &&scope.registry_sha256===registrySha256&&scope.policy_sha256===policySha256
+  &&[registrySha256,policySha256].every(value=>/^[a-f0-9]{64}$/.test(value||''))
+  &&[scope.task_id,scope.original_task_id,scope.original_run_id,scope.decision_id,scope.pending_action_id].every(value=>uuid.test(value||''))
+  &&scope.task_id!==scope.original_task_id&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(scope.serial||'')
+  &&locator&&isIPv4(locator[1])&&Number(locator[2])<=65535
+  &&typeof scope.review_event_id==='string'&&/^[1-9]\d*$/.test(scope.review_event_id)
+  &&version(receipt.lease_version)&&issued<=now&&expires>now&&expires-issued<=120000,'CLEAN_STARTUP_RECEIPT');
+ const currentSource=source(),fixed=instance({instanceId,registrySha256,policySha256});
+ need(currentSource.commit===sourceCommit&&canonical(currentSource)===canonical(receipt.source_authority),'CLEAN_STARTUP_SOURCE');
+ need(fixed.instance_id===instanceId&&fixed.endpoint===scope.endpoint&&fixed.registry_sha256===registrySha256
+  &&fixed.policy_sha256===policySha256,'CLEAN_STARTUP_INSTANCE');
+ const [maintenanceValue,originalValue,reviewValue,lockValue]=await Promise.all([
+  read('/api/brain/tasks/'+scope.task_id),
+  read('/api/brain/tasks/'+scope.original_task_id),
+  read('/api/brain/pending-actions/'+scope.pending_action_id),
+  read('/api/brain/device-locks'),
+ ]);
+ const maintenance=maintenanceValue?.task??maintenanceValue,original=originalValue?.task??originalValue;
+ const action=reviewValue?.action??reviewValue,approval=maintenance?.result?.clean_adb_startup_approval;
+ need(maintenance?.id===scope.task_id&&maintenance.status==='in_progress'&&maintenance.claimed_by
+  &&Date.parse(maintenance.claimed_at)<=issued&&maintenance.payload?.decision_id===scope.decision_id
+  &&approval?.protocol==='device-epoch-clean-startup-approval/v1'&&canonical(approval.scope)===canonical(scope),'CLEAN_STARTUP_APPROVAL');
+ const cleanup=original?.result?.native_agent_resource_review;
+ need(original?.id===scope.original_task_id&&['completed_no_pr','failed','cancelled'].includes(original.status)
+  &&cleanup?.protocol==='native-agent-resource-settlement/v1'&&cleanup.basis==='operator-cleanup-review'
+  &&cleanup.task_id===scope.original_task_id&&cleanup.run_id===scope.original_run_id
+  &&cleanup.review_event_id===scope.review_event_id&&cleanup.pending_action_id===scope.pending_action_id
+  &&cleanup.host?.machine_id==='us-mac-m4'&&cleanup.review?.actor==='authenticated-operator'
+  &&cleanup.review.cleanup_confirmed===true&&cleanup.review.effects_reviewed===true
+  &&cleanup.devices?.length===1&&cleanup.devices[0].device_name===scope.serial
+  &&version(cleanup.devices[0].acquisition_version)
+  &&action?.id===scope.pending_action_id&&action.status==='approved'&&action.action_type==='owner_decision'
+  &&action.params?.task_id===scope.original_task_id&&canonical(action.execution_result)===canonical(cleanup),'CLEAN_STARTUP_REVIEW');
+ const rows=lockValue?.locks?.filter(row=>row.device_name===scope.serial),lock=rows?.[0];
+ need(lockValue?.success===true&&rows?.length===1&&lock.locked_by===scope.task_id&&lock.expired===false
+  &&lock.lease_version===receipt.lease_version&&Date.parse(lock.expires_at)>=expires&&expires>Date.now(),'CLEAN_STARTUP_LEASE');
+ return {protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',
+  instance_id:instanceId,endpoint:fixed.endpoint,source_commit:sourceCommit,registry_sha256:registrySha256,policy_sha256:policySha256};
+}
 export async function verifyStartupReceipt(options={}){
  const loaded=(options.load??loadStartupReceipt)(options.receiptPath);if(loaded?.protocol==='device-epoch-fence-resume-startup/v1')return (await import('./device-epoch-fence-resume-startup.mjs')).verifyResumeStartupReceipt(options);
+ if(loaded?.protocol==='device-epoch-clean-startup/v1')return verifyCleanStartupReceipt(loaded,options);
  const {receiptPath,instanceId,registrySha256,sourceCommit,policySha256}=options,load=options.load??loadStartupReceipt,inspect=options.inspect??inspectReview,source=options.source??reviewSource,instance=options.instance??readStartupInstance;
  need(typeof receiptPath==='string'&&resolve(receiptPath)===receiptPath&&/^[a-z][a-z0-9-]{2,63}$/.test(instanceId||'')&&/^[a-f0-9]{40}$/.test(sourceCommit||'')&&[registrySha256,policySha256].every(x=>/^[a-f0-9]{64}$/.test(x||'')),'STARTUP_ARGUMENTS');const r=load(receiptPath),now=Date.now();
  need(r.protocol==='device-epoch-fence-startup/v1'&&r.action==='start_private_server'&&r.instance_id===instanceId&&r.registry_sha256===registrySha256&&r.policy_sha256===policySha256&&uuid.test(r.task_id||'')&&Number.isFinite(Date.parse(r.issued_at))&&Date.parse(r.issued_at)<=now&&Date.parse(r.expires_at)>now&&Date.parse(r.expires_at)-Date.parse(r.issued_at)<=120000&&r.review?.original_execution_stopped===false,'STARTUP_RECEIPT');
@@ -139,6 +188,24 @@ export async function planStartupReceipt({taskId,stateFile,instanceId,directory,
  const r={operation_plan_sha256:approved.plan_sha256,protocol:'device-epoch-fence-startup/v1',action:'start_private_server',issued_at:new Date(now).toISOString(),expires_at:new Date(Math.min(now+120000,Date.parse(review.central_readback.expires_at))).toISOString(),task_id:taskId,state_file:stateFile,...fixed,source_authority:review.scope.review_source,review,old_daemon:review.scope.old_daemon};
  persistStartupReceipt(directory,r);return r;
 }
+export async function planCleanStartupReceipt({taskId,receiptPath,read=readBrain,source=reviewSource,instance=readStartupInstance}={}){
+ need(uuid.test(taskId||''),'CLEAN_STARTUP_TASK');
+ const value=await read('/api/brain/tasks/'+taskId),task=value?.task??value;
+ const approval=task?.result?.clean_adb_startup_approval,scope=approval?.scope;
+ need(task?.id===taskId&&approval?.protocol==='device-epoch-clean-startup-approval/v1'
+  &&scope?.task_id===taskId,'CLEAN_STARTUP_APPROVAL');
+ const lockValue=await read('/api/brain/device-locks');
+ const rows=lockValue?.locks?.filter(row=>row.device_name===scope.serial);
+ need(rows?.length===1&&rows[0].locked_by===taskId&&rows[0].expired===false,'CLEAN_STARTUP_LEASE');
+ const issued=Date.now(),expires=Math.min(issued+120000,Date.parse(rows[0].expires_at));
+ need(expires>issued,'CLEAN_STARTUP_LEASE');
+ const receipt={protocol:'device-epoch-clean-startup/v1',action:'start_private_server',scope,source_authority:source(),
+  issued_at:new Date(issued).toISOString(),expires_at:new Date(expires).toISOString(),lease_version:rows[0].lease_version};
+ await verifyCleanStartupReceipt(receipt,{receiptPath,instanceId:scope.instance_id,registrySha256:scope.registry_sha256,
+  sourceCommit:scope.source_commit,policySha256:scope.policy_sha256,read,source,instance});
+ persistStartupReceipt(receiptPath,receipt);
+ return receipt;
+}
 export async function main(args=process.argv.slice(2)){
  let result;
  if(['fence-plan','fence-materialize','fence-apply','fence-resume-plan','fence-resume-apply','fence-resume-inspect','fence-resume-auth-prepare'].includes(args[0])){result=await (await import('./device-epoch-fence-controller.mjs')).main(args);}
@@ -153,6 +220,8 @@ export async function main(args=process.argv.slice(2)){
   need(args.length===5&&/^[1-9][0-9]{0,9}$/.test(args[3]),'DIAGNOSTIC_PROCESS_USAGE');result=await diagnoseReview({taskId:args[1],stateFile:args[2],processPid:Number(args[3]),directory:args[4]});
  }else if(args[0]==='startup-plan'){
   need(args.length===5,'STARTUP_PLAN_USAGE');result=await planStartupReceipt({taskId:args[1],stateFile:args[2],instanceId:args[3],directory:args[4]});
+ }else if(args[0]==='clean-startup-plan'){
+  need(args.length===3,'CLEAN_STARTUP_PLAN_USAGE');result=await planCleanStartupReceipt({taskId:args[1],receiptPath:args[2]});
  }else{
   need(args.length===(args[0]==='diagnose'?4:3)&&['inspect','diagnose'].includes(args[0]),'USAGE_inspect_TASK_STATE_or_diagnose_TASK_STATE_EMPTY_DIRECTORY');const options={taskId:args[1],stateFile:args[2],directory:args[3]};result=await (args[0]==='inspect'?inspectReview(options):diagnoseReview(options));
  }process.stdout.write(JSON.stringify(result)+'\n');process.exitCode=diagnosticExitCode(result);

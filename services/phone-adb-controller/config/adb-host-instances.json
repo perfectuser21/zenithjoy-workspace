@@ -24,7 +24,8 @@
         "instance_id": "mmv-cloud-epoch2"
       },
       "coexists_with": [
-        "mmv-cloud-legacy-5041"
+        "mmv-cloud-legacy-5041",
+        "mmv-yuesheng-direct"
       ]
     },
     {
@@ -42,7 +43,28 @@
         "adb_sha256": "9fdf861259dc807937b13afdd5f053c7fda9f3b7726933fe0e0f45130ecb8dc7"
       },
       "coexists_with": [
-        "mmv-cloud-epoch2"
+        "mmv-cloud-epoch2",
+        "mmv-yuesheng-direct"
+      ]
+    },
+    {
+      "instance_id": "mmv-yuesheng-direct",
+      "kind": "managed",
+      "policy_path": "/Users/administrator/.config/zenithjoy/adb-instances/mmv-yuesheng-direct.json",
+      "policy": {
+        "schema_version": 2,
+        "host_id": "mmv",
+        "transport": "tcp",
+        "endpoint": "tcp:127.0.0.1:5045",
+        "forbidden_ports": [],
+        "adb_bin": "/opt/homebrew/bin/adb",
+        "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/37.0.0/platform-tools/adb",
+        "adb_sha256": "9fdf861259dc807937b13afdd5f053c7fda9f3b7726933fe0e0f45130ecb8dc7",
+        "instance_id": "mmv-yuesheng-direct"
+      },
+      "coexists_with": [
+        "mmv-cloud-epoch2",
+        "mmv-cloud-legacy-5041"
       ]
     }
   ]
