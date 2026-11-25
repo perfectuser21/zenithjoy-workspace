@@ -198,9 +198,10 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
 test('公司管理员能选择资料来源、预览并确认同步', async ({ page }) => {
   const calls: unknown[] = [];
   let state: Record<string, unknown> = {};
-  await page.route('**/api/company-profile', route => route.fulfill({
-    json: { success: true, data: MOCK_COMPANY_PROFILE },
-  }));
+  await page.route('**/api/company-profile', route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    return route.fulfill({ json: { success: true, data: MOCK_COMPANY_PROFILE } });
+  });
   await page.route('**/api/company-profile/source-sync**', async route => {
     const request = route.request();
     if (request.method() === 'GET') {
