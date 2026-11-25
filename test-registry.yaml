@@ -10640,6 +10640,22 @@ tests:
     product: 获客
     note: Real session gate, tenant middleware and HTTP repair/readback; external auth/DB seams only.
 
+  - id: company-source-import
+    path: apps/api/src/services/company-source-import.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "统一 Notion 和飞书客户资料，缺列或串工作台拒绝导入"
+
+  - id: company-source-sync-real-pg
+    path: apps/api/tests/pg-contracts/company-source-sync-pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 获客
+    note: "真实 PostgreSQL 验证预览、原子启用、租户隔离、重复确认和过期保护"
+
   - id: company-routing-normalization-real-pg
     path: apps/api/tests/pg-contracts/routing-normalization-pg.test.ts
     type: integration
