@@ -9,13 +9,13 @@ const path=new URL('../../../.github/workflows/pr-review.yml',import.meta.url);
 const source=readFileSync(path,'utf8');
 const run=source.match(/id: ai-review[\s\S]*?run: \|([\s\S]*?)(?=\n      - name:|$)/)?.[1];
 assert.ok(run,'实际审查步骤存在，测试只用Node内置模块');
-test('真实CI文件请求保留固定模型、禁推理及最终输出预算',()=>{
+test('真实CI文件固定Terra、仅输出最终正文并保留输出预算',()=>{
  const folder=mkdtempSync(join(tmpdir(),'pr-review-payload-'));
  try{
   writeFileSync(join(folder,'pr-review-system.txt'),'审查代码');writeFileSync(join(folder,'pr-review.diff'),'diff --git a/a.py b/a.py');
   const fragment=run.match(/jq -n([\s\S]*?)> "\$RUNNER_TEMP\/pr-review-request.json"/);assert.ok(fragment);
   const built=spawnSync('bash',['-c','jq -n'+fragment[1]],{encoding:'utf8',env:{...process.env,RUNNER_TEMP:folder}});assert.equal(built.status,0,built.stderr);
-  const request=JSON.parse(built.stdout);assert.equal(request.model,'deepseek/deepseek-v4-flash');assert.deepEqual(request.reasoning,{enabled:false});assert.equal(request.max_tokens,4096);assert.equal(request.temperature,0.1);assert.equal(request.enable_thinking,undefined);assert.equal(request.thinking,undefined);
+  const request=JSON.parse(built.stdout);assert.equal(request.model,'openai/gpt-6.1-terra');assert.deepEqual(request.reasoning,{effort:'none',exclude:true});assert.equal(request.max_completion_tokens,4096);assert.equal(request.temperature,undefined);assert.equal(request.enable_thinking,undefined);assert.equal(request.thinking,undefined);
   assert.deepEqual(request.messages,[{role:'system',content:'审查代码'},{role:'user',content:'请审查以下代码变更：\n\n```diff\ndiff --git a/a.py b/a.py\n```'}]);
  }finally{rmSync(folder,{recursive:true,force:true});}
 });
@@ -52,7 +52,7 @@ for(const row of [
    assert.equal(args[methodIndex+2],'https://openrouter.ai/api/v1/chat/completions');
    assert.ok(args.includes('Authorization: Bearer fixture-key-not-a-secret'));
    assert.equal(args[args.indexOf('--connect-timeout')+1],'20');assert.equal(args[args.indexOf('--max-time')+1],'180');assert.ok(!args.includes('--retry'),'one retry owner; curl must not multiply calls');
-   const body=JSON.parse(readFileSync(args[args.indexOf('--data-binary')+1].slice(1),'utf8'));assert.equal(body.model,'deepseek/deepseek-v4-flash');assert.deepEqual(body.reasoning,{enabled:false});assert.equal(body.max_tokens,4096);
+   const body=JSON.parse(readFileSync(args[args.indexOf('--data-binary')+1].slice(1),'utf8'));assert.equal(body.model,'openai/gpt-6.1-terra');assert.deepEqual(body.reasoning,{effort:'none',exclude:true});assert.equal(body.max_completion_tokens,4096);
   }
   assert.match(result.stdout,new RegExp(`curl_exit=${row.exit??0} category=\\w+ http=${row.http??200} response_bytes=\\d+ stderr_bytes=\\d+`));
   assert.ok(!(result.stdout+result.stderr).includes('fixture-sensitive-error'));assert.ok(!(result.stdout+result.stderr).includes('fixture-key-not-a-secret'));
@@ -85,7 +85,7 @@ test('真实workflow保留大单行XML diff于文件，正文不进入环境或�
   assert.equal(readFileSync(envFile,'utf8'),'','diff正文不得写入GITHUB_ENV，单行XML会触发Linux单变量上限');
   assert.equal(readFileSync(join(folder,'pr-review.diff'),'utf8'),diff,'真实diff完整保留，不按行或字节截断');
   const reviewed=spawnSync('bash',['-e','-o','pipefail','-c',run.replace(/^          /gm,'').replaceAll('/tmp/review-result.txt',join(folder,'review.txt'))],{encoding:'utf8',env,cwd:folder});assert.equal(reviewed.status,0,reviewed.stderr);
-  const call=JSON.parse(readFileSync(calls,'utf8').trim());assert.ok(call.args.every(x=>!x.includes('<node')));assert.ok(call.request.messages[1].content.includes(diff));assert.deepEqual(call.request.reasoning,{enabled:false});
+  const call=JSON.parse(readFileSync(calls,'utf8').trim());assert.ok(call.args.every(x=>!x.includes('<node')));assert.ok(call.request.messages[1].content.includes(diff));assert.deepEqual(call.request.reasoning,{effort:'none',exclude:true});
  }finally{rmSync(folder,{recursive:true,force:true});}
 });
 
