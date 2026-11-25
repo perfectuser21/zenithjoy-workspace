@@ -26,6 +26,16 @@ describe('公司资料同步', () => {
     expect(profile.wiki.products[0].fields).toEqual({ 保留列: true });
   });
 
+  it('同名关键词可按不同记录标识保留各自条件', () => {
+    const input = rows();
+    input.keywords.push({ id: 'row-k-other', fields: { ...input.keywords[0].fields, 时间范围: 14, 优先级: 5 } });
+    const result = importCompanySource({}, input).runtime_config.search_strategy.keywords;
+    expect(result).toMatchObject([
+      { id: 'row-k', word: '新词', fields: { 时间窗口天数: '' } },
+      { id: 'row-k-other', word: '新词', fields: { 时间窗口天数: '14', 优先级: '5' } },
+    ]);
+  });
+
   it('拒绝缺列和重复标识，避免误删现役资料', () => {
     const input = rows();
     input.products.push(input.products[0]);

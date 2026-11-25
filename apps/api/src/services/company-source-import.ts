@@ -56,7 +56,6 @@ export function importCompanySource(profile: RecordData, input: SourceRows) {
     if (typeof input.启用 !== 'boolean' && input.启用 !== undefined) throw Error('关键词启用列必须是复选框');
     return { ...row, word, enabled: input.启用 === true };
   });
-  if (new Set(keywords.map(row => row.word)).size !== keywords.length) throw Error('关键词存在重复名称');
   return {
     products: products.map(row => row.name),
     wiki: { ...wiki, products, audiences },
