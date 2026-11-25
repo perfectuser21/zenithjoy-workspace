@@ -13,5 +13,10 @@
     "step_every_hours": 3,
     "step_amount": 5,
     "ceiling_per_day": 60
+  },
+  "yueshengyun-work": {
+    "mode": "fixed",
+    "base_per_day": 80,
+    "ceiling_per_day": 80
   }
 }

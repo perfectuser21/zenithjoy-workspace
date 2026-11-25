@@ -51,3 +51,9 @@ test("loadRampConfig: 从文件读取并按profile取配置", () => {
   assert.equal(cfg["jinoshengyuan-work"].mode, "daily_step");
   assert.equal(cfg["legacy"].mode, "intraday_step");
 });
+
+test('YueSheng 104 uses the same company cap of 80 across campaign variants', () => {
+  const cfg = loadRampConfig(new URL('../config/leadgen-outreach-rate-ramp.json', import.meta.url).pathname);
+  const sender = cfg['yueshengyun-work'];
+  assert.equal(computeDailyCap(sender, new Date('2026-11-25T11:00:00+08:00')), 80);
+});
