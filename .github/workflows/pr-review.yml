@@ -1,7 +1,7 @@
-name: PR Auto Review (DeepSeek)
+name: PR Auto Review (GPT-6.1 Terra)
 
 # AI 代码审查 — 每个 PR 创建/更新时自动触发
-# 使用已核 OpenRouter 通道的固定 DeepSeek V4 模型审查；上游不可达或无最终正文则失败
+# 通过 OpenRouter 使用固定的 GPT-6.1 Terra。只有收到最终正文才发布审查。
 # 结果以评论形式发布到 PR
 # 若发现🔴严重问题 → 记录在 PR 评论里供人工参考，不再阻断合并（0929 决策 703c1532：
 # 单轮 AI 审查判定不收敛，见 issue c115e952）
@@ -11,8 +11,8 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  deepseek-review:
-    name: DeepSeek Code Review
+  terra-review:
+    name: GPT-6.1 Terra Code Review
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -44,7 +44,6 @@ jobs:
       - name: 调用 OpenRouter API 进行代码审查（含重试，fail-closed）
         id: ai-review
         env:
-          # 原通道对同份PR diff连续空超时；已核原OpenRouter账号/同模型可返回最终正文。
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           cat > "$RUNNER_TEMP/pr-review-system.txt" <<'SYSTEM_EOF'
@@ -68,14 +67,13 @@ jobs:
             --rawfile sys "$RUNNER_TEMP/pr-review-system.txt" \
             --rawfile diff "$RUNNER_TEMP/pr-review.diff" \
             '{
-              "model": "deepseek/deepseek-v4-flash",
+              "model": "openai/gpt-6.1-terra",
               "messages": [
                 {"role": "system", "content": $sys},
                 {"role": "user", "content": ("请审查以下代码变更：\n\n```diff\n" + $diff + "\n```")}
               ],
-              "max_tokens": 4096,
-              "temperature": 0.1,
-              "reasoning": {"enabled": false}
+              "max_completion_tokens": 4096,
+              "reasoning": {"effort": "none", "exclude": true}
             }' > "$RUNNER_TEMP/pr-review-request.json"
 
           # OpenRouter官方统一reasoning参数关闭推理；仅接受message.content最终正文。
@@ -136,7 +134,7 @@ jobs:
           done
 
           if [[ -z "$REVIEW_CONTENT" ]]; then
-            echo "❌ OpenRouter API 调用全部失败或无最终正文（已重试 ${MAX_RETRY} 次），阻止 PR 合并" >&2
+            echo "❌ OpenRouter API 调用全部失败或无最终正文（共尝试 ${MAX_RETRY} 次）" >&2
             exit 1
           fi
 
@@ -148,12 +146,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REVIEW_CONTENT=$(cat /tmp/review-result.txt)
-          COMMENT_BODY="## 🤖 AI 代码审查（DeepSeek V4）
+          COMMENT_BODY="## 🤖 AI 代码审查（GPT-6.1 Terra）
 
           ${REVIEW_CONTENT}
 
           ---
-          *由 [OpenRouter](https://openrouter.ai) 提供 DeepSeek V4 模型审查*"
+          *由 [OpenRouter](https://openrouter.ai) 提供 GPT-6.1 Terra 模型审查*"
 
           gh pr comment ${{ github.event.pull_request.number }} \
             --body "$COMMENT_BODY" 2>/dev/null || \
