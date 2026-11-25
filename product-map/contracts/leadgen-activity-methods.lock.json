@@ -166,7 +166,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -295,11 +295,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "55068e223684bd345ba6ef1d686b93602c9c03001b5c7ab560bb6179bc6dc3bc",
+      "code_digest": "517a81bb0802d30f094dd236c3ed093c59afaa38300beb9d24cd221b338f91d0",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "06e9d24121307d9ccf7f62443e055d6c9e1b4fbf6ffa94bd8274297e447b39da",
-        "current_code_digest": "55068e223684bd345ba6ef1d686b93602c9c03001b5c7ab560bb6179bc6dc3bc",
+        "current_code_digest": "517a81bb0802d30f094dd236c3ed093c59afaa38300beb9d24cd221b338f91d0",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -626,11 +626,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+      "code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cf02e7d2cc54cf9d7d8d52783c21b4967389a42fa7694b48ffd0bbc8c91f0f5b",
-        "current_code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+        "current_code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -828,7 +828,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -957,11 +957,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+      "code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cf02e7d2cc54cf9d7d8d52783c21b4967389a42fa7694b48ffd0bbc8c91f0f5b",
-        "current_code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+        "current_code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -1143,7 +1143,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -1293,11 +1293,11 @@
           "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
         }
       ],
-      "code_digest": "5d813ded617427da7acdf27194007cb9c5d03ad93eaea245efc102301ec66f4b",
+      "code_digest": "d5603bd2be1f8726cd9a43729a3c66da9753418976bea47e865deebcd835f5e6",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "f090f4d662c08f2ccc87be4f420730fad9f24413754a89aaaaa73d58f042e0c5",
-        "current_code_digest": "5d813ded617427da7acdf27194007cb9c5d03ad93eaea245efc102301ec66f4b",
+        "current_code_digest": "d5603bd2be1f8726cd9a43729a3c66da9753418976bea47e865deebcd835f5e6",
         "reason": "只读核验原 Run 已绑定的覆盖清单与画面字节，保留原日志、转写及失败保护。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -1495,7 +1495,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -1624,11 +1624,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+      "code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cf02e7d2cc54cf9d7d8d52783c21b4967389a42fa7694b48ffd0bbc8c91f0f5b",
-        "current_code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+        "current_code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -1826,7 +1826,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -1955,11 +1955,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+      "code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "cf02e7d2cc54cf9d7d8d52783c21b4967389a42fa7694b48ffd0bbc8c91f0f5b",
-        "current_code_digest": "85c8ed4b16e29de1e795fbf518a2eb834247e450b353769a22b2b8fa338908be",
+        "current_code_digest": "dba3833fcf77870e8c0fe0bf335d5101f6116961abaad0c91ad11566adc7645e",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -2169,7 +2169,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -2298,11 +2298,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "148d292c76a5e2145cf252e0437e348ed69ccd548e86fbb0015ccf2ffc91083f",
+      "code_digest": "050612d0b85327e9e221d97bd62c1af12cfba7c0856a71e9fec63b5aa74f1b83",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "529a920d3ad4c6c25cfe72c786a92495a0fd788fd336bb2f5ddece3603196c76",
-        "current_code_digest": "148d292c76a5e2145cf252e0437e348ed69ccd548e86fbb0015ccf2ffc91083f",
+        "current_code_digest": "050612d0b85327e9e221d97bd62c1af12cfba7c0856a71e9fec63b5aa74f1b83",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -2512,7 +2512,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -2641,11 +2641,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "148d292c76a5e2145cf252e0437e348ed69ccd548e86fbb0015ccf2ffc91083f",
+      "code_digest": "050612d0b85327e9e221d97bd62c1af12cfba7c0856a71e9fec63b5aa74f1b83",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "529a920d3ad4c6c25cfe72c786a92495a0fd788fd336bb2f5ddece3603196c76",
-        "current_code_digest": "148d292c76a5e2145cf252e0437e348ed69ccd548e86fbb0015ccf2ffc91083f",
+        "current_code_digest": "050612d0b85327e9e221d97bd62c1af12cfba7c0856a71e9fec63b5aa74f1b83",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -2836,7 +2836,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -2965,11 +2965,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+      "code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "028fec21db131b94dbb8f22557ef0ec2ae4312e3f74cf4762ec36ddff6881a7a",
-        "current_code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+        "current_code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -3160,7 +3160,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -3289,11 +3289,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+      "code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "028fec21db131b94dbb8f22557ef0ec2ae4312e3f74cf4762ec36ddff6881a7a",
-        "current_code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+        "current_code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -3484,7 +3484,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -3613,11 +3613,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+      "code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "028fec21db131b94dbb8f22557ef0ec2ae4312e3f74cf4762ec36ddff6881a7a",
-        "current_code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+        "current_code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
@@ -3808,7 +3808,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs",
           "revision": "contract",
-          "sha256": "3c83f30447aee31aa6232dbef92b60894868b70bc14c6e87bb6273e18f0161d7"
+          "sha256": "521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be"
         },
         {
           "kind": "code",
@@ -3937,11 +3937,11 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+      "code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
       "code_compatibility": {
         "kind": "internal_compatible",
         "previous_code_digest": "028fec21db131b94dbb8f22557ef0ec2ae4312e3f74cf4762ec36ddff6881a7a",
-        "current_code_digest": "291f7d6c687b361f71103c2f9cde0baa3486f91a0078475baae2b485419d7aac",
+        "current_code_digest": "339844135b369b95a8c787967719d4033a28a63293ff83db65c4b23122c4ef36",
         "reason": "共享只读事实源的历史资格分支补充真图证据，当前活动的技能、契约和执行逻辑一致。",
         "reviewed_by": "codex-independent-review-102-origin"
       }
