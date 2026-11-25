@@ -33,7 +33,6 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     title: '视频工具',
     subtitle: '从创意生成到清晰成片，选择一个工具开始。',
     cards: [
-      { label: '视频创作画布', desc: '在 ComfyUI 中拖拽节点、连线，完成分镜与视频修改', to: '/creative-canvas', Icon: Layers, color: 'text-purple-500' },
       { label: 'Wan Playground', desc: '使用 Wan 3.0，根据文字和参考素材生成视频', to: '/wan-playground', Icon: Sparkles, color: 'text-violet-500' },
       { label: '视频超分', desc: '上传已有视频，两倍放大并增强画面细节', to: '/video-upscale', Icon: Video, color: 'text-blue-500' },
     ],
@@ -79,7 +78,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     title: '爆款翻拍',
     subtitle: '上传视频 + 模特图 + 产品图，AI 翻拍出新爆款。',
     cards: [
-      { label: 'AI 视频翻拍', desc: '9 节点画布翻拍流水线', to: '/video-remake', Icon: Video, color: 'text-violet-500' },
+      { label: 'AI 视频翻拍', desc: '9 步视频翻拍流水线', to: '/video-remake', Icon: Video, color: 'text-violet-500' },
     ],
   },
   settings: {

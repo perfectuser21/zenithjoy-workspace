@@ -130,7 +130,6 @@ jobs:
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
       # 同时声明两个 workspace。
       # media-contracts-smoke executes API/provider and Dashboard interaction suites once.
-      # video-tools-smoke retains the additional shipped canvas graph/node contracts.
       # Staff's environment-badge smoke builds the current editor, including its
       # collaboration dependencies. Install all four together: a later workspace
       # npm ci would remove dependencies installed for the previous consumers.

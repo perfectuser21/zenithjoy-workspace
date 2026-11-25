@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowRight, ExternalLink, Sparkles } from 'lucide-react';
+import { ExternalLink, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Field {
@@ -213,12 +212,6 @@ export default function AidgeWorkspacePage() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100">
           阿里云电商经营助手的翻译、图片、视频、商品经营与巡检能力，按栏目选择后直接运行。
         </p>
-        {!isAidgeOnly && <Link
-          to="/creative-canvas"
-          className="mt-5 inline-flex items-center gap-2 text-sm text-violet-200 hover:text-white"
-        >
-          前往创作画布 <ArrowRight size={15} />
-        </Link>}
       </header>
 
       {loadingCatalog && (

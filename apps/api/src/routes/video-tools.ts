@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import multer from 'multer';
 import { rateLimit } from 'express-rate-limit';
 import { fromNodeHeaders } from 'better-auth/node';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { resolve, join, extname, sep } from 'node:path';
@@ -119,29 +119,6 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   }
   const wrap = (handler: (req: StaffRequest, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => { void handler(req, res, next).catch(next); };
   router.use(wrap(async (req, res, next) => {
-    const instanceToken=req.get('X-Creative-Instance-Token');
-    if (instanceToken) {
-      let tokens:Record<string,unknown>={};let instances:Record<string,unknown>={};
-      try {tokens=JSON.parse(process.env.CREATIVE_CANVAS_SERVICE_TOKENS || '{}');instances=JSON.parse(process.env.CREATIVE_CANVAS_INSTANCES || '{}');} catch {return void res.status(401).json({error:'画布身份无效'});}
-      if (!tokens || Array.isArray(tokens) || typeof tokens!=='object' || !instances || Array.isArray(instances) || typeof instances!=='object') return void res.status(401).json({error:'画布身份无效'});
-      const entries=Object.entries(tokens);
-      const values=entries.map(([,value])=>value);
-      if (entries.length>1000 || values.some(value=>typeof value!=='string' || value.length<32 || value.length>512) || new Set(values).size!==values.length || instanceToken.length>512) return void res.status(401).json({error:'画布身份无效'});
-      const digest=(value:string)=>createHash('sha256').update(value).digest();
-      let staffId:string|undefined;
-      for (const [id,value] of entries) if (timingSafeEqual(digest(instanceToken),digest(value as string)) && typeof instances[id]==='string') staffId=id;
-      if (!staffId) return void res.status(401).json({error:'画布身份无效'});
-      // A registered canvas may run its owner's native project nodes. No project
-      // enumeration, browser upload, configuration or destructive API is granted.
-      const projectIdPattern='[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
-      const projectRead=new RegExp(`^/projects/${projectIdPattern}(?:/download)?$`,'i');
-      const projectWrite=new RegExp(`^/projects/${projectIdPattern}(?:/segments/${projectIdPattern})?$`,'i');
-      const projectAction=new RegExp(`^/projects/${projectIdPattern}/(?:split|assemble)$`,'i');
-      const projectPermitted=(req.method==='POST'&&(req.path==='/projects'||projectAction.test(req.path))) || (req.method==='GET'&&projectRead.test(req.path)) || (req.method==='PATCH'&&projectWrite.test(req.path));
-      const permitted=projectPermitted || (req.method==='POST' && (req.path==='/image-jobs' || req.path==='/canvas-images' || (req.path==='/jobs' && req.body?.kind==='wan'))) || (req.method==='GET' && (/^\/image-jobs\/[a-f0-9-]+$/i.test(req.path) || /^\/canvas-images\/[a-f0-9-]+$/i.test(req.path) || /^\/jobs\/[a-f0-9-]+(?:\/download)?$/i.test(req.path)));
-      if (!permitted) return void res.status(403).json({error:'画布操作无权访问'});
-      req.videoStaffId=staffId;next();return;
-    }
     const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
     if (!session?.user?.id) return void res.status(401).json({ error: '登录已失效，请重新登录' });
     const staff = parseFlatDirectory(process.env);
@@ -250,54 +227,6 @@ export function createVideoToolsRouter(options: Options = {}): Router {
       res.json(asset);
     } finally { await unlink(temporaryFile).catch(() => {}); temporaryFiles.delete(req); }
   }));
-
-  // Canvas instances upload image bytes only; no arbitrary source URLs or video files.
-  const canvasUpload=multer({storage:multer.diskStorage({destination:tmpdir(),filename:(req,_file,cb)=>{
-    const filename=`canvas-image-${randomUUID()}`;temporaryFiles.set(req,join(tmpdir(),filename));cb(null,filename);
-  }}),limits:{fileSize:20*1024*1024,files:1},fileFilter:(_req,file,cb)=>{
-    if (file.originalname !== 'canvas.png') return cb(Object.assign(new Error('请选择 PNG 图片'),{status:400}));
-    cb(null,true);
-  }});
-  async function currentCanvasAsset(req:StaffRequest,id:string):Promise<Asset> {
-    if (!uuid.test(id)) return fail(404,'素材不存在或无权访问');
-    return serialized(`canvas-asset:${req.videoStaffId}:${id}`,async()=>{
-      const asset=await load<Asset>(assetPath(req,id),directory);
-      if (!asset || asset.kind!=='image') return fail(404,'素材不存在或无权访问');
-      if (Date.now()-Date.parse(asset.createdAt)>22*3600_000) {
-        const suffix=extname(asset.name).toLowerCase();
-        if (!['.png','.jpg','.jpeg','.webp'].includes(suffix)) return fail(400,'素材格式无效');
-        asset.url=await (await getStorage()).getSignedUrl(`video-tools/${hash(req.videoStaffId!)}/${id}${suffix}`,86400);
-        asset.createdAt=new Date().toISOString();await save(assetPath(req,id),asset);
-      }
-      return asset;
-    });
-  }
-  router.post('/canvas-images',canvasUpload.single('file'),wrap(async(req,res)=>{
-    const file=req.file;const temp=temporaryFiles.get(req);
-    if (!file || !temp) return fail(400,'请选择图片');
-    try {
-      if (!file.size) return fail(400,'不能上传空文件');
-      const bytes=await readFile(temp);
-      if (!bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return fail(400,'请选择有效的 PNG 图片');
-      const metadata=await inspectAsset(temp,'image');
-      if (metadata.width*metadata.height>2048*2048) return fail(400,'图片像素不能超过 4194304，请缩小图片后重试');
-      if (Math.min(metadata.width,metadata.height)<240 || Math.max(metadata.width,metadata.height)>8000 || Math.max(metadata.width,metadata.height)/Math.min(metadata.width,metadata.height)>4) return fail(400,'图片边长须为 240 至 8000 像素，长宽比不超过 4:1');
-      const digest=createHash('sha256').update(bytes).digest('hex');
-      await serialized(`canvas-upload:${req.videoStaffId}:${digest}`,async()=>{
-        const indexPath=join(ownerDir(req),'canvas-image-index',`${digest}.json`);
-        const index=await load<{id:string}>(indexPath,directory);
-        if (index && uuid.test(index.id)) {
-          const existing=await load<Asset>(assetPath(req,index.id),directory);
-          if (existing) {res.json(await currentCanvasAsset(req,index.id));return;}
-        }
-        const id=randomUUID();const key=`video-tools/${hash(req.videoStaffId!)}/${id}.png`;const objectStorage=await getStorage();
-        await objectStorage.putObject({key,filePath:temp,contentType:'image/png'});
-        const asset:Asset={id,url:await objectStorage.getSignedUrl(key,86400),kind:'image',name:'canvas.png',...metadata,size:file.size,createdAt:new Date().toISOString()};
-        await save(assetPath(req,id),asset);await save(indexPath,{id});res.json(asset);
-      });
-    } finally {await unlink(temp).catch(()=>{});temporaryFiles.delete(req);}
-  }));
-  router.get('/canvas-images/:id',wrap(async(req,res)=>res.json(await currentCanvasAsset(req,req.params.id))));
 
   const imageJobPath = (req: StaffRequest, id: string) => join(ownerDir(req), 'image-jobs', `${id}.json`);
   const imageView = (job: ImageJob) => ({ id:job.id, status:job.status, createdAt:job.createdAt, ...(job.asset ? {asset:job.asset} : {}), ...(job.error ? {error:job.error} : {}) });
