@@ -2,6 +2,7 @@
 import {lstatSync,readdirSync,realpathSync,mkdirSync,openSync,closeSync,constants,fsyncSync,mkdtempSync,linkSync,unlinkSync,rmSync} from 'node:fs';
 import {join,dirname,resolve,basename} from 'node:path';
 import {userInfo} from 'node:os';
+import {isIPv4} from 'node:net';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {bytes,canonical,digest as sha,writeAll,FENCE_ACTIONS,approvalScopeFor} from './device-epoch-fence-reference.mjs';
 export {bytes};
@@ -117,13 +118,15 @@ async function verifyCleanStartupReceipt(receipt,{receiptPath,instanceId,registr
  source=reviewSource,instance=readStartupInstance,read=readBrain}){
  const scope=receipt.scope,issued=Date.parse(receipt.issued_at),expires=Date.parse(receipt.expires_at),now=Date.now();
  const version=value=>typeof value==='string'&&/^[1-9]\d{0,9}$/.test(value)&&Number(value)<=4294967295;
+ const locator=typeof scope?.adb_serial==='string'&&scope.adb_serial.match(/^([^:]+):([1-9]\d{0,4})$/);
  need(typeof receiptPath==='string'&&resolve(receiptPath)===receiptPath&&receipt.action==='start_private_server'
   &&scope?.instance_id===instanceId&&/^[a-z][a-z0-9-]{2,63}$/.test(instanceId||'')
   &&scope.source_commit===sourceCommit&&/^[a-f0-9]{40}$/.test(sourceCommit||'')
   &&scope.registry_sha256===registrySha256&&scope.policy_sha256===policySha256
   &&[registrySha256,policySha256].every(value=>/^[a-f0-9]{64}$/.test(value||''))
   &&[scope.task_id,scope.original_task_id,scope.original_run_id,scope.decision_id,scope.pending_action_id].every(value=>uuid.test(value||''))
-  &&scope.task_id!==scope.original_task_id&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(scope.serial||'')
+  &&scope.task_id!==scope.original_task_id&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(scope.serial||'')
+  &&locator&&isIPv4(locator[1])&&Number(locator[2])<=65535
   &&typeof scope.review_event_id==='string'&&/^[1-9]\d*$/.test(scope.review_event_id)
   &&version(receipt.lease_version)&&issued<=now&&expires>now&&expires-issued<=120000,'CLEAN_STARTUP_RECEIPT');
  const currentSource=source(),fixed=instance({instanceId,registrySha256,policySha256});

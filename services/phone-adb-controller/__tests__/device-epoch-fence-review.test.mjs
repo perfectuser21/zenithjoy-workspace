@@ -31,21 +31,22 @@ test('已完成独立清场的设备可单独启空服务，仍要求本次审�
  const registrySha256='c'.repeat(64),policySha256='d'.repeat(64),leaseVersion='21';
  const approvalRef='f80bca77-53f6-4bd6-88ec-4675eaf0255d';
  const reviewedAction='76bdc92e-46a2-4ac1-b6f7-b6a000c93f8e';
- const scope={task_id:maintenance,original_task_id:original,original_run_id:run,serial,
+ const hardware='fixture-phone-serial';
+ const scope={task_id:maintenance,original_task_id:original,original_run_id:run,serial:hardware,adb_serial:serial,
   instance_id:instanceId,endpoint,source_commit:source.commit,registry_sha256:registrySha256,policy_sha256:policySha256,
   review_event_id:'62162',decision_id:approvalRef,pending_action_id:reviewedAction};
  const now=Date.now();
  const receipt={protocol:'device-epoch-clean-startup/v1',action:'start_private_server',scope,source_authority:source,
   issued_at:new Date(now).toISOString(),expires_at:new Date(now+60000).toISOString(),lease_version:leaseVersion};
  const cleanup={protocol:'native-agent-resource-settlement/v1',basis:'operator-cleanup-review',task_id:original,run_id:run,
-  review_event_id:'62162',pending_action_id:reviewedAction,devices:[{device_name:serial,acquisition_version:'20'}],
+  review_event_id:'62162',pending_action_id:reviewedAction,devices:[{device_name:hardware,acquisition_version:'20'}],
   host:{machine_id:'us-mac-m4'},review:{actor:'authenticated-operator',cleanup_confirmed:true,effects_reviewed:true}};
  const readings={
   ['/api/brain/tasks/'+maintenance]:{id:maintenance,status:'in_progress',claimed_by:'approved-operator',claimed_at:receipt.issued_at,
    payload:{decision_id:approvalRef},result:{clean_adb_startup_approval:{protocol:'device-epoch-clean-startup-approval/v1',scope}}},
   ['/api/brain/tasks/'+original]:{id:original,status:'completed_no_pr',result:{native_agent_resource_review:cleanup}},
   ['/api/brain/pending-actions/'+reviewedAction]:{id:reviewedAction,status:'approved',action_type:'owner_decision',params:{task_id:original},execution_result:cleanup},
-  '/api/brain/device-locks':{success:true,locks:[{device_name:serial,locked_by:maintenance,lease_version:leaseVersion,expired:false,
+  '/api/brain/device-locks':{success:true,locks:[{device_name:hardware,locked_by:maintenance,lease_version:leaseVersion,expired:false,
    expires_at:new Date(now+90000).toISOString()}]},
  };
  const fixed={instance_id:instanceId,endpoint,registry_sha256:registrySha256,policy_sha256:policySha256};
@@ -54,6 +55,8 @@ test('已完成独立清场的设备可单独启空服务，仍要求本次审�
   read:async path=>structuredClone(readings[path])};
  const result=await verifyStartupReceipt(options);
  assert.deepEqual(result,{protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',...fixed,source_commit:source.commit});
+ await assert.rejects(verifyStartupReceipt({...options,load:()=>({...receipt,scope:{...scope,adb_serial:hardware}})}),/CLEAN_STARTUP_RECEIPT/);
+ await assert.rejects(verifyStartupReceipt({...options,load:()=>({...receipt,scope:{...scope,adb_serial:'192.0.2.15:5555'}})}),/CLEAN_STARTUP_APPROVAL/);
  const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
  const directory=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'clean-adb-startup-'));
  t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
