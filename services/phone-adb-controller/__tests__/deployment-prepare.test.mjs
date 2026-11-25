@@ -64,6 +64,7 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
  }));
  const acceptanceTaskIds={},acceptanceTasks=new Map();
  for(const [runId,proof]of proofs){const i=Number(runId.split('-')[1]);if(i>3)continue;const taskId=`aaaaaaaa-aaaa-4aaa-8aaa-${String(i+1).padStart(12,'0')}`;acceptanceTaskIds[runId]=taskId;for(const task of fixtureSkillTasks({n:101+i,taskId,proof,sha}))acceptanceTasks.set(task.id,task);}
+ let releaseReadDropped = false;
  const server=createServer(async(req,res)=>{
   assert.equal(req.headers.authorization,'Bearer fixture-private-token');let body='';for await(const part of req)body+=part;requests.push({method:req.method,path:req.url,environment:body?JSON.parse(body).environment:undefined});
   if(req.method==='GET'&&req.url.startsWith('/api/brain/tasks/')){
@@ -78,6 +79,12 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
   if(req.method==='GET'&&req.url.endsWith('/gate')){
    const release=releases.get(req.url.split('/')[4]);
    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({release_id:release.id,deployed:true,actual_matches:true,current_observation_id:`observation-${release.target}`}));return;
+  }
+  if (mode === 'release_read_cutover' && req.method === 'GET' &&
+      req.url === '/api/brain/releases/' + uuid(5) && !releaseReadDropped) {
+   releaseReadDropped = true;
+   req.socket.destroy();
+   return;
   }
   let release;
   if(req.method==='POST'){
@@ -108,6 +115,22 @@ test('工作区字节漂移在创建release前拒绝',async t=>{
 test('Pilot绿但业务失败时禁止创建production release及执行部署',async t=>{
  const f=await fixture(t);f.setMode('business_failed');await assert.rejects(prepareAndDeploy(f));
  assert.equal(f.requests.some(r=>r.method==='POST'),false);assert.equal(existsSync(f.marker),false);
+});
+
+test('候选入口在 Brain 发布切换后读回同一 release 并继续准备', async t => {
+ const f = await fixture(t);
+ f.setMode('release_read_cutover');
+ const plan = await prepareAndDeploy({
+  ...f, mode: 'candidate', businessRunIds: [], acceptanceTaskIds: {},
+  stageCandidateFn: async ({plan}) => plan,
+ });
+ assert.equal(plan.environment, `staging:${f.sha}`);
+ const path = '/api/brain/releases/' + plan.release_ids['xian-m4'];
+ assert.equal(f.requests.filter(r => r.method === 'GET' && r.path === path).length, 2);
+ const posts = f.requests.filter(r => r.method === 'POST');
+ assert.equal(posts.length, 2);
+ assert.ok(posts.every(r => r.environment === plan.environment));
+ assert.equal(existsSync(f.marker), false);
 });
 
 test('安全安装入口独立于业务promote：无业务run仍可进入只围栏模式，且不生成production release',async t=>{
