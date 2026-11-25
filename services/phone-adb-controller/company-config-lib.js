@@ -1,7 +1,6 @@
 'use strict';
 const { routeOf } = require('./line-routes.js');
 const { isDeepStrictEqual } = require('node:util');
-const { isIPv4 } = require('node:net');
 
 function missing(field) { throw new Error(`COMPANY_CONFIG_MISSING: ${field}`); }
 function configTargetProfile(snapshot, step) {
@@ -67,33 +66,6 @@ async function freezeCompanyConfig(pool, {lineHint,runId,step,sourceRun,taskInpu
     await client.query('COMMIT');return out;
   } catch(error) {await client.query('ROLLBACK');throw error;} finally {client.release();}
 }
-// 设备编号用于业务归属和锁。ADB 地址和实例只能来自已核验的公司配置。
-function resolveCompanyPhoneAccount(snapshot, requested, { requireTenant = true } = {}) {
-  if (!snapshot?.company_id || !snapshot.tenant_id || !Number.isSafeInteger(snapshot.version)
-    || snapshot.version < 1 || !requested?.profile || !requested.device_serial) return null;
-  const accounts = snapshot.runtime_config?.platform_accounts;
-  const matches = Array.isArray(accounts)
-    ? accounts.filter(account => account?.profile === requested.profile && account.enabled !== false) : [];
-  if (matches.length !== 1) return null;
-  const [account] = matches;
-  if (account.enabled !== true || account.verification_status !== 'verified'
-    || account.device_serial !== requested.device_serial || typeof account.douyin_id !== 'string'
-    || !account.douyin_id || account.douyin_id.trim() !== account.douyin_id) return null;
-
-  const cloud = Object.hasOwn(account, 'adb_serial') || Object.hasOwn(account, 'adb_instance_id');
-  if ((requireTenant || cloud) && (account.company_id !== snapshot.company_id
-    || account.tenant_id !== snapshot.tenant_id || account.platform !== 'douyin')) return null;
-  if (cloud) {
-    const locator = typeof account.adb_serial === 'string'
-      ? /^([^:]+):([1-9]\d{0,4})$/.exec(account.adb_serial) : null;
-    if (!locator || !isIPv4(locator[1]) || Number(locator[2]) > 65535
-      || account.adb_serial === account.device_serial
-      || typeof account.adb_instance_id !== 'string' || !/^[a-z][a-z0-9-]{2,63}$/.test(account.adb_instance_id)) return null;
-  }
-  return { profile: account.profile, device_serial: account.device_serial, douyin_id: account.douyin_id,
-    ...(cloud ? { adb_serial: account.adb_serial, adb_instance_id: account.adb_instance_id } : {}) };
-}
-
 // 来源授权只能读既有102快照；禁止用freezeCompanyConfig为旧评论补造来源。
 async function readCollectionAccountBinding(pool,{lineKey,run,sourceRun}) {
   const fail=()=>{throw Error('COMPANY_COLLECTION_BINDING_INVALID');};
@@ -109,9 +81,15 @@ async function readCollectionAccountBinding(pool,{lineKey,run,sourceRun}) {
     ||s.config_status!=='enabled'||s.runtime_config?.routing?.line_key!==lineKey
     ||!pick||Object.keys(pick).sort().join(',')!=='device_serial,profile'
     ||typeof pick.profile!=='string'||!pick.profile||typeof pick.device_serial!=='string'||!pick.device_serial)fail();
-  const routing=s.runtime_config.routing.profiles,a=resolveCompanyPhoneAccount(s,pick);
-  if(!Array.isArray(routing)||routing.filter(p=>p===pick.profile).length!==1||!a)fail();
+  const routing=s.runtime_config.routing.profiles,accounts=s.runtime_config.platform_accounts;
+  // 仅排除明确停用历史，仍由下面的唯一性及身份守卫拒绝未核验/非法状态的当前行。
+  const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===pick.profile&&a.enabled!==false):[];
+  const a=matches[0];
+  if(!Array.isArray(routing)||routing.filter(p=>p===pick.profile).length!==1||matches.length!==1
+    ||a.enabled!==true||a.verification_status!=='verified'||a.device_serial!==pick.device_serial
+    ||a.company_id!==s.company_id||a.tenant_id!==s.tenant_id||a.platform!=='douyin'
+    ||typeof a.douyin_id!=='string'||!a.douyin_id||a.douyin_id.trim()!==a.douyin_id)fail();
   return {company_id:s.company_id,tenant_id:s.tenant_id,version:s.version,run_id:run,line_key:lineKey,
     source_run:row.source_run||null,profile:a.profile,device_serial:a.device_serial,douyin_id:a.douyin_id,verification_status:'verified',enabled:true};
 }
-module.exports={freezeCompanyConfig,configTargetProfile,runtimeSnapshot,resolveCompanyPhoneAccount,readCollectionAccountBinding};
+module.exports={freezeCompanyConfig,configTargetProfile,runtimeSnapshot,readCollectionAccountBinding};

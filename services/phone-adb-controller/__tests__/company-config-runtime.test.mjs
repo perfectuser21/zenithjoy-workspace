@@ -4,36 +4,6 @@ import video from '../judge-video.js';
 import qualify from '../qualify-video.js';
 import queue from '../leadgen-queue.js';
 const snapshot={company_id:'company-A',tenant_id:'tenant-A',company_key:'jinuo',version:7,wiki:{products:['产品A'],audiences:['测试人群'],customer_portrait:'画像A'},runtime_config:{video_judgment:{instructions:'判断规则A'},comment_scoring:{audiences:[{id:'audience-A',fields:{'意向信号':'报名','人群描述':'报名培训','排除信号':'同行广告'}}],criteria:{A:'报名',B:'咨询',C:'互动','不相关':'跑题'},confidence_threshold:.8}},product_ids:['product-A'],policy_id:'policy-A'};
-test('101/102从各公司冻结配置读取云手机绑定，换机无需修改流程输入格式',async()=>{
- const company={...snapshot,config_status:'enabled'};
- const profile='cloud-pool-slot',run='cloud-runtime-test';
- const execute=(step,current,device_serial)=>queue.queueRequest({},{
-  line:'jinuo',run,op:'company_config',step,device_binding:{profile,device_serial},
- },{freezeCompanyConfig:async()=>current});
- const bind=(current,device_serial,adb_serial,adb_instance_id)=>({...current,runtime_config:{...current.runtime_config,
-  platform_accounts:[{profile,device_serial,adb_serial,adb_instance_id,platform:'douyin',enabled:true,
-   verification_status:'verified',company_id:current.company_id,tenant_id:current.tenant_id,douyin_id:'fixture-'+current.tenant_id}],
- }});
- const first=bind(company,'hardware-a','192.0.2.10:40001','tenant-a-adb');
- const replacement=bind({...company,version:8},'hardware-b','192.0.2.11:40002','tenant-a-replacement');
- const other=bind({...company,company_id:'company-B',tenant_id:'tenant-B'},'hardware-c','192.0.2.12:40003','tenant-b-adb');
- for(const step of ['101','102']){
-  for(const current of [first,replacement,other]){
-   const account=current.runtime_config.platform_accounts[0];
-   const {device_binding:binding}=await execute(step,current,account.device_serial);
-   assert.equal(binding.tenant_id,current.tenant_id);
-   assert.equal(binding.device_serial,account.device_serial);
-   assert.equal(binding.adb_serial,account.adb_serial);
-   assert.equal(binding.adb_instance_id,account.adb_instance_id);
-  }
-  await assert.rejects(execute(step,replacement,'hardware-a'),/COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED/);
-  const mixed={...other,runtime_config:first.runtime_config};
-  await assert.rejects(execute(step,mixed,'hardware-a'),/COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED/);
-  const malformed=structuredClone(first);
-  malformed.runtime_config.platform_accounts[0].adb_serial='hardware-a';
-  await assert.rejects(execute(step,malformed,'hardware-a'),/COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED/);
- }
-});
 test('102缺运行号不触发判定',async()=>{let called=0;await assert.rejects(()=>video.runJudgeVideo({lineHint:'jinuo',pool:{},deps:{listPendingVideos:async()=>{called++;return[]}}}),/运行|RUN/);assert.equal(called,0)});
 test('102实际判定包含冻结公司规则并返回版本',async()=>{let state,write;const r=await video.runJudgeVideo({lineHint:'jinuo',runId:'run-A',pool:{},deps:{freezeCompanyConfig:async()=>snapshot,listPendingVideos:async()=>[{video_id:'v1',title:'内容',comment_count:1}],judgeContent:async(_t,p)=>{state=p;return{verdict:'matched',reason:'符合'}},markVideoJudgment:async(_p,a)=>{write=a}}});assert.match(state,/产品A/);assert.match(state,/判断规则A/);assert.equal(r.config.version,7);assert.equal(write.configEvidence.company_id,'company-A')});
 test('102旧版缓存重新判断且写本版来源',async()=>{let judged=0;const r=await qualify.runQualify({cmd:'judge',args:{line:'jinuo',videoId:'v1',run:'run-A'},pool:{},deps:{freezeCompanyConfig:async()=>snapshot,getVideo:async()=>({video_id:'v1',title:'内容',judgment_status:'matched',judgment_config:{company_id:'company-A',version:6}}),judgeContent:async()=>{judged++;return{verdict:'matched',reason:'新版'}},markVideoJudgment:async()=>{}}});assert.equal(judged,1);assert.equal(r.config.version,7)});
