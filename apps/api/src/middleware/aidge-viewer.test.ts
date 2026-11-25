@@ -27,7 +27,6 @@ describe('Aidge 试用账号边界', () => {
     expect((await request(app).get('/api/works').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
     expect((await request(app).get('/api/account/license').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
     expect((await request(app).get('/api/materials-private').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
-    expect((await request(app).post('/api/creative-canvas/execute').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
   });
   it('普通用户不受影响', async () => {
     expect((await request(testApp('normal-user')).get('/api/works')).status).toBe(200);

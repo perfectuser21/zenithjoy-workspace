@@ -14,7 +14,6 @@ commander-codex-agent-smoke.sh
 commander-report-smoke.sh
 common-runner-source-smoke.sh
 company-wiki-config-smoke.sh
-creative-canvas-fullscreen-smoke.sh
 cross-line-seam-smoke.sh
 customer-workspace-http-smoke.sh
 deploy-version-selfcheck-smoke.sh
@@ -63,7 +62,6 @@ staff-workbench-smoke.sh
 staging-smoke.sh
 structured-workbench-smoke.sh
 trim-json-lib-smoke.sh
-video-tools-smoke.sh
 wechat-cs-android-smoke.sh
 wechat-cs-hardening-smoke.sh
 wechat-moments-controller-smoke.sh

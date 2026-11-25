@@ -12,10 +12,6 @@ body {
   zoom: 0.9;
 }
 
-body.creative-canvas-natural-zoom {
-  zoom: 1;
-}
-
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
