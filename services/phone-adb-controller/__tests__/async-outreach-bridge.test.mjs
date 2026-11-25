@@ -397,3 +397,65 @@ test('103 bridge只读回包消费显式原native parser接缝，默认104不借
  const pool={query:async()=>({rows:[row]})},input={op:'bridge_readback',line:'yuesheng',run:payload.run,source_run:payload.source_run,ids:[id]},deps={verifyRecipient:()=>{calls++;return true;}};
  assert.equal((await queueRequest(pool,input,deps)).verified,true);assert.equal(calls,1);assert.equal((await bridge.readbackBridge(pool,input)).verified,false,'不注入接缝时仍必须原native验证，不能把缺原件当真');
 });
+
+const {revalidateBridge}=require('../../../scripts/leadgen-bridge-revalidate.cjs');
+function revalidationFixture() {
+  const {digest}=require('../leadgen-outreach-bridge.js');
+  const row=pendingBridge();
+  const payload=row.payload;
+  payload.qualification={status:'unknown',reason:'native_profile_proof_missing_or_invalid',model_call_count:0};
+  Object.assign(row,{state:'unknown',qualification_status:'unknown',payload_sha256:digest(payload),
+    lead_id:lid,attempted_at:null,feishu_record_id:null,fields:null,fields_sha256:null,last_error:null});
+  const comment={id:cid,line_key:'jinuo',process_status:'已分拣',relevance:'相关',harvest_batch:payload.comment_run,
+    recovery_updated_at:'2026-10-14 01:00:00.123456+00',
+    douyin_id:payload.target_douyin_id,nickname:payload.nickname,comment_body:payload.comment_body,
+    profile_url:payload.profile_url,source_video:payload.source_video,source_video_url:payload.source_video_url,
+    collected_at:payload.collected_at,intent_grade:payload.intent_grade,judgment_reason:payload.judgment_reason,
+    judgment_config:{run_id:payload.scoring_run},recipient_evidence:payload.recipient_evidence};
+  const updates=[];
+  const pool={query:async(sql,args)=>{
+    if(sql.startsWith('UPDATE')) {
+      updates.push(args);
+      return {rows:[{...row,state:'pending',qualification_status:'passed',
+        payload:JSON.parse(args[4]),payload_sha256:args[5]}]};
+    }
+    if(sql.includes('leadgen_bridge_outbox')) return {rows:[row]};
+    if(sql.includes('leadgen_comments')) return {rows:[comment]};
+    if(sql.includes('leadgen_leads')) return {rows:[payload.lead_identity]};
+    throw Error('Unexpected query');
+  }};
+  const snapshot={company_id:'company1',version:3,tenant_id:'tenant1',policy_id:'policy3'};
+  const deps={lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>snapshot,
+    qualifyRecipient:async()=>({status:'passed',company_id:'company1',company_version:3,
+      tenant_id:'tenant1',policy_id:'policy3',model_call_count:0})};
+  const input={op:'bridge_revalidate',line:'jinuo',run:'score103',source_run:'source102',comment_id:cid,outbox_id:cid};
+  return {pool,row,comment,updates,deps,input};
+}
+
+test('bridge revalidate reuses the exact unattempted outbox and recorded score without posting',async()=>{
+  const f=revalidationFixture();
+  const result=await revalidateBridge(f.pool,f.input,f.deps);
+  assert.equal(result.verified,true);
+  assert.equal(result.id,cid);
+  assert.equal(result.state,'pending');
+  assert.equal(f.updates.length,1);
+  const payload=JSON.parse(f.updates[0][4]);
+  assert.deepEqual(payload.recipient_evidence,f.row.payload.recipient_evidence);
+  assert.equal(payload.qualification.model_call_count,0);
+  assert.equal(payload.scoring_run,'score103');
+  assert.equal(f.updates[0][8],f.comment.recovery_updated_at);
+});
+
+test('bridge revalidate keeps attempted, shifted and uncertain original records unavailable',async()=>{
+  for(const change of [
+    f=>{f.row.attempted_at='2026-10-14T01:00:00Z';},
+    f=>{f.row.feishu_record_id='existing-order';},
+    f=>{f.comment.comment_body='different';},
+    f=>{f.row.payload_sha256='0'.repeat(64);},
+    f=>{f.deps.qualifyRecipient=async()=>({status:'unknown',model_call_count:0});}
+  ]) {
+    const f=revalidationFixture(); change(f);
+    await assert.rejects(()=>revalidateBridge(f.pool,f.input,f.deps),/BRIDGE_REVALIDATION/);
+    assert.equal(f.updates.length,0);
+  }
+});
