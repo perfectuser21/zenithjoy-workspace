@@ -10640,6 +10640,14 @@ tests:
     product: 获客
     note: Real session gate, tenant middleware and HTTP repair/readback; external auth/DB seams only.
 
+  - id: company-source-sync-http
+    path: apps/api/src/routes/company-source-sync.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "资料同步管理权限、租户范围和凭据不外泄"
+
   - id: company-source-import
     path: apps/api/src/services/company-source-import.test.ts
     type: unit
