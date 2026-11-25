@@ -38,11 +38,14 @@ test('historical qualification reports visual evidence only when original scoped
   const journal=JSON.parse(fs.readFileSync(journalPath));
   const receipts=path.join(f.host,'receipts');
   fs.mkdirSync(receipts);
-  const framePath=path.join(receipts,'coverage-frame-B.png');
+  const framePath=path.join(receipts,'source-coverage-panel-B.png');
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7d8AAAAASUVORK5CYII=','base64');
   fs.writeFileSync(framePath,png);
   const frame={label:'B',pts_seconds:10,sha256:hash(png),text:'原判断记录'};
-  const visual={run_id:run,task_id:task,video_id:video,coverage_sha256:'c'.repeat(64),frames:[frame]};
+  const coveragePath=path.join(receipts,'coverage-five-frames.json');
+  const coverage={panels:[{...frame,frame:'receipts/source-coverage-panel-B.png'}]};
+  f.put(coveragePath,coverage);
+  const visual={run_id:run,task_id:task,video_id:video,coverage_sha256:hash(fs.readFileSync(coveragePath)),frames:[frame]};
   visual.sha256=hash(JSON.stringify(visual));
   journal.visual_evidence=visual;
   journal.scope.visual_evidence_sha256=visual.sha256;
@@ -54,5 +57,9 @@ test('historical qualification reports visual evidence only when original scoped
   const changed=await readQualificationOrigin(f.c,run,video,f.brain);
   assert.equal(changed.visual_evidence_read,false);
   assert.equal(changed.visual_error,'ORIGIN_VISUAL_BYTES_MISMATCH');
+  f.put(coveragePath,{panels:[]});
+  const invalidCoverage=await readQualificationOrigin(f.c,run,video,f.brain);
+  assert.equal(invalidCoverage.visual_evidence_read,false);
+  assert.equal(invalidCoverage.visual_error,'ORIGIN_VISUAL_COVERAGE_MISMATCH');
  } finally { f.close(); }
 });

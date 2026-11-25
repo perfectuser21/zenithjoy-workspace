@@ -10,17 +10,29 @@ function historicalVisualFacts(host,{scope,visual_evidence:visual}){
  const frames=record.frames;
  if(sha256!==scope.visual_evidence_sha256||hash(JSON.stringify(record))!==sha256||
     ['run_id','task_id','video_id'].some(key=>record[key]!==scope[key])||
-    !Array.isArray(frames)||frames.length<1||frames.length>5||
+    !/^[a-f0-9]{64}$/.test(record.coverage_sha256??'')||
+    !Array.isArray(frames)||frames.length<1||frames.length>3||
     new Set(frames.map(frame=>frame?.label)).size!==frames.length||
-    frames.some(frame=>!frame||!(/^[A-E]$/.test(frame.label))||
-      !Number.isFinite(frame.pts_seconds)||frame.pts_seconds<0||!/^[a-f0-9]{64}$/.test(frame.sha256))){
+    frames.some(frame=>!frame||typeof frame.label!=='string'||!/^[A-E]$/.test(frame.label)||
+      !Number.isFinite(frame.pts_seconds)||frame.pts_seconds<0||
+      typeof frame.sha256!=='string'||!/^[a-f0-9]{64}$/.test(frame.sha256))){
   return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_RECORD_INVALID'};
  }
  const visual_frames=[];
  try{
   const receipts=directory(path.join(host,'receipts'));
+  const coverage=document(path.join(receipts,'coverage-five-frames.json'));
+  if(coverage.sha256!==record.coverage_sha256||!Array.isArray(coverage.data?.panels)){
+   return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_COVERAGE_MISMATCH'};
+  }
   for(const {label,pts_seconds,sha256:expected} of frames){
-   const file=path.join(receipts,'coverage-frame-'+label+'.png');
+   const matches=coverage.data.panels.filter(panel=>panel?.label===label);
+   const panel=matches[0];
+   if(matches.length!==1||panel.pts_seconds!==pts_seconds||panel.sha256!==expected||
+      typeof panel.frame!=='string'||!/^receipts\/[A-Za-z0-9][A-Za-z0-9_.-]{0,239}\.png$/.test(panel.frame)){
+    return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_COVERAGE_MISMATCH'};
+   }
+   const file=path.join(host,panel.frame);
    regular(file,3*1024*1024);
    const bytes=fs.readFileSync(file);
    if(hash(bytes)!==expected||bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'){
