@@ -7,6 +7,7 @@ import { companyAccountDeviceReplacement } from './company-account-device-replac
 import { companyAccountRegistration, companyAccountRegistrationSession } from './company-account-registration';
 import { companyRoutingNormalization, companyRoutingNormalizationReadback } from './company-routing-normalization';
 import { validateCompanyIdentity, validateEnabledCompany, companyRecord, companyObject, type CompanyJsonRecord } from './company-profile-validation';
+import { registerCompanyOutreachSettings } from './company-outreach-settings';
 import { registerCompanySourceSync } from './company-source-sync';
 import { tenantContext } from '../middleware/tenant-context';
 import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
@@ -58,6 +59,7 @@ export function companySnapshot(row: CompanyJsonRecord) {
   return { ...data, version: data.config_version, product_ids: runtime.product_ids ?? [], policy_id: runtime.policy_id ?? null };
 }
 registerCompanySourceSync(companyProfileRouter, companySnapshot);
+registerCompanyOutreachSettings(companyProfileRouter);
 
 function validate(data: CompanyJsonRecord, previous: CompanyJsonRecord): string | null {
   if (typeof data.company_name !== 'string' || !data.company_name.trim()) return 'company_name 必填';

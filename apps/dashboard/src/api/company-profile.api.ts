@@ -53,3 +53,34 @@ export async function updateCompanyProfile(profile: CompanyProfile): Promise<{ c
   if (!json.success || !json.data?.updated) throw new Error('公司配置未保存');
   return json.data;
 }
+
+export interface OutreachSettings {
+  daily_cap: number;
+  start_local: string;
+  end_local: string;
+  paused: boolean;
+  revision: number;
+  updated_at?: string;
+}
+
+async function outreachSettings(init?: RequestInit): Promise<OutreachSettings | null> {
+  const response = await fetch(BASE + '/outreach-settings', init);
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body?.success) throw new Error(body?.error?.message || '触达设置请求失败');
+  return body.data;
+}
+
+export function getOutreachSettings() {
+  return outreachSettings();
+}
+
+export async function saveOutreachSettings(form: OutreachSettings) {
+  const { daily_cap, start_local, end_local, paused, revision } = form;
+  const saved = await outreachSettings({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ daily_cap, start_local, end_local, paused, expected_revision: revision }),
+  });
+  if (!saved) throw new Error('触达设置未保存');
+  return saved;
+}

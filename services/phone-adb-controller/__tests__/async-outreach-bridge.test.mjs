@@ -182,7 +182,9 @@ test('旧 score → 新 mark 的唯一订单可由独立 104 run 领单并准备
   source_video_url:row.payload.source_video_url,comment_body:row.payload.comment_body,relevance:'相关',intent_grade:'A',
   judgment_config:{run_id:'score103',company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,policy_id:policySnapshot.policy_id}};
  await attachDualPolicyProof(comment);
- const pool={async query(sql,args=[]){if(sql.includes('leadgen_bridge_outbox'))return {rows:[row]};
+ const pool={async query(sql,args=[]){
+  if(sql.includes('company_outreach_settings'))return {rows:[{daily_cap:null}]};
+  if(sql.includes('leadgen_bridge_outbox'))return {rows:[row]};
   if(sql.includes('company_config_runs'))return {rows:[{run_id:args[0],snapshot:policySnapshot,company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version}]};
   if(sql.includes('leadgen_comments'))return {rows:[comment]};if(sql.includes('leadgen_videos'))return {rows:[{video_url:comment.source_video_url,title:comment.source_video,line_key:'jinuo',judgment_status:'matched'}]};throw Error('unexpected SQL');}};
  const record={record_id:row.feishu_record_id,fields:{...row.fields}},client={all:async()=>[record],get:async()=>record,

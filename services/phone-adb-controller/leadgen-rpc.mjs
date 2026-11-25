@@ -71,7 +71,7 @@ export async function handleRpc(input, deps = {}) {
   try {
     if(fixedPool)await verifyPublicDomainCompany({runtimeRoot:root,pool:fixedPool});
     if(input.kind==='outreach'){pool=deps.pool||getPool();return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit,pool})};}
-    if(input.kind==='outreach_policy')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachPolicy(input)};
+    if(input.kind==='outreach_policy'){pool=deps.pool||getPool();return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachPolicy(input,{pool})};}
     if(input.kind==='resolve_share_link')return {ok:true,result:await resolveCopiedShareLink(input.url,{execute:deps.resolveExec||exec})};
     if(['activity_skill','activity_skill_authority','activity_skill_stop'].includes(input.kind)){
       if(input.request?.source_commit!==input.source.commit)throw Error('RPC_SKILL_SOURCE_MISMATCH');

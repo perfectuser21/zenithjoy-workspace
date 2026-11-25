@@ -16,6 +16,7 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  const binding=JSON.stringify(scope(c),null,2)+'\n',bindingHash=hash(binding);
  files['outreach-host-binding.json']=binding;
  files['activity-104-context.mjs']=replace(regular(path.join(HERE,'activity-104-context.mjs')).toString(),'ASSEMBLY_REPLACES_BINDING_SHA',bindingHash);
+ files['dm-rate-ramp-lib.js']=regular(path.join(HERE,'dm-rate-ramp-lib.js')).toString();
  files['activity-104-runtime.mjs']=regular(path.join(HERE,'activity-104-runtime.mjs')).toString();
  files['activity-104-transport.py']=replace(replace(regular(path.join(HERE,'activity-104-transport.py')).toString(),'ASSEMBLY_REPLACES_BINDING_SHA',bindingHash),'KEYS=[] # ASSEMBLY_REPLACES_KEYS','KEYS='+JSON.stringify(KEYS));
  files['activity-host-pg.mjs']=pg.toString();
@@ -33,11 +34,16 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  r=replace(r," const authAsset=c.authorization_asset||{path:AUTH,sha256:AUTH_SHA};need(authAsset.sha256===AUTH_SHA,'AUTHORIZATION_SOURCE_CHANGED');"," const authAsset=c.authorization_asset;");
  r=replace(r,'  const auth=jsonAsset(authAsset);','  verify104Context(c);const auth=jsonAsset(authAsset);');
  r=replace(r,'const raw=await sshRead(c),locks=', 'const raw=observe104Runtime(c,{orders:all}),locks=');
+ r=replace(r,'const raw=observe104Runtime(c,{orders:all}),locks=',`const settings=await readOutreachSettings(pool,c.line,{companyId:c.company_id,tenantId:c.tenant_id});
+   const raw=observe104Runtime(c,{orders:all});
+   try{assertOutreachWindow(settings);}catch(error){raw.pause=true;raw.settings_block_reason=error.message;}
+   raw.settings_daily_cap=settings?.daily_cap??null;
+   const locks=`);
  r=replace(r,'raw.verified=raw.today_ambiguous_sender_orders===0','raw.verified=raw.verified===true&&raw.today_ambiguous_sender_orders===0');
  r=replace(r,"import {checkPreflight,checkNative} from './native-checker.mjs';","import {readPreflightFacts,readSendFacts} from '../activity-native-facts.mjs';");
  r=r.replaceAll('checkPreflight','readPreflightFacts').replaceAll('checkNative','readSendFacts');
  files['activity-native-facts.mjs']=regular(path.join(HERE,'activity-native-facts.mjs')).toString();
- files['outreach104/runtime-deps.mjs']="import {verify104Context,verify104Runtime,canonical} from '../activity-104-context.mjs';\nimport {observe104Runtime} from '../activity-104-runtime.mjs';\nimport {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+r;
+ files['outreach104/runtime-deps.mjs']="import {verify104Context,verify104Runtime,canonical} from '../activity-104-context.mjs';\nimport {observe104Runtime} from '../activity-104-runtime.mjs';\nimport outreachSettings from '../dm-rate-ramp-lib.js';\nconst {readOutreachSettings,assertOutreachWindow}=outreachSettings;\nimport {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+r;
  // Reuse only read-only Task admission; the 104 dispatcher/authorization/OPS stay dedicated.
  for(const name of ['activity-host-tools.py','activity-tool-result.py'])files[name]=regular(path.join(HERE,name)).toString();
  const authorityPatch="import importlib.util,sys,json\ns=importlib.util.spec_from_file_location('authority',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ntools,scope=json.load(sys.stdin)\nprint(json.dumps([*m.patch_phone_access(m.patch_task_authority(tools,main_only=True),scope),m.PHONE_INSTRUCTIONS]))\n";
@@ -53,7 +59,8 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  const old=t.split('\n').find(l=>l.startsWith("  r=subprocess.run(['scp'"));need(old,'BASE_LAYOUT');
  t=replace(t,old+"\n  if r.returncode:return r","  _host104.verify_context(c)\n  source=pathlib.Path(remote)\n  if source.is_symlink() or source.resolve().parent!=pathlib.Path(c['native_root']).resolve() or not source.is_file():raise ValueError('NATIVE_FILE_SCOPE')\n  shutil.copy2(source,partial)");t=replace(t,'  return subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=min(420,remaining))',"  result=subprocess.run(ssh(c,approved),capture_output=True,text=True,timeout=min(420,remaining))\n  return _host104.preflight_result(c,result,subprocess.run) if cmd=='preflight' else result");files['tools.py']=t;
  files['activity-104-state.mjs']=regular(path.join(HERE,'activity-104-state.mjs')).toString();wire104State(files);
- files['outreach104/order-adapter.mjs']=files['outreach104/order-adapter.mjs'].replaceAll('checkPreflight','readPreflightFacts').replaceAll('checkNative','readSendFacts').replaceAll('native.verified','native.source_verified').replaceAll('native-check.json','native-report.json');
+ const cap='Math.min(auth.test_execution_daily_cap,runtime.settings_daily_cap??Infinity)';
+ files['outreach104/order-adapter.mjs']=files['outreach104/order-adapter.mjs'].replaceAll('<auth.test_execution_daily_cap','<'+cap).replaceAll('checkPreflight','readPreflightFacts').replaceAll('checkNative','readSendFacts').replaceAll('native.verified','native.source_verified').replaceAll('native-check.json','native-report.json');
  files['TOOLS.txt']='104本轮工具仅通过commander_host_tools.invoke(kind, action_name, args字符串数组)。下面python tools.py例子仅说明参数顺序，禁止shell直调；逐次等待每个工具终态。\n'+files['outreach104/TOOLS104.txt'].replace('在同一次shell执行中按顺序等待各既有工具终态','通过宿主工具按顺序等待各既有工具终态')+'\n'+phoneInstructions+'\n';
  const receipt={schema:'activity-host-104/v1',status:'assembled_not_started',binding_sha256:bindingHash,base_sha256:BASE,local_sha256:LOCAL,sha256:Object.fromEntries(Object.entries(files).map(([n,b])=>[n,hash(b)]))};
  fs.mkdirSync(targetRoot,{mode:0o700});for(const[n,b]of Object.entries({...files,'activity-host-104-receipt.json':JSON.stringify(receipt,null,2)+'\n'})){fs.mkdirSync(path.dirname(path.join(targetRoot,n)),{recursive:true,mode:0o700});fs.writeFileSync(path.join(targetRoot,n),b,{flag:'wx',mode:0o600});}return receipt;
