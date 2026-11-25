@@ -106,7 +106,8 @@ export async function syncNotionCompanyChanges(row: CompanyJsonRecord, snapshot:
   if (profile?.company_id !== row.company_id || profile.config_status !== 'enabled') return;
   const source = (await getSources(profile)).find(item => item.platform === 'notion');
   if (!source) return;
-  const { fields, inputs } = await readCompanySource(profile, source);
+  // 独立同步只依赖已登记工作台和公司档案，可直接接执行侧业务库。
+  const { fields, inputs } = await readCompanySource(profile, source, { checkConsoleDrafts: false, preserveExistingOrder: true });
   const fingerprint = notionSourceFingerprint(inputs);
   const observed = companyRecord(companyRecord(row.state).notion_auto_sync);
   if (observed.enabled !== true || observed.fingerprint === fingerprint) return;

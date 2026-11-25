@@ -29,8 +29,16 @@ export async function getSources(profile: CompanyJsonRecord) {
     });
 }
 
-export async function readCompanySource(profile: CompanyJsonRecord, source: Awaited<ReturnType<typeof getSources>>[number]) {
-  const bound = (await pool.query(`SELECT company_id FROM zenithjoy.customer_workspaces WHERE platform=$1 AND (CASE WHEN platform='notion' THEN lower(replace(parent_id,'-','')) ELSE parent_id END)=$2 AND company_id<>$3 UNION ALL SELECT company_id FROM zenithjoy.company_source_sync WHERE platform=$1 AND parent_id=$2 AND company_id<>$3`,
+export async function readCompanySource(
+  profile: CompanyJsonRecord,
+  source: Awaited<ReturnType<typeof getSources>>[number],
+  { checkConsoleDrafts = true, preserveExistingOrder = false } = {},
+) {
+  const otherWorkspace = `SELECT company_id FROM zenithjoy.customer_workspaces WHERE platform=$1
+    AND (CASE WHEN platform='notion' THEN lower(replace(parent_id,'-','')) ELSE parent_id END)=$2
+    AND company_id<>$3`;
+  const otherDraft = 'SELECT company_id FROM zenithjoy.company_source_sync WHERE platform=$1 AND parent_id=$2 AND company_id<>$3';
+  const bound = (await pool.query(checkConsoleDrafts ? `${otherWorkspace} UNION ALL ${otherDraft}` : otherWorkspace,
     [source.platform, source.parent, profile.company_id])).rowCount;
   if (bound) throw new SourceSyncError(409, '此工作台已归属其他公司');
   let inputs: SourceRows;
@@ -45,7 +53,7 @@ export async function readCompanySource(profile: CompanyJsonRecord, source: Awai
     ]))) as SourceRows;
   } catch { throw new SourceSyncError(502, '工作台读取失败，请检查应用读权限、表绑定和平台连接'); }
   let fields;
-  try { fields = importCompanySource(profile, inputs); }
+  try { fields = importCompanySource(profile, inputs, { preserveExistingOrder }); }
   catch (cause) { throw new SourceSyncError(422, cause instanceof Error ? cause.message : '资料格式不正确'); }
   const next = { ...profile, ...fields };
   const invalid = validateCompanyIdentity(next, profile) ?? validateEnabledCompany(next);
