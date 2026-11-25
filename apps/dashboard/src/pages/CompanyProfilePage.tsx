@@ -1,3 +1,4 @@
+import { CompanyOutreachSettings } from './CompanyOutreachSettings';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CompanySourceSync from '../components/CompanySourceSync';
 import { getCompanyProfile, updateCompanyProfile, type CompanyProfile } from '../api/company-profile.api';
@@ -10,7 +11,7 @@ const EMPTY: CompanyProfile = {
   customer_portrait: '', qa_list: [],
 };
 
-const TABS = ['基础信息', '产品与价值', '目标客群', '公司Wiki与配置', '客户资料同步'] as const;
+const TABS = ['基础信息', '产品与价值', '目标客群', '公司Wiki与配置', '客户资料同步', '触达设置'] as const;
 type TabKey = (typeof TABS)[number];
 
 const contentStyle = {
@@ -295,6 +296,8 @@ export default function CompanyProfilePage() {
           </div>
         </div>
       )}
+
+      {activeTab === '触达设置' && <CompanyOutreachSettings />}
 
       {activeTab === '客户资料同步' && <CompanySourceSync onApplied={() => { void reloadProfile(); }} />}
 

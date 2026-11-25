@@ -188,12 +188,14 @@ test('original order adapter keeps same-UID prohibition and daily 100 limit with
  const auth=JSON.parse(fs.readFileSync(f.context.authorization_asset.path)),scope=f.context.verification['104'];let puts=0;
  const own={record_id:scope.record_id,fields:{'抖音号':scope.target_douyin_id,'主页链接':scope.profile_url,'状态':'待触达','发送状态':'未发送'}};
  const makeOther=i=>({record_id:'previous-order-'+i,fields:{'抖音号':'other-person-'+i,'实际分发号':'old-profile('+f.context.sender_id+')','回复结果':'[104 unknown:old-run:old-source]','状态':'触达中'}});
- let prior=[makeOther(0)],row=own;const args={context:f.context,scope,artifact_dir:path.join(f.root,'budget-orders'),evidence:{}};
- const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0}),readPreflightFacts:async()=>({source_verified:true}),close:async()=>{}};
+ let prior=[makeOther(0)],row=own,settingsCap;const args={context:f.context,scope,artifact_dir:path.join(f.root,'budget-orders'),evidence:{}};
+ const deps={authorize:async()=>auth,qualify:async()=>({verified:true}),withLock:fn=>fn(),validateOriginal:()=>true,validateStable:()=>true,api:{all:async()=>[row,...prior].map(x=>structuredClone(x)),get:async()=>structuredClone(row),fields:async()=>[],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);}},freshRuntime:async all=>({...observe104Runtime(f.context,{orders:all}),today_sent_orders:0,settings_daily_cap:settingsCap}),readPreflightFacts:async()=>({source_verified:true}),close:async()=>{}};
  assert.equal((await request({...args,op:'inspect'},deps)).status,'ready');assert.equal(puts,0);
  prior[0].fields['抖音号']=scope.target_douyin_id;await assert.rejects(request({...args,op:'claim'},deps),/RECIPIENT_RESERVED/);assert.equal(puts,0);
  prior=[makeOther(0)];assert.equal((await request({...args,op:'claim'},deps)).status,'claimed');assert.equal(puts,1);
  prior=Array.from({length:100},(_,i)=>makeOther(i));await assert.rejects(request({...args,op:'prepare'},deps),/CURRENT_RUNTIME_BLOCKED/);assert.equal(puts,1);
+ settingsCap=80;prior=Array.from({length:80},(_,i)=>makeOther(i));await assert.rejects(request({...args,op:'prepare'},deps),/CURRENT_RUNTIME_BLOCKED/);assert.equal(puts,1);
+ settingsCap=undefined;
  prior=Array.from({length:99},(_,i)=>makeOther(i));assert.equal((await request({...args,op:'prepare'},deps)).status,'prepared');assert.equal(puts,2);
 });
 
