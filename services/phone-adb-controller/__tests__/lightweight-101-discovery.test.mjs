@@ -41,7 +41,7 @@ test('轻量 101 Worker 可从只含发布清单文件的独立目录加载', t 
   assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
-for(const mode of ['capture','complete','missing','multiple_cards'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
+for(const mode of ['capture','complete','missing','missing_copy','wrong_reopen','multiple_cards'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
   const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'lightweight-101-')));
   t.after(() => rmSync(workDir, {recursive: true, force: true}));
   const runTag = 'cfc6365c-81ed-4c38-b33d-c1eb2b21ab3a';
@@ -82,8 +82,17 @@ for(const mode of ['capture','complete','missing','multiple_cards'])test('101 �
         result.stdout = cards.join('\n')+'\nvideo_tab=1\nevidence='+nativeFile('cards.xml')+'\n';
       }
       if (command === 'search-kw-matches') result.stdout = 'kw_matches=1\n';
-      if (command === 'current-video-link') result.stdout = metricPhoneReceipt(
-        `content_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/demo/\nreturn_mode=results\n`, evidenceId, context.native_root);
+      if (command === 'current-video-link') {
+        const stem = evidenceId.slice(runTag.length + 1)+'-t1';
+        nativeFile(stem+'-scratch-result.xml');
+        const screenshot = mode==='missing_copy'?'':nativeFile(stem+'-link-copied.png');
+        result.stdout = metricPhoneReceipt(
+          `content_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/demo/\nreturn_mode=results\nevidence=${screenshot}\n`, evidenceId, context.native_root);
+      }
+      if (command === 'open-video') {
+        assert.equal(args[1], videoId);
+        result.stdout = `video_opened=1\nvideo_id=${mode==='wrong_reopen'?'7000000000000000000':videoId}\n`;
+      }
     } else if (kind === 'business') {
       const {op,video} = JSON.parse(args[0]);
       events.push(op);
@@ -107,6 +116,12 @@ for(const mode of ['capture','complete','missing','multiple_cards'])test('101 �
     return receipt;
   };
   const result = await runLightweightDiscovery101({context,workDir,invoke,hostRoot,pause:async () => {}});
+  if(mode==='missing_copy'||mode==='wrong_reopen'){
+    assert.deepEqual(result.videos,[]);
+    assert.equal(events.includes('discover'),false);
+    assert.match(result.failures[0].detail,/LIGHT101_(EVIDENCE_SCOPE|REOPEN_UNVERIFIED)/);
+    return;
+  }
   assert.deepEqual(result.videos.map(video => video.videoId), [videoId], JSON.stringify(result.failures));
   if (mode === 'multiple_cards') {
     assert.equal(result.counts.cards, 2);
@@ -124,6 +139,10 @@ for(const mode of ['capture','complete','missing','multiple_cards'])test('101 �
       assert.deepEqual(events.slice(-4),['inspect_videos','discover','discover_readback','inspect_videos']);
       assert.ok(result.delivery_evidence.run.selected_page.endsWith('-selected.png'));
       assert.ok(result.delivery_evidence[videoId].share_xml.endsWith('-share.xml'));
+      assert.ok(result.delivery_evidence[videoId].copy_screen.endsWith('-link-copied.png'));
+      assert.ok(result.delivery_evidence[videoId].paste_xml.endsWith('-scratch-result.xml'));
+      assert.match(result.delivery_evidence[videoId].reopen_receipt,/^receipts\//);
+      assert.ok(events.indexOf('open-video') < events.indexOf('discover') && events.includes('open-video'));
       assert.match(result.delivery_evidence[videoId].prior_state,/^receipts\//);
       const contract=generateLightweight101Profile().contract.activities.find(activity=>activity.key==='collect_videos');
       const validate=new Ajv({strict:true}).compile(contract.acceptance.document.delivery.schema);

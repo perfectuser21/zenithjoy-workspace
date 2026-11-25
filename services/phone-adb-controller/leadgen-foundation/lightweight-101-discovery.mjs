@@ -87,6 +87,23 @@ export async function runLightweightDiscovery101({context,workDir,invoke,hostRoo
     },
     queue:async(_op,{video})=>{
       const exact={video_ids:[video.videoId]};
+      let nativeEvidence;
+      if(hostRoot){
+        const link=linkReceipt.result.stdout;
+        const linkId=field(link,'metrics_evidence_id'), copied=field(link,'evidence');
+        if(field(link,'video_id')!==video.videoId||field(link,'resolved_url')!==video.videoUrl
+          ||!linkId?.startsWith(runTag+'-')||!/^[A-Za-z0-9_-]+$/.test(linkId))
+          throw Error('LIGHT101_LINK_RECEIPT_UNBOUND');
+        const shareXml=await fetchNative(field(link,'metrics_evidence'));
+        if(basename(copied??'')!==linkId+'-link-copied.png')throw Error('LIGHT101_EVIDENCE_SCOPE');
+        const copyScreen=await fetchNative(copied);
+        const pasteXml=await fetchNative(join(context.native_root,linkId+'-scratch-result.xml'));
+        const reopened=await useHost('phone',['open-video',video.videoId,linkId+'-reopen']);
+        if(field(reopened.result.stdout,'video_opened')!=='1'||field(reopened.result.stdout,'video_id')!==video.videoId)
+          throw Error('LIGHT101_REOPEN_UNVERIFIED');
+        nativeEvidence={share_xml:shareXml,copy_screen:copyScreen,paste_xml:pasteXml,
+          link_receipt:receiptPath(linkReceipt.name),reopen_receipt:receiptPath(reopened.name)};
+      }
       const prior=hostRoot&&await business('inspect_videos',exact);
       const written=await business('discover',{video});
       const observed=await business('discover_readback',{video}),confirmed=observed.data;
@@ -96,11 +113,8 @@ export async function runLightweightDiscovery101({context,workDir,invoke,hostRoo
       handoffs.set(video.videoId,{...confirmed.handoff,author:video.author});
       if(hostRoot){
         const after=await business('inspect_videos',exact);
-        const link=linkReceipt.result.stdout;
-        if(field(link,'video_id')!==video.videoId)throw Error('LIGHT101_LINK_RECEIPT_UNBOUND');
         itemEvidence.set(video.videoId,{
-          share_xml:await fetchNative(field(link,'metrics_evidence')),
-          link_receipt:receiptPath(linkReceipt.name),write_receipt:receiptPath(written.name),
+          ...nativeEvidence,write_receipt:receiptPath(written.name),
           readback_receipt:receiptPath(observed.name),prior_state:receiptPath(prior.name),written_state:receiptPath(after.name),
         });
       }
