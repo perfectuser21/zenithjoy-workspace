@@ -464,6 +464,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ...(blockedIds.length?{status:'partial',reason:'POLICY_SCORE_NOT_VERIFIED'}:
         scored+excluded===0?{status:'partial',reason:'POLICY_SCORE_NO_ELIGIBLE_ROWS'}:{}) };
   }
+  if(op==='bridge_revalidate')return require('./leadgen-outreach-bridge.js').revalidateBridge(pool,input,deps);
   if(op==='bridge_readback')return require('./leadgen-outreach-bridge.js').readbackBridge(pool,input,deps);
   if(op==='bridge_outreach')return require('./leadgen-outreach-bridge.js').bridgeOutreach(pool,input,deps);
   if (op === 'mark_leads') {
