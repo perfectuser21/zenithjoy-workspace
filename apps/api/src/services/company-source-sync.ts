@@ -29,8 +29,16 @@ export async function getSources(profile: CompanyJsonRecord) {
     });
 }
 
-export async function readCompanySource(profile: CompanyJsonRecord, source: Awaited<ReturnType<typeof getSources>>[number]) {
-  const bound = (await pool.query(`SELECT company_id FROM zenithjoy.customer_workspaces WHERE platform=$1 AND (CASE WHEN platform='notion' THEN lower(replace(parent_id,'-','')) ELSE parent_id END)=$2 AND company_id<>$3 UNION ALL SELECT company_id FROM zenithjoy.company_source_sync WHERE platform=$1 AND parent_id=$2 AND company_id<>$3`,
+export async function readCompanySource(
+  profile: CompanyJsonRecord,
+  source: Awaited<ReturnType<typeof getSources>>[number],
+  options = { checkConsoleDrafts: true },
+) {
+  const otherWorkspace = `SELECT company_id FROM zenithjoy.customer_workspaces WHERE platform=$1
+    AND (CASE WHEN platform='notion' THEN lower(replace(parent_id,'-','')) ELSE parent_id END)=$2
+    AND company_id<>$3`;
+  const otherDraft = 'SELECT company_id FROM zenithjoy.company_source_sync WHERE platform=$1 AND parent_id=$2 AND company_id<>$3';
+  const bound = (await pool.query(options.checkConsoleDrafts ? `${otherWorkspace} UNION ALL ${otherDraft}` : otherWorkspace,
     [source.platform, source.parent, profile.company_id])).rowCount;
   if (bound) throw new SourceSyncError(409, '此工作台已归属其他公司');
   let inputs: SourceRows;
