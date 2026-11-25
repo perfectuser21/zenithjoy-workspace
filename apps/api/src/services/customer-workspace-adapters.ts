@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import type { SourceRow } from './company-source-import';
 import type { WorkspaceAdapter, WorkspaceDefinition, WorkspaceField, WorkspacePlatform } from './customer-workspace';
 
+export interface NotionSyncPage { id: string; creator: string; editor: string }
+export interface NotionSyncClient {
+  readSyncRequests(parent: string, table: string): Promise<NotionSyncPage[]>;
+  writeSyncReceipt(page: string, success: boolean, summary: string): Promise<void>;
+}
 type Text = { plain_text?: string; text?: { content?: string } };
 type Json = {
   code?: number; data?: Json; app?: Json; app_token?: string;
@@ -9,6 +14,7 @@ type Json = {
   id?: string; table_id?: string; name?: string; field_name?: string; type?: string | number;
   object?: string; archived?: boolean; in_trash?: boolean;
   title?: Text[]; description?: Text[]; parent?: { page_id?: string };
+  created_by?: { id?: string }; last_edited_by?: { id?: string };
   record_id?: string; fields?: SourceRow['fields'];
   child_database?: { title?: string }; properties?: Record<string, { type?: string }>;
 };
@@ -19,7 +25,7 @@ export function workspaceFields(definition: WorkspaceDefinition) { return [...sh
 export function feishuTableName(definition: WorkspaceDefinition, marker: string) {
   return `${definition.name} [cw1-${createHash('sha256').update(marker).digest('hex').slice(0, 20)}]`;
 }
-export function createWorkspaceAdapter(platform: WorkspacePlatform, token: string, fetcher: typeof fetch = fetch): WorkspaceAdapter & { readRows(parent: string, table: string): Promise<SourceRow[]> } {
+export function createWorkspaceAdapter(platform: WorkspacePlatform, token: string, fetcher: typeof fetch = fetch): WorkspaceAdapter & NotionSyncClient & { readRows(parent: string, table: string): Promise<SourceRow[]> } {
   if (!token) throw Error('workspace credential missing');
   if (!['notion', 'feishu'].includes(platform)) throw Error('unsupported workspace platform');
   const notion = platform === 'notion';
@@ -53,7 +59,30 @@ export function createWorkspaceAdapter(platform: WorkspacePlatform, token: strin
     return output;
   }
   const appPath = (parent: string) => `/bitable/v1/apps/${encodeURIComponent(parent)}`;
+  async function verifyNotionTable(parent: string, table: string): Promise<Json> {
+    const database = await request('GET', `/databases/${table}`);
+    if (database.archived || database.in_trash || database.parent?.page_id?.replace(/-/g, '').toLowerCase() !== parent) throw Error('资料表不属于已绑定的 Notion 工作台');
+    return database;
+  }
   return {
+    async readSyncRequests(parent, table) {
+      if (!notion) throw Error('仅支持 Notion 同步请求');
+      const database = await verifyNotionTable(parent, table);
+      if (database.properties?.同步状态?.type !== 'select' || database.properties?.同步回执?.type !== 'rich_text') throw Error('同步请求表字段不完整');
+      const result = await request('POST', `/databases/${table}/query`, {
+        page_size: 10, filter: { property: '同步状态', select: { equals: '待同步' } },
+      });
+      if (!Array.isArray(result.results)) throw Error('Notion 请求表读回不完整');
+      return result.results.flatMap(row => row.id && row.created_by?.id && row.last_edited_by?.id && !row.archived && !row.in_trash
+        ? [{ id: row.id, creator: row.created_by.id, editor: row.last_edited_by.id }] : []);
+    },
+    async writeSyncReceipt(page, success, summary) {
+      if (!notion) throw Error('仅支持 Notion 同步回执');
+      await request('PATCH', `/pages/${page}`, { properties: {
+        同步状态: { select: { name: success ? '已同步' : '同步失败' } },
+        同步回执: { rich_text: rich(summary.slice(0, 1000)) },
+      } });
+    },
     async readRows(parent, table) {
       if (!/^[a-zA-Z0-9_-]+$/.test(table)) throw Error('资料表标识不合法');
       if (!notion) {
@@ -68,8 +97,7 @@ export function createWorkspaceAdapter(platform: WorkspacePlatform, token: strin
           return { id: row.record_id, fields: { ...emptyFields, ...row.fields } };
         });
       }
-      const database = await request('GET', `/databases/${table}`);
-      if (database.archived || database.in_trash || database.parent?.page_id?.replace(/-/g, '').toLowerCase() !== parent) throw Error('资料表不属于已绑定的 Notion 工作台');
+      await verifyNotionTable(parent, table);
       const rows: SourceRow[] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;

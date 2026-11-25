@@ -1,4 +1,5 @@
 // 内部开户资源面。租户不可凭自报company/parent更改投影目标。
+import { notionSyncBinding } from '../services/notion-company-source-worker';
 import { Router } from 'express';
 import pool from '../db/connection';
 import { internalAuth } from '../middleware/internal-auth';
@@ -72,6 +73,27 @@ customerWorkspacesRouter.post('/:companyId/bind', async (req, res) => {
     const duplicate = (error as { code?: string }).code === '23505';
     res.status(duplicate ? 409 : 500).json({ success: false, error: duplicate ? 'WORKSPACE_PARENT_ALREADY_BOUND' : 'WORKSPACE_BIND_FAILED' });
   } finally { client.release(); }
+});
+customerWorkspacesRouter.post('/:companyId/notion-source-sync', async (req, res) => {
+  const binding = notionSyncBinding(req.body), tenantId = req.body?.tenant_id;
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  if (!binding || typeof tenantId !== 'string' || !uuid.test(tenantId) || !uuid.test(req.params.companyId)) {
+    res.status(400).json({ success: false, error: 'INVALID_NOTION_SYNC_BINDING' }); return;
+  }
+  try {
+    const result = await pool.query(`WITH configured AS (
+      UPDATE zenithjoy.customer_workspaces
+      SET state=jsonb_set(state,'{notion_sync}',$3::jsonb), updated_at=now()
+      WHERE company_id=$1 AND tenant_id=$2 AND platform='notion' AND status='structure_ready'
+        AND (NOT (state ? 'notion_sync') OR state->'notion_sync'=$3::jsonb)
+      RETURNING company_id,tenant_id,platform,state
+    )
+    INSERT INTO zenithjoy.customer_workspace_events(company_id,tenant_id,platform,actor,state)
+    SELECT company_id,tenant_id,platform,'internal-service:notion-source-binding',state FROM configured
+    RETURNING company_id`, [req.params.companyId, tenantId, JSON.stringify(binding)]);
+    if (result.rowCount !== 1) { res.status(409).json({ success: false, error: 'NOTION_SYNC_BINDING_CONFLICT' }); return; }
+    res.status(202).json({ success: true, data: binding });
+  } catch { res.status(503).json({ success: false, error: 'NOTION_SYNC_BINDING_FAILED' }); }
 });
 customerWorkspacesRouter.post('/:companyId/reconcile', async (req, res) => {
   const body = req.body ?? {};

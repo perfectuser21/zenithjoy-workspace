@@ -6,7 +6,7 @@ import request from 'supertest';
 import pg from 'pg';
 import { requireDisposableDatabases } from './disposable-db';
 
-const fixture = vi.hoisted(() => ({ pool: null as pg.Pool | null, schema: '', readRows: vi.fn() }));
+const fixture = vi.hoisted(() => ({ pool: null as pg.Pool | null, schema: '', readRows: vi.fn(), readSyncRequests: vi.fn(), writeSyncReceipt: vi.fn() }));
 const sql = (query: string) => query.replaceAll('zenithjoy.', fixture.schema + '.');
 vi.mock('../../src/db/connection', () => ({ default: {
   query: (query: string, args?: unknown[]) => fixture.pool!.query(sql(query), args),
@@ -24,8 +24,9 @@ vi.mock('../../src/middleware/tenant-context', () => ({
   },
 }));
 vi.mock('../../src/services/customer-workspace-adapters', () => ({
-  createWorkspaceAdapter: () => ({ preflight: async () => {}, readRows: fixture.readRows }),
+  createWorkspaceAdapter: () => ({ preflight: async () => {}, readRows: fixture.readRows, readSyncRequests: fixture.readSyncRequests, writeSyncReceipt: fixture.writeSyncReceipt }),
 }));
+import { syncNotionCompanyWorkspace } from '../../src/services/notion-company-source-worker';
 import { registerCompanySourceSync } from '../../src/routes/company-source-sync';
 
 const tenant = randomUUID(), company = randomUUID(), unboundTenant = randomUUID(), unboundCompany = randomUUID();
@@ -48,7 +49,7 @@ beforeAll(async () => {
     CREATE TABLE zenithjoy.company_config_versions(company_id uuid,version integer,tenant_id uuid,snapshot jsonb,actor text, PRIMARY KEY(company_id,version));
     CREATE TABLE zenithjoy.company_config_changes(company_id uuid,version integer,actor text,source text,old_snapshot jsonb,new_snapshot jsonb,conflict jsonb);
   `));
-  for (const filename of ['20261018_120000_customer_workspace_bindings.sql', '20261125_120000_company_source_sync.sql']) {
+  for (const filename of ['20261018_120000_customer_workspace_bindings.sql', '20261125_120000_company_source_sync.sql', '20261125_121000_notion_company_source_requests.sql']) {
     await fixture.pool.query(sql(await readFile(new URL('../../db/migrations/' + filename, import.meta.url), 'utf8')));
   }
   const runtime = {
@@ -107,4 +108,33 @@ it('只读取认证公司的映射，预览保留现役版本，确认写入并�
   await fixture.pool!.query(sql('UPDATE zenithjoy.tenant_company_profiles SET config_version=5 WHERE tenant_id=$1'), [tenant]);
   expect((await apply(stale.body.data.draft_id)).status).toBe(409);
   expect((await profile()).config_version).toBe(5);
+});
+
+it('接到 Notion 明确提交后写入版本。写回丢失时只补回执，外人提交被拒绝', async () => {
+  const editor = randomUUID(), foreignEditor = randomUUID();
+  const id = randomUUID(), deniedId = randomUUID();
+  const binding = { database_id: randomUUID(), approved_editors: [editor] };
+  const stored = await fixture.pool!.query(sql(`UPDATE zenithjoy.customer_workspaces
+    SET state=jsonb_set(state,'{notion_sync}',$2::jsonb) WHERE company_id=$1 RETURNING *`), [company, binding]);
+  const workspace = stored.rows[0];
+  const version = (await profile()).config_version;
+  const originalReadRows = fixture.readRows.getMockImplementation()!;
+  fixture.readRows.mockImplementation(async (...args) => {
+    const source = await originalReadRows(...args);
+    if (args[1] === 'keywords') source[0].fields.名称 = '从 Notion 提交的词';
+    return source;
+  });
+  fixture.readSyncRequests.mockResolvedValue([{ id, creator: editor, editor }]);
+  fixture.writeSyncReceipt.mockRejectedValueOnce(Error('fixture lost Notion callback')).mockResolvedValue(undefined);
+  await expect(syncNotionCompanyWorkspace(workspace, row => row)).rejects.toThrow('lost Notion callback');
+  const saved = await profile();
+  expect(saved.config_version).toBe(version + 1);
+  expect(saved.runtime_config.search_strategy.keywords[0].word).toBe('从 Notion 提交的词');
+  fixture.readSyncRequests.mockResolvedValue([{ id, creator: editor, editor }, { id: deniedId, creator: foreignEditor, editor }]);
+  await syncNotionCompanyWorkspace(workspace, row => row);
+  expect((await profile()).config_version).toBe(version + 1);
+  expect(fixture.writeSyncReceipt).toHaveBeenCalledWith(id.replaceAll('-', ''), true, expect.stringContaining(`v${version + 1}`));
+  expect(fixture.writeSyncReceipt).toHaveBeenCalledWith(deniedId.replaceAll('-', ''), false, expect.stringContaining('资料负责人'));
+  const receipts = await fixture.pool!.query(sql('SELECT success FROM zenithjoy.notion_company_source_requests ORDER BY success'));
+  expect(receipts.rows).toEqual([{ success: false }, { success: true }]);
 });
