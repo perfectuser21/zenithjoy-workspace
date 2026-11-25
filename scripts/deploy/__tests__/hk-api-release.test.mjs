@@ -6,7 +6,6 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import {createPlan,writePrepared} from '../video-tools-release.mjs';
 
 const script = resolve('scripts/deploy/hk-api-release.sh');
 function fixture(t) {
@@ -20,7 +19,6 @@ function fixture(t) {
   };
   mkdirSync(join(repo,'scripts/deploy'),{recursive:true}); copyFileSync(resolve('scripts/deploy/staging-image-identity.py'),join(repo,'scripts/deploy/staging-image-identity.py'));
   copyFileSync(resolve('scripts/deploy/video-tools-release.mjs'),join(repo,'scripts/deploy/video-tools-release.mjs'));
-  copyFileSync(resolve('scripts/deploy/canvas-capabilities.py'),join(repo,'scripts/deploy/canvas-capabilities.py'));
   git('init', '-b', 'main'); git('config', 'user.email', 'test@example.invalid'); git('config', 'user.name', 'test');
   writeFileSync(join(repo, 'deploy/docker-compose.prod-api.yml'), 'services:\n  zenithjoy-api-prod:\n    image: zenithjoy-api-prod:latest\n');
   writeFileSync(join(repo, 'deploy/docker-compose.staging-api.yml'), 'services:\n  zenithjoy-api-staging:\n    image: zenithjoy-api-staging:latest\n');
@@ -40,11 +38,6 @@ if(path.basename(process.argv[1])==='curl'){
  console.log(JSON.stringify({build:{sha}})); process.exit(0);
 }
 if(args[0]==='inspect'){
- if(process.env.FAKE_CANVAS_PLAN){
-  const p=JSON.parse(fs.readFileSync(process.env.FAKE_CANVAS_PLAN)),v=Object.values(p.compose.services).find(x=>x.container_name===args[1]);
-  if(v){console.log(JSON.stringify([{Image:p.image,Config:{Env:Object.entries(v.environment).map(([k,v])=>k+'='+v)},State:{Health:{Status:'healthy'}},HostConfig:{PortBindings:{}},NetworkSettings:{Networks:Object.fromEntries(v.networks.map(n=>[n,{}]))},Mounts:[{Destination:'/data',Name:v.volumes[0].split(':')[0]}]}]));process.exit(0);}
-  if(args[1]===service&&!args.includes('--format')){const a=p.apiOverlay.services[service];console.log(JSON.stringify([{Config:{Env:Object.entries(a.environment).map(([k,v])=>k+'='+v)},NetworkSettings:{Networks:Object.fromEntries(a.networks.map(n=>[n,{}]))}}]));process.exit(0);}
- }
  if(args[1]==='zenithjoy-api-staging'){if(process.env.FAIL_MODE==='stage-missing')process.exit(1);const fmt=args.at(-1);console.log(fmt.includes('.Image')?stageId:process.env.FAIL_MODE==='stage-health'?'unhealthy':'healthy');process.exit(0);}
  if(args[1]!==service)throw Error('wrong container '+args[1]);
  if(!s.active)process.exit(1);
@@ -53,13 +46,6 @@ if(args[0]==='inspect'){
  else if(fmt.includes('Health'))console.log(process.env.FAIL_MODE==='health'&&s.images[s.active]===process.env.CANDIDATE?'unhealthy':'healthy');
  else if(fmt.includes('Labels'))console.log('repo');
  else throw Error('unknown inspect '+args); process.exit(0);
-}
-if(args[0]==='network'&&args[1]==='inspect'&&process.env.FAKE_CANVAS_PLAN){const p=JSON.parse(fs.readFileSync(process.env.FAKE_CANVAS_PLAN));console.log(JSON.stringify([{Containers:Object.fromEntries(Object.values(p.compose.services).filter(s=>s.networks.includes(args[2])).map(s=>[s.container_name,{Name:s.container_name}]))}]));process.exit(0);}
-if(args[0]==='exec'&&process.env.FAKE_CANVAS_PLAN){
- const p=JSON.parse(fs.readFileSync(process.env.FAKE_CANVAS_PLAN));
- if(!Object.values(p.compose.services).some(s=>s.container_name===args[1])||args[2]!=='python'||args[3]!=='-c'||args.length!==5)throw Error('unexpected canvas probe invocation');
- const prelude='import ast,json,io,urllib.request\\nsource='+JSON.stringify(args[4])+'\\nassignments={n.targets[0].id:ast.literal_eval(n.value) for n in ast.parse(source).body if isinstance(n,ast.Assign) and isinstance(n.targets[0],ast.Name) and n.targets[0].id in ("NODES","TEMPLATES")}\\nclass Reply(io.BytesIO):\\n status=200\\ndef open_fixture(url,timeout):\\n from urllib.parse import urlparse\\n path=urlparse(url).path\\n if path=="/object_info": value={n:{} for n in assignments["NODES"]}\\n elif path.startswith("/extensions/zenithjoy/") and path.rsplit("/",1)[1] in assignments["TEMPLATES"]: value={"nodes":[],"links":[]}\\n else: raise RuntimeError("unexpected fixture HTTP path")\\n return Reply(json.dumps(value).encode())\\nurllib.request.urlopen=open_fixture\\n';
- const result=require('node:child_process').spawnSync('python3',['-c',prelude+args[4]],{encoding:'utf8'});process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');process.exit(result.status??1);
 }
 if(args[0]==='image'&&args[1]==='inspect'){
  const image=args[2];if(image===stageId||image==='zenithjoy-api-staging:'+process.env.CANDIDATE){if(process.env.FAIL_MODE==='stage-image-missing')process.exit(1);const fmt=args.at(-1);if(fmt.includes('.Os'))console.log(process.env.FAIL_MODE==='stage-platform'?'linux/arm64':'linux/amd64');else if(fmt.includes('revision'))console.log(process.env.FAIL_MODE==='stage-label'?'0'.repeat(40):process.env.CANDIDATE);else console.log(process.env.FAIL_MODE==='stage-image'&&image!==stageId?'sha256:'+'c'.repeat(64):stageId);s.images[stageId]=process.env.CANDIDATE;save();process.exit(0);}
@@ -171,21 +157,14 @@ function stage(f, extra = {}) {
   const oldId='sha256:'+'a'.repeat(64), candidateId='sha256:'+'b'.repeat(64);
   let config=join(f.root,'previous-compose.yml'); writeFileSync(config,'services: {}\n');
   if(extra.SAME_SHA_RETRY){config=join(f.root,'staging',f.next,'image.json');mkdirSync(join(f.root,'staging',f.next),{recursive:true});writeFileSync(config,JSON.stringify({services:{'zenithjoy-api-staging':{image:oldId,environment:{STAFF_EMAILS:'previous@example.com'},networks:['old-private']}},networks:{'old-private':{external:true}}}));}
-  let previousCanvas;
-  if (extra.WITH_CANVAS) {
-    const root = join(f.root, 'staging');
-    const rosterPath = join(f.root, 'staging-roster.json');
-    const roster = {schema_version: 1, environment: 'staging', source_commit: f.old,
-      origin: 'https://staging-autopilot.zenjoymedia.media',
-      providers: {DASHSCOPE_API_KEY: 'wan', ALIYUN_ACCESS_KEY_ID: 'id', ALIYUN_ACCESS_KEY_SECRET: 'secret',
-        COS_SECRET_ID: 'id', COS_SECRET_KEY: 'secret', COS_BUCKET: 'private-materials-12345', COS_REGION: 'ap-guangzhou'},
-      users: [{id: 'employee', email: 'employee@example.test', token: 'k'.repeat(40)}]};
-    previousCanvas = createPlan(roster, {sha: f.old, image: oldId});
-    writeFileSync(rosterPath, JSON.stringify(roster), {mode: 0o600});
-    writePrepared(root, rosterPath, previousCanvas);
-    extra = {...extra, FAKE_STAGING_CANVAS: join(root, f.old, 'canvas-plan.json')};
-  }
-  const previousApi = previousCanvas?.apiOverlay.services['zenithjoy-api-staging'];
+  const previousApi = extra.WITH_CANVAS ? {
+    environment: {
+      STAFF_EMAILS: 'employee@example.test', DASHSCOPE_API_KEY: 'wan', COS_BUCKET: 'private-materials-12345',
+      CREATIVE_CANVAS_INSTANCES: '{"employee":"http://retired:8188"}',
+      CREATIVE_CANVAS_SERVICE_TOKENS: '{"employee":"retired-fixture"}',
+    },
+    networks: ['old-private', 'zj-canvas-stage-aaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaa-net'],
+  } : undefined;
   writeFileSync(join(f.root,'docker.json'),JSON.stringify({active:oldId,images:{[oldId]:extra.SAME_SHA_RETRY?f.next:f.old},builds:0,ups:[],environment:previousApi?.environment,networks:previousApi?.networks}));
   const fake=String.raw`#!${process.execPath} --
 const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2),name=path.basename(process.argv[1]),state=JSON.parse(fs.readFileSync(process.env.FAKE_DOCKER));
@@ -195,20 +174,6 @@ if(args[0]==='save'){process.stdout.write(fs.readFileSync(process.env.SAVE_TAR))
 if(name==='df'){const free=state.builds>0&&process.env.FAKE_AFTER_BUILD_FREE_KB||process.env.FAKE_FREE_KB||'9999999';console.log('Filesystem 1024-blocks Used Available Capacity Mounted\nfixture 99999999 1 '+free+' 1% /');process.exit(0)}
 if(name==='curl'){let sha=state.images[state.active];if(process.env.FAIL_MODE==='sha'&&sha===process.env.CANDIDATE)sha='0'.repeat(40);console.log(JSON.stringify({build:{sha}}));process.exit(0)}
 if(args[0]==='info'){console.log('/fake/docker');process.exit(0)}
-if(process.env.FAKE_STAGING_CANVAS){
- const plan=JSON.parse(fs.readFileSync(process.env.FAKE_STAGING_CANVAS));
- if(args[0]==='exec'){console.log(JSON.stringify({verified:true,nodes:[],templates:[]}));process.exit(0)}
- if(args[0]==='network'&&args[1]==='inspect'){console.log(JSON.stringify([{Containers:{}}]));process.exit(0)}
- if(args[0]==='inspect'&&!args.includes('--format')){
-  const node=Object.values(plan.compose.services).find(s=>s.container_name===args[1]);
-  if(node&&process.env.RETIRED_COMFY)process.exit(1);
-  const environment=Object.entries(node?node.environment:state.environment||{}).map(([k,v])=>k+'='+v);
-  const networks=Object.fromEntries((node?node.networks:state.networks||[]).map(n=>[n,{}]));
-  console.log(JSON.stringify([{Image:plan.image,Config:{Env:environment},NetworkSettings:{Networks:networks},
-    State:{Health:{Status:'healthy'}},HostConfig:{PortBindings:{}},Mounts:node?[{Destination:'/data',Name:node.volumes[0].split(':')[0]}]:[]}]));
-  process.exit(0)
- }
-}
 if(args[0]==='inspect'){let fmt=args[args.indexOf('--format')+1];if(fmt.includes('config_files'))console.log(process.env.PREVIOUS_CONFIG);else if(fmt.includes('project'))console.log('repo');else if(fmt.includes('Health'))console.log(process.env.FAIL_MODE==='health'&&state.active===next?'unhealthy':'healthy');else if(fmt.includes('.Image'))console.log(state.active);else throw Error('bad inspect '+fmt);process.exit(0)}
 if(args[0]==='image'&&args[1]==='inspect'){const image=args[2];if(image!==old&&image!==tag)process.exit(1);let fmt=args[args.indexOf('--format')+1]||'';if(fmt.includes('RootFS.Layers'))console.log(JSON.stringify(process.env.FAIL_MODE==='layers'?['sha256:'+'c'.repeat(64)]:['sha256:'+'d'.repeat(64)]));else if(fmt.includes('.Os'))console.log(process.env.FAIL_MODE==='platform'?'linux/arm64':'linux/amd64');else if(fmt.includes('revision'))console.log(process.env.FAIL_MODE==='label'?'0'.repeat(40):process.env.CANDIDATE);else if(fmt.includes('.Id'))console.log(image===old?old:(process.env.FAIL_MODE==='image'?'sha256:'+'c'.repeat(64):next));process.exit(0)}
 if(args[0]==='tag')process.exit(0);
@@ -239,7 +204,7 @@ with tarfile.open(sys.argv[1],'w') as t:
 }
 test('退役 ComfyUI 后普通预发 API 继续发布并保留供应商和员工配置', t => {
   const f = fixture(t);
-  const result = stage(f, {WITH_CANVAS: '1', RETIRED_COMFY: '1'});
+  const result = stage(f, {WITH_CANVAS: '1'});
   assert.equal(result.status, 0, result.stderr);
   assert.equal(f.state().environment?.STAFF_EMAILS, 'employee@example.test');
   assert.equal(f.state().environment.COS_BUCKET, 'private-materials-12345');
@@ -250,7 +215,7 @@ test('退役 ComfyUI 后普通预发 API 继续发布并保留供应商和员工
 });
 test('退役 ComfyUI 后预发切换失败也不会恢复旧画布绑定', t => {
   const f = fixture(t);
-  const result = stage(f, {WITH_CANVAS: '1', RETIRED_COMFY: '1', FAIL_MODE: 'up'});
+  const result = stage(f, {WITH_CANVAS: '1', FAIL_MODE: 'up'});
   assert.notEqual(result.status, 0);
   assert.equal(f.state().active, 'sha256:'+'a'.repeat(64));
   assert.equal(f.state().environment.COS_BUCKET, 'private-materials-12345');
@@ -275,12 +240,24 @@ test('同SHA重试失败恢复旧有效环境与私有网络，不引用已覆�
  assert.deepEqual(f.state().networks,['old-private']);
 });
 test('个人画布已停用后，普通生产 API 发布、失败恢复及回退仍保留模型和素材配置',t=>{
- const f=fixture(t),rosterPath=join(f.root,'roster.json');
- const roster={schema_version:1,source_commit:f.old,origin:'https://zenithjoy.tech',providers:{DASHSCOPE_API_KEY:'wan-private',ALIYUN_ACCESS_KEY_ID:'ali-id',ALIYUN_ACCESS_KEY_SECRET:'ali-secret',COS_SECRET_ID:'cos-id',COS_SECRET_KEY:'cos-key',COS_BUCKET:'private-materials-12345',COS_REGION:'ap-guangzhou'},users:[{id:'employee',email:'employee@example.com',token:'k'.repeat(40)}]};
- writeFileSync(rosterPath,JSON.stringify(roster),{mode:0o600});
- const plan=createPlan(roster,{sha:f.old,image:'sha256:'+'f'.repeat(64)});
- writePrepared(f.env.ZJ_HK_RELEASES,rosterPath,plan);
- const originalSource=join(f.env.ZJ_HK_RELEASES,f.old,'source');mkdirSync(originalSource,{recursive:true});
+ const f=fixture(t);
+ const oldRelease=join(f.env.ZJ_HK_RELEASES,f.old);
+ const retiredNetwork='zj-canvas-aaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaa-net';
+ const environment={
+   DASHSCOPE_API_KEY:'wan-private', COS_BUCKET:'private-materials-12345', COS_SECRET_KEY:'cos-key',
+   CREATIVE_CANVAS_INSTANCES:'{"employee":"http://retired:8188"}',
+   CREATIVE_CANVAS_SERVICE_TOKENS:'{"employee":"retired-fixture"}',
+   CREATIVE_CANVAS_ALLOWED_ORIGINS:'https://zenithjoy.tech',
+ };
+ const overlay={services:{'zenithjoy-api-prod':{environment,networks:[retiredNetwork]}},networks:{[retiredNetwork]:{external:true}}};
+ const overlayBytes=JSON.stringify(overlay);
+ const plan={source_commit:f.old,apiOverlay:overlay};
+ const originalSource=join(oldRelease,'source');mkdirSync(originalSource,{recursive:true});
+ writeFileSync(join(oldRelease,'video-tools.json'),overlayBytes,{mode:0o600});
+ writeFileSync(join(oldRelease,'video-tools-prepared.json'),JSON.stringify({
+   source_commit:f.old,overlay_sha256:createHash('sha256').update(overlayBytes).digest('hex'),
+ }),{mode:0o600});
+ writeFileSync(join(oldRelease,'canvas-plan.json'),JSON.stringify(plan),{mode:0o600});
  const originalArchive=spawnSync('git',['-C',f.env.ZJ_HK_REPO,'archive',f.old]);assert.equal(originalArchive.status,0);
  assert.equal(spawnSync('tar',['-x','-C',originalSource],{input:originalArchive.stdout}).status,0);
  const config = version => JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,version,'image.json')));

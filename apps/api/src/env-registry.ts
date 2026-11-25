@@ -73,9 +73,6 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'AIDGE_ACCESS_KEY_SECRET', reason: 'Aidge 全能力 RAM AccessKey Secret；仅服务端读取' },
   { name: 'AIDGE_ENDPOINT', reason: '可选：香港测试站经受限 Tailscale TLS 转发连接 Aidge 北京端点（固定域名和端口）' },
   { name: 'ALIYUN_VIAPI_OSS_BUCKET', reason: '可选自有上海 OSS bucket；试用默认通过 STS 使用 viapi-customer-temp，临时素材仅保留一天' },
-  { name: 'CREATIVE_CANVAS_INSTANCES', reason: '画布员工到隔离实例的映射；未配置时画布不可用' },
-  { name: 'CREATIVE_CANVAS_ALLOWED_ORIGINS', reason: '画布代理允许的额外网页来源；未配置时使用站点来源' },
-  { name: 'CREATIVE_CANVAS_SERVICE_TOKENS', reason: '画布隔离实例到员工的独立服务密钥映射；未配置时节点无法调用员工接口' },
   { name: 'VIDEO_TOOLS_DATA_DIR', reason: '视频工具任务与素材元数据持久化目录；默认 data/video-tools，部署须挂载持久卷' },
   { name: 'VOLCENGINE_TTS_APP_ID', reason: '批量混剪配音刀(GP line05/batch_mashup#step4)火山引擎 TTS 凭据，缺则 tts-volcengine.ts 的 synthesize() 抛 VolcengineTtsError(missing_credentials)，不阻断中台启动，由调用方（渲染层）决定兜底' },
   { name: 'VOLCENGINE_TTS_ACCESS_KEY', reason: '同 VOLCENGINE_TTS_APP_ID——火山引擎 TTS access_key，凭据均在 1Password CS「Volcengine Speech (豆包实时语音对话)」条目' },
@@ -120,6 +117,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   // —— Notion ——
   { name: 'NOTION_INTEGRATION_TOKEN', reason: 'Notion 集成 token，缺则 Notion 同步不可用' },
   { name: 'CUSTOMER_WORKSPACE_PROVISIONING_ENABLED', reason: '客户独立工作台开户worker开关，只有true启用，缺省关闭' },
+  { name: 'NOTION_COMPANY_SOURCE_SYNC_ENABLED', reason: '已登记工作台的 Notion 客户资料同步开关，只有 true 启用' },
   { name: 'FEISHU_TENANT_ACCESS_TOKEN', reason: '客户工作台飞书默认有效访问令牌；可由每公司凭据引用覆盖，缺则开户停止待核对' },
   { name: 'NOTION_PARENT_PAGE_ID', reason: 'Notion 父页面 ID，缺则用默认/跳过' },
   { name: 'NOTION_PUBLISH_ORCH_DB_ID', reason: 'Notion 发布编排台 database id，缺则编排台同步器红日志跳过启动' },

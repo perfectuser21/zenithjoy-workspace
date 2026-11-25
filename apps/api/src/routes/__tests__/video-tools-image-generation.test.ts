@@ -56,15 +56,12 @@ describe('staff image generation',()=>{
     expect(reloaded.body.status).toBe('succeeded');expect(storage.getSignedUrl).toHaveBeenCalledTimes(2);expect(submit).toHaveBeenCalledTimes(1);
     vi.restoreAllMocks();
   });
-  it('scopes the instance token to its configured employee and permitted routes',async()=>{
-    vi.stubEnv('CREATIVE_CANVAS_INSTANCES',JSON.stringify({alice:'http://alice:8188',bob:'http://bob:8188'}));
-    vi.stubEnv('CREATIVE_CANVAS_SERVICE_TOKENS',JSON.stringify({alice:'a'.repeat(48),bob:'b'.repeat(48)}));
-    const a=app();const token='a'.repeat(48);
-    const created=await request(a).post('/video/image-jobs').set('X-Creative-Instance-Token',token).send({prompt:'chair'});expect(created.status).toBe(202);
-    expect((await request(a).get(`/video/image-jobs/${created.body.id}`).set('X-Creative-Instance-Token','b'.repeat(48))).status).toBe(404);
-    expect((await request(a).post('/video/jobs').set('X-Creative-Instance-Token',token).send({kind:'upscale',videoUrl:'https://example.com/a.mp4'})).status).toBe(403);
-    expect((await request(a).post('/video/uploads/presign').set('X-Creative-Instance-Token',token).send({name:'x.png',size:1})).status).toBe(403);
-    expect((await request(a).post('/video/image-jobs').set('X-Creative-Instance-Token','x'.repeat(48)).send({prompt:'chair'})).status).toBe(401);
+  it('requires an employee session even if a retired canvas token is supplied', async () => {
+    const result = await request(app()).post('/video/image-jobs')
+      .set('X-Creative-Instance-Token', 'a'.repeat(48))
+      .send({ prompt: 'chair' });
+    expect(result.status).toBe(401);
+    expect(submit).not.toHaveBeenCalled();
   });
   it('recovers abandoned jobs and frees slots on the next submission',async()=>{
     const a=app();

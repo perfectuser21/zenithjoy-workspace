@@ -40,10 +40,38 @@ describe('客户工作台内部开户边界', () => {
     expect(result.status).toBe(202); expect(result.body.data.object_count).toBe(16); expect(result.body.data.data_sync_status).toBe('not_connected');
     expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('customer_workspace_events'))).toBe(true);
   });
+  it('接入现有三张表直接登记，避免创建第二套工作台', async () => {
+    const parent = 'aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa';
+    const tables = { products: 'bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb', audiences: 'cccccccccccc4ccc8ccccccccccccccc', keywords: 'dddddddddddd4ddd8ddddddddddddddd' };
+    let state: unknown;
+    mocks.query.mockImplementation(async (sql: string, args?: unknown[]) => {
+      if (sql.includes('SELECT company_id,tenant_id,company_name')) return { rows: [{ company_id: company, tenant_id: tenant }] };
+      if (sql.includes('INSERT INTO zenithjoy.customer_workspaces(')) {
+        state = JSON.parse(String(args?.[6]));
+        expect(args?.[7]).toBe('structure_ready');
+      }
+      return { rows: sql.includes('SELECT state') ? [{ state }] : [] };
+    });
+    const result = await request(app).post(`/workspaces/${company}/bind`).set('x-internal-token', 'test-service')
+      .send({ platform: 'notion', parent_id: parent, tenant_id: tenant, modules: ['leadgen'], approved_parent: true, existing_source_tables: tables });
+    expect(result.status).toBe(202);
+    expect(result.body.data).toMatchObject({ status: 'structure_ready', data_sync_status: 'not_connected', object_count: 3 });
+    expect(result.body.data.resources.keywords.id).toBe(tables.keywords);
+  });
   it('同公司重放不能改写既有parent', async () => {
     mocks.query.mockImplementation(async (sql: string) => ({ rows: sql.includes('SELECT company_id,tenant_id,company_name') ? [{ company_id: company, tenant_id: tenant, company_name: '甲' }] : sql.includes('SELECT state') ? [{ state: { parent_id: 'foreign-parent', modules: [], template_version: 1 } }] : [] }));
     const result = await request(app).post(`/workspaces/${company}/bind`).set('x-internal-token', 'test-service').send({ platform: 'notion', parent_id: 'aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa', tenant_id: tenant, approved_parent: true });
     expect(result.status).toBe(409); expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('COMMIT'))).toBe(false);
+  });
+  it('自动同步开关只可由开户服务按公司和租户登记', async () => {
+    const endpoint = `/workspaces/${company}/notion-auto-sync`;
+    expect((await request(app).post(endpoint).send({ tenant_id: tenant, enabled: true })).status).toBe(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+    mocks.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ company_id: company }] });
+    const result = await request(app).post(endpoint).set('x-internal-token', 'test-service').send({ tenant_id: tenant, enabled: true });
+    expect(result.status).toBe(202);
+    expect(result.body.data.enabled).toBe(true);
+    expect(mocks.query.mock.calls[0][1]).toEqual([company, tenant, true]);
   });
   it('凭据引用不能指向任意服务环境变量或另一个平台', async () => {
     const result = await request(app).post(`/workspaces/${company}/bind`).set('x-internal-token', 'test-service').send({ platform: 'notion', parent_id: 'aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa', tenant_id: tenant, approved_parent: true, credential_ref: 'ZENITHJOY_INTERNAL_TOKEN' });

@@ -54,28 +54,32 @@ tests:
     path: apps/api/src/routes/__tests__/video-tools-project-instance.test.ts
     type: integration
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: 视频创作
 
   - id: comfy-native-video-nodes
     path: infrastructure/comfyui/tests/test_native_video_workflow.py
     type: unit
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: 视频创作
 
   - id: comfy-native-video-extension
     path: infrastructure/comfyui/tests/video-project-extension.test.mjs
     type: unit
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: 视频创作
 
   - id: canvas-capabilities-probe
     path: scripts/deploy/__tests__/canvas-capabilities.test.mjs
     type: integration
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: 视频创作
 
   - id: simple-video-workflow-lifecycle
@@ -102,7 +106,7 @@ tests:
     ci: L4
     status: active
     product: 视频创作
-    note: 默认业务步骤入口与高级画布分离。
+    note: 验证旧画布入口已移除并保留视频翻拍流水线。
 
   - id: simple-video-workflow-ui
     path: apps/dashboard/src/pages/__tests__/VideoWorkflowPage.test.tsx
@@ -8649,7 +8653,8 @@ tests:
     path: apps/api/src/services/creative-canvas-gateway.test.ts
     type: integration
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 画布网关 HTTP 和 WebSocket 身份隔离。
 
@@ -8657,7 +8662,8 @@ tests:
     path: apps/api/src/services/creative-canvas-configured.test.ts
     type: integration
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 真实配置网关的员工身份与未配置实例。
 
@@ -8665,7 +8671,8 @@ tests:
     path: apps/dashboard/src/pages/__tests__/CreativeCanvasPage.test.tsx
     type: unit
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 创作画布入口、服务状态与重试。
 
@@ -8729,7 +8736,8 @@ tests:
     path: apps/api/src/routes/__tests__/video-tools-canvas-image-upload.test.ts
     type: integration
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 员工素材上传与隔离、尺寸像素限制、签名续期、Wan 幂等。
 
@@ -8737,7 +8745,8 @@ tests:
     path: infrastructure/comfyui/tests/test_zenithjoy_nodes.py
     type: unit
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 在 Comfy CPU 镜像运行，验证上传选图、解码前像素限制及节点幂等。
 
@@ -8785,7 +8794,8 @@ tests:
     path: .github/workflows/scripts/smoke/creative-canvas-fullscreen-smoke.sh
     type: smoke
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 全屏切换保持原画布与未保存内容。
 
@@ -8793,7 +8803,8 @@ tests:
     path: scripts/deploy/__tests__/creative-canvas-cache.test.mjs
     type: integration
     ci: L1
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 真实 Nginx 验证画布静态缓存与鉴权、错误响应及用户数据隔离。
 
@@ -8801,7 +8812,8 @@ tests:
     path: scripts/deploy/__tests__/creative-canvas-startup.test.mjs
     type: integration
     ci: L1
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 验证画布启动诊断注入的权限边界和日志脱敏。
 
@@ -8809,7 +8821,8 @@ tests:
     path: scripts/deploy/__tests__/comfy-official-assets.test.mjs
     type: integration
     ci: L1
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 真实 Nginx 验证官方静态资源与鉴权隔离、版本及缺文件回退；执行 wheel 校验测试。
 
@@ -8817,7 +8830,8 @@ tests:
     path: apps/api/src/services/creative-canvas-stream.test.ts
     type: integration
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 真正的 HTTP 流验证上游中断、静态资源停滞、客户端断开及其他请求不受影响。
 
@@ -8833,7 +8847,8 @@ tests:
     path: scripts/deploy/__tests__/video-tools-release.test.mjs
     type: integration
     ci: L1
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧画布部署计划已退役，既有 API 发布及回退兼容由 hk-api-release-regression 覆盖。
     product: AI视频
     note: 私人画布、模型配置、固定来源、员工隔离、后续API配置保留与回退的行为回归。
 
@@ -8841,7 +8856,8 @@ tests:
     path: apps/dashboard/e2e/video-tools-live.spec.ts
     type: e2e
     ci: L4
-    status: pending-ci
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 明确授权后opt-in的真实staging员工登录、画布和两秒Wan/超分；产生费用。尚未执行；默认跳过不能当业务通过。
 
@@ -8849,7 +8865,8 @@ tests:
     path: scripts/deploy/__tests__/canvas-employee-verification.test.mjs
     type: integration
     ci: L1
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 执行真实shell内Node核验器，覆盖认证schema解析、精确员工身份、生产staff及只读事务。
 
@@ -8931,7 +8948,7 @@ tests:
   - {"id":"inventory-26d0f25a8dea879a","path":"scripts/ci/__tests__/run-core-regression.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c428a3258767ebe7","path":"scripts/ci/__tests__/wechat-agent-scope.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"Windows CS-only classifier retired; restore b9746d8adea210cca015721949b11624ba2f4d03:scripts/ci/__tests__/wechat-agent-scope.test.mjs; Android routes and generic source ownership tests replace unique current obligations; docs/ci/wechat-cs-android-gate-migration.json."}
   - {"id":"inventory-3e168cfe02791d3e","path":"scripts/common-runner/sync.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-edd0003f092365a2","path":"scripts/deploy/__tests__/comfy-official-assets.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-edd0003f092365a2","path":"scripts/deploy/__tests__/comfy-official-assets.test.py","type":"unclassified","ci":"unverified","status":"deprecated","retirement":"2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。","product":"unclassified"}
   - {"id":"inventory-fa4dddedaf24ac59","path":"scripts/deploy/__tests__/hk-source-fetch.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-3e0f2345bf24d60a","path":"scripts/phone-account-patrol/implementation-regression.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-36d322ed60454d1c","path":"scripts/phone-account-patrol/test_deploy.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9621,7 +9638,7 @@ tests:
   - {"id":"inventory-3950ff76fd6b4473","path":"services/wechat-phone-controller/tests/test_legacy.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-074613422af653ac","path":"services/wechat-phone-controller/tests/test_pad_login.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-448f680354fc3ad9","path":"services/wechat-phone-controller/tests/test_popup.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-1b292e1d9d488e97","path":"sprints/06090814-video-remake/tests/test_api.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-1b292e1d9d488e97","path":"sprints/06090814-video-remake/tests/test_api.py","type":"unclassified","ci":"unverified","status":"deprecated","retirement":"2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。","product":"unclassified"}
   - {"id":"inventory-652453d2de37e48a","path":"sprints/06091001-agent-module-preflight-blocking/tests/test_preflight_lock.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-e4c4c5c53695814d","path":"sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-76a4e89b80cd9b45","path":"sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_lifecycle.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9953,7 +9970,8 @@ tests:
     path: infrastructure/comfyui/tests/remake-extension.test.mjs
     type: unit
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 真实widget回调的Cookie上传、类型检查、移除节点、失败恢复和模板打包。
 
@@ -9961,7 +9979,8 @@ tests:
     path: infrastructure/comfyui/tests/test_wan_remake.py
     type: unit
     ci: L3
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     note: 新节点真实类方法的输入与组合模式合同，API错误消息；无Torch运行AST抽取，仅验证节点方法不冒充真实模型。
 
@@ -10621,6 +10640,46 @@ tests:
     product: 获客
     note: Real session gate, tenant middleware and HTTP repair/readback; external auth/DB seams only.
 
+  - id: company-source-sync-http
+    path: apps/api/src/routes/company-source-sync.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "资料同步管理权限、租户范围和凭据不外泄"
+
+  - id: company-source-import
+    path: apps/api/src/services/company-source-import.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "统一 Notion 和飞书客户资料，缺列或串工作台拒绝导入"
+
+  - id: company-source-sync-service
+    path: apps/api/src/services/company-source-sync.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "资料源须有完整绑定，跨租户工作台拒绝读取"
+
+  - id: notion-company-source-worker
+    path: apps/api/src/services/notion-company-source-worker.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "Notion 待同步选择、编辑者登记边界及原页回执协议"
+
+  - id: company-source-sync-real-pg
+    path: apps/api/tests/pg-contracts/company-source-sync-pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 获客
+    note: "真实 PostgreSQL 验证预览、原子启用、租户隔离、重复确认和过期保护"
+
   - id: company-routing-normalization-real-pg
     path: apps/api/tests/pg-contracts/routing-normalization-pg.test.ts
     type: integration
@@ -10924,7 +10983,8 @@ tests:
     path: infrastructure/comfyui/tests/starter-workflows.test.mjs
     type: contract
     ci: L4
-    status: active
+    status: deprecated
+    retirement: 2026-11-25 旧 ComfyUI 画布和 React Flow 翻拍原型退役。测试原件见基线 c57b2668a。
     product: AI视频
     execution: ci-smoke-glob-runner.yml / smoke-glob-shards / video-tools-smoke.sh
     note: Both shipped starter graphs retain owned asset links, required nodes and fresh request identities; no provider submission.

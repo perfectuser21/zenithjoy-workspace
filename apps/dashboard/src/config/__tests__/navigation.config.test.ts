@@ -42,7 +42,6 @@ describe('Aidge 定向试用导航', () => {
     expect(isAidgeOnlyPath('/aidge')).toBe(true);
     expect(isAidgeOnlyPath('/materials')).toBe(true);
     expect(isAidgeOnlyPath('/mashup')).toBe(true);
-    expect(isAidgeOnlyPath('/creative-canvas')).toBe(false);
     expect(isAidgeOnlyPath('/area/admin')).toBe(false);
   });
 });

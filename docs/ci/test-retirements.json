@@ -977,6 +977,28 @@
         ".github/workflows/ci-walking-skeleton-1.yml"
       ],
       "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/06090814-video-remake/tests/test_api.py",
+      "source_commit": "c57b2668a71c2e55b360e8574ee7bd8366d19ed1",
+      "source_blob": "d01256f9da49175edafaf80ee349cbd4a72ea2fe",
+      "source_sha256": "1b995e979547e99e9c054494ca0fb0a1d1942a27ae15ecf39d29289aa0f4e3d2",
+      "reason": "主理人确认退役 React Flow 视频翻拍原型。旧测试所验证的 FastAPI 骨架随原型移除。",
+      "dimensions": {
+        "current_value": "旧测试仅验证原型的固定节点清单、确认接口和 HTML 回退，原型已退役。",
+        "active_status": "原型服务无当期部署入口，保留现有 Dashboard 视频翻拍流水线。",
+        "real_effect": "删除原型的 /api/nodes 与 8899 服务入口，用户继续通过 Dashboard 使用实际翻拍流水线。",
+        "test_and_blocking": "保留现有 Dashboard 翻拍入口断言和媒体 API 实际回归。",
+        "duplication_and_obsolescence": "独立原型路由、静态页面和 FastAPI 固定节点均已删除，历史内容由固定源码保留。",
+        "runtime_and_maintenance_cost": "退役旧版本前端依赖、Python 入口与对应历史测试。",
+        "retirement_and_dependencies": "Toonflow 与 Dashboard 视频翻拍 API 无原型依赖，已核对部署入口和回归。"
+      },
+      "replacement_test_paths": [
+        "apps/dashboard/src/pages/__tests__/VideoWorkflowEntry.test.tsx"
+      ],
+      "evidence_paths": [
+        "scripts/deploy/VIDEO_TOOLS_RELEASE.md"
+      ]
     }
   ]
 }

@@ -20,3 +20,22 @@ npm test \
 # required L3 openclaw-scripts-test: services/phone-adb-controller/__tests__/*.test.mjs
 # The complete paired-deploy-smoke.test.mjs suite runs there once, rather than
 # duplicating its 22 cases in this separate 90-second company configuration smoke.
+
+# 离线验证来源受租户约束及 Notion、飞书记录字段转换。
+npm test \
+  --workspace @zenithjoy/api \
+  -- \
+  src/routes/company-source-sync.test.ts src/services/company-source-import.test.ts \
+  src/services/company-source-sync.test.ts src/services/notion-company-source-worker.test.ts
+
+# 自动同步由开户服务登记现有 Notion 三表，拒绝匿名变更租户的开关。
+npm test \
+  --workspace @zenithjoy/api \
+  -- \
+  src/routes/customer-workspaces.test.ts
+
+# 轻量获客的业务库可独立同步，只核对工作台归属。
+npm test \
+  --workspace @zenithjoy/api \
+  -- \
+  src/services/company-source-sync.test.ts -t '独立同步只核对工作台归属'
