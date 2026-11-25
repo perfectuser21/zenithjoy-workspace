@@ -118,3 +118,21 @@ for(const variant of ['lightweight','single-check'])test(`${variant} 101 发布�
  assert.match(admission.run,/test "\$HEAD" = "\$CALLER_SHA"/);
  assert.match(admission.run,/git\/ref\/heads\/main/);
 });
+
+test('发布范围守卫拒绝已退役的 KR，同时接受所有现役调用方', () => {
+ const workflow = regression();
+ const admission = workflow.jobs.snapshot.steps.find(step => step.env?.CALLER_REPO);
+ const repo = 'perfectuser21/zenithjoy-workspace';
+ const active = ['zenithjoy', 'commander-generic', 'cecelia-device-patrol-definitions', 'leadgen-101-lightweight', 'leadgen-101-single-check'];
+ const head = '1'.repeat(40);
+ const env = {...process.env, HEAD: head, CALLER_SHA: head};
+ const command = 'gh() { printf "%s\\n" "$HEAD"; }\n' + admission.run;
+ const admit = (source, scope) => spawnSync('bash', ['-c', command], {
+  encoding: 'utf8',
+  env: {...env, SOURCE_REPO: source, CALLER_REPO: source, MAP_SCOPE: scope},
+ });
+ for (const scope of active) assert.equal(admit(repo, scope).status, 0, scope);
+ assert.notEqual(admit(repo, '').status, 0, '缺范围须拒绝');
+ assert.notEqual(admit('perfectuser21/cecelia', 'cecelia-kr').status, 0, '已退役范围须在调用 Brain 前拒绝');
+ assert.equal(workflow.jobs.snapshot.env.MAP_SCOPE, '${{ inputs.scope }}');
+});

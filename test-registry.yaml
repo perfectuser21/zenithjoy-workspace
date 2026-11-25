@@ -9920,7 +9920,7 @@ tests:
     ci: L1
     status: active
     product: unclassified
-    execution: pr-review.yml / terra-review / node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs; real Git fixtures, no model calls
+    execution: pr-review-terra.yml / terra-review / node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs; real Git fixtures, no model calls
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: company-freeze-node-child-admission

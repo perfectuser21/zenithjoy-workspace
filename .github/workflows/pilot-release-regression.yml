@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SOURCE_REPO: ${{ inputs.source_repo || github.repository }}
-      MAP_SCOPE: ${{ inputs.scope || 'cecelia-kr' }}
+      MAP_SCOPE: ${{ inputs.scope }}
       HEAD: ${{ inputs.head_revision || github.sha }}
     steps:
       - name: 固定同仓当前main及受支持试点
@@ -33,7 +33,7 @@ jobs:
           test "$SOURCE_REPO" = "$CALLER_REPO"
           test "$HEAD" = "$CALLER_SHA"
           case "$SOURCE_REPO:$MAP_SCOPE" in
-            perfectuser21/cecelia:cecelia-kr|perfectuser21/zenithjoy-workspace:zenithjoy|perfectuser21/zenithjoy-workspace:commander-generic|perfectuser21/zenithjoy-workspace:cecelia-device-patrol-definitions|perfectuser21/zenithjoy-workspace:leadgen-101-lightweight|perfectuser21/zenithjoy-workspace:leadgen-101-single-check) ;;
+            perfectuser21/zenithjoy-workspace:zenithjoy|perfectuser21/zenithjoy-workspace:commander-generic|perfectuser21/zenithjoy-workspace:cecelia-device-patrol-definitions|perfectuser21/zenithjoy-workspace:leadgen-101-lightweight|perfectuser21/zenithjoy-workspace:leadgen-101-single-check) ;;
             *) exit 1 ;;
           esac
           test "$(gh api "repos/$SOURCE_REPO/git/ref/heads/main" --jq .object.sha)" = "$HEAD"
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pilot-release-snapshot-${{ inputs.scope || 'cecelia-kr' }}-${{ inputs.head_revision || github.sha }}
+          name: pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}
           path: evidence/*.json
           if-no-files-found: error
   verify:
@@ -107,7 +107,7 @@ jobs:
           mkdir -p output
       - uses: actions/download-artifact@v4
         with:
-          name: pilot-release-snapshot-${{ inputs.scope || 'cecelia-kr' }}-${{ inputs.head_revision || github.sha }}
+          name: pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}
           path: snapshot
       - name: 准备固定中央Skill对象缓存
         env:
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pilot-release-verification-${{ inputs.scope || 'cecelia-kr' }}-${{ inputs.head_revision || github.sha }}
+          name: pilot-release-verification-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}
           path: output/*.json
           retention-days: 90
           if-no-files-found: error
