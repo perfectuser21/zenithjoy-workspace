@@ -292,8 +292,19 @@ test('真实旧zenithjoy格式可无source_set但保留snapshot中央绑定，�
 async function isolatedBrain(t){
  const child=spawn(process.execPath,['--input-type=module','-e',`
   import{createServer}from'node:http';
-  const sockets=new Set();let count=0,nextSocket=0;
+  const sockets=new Set();let count=0,nextSocket=0,releaseReads=0;
+  const releaseRoute = '/api/brain/releases/11111111-1111-4111-8111-111111111111';
+  const invalidReleaseRoute = '/api/brain/releases/22222222-2222-4222-8222-222222222222';
   const server=createServer((req,res)=>{count++;if(req.url==='/conflict'){res.writeHead(409);res.end('fixture-private-response');return;}if(req.url.startsWith('/invalid')){res.end('fixture-private-response');return;}if(req.url.startsWith('/reset')){req.socket.destroy();return;}
+   if (req.url === releaseRoute && (req.method === 'POST' || ++releaseReads < 3)) {
+    req.socket.destroy();
+    return;
+   }
+   if (req.url === invalidReleaseRoute) {
+    res.writeHead(503);
+    res.end();
+    return;
+   }
    if(req.url==='/warm'){const old=req.socket;setTimeout(()=>{if(!old.destroyed)old.resetAndDestroy();},50);}
    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({connection:req.headers.connection,count,method:req.method,socket:req.socket.fixtureId}));});
   server.keepAliveTimeout=60000;server.on('connection',s=>{s.fixtureId=++nextSocket;sockets.add(s);s.on('close',()=>sockets.delete(s));});
@@ -316,6 +327,26 @@ test('真实独立HTTP服务关闭旧idle连接且同步命令阻塞时，下一
   assert.notEqual(first.socket,next.socket,'不复用已关闭旧socket');
  }
  assert.ok(connections.every(row=>row.connection==='close'));assert.equal(connections.at(-1).count,12);
+});
+test('候选读取固定 release 时恢复两次真实连接中断', async t => {
+ const {brainRequest} = await implementation();
+ const server = await isolatedBrain(t);
+ const request = brainRequest(server.base, 'fixture-token-not-for-output', {retryReleaseReads: true});
+ const result = await request('/api/brain/releases/' + vid[0]);
+ assert.equal(result.method, 'GET');
+ assert.equal(result.count, 3);
+});
+test('重试范围仅含候选 release GET 的传输中断', async t => {
+ const {brainRequest} = await implementation();
+ const server = await isolatedBrain(t);
+ const token = 'fixture-token-not-for-output';
+ const request = brainRequest(server.base, token, {retryReleaseReads: true});
+ const releasePath = '/api/brain/releases/' + vid[0];
+ await assert.rejects(brainRequest(server.base, token)(releasePath), /Brain request failed GET/);
+ await assert.rejects(request(releasePath, {evidence: 'a'}), /Brain request failed POST/);
+ await assert.rejects(request('/reset'), /Brain request failed GET/);
+ await assert.rejects(request('/api/brain/releases/' + vid[1]), /Brain HTTP 503/);
+ assert.equal((await request('/count')).count, 5);
 });
 test('真实POST只发一次且要求关闭连接，不自动重试未知写入',async t=>{
  const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
