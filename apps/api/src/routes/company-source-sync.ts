@@ -6,7 +6,7 @@ import { tenantContext } from '../middleware/tenant-context';
 import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
 import { createWorkspaceAdapter } from '../services/customer-workspace-adapters';
 import { normalizeWorkspaceParent, type WorkspacePlatform } from '../services/customer-workspace';
-import { SOURCE_TABLES, importCompanySource, type SourceRows } from '../services/company-source-import';
+import { SOURCE_TABLES, importCompanySource, previewCompanySource, type SourceRows } from '../services/company-source-import';
 import { getTenantToken } from '../services/feishu-client';
 import { companyRecord, validateCompanyIdentity, validateEnabledCompany, type CompanyJsonRecord } from './company-profile-validation';
 
@@ -94,6 +94,7 @@ export function registerCompanySourceSync(router: Router, snapshot: (row: Compan
     const invalid = validateCompanyIdentity(next, profile) ?? validateEnabledCompany(next);
     if (invalid) throw new SourceSyncError(422, invalid);
     const draft = { fields, table_ids: source.ids, preview: {
+      rows: previewCompanySource(inputs),
       products: fields.products,
       audiences: fields.wiki.audiences.map(row => row.name),
       keywords: fields.runtime_config.search_strategy.keywords.map(row => ({ word: row.word, enabled: row.enabled })),

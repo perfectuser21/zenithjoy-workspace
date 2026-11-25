@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 const API = '/api/company-profile/source-sync';
 const labels = { notion: 'Notion', feishu: '飞书' };
+const tableLabels = { products: '产品', audiences: '客户画像', keywords: '关键词' };
 type Platform = keyof typeof labels;
 type Source = { platform: Platform; parent: string };
 type SyncState = {
@@ -11,7 +12,12 @@ type SyncState = {
   applied_version?: number;
   fetched_at?: string;
   applied_at?: string;
-  preview?: { products: string[]; audiences: string[]; keywords: { word: string; enabled: boolean }[] };
+  preview?: {
+    products: string[];
+    audiences: string[];
+    keywords: { word: string; enabled: boolean }[];
+    rows?: { table: keyof typeof tableLabels; title: string; fields: Record<string, string> }[];
+  };
 };
 
 async function request<T>(path = '', body?: unknown): Promise<T> {
@@ -83,6 +89,13 @@ export default function CompanySourceSync({ onApplied }: { onApplied: () => void
         <p>产品（{preview.products.length}）{preview.products.join('、')}</p>
         <p>客户画像（{preview.audiences.length}）{preview.audiences.join('、')}</p>
         <p>关键词（{preview.keywords.length}）{preview.keywords.map(keyword => `${keyword.word}${keyword.enabled ? '' : '（停用）'}`).join('、')}</p>
+        {!!preview.rows?.length && <details>
+          <summary>查看字段</summary>
+          {preview.rows.map((row, index) => <dl key={index}>
+            <dt>{tableLabels[row.table]} · {row.title}</dt>
+            {Object.entries(row.fields).map(([field, value]) => <dd key={field}>{field}　{value || '空'}</dd>)}
+          </dl>)}
+        </details>}
         <button type="button" disabled={busy} onClick={() => void sync('apply')}>确认并启用</button>
       </div>}
       {state.applied_at && <p>最近同步 {new Date(state.applied_at).toLocaleString()} · v{state.applied_version}</p>}

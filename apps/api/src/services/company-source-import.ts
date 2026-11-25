@@ -21,6 +21,14 @@ const columns = {
   keywords: { 优先级: '优先级', 时间窗口天数: '时间范围', 排序方式: '排序方式' },
 };
 
+export function previewCompanySource(input: SourceRows) {
+  return SOURCE_TABLES.flatMap(table => input[table].map(row => ({
+    table,
+    title: value(row.fields, '名称'),
+    fields: Object.fromEntries(Object.values(columns[table]).map(label => [label, value(row.fields, label)])),
+  })));
+}
+
 export function importCompanySource(profile: RecordData, input: SourceRows) {
   const wiki = companyRecord(profile.wiki), runtime = companyRecord(profile.runtime_config);
   const search = companyRecord(runtime.search_strategy);
