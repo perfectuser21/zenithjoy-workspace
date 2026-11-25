@@ -398,7 +398,7 @@ test('103 bridge只读回包消费显式原native parser接缝，默认104不借
  assert.equal((await queueRequest(pool,input,deps)).verified,true);assert.equal(calls,1);assert.equal((await bridge.readbackBridge(pool,input)).verified,false,'不注入接缝时仍必须原native验证，不能把缺原件当真');
 });
 
-const {revalidateBridge}=require('../bridge-revalidate.js');
+const {revalidateBridge}=require('../../../scripts/leadgen-bridge-revalidate.cjs');
 function revalidationFixture() {
   const {digest}=require('../leadgen-outreach-bridge.js');
   const row=pendingBridge();

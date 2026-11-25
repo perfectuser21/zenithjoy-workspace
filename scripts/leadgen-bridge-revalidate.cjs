@@ -1,7 +1,7 @@
 'use strict';
 // Explicit operations command. It recovers one existing outbox before any delivery attempt.
-const {routeOf}=require('./line-routes.js');
-const {digest,nativeIntent}=require('./leadgen-outreach-bridge.js');
+const {routeOf}=require('../services/phone-adb-controller/line-routes.js');
+const {digest,nativeIntent}=require('../services/phone-adb-controller/leadgen-outreach-bridge.js');
 
 async function revalidateBridge(pool,input,{lock,freezeCompanyConfig,qualifyRecipient}={}){
  const {outbox_id:id,comment_id:commentId,run,source_run:sourceRun}=input;
@@ -10,7 +10,7 @@ async function revalidateBridge(pool,input,{lock,freezeCompanyConfig,qualifyReci
  const need=(condition,reason)=>{if(!condition)throw Error('BRIDGE_REVALIDATION_'+reason);};
  need([id,commentId].every(v=>typeof v==='string'&&uuid.test(v))&&
    [run,sourceRun].every(v=>typeof v==='string'&&runKey.test(v)),'SCOPE_INVALID');
- const {key:lineKey}=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js');
+ const {key:lineKey}=routeOf(input.line),outreach=require('../services/phone-adb-controller/leadgen-outreach-orders.js');
  return (lock||outreach.withOrderLock)(lineKey,async()=>{
   const [row]= (await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox
     WHERE line_key=$1 AND id=$2 AND comment_id=$3 AND run_tag=$4 AND source_run=$5`,
@@ -33,12 +33,12 @@ async function revalidateBridge(pool,input,{lock,freezeCompanyConfig,qualifyReci
     digest(comment.recipient_evidence)===digest(p.recipient_evidence)&&
     ['nickname','comment_body','profile_url','source_video','source_video_url','intent_grade','judgment_reason']
       .every(key=>comment[key]===p[key])&&new Date(comment.collected_at).getTime()===new Date(p.collected_at).getTime(),'IDENTITY_CHANGED');
-  const freeze=freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig;
+  const freeze=freezeCompanyConfig||require('../services/phone-adb-controller/company-config-lib.js').freezeCompanyConfig;
   const snapshot=await freeze(pool,{lineHint:lineKey,runId:run,sourceRun,step:'103'});
   const companyBinding=p.recipient_evidence.company_binding===undefined?undefined:
-    await require('./company-config-lib.js').readCollectionAccountBinding(pool,{
+    await require('../services/phone-adb-controller/company-config-lib.js').readCollectionAccountBinding(pool,{
       lineKey,run:sourceRun,sourceRun:p.recipient_evidence.scope?.source_run});
-  const qualify=qualifyRecipient||require('./judge-recipient.js').qualifyRecipientFromScore;
+  const qualify=qualifyRecipient||require('../services/phone-adb-controller/judge-recipient.js').qualifyRecipientFromScore;
   const qualification=await qualify(comment,snapshot,{companyBinding});
   const candidate={...p,qualification};
   need(qualification?.status==='passed'&&qualification.model_call_count===0&&
@@ -70,7 +70,7 @@ async function main(){
  let pool;
  try{
   const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
-  pool=require('./leadgen-db-connect.js').getPool();
+  pool=require('../services/phone-adb-controller/leadgen-db-connect.js').getPool();
   const result=await revalidateBridge(pool,input);
   process.stdout.write(JSON.stringify({ok:true,result})+'\n');
  }catch(error){
