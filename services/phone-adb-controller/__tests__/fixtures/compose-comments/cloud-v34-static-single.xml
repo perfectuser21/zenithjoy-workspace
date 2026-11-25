@@ -1,0 +1,64 @@
+<?xml version='1.0' encoding='utf-8'?>
+<hierarchy rotation="0">
+  <node text="" resource-id="" class="android.widget.FrameLayout" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,0][720,1280]">
+    <node text="" resource-id="com.ss.android.ugc.aweme:id/jn+" class="android.widget.FrameLayout" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,387][720,1208]">
+      <node text="" resource-id="com.ss.android.ugc.aweme:id/e4d" class="android.widget.LinearLayout" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[0,387][570,450]">
+        <node text="示例" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,394][158,442]" />
+        <node text="示例" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="工具按钮" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[158,394][351,442]" />
+      </node>
+      <node text="" resource-id="com.ss.android.ugc.aweme:id/x55" class="androidx.viewpager.widget.ViewPager" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,450][720,1208]">
+        <node text="" resource-id="" class="androidx.compose.ui.platform.ComposeView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,450][720,1208]">
+          <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,450][720,1208]">
+            <node text="1条评论" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,450][720,477]" />
+            <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,498][720,1123]">
+              <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[24,498][720,626]">
+                <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[24,512][720,626]">
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[24,512][78,566]" />
+                  <node text="测试昵称" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[90,512][185,541]" />
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[90,541][696,580]">
+                    <node text="这是脱敏后的测试评论" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[90,547][311,580]">
+                      <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="false" focused="false" scrollable="false" bounds="[270,555][310,576]">
+                        <node text="示例" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[275,555][305,576]" />
+                      </node>
+                    </node>
+                  </node>
+                  <node text="35分钟前" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[90,588][169,617]" />
+                  <node text=" · 河南" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[169,588][222,617]" />
+                  <node text="回复" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[246,588][284,617]" />
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[591,578][648,626]">
+                    <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="赞0,未选中" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[606,589][633,616]" />
+                  </node>
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[648,578][711,626]">
+                    <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="点踩" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[666,589][693,616]" />
+                  </node>
+                </node>
+              </node>
+              <node text="暂时没有更多了" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[294,647][427,674]" />
+            </node>
+            <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,1123][720,1124]" />
+            <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[0,1124][720,1208]">
+              <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[18,1136][702,1196]">
+                <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[18,1136][522,1196]">
+                  <node text="示例" resource-id="" class="android.widget.TextView" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[33,1150][253,1183]" />
+                </node>
+                <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[522,1136][582,1196]">
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="image" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[534,1148][570,1184]" />
+                </node>
+                <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[582,1136][642,1196]">
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="at" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[594,1148][630,1184]" />
+                </node>
+                <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[642,1136][702,1196]">
+                  <node text="" resource-id="" class="android.view.View" package="com.ss.android.ugc.aweme" content-desc="emoji" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[654,1148][690,1184]" />
+                </node>
+              </node>
+            </node>
+          </node>
+        </node>
+      </node>
+      <node text="" resource-id="com.ss.android.ugc.aweme:id/2m6" class="android.widget.LinearLayout" package="com.ss.android.ugc.aweme" content-desc="" clickable="false" enabled="true" focused="false" scrollable="false" bounds="[588,388][720,448]">
+        <node text="" resource-id="com.ss.android.ugc.aweme:id/kh4" class="android.widget.ImageView" package="com.ss.android.ugc.aweme" content-desc="放大评论区" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[588,388][648,448]" />
+        <node text="" resource-id="com.ss.android.ugc.aweme:id/back_btn" class="android.widget.ImageView" package="com.ss.android.ugc.aweme" content-desc="关闭" clickable="true" enabled="true" focused="false" scrollable="false" bounds="[654,388][714,448]" />
+      </node>
+    </node>
+  </node>
+</hierarchy>

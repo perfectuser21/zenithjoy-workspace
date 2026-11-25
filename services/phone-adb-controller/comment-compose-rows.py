@@ -20,6 +20,20 @@ def compose_inside(a, b):
     return bool(a and b and b[0] <= a[0] < a[2] <= b[2] and b[1] <= a[1] < a[3] <= b[3])
 
 
+def disabled_body_annotation(node, body_text):
+    # Douyin can attach a disabled inline decoration to the visible body label.
+    children = list(node)
+    return (node in body_text and node.get('class') == 'android.view.View'
+            and node.get('clickable') == 'true' and not node.get('text')
+            and not node.get('content-desc') and len(children) == 1
+            and children[0].get('class') == 'android.widget.TextView'
+            and children[0].get('clickable') == 'false'
+            and children[0].get('enabled') == 'true' and children[0].get('text')
+            and not children[0].get('content-desc') and len(children[0]) == 0
+            and compose_inside(compose_bounds(node), compose_bounds(body_text))
+            and compose_inside(compose_bounds(children[0]), compose_bounds(node)))
+
+
 def compose_row(row, slot, viewport):
     rb, sb = compose_bounds(row), compose_bounds(slot)
     if (row.get('class') != 'android.view.View' or row.get('clickable') != 'false'
@@ -27,7 +41,7 @@ def compose_row(row, slot, viewport):
             or not compose_inside(rb, sb) or rb[0] != sb[0] or rb[2] != viewport[2]):
         return None
     children = list(row)
-    if any(n.get('enabled') == 'false' or not compose_inside(compose_bounds(n), rb) for n in row.iter('node')):
+    if any(not compose_inside(compose_bounds(n), rb) for n in row.iter('node')):
         return None
     avatars = [n for n in children if n.get('class') == 'android.view.View'
                and n.get('clickable') == 'true' and not n.get('text')
@@ -53,6 +67,9 @@ def compose_row(row, slot, viewport):
     if len(bodies) != 1:
         return None
     body = bodies[0]
+    if any(n.get('enabled') == 'false' and not disabled_body_annotation(n, body[0])
+           for n in row.iter('node')):
+        return None
     texts = [n for n in children if n.get('class') == 'android.widget.TextView']
     dates = [n for n in texts if n.get('clickable') == 'false' and re.fullmatch(
         r'(?:刚刚|昨天|前天|\d+(?:秒|分钟|小时|天|周|个月|年)前|(?:\d{4}-)?\d{1,2}-\d{1,2})', n.get('text', ''))]
@@ -132,6 +149,38 @@ def compose_input(view, viewport, comment_list):
     return candidates[0]
 
 
+def single_comment_list(view, header):
+    # A short list fits without scrolling. Require its own in-bounds end marker.
+    parent = next((node for node in view.iter('node') if header in node), None)
+    if parent is None or header.get('text') != '1条评论':
+        raise ValueError('COMPOSE_PANEL_ANCHORS')
+    candidates = []
+    for node in parent:
+        if (node.get('class') != 'android.view.View' or node.get('scrollable') != 'false'
+                or node.get('enabled') != 'true' or node.get('clickable') != 'false'
+                or node.get('text') or node.get('content-desc')):
+            continue
+        viewport = compose_bounds(node)
+        if viewport is None or any(child.get('scrollable') == 'true' for child in node.iter('node')):
+            continue
+        footers = [child for child in node
+                   if child.get('class') == 'android.widget.TextView'
+                   and child.get('text') == '暂时没有更多了'
+                   and child.get('clickable') == 'false' and child.get('enabled') == 'true'
+                   and compose_inside(compose_bounds(child), viewport)]
+        if len(footers) != 1:
+            continue
+        footer = footers[0]
+        slots = [child for child in node if child != footer]
+        if len(slots) != 1 or not compose_inside(compose_bounds(slots[0]), viewport):
+            continue
+        if compose_bounds(slots[0])[3] <= compose_bounds(footer)[1]:
+            candidates.append(node)
+    if len(candidates) != 1:
+        raise ValueError('COMPOSE_PANEL_ANCHORS')
+    return candidates[0]
+
+
 def compose_panel(xml, width=None):
     if len(xml.encode()) > 4 * 1024 * 1024:
         raise ValueError('COMPOSE_XML_TOO_LARGE')
@@ -154,10 +203,12 @@ def compose_panel(xml, width=None):
     controls = [[n for n in nodes if n.get('class') == 'android.widget.ImageView'
                  and n.get('content-desc') == desc and n.get('clickable') == 'true']
                 for desc in ('关闭', '放大评论区')]
-    if (len(lists) != 1 or len(headers) != 1 or any(len(a) != 1 for a in controls)
+    if (len(lists) > 1 or len(headers) != 1 or any(len(a) != 1 for a in controls)
             or any(n.get('class') == 'android.widget.EditText' for n in vn)):
         raise ValueError('COMPOSE_PANEL_ANCHORS')
-    viewport, vb = compose_bounds(lists[0]), compose_bounds(view)
+    static = not lists
+    comment_list = single_comment_list(view, headers[0]) if static else lists[0]
+    viewport, vb = compose_bounds(comment_list), compose_bounds(view)
     screen = compose_bounds(nodes[0])
     expected_width = width if width is not None else (screen[2] if screen else None)
     if (not compose_inside(viewport, vb) or not compose_inside(vb, screen)
@@ -166,7 +217,7 @@ def compose_panel(xml, width=None):
             or not compose_inside(compose_bounds(headers[0]), vb)
             or compose_bounds(headers[0])[3] > viewport[1]):
         raise ValueError('COMPOSE_PANEL_BOUNDS')
-    compose_input(view, viewport, lists[0])
+    compose_input(view, viewport, comment_list)
     parents = {n: parent for parent in root.iter() for n in parent}
     def ancestors(n):
         out = []
@@ -182,13 +233,15 @@ def compose_panel(xml, width=None):
            or compose_bounds(a[0])[3] > vb[1] for a in controls):
         raise ValueError('COMPOSE_PANEL_CONTROLS')
     rows = []
-    for slot in list(lists[0]):
+    for slot in comment_list:
         candidates = [n for n in [slot, *list(slot)] if n.get('class') == 'android.view.View']
         found = [r for n in candidates if (r := compose_row(n, slot, viewport)) is not None]
         if len(found) == 1:
             rows.append(found[0])
-    return {'panel': panel, 'list': lists[0], 'rows': rows,
-            'scroll_viewport': dict(zip(('left', 'top', 'right', 'bottom'), viewport))}
+    if static and len(rows) != 1:
+        raise ValueError('COMPOSE_PANEL_ROW_COUNT')
+    return {'panel': panel, 'list': comment_list, 'rows': rows,
+            'scroll_viewport': None if static else dict(zip(('left', 'top', 'right', 'bottom'), viewport))}
 
 
 if __name__ == '__main__' and len(sys.argv) == 3:
