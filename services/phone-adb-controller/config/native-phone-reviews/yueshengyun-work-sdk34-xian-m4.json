@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "host": "xian-m4",
+    "profile": "yueshengyun-work",
+    "serial": "e6c7ef34",
+    "device_sdk": 34,
+    "width": 1080,
+    "height": 2412,
+    "package": "com.ss.android.ugc.aweme"
+  },
+  "source_method": "two independent bounded adb exec-out cat reads; exit0 and complete stdout; no UI actions",
+  "evidence": [
+    {
+      "path": "/Users/administrator/.codex-team1/artifacts/leadgen-skill-first-20261122/activity-audit-20261123/m4-sdk34-source-20261126/sdk34-observation.json",
+      "sha256": "710cbb52f032c78db064d3eca5d1b57dee3af7074f93a38ba395e75c6fc9619d"
+    }
+  ],
+  "source_observations": {
+    "programs": 19,
+    "independent_reads": 38,
+    "all_reads_exit_zero": true,
+    "all_pairs_agree": true
+  },
+  "command_set": "unchanged from reviewed M4 USB SDK36 commands; no additional actions or argument templates",
+  "command_observations": {
+    "am": "当前编译动作只调用 start、broadcast、force-stop，不进入 instrument 分支",
+    "uiautomator": "当前编译动作只调用 dump，已读回 app_process 与所需 Android JAR"
+  },
+  "runtime_requirements": [
+    "正式执行重新核对 SDK34、设备、租约和已冻结的文件摘要。",
+    "两轮读取仅证明系统程序来源。业务结果和收尾按现场任务验收。"
+  ],
+  "business_verified": false
+}
