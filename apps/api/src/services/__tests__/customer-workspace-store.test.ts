@@ -4,7 +4,7 @@ vi.mock('../../db/connection', () => ({ default: { query: mocks.query, connect: 
 vi.mock('../customer-workspace', () => ({ provisionWorkspace: mocks.provision }));
 vi.mock('../customer-workspace-adapters', () => ({ createWorkspaceAdapter: mocks.adapter }));
 import { provisionRegisteredWorkspace, startCustomerWorkspaceWorker } from '../customer-workspace-store';
-beforeEach(() => { vi.clearAllMocks(); mocks.connect.mockResolvedValue({ query: mocks.query, release: mocks.release }); delete process.env.NOTION_INTEGRATION_TOKEN; delete process.env.CUSTOMER_WORKSPACE_PROVISIONING_ENABLED; });
+beforeEach(() => { vi.clearAllMocks(); mocks.connect.mockResolvedValue({ query: mocks.query, release: mocks.release }); delete process.env.NOTION_INTEGRATION_TOKEN; delete process.env.CUSTOMER_WORKSPACE_PROVISIONING_ENABLED; delete process.env.NOTION_COMPANY_SOURCE_SYNC_ENABLED; });
 describe('外部开户并发与运行恢复', () => {
   it('别的worker占锁时完全不调用外部平台或建库器', async () => {
     mocks.query.mockResolvedValue({ rows: [{ locked: false }] });
@@ -24,6 +24,14 @@ describe('外部开户并发与运行恢复', () => {
     });
     await expect(provisionRegisteredWorkspace('company-a', 'notion')).rejects.toThrow('binding missing');
     expect(mocks.release).toHaveBeenCalledWith(true);
+  });
+  it('可在关闭建工作台的情况下启用 Notion 同步轮询', () => {
+    vi.stubEnv('NOTION_COMPANY_SOURCE_SYNC_ENABLED', 'true');
+    try {
+      const timer = startCustomerWorkspaceWorker();
+      expect(timer).toBeDefined();
+      clearInterval(timer);
+    } finally { vi.unstubAllEnvs(); }
   });
   it('未显式启用时不注册定时器，不触发外部操作', () => {
     expect(startCustomerWorkspaceWorker()).toBeUndefined(); expect(mocks.connect).not.toHaveBeenCalled();

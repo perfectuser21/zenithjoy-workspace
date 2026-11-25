@@ -12,8 +12,6 @@ import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
 import { startNotionOrchestrator } from './services/notion-orchestrator';
 import { startFeishuOrchestrator } from './services/feishu-orchestrator';
 import { startPublishRollup } from './services/publish-rollup';
-import { companySnapshot } from './routes/company-profile';
-import { startNotionCompanySourceWorker } from './services/notion-company-source-worker';
 import { startCustomerWorkspaceWorker } from './services/customer-workspace-store';
 import {
   runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck,
@@ -137,10 +135,7 @@ async function bootstrap(): Promise<void> {
     // 通用发布 rollup sweeper（刀5b Task 1）：无 env 依赖，永远启动——收敛 dashboard
     // 直派、从未挂过任何编排台锚的 queued 作品，防止它们永久卡在 queued。
     if (!process.env.VITEST) startPublishRollup();
-    if (!process.env.VITEST) {
-      startCustomerWorkspaceWorker();
-      startNotionCompanySourceWorker(companySnapshot);
-    }
+    if (!process.env.VITEST) startCustomerWorkspaceWorker();
   });
 }
 
