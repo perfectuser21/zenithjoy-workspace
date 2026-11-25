@@ -4,6 +4,35 @@ const hash=x=>createHash('sha256').update(x).digest('hex'),need=x=>{if(!x)throw 
 function regular(file,max=4*1024*1024,executable=false){const s=fs.lstatSync(file);need(s.isFile()&&!s.isSymbolicLink()&&(executable?((s.uid===process.getuid()||s.uid===0)&&(s.mode&0o022)===0):s.uid===process.getuid())&&s.nlink===1&&s.size<=max&&fs.realpathSync(file)===file);return s;}
 function document(file){regular(file);const bytes=fs.readFileSync(file);return{sha256:hash(bytes),data:JSON.parse(bytes)};}
 function directory(file){need(path.isAbsolute(file)&&fs.realpathSync(file)===file&&fs.statSync(file).isDirectory());return file;}
+function historicalVisualFacts(host,{scope,visual_evidence:visual}){
+ if(!visual)return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_NOT_RECORDED'};
+ const {sha256,...record}=visual;
+ const frames=record.frames;
+ if(sha256!==scope.visual_evidence_sha256||hash(JSON.stringify(record))!==sha256||
+    ['run_id','task_id','video_id'].some(key=>record[key]!==scope[key])||
+    !Array.isArray(frames)||frames.length<1||frames.length>5||
+    new Set(frames.map(frame=>frame?.label)).size!==frames.length||
+    frames.some(frame=>!frame||!(/^[A-E]$/.test(frame.label))||
+      !Number.isFinite(frame.pts_seconds)||frame.pts_seconds<0||!/^[a-f0-9]{64}$/.test(frame.sha256))){
+  return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_RECORD_INVALID'};
+ }
+ const visual_frames=[];
+ try{
+  const receipts=directory(path.join(host,'receipts'));
+  for(const {label,pts_seconds,sha256:expected} of frames){
+   const file=path.join(receipts,'coverage-frame-'+label+'.png');
+   regular(file,3*1024*1024);
+   const bytes=fs.readFileSync(file);
+   if(hash(bytes)!==expected||bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'){
+    return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_BYTES_MISMATCH'};
+   }
+   visual_frames.push({label,pts_seconds,sha256:expected,bytes:bytes.length});
+  }
+ }catch{
+  return {visual_evidence_read:false,visual_error:'ORIGIN_VISUAL_FILE_UNAVAILABLE'};
+ }
+ return {visual_evidence_read:true,visual_frames};
+}
 export async function readQualificationOrigin(c,run,video,brainGet){
  need(UUID.test(run)&&/^\d{16,24}$/.test(video));const root=directory(c.foundation_state_root),dir=directory(path.join(root,run)),manifest=document(path.join(dir,'manifest.json')),m=manifest.data;
  need(m.run?.run_id===run&&UUID.test(m.run.task_id)&&/^[a-f0-9]{64}$/.test(m.run.definition_sha256??''));
@@ -17,7 +46,7 @@ export async function readQualificationOrigin(c,run,video,brainGet){
  need(s&&s.task_id===m.run.task_id&&s.run_id===run&&s.run===run&&s.video_id===video);
  for(const key of ['company_id','tenant_id','line'])need(s[key]===c[key]);need(/^[a-f0-9]{64}$/.test(s.audio_sha256??''));
  const documents={'journal.json':journal};for(const name of ['asr-response.json','judge-response.json'])if(fs.existsSync(path.join(evidence,name)))documents[name]=document(path.join(evidence,name));
- return{origin:{task_id:m.run.task_id,run_id:run,video_id:video,company_id:c.company_id,tenant_id:c.tenant_id,line:c.line},manifest_sha256:manifest.sha256,context_sha256:context.sha256,documents,observed_at:new Date().toISOString(),visual_evidence_read:false};
+ return{origin:{task_id:m.run.task_id,run_id:run,video_id:video,company_id:c.company_id,tenant_id:c.tenant_id,line:c.line},manifest_sha256:manifest.sha256,context_sha256:context.sha256,documents,observed_at:new Date().toISOString(),...historicalVisualFacts(host,journal.data)};
 }
 export async function readMediaFacts(root,name,tool){
  directory(root);need(typeof name==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,239}\.(mkv|mp4|wav|webm|mp3|m4a)$/.test(name));const file=path.join(root,name),before=regular(file,512*1024*1024);

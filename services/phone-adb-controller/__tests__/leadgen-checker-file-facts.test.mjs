@@ -29,3 +29,30 @@ test('historical qualification documents still require the executing user owner'
  try{const target=path.join(f.host,'context.json');fs.lstatSync=function(p,...args){const stat=original.call(this,p,...args);if(String(p)===target)stat.uid=process.getuid()+1000;return stat;};await assert.rejects(readQualificationOrigin(f.c,run,video,f.brain),/FACT_FILE_SCOPE/);}
  finally{fs.lstatSync=original;f.close();}
 });
+
+test('historical qualification reports visual evidence only when original scoped frames match their recorded digests', async () => {
+ const {readQualificationOrigin}=await import('../leadgen-foundation/checker-file-facts.mjs');
+ const f=await fixture();
+ try {
+  const journalPath=path.join(f.host,'qualification-receipts',video,'journal.json');
+  const journal=JSON.parse(fs.readFileSync(journalPath));
+  const receipts=path.join(f.host,'receipts');
+  fs.mkdirSync(receipts);
+  const framePath=path.join(receipts,'coverage-frame-B.png');
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7d8AAAAASUVORK5CYII=','base64');
+  fs.writeFileSync(framePath,png);
+  const frame={label:'B',pts_seconds:10,sha256:hash(png),text:'原判断记录'};
+  const visual={run_id:run,task_id:task,video_id:video,coverage_sha256:'c'.repeat(64),frames:[frame]};
+  visual.sha256=hash(JSON.stringify(visual));
+  journal.visual_evidence=visual;
+  journal.scope.visual_evidence_sha256=visual.sha256;
+  f.put(journalPath,journal);
+  const original=await readQualificationOrigin(f.c,run,video,f.brain);
+  assert.equal(original.visual_evidence_read,true);
+  assert.deepEqual(original.visual_frames,[{label:'B',pts_seconds:10,sha256:hash(png),bytes:png.length}]);
+  fs.writeFileSync(framePath,Buffer.concat([png,Buffer.from('different')]));
+  const changed=await readQualificationOrigin(f.c,run,video,f.brain);
+  assert.equal(changed.visual_evidence_read,false);
+  assert.equal(changed.visual_error,'ORIGIN_VISUAL_BYTES_MISMATCH');
+ } finally { f.close(); }
+});
