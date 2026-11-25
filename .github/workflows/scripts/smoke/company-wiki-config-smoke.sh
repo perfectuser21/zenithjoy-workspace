@@ -33,3 +33,9 @@ npm test \
   --workspace @zenithjoy/api \
   -- \
   src/routes/customer-workspaces.test.ts
+
+# 轻量获客的业务库可独立同步，只核对工作台归属。
+npm test \
+  --workspace @zenithjoy/api \
+  -- \
+  src/services/company-source-sync.test.ts -t '独立同步只核对工作台归属'
