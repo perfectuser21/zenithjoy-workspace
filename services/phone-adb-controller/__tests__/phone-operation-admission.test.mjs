@@ -103,3 +103,26 @@ for(const [name,change]of [
 ])test('USB支持谓词不把未审核形状当授权 '+name,async t=>{
  const f=await reviewedUsbFixture(t);change(f);const {root,frozen}=f.context;assert.equal(phoneOperationKind(frozen.discovery_phone_scope,{root,frozen,workflow:frozen.agent_input.workflow_key}),null);assert.equal(f.live.starts,0);
 });
+
+test('悦升实体手机的两条 USB 业务用同一份冻结的 SDK34 来源记录准入',()=>{
+ const host=JSON.parse(readFileSync(join(root,'config/collection-phone-hosts.json'))).hosts.find(row=>row.profile==='yueshengyun-work');
+ assert.ok(host);
+ const spec={...host,policy_binding:{usb_local:{protocol:'usb-local-lease/v1',device_sdk:34,
+  transport:{serial:host.serial,transport_id:'11',usb_path:'0-1'},daemon:{endpoint:host.policy.endpoint}}}};
+ const registryPath='config/native-phone-command-sources.json';
+ const source=JSON.parse(readFileSync(join(root,registryPath))).device_sources.find(row=>row.profile===host.profile);
+ assert.ok(source,'悦升实体机缺少已核实的 USB 来源记录');
+ assert.equal(source.serial,host.serial);
+ assert.deepEqual([source.device_sdk,source.width,source.height],[34,1080,2412]);
+ const paths=['config/collection-phone-hosts.json',registryPath,source.review.path];
+ const files=Object.fromEntries(paths.map(name=>['runtime/'+name,sha(readFileSync(join(root,name)))]));
+ const frozen={files};
+ for(const workflow of ['douyin_video_discovery','douyin_video_processing']){
+  assert.equal(phoneOperationKind(spec,{root,frozen,workflow}),'usb-local');
+ }
+ spec.policy_binding.usb_local.device_sdk=35;
+ assert.equal(phoneOperationKind(spec,{root,frozen,workflow:'douyin_video_discovery'}),null);
+ spec.policy_binding.usb_local.device_sdk=34;
+ files['runtime/'+source.review.path]='0'.repeat(64);
+ assert.equal(phoneOperationKind(spec,{root,frozen,workflow:'douyin_video_discovery'}),null);
+});

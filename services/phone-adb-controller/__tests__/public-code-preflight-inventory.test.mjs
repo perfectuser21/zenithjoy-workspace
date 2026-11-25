@@ -26,6 +26,7 @@ test('actual account-preflight fixture inventory remains within the unchanged na
  assert.equal(files.includes('leadgen-authorization-intent.mjs'),false,'account preflight has no foundation authorization intent import');
  assert.equal(files.includes('activity-upstream-source.mjs'),false,'account preflight has no producer metrics readback import');
  assert.equal(files.some(name=>name.startsWith('leadgen-foundation/')),false,'account preflight does not import the offline foundation assembler or its source archives');
+ assert.equal(files.some(name=>name.startsWith('commander/skills/')),false,'public Code does not execute Commander Agent skills');
  assert.ok(files.length<=512,JSON.stringify({files:files.length,synthetic_review:1,qualification:files.filter(x=>x.startsWith('qualification-artifacts.')),extra_source_paths:files.filter(p=>p!=='config/native-phone-reviews/fixture-public-code.md'&&!tracked.has(p)).sort()}));
 });
 

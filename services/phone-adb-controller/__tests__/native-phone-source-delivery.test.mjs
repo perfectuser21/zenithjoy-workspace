@@ -16,7 +16,7 @@ const hash=path=>createHash('sha256').update(readFileSync(resolve(root,path))).d
 const policy=JSON.parse(text('config/native-phone-command-sources.json'));
 const dependencies=[...new Set([...NATIVE_PHONE_FILES,'douyin-phone-adb','search-video-tab.py','clipboard-widget-cancel.py','locate-element.py','config/native-phone-command-sources.json',...policy.device_sources.flatMap(row=>[row.review.path,row.pillow.path])])];
 
-test('cold phone source reaches both deployed inventories, RPC and every shared Activity binding',()=>{
+test('cold phone sources reach both deployed inventories and RPC; historical bindings keep their original sources',()=>{
  const deploy=text('deploy.sh');
  const start=deploy.indexOf('MMV_JS_FILES=('),end=deploy.indexOf('# 在任何SSH前核验部署源字节');assert.ok(start>0&&end>start);
  const names=['MMV_JS_FILES','MMV_PROBE_FILES','MMV_RUNTIME_FILES','DEVICE_NODE_FILES','DEVICE_RPC_PROBE_FILES','DEVICE_PLAN_FILES','DEVICE_SH_FILES','DEVICE_CTL_FILES','DEVICE_CTL_DIRS','RPC_FILES'];
@@ -44,13 +44,17 @@ test('cold phone source reaches both deployed inventories, RPC and every shared 
  assert.ok(required,'actual RPC receiver source gate exists');
  const receiver=new Set([...required[1].matchAll(/'([^']+)'/g)].map(m=>m[1]));
  for(const file of dependencies){assert.ok(RPC_FILES.includes(file),`RPC misses ${file}`);assert.ok(receiver.has(file),`RPC receiver misses ${file}`);}
+ // Historical methods are fixed to the archived revision, before the
+ // YueSheng SDK34 review. The additions above are checked in every current
+ // delivery inventory without asking that old workflow to consume new data.
+ const historicalDependencies=dependencies.filter(path=>path!=='config/native-phone-reviews/yueshengyun-work-sdk34-xian-m4.json');
  const methods=collectMethods(repository,{read:historicalMethodsRead});
  for(const [ref,activity] of Object.entries(methods.activities)){
   const bound=new Set(activity.code_bindings.map(row=>row.path));
   const xian=policy.device_sources.find(row=>row.profile==='xiaolongxia');
   const only101=xian?[xian.review.path,xian.pillow.path]:[];
   const consumes101=['douyin_video_processing.preflight','douyin_video_discovery.collect_videos','douyin_video_processing.cleanup'].includes(ref);
-  for(const file of dependencies.filter(file=>consumes101||!only101.includes(file)))assert.ok(bound.has('services/phone-adb-controller/'+file),`${ref} misses ${file}`);
+  for(const file of historicalDependencies.filter(file=>consumes101||!only101.includes(file)))assert.ok(bound.has('services/phone-adb-controller/'+file),`${ref} misses ${file}`);
  }
 });
 
