@@ -65,3 +65,34 @@ for(const[name,code]of Object.entries(invalidToolbars))test('input region reject
 test('arbitrary placeholder text is not used as an identity anchor',()=>{const xml=toolbarChanged("label.set('text','动态文本随时改变')");assert.equal(parseNativeCommentXml(xml).rows.length,4);assert.equal(parseNative(profile,xml,{nickname,douyinId:'person123',commentBody:body}).returned_comment_verified,true);});
 
 test('noninteractive input wrappers preserve the unique visible label',()=>{const xml=toolbarChanged("field.remove(label);wrapper=E.SubElement(field,'node',{'package':'com.ss.android.ugc.aweme','class':'android.view.View','enabled':'true','clickable':'false','bounds':field.get('bounds')});wrapper.append(label)");assert.equal(parseNativeCommentXml(xml).rows.length,4);assert.equal(parseNative(profile,xml,{nickname,douyinId:'person123',commentBody:body}).returned_comment_verified,true);});
+
+const staticPanel = readFileSync(new URL('./fixtures/compose-comments/cloud-v34-static-single.xml', import.meta.url), 'utf8');
+const staticNickname = '测试昵称';
+const staticBody = '这是脱敏后的测试评论';
+
+test('a short Compose panel proves its single comment using the visible footer', () => {
+  const {rows, footer_reached, scroll_viewport} = parseNativeCommentXml(staticPanel);
+  assert.equal(footer_reached, true);
+  assert.equal(scroll_viewport, null);
+  assert.deepEqual(rows, [{
+    nickname: staticNickname, body: staticBody, author: false, time: '35分钟前', region: '河南',
+    x: '51', y: '539', nickname_b64: Buffer.from(staticNickname).toString('base64'),
+  }]);
+  const staticProfile = profile.replaceAll(nickname, staticNickname);
+  assert.equal(parseNative(staticProfile, staticPanel, {
+    nickname: staticNickname, douyinId: 'person123', commentBody: staticBody,
+  }).returned_comment_verified, true);
+});
+
+test('a static Compose panel requires one complete row and its own visible footer', () => {
+  for (const invalid of [
+    staticPanel.replace('暂时没有更多了', '加载中'),
+    staticPanel.replace('1条评论', '2条评论'),
+    staticPanel.replace('bounds="[294,647][427,674]"', 'bounds="[294,1260][427,1287]"'),
+    staticPanel.replace('text="35分钟前"', 'text="加载中"'),
+    staticPanel.replace('enabled="true" focused="false" scrollable="false" bounds="[24,512][78,566]"',
+      'enabled="false" focused="false" scrollable="false" bounds="[24,512][78,566]"'),
+  ]) {
+    assert.throws(() => parseNativeCommentXml(invalid), /RECIPIENT_COMMENT_PANEL/);
+  }
+});
