@@ -24,8 +24,8 @@ test('正式run snapshot允许原生身份/文件投影但不允许修改合同�
  assert.doesNotThrow(()=>validateFrozenProjection({state,frozen:f}));for(const mutate of [x=>x.release.id=original,x=>x.files['code.mjs']=h,x=>x.public_domain.task_id=maintenance,x=>x.discovery_phone_scope.serial='other',x=>x.public_domain.deadline_ms++]){const b=structuredClone(f);mutate(b);assert.throws(()=>validateFrozenProjection({state,frozen:b}));}
 });
 
-test('已完成独立清场的设备可单独启空服务，仍要求本次审批与维护锁',async()=>{
- const {verifyStartupReceipt}=await load();
+test('已完成独立清场的设备可单独启空服务，仍要求本次审批与维护锁',async t=>{
+ const {verifyStartupReceipt,planCleanStartupReceipt}=await load();
  const source={commit:'a'.repeat(40),files:{review:'b'.repeat(64)}};
  const instanceId='mmv-yuesheng-direct',endpoint='tcp:127.0.0.1:5045';
  const registrySha256='c'.repeat(64),policySha256='d'.repeat(64),leaseVersion='21';
@@ -54,6 +54,21 @@ test('已完成独立清场的设备可单独启空服务，仍要求本次审�
   read:async path=>structuredClone(readings[path])};
  const result=await verifyStartupReceipt(options);
  assert.deepEqual(result,{protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',...fixed,source_commit:source.commit});
+ const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
+ const directory=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'clean-adb-startup-'));
+ t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+ const output=path.join(directory,'receipt.json');
+ const issuance={taskId:maintenance,receiptPath:output,read:options.read,instance:options.instance,source:options.source};
+ await assert.rejects(planCleanStartupReceipt({...issuance,read:async key=>{
+  const value=await options.read(key);if(key==='/api/brain/device-locks')value.locks[0].locked_by=null;return value;
+ }}),/CLEAN_STARTUP_LEASE/);
+ assert.equal(fs.existsSync(output),false);
+ const issued=await planCleanStartupReceipt(issuance);
+ assert.equal(fs.statSync(output).mode&0o777,0o600);
+ assert.deepEqual(JSON.parse(fs.readFileSync(output,'utf8')),issued);
+ const {load:_load,...savedOptions}=options;
+ assert.deepEqual(await verifyStartupReceipt({...savedOptions,receiptPath:output}),result);
+ await assert.rejects(planCleanStartupReceipt(issuance),{code:'EEXIST'});
  for(const [path,mutate] of [
   ['/api/brain/tasks/'+maintenance,v=>delete v.result.clean_adb_startup_approval],
   ['/api/brain/tasks/'+original,v=>v.result.native_agent_resource_review.review.effects_reviewed=false],

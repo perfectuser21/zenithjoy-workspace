@@ -185,6 +185,24 @@ export async function planStartupReceipt({taskId,stateFile,instanceId,directory,
  const r={operation_plan_sha256:approved.plan_sha256,protocol:'device-epoch-fence-startup/v1',action:'start_private_server',issued_at:new Date(now).toISOString(),expires_at:new Date(Math.min(now+120000,Date.parse(review.central_readback.expires_at))).toISOString(),task_id:taskId,state_file:stateFile,...fixed,source_authority:review.scope.review_source,review,old_daemon:review.scope.old_daemon};
  persistStartupReceipt(directory,r);return r;
 }
+export async function planCleanStartupReceipt({taskId,receiptPath,read=readBrain,source=reviewSource,instance=readStartupInstance}={}){
+ need(uuid.test(taskId||''),'CLEAN_STARTUP_TASK');
+ const value=await read('/api/brain/tasks/'+taskId),task=value?.task??value;
+ const approval=task?.result?.clean_adb_startup_approval,scope=approval?.scope;
+ need(task?.id===taskId&&approval?.protocol==='device-epoch-clean-startup-approval/v1'
+  &&scope?.task_id===taskId,'CLEAN_STARTUP_APPROVAL');
+ const lockValue=await read('/api/brain/device-locks');
+ const rows=lockValue?.locks?.filter(row=>row.device_name===scope.serial);
+ need(rows?.length===1&&rows[0].locked_by===taskId&&rows[0].expired===false,'CLEAN_STARTUP_LEASE');
+ const issued=Date.now(),expires=Math.min(issued+120000,Date.parse(rows[0].expires_at));
+ need(expires>issued,'CLEAN_STARTUP_LEASE');
+ const receipt={protocol:'device-epoch-clean-startup/v1',action:'start_private_server',scope,source_authority:source(),
+  issued_at:new Date(issued).toISOString(),expires_at:new Date(expires).toISOString(),lease_version:rows[0].lease_version};
+ await verifyCleanStartupReceipt(receipt,{receiptPath,instanceId:scope.instance_id,registrySha256:scope.registry_sha256,
+  sourceCommit:scope.source_commit,policySha256:scope.policy_sha256,read,source,instance});
+ persistStartupReceipt(receiptPath,receipt);
+ return receipt;
+}
 export async function main(args=process.argv.slice(2)){
  let result;
  if(['fence-plan','fence-materialize','fence-apply','fence-resume-plan','fence-resume-apply','fence-resume-inspect','fence-resume-auth-prepare'].includes(args[0])){result=await (await import('./device-epoch-fence-controller.mjs')).main(args);}
@@ -199,6 +217,8 @@ export async function main(args=process.argv.slice(2)){
   need(args.length===5&&/^[1-9][0-9]{0,9}$/.test(args[3]),'DIAGNOSTIC_PROCESS_USAGE');result=await diagnoseReview({taskId:args[1],stateFile:args[2],processPid:Number(args[3]),directory:args[4]});
  }else if(args[0]==='startup-plan'){
   need(args.length===5,'STARTUP_PLAN_USAGE');result=await planStartupReceipt({taskId:args[1],stateFile:args[2],instanceId:args[3],directory:args[4]});
+ }else if(args[0]==='clean-startup-plan'){
+  need(args.length===3,'CLEAN_STARTUP_PLAN_USAGE');result=await planCleanStartupReceipt({taskId:args[1],receiptPath:args[2]});
  }else{
   need(args.length===(args[0]==='diagnose'?4:3)&&['inspect','diagnose'].includes(args[0]),'USAGE_inspect_TASK_STATE_or_diagnose_TASK_STATE_EMPTY_DIRECTORY');const options={taskId:args[1],stateFile:args[2],directory:args[3]};result=await (args[0]==='inspect'?inspectReview(options):diagnoseReview(options));
  }process.stdout.write(JSON.stringify(result)+'\n');process.exitCode=diagnosticExitCode(result);
