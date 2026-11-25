@@ -398,6 +398,7 @@ test('103 bridge只读回包消费显式原native parser接缝，默认104不借
  assert.equal((await queueRequest(pool,input,deps)).verified,true);assert.equal(calls,1);assert.equal((await bridge.readbackBridge(pool,input)).verified,false,'不注入接缝时仍必须原native验证，不能把缺原件当真');
 });
 
+const {revalidateBridge}=require('../bridge-revalidate.js');
 function revalidationFixture() {
   const {digest}=require('../leadgen-outreach-bridge.js');
   const row=pendingBridge();
@@ -433,7 +434,7 @@ function revalidationFixture() {
 
 test('bridge revalidate reuses the exact unattempted outbox and recorded score without posting',async()=>{
   const f=revalidationFixture();
-  const result=await queueRequest(f.pool,f.input,f.deps);
+  const result=await revalidateBridge(f.pool,f.input,f.deps);
   assert.equal(result.verified,true);
   assert.equal(result.id,cid);
   assert.equal(result.state,'pending');
@@ -454,7 +455,7 @@ test('bridge revalidate keeps attempted, shifted and uncertain original records 
     f=>{f.deps.qualifyRecipient=async()=>({status:'unknown',model_call_count:0});}
   ]) {
     const f=revalidationFixture(); change(f);
-    await assert.rejects(()=>queueRequest(f.pool,f.input,f.deps),/BRIDGE_REVALIDATION/);
+    await assert.rejects(()=>revalidateBridge(f.pool,f.input,f.deps),/BRIDGE_REVALIDATION/);
     assert.equal(f.updates.length,0);
   }
 });
