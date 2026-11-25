@@ -37,13 +37,22 @@ trap 'exit 143' TERM
 [[ $(stat -c '%s' "$TEMP/image.tar") == "$ARCHIVE_BYTES" &&
    $(sha256sum "$TEMP/image.tar" | awk '{print $1}') == "$ARCHIVE_SHA" ]] || fail 'archive hash or size mismatch'
 TAG="zenithjoy-api-staging:$SHA"
-IDENTITY=$(python3 -c "$IDENTITY_SCRIPT" "$TAG" < "$TEMP/image.tar")
-ACTUAL_CONFIG=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["config"])' <<< "$IDENTITY")
-ACTUAL_LAYERS=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["layers_hash"])' <<< "$IDENTITY")
-[[ "$ACTUAL_CONFIG" == "$CONFIG" && "$ACTUAL_LAYERS" == "$LAYERS" ]] || fail 'archive config or layers mismatch'
+verify_identity() {
+  python3 -I -c '
+import json, sys
+identity = json.load(sys.stdin)
+sys.exit(int((identity.get("config"), identity.get("layers_hash")) != tuple(sys.argv[1:])))
+' "$CONFIG" "$LAYERS" <<< "$1" || fail "$2"
+}
+IDENTITY=$(python3 -I -c "$IDENTITY_SCRIPT" "$TAG" < "$TEMP/image.tar")
+verify_identity "$IDENTITY" 'archive config or layers mismatch'
 docker load -i "$TEMP/image.tar" >/dev/null
 IMAGE=$(docker image inspect "$TAG" --format '{{.Id}}')
 [[ "$IMAGE" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'invalid loaded image ID'
 [[ $(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || fail 'loaded image platform mismatch'
 [[ $(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$SHA" ]] || fail 'loaded image revision mismatch'
+# On containerd-backed Docker, the Image ID and image config can differ.
+IDENTITY=$(docker save "$IMAGE" | python3 -I -c "$IDENTITY_SCRIPT" --untagged)
+verify_identity "$IDENTITY" 'loaded image config or layers mismatch'
 echo "HZ_CANDIDATE_IMAGE=$IMAGE"
+echo "HZ_CANDIDATE_CONFIG=$CONFIG"

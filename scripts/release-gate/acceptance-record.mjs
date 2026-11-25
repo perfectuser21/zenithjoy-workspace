@@ -31,7 +31,7 @@ export function parseTargets(value) {
 // 消费现有 Brain acceptance/runs/:run_key 原件，不接受调用方传 PASS。
 // release_targets/source_repo/environment 是建单时冻结在 detail 的发布范围；
 // 旧单缺范围只可查阅，不可替其它组件提供生产验收。
-export function validateAcceptance(record, {sha, targets, runKey}) {
+export function validateAcceptance(record, {sha, targets, runKey, apiStaging}) {
   need(/^[a-f0-9]{40}$/.test(sha), '候选必须是完整SHA');
   targets = parseTargets(targets);
   const {run, checks} = record || {}, d = run?.detail || {};
@@ -44,6 +44,12 @@ export function validateAcceptance(record, {sha, targets, runKey}) {
   need(d.gate_verdict === '绿' && d.ai_status !== 'dumb' && !d.blocked_reason && d.spec_sha, '验收未定案通过');
   const fields = new Set(targets.map(t => t === 'api' ? 'backend_sha' : 'frontend_sha'));
   for (const field of fields) need(d[field] === sha && d[field + '_src2'] === sha, `${field}验收版本与候选不符`);
+  if (apiStaging) {
+    const observed = d.version_sources?.backend;
+    need(targets.includes('api') && observed?.target === 'api' && observed.sha === sha
+      && observed.run_id === apiStaging.runId && observed.run_attempt === apiStaging.attempt,
+      'API验收未绑定本次staging运行和尝试');
+  }
   need(Array.isArray(checks) && checks.length > 0 && new Set(checks.map(c => c.check_key)).size === checks.length, '验收格为空或重复');
   for (const c of checks) {
     need(c.run_id === run.id && /^S\d+-c[1-4]$/.test(c.check_key), '验收格身份不符');
@@ -53,14 +59,24 @@ export function validateAcceptance(record, {sha, targets, runKey}) {
   }
   return {sha, targets, run_key: runKey, check_count: checks.length};
 }
-export async function readAcceptance({sha, targets, runKey, baseUrl = 'http://localhost:5221', fetchImpl = fetch}) {
+export async function readAcceptance({sha, targets, runKey, baseUrl = 'http://localhost:5221', fetchImpl = fetch, apiStaging}) {
   need(/^[a-zA-Z0-9_.:-]{1,180}$/.test(runKey || ''), '验收run_key无效');
   const url = new URL('/api/brain/acceptance/runs/' + encodeURIComponent(runKey), baseUrl);
   const response = await fetchImpl(url, {signal: AbortSignal.timeout(20000), redirect: 'error'});
   need(response.ok, `读取Brain验收单失败: HTTP ${response.status}`);
-  return validateAcceptance(await response.json(), {sha, targets, runKey});
+  return validateAcceptance(await response.json(), {sha, targets, runKey, apiStaging});
 }
 if (process.argv[1] === '-' || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)) {
-  try { console.log(JSON.stringify(await readAcceptance({sha:process.argv[2], targets:process.argv[3], runKey:process.argv[4]}))); }
+  try {
+    const [, , sha, targets, runKey, runId, attempt] = process.argv;
+    let apiStaging;
+    if (runId !== undefined || attempt !== undefined) {
+      need(/^[1-9][0-9]{0,15}$/.test(runId) && /^[1-9][0-9]{0,15}$/.test(attempt)
+        && Number.isSafeInteger(Number(runId)) && Number.isSafeInteger(Number(attempt)),
+        'API staging运行和尝试无效');
+      apiStaging = {runId:Number(runId), attempt:Number(attempt)};
+    }
+    console.log(JSON.stringify(await readAcceptance({sha, targets, runKey, apiStaging})));
+  }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

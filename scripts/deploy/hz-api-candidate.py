@@ -167,6 +167,8 @@ def deliver_image(ssh, source, info, env):
         raise ValueError(str(error)) from None
     except Exception:
         raise ValueError('private image transfer failed') from None
+    config = read_receipt(receipt, 'HZ_CANDIDATE_CONFIG=', 'sha256:' + DIGEST_PATTERN)
+    require(config == info['config'], 'Hangzhou loaded image differs from the admitted configuration')
     return read_receipt(receipt, 'HZ_CANDIDATE_IMAGE=', 'sha256:' + DIGEST_PATTERN)
 
 

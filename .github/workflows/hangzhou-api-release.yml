@@ -55,6 +55,7 @@ jobs:
     with:
       sha: ${{ inputs.sha }}
       targets: api
+      bind_api_artifact: true
       acceptance_run_key: ${{ inputs.acceptance_run_key }}
     secrets: inherit
 

@@ -25,6 +25,7 @@ test('only a trusted manual main run may activate the admitted Hangzhou API arti
   assert.match(request.steps[0].run, /ROLLBACK/);
   assert.equal(admission.uses, './.github/workflows/release-admission.yml');
   assert.equal(admission.with.targets, 'api');
+  assert.equal(admission.with.bind_api_artifact, true);
   assert.match(execute.if, /inputs.action == 'promote' && needs.admission.result == 'success'/);
   const download = execute.steps.find(step => step.uses?.startsWith('actions/download-artifact@'));
   assert.match(download.with.name, /api_run_id.*api_run_attempt/);
