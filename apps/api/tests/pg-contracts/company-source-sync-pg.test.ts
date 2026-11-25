@@ -148,13 +148,20 @@ it('首次记录 Notion 基线，改关键词后自动更新，重复读取不�
   await fixture.pool!.query(sql(`UPDATE zenithjoy.customer_workspaces
     SET state=jsonb_set(state,'{notion_auto_sync}','{"enabled":true}') WHERE company_id=$1`), [company]);
   const workspace = () => fixture.pool!.query(sql('SELECT * FROM zenithjoy.customer_workspaces WHERE company_id=$1'), [company]).then(result => result.rows[0]);
-  const version = (await profile()).config_version;
+  const previous = await profile();
+  const version = previous.config_version;
+  const keywords = [
+    ...previous.runtime_config.search_strategy.keywords,
+    { id: 'stable', word: '第二个词', enabled: true },
+  ];
+  await fixture.pool!.query(sql("UPDATE zenithjoy.tenant_company_profiles SET runtime_config=jsonb_set(runtime_config,'{search_strategy,keywords}',$2::jsonb) WHERE tenant_id=$1"), [tenant, JSON.stringify(keywords)]);
   const existingImplementation = fixture.readRows.getMockImplementation()!;
   let keyword = '测试现有 Notion 快照';
   fixture.readRows.mockImplementation(async (...args) => {
     const result = await existingImplementation(...args);
-    if (args[1] === 'keywords') result[0].fields.名称 = keyword;
-    return result;
+    if (args[1] !== 'keywords') return result;
+    result[0].fields.名称 = keyword;
+    return [{ id: 'other-notion-page', fields: { ...result[0].fields, 记录标识: 'stable', 名称: '第二个词' } }, ...result];
   });
   const snapshot = (row: Record<string, unknown>) => ({ ...row, version: row.config_version });
   try {
@@ -176,7 +183,7 @@ it('首次记录 Notion 基线，改关键词后自动更新，重复读取不�
     };
     const skillInputs = await freezeCompanyConfig(runtimePool, { lineHint: 'yuesheng', runId: 'after-notion-sync', step: '101' });
     expect(skillInputs.version).toBe(version + 1);
-    expect(skillInputs.runtime_config.search_strategy.keywords[0].word).toBe(keyword);
+    expect(skillInputs.runtime_config.search_strategy.keywords.map((row: { word: string }) => row.word)).toEqual([keyword, '第二个词']);
     const history = await fixture.pool!.query(sql('SELECT source,actor FROM zenithjoy.company_config_changes WHERE company_id=$1 AND version=$2'), [company, version + 1]);
     expect(history.rows).toEqual([{ source: 'notion', actor: 'notion:auto-sync' }]);
     keyword = '';
