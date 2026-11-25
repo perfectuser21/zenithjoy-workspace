@@ -31,8 +31,8 @@ it('只允许公司管理员保存，并拒绝无效时间与租户覆盖', asyn
 it('保存返回新版本，陈旧版本发生冲突', async () => {
   db.query.mockResolvedValueOnce({ rows: [settings] }).mockResolvedValueOnce({ rows: [] })
     .mockResolvedValueOnce({ rows: [{ company_exists: true }] });
-  const { revision: _revision, ...fields } = settings;
-  const save = () => request(app).put('/outreach-settings').set('x-role', 'admin').send({ ...fields, expected_revision: 0 });
+  const { daily_cap, start_local, end_local, paused } = settings;
+  const save = () => request(app).put('/outreach-settings').set('x-role', 'admin').send({ daily_cap, start_local, end_local, paused, expected_revision: 0 });
   const result = await save();
   expect(result.status).toBe(200);
   expect(result.body.data).toMatchObject(settings);
