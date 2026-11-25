@@ -16,7 +16,7 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  const binding=JSON.stringify(scope(c),null,2)+'\n',bindingHash=hash(binding);
  files['outreach-host-binding.json']=binding;
  files['activity-104-context.mjs']=replace(regular(path.join(HERE,'activity-104-context.mjs')).toString(),'ASSEMBLY_REPLACES_BINDING_SHA',bindingHash);
- files['outreach-settings.cjs']=regular(path.join(HERE,'outreach-settings.cjs')).toString();
+ files['dm-rate-ramp-lib.js']=regular(path.join(HERE,'dm-rate-ramp-lib.js')).toString();
  files['activity-104-runtime.mjs']=regular(path.join(HERE,'activity-104-runtime.mjs')).toString();
  files['activity-104-transport.py']=replace(replace(regular(path.join(HERE,'activity-104-transport.py')).toString(),'ASSEMBLY_REPLACES_BINDING_SHA',bindingHash),'KEYS=[] # ASSEMBLY_REPLACES_KEYS','KEYS='+JSON.stringify(KEYS));
  files['activity-host-pg.mjs']=pg.toString();
@@ -43,7 +43,7 @@ export async function assembleActivity104Host({baseRoot,localBaseRoot,targetRoot
  r=replace(r,"import {checkPreflight,checkNative} from './native-checker.mjs';","import {readPreflightFacts,readSendFacts} from '../activity-native-facts.mjs';");
  r=r.replaceAll('checkPreflight','readPreflightFacts').replaceAll('checkNative','readSendFacts');
  files['activity-native-facts.mjs']=regular(path.join(HERE,'activity-native-facts.mjs')).toString();
- files['outreach104/runtime-deps.mjs']="import {verify104Context,verify104Runtime,canonical} from '../activity-104-context.mjs';\nimport {observe104Runtime} from '../activity-104-runtime.mjs';\nimport outreachSettings from '../outreach-settings.cjs';\nconst {readOutreachSettings,assertOutreachWindow}=outreachSettings;\nimport {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+r;
+ files['outreach104/runtime-deps.mjs']="import {verify104Context,verify104Runtime,canonical} from '../activity-104-context.mjs';\nimport {observe104Runtime} from '../activity-104-runtime.mjs';\nimport outreachSettings from '../dm-rate-ramp-lib.js';\nconst {readOutreachSettings,assertOutreachWindow}=outreachSettings;\nimport {loadActivityHostPg} from '../activity-host-pg.mjs';\n"+r;
  // Reuse only read-only Task admission; the 104 dispatcher/authorization/OPS stay dedicated.
  for(const name of ['activity-host-tools.py','activity-tool-result.py'])files[name]=regular(path.join(HERE,name)).toString();
  const authorityPatch="import importlib.util,sys,json\ns=importlib.util.spec_from_file_location('authority',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ntools,scope=json.load(sys.stdin)\nprint(json.dumps([*m.patch_phone_access(m.patch_task_authority(tools,main_only=True),scope),m.PHONE_INSTRUCTIONS]))\n";

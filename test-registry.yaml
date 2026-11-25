@@ -10640,6 +10640,14 @@ tests:
     product: 获客
     note: Real session gate, tenant middleware and HTTP repair/readback; external auth/DB seams only.
 
+  - id: company-outreach-settings-http
+    path: apps/api/src/routes/company-outreach-settings.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 获客
+    note: "触达参数管理权限、版本冲突与租户隔离"
+
   - id: company-source-sync-http
     path: apps/api/src/routes/company-source-sync.test.ts
     type: unit
@@ -12382,6 +12390,14 @@ tests:
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "真实tools.main权限/101缺metrics执行前拒绝、原action重放、纠正与unknown保护；102/103按冻结输入装配，外部派发为计数替身"
 
+
+  - id: leadgen-outreach-settings
+    path: services/phone-adb-controller/__tests__/outreach-settings.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: line02
+    note: "104 读取最新的公司设置、跨午夜时段与暂停"
 
   - id: activity-host-104
     path: services/phone-adb-controller/__tests__/activity-host-104.test.mjs

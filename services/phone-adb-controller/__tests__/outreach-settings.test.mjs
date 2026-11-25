@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import settings from '../outreach-settings.cjs';
+import settings from '../dm-rate-ramp-lib.js';
 const { readOutreachSettings, assertOutreachWindow } = settings;
 
 test('reads the saved company settings every time and keeps tenant identity explicit', async () => {

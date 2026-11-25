@@ -2,8 +2,7 @@
 const fs=require('fs');
 const crypto=require('crypto');
 const {routeOf}=require('./line-routes.js');
-const {readOutreachSettings,assertOutreachWindow}=require('./outreach-settings.cjs');
-const {computeDailyCap}=require('./dm-rate-ramp-lib.js');
+const {computeDailyCap,readOutreachSettings,assertOutreachWindow}=require('./dm-rate-ramp-lib.js');
 const {txt}=require('./next-outreach-lib.js');
 const lib=require('./next-outreach-lib.js');
 const {validateOutreachScope,resolveOutreachMode}=require('./leadgen-outreach-scope.js');
