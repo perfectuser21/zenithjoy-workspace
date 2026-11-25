@@ -2,7 +2,7 @@
 'use strict';
 const db = require('./leadgen-db-lib.js');
 const { resolveLine, configEvidence } = require('./judge-video.js');
-const { freezeCompanyConfig, configTargetProfile, resolveCompanyPhoneAccount } = require('./company-config-lib.js');
+const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
 const { judgeCommentOnce: judgeComment, scoreFailureReceipt, safeCommanderEvidenceCheck } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment,makeSingleScoreAudit,verifyStoredScore}=require('./leadgen-policy-review.js');
@@ -152,10 +152,16 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:String(input.step),
       ...(requestedBinding!==undefined&&String(input.step)==='102'?{taskInputs:{device_binding:{...requestedBinding}}}:{})});
     if(requestedBinding!==undefined){
-      const account=resolveCompanyPhoneAccount(snapshot,requestedBinding,{requireTenant:String(input.step)==='102'});
-      if(!account)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: exact frozen company account/device binding required');
+      const accounts=snapshot.runtime_config?.platform_accounts;
+      // 明确停用的历史账号保留在快照中；其余同profile行都参与唯一性检查，不能隐藏未核验或非法状态的冲突。
+      const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===requestedBinding.profile&&a.enabled!==false):[];
+      const account=matches[0];
+      if(!snapshot.company_id||!snapshot.tenant_id||!Number.isSafeInteger(snapshot.version)||snapshot.version<1||matches.length!==1
+        ||account.verification_status!=='verified'||account.enabled!==true||account.device_serial!==requestedBinding.device_serial
+        ||String(input.step)==='102'&&(account.company_id!==snapshot.company_id||account.tenant_id!==snapshot.tenant_id||account.platform!=='douyin')
+        ||typeof account.douyin_id!=='string'||!account.douyin_id||account.douyin_id.trim()!==account.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: exact frozen company account/device binding required');
       return {...configEvidence(snapshot,run),device_binding:{company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:run,
-        ...account,verification_status:'verified',enabled:true}};
+        profile:account.profile,device_serial:account.device_serial,douyin_id:account.douyin_id,verification_status:'verified',enabled:true}};
     }
     return {...configEvidence(snapshot,run),...(String(input.step)==='104'?{runtime_config:snapshot.runtime_config}:{})};
   }
