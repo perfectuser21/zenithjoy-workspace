@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import CompanySourceSync from '../components/CompanySourceSync';
 import { getCompanyProfile, updateCompanyProfile, type CompanyProfile } from '../api/company-profile.api';
 
 const INDUSTRIES = ['餐饮', '零售', '电商', '教育', '医疗', '科技', '金融', '房地产', '制造', '其他'];
@@ -9,7 +10,7 @@ const EMPTY: CompanyProfile = {
   customer_portrait: '', qa_list: [],
 };
 
-const TABS = ['基础信息', '产品与价值', '目标客群', '公司Wiki与配置'] as const;
+const TABS = ['基础信息', '产品与价值', '目标客群', '公司Wiki与配置', '客户资料同步'] as const;
 type TabKey = (typeof TABS)[number];
 
 const contentStyle = {
@@ -294,6 +295,8 @@ export default function CompanyProfilePage() {
           </div>
         </div>
       )}
+
+      {activeTab === '客户资料同步' && <CompanySourceSync onApplied={() => { void reloadProfile(); }} />}
 
       {activeTab === '公司Wiki与配置' && <div style={{ display: 'grid', gap: 16 }}>
         {form.wiki?.verification_status === 'source_preserved_pending_owner_review' && <p>资料状态：保留原始来源，事实声明及AI初稿仍待负责人核对。运行配置启用不代表资料已独立核验。</p>}

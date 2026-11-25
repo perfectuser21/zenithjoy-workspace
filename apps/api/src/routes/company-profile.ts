@@ -7,6 +7,7 @@ import { companyAccountDeviceReplacement } from './company-account-device-replac
 import { companyAccountRegistration, companyAccountRegistrationSession } from './company-account-registration';
 import { companyRoutingNormalization, companyRoutingNormalizationReadback } from './company-routing-normalization';
 import { validateCompanyIdentity, validateEnabledCompany, companyRecord, companyObject, type CompanyJsonRecord } from './company-profile-validation';
+import { registerCompanySourceSync } from './company-source-sync';
 import { tenantContext } from '../middleware/tenant-context';
 import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
 
@@ -50,12 +51,14 @@ function profile(row: CompanyJsonRecord, projections: CompanyJsonRecord[] = []) 
   }));
   return data;
 }
-function snapshot(row: CompanyJsonRecord) {
+export function companySnapshot(row: CompanyJsonRecord) {
   const data = profile(row);
   delete data.sync_status;
   const runtime = companyRecord(data.runtime_config);
   return { ...data, version: data.config_version, product_ids: runtime.product_ids ?? [], policy_id: runtime.policy_id ?? null };
 }
+registerCompanySourceSync(companyProfileRouter, companySnapshot);
+
 function validate(data: CompanyJsonRecord, previous: CompanyJsonRecord): string | null {
   if (typeof data.company_name !== 'string' || !data.company_name.trim()) return 'company_name 必填';
   for (const field of TEXT_FIELDS) if (typeof data[field] !== 'string') return `${field} 必须为文本`;
@@ -108,9 +111,9 @@ companyProfileRouter.put('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn
     const next = profile(old); delete next.sync_status;
     next.config_owner = next.config_owner ?? '';
     for (const field of EDITABLE) if (Object.prototype.hasOwnProperty.call(body, field)) next[field] = body[field];
-    const oldSnapshot = snapshot(old);
+    const oldSnapshot = companySnapshot(old);
     if (body.expected_version !== old.config_version) {
-      await client.query(`INSERT INTO zenithjoy.company_config_changes (company_id,version,actor,source,old_snapshot,new_snapshot,conflict) VALUES ($1,$2,$3,'web',$4::jsonb,$5::jsonb,$6::jsonb)`, [old.company_id, old.config_version, actor, JSON.stringify(oldSnapshot), JSON.stringify(snapshot(next)), JSON.stringify({ kind: 'version_conflict', expected_version: body.expected_version, actual_version: old.config_version })]);
+      await client.query(`INSERT INTO zenithjoy.company_config_changes (company_id,version,actor,source,old_snapshot,new_snapshot,conflict) VALUES ($1,$2,$3,'web',$4::jsonb,$5::jsonb,$6::jsonb)`, [old.company_id, old.config_version, actor, JSON.stringify(oldSnapshot), JSON.stringify(companySnapshot(next)), JSON.stringify({ kind: 'version_conflict', expected_version: body.expected_version, actual_version: old.config_version })]);
       await client.query('COMMIT'); transaction = false;
       return fail(res, 409, 'VERSION_CONFLICT', `配置已更新到版本 ${old.config_version}，请重新读取后保存`);
     }
@@ -131,7 +134,7 @@ companyProfileRouter.put('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn
     next.config_version = Number(old.config_version) + 1;
     const values = EDITABLE.map(field => ['wiki', 'runtime_config', 'source_evidence', ...ARRAY_FIELDS].includes(field) ? JSON.stringify(next[field]) : next[field]);
     await client.query(`UPDATE zenithjoy.tenant_company_profiles SET ${EDITABLE.map((field, index) => `${field} = $${index + 1}`).join(', ')}, config_version = $${values.length + 1}, updated_at = NOW() WHERE tenant_id = $${values.length + 2} AND config_version = $${values.length + 3}`, [...values, next.config_version, req.tenantId, body.expected_version]);
-    const newSnapshot = snapshot(next);
+    const newSnapshot = companySnapshot(next);
     await client.query('INSERT INTO zenithjoy.company_config_versions (company_id,version,tenant_id,snapshot,actor) VALUES ($1,$2,$3,$4::jsonb,$5)', [old.company_id, next.config_version, req.tenantId, JSON.stringify(newSnapshot), actor]);
     await client.query(`INSERT INTO zenithjoy.company_config_changes (company_id,version,actor,source,old_snapshot,new_snapshot,conflict) VALUES ($1,$2,$3,'web',$4::jsonb,$5::jsonb,$6::jsonb)`, [old.company_id, next.config_version, actor, JSON.stringify(oldSnapshot), JSON.stringify(newSnapshot), JSON.stringify({})]);
     const projections = await client.query<CompanyJsonRecord>('SELECT * FROM zenithjoy.company_config_projections WHERE company_id=$1 AND tenant_id=$2', [old.company_id, req.tenantId]);
@@ -142,11 +145,11 @@ companyProfileRouter.put('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn
 });
 
 // 独立登记入口；普通PUT继续拒绝身份变更，核验/启用另走独立协议。
-companyProfileRouter.post('/platform-account-registrations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountRegistration({ pool, profile, snapshot }));
+companyProfileRouter.post('/platform-account-registrations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountRegistration({ pool, profile, snapshot: companySnapshot }));
 
-companyProfileRouter.post('/platform-account-verifications', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountVerification({ pool, profile, snapshot }));
+companyProfileRouter.post('/platform-account-verifications', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountVerification({ pool, profile, snapshot: companySnapshot }));
 
-companyProfileRouter.post('/platform-account-device-replacements', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountDeviceReplacement({ pool, profile, snapshot }));
+companyProfileRouter.post('/platform-account-device-replacements', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountDeviceReplacement({ pool, profile, snapshot: companySnapshot }));
 
-companyProfileRouter.post('/routing-profile-normalizations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalization({ pool, snapshot }));
-companyProfileRouter.get('/routing-profile-normalizations/:requestId', simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalizationReadback({ pool, snapshot }));
+companyProfileRouter.post('/routing-profile-normalizations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalization({ pool, snapshot: companySnapshot }));
+companyProfileRouter.get('/routing-profile-normalizations/:requestId', simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalizationReadback({ pool, snapshot: companySnapshot }));

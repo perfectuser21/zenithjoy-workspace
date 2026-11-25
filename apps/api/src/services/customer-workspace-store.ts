@@ -1,3 +1,5 @@
+import { companySnapshot } from '../routes/company-profile';
+import { startNotionCompanySourceWorker } from './notion-company-source-worker';
 import pool from '../db/connection';
 import { provisionWorkspace, type WorkspaceState } from './customer-workspace';
 import { createWorkspaceAdapter } from './customer-workspace-adapters';
@@ -49,7 +51,8 @@ export async function tickCustomerWorkspaces(): Promise<void> {
   } finally { running = false; }
 }
 export function startCustomerWorkspaceWorker(): NodeJS.Timeout | undefined {
-  if (process.env.CUSTOMER_WORKSPACE_PROVISIONING_ENABLED !== 'true') return;
+  const notionTimer = startNotionCompanySourceWorker(companySnapshot);
+  if (process.env.CUSTOMER_WORKSPACE_PROVISIONING_ENABLED !== 'true') return notionTimer;
   const timer = setInterval(() => { void tickCustomerWorkspaces().catch(() => console.warn('[customer-workspace] tick failed')); }, 30000);
   timer.unref(); return timer;
 }

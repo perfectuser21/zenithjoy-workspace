@@ -194,3 +194,34 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
     await expect(anyChip.first()).toBeVisible({ timeout: 8000 });
   });
 });
+
+test('公司管理员能选择资料来源、预览并确认同步', async ({ page }) => {
+  const calls: unknown[] = [];
+  let state: Record<string, unknown> = {};
+  await page.route('**/api/company-profile', route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    return route.fulfill({ json: { success: true, data: MOCK_COMPANY_PROFILE } });
+  });
+  await page.route('**/api/company-profile/source-sync**', async route => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      await route.fulfill({ json: { success: true, data: { state, sources: [{ platform: 'notion' }, { platform: 'feishu' }] } } });
+    } else if (request.url().endsWith('/preview')) {
+      calls.push(request.postDataJSON());
+      state = { platform: 'feishu', draft_id: 'fixture-preview', preview: { products: ['产品甲'], audiences: ['画像甲'], keywords: [{ word: '测试关键词', enabled: true }] } };
+      await route.fulfill({ json: { success: true, data: state } });
+    } else {
+      calls.push(request.postDataJSON());
+      state = { platform: 'feishu', applied_version: 4, applied_at: '2026-11-25T00:00:00Z' };
+      await route.fulfill({ json: { success: true, data: state } });
+    }
+  });
+  await page.goto(BASE_URL + '/company-profile');
+  await page.getByRole('tab', { name: '客户资料同步' }).click();
+  await page.getByLabel('资料来源').selectOption('feishu');
+  await page.getByRole('button', { name: '拉取同步预览' }).click();
+  await expect(page.getByText('关键词（1）测试关键词')).toBeVisible();
+  await page.getByRole('button', { name: '确认并启用' }).click();
+  await expect(page.getByText(/最近同步.*v4/)).toBeVisible();
+  expect(calls).toEqual([{ platform: 'feishu' }, { draft_id: 'fixture-preview' }]);
+});
