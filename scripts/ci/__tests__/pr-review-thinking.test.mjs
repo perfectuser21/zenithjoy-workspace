@@ -5,7 +5,7 @@ import {spawnSync,execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
-const path=new URL('../../../.github/workflows/pr-review.yml',import.meta.url);
+const path=new URL('../../../.github/workflows/pr-review-terra.yml',import.meta.url);
 const source=readFileSync(path,'utf8');
 const run=source.match(/id: ai-review[\s\S]*?run: \|([\s\S]*?)(?=\n      - name:|$)/)?.[1];
 assert.ok(run,'实际审查步骤存在，测试只用Node内置模块');
