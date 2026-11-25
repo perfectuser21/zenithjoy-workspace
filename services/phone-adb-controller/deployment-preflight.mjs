@@ -1,6 +1,7 @@
 // 部署前证据核验；HTTP只创建不可变发布声明，不触及目标机器。
 import {readFileSync,lstatSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
+import {setTimeout as wait} from 'node:timers/promises';
 import {checkDeploymentCompanyReadiness} from './company-config-readiness.mjs';
 import {digest} from './runtime-definition.mjs';
 export const DEPLOY_REPO='perfectuser21/zenithjoy-workspace';
@@ -167,15 +168,39 @@ export function readDeploymentToken(path){
  const token=/^(['"])(.*)\1$/.exec(raw)?.[2]??raw;
  requireThat(/^[A-Za-z0-9_.~+/=-]{8,}$/.test(token),'凭据镜像格式无效');return token;
 }
-export function brainRequest(base,token){
- const url=new URL(base);requireThat(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&token,'Brain地址/凭据未配置');
- return async(path,body)=>{
-  const target=new URL(path,url),method=body?'POST':'GET';let response;
-  // 同步SSH采集会阻塞socket关闭事件；每次独立连接，未知POST不重发。
-  try{response=await fetch(target,{method,redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`,Connection:'close'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});}
-  catch(error){const code=error?.cause?.code;throw Error(`Brain request failed ${method} ${target.pathname} code=${typeof code==='string'&&/^[A-Z][A-Z0-9_]{0,63}$/.test(code)?code:'TRANSPORT_ERROR'}`);}
-  requireThat(response.ok,`Brain HTTP ${response.status}`);
-  try{return await response.json();}catch{throw Error(`Brain response invalid ${method} ${target.pathname}`);}
+const RELEASE_READ_RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000];
+export function brainRequest(base, token, {retryReleaseReads = false} = {}) {
+ const url = new URL(base);
+ requireThat(['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && token, 'Brain地址/凭据未配置');
+ return async (path, body) => {
+  const target = new URL(path, url);
+  const method = body ? 'POST' : 'GET';
+  const releasePath = '/api/brain/releases/';
+  const canRetry = retryReleaseReads && method === 'GET' && target.origin === url.origin &&
+    target.pathname.startsWith(releasePath) && UUID.test(target.pathname.slice(releasePath.length));
+  const signal = AbortSignal.timeout(30000);
+  const options = {
+   method, redirect: 'error',
+   headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Connection: 'close'},
+   body: body ? JSON.stringify(body) : undefined, signal,
+  };
+  let response;
+  for (let attempt = 0; ; attempt++) {
+   try {
+    response = await fetch(target, options);
+    break;
+   } catch (error) {
+    const code = error?.cause?.code;
+    const safeCode = typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'TRANSPORT_ERROR';
+    const failure = Error(`Brain request failed ${method} ${target.pathname} code=${safeCode}`);
+    const delay = RELEASE_READ_RETRY_DELAYS[attempt];
+    if (!canRetry || code !== 'UND_ERR_SOCKET' || delay === undefined) throw failure;
+    await wait(delay, undefined, {signal}).catch(() => { throw failure; });
+   }
+  }
+  requireThat(response.ok, `Brain HTTP ${response.status}`);
+  try { return await response.json(); }
+  catch { throw Error(`Brain response invalid ${method} ${target.pathname}`); }
  };
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){

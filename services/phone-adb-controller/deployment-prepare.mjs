@@ -23,7 +23,7 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  const origin=git('remote','get-url','origin');
  if(![`https://github.com/${DEPLOY_REPO}.git`,`https://github.com/${DEPLOY_REPO}`,`git@github.com:${DEPLOY_REPO}.git`].includes(origin))throw Error('部署来源仓库不符');
  if(mode!=='candidate')verifyTransactionProtocol(readDeploymentSource(root,sha,'services/phone-adb-controller/deployment-protocol.json'));
- const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
+ const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token,{retryReleaseReads:mode==='candidate'});
  if(mode==='maintenance-recover'){
   if(!/^phone-safety-[a-f0-9]{24}$/.test(transaction||''))throw Error('安全恢复必须指定原事务ID');
   if(toolSha&&toolSha!==sha){
