@@ -1,9 +1,10 @@
+import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { isDeepStrictEqual } from 'node:util';
 import pool from '../db/connection';
 import { companyQuery, getSources, readCompanySource, saveCompanySource, SourceSyncError } from './company-source-sync';
 import { createWorkspaceAdapter, type NotionSyncPage } from './customer-workspace-adapters';
-import { SOURCE_TABLES } from './company-source-import';
+import { importCompanySource, SOURCE_TABLES, type SourceRows } from './company-source-import';
 import { companyRecord, type CompanyJsonRecord } from '../routes/company-profile-validation';
 
 const pageId = (value: unknown) => typeof value === 'string' ? value.replace(/-/g, '').toLowerCase() : '';
@@ -92,6 +93,52 @@ export async function syncNotionCompanyWorkspace(row: CompanyJsonRecord, snapsho
   }
 }
 
+export function notionSourceFingerprint(inputs: SourceRows) {
+  // 仅对实际导入字段取指纹。页面排序、备注和回执列变化不会制造配置版本。
+  const ordered = Object.fromEntries(SOURCE_TABLES.map(key => [
+    key, [...inputs[key]].sort((left, right) => left.id.localeCompare(right.id)),
+  ])) as SourceRows;
+  return createHash('sha256').update(JSON.stringify(importCompanySource({}, ordered))).digest('hex');
+}
+
+export async function syncNotionCompanyChanges(row: CompanyJsonRecord, snapshot: Snapshot) {
+  const profile = (await pool.query<CompanyJsonRecord>(companyQuery, [row.tenant_id])).rows[0];
+  if (profile?.company_id !== row.company_id || profile.config_status !== 'enabled') return;
+  const source = (await getSources(profile)).find(item => item.platform === 'notion');
+  if (!source) return;
+  const { fields, inputs } = await readCompanySource(profile, source);
+  const fingerprint = notionSourceFingerprint(inputs);
+  const observed = companyRecord(companyRecord(row.state).notion_auto_sync);
+  if (observed.enabled !== true || observed.fingerprint === fingerprint) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const old = (await client.query<CompanyJsonRecord>(companyQuery + ' FOR UPDATE', [profile.tenant_id])).rows[0];
+    const registered = (await client.query(`SELECT parent_id,state FROM zenithjoy.customer_workspaces
+      WHERE company_id=$1 AND tenant_id=$2 AND platform='notion' AND status='structure_ready' FOR UPDATE`,
+    [profile.company_id, profile.tenant_id])).rows[0];
+    const resources = companyRecord(companyRecord(registered?.state).resources);
+    const active = companyRecord(registered?.state?.notion_auto_sync);
+    // 另一实例先处理、停用或重绑时放弃这次读取，下轮重新读。
+    if (old?.company_id === profile.company_id && old.config_version === profile.config_version &&
+        old.config_status === 'enabled' && active.enabled === true && active.fingerprint === observed.fingerprint &&
+        pageId(registered?.parent_id) === source.parent &&
+        isDeepStrictEqual(SOURCE_TABLES.map(key => companyRecord(resources[key]).id), source.ids)) {
+      // 首次绑定只记录现有来源的基线，避免把旧 Notion 存量覆盖到正在使用的正式配置。
+      const version = typeof active.fingerprint === 'string'
+        ? await saveCompanySource(client, old, fields, 'notion', 'notion:auto-sync', snapshot)
+        : old.config_version;
+      await client.query(`UPDATE zenithjoy.customer_workspaces SET state=jsonb_set(state,'{notion_auto_sync}',$3::jsonb)
+        WHERE company_id=$1 AND tenant_id=$2 AND platform='notion'`,
+      [profile.company_id, profile.tenant_id, JSON.stringify({ enabled: true, fingerprint, observed_version: version, checked_at: new Date().toISOString() })]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally { client.release(); }
+}
+
 export function startNotionCompanySourceWorker(snapshot: Snapshot): NodeJS.Timeout | undefined {
   if (process.env.NOTION_COMPANY_SOURCE_SYNC_ENABLED !== 'true') return;
   let running = false;
@@ -99,10 +146,16 @@ export function startNotionCompanySourceWorker(snapshot: Snapshot): NodeJS.Timeo
     if (running) return;
     running = true;
     try {
-      const result = await pool.query("SELECT company_id,tenant_id,state FROM zenithjoy.customer_workspaces WHERE platform='notion' AND status='structure_ready' AND state ? 'notion_sync' ORDER BY company_id");
+      const result = await pool.query("SELECT company_id,tenant_id,state FROM zenithjoy.customer_workspaces WHERE platform='notion' AND status='structure_ready' AND ((NOT (state ? 'notion_auto_sync') AND state ? 'notion_sync') OR state->'notion_auto_sync'->>'enabled'='true') ORDER BY company_id");
       for (const workspace of result.rows) {
-        try { await syncNotionCompanyWorkspace(workspace, snapshot); }
-        catch { console.warn('[notion-company-source] sync failed; pending request can be retried'); }
+        try {
+          if (companyRecord(workspace.state?.notion_auto_sync).enabled === true) {
+            await syncNotionCompanyChanges(workspace, snapshot);
+          } else {
+            await syncNotionCompanyWorkspace(workspace, snapshot);
+          }
+        }
+        catch (error) { console.warn('[notion-company-source] sync failed:', error instanceof SourceSyncError ? error.message : 'source or database unavailable'); }
       }
     } catch { console.warn('[notion-company-source] workspace query failed'); }
     finally { running = false; }
