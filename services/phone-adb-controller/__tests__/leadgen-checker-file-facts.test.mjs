@@ -63,3 +63,39 @@ test('historical qualification reports visual evidence only when original scoped
   assert.equal(invalidCoverage.visual_error,'ORIGIN_VISUAL_COVERAGE_MISMATCH');
  } finally { f.close(); }
 });
+
+test('history exposes only the policy from the original digest-bound agent dossier',async()=>{
+ const {readQualificationOrigin}=await import('../leadgen-foundation/checker-file-facts.mjs');
+ const f=await fixture();
+ try{
+  const root=path.join(f.host,'qualification-receipts',video);
+  const journalPath=path.join(root,'journal.json');
+  const journal=JSON.parse(fs.readFileSync(journalPath));
+  const policy={company_id:'company',version:34,policy:{instructions:'original qualification scope'}};
+  const dossier={scope:journal.scope,policy,policy_sha256:'a'.repeat(64)};
+  const canonical=value=>JSON.stringify(value,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)
+   ?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+  journal.policy_sha256=dossier.policy_sha256;
+  journal.policy={company_id:'company',tenant_id:'tenant',policy_id:'original',version:34};
+  journal.agent_decision_provenance={dossier_sha256:hash(canonical(dossier))};
+  const dossierPath=path.join(root,'activity-agent-dossier.json');
+  const contextPath=path.join(f.host,'context.json');
+  const oldContext=JSON.parse(fs.readFileSync(contextPath));
+  f.put(contextPath,{...oldContext,verification:{...oldContext.verification,policy_id:'original',policy_version:34}});
+  f.put(journalPath,journal);
+  f.put(dossierPath,dossier);
+  const result=await readQualificationOrigin(f.c,run,video,f.brain);
+  assert.equal(result.policy_evidence.status,'available');
+  assert.deepEqual(result.policy_evidence.policy,policy.policy);
+  f.put(dossierPath,{...dossier,policy:{...policy,version:35}});
+  const changed=await readQualificationOrigin(f.c,run,video,f.brain);
+  assert.equal(changed.policy_evidence.status,'unavailable');
+  assert.equal(changed.policy_evidence.reason,'ORIGIN_POLICY_DOSSIER_MISMATCH');
+  const rehashed={...dossier,policy:{...policy,version:35}};
+  f.put(journalPath,{...journal,policy:{...journal.policy,version:35},
+   agent_decision_provenance:{dossier_sha256:hash(canonical(rehashed))}});
+  f.put(dossierPath,rehashed);
+  const wrongVersion=await readQualificationOrigin(f.c,run,video,f.brain);
+  assert.equal(wrongVersion.policy_evidence.reason,'ORIGIN_POLICY_DOSSIER_MISMATCH');
+ }finally{f.close();}
+});

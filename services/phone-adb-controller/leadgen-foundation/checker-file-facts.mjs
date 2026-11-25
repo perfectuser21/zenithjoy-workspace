@@ -45,6 +45,30 @@ function historicalVisualFacts(host,{scope,visual_evidence:visual}){
  }
  return {visual_evidence_read:true,visual_frames};
 }
+function historicalPolicyFacts(evidence,journal,frozen){
+ const expected=journal.agent_decision_provenance?.dossier_sha256;
+ if(!/^[a-f0-9]{64}$/.test(expected??''))return {status:'unavailable',reason:'ORIGIN_POLICY_DOSSIER_NOT_RECORDED'};
+ try{
+  const file=path.join(evidence,'activity-agent-dossier.json');
+  need((regular(file,1024*1024).mode&0o077)===0);
+  const dossier=JSON.parse(fs.readFileSync(file));
+  const canonical=value=>JSON.stringify(value,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)
+   ?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+  const identity=journal.policy;
+  if(hash(canonical(dossier))!==expected||canonical(dossier.scope)!==canonical(journal.scope)||
+     !/^[a-f0-9]{64}$/.test(journal.policy_sha256??'')||dossier.policy_sha256!==journal.policy_sha256||
+     identity?.company_id!==journal.scope.company_id||identity.tenant_id!==journal.scope.tenant_id||
+     typeof identity.policy_id!=='string'||identity.policy_id!==frozen?.policy_id||
+     !Number.isSafeInteger(identity.version)||identity.version<1||identity.version!==frozen?.policy_version||
+     dossier.policy?.company_id!==identity.company_id||dossier.policy.version!==identity.version||
+     !dossier.policy.policy||typeof dossier.policy.policy!=='object'||Array.isArray(dossier.policy.policy)){
+   return {status:'unavailable',reason:'ORIGIN_POLICY_DOSSIER_MISMATCH'};
+  }
+  return {status:'available',identity,policy_sha256:journal.policy_sha256,dossier_sha256:expected,policy:dossier.policy.policy};
+ }catch{
+  return {status:'unavailable',reason:'ORIGIN_POLICY_DOSSIER_UNAVAILABLE'};
+ }
+}
 export async function readQualificationOrigin(c,run,video,brainGet){
  need(UUID.test(run)&&/^\d{16,24}$/.test(video));const root=directory(c.foundation_state_root),dir=directory(path.join(root,run)),manifest=document(path.join(dir,'manifest.json')),m=manifest.data;
  need(m.run?.run_id===run&&UUID.test(m.run.task_id)&&/^[a-f0-9]{64}$/.test(m.run.definition_sha256??''));
@@ -58,7 +82,7 @@ export async function readQualificationOrigin(c,run,video,brainGet){
  need(s&&s.task_id===m.run.task_id&&s.run_id===run&&s.run===run&&s.video_id===video);
  for(const key of ['company_id','tenant_id','line'])need(s[key]===c[key]);need(/^[a-f0-9]{64}$/.test(s.audio_sha256??''));
  const documents={'journal.json':journal};for(const name of ['asr-response.json','judge-response.json'])if(fs.existsSync(path.join(evidence,name)))documents[name]=document(path.join(evidence,name));
- return{origin:{task_id:m.run.task_id,run_id:run,video_id:video,company_id:c.company_id,tenant_id:c.tenant_id,line:c.line},manifest_sha256:manifest.sha256,context_sha256:context.sha256,documents,observed_at:new Date().toISOString(),...historicalVisualFacts(host,journal.data)};
+ return{origin:{task_id:m.run.task_id,run_id:run,video_id:video,company_id:c.company_id,tenant_id:c.tenant_id,line:c.line},manifest_sha256:manifest.sha256,context_sha256:context.sha256,documents,policy_evidence:historicalPolicyFacts(evidence,journal.data,old.verification),observed_at:new Date().toISOString(),...historicalVisualFacts(host,journal.data)};
 }
 export async function readMediaFacts(root,name,tool){
  directory(root);need(typeof name==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,239}\.(mkv|mp4|wav|webm|mp3|m4a)$/.test(name));const file=path.join(root,name),before=regular(file,512*1024*1024);
