@@ -32,9 +32,9 @@
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "c252fa61a3e9527c1f33b1b379ae0f1ddc367440e2b08102f99d586b413494e0",
+      "sha256": "5f60b0d3225879711ee59f7a0e1791ae35748a3a0c20c29f0a709e441070c26a",
       "activities": {
-        "preflight": "7b8505c1d2b5eb9c913ad836bea464cc9b4cd91ccf08e9d46f98e0a1757eb10c",
+        "preflight": "ec4cfcb2581cc1020e0f107f46139f433f3d3f17da308d3e80f8bd6f0a6709da",
         "send_dm": "c13f6c7b59b70f9cc32094a1fd067ab8379b52ab32e1747379b2a428670dbb47",
         "write_back": "fd5b928f9e95cd1a5b953da7c5e1dddd48cf595e8683fa035116102ef0b8b153",
         "cleanup": "36862a7360b8766ea6ec7c84a6b8b050a4e16bc410f69a122b1662d6ed14c68c"

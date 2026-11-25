@@ -54,7 +54,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -295,13 +295,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "194651d244398f49db163ac5a628f17d334c8cd7d60fd6ea60dccff96a7ece26",
+      "code_digest": "48ef051e7e1958ad9a34d32805f788b8dee89ece7feb932023175973594b42e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "bf971db5580128cf4c90e8d318ff35c096623247b713b61a2c60e7505e457e17",
-        "current_code_digest": "194651d244398f49db163ac5a628f17d334c8cd7d60fd6ea60dccff96a7ece26"
+        "previous_code_digest": "194651d244398f49db163ac5a628f17d334c8cd7d60fd6ea60dccff96a7ece26",
+        "current_code_digest": "48ef051e7e1958ad9a34d32805f788b8dee89ece7feb932023175973594b42e0"
       }
     },
     "douyin_video_processing.preflight": {
@@ -378,7 +378,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -626,13 +626,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+      "code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
-        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
+        "previous_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+        "current_code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1"
       }
     },
     "douyin_video_processing.dedup": {
@@ -709,7 +709,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -957,13 +957,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+      "code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
-        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
+        "previous_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+        "current_code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1024,7 +1024,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -1293,13 +1293,13 @@
           "sha256": "14aebd4617fc98bf3fb0a148bb00fb8fcc3b47e00890423cb715b34d31a4b47a"
         }
       ],
-      "code_digest": "765e7df9bc148b119c2512c79ed65e5650ddf831eed6d38442025536b0fa2efe",
+      "code_digest": "27312a75aeddcd29daabe3d2d369c62ae80db8bef05d28c6b20a68b7d9344408",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "d40428b7f48afd19a473a7fdca89c7f5161a1e12cfd21cbd8447c2b15ac7c106",
-        "current_code_digest": "765e7df9bc148b119c2512c79ed65e5650ddf831eed6d38442025536b0fa2efe"
+        "previous_code_digest": "765e7df9bc148b119c2512c79ed65e5650ddf831eed6d38442025536b0fa2efe",
+        "current_code_digest": "27312a75aeddcd29daabe3d2d369c62ae80db8bef05d28c6b20a68b7d9344408"
       }
     },
     "douyin_video_processing.collection": {
@@ -1376,7 +1376,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -1624,13 +1624,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+      "code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
-        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
+        "previous_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+        "current_code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1707,7 +1707,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -1955,13 +1955,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+      "code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "eb3f972b986771bfc7c02ea8487094b449b141d49743bb4c946d5eea11a5239b",
-        "current_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92"
+        "previous_code_digest": "86d1e74cb62a6ee57b7df28d7bdfafa7825d6fb0c5f2c67217ed349064e5ad92",
+        "current_code_digest": "de46327076445b67b1462e8f8576cbfdc71b2d9394d550f7853e0ec4b8a415a1"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -2057,7 +2057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -2298,13 +2298,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396",
+      "code_digest": "1c8ea5c9893312229300cbd28c7a4df0738a08ca1cf37bedb5dd62ea69643f34",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
-        "current_code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396"
+        "previous_code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396",
+        "current_code_digest": "1c8ea5c9893312229300cbd28c7a4df0738a08ca1cf37bedb5dd62ea69643f34"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2400,7 +2400,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -2641,13 +2641,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396",
+      "code_digest": "1c8ea5c9893312229300cbd28c7a4df0738a08ca1cf37bedb5dd62ea69643f34",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "40ae4043e06524aca63821e854181f34df2ce64dff9990fc3691dc9e419e02d1",
-        "current_code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396"
+        "previous_code_digest": "4fa203f34b4ebc61ff3acff91ebf1fee2e3d462737ecfa820591dcb144e4c396",
+        "current_code_digest": "1c8ea5c9893312229300cbd28c7a4df0738a08ca1cf37bedb5dd62ea69643f34"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2717,7 +2717,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -2958,13 +2958,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+      "code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
-        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
+        "previous_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+        "current_code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -3034,7 +3034,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -3275,13 +3275,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+      "code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
-        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
+        "previous_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+        "current_code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3351,7 +3351,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -3592,13 +3592,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+      "code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
-        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
+        "previous_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+        "current_code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3668,7 +3668,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-host-104.mjs",
           "revision": "contract",
-          "sha256": "3157f3c0eed4b6530d7045b505dbd66b5527aff2680d887f1fd8f1b76e067103"
+          "sha256": "cc470a2807ad50c22c06f8d064706b42104b9f46ffd02fc7b804b07e654e6b85"
         },
         {
           "kind": "code",
@@ -3909,13 +3909,13 @@
           "sha256": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8"
         }
       ],
-      "code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+      "code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复已核验来源识别，保留活动输入输出、授权范围及动作防重，原单回执可幂等恢复。",
+        "reason": "104 宿主新增独立运营参数读取，保留业务契约、权限和证据格式，其他流程共享引用的运行分支不变",
         "reviewed_by": "codex",
-        "previous_code_digest": "82d7638ded6224c7f9cea476b8e2b0629b8534db0be0c66546a634ae8580c34c",
-        "current_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1"
+        "previous_code_digest": "46d396dfb6c82c1beef1fbee8b9690eedb5d05e61c6c15bf6df3a252d3011aa1",
+        "current_code_digest": "30cbd5348a20ee3a5ca37cccf117ae4ed8787c1053dca819d9fef6721ce7e234"
       }
     }
   },
