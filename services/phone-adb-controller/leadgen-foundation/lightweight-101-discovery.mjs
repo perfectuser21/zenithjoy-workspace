@@ -86,7 +86,7 @@ export async function runLightweightDiscovery101({context,workDir,invoke,hostRoo
       return {code:0};
     },
     queue:async(_op,{video})=>{
-      const exact={video_ids:[video.videoId]};
+      const exact={video_ids:[video.videoId],include_discovery_protection:true};
       let nativeEvidence;
       if(hostRoot){
         const link=linkReceipt.result.stdout;

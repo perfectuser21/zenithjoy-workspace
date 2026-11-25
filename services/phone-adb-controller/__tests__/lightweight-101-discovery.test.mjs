@@ -41,7 +41,7 @@ test('轻量 101 Worker 可从只含发布清单文件的独立目录加载', t 
   assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
-for(const mode of ['capture','complete','missing','missing_copy','wrong_reopen','multiple_cards'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
+for(const mode of ['capture','complete','missing','missing_copy','wrong_reopen','multiple_cards','duplicate'])test('101 复用现场取链并独立读回，证据模式 '+mode, async t => {
   const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'lightweight-101-')));
   t.after(() => rmSync(workDir, {recursive: true, force: true}));
   const runTag = 'cfc6365c-81ed-4c38-b33d-c1eb2b21ab3a';
@@ -62,6 +62,8 @@ for(const mode of ['capture','complete','missing','missing_copy','wrong_reopen',
     return file;
   };
   const videoId = '7685662999797258401', events = [];
+  const existing = {video_id:videoId,process_status:'评论已采',harvest_batch:'previous-collection',
+    comment_count:7,transcript_sha256:'c'.repeat(64)};
   let persisted;
   const invoke = async (kind, name, args) => {
     assert.match(name, /^light101-/);
@@ -94,14 +96,18 @@ for(const mode of ['capture','complete','missing','missing_copy','wrong_reopen',
         result.stdout = `video_opened=1\nvideo_id=${mode==='wrong_reopen'?'7000000000000000000':videoId}\n`;
       }
     } else if (kind === 'business') {
-      const {op,video} = JSON.parse(args[0]);
+      const {op,video,include_discovery_protection,video_ids} = JSON.parse(args[0]);
+      if(op==='inspect_videos'&&mode==='duplicate'){
+        assert.deepEqual(video_ids,[videoId]);
+        assert.equal(include_discovery_protection,true,'read both old and final protected state');
+      }
       events.push(op);
       if (op === 'discover') persisted = video;
       if(op==='discover_readback'){
         assert.equal(op, 'discover_readback');
         assert.deepEqual(video, persisted);
       }
-      result.stdout = JSON.stringify({ok:true,result:op==='inspect_videos'?[]:{status:'pending',inserted:true,
+      result.stdout = JSON.stringify({ok:true,result:op==='inspect_videos'?(mode==='duplicate'?[existing]:[]):{status:'pending',inserted:mode!=='duplicate',
         metrics_verified:true,metrics_digest:video.metrics.digest,
         ...(op==='discover_readback'?{handoff:{video_id:video.videoId,video_url:video.videoUrl,
           title:video.title,keyword:video.keyword,line_key:context.line,comment_count:4,harvest_batch:runTag,
@@ -144,6 +150,12 @@ for(const mode of ['capture','complete','missing','missing_copy','wrong_reopen',
       assert.match(result.delivery_evidence[videoId].reopen_receipt,/^receipts\//);
       assert.ok(events.indexOf('open-video') < events.indexOf('discover') && events.includes('open-video'));
       assert.match(result.delivery_evidence[videoId].prior_state,/^receipts\//);
+      if(mode==='duplicate'){
+        for(const key of ['prior_state','written_state']){
+          const receipt=JSON.parse(readFileSync(join(hostRoot,result.delivery_evidence[videoId][key]),'utf8'));
+          assert.deepEqual(JSON.parse(receipt.result.stdout).result,[existing]);
+        }
+      }
       const contract=generateLightweight101Profile().contract.activities.find(activity=>activity.key==='collect_videos');
       const validate=new Ajv({strict:true}).compile(contract.acceptance.document.delivery.schema);
       assert.ok(validate({outputs:{Video:result.handoffs,Run:{status:result.status,
