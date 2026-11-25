@@ -4,13 +4,13 @@
 
 ## 环境配置与正常发布
 
-`docker-compose.staging-api.yml` 和 `docker-compose.prod-api.yml` 已分别用 `env_file` 全量传入 `/opt/zenithjoy/staging-api/.env`、`/opt/zenithjoy/prod-api/.env`。沿用该真实部署入口，勿在compose或Git中放secret；环境文件权限600。更改后须由正常部署重建相应容器加载，不能只改文件宣称已生效。
+香港预发通过 `docker-compose.staging-api.yml` 加载 `/opt/zenithjoy/staging-api/.env`。生产 API 现运行于杭州，生产配置应按现役部署的环境文件注入。Secret 保存在部署环境中，环境文件权限为 600。更新后核对目标进程已加载配置。
 
 必须配置：
 
 | 变量 | 来源 |
 |---|---|
-| CECELIA_BRAIN_URL | 部署管理员批准的固定Brain origin；现役宿主代理为host.docker.internal:5221 |
+| CECELIA_BRAIN_URL | 部署管理员批准的固定 Brain origin，按目标环境核对 |
 | CECELIA_INTERNAL_TOKEN | 1Password「Cecelia Internal Token」，不复用ZenithJoy token |
 | COMPANY_ACCOUNT_VERIFICATION_SOURCE_REVISION | 已真实合并、发布并批准的完整40位main SHA |
 | COMPANY_ACCOUNT_VERIFICATION_COLLECTORS | 真正采证任务claimed_by精确允许列表 |
@@ -18,7 +18,7 @@
 
 缺配置503，Brain失败/重定向/超时/过大响应也拒绝；未配置不影响其他业务端点。服务端发送凭据只到固定Brain origin，不读取请求指定URL。
 
-按 main→`deploy-staging-hk.yml`→staging验收→`promote-prod-hk.yml`人工闸（指定精确已验SHA）发布。先检查`GET /api/health`的build.sha与最终main一致，再用正式登录读回公司身份/版本。代码merge不代表生产API、环境配置或真实核验已完成。
+主线候选通过 `deploy-staging-hk.yml` 在香港部署并验收。生产入口与回退状态见[预发访问与生产版本核对](../docs/staging-access.md#生产发布与回退)。发布后先确认生产 `GET /api/version` 返回获准候选的完整 SHA，再用正式登录读回公司身份和版本。
 
 ## 双任务证据合同
 

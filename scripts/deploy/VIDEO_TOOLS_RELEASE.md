@@ -6,4 +6,4 @@
 - 新 API 配置将旧画布实例和服务令牌映射置空，并保留已配置的千问、阿里云、COS 和员工名单设置。
 - 历史发布回执和 ComfyUI 数据卷保留。普通共享 API 发布不需要读取这些卷，也不需要启动其中的历史工作流。
 
-香港共享 API 的预发入口为 `deploy-staging-hk.yml`。生产仍通过 `promote-prod-hk.yml` 使用已经验收的同版本候选。
+共享 API 通过 `deploy-staging-hk.yml` 在香港部署预发候选。生产 API 运行在杭州。发布入口与回退状态见[预发访问与生产版本核对](../../docs/staging-access.md#生产发布与回退)。
