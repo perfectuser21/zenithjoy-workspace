@@ -23,6 +23,48 @@ test('正式run snapshot允许原生身份/文件投影但不允许修改合同�
  const {digest}=await import('../runtime-definition.mjs');id.profile_sha256=digest(profile);const state={identity:id,machine_id:id.machine_id,profile,domain_started_at_ms:100000},f=structuredClone(template);delete f.snapshot_sha256;f.files={'runtime/step.json':h,'runtime/code.mjs':h,'step-dod.json':h,'sources.txt':digest('AI办公\n')};f.execution_mode='code';f.public_domain={protocol:'workflow-domain/v1',run_id:run,task_id:original,machine_id:id.machine_id,profile_sha256:id.profile_sha256,run_binding:id.run_binding,deadline_ms:2800000,cleanup_deadline_ms:2920000,company:{version:26}};f.run_identity={capability:'douyin_video_discovery',tag:'tag',profile:'cloud-phone-test',serial,run_id:run};Object.assign(f.discovery_phone_scope,{task_id:original,run_id:run,attempt:'a1',source_commit:'a'.repeat(40)});f.snapshot_sha256=digest(f);
  assert.doesNotThrow(()=>validateFrozenProjection({state,frozen:f}));for(const mutate of [x=>x.release.id=original,x=>x.files['code.mjs']=h,x=>x.public_domain.task_id=maintenance,x=>x.discovery_phone_scope.serial='other',x=>x.public_domain.deadline_ms++]){const b=structuredClone(f);mutate(b);assert.throws(()=>validateFrozenProjection({state,frozen:b}));}
 });
+
+test('已完成独立清场的设备可单独启空服务，仍要求本次审批与维护锁',async()=>{
+ const {verifyStartupReceipt}=await load();
+ const source={commit:'a'.repeat(40),files:{review:'b'.repeat(64)}};
+ const instanceId='mmv-yuesheng-direct',endpoint='tcp:127.0.0.1:5045';
+ const registrySha256='c'.repeat(64),policySha256='d'.repeat(64),leaseVersion='21';
+ const approvalRef='f80bca77-53f6-4bd6-88ec-4675eaf0255d';
+ const reviewedAction='76bdc92e-46a2-4ac1-b6f7-b6a000c93f8e';
+ const scope={task_id:maintenance,original_task_id:original,original_run_id:run,serial,
+  instance_id:instanceId,endpoint,source_commit:source.commit,registry_sha256:registrySha256,policy_sha256:policySha256,
+  review_event_id:'62162',decision_id:approvalRef,pending_action_id:reviewedAction};
+ const now=Date.now();
+ const receipt={protocol:'device-epoch-clean-startup/v1',action:'start_private_server',scope,source_authority:source,
+  issued_at:new Date(now).toISOString(),expires_at:new Date(now+60000).toISOString(),lease_version:leaseVersion};
+ const cleanup={protocol:'native-agent-resource-settlement/v1',basis:'operator-cleanup-review',task_id:original,run_id:run,
+  review_event_id:'62162',pending_action_id:reviewedAction,devices:[{device_name:serial,acquisition_version:'20'}],
+  host:{machine_id:'us-mac-m4'},review:{actor:'authenticated-operator',cleanup_confirmed:true,effects_reviewed:true}};
+ const readings={
+  ['/api/brain/tasks/'+maintenance]:{id:maintenance,status:'in_progress',claimed_by:'approved-operator',claimed_at:receipt.issued_at,
+   payload:{decision_id:approvalRef},result:{clean_adb_startup_approval:{protocol:'device-epoch-clean-startup-approval/v1',scope}}},
+  ['/api/brain/tasks/'+original]:{id:original,status:'completed_no_pr',result:{native_agent_resource_review:cleanup}},
+  ['/api/brain/pending-actions/'+reviewedAction]:{id:reviewedAction,status:'approved',action_type:'owner_decision',params:{task_id:original},execution_result:cleanup},
+  '/api/brain/device-locks':{success:true,locks:[{device_name:serial,locked_by:maintenance,lease_version:leaseVersion,expired:false,
+   expires_at:new Date(now+90000).toISOString()}]},
+ };
+ const fixed={instance_id:instanceId,endpoint,registry_sha256:registrySha256,policy_sha256:policySha256};
+ const options={receiptPath:'/private/clean-startup.json',instanceId,sourceCommit:source.commit,registrySha256,policySha256,
+  load:()=>structuredClone(receipt),source:()=>structuredClone(source),instance:()=>structuredClone(fixed),
+  read:async path=>structuredClone(readings[path])};
+ const result=await verifyStartupReceipt(options);
+ assert.deepEqual(result,{protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',...fixed,source_commit:source.commit});
+ for(const [path,mutate] of [
+  ['/api/brain/tasks/'+maintenance,v=>delete v.result.clean_adb_startup_approval],
+  ['/api/brain/tasks/'+original,v=>v.result.native_agent_resource_review.review.effects_reviewed=false],
+  ['/api/brain/pending-actions/'+reviewedAction,v=>v.status='pending_approval'],
+  ['/api/brain/device-locks',v=>v.locks[0].lease_version='22'],
+ ]){
+  await assert.rejects(verifyStartupReceipt({...options,read:async key=>{
+   const value=await options.read(key);if(key===path)mutate(value);return value;
+  }}),/CLEAN_STARTUP_/);
+ }
+});
 test('正式flat部署manifest完整闭包可校验；缺依赖/脏字节/错误来源不回退git',async()=>{
  const {reviewSource}=await load(),fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path'),crypto=await import('node:crypto');const root=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'epoch-flat-')),hash=x=>crypto.createHash('sha256').update(x).digest('hex'),a='import "./dep.mjs";\n',b='export const fixed=1;\n';
  try{fs.writeFileSync(path.join(root,'device-epoch-fence-review.mjs'),a);fs.writeFileSync(path.join(root,'dep.mjs'),b);const manifest={source_repo:'perfectuser21/zenithjoy-workspace',source_commit:'a'.repeat(40),target:'mmv',files:[['device-epoch-fence-review.mjs',a],['dep.mjs',b]].map(([n,bytes])=>({path:'services/phone-adb-controller/'+n,deployed_path:n,content_sha256:hash(bytes)}))};const write=()=>fs.writeFileSync(path.join(root,'deployment-manifest.json'),JSON.stringify(manifest));write();const options={runtimeRoot:root,repositoryRoot:'/no-git'};assert.equal(Object.keys(reviewSource(options).files).length,2);
