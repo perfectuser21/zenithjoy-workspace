@@ -14,6 +14,10 @@ on:
     outputs:
       sha:
         value: ${{ jobs.admission.outputs.sha }}
+      api_run_id:
+        value: ${{ jobs.admission.outputs.api_run_id }}
+      api_run_attempt:
+        value: ${{ jobs.admission.outputs.api_run_attempt }}
 permissions:
   contents: read
   actions: read
@@ -23,6 +27,8 @@ jobs:
     timeout-minutes: 10
     outputs:
       sha: ${{ steps.staging.outputs.sha }}
+      api_run_id: ${{ steps.staging.outputs.api_run_id }}
+      api_run_attempt: ${{ steps.staging.outputs.api_run_attempt }}
     steps:
       - name: Only trusted main release entry
         env:

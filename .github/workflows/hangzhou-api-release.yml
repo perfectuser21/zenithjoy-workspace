@@ -1,0 +1,125 @@
+name: Hangzhou production API release
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'inspect reads the active API, promote uses an official candidate, rollback uses a verified retained image'
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect, promote, rollback]
+      sha:
+        description: 'Full commit SHA required for promote and rollback'
+        type: string
+      acceptance_run_key:
+        description: 'Same-version Brain acceptance key required for promote'
+        type: string
+      confirm:
+        description: 'Type PROMOTE or ROLLBACK to change the API'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: zenithjoy-hangzhou-production-api
+  cancel-in-progress: false
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate release request
+        env:
+          MODE: ${{ inputs.action }}
+          SHA: ${{ inputs.sha }}
+          RUN_KEY: ${{ inputs.acceptance_run_key }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]]
+          case "$MODE" in
+            inspect) [[ -z "$SHA$RUN_KEY$CONFIRM" ]] ;;
+            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ && "$CONFIRM" == PROMOTE ]] ;;
+            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && -z "$RUN_KEY" && "$CONFIRM" == ROLLBACK ]] ;;
+            *) exit 1 ;;
+          esac
+
+  admission:
+    needs: request
+    if: inputs.action == 'promote'
+    uses: ./.github/workflows/release-admission.yml
+    with:
+      sha: ${{ inputs.sha }}
+      targets: api
+      acceptance_run_key: ${{ inputs.acceptance_run_key }}
+    secrets: inherit
+
+  execute:
+    needs: [request, admission]
+    if: >-
+      ${{ !cancelled() && needs.request.result == 'success' &&
+          ((inputs.action == 'promote' && needs.admission.result == 'success') ||
+           (inputs.action != 'promote' && needs.admission.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: hangzhou-api-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate admitted artifact coordinates
+        if: inputs.action == 'promote'
+        env:
+          SHA: ${{ needs.admission.outputs.sha }}
+          RUN_ID: ${{ needs.admission.outputs.api_run_id }}
+          RUN_ATTEMPT: ${{ needs.admission.outputs.api_run_attempt }}
+        run: '[[ "$SHA" =~ ^[a-f0-9]{40}$ && "$RUN_ID" =~ ^[1-9][0-9]{0,15}$ && "$RUN_ATTEMPT" =~ ^[1-9][0-9]{0,15}$ ]]'
+
+      - uses: actions/download-artifact@v4
+        if: inputs.action == 'promote'
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.admission.outputs.api_run_id }}
+          name: hk-api-candidate-${{ needs.admission.outputs.api_run_id }}-${{ needs.admission.outputs.api_run_attempt }}
+          path: ${{ runner.temp }}/hz-api-candidate
+
+      - name: Install the existing private image delivery client
+        if: inputs.action == 'promote'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hz-delivery"
+          "$RUNNER_TEMP/hz-delivery/bin/pip" install cos-python-sdk-v5==1.9.44
+
+      - uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+
+      - name: Read or switch Hangzhou API and verify the public versions
+        env:
+          MODE: ${{ inputs.action }}
+          INPUT_SHA: ${{ inputs.sha }}
+          STAGED_SHA: ${{ needs.admission.outputs.sha }}
+          STAGED_RUN: ${{ needs.admission.outputs.api_run_id }}
+          STAGED_ATTEMPT: ${{ needs.admission.outputs.api_run_attempt }}
+          MMV_SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          MMV_SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          MMV_SSH_USER: ${{ secrets.US_MAC_USER }}
+          MMV_HOST_KEY: ${{ vars.HZ_RELEASE_MMV_HOST_KEY }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+          COS_BUCKET: zenithjoy-static-hk-1333590468
+          COS_REGION: ap-hongkong
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            inspect) python3 scripts/deploy/hz-api-candidate.py inspect ;;
+            promote) "$RUNNER_TEMP/hz-delivery/bin/python" scripts/deploy/hz-api-candidate.py promote \
+              "$RUNNER_TEMP/hz-api-candidate" "$STAGED_SHA" "$STAGED_RUN" "$STAGED_ATTEMPT" ;;
+            rollback) python3 scripts/deploy/hz-api-candidate.py rollback "$INPUT_SHA" ;;
+            *) exit 1 ;;
+          esac
