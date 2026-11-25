@@ -93,7 +93,7 @@ export default function CompanySourceSync({ onApplied }: { onApplied: () => void
           <summary>查看字段</summary>
           {preview.rows.map((row, index) => <dl key={index}>
             <dt>{tableLabels[row.table]} · {row.title}</dt>
-            {Object.entries(row.fields).map(([field, value]) => <dd key={field}>{field}　{value || '空'}</dd>)}
+            {Object.entries(row.fields).map(([field, value]) => <dd key={field}>{field} · {value || '空'}</dd>)}
           </dl>)}
         </details>}
         <button type="button" disabled={busy} onClick={() => void sync('apply')}>确认并启用</button>
