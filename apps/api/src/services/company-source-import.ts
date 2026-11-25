@@ -29,14 +29,15 @@ export function previewCompanySource(input: SourceRows) {
   })));
 }
 
-export function importCompanySource(profile: RecordData, input: SourceRows) {
+export function importCompanySource(profile: RecordData, input: SourceRows, { preserveExistingOrder = false } = {}) {
   const wiki = companyRecord(profile.wiki), runtime = companyRecord(profile.runtime_config);
   const search = companyRecord(runtime.search_strategy);
   const build = <T>(table: SourceTable, previous: unknown, convert: (row: RecordData, title: string, input: SourceRow['fields']) => T) => {
     const ids = new Set<string>();
     const existing = (Array.isArray(previous) ? previous : []).map(companyRecord);
     if (!input[table].length) throw Error(`${table} 表没有可导入的记录`);
-    return input[table].map(row => {
+    const previousOrder = new Map(existing.map((item, index) => [item.id, index]));
+    const imported = input[table].map(row => {
       const title = value(row.fields, '名称');
       const id = value(row.fields, table === 'products' ? '产品标识' : table === 'audiences' ? '画像标识' : '记录标识') || row.id;
       if (!title || !id || ids.has(id)) throw Error(`${table} 表存在缺失名称、标识或重复标识`);
@@ -47,8 +48,12 @@ export function importCompanySource(profile: RecordData, input: SourceRows) {
         if (!Object.prototype.hasOwnProperty.call(row.fields, label)) throw Error(`${table} 表缺少列「${label}」`);
         fields[key] = value(row.fields, label);
       }
-      return convert({ ...old, id, fields }, title, row.fields);
+      return { id, record: convert({ ...old, id, fields }, title, row.fields) };
     });
+    // Notion view order is not the operating priority used by the acquisition workflow.
+    if (preserveExistingOrder) imported.sort((left, right) =>
+      (previousOrder.get(left.id) ?? existing.length) - (previousOrder.get(right.id) ?? existing.length));
+    return imported.map(item => item.record);
   };
   const named = (row: RecordData, name: string) => ({ ...row, id: String(row.id), name });
   const products = build('products', wiki.products, named), audiences = build('audiences', wiki.audiences, named);
