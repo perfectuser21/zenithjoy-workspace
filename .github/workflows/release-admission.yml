@@ -75,15 +75,15 @@ jobs:
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$TARGETS" =~ ^(api|dashboard|staff-hub)(,(api|dashboard|staff-hub))*$ ]]
           [[ "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ ]]
-          STAGING_ARGS=()
-          if [[ "$BIND_API_ARTIFACT" == true ]]; then
+          set -- "$SHA" "$TARGETS" "$RUN_KEY"
+          if [[ "${BIND_API_ARTIFACT:-false}" == true ]]; then
             [[ "$API_RUN_ID" =~ ^[1-9][0-9]{0,15}$ && "$API_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,15}$ ]]
-            STAGING_ARGS=("$API_RUN_ID" "$API_RUN_ATTEMPT")
+            set -- "$@" "$API_RUN_ID" "$API_RUN_ATTEMPT"
           fi
           KEY_FILE=$(mktemp)
           trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 -i "$KEY_FILE" \
-            "$SSH_USER@$SSH_HOST" node --input-type=module - "$SHA" "$TARGETS" "$RUN_KEY" "${STAGING_ARGS[@]}" \
+            "$SSH_USER@$SSH_HOST" node --input-type=module - "$@" \
             < scripts/release-gate/acceptance-record.mjs
