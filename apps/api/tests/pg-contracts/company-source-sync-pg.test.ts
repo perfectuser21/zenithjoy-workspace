@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
 import pg from 'pg';
 import { requireDisposableDatabases } from './disposable-db';
+
+const { freezeCompanyConfig } = createRequire(import.meta.url)('../../../../services/phone-adb-controller/company-config-lib.js');
 
 const fixture = vi.hoisted(() => ({ pool: null as pg.Pool | null, schema: '', readRows: vi.fn(), readSyncRequests: vi.fn(), writeSyncReceipt: vi.fn() }));
 const sql = (query: string) => query.replaceAll('zenithjoy.', fixture.schema + '.');
@@ -47,6 +50,7 @@ beforeAll(async () => {
       config_status text, updated_at timestamptz DEFAULT now()
     );
     CREATE TABLE zenithjoy.company_config_versions(company_id uuid,version integer,tenant_id uuid,snapshot jsonb,actor text, PRIMARY KEY(company_id,version));
+    CREATE TABLE zenithjoy.company_config_runs(company_id uuid,run_id text,version integer,tenant_id uuid,snapshot jsonb,task_inputs jsonb,source_run text,PRIMARY KEY(company_id,run_id));
     CREATE TABLE zenithjoy.company_config_changes(company_id uuid,version integer,actor text,source text,old_snapshot jsonb,new_snapshot jsonb,conflict jsonb);
   `));
   for (const filename of ['20261018_120000_customer_workspace_bindings.sql', '20261125_120000_company_source_sync.sql', '20261125_121000_notion_company_source_requests.sql']) {
@@ -54,7 +58,7 @@ beforeAll(async () => {
   }
   const runtime = {
     product_ids: ['p'], policy_id: 'policy', language: 'zh-CN', timezone: 'Asia/Shanghai',
-    routing: { line_key: 'line', profiles: ['phone'], feishu_base: 'old-base' },
+    routing: { line_key: 'yuesheng', profiles: ['phone'], feishu_base: 'old-base' },
     platform_accounts: [{ id: 'phone' }],
     search_strategy: { keywords: [{ id: 'k', word: '旧词', enabled: true }] },
     video_judgment: { instructions: '现役视频规则' },
@@ -62,7 +66,7 @@ beforeAll(async () => {
   };
   for (const [id, owner] of [[company, tenant], [unboundCompany, unboundTenant]]) {
     await fixture.pool.query(sql("INSERT INTO zenithjoy.tenant_company_profiles(company_id,tenant_id,products,wiki,runtime_config,config_version,config_status) VALUES ($1,$2,$3,$4,$5,3,'enabled')"),
-      [id, owner, '["原服务"]', { products: [{ id: 'p', name: '原服务' }], audiences: [{ id: 'a', name: '旧画像' }] }, runtime]);
+      [id, owner, '["原服务"]', { products: [{ id: 'p', name: '原服务' }], audiences: [{ id: 'a', name: '旧画像' }] }, owner === tenant ? runtime : { ...runtime, routing: { ...runtime.routing, line_key: 'unbound' } }]);
   }
   await fixture.pool.query(sql("INSERT INTO zenithjoy.customer_workspaces (company_id,tenant_id,platform,parent_id,template_version,status,state) VALUES ($1,$2,'notion',$3,1,'structure_ready',$4)"),
     [company, tenant, parent, { company_id: company, tenant_id: tenant, platform: 'notion', parent_id: parent, resources: { products: { id: 'products' }, audiences: { id: 'audiences' }, keywords: { id: 'keywords' } } }]);
@@ -152,7 +156,7 @@ it('首次记录 Notion 基线，改关键词后自动更新，重复读取不�
     if (args[1] === 'keywords') result[0].fields.名称 = keyword;
     return result;
   });
-  const snapshot = (row: Record<string, unknown>) => row;
+  const snapshot = (row: Record<string, unknown>) => ({ ...row, version: row.config_version });
   try {
     await syncNotionCompanyChanges(await workspace(), snapshot);
     expect((await profile()).config_version).toBe(version);
@@ -164,6 +168,15 @@ it('首次记录 Notion 基线，改关键词后自动更新，重复读取不�
     expect(applied.runtime_config.search_strategy.keywords[0].word).toBe(keyword);
     await syncNotionCompanyChanges(await workspace(), snapshot);
     expect((await profile()).config_version).toBe(version + 1);
+    const runtimePool = {
+      async connect() {
+        const client = await fixture.pool!.connect();
+        return { query: (query: string, args?: unknown[]) => client.query(sql(query), args), release: () => client.release() };
+      },
+    };
+    const skillInputs = await freezeCompanyConfig(runtimePool, { lineHint: 'yuesheng', runId: 'after-notion-sync', step: '101' });
+    expect(skillInputs.version).toBe(version + 1);
+    expect(skillInputs.runtime_config.search_strategy.keywords[0].word).toBe(keyword);
     const history = await fixture.pool!.query(sql('SELECT source,actor FROM zenithjoy.company_config_changes WHERE company_id=$1 AND version=$2'), [company, version + 1]);
     expect(history.rows).toEqual([{ source: 'notion', actor: 'notion:auto-sync' }]);
     keyword = '';
