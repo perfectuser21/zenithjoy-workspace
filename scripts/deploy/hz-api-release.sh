@@ -231,15 +231,14 @@ def read_state():
         return None
     safe_path(STATE_FILE, stat.S_ISREG)
     state = json.loads(STATE_FILE.read_bytes())
-    require(isinstance(state, dict) and set(state) == {'current', 'previous', 'schema', 'pending'} and
-            valid(DIGEST, state.get('schema')), 'invalid release ledger')
+    require(isinstance(state, dict) and set(state) == {'current', 'previous', 'schema', 'config', 'pending'} and
+            valid(DIGEST, state.get('schema')) and valid(DIGEST, state.get('config')), 'invalid release ledger')
     validate_release(state['current'])
     if state['previous'] is not None:
         validate_release(state['previous'])
     if state['pending'] is not None:
         pending = state['pending']
-        require(isinstance(pending, dict) and set(pending) == {'target', 'config'} and
-                valid(DIGEST, pending.get('config')), 'invalid pending activation journal')
+        require(isinstance(pending, dict) and set(pending) == {'target'}, 'invalid pending activation journal')
         validate_release(pending['target'])
     return state
 
@@ -291,7 +290,7 @@ def verify_saved_schema(state, schema):
 def recover(state, config):
     pending = state['pending']
     ensure_config(config)
-    require(config == pending['config'], 'production Compose configuration differs from pending activation')
+    require(config == state['config'], 'production Compose configuration differs from pending activation')
     verify_saved_schema(state, hash_bytes(json_bytes(live_migrations())))
     current = state['current']
     active = available_container()
@@ -310,7 +309,7 @@ def activate(state, target, config):
     ensure_config(config)
     retain(state['current'])
     retain(target)
-    pending = {**state, 'pending': {'target': target, 'config': config}}
+    pending = {**state, 'pending': {'target': target}}
     write_json(STATE_FILE, pending)
     try:
         replace_api(target)
@@ -354,6 +353,7 @@ def release(action, arguments):
     schema = hash_bytes(json_bytes(actual))
     if state is not None:
         verify_saved_schema(state, schema)
+        require(config == state['config'], 'production Compose configuration differs from verified release')
 
     if state and state['pending']:
         recover(state, config)
@@ -363,7 +363,7 @@ def release(action, arguments):
     if action == 'promote' or (action == 'check' and arguments):
         verify_candidate_migrations(candidate_migrations(), actual)
     current = check_running(state)
-    state = state or {'current': current, 'previous': None, 'schema': schema, 'pending': None}
+    state = state or {'current': current, 'previous': None, 'schema': schema, 'config': config, 'pending': None}
 
     if action == 'check':
         verify_live(current)

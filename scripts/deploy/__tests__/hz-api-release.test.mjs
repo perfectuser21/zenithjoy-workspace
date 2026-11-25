@@ -40,7 +40,7 @@ if (program === 'curl') {
 } else if (args[0] === 'compose' && args.includes('config')) {
   print({services: {api: {
     container_name: service, image: x.oldImage, networks: {egress: null, production_db: null},
-    environment: {DATABASE_HOST: 'db', DATABASE_PORT: '5432', DATABASE_NAME: 'zenithjoy', DATABASE_USER: 'zenithjoy_prod'},
+    environment: {APP_RUNTIME_POLICY: x.runtimePolicy ?? 'baseline', DATABASE_HOST: 'db', DATABASE_PORT: '5432', DATABASE_NAME: 'zenithjoy', DATABASE_USER: 'zenithjoy_prod'},
     ports: [{target: 5200, published: '5200', host_ip: '127.0.0.1', protocol: 'tcp'}],
   }}, networks: {
     egress: {name: 'zenithjoy-cn-production-api-egress'},
@@ -222,5 +222,13 @@ test('回滚前检测 schema 漂移，保留当前容器', t => {
   success(f.promote());
   f.update({ migrations: migrations + '20260103_unreviewed.sql\n' });
   assert.match(f.run(['rollback', oldSha]).stderr, /schema/i);
+  assert.deepEqual(f.read().replacements, [nextImage]);
+});
+
+test('回滚前检测编排配置漂移，保留当前容器', t => {
+  const f = fixture(t);
+  success(f.promote());
+  f.update({ runtimePolicy: 'changed-outside-release' });
+  assert.match(f.run(['rollback', oldSha]).stderr, /Compose configuration differs/i);
   assert.deepEqual(f.read().replacements, [nextImage]);
 });
