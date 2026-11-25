@@ -140,6 +140,7 @@ it('接到 Notion 明确提交后写入版本。写回丢失时只补回执，�
 });
 
 it('首次记录 Notion 基线，改关键词后自动更新，重复读取不新增版本', async () => {
+  await fixture.pool!.query(sql('ALTER TABLE zenithjoy.company_source_sync RENAME TO console_drafts_not_installed'));
   await fixture.pool!.query(sql(`UPDATE zenithjoy.customer_workspaces
     SET state=jsonb_set(state,'{notion_auto_sync}','{"enabled":true}') WHERE company_id=$1`), [company]);
   const workspace = () => fixture.pool!.query(sql('SELECT * FROM zenithjoy.customer_workspaces WHERE company_id=$1'), [company]).then(result => result.rows[0]);
