@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CompanyProfilePage from './CompanyProfilePage';
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
-vi.mock('../api/company-profile.api', () => ({ getCompanyProfile: mocks.get, updateCompanyProfile: mocks.put }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), getSettings: vi.fn(), saveSettings: vi.fn() }));
+vi.mock('../api/company-profile.api', () => ({ getCompanyProfile: mocks.get, updateCompanyProfile: mocks.put, getOutreachSettings: mocks.getSettings, saveOutreachSettings: mocks.saveSettings }));
 const data = { company_id:'company-a', company_name:'甲公司', city:'西安', industry:'教育', description:'', products:[], key_advantages:[], customer_problem:'', customer_portrait:'', qa_list:[], wiki:{markdown:'# 甲资料\n<script>危险</script>'}, runtime_config:{language:'zh-CN'}, config_version:2, config_status:'draft', config_owner:'负责人', source_evidence:[{source:'飞书主档案'}], sync_status:{notion:{status:'unmapped'},feishu:{status:'source_retained'}} };
 beforeEach(()=>{ vi.clearAllMocks(); mocks.get.mockResolvedValue(data); mocks.put.mockResolvedValue({ config_version:3, profile:{...data, config_version:3} }); });
 describe('公司Wiki页面',()=>{
@@ -68,4 +68,19 @@ describe('公司Wiki在深色父背景中的可读性',()=>{
  it('读取失败提示及重试操作在深色父背景中可读',async()=>{
   mocks.get.mockRejectedValueOnce(new Error('租户未关联公司'));renderOnDarkShell();expectReadable(await screen.findByRole('alert'));expectReadable(screen.getByRole('button',{name:'重新读取公司资料'}));
  });
+});
+
+it('公司信息可以独立保存触达设置并显示新版本', async () => {
+ mocks.getSettings.mockResolvedValue(null);
+ mocks.saveSettings.mockResolvedValue({daily_cap:50,start_local:'09:00',end_local:'18:00',paused:true,revision:1});
+ render(<CompanyProfilePage/>);
+ fireEvent.click(await screen.findByRole('tab',{name:'触达设置'}));
+ fireEvent.change(await screen.findByLabelText('每日发送上限'),{target:{value:'50'}});
+ fireEvent.change(screen.getByLabelText('开始时间'),{target:{value:'09:00'}});
+ fireEvent.change(screen.getByLabelText('结束时间'),{target:{value:'18:00'}});
+ fireEvent.click(screen.getByLabelText('暂停新增发送'));
+ fireEvent.click(screen.getByRole('button',{name:'保存触达设置'}));
+ await waitFor(()=>expect(mocks.saveSettings).toHaveBeenCalledWith({daily_cap:50,start_local:'09:00',end_local:'18:00',paused:true,revision:0}));
+ expect(await screen.findByText(/下一次运行使用版本 1/)).toBeInTheDocument();
+ expect(mocks.put).not.toHaveBeenCalled();
 });

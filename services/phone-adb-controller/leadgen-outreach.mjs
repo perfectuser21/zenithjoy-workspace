@@ -54,7 +54,7 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
   // 先消费本次尝试额度，再提交原订单永久预留。回复丢失也不允许第二次手机发送。
   mkdirSync(stateDir,{recursive:true});writeFileSync(current.path,String(current.value+1),{mode:0o600});chmodSync(current.path,0o600);
   prepared=true;
-  const permit=await queue('prepare_outreach',{id:order.id,profile,sender_douyin_id:state.account,outreach_mode:state.outreach_mode,outreach_scope:state.outreach_scope,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),target_douyin_id:order.douyin_id,profile_url:order.profile_url});
+  const permit=await queue('prepare_outreach',{id:order.id,previous_attempts:current.value,profile,sender_douyin_id:state.account,outreach_mode:state.outreach_mode,outreach_scope:state.outreach_scope,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),target_douyin_id:order.douyin_id,profile_url:order.profile_url});
   if(permit?.prepared!==true||permit.order?.id!==order.id)throw Error('发送永久预留回执未知');
   const eid=`${run}-a2-dm-1`;
   const stdout=await phone('private-message-send',state.account,order.douyin_id,Buffer.from(order.message).toString('base64'),eid,order.profile_url);

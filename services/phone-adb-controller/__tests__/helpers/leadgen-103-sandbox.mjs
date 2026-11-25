@@ -28,6 +28,7 @@ const route=routes.routeOf(scope.line);const pending=[];let before=null;const cl
  if(sql==='BEGIN'){pending.length=0;before=structuredClone({rows:state.rows,leads:state.leads,outbox:state.outbox});return {rows:[]};}
  if(sql==='COMMIT'){for(const fn of pending)fn();pending.length=0;before=null;return {rows:[]};}
  if(sql==='ROLLBACK'){pending.length=0;if(before){rows.splice(0,rows.length,...before.rows);state.leads=before.leads;state.outbox=before.outbox;}before=null;return {rows:[]};}
+ if(sql.includes('company_outreach_settings'))return {rows:[{company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,daily_cap:80,start_local:'00:00',end_local:'00:00',paused:false}]};
  if(sql.includes('tenant_company_profiles')&&sql.includes('company_id FROM'))return {rows:[{company_id:snapshot.company_id}]};
  if(sql.includes('company_config_runs')&&sql.includes('company_id=$1'))return {rows:[{snapshot,source_run:state.source_run,task_inputs:{}}]};
  if(sql.includes('company_config_runs'))return {rows:[{snapshot,run_id:args[0],company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version}]};
@@ -127,7 +128,7 @@ try{
    lead_ids:mode==='mark_readback'?state.leads.map(l=>l.id):undefined}:
   mode==='bridge_readback'?{ids:state.outbox.map(r=>r.id)}:
   mode==='claim_outreach'?{profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',limit:1,outreach_scope:outreachScope}:
-  mode==='prepare_outreach'?{id:state.claim?.id,profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',outreach_scope:outreachScope,
+  mode==='prepare_outreach'?{id:state.claim?.id,previous_attempts:0,profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',outreach_scope:outreachScope,
    script_id:state.claim?.script_id,script_version:state.claim?.script_version,message_sha256:state.claim?.message?hash(state.claim.message):null,
    target_douyin_id:state.claim?.douyin_id,profile_url:state.claim?.profile_url}:{};
  const input={kind:mode.endsWith('_outreach')&&mode!=='bridge_outreach'?'outreach':'queue',

@@ -39,3 +39,9 @@ npm test \
   --workspace @zenithjoy/api \
   -- \
   src/services/company-source-sync.test.ts -t '独立同步只核对工作台归属'
+
+# 104 的独立运营设置以 HTTP 管理权限、冲突保护和实时执行读取为验收边界。
+# 隔离夹具不会操作真实手机、订单或租户。
+npm test --workspace @zenithjoy/api -- src/routes/company-outreach-settings.test.ts
+node --test \
+  "$ROOT/services/phone-adb-controller/__tests__/outreach-settings.test.mjs"

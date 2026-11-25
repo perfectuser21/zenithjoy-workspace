@@ -2,7 +2,7 @@
 const fs=require('fs');
 const crypto=require('crypto');
 const {routeOf}=require('./line-routes.js');
-const {computeDailyCap}=require('./dm-rate-ramp-lib.js');
+const {computeDailyCap,readOutreachSettings,assertOutreachWindow}=require('./dm-rate-ramp-lib.js');
 const {txt}=require('./next-outreach-lib.js');
 const lib=require('./next-outreach-lib.js');
 const {validateOutreachScope,resolveOutreachMode}=require('./leadgen-outreach-scope.js');
@@ -13,13 +13,15 @@ function sender(route,profile,id){if(!route.profiles.includes(profile)||!validId
 async function request(url,opts,fetcher,deadlineAt=Infinity){const remaining=deadlineAt-Date.now();if(remaining<=0)throw Error('BRIDGE_DEADLINE');const r=await fetcher(url,{...opts,signal:AbortSignal.timeout(Math.max(1,Math.min(15000,Math.floor(remaining))))});if(!r.ok)throw Error('触达批准话术HTTP失败');const b=await r.json();if(b.code!==0)throw Error('触达批准话术API失败');return b;}
 
 // 仅中央端读取1Password导出的私有账号缓存；设备RPC不能提交自拟模板。
-async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readFileSync,now=new Date()}={}){
+async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readFileSync,now=new Date(),pool}={}){
  const route=routeOf(input.line);sender(route,input.profile,input.sender_douyin_id);
+ const settings=pool?await readOutreachSettings(pool,route.key):null;
+ assertOutreachWindow(settings,now);
  const cache=env.LEADGEN_FEISHU_CREDENTIALS||require('path').join(require('os').homedir(),'.credentials/leadgen-feishu-accounts.json');
  const acc=JSON.parse(read(cache,'utf8'))[route.account];
  if(!acc?.appId||!acc.appSecret)throw Error('触达批准话术账号绑定缺失');
- const ramp=JSON.parse(read(require('path').join(__dirname,'config/leadgen-outreach-rate-ramp.json'),'utf8'))[input.profile];
- if(!ramp)throw Error('触达日上限配置缺失');const cap=computeDailyCap(ramp,now);
+ const ramp=settings?null:JSON.parse(read(require('path').join(__dirname,'config/leadgen-outreach-rate-ramp.json'),'utf8'))[input.profile];
+ if(!settings&&!ramp)throw Error('触达日上限配置缺失');const cap=settings?.daily_cap??computeDailyCap(ramp,now);
  if(!Number.isSafeInteger(cap)||cap<1||cap>1000)throw Error('触达日上限无效');
  const token=(await request('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:acc.appId,app_secret:acc.appSecret})},fetcher)).tenant_access_token;
  if(!token)throw Error('触达话术授权失败');
@@ -92,7 +94,7 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
    const qualified=new Set(await (eligibleOrders||((route,rows,input)=>require('./leadgen-outreach-bridge.js').eligibleOrders(route,rows,input,{pool,freezeCompanyConfig})))(route,target,input));
    if(scope&&!qualified.has(scope.record_id))throw Error('OUTREACH_SCOPE_QUALIFICATION_NOT_VERIFIED');
    if(!qualified.size)return [];
-   const p=await policy(input);
+   const p=await policy(input,{pool});
    const reserved=lib.reservedRecipientSet(all);
    const rows=target.filter(r=>qualified.has(r.record_id)&&txt(r.fields?.['状态'])==='待触达'&&lib.classifyPending(r.fields)==='ok'&&lib.gradeAllowed(lib.leadGrade(r.fields),route.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
    if(scope&&(!rows.length||lib.extractLead(rows[0].fields).dyid.toLowerCase()!==scope.target_douyin_id.toLowerCase()))throw Error('OUTREACH_SCOPE_ORDER_NOT_READY');
@@ -117,6 +119,11 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
    if(!policyReady)throw Error('POLICY_PREPARE_NOT_VERIFIED');
    const same=fields=>txt(fields['状态'])==='触达中'&&txt(fields['实际分发号'])===input.profile+'('+input.sender_douyin_id+')'&&txt(fields['话术ID'])===input.script_id&&txt(fields['话术版本'])===input.script_version&&hash(txt(fields['话术内容']))===input.message_sha256&&lib.extractLead(fields).dyid.toLowerCase()===String(input.target_douyin_id||'').toLowerCase()&&lib.extractLead(fields).profileUrl===input.profile_url;
    if(reply!==marker('claim',run,sourceCommit)||!same(f))throw Error('触达无首次发送许可证或订单已变化');
+   if(pool){
+    const settings=await readOutreachSettings(pool,route.key);
+    assertOutreachWindow(settings);
+    if(settings&&(!Number.isSafeInteger(input.previous_attempts)||input.previous_attempts<0||input.previous_attempts>=settings.daily_cap))throw Error('OUTREACH_DAILY_CAP_OR_COUNT_INVALID');
+   }
    const prepared=marker('prepared',run,sourceCommit);await api.put(input.id,{'回复结果':prepared});const back=await api.get(input.id);
    if(txt(back?.fields?.['回复结果'])!==prepared||!same(back?.fields||{}))throw Error('触达永久预留回执未知');
    return {prepared:true,order:{id:input.id}};
