@@ -27,3 +27,9 @@ npm test \
   -- \
   src/routes/company-source-sync.test.ts src/services/company-source-import.test.ts \
   src/services/company-source-sync.test.ts src/services/notion-company-source-worker.test.ts
+
+# 自动同步由开户服务登记现有 Notion 三表，拒绝匿名变更租户的开关。
+npm test \
+  --workspace @zenithjoy/api \
+  -- \
+  src/routes/customer-workspaces.test.ts

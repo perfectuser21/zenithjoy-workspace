@@ -95,6 +95,31 @@ customerWorkspacesRouter.post('/:companyId/notion-source-sync', async (req, res)
     res.status(202).json({ success: true, data: binding });
   } catch { res.status(503).json({ success: false, error: 'NOTION_SYNC_BINDING_FAILED' }); }
 });
+customerWorkspacesRouter.post('/:companyId/notion-auto-sync', async (req, res) => {
+  const tenant = req.body?.tenant_id, enabled = req.body?.enabled;
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  if (typeof tenant !== 'string' || !uuid.test(tenant) || !uuid.test(req.params.companyId) || typeof enabled !== 'boolean') {
+    res.status(400).json({ success: false, error: 'INVALID_NOTION_AUTO_SYNC_BINDING' }); return;
+  }
+  try {
+    const result = await pool.query(`WITH configured AS (
+      UPDATE zenithjoy.customer_workspaces SET state=jsonb_set(state,'{notion_auto_sync}',jsonb_build_object('enabled',$3::boolean)),updated_at=now()
+      WHERE company_id=$1 AND tenant_id=$2 AND platform='notion' AND status='structure_ready'
+        AND (state->'notion_auto_sync'->'enabled') IS DISTINCT FROM to_jsonb($3::boolean)
+      RETURNING company_id,tenant_id,platform,state
+    )
+    INSERT INTO zenithjoy.customer_workspace_events(company_id,tenant_id,platform,actor,state)
+    SELECT company_id,tenant_id,platform,'internal-service:notion-auto-sync',state FROM configured
+    RETURNING company_id`, [req.params.companyId, tenant, enabled]);
+    if (!result.rowCount) {
+      const existing = await pool.query(`SELECT company_id FROM zenithjoy.customer_workspaces
+        WHERE company_id=$1 AND tenant_id=$2 AND platform='notion' AND status='structure_ready'
+          AND state->'notion_auto_sync'->'enabled'=to_jsonb($3::boolean)`, [req.params.companyId, tenant, enabled]);
+      if (!existing.rowCount) { res.status(409).json({ success: false, error: 'NOTION_WORKSPACE_NOT_BOUND' }); return; }
+    }
+    res.status(202).json({ success: true, data: { enabled } });
+  } catch { res.status(503).json({ success: false, error: 'NOTION_AUTO_SYNC_BINDING_FAILED' }); }
+});
 customerWorkspacesRouter.post('/:companyId/reconcile', async (req, res) => {
   const body = req.body ?? {};
   if (!['notion', 'feishu'].includes(body.platform) || typeof body.expected_updated_at !== 'string') {

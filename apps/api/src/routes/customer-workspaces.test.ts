@@ -63,6 +63,16 @@ describe('客户工作台内部开户边界', () => {
     const result = await request(app).post(`/workspaces/${company}/bind`).set('x-internal-token', 'test-service').send({ platform: 'notion', parent_id: 'aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa', tenant_id: tenant, approved_parent: true });
     expect(result.status).toBe(409); expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('COMMIT'))).toBe(false);
   });
+  it('自动同步开关只可由开户服务按公司和租户登记', async () => {
+    const endpoint = `/workspaces/${company}/notion-auto-sync`;
+    expect((await request(app).post(endpoint).send({ tenant_id: tenant, enabled: true })).status).toBe(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+    mocks.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ company_id: company }] });
+    const result = await request(app).post(endpoint).set('x-internal-token', 'test-service').send({ tenant_id: tenant, enabled: true });
+    expect(result.status).toBe(202);
+    expect(result.body.data.enabled).toBe(true);
+    expect(mocks.query.mock.calls[0][1]).toEqual([company, tenant, true]);
+  });
   it('凭据引用不能指向任意服务环境变量或另一个平台', async () => {
     const result = await request(app).post(`/workspaces/${company}/bind`).set('x-internal-token', 'test-service').send({ platform: 'notion', parent_id: 'aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa', tenant_id: tenant, approved_parent: true, credential_ref: 'ZENITHJOY_INTERNAL_TOKEN' });
     expect(result.status).toBe(400); expect(mocks.connect).not.toHaveBeenCalled();

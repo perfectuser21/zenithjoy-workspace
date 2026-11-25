@@ -26,7 +26,7 @@ vi.mock('../../src/middleware/tenant-context', () => ({
 vi.mock('../../src/services/customer-workspace-adapters', () => ({
   createWorkspaceAdapter: () => ({ preflight: async () => {}, readRows: fixture.readRows, readSyncRequests: fixture.readSyncRequests, writeSyncReceipt: fixture.writeSyncReceipt }),
 }));
-import { syncNotionCompanyWorkspace } from '../../src/services/notion-company-source-worker';
+import { syncNotionCompanyChanges, syncNotionCompanyWorkspace } from '../../src/services/notion-company-source-worker';
 import { registerCompanySourceSync } from '../../src/routes/company-source-sync';
 
 const tenant = randomUUID(), company = randomUUID(), unboundTenant = randomUUID(), unboundCompany = randomUUID();
@@ -137,4 +137,36 @@ it('接到 Notion 明确提交后写入版本。写回丢失时只补回执，�
   expect(fixture.writeSyncReceipt).toHaveBeenCalledWith(deniedId.replaceAll('-', ''), false, expect.stringContaining('资料负责人'));
   const receipts = await fixture.pool!.query(sql('SELECT success FROM zenithjoy.notion_company_source_requests ORDER BY success'));
   expect(receipts.rows).toEqual([{ success: false }, { success: true }]);
+});
+
+it('首次记录 Notion 基线，改关键词后自动更新，重复读取不新增版本', async () => {
+  await fixture.pool!.query(sql(`UPDATE zenithjoy.customer_workspaces
+    SET state=jsonb_set(state,'{notion_auto_sync}','{"enabled":true}') WHERE company_id=$1`), [company]);
+  const workspace = () => fixture.pool!.query(sql('SELECT * FROM zenithjoy.customer_workspaces WHERE company_id=$1'), [company]).then(result => result.rows[0]);
+  const version = (await profile()).config_version;
+  const existingImplementation = fixture.readRows.getMockImplementation()!;
+  let keyword = '测试现有 Notion 快照';
+  fixture.readRows.mockImplementation(async (...args) => {
+    const result = await existingImplementation(...args);
+    if (args[1] === 'keywords') result[0].fields.名称 = keyword;
+    return result;
+  });
+  const snapshot = (row: Record<string, unknown>) => row;
+  try {
+    await syncNotionCompanyChanges(await workspace(), snapshot);
+    expect((await profile()).config_version).toBe(version);
+    keyword = '新版市场关键词';
+    const before = await workspace();
+    await Promise.all([syncNotionCompanyChanges(before, snapshot), syncNotionCompanyChanges(before, snapshot)]);
+    const applied = await profile();
+    expect(applied.config_version).toBe(version + 1);
+    expect(applied.runtime_config.search_strategy.keywords[0].word).toBe(keyword);
+    await syncNotionCompanyChanges(await workspace(), snapshot);
+    expect((await profile()).config_version).toBe(version + 1);
+    const history = await fixture.pool!.query(sql('SELECT source,actor FROM zenithjoy.company_config_changes WHERE company_id=$1 AND version=$2'), [company, version + 1]);
+    expect(history.rows).toEqual([{ source: 'notion', actor: 'notion:auto-sync' }]);
+    keyword = '';
+    await expect(syncNotionCompanyChanges(await workspace(), snapshot)).rejects.toMatchObject({ status: 422 });
+    expect((await profile()).config_version).toBe(version + 1);
+  } finally { fixture.readRows.mockImplementation(existingImplementation); }
 });
