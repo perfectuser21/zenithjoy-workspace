@@ -37,7 +37,8 @@ export async function readYueshengPreviousClearance(currentTask, { read = mainte
     && uuid.test(review.pending_action_id ?? '') && sha.test(review.receipt_sha256 ?? ''), 'PREVIOUS_CLEARANCE');
   const value = await read('/pending-actions/' + review.pending_action_id);
   const action = value?.action ?? value;
-  need(action?.id === review.pending_action_id && action.status === 'approved', 'PREVIOUS_CLEARANCE');
+  need(action?.id === review.pending_action_id && action.status === 'approved' && action.action_type === 'owner_decision'
+    && action.params?.task_id === oldTaskId && same(action.execution_result, review), 'PREVIOUS_CLEARANCE');
   return { task_id: task.id, run_id: review.run_id, review_event_id: review.review_event_id,
     settlement_sha256: digest(review), pending_action_sha256: digest(action) };
 }

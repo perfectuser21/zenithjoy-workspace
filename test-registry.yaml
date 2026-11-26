@@ -11624,6 +11624,42 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；通过隔离 ADB socket 复核悦升云机物理身份、两端监听与同一维护租约"
 
+  - id: phone-device-epoch-fence-yuesheng-execution
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-execution.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；验证切换通过已绑定的两条 Mac Studio ADB 路由及实时授权"
+
+  - id: phone-device-epoch-fence-yuesheng-issuer
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-issuer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；验证原始迁移回执与 CAS 释放后才能签发工作流准入"
+
+  - id: phone-device-epoch-fence-yuesheng-local-lock
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-local-lock.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；验证同一云手机的 TCP 地址和物理设备号共用迁移保护"
+
+  - id: phone-yuesheng-adb-daemon-binding
+    path: services/phone-adb-controller/__tests__/yuesheng-adb-daemon-binding.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / public-code-phone-darwin-test / python3 -B services/phone-adb-controller/__tests__/yuesheng-adb-daemon-binding.test.py
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；通过隔离 Mac 进程和端口验证监听器、父进程和锁身份"
+
   - id: leadgen-activity-skill-public-source
     path: services/phone-adb-controller/__tests__/activity-skill-public-source.test.mjs
     type: unit
