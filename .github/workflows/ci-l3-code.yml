@@ -266,7 +266,8 @@ jobs:
             fi
           done
           if ((${#missing[@]})); then
-            timeout 300s bash .github/workflows/scripts/prepare-openclaw-os-packages.sh --runner-sources "${RUNNER_TEMP:-/tmp}" /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt "${missing[@]}"
+            # APT's _apt sandbox needs to traverse the path to its mirror cache.
+            timeout 300s bash .github/workflows/scripts/prepare-openclaw-os-packages.sh --runner-sources /tmp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt "${missing[@]}"
           fi
           for tool in zsh xmllint ffmpeg; do
             echo "PREFLIGHT_TOOL $tool path=$(command -v "$tool")"

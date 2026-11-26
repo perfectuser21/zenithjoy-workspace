@@ -23,7 +23,7 @@ function invoke(t,failed='',present=[],broken='',expired=false){
  validate(workflow);const top=mkdtempSync(join(tmpdir(),'ci-dependency-preflight-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const trace=join(top,'trace');
  const put=(name,script)=>writeFileSync(join(top,name),'#!/bin/sh\n'+script+'\n',{mode:0o755});
- put('timeout','printf "timeout %s\\n" "$*" >> "$DEPENDENCY_TRACE"; case "$*" in *"prepare-openclaw-os-packages.sh"*) [ "$DEPENDENCY_EXPIRED" != 1 ] || exit 124;; esac; shift; exec "$@"');put('sudo','exec "$@"');
+ put('timeout','printf "timeout %s\\n" "$*" >> "$DEPENDENCY_TRACE"; case "$*" in *"prepare-openclaw-os-packages.sh"*) [ "$DEPENDENCY_EXPIRED" != 1 ] || exit 124;; esac; shift; exec "$@"');put('sudo','if [ "$1" = -u ]; then [ "$2" = _apt ] && [ "$DEPENDENCY_FAILED" != sandbox ]; exit; fi; exec "$@"');
  put('env','exec /usr/bin/env "$@"');
  const source=join(top,'ubuntu.sources'),mirrors=join(top,'apt-mirrors.txt');
  writeFileSync(source,'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates noble-backports\nComponents: main universe restricted multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n');writeFileSync(mirrors,'https://archive.ubuntu.com/ubuntu/\n');
@@ -93,4 +93,11 @@ test('缺工具时同一签名runner来源只刷新一次并为其安装，已�
  const present=invoke(t,'',['zsh','xmllint','ffmpeg']);
  assert.equal(present.status,0,present.output);
  assert.doesNotMatch(present.trace,/^apt /m);
+});
+
+test('软件包准备拒绝 _apt 无法访问的工作目录，避免退回 root 下载',t=>{
+ const r=invoke(t,'sandbox');
+ assert.equal(r.status,1,r.output);
+ assert.match(r.output,/APT_SANDBOX_PATH_INACCESSIBLE/);
+ assert.doesNotMatch(r.trace,/^apt /m);
 });

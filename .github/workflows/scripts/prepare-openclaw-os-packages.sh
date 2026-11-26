@@ -61,6 +61,10 @@ isolated=(-o "Dir::Etc::sourcelist=$work/ubuntu.sources" -o Dir::Etc::sourcepart
 original_isolated=(-o "Dir::Etc::sourcelist=$work/original.sources" -o Dir::Etc::sourceparts=- -o "Dir::State::lists=$work/original-lists")
 # Use the runner's regional mirror preferences for both signed metadata and packages.
 if "$runner_sources"; then
+  if ! sudo -u _apt /usr/bin/test -x "$work/original-lists" || ! sudo -u _apt /usr/bin/test -r "$mirror_file"; then
+    echo 'APT_SANDBOX_PATH_INACCESSIBLE' >&2
+    exit 1
+  fi
   stage original-index sudo env LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" -o APT::Update::Error-Mode=any update
   stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" --no-remove install -y "$@"
   echo 'PREFLIGHT_APT_DONE'
