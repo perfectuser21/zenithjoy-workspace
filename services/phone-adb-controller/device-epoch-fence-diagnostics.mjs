@@ -16,6 +16,7 @@ export const DIAGNOSTIC_COMMANDS=Object.freeze({
  window:'exec /system/bin/dumpsys window windows'
 });
 export const SUPPLEMENTAL_DIAGNOSTIC_COMMANDS=Object.freeze({
+ hardware_serial:'exec /system/bin/getprop ro.serialno',
  activity_starter:'exec /system/bin/dumpsys activity starter',
  activity_processes:'exec /system/bin/dumpsys activity -a processes',
  process_details:'exec /system/bin/toybox ps -A -o UID,PID,PPID,TTY,STAT,WCHAN,NAME,ARGS',
