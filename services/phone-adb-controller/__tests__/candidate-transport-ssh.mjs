@@ -16,10 +16,14 @@ if(presence&&host==='xian-m4'&&c.mode.startsWith('presence-connect-')){
  if(c.mode==='presence-connect-non255'){console.error('fixture nontransport rejection');process.exit(75);}
  if(c.mode==='presence-connect-output'){process.stdout.write('{"protocol":"candidate_presence_v1","state":"absent"}');process.exit(255);}
  if(c.mode==='presence-connect-always'||count===0){await new Promise(resolve=>setTimeout(resolve,200));console.error('ssh: connect to host fixture port 22: Operation timed out');process.exit(255);}
- if(c.mode==='presence-connect-hang'){await new Promise(resolve=>setTimeout(resolve,60000));process.exit(255);}
+ if(c.mode==='presence-connect-hang'){await delay(5000);process.exit(255);}
  if(c.mode==='presence-connect-bad-json'){process.stdout.write('{truncated');process.exit(0);}
  if(c.mode==='presence-connect-identity'){process.stdout.write(JSON.stringify({protocol:'candidate_presence_v1',state:'present',identity:{source_commit:'other'}}));process.exit(0);}
  if(c.mode==='presence-connect-pending')mkdirSync(join(home,'.local/share/zenithjoy/phone-candidates','.'+c.sha+'.foreign'),{recursive:true});
+}
+if(presence&&existsSync(final)){
+ if((host==='mmv'&&c.mode==='presence-read-mmv')||(host==='xian-m4'&&c.mode==='presence-read-slow'))await delay(1850);
+ if(host==='xian-m4'&&c.mode==='presence-read-hang')await delay(5000);
 }
 if((install&&c.mode==='install-255')||(collect&&c.mode==='collect-255')||(manifest&&c.mode==='manifest-255')){console.error('fixture mutation/collector transport failed');process.exit(255);}
 if(presence&&c.mode==='bad-json'){process.stdout.write('{truncated');process.exit(0);}
