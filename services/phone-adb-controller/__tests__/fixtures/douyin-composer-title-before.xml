@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Minimized from xiaolongxia text-input-20261126094212-65625-before.xml. -->
+<hierarchy rotation="0">
+  <node package="com.ss.android.ugc.aweme" class="android.widget.FrameLayout" bounds="[0,0][1200,2664]" enabled="true" password="false" focused="false">
+    <node package="com.ss.android.ugc.aweme" class="android.widget.ScrollView" resource-id="com.ss.android.ugc.aweme:id/jt1" bounds="[0,121][1200,2360]" enabled="true" password="false" focused="false">
+      <node package="com.ss.android.ugc.aweme" class="android.widget.LinearLayout" resource-id="com.ss.android.ugc.aweme:id/qkj" bounds="[0,311][1200,1393]" enabled="true" password="false" focused="false">
+        <node package="com.ss.android.ugc.aweme" class="android.widget.EditText" resource-id="com.ss.android.ugc.aweme:id/ij+" bounds="[52,363][1068,465]" enabled="true" password="false" focusable="true" focused="true" text="添加标题"/>
+        <node package="com.ss.android.ugc.aweme" class="android.widget.TextView" resource-id="com.ss.android.ugc.aweme:id/44k" bounds="[1081,372][1174,456]" enabled="true" password="false" focused="false" text="0/20"/>
+        <node package="com.ss.android.ugc.aweme" class="android.widget.EditText" resource-id="com.ss.android.ugc.aweme:id/h94" bounds="[52,465][1174,1223]" enabled="true" password="false" focusable="true" focused="false" text="添加作品描述.."/>
+      </node>
+    </node>
+    <node package="com.ss.android.ugc.aweme" class="android.widget.FrameLayout" bounds="[0,2451][1200,2664]" enabled="true" password="false" focused="false">
+      <node package="com.ss.android.ugc.aweme" class="android.widget.FrameLayout" resource-id="com.ss.android.ugc.aweme:id/t5l" bounds="[691,2484][1174,2628]" enabled="true" password="false" focused="false" content-desc="发作品">
+        <node package="com.ss.android.ugc.aweme" class="android.widget.TextView" resource-id="com.ss.android.ugc.aweme:id/wov" bounds="[819,2484][1045,2628]" enabled="true" password="false" focused="false" text="发作品"/>
+      </node>
+    </node>
+  </node>
+</hierarchy>
