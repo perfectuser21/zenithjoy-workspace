@@ -70,7 +70,12 @@ export function reviewSource({runtimeRoot=here,repositoryRoot=resolve(here,'../.
  else{git=(...args)=>execFileSync('git',['-C',repositoryRoot,...args],{encoding:'utf8',timeout:10000,stdio:['ignore','pipe','pipe']});commit=git('rev-parse','HEAD').trim();}
  const files={},queue=['device-epoch-fence-review.mjs'];
  while(queue.length){const n=queue.shift();if(Object.hasOwn(files,'services/phone-adb-controller/'+n))continue;need(!n.startsWith('../')&&queue.length<512,'REVIEW_IMPORT_SCOPE');const path='services/phone-adb-controller/'+n,b=bytes(join(runtimeRoot,n));
-  if(manifest){const rows=manifest.files.filter(r=>r.path===path);need(rows.length===1&&rows[0].deployed_path===n&&rows[0].content_sha256===sha(b),'REVIEW_SOURCE_BYTES');}else need(b.equals(Buffer.from(git('show',commit+':'+path))),'REVIEW_SOURCE_DIRTY');files[path]=sha(b);
+  if(manifest){
+   // A candidate may also archive this repository path under a frozen revision.
+   const rows=manifest.files.filter(row=>row.path===path&&row.deployed_path===n);
+   need(rows.length===1&&rows[0].content_sha256===sha(b),'REVIEW_SOURCE_BYTES');
+  }else need(b.equals(Buffer.from(git('show',commit+':'+path))),'REVIEW_SOURCE_DIRTY');
+  files[path]=sha(b);
   for(const match of b.toString().matchAll(/(?:from\s*|import\s*\(\s*|import\s*|new URL\(\s*)['"](\.[^'"]+)['"]/g)){const dependency=resolve(dirname(join(runtimeRoot,n)),match[1]);need(dependency.startsWith(runtimeRoot+'/'),'REVIEW_IMPORT_SCOPE');queue.push(dependency.slice(runtimeRoot.length+1));}
  }return {commit,files};
 }
