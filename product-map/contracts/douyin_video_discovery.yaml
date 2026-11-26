@@ -29,8 +29,8 @@ on_status:
   needs_review: pause
 always_run: [ cleanup ]
 recovery:
-  total_timeout_sec: 2820
-  cleanup_timeout_sec: 120
+  total_timeout_sec: 3000
+  cleanup_timeout_sec: 300
 trigger_inputs:
   - Keyword
   - Account
