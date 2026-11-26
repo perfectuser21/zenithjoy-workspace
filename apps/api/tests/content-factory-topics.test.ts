@@ -2,7 +2,10 @@ import request from 'supertest';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 const { getSession, query } = vi.hoisted(() => ({ getSession: vi.fn(), query: vi.fn() }));
-vi.mock('../src/auth', () => ({ auth: { handler: vi.fn(), api: { getSession } } }));
+vi.mock('../src/auth', () => ({
+  AUTH_TRUSTED_ORIGINS: ['https://compat.example.test'],
+  auth: { handler: vi.fn(), api: { getSession } },
+}));
 vi.mock('../src/db/connection', () => ({ default: { query } }));
 
 import app from '../src/app';
@@ -50,6 +53,19 @@ describe('content factory browser topics', () => {
     expect(read.status).toBe(403);
     expect(write.status).toBe(403);
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('accepts same-origin browser writes through a configured compatibility proxy that rewrites Host', async () => {
+    getSession.mockResolvedValue({ user: { id: 'staff', email: staffEmail, emailVerified: true } });
+    query.mockResolvedValueOnce({ rows: [topic] });
+    const post = (origin: string, site: string) => request(app).post(route).set({
+      Host: host, Origin: origin, 'Sec-Fetch-Site': site,
+    }).send({ title: topic.title });
+
+    expect((await post('https://compat.example.test', 'same-site')).status).toBe(403);
+    expect((await post('https://another.example.test', 'same-origin')).status).toBe(403);
+    expect(query).not.toHaveBeenCalled();
+    expect((await post('https://compat.example.test', 'same-origin')).status).toBe(201);
   });
 
   it('lets verified staff create, read back and remove their staging fixture through the existing topic handlers', async () => {

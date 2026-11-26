@@ -18,7 +18,7 @@ import pool from './db/connection';
 import { bridgeNewUserToTenant } from './auth-bridge';
 
 
-const TRUSTED_ORIGINS = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:5173,https://autopilot.zenjoymedia.media')
+export const AUTH_TRUSTED_ORIGINS = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:5173,https://autopilot.zenjoymedia.media')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -39,7 +39,7 @@ function buildAuth() {
     database: pool,
     baseURL: BASE_URL,
     secret: SECRET ?? 'dev-only-secret-change-me-in-production-please-min-32-chars',
-    trustedOrigins: TRUSTED_ORIGINS,
+    trustedOrigins: AUTH_TRUSTED_ORIGINS,
 
     emailAndPassword: {
       enabled: true,

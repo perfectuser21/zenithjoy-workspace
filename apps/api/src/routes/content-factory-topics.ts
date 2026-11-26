@@ -1,6 +1,6 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
-import { auth } from '../auth';
+import { auth, AUTH_TRUSTED_ORIGINS } from '../auth';
 import { PacingConfigController } from '../controllers/pacing-config.controller';
 import { TopicsController } from '../controllers/topics.controller';
 import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
@@ -14,10 +14,15 @@ function error(code: string, message: string) {
   return { success: false, data: null, error: { code, message } };
 }
 
-function isOriginForHost(origin: string, host: string | undefined): boolean {
+function isSameOrigin(origin: string, req: Request): boolean {
   try {
     const url = new URL(origin);
-    return (url.protocol === 'https:' || url.protocol === 'http:') && url.host === host?.toLowerCase();
+    if (!['https:', 'http:'].includes(url.protocol) || url.origin !== origin) return false;
+    const site = req.get('sec-fetch-site');
+    if (site === 'same-site' || site === 'cross-site') return false;
+    // The HK compatibility ingress rewrites Host before it reaches the shared API.
+    return url.host === req.get('host')?.toLowerCase()
+      || (site === 'same-origin' && AUTH_TRUSTED_ORIGINS.includes(origin));
   } catch {
     return false;
   }
@@ -28,7 +33,7 @@ router.use(simpleRateLimit({ windowMs: 60_000, max: 240, keyFn: ipKeyFn }));
 router.use(async (req, res, next) => {
   const origin = req.get('origin');
   const readOnly = req.method === 'GET' || req.method === 'HEAD';
-  if (origin ? !isOriginForHost(origin, req.get('host')) : !readOnly) {
+  if (origin ? !isSameOrigin(origin, req) : !readOnly) {
     res.status(403).json(error('FORBIDDEN_ORIGIN', '请从当前站点操作'));
     return;
   }
