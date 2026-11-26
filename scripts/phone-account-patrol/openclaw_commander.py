@@ -13,9 +13,10 @@ import tempfile
 STATE = pathlib.Path.home() / '.local/share/phone-account-patrol'
 CONTROL_RELEASES = pathlib.Path.home() / '.local/share/infra-workflow-commander/releases'
 API = 'http://localhost:5221/api/brain/'
-PHONE_SOURCE_REVISION = '864154c57e88e8085d2add741a79103a28891a44'
+PHONE_SOURCE_REVISION = 'e3f8fc705e2c05db43f787711c31843ae080a458'
+PREVIOUS_PHONE_REVISION = '864154c57e88e8085d2add741a79103a28891a44'
 MAINTENANCE_WORKFLOW_ID = 'e4d2030f-129f-4668-95dd-4a6d880493a8'
-EXPECTED_SHA256 = {
+PREVIOUS_EXPECTED_SHA256 = {
     'runner.py': '026e94011162a4e42e7e07edf4c5b04f28796067dae3161e5ce185c4bd53e16e',
     'collector.py': '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3',
     'dispatch.py': 'ea60ff9e538aa77f991d5f234d47cb392a2613ead560c0963d5949d53a1694de',
@@ -25,9 +26,14 @@ EXPECTED_SHA256 = {
     'SKILL.md': 'ee99dc331f8aec05c1071260dcfb06197c4add7d74b5160ea3084b5b8b5e6dde',
     'mirror.mjs': 'a628a9406528a24de126a9cafdc63c17a9f9f8e0d82d1b2dd41a94a3efc8ebb0',
 }
+EXPECTED_SHA256 = {**PREVIOUS_EXPECTED_SHA256, 'collector.py': '7e0a29d0264f3ae8535ef1662886b69b76049eb7eb906a80bc9d98642ce07444'}
 LEGACY_PHONE_REVISION = '4f899cab6425341646e27c5fca20979b8ac42be7'
 LEGACY_CONTROL_REVISION = '22d20ba53b7d33f595be0984b790fe77921c0917'
 LEGACY_CONTROL_SHA256 = '988f3f65522dbc9a0f33cf3161ca58e08981b6713e185972eb5d499dce58b596'
+HISTORICAL_CONTROL_SHA256 = {
+    LEGACY_CONTROL_REVISION: LEGACY_CONTROL_SHA256,
+    'f38c5a5635d2f57554efcfee4b09163d10cfe39b': '51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213',
+}
 LEGACY_EXPECTED_SHA256 = {
     'runner.py': '26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce',
     'collector.py': '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3',
@@ -38,7 +44,11 @@ LEGACY_EXPECTED_SHA256 = {
     'SKILL.md': 'ee99dc331f8aec05c1071260dcfb06197c4add7d74b5160ea3084b5b8b5e6dde',
     'mirror.mjs': 'a628a9406528a24de126a9cafdc63c17a9f9f8e0d82d1b2dd41a94a3efc8ebb0',
 }
-ACCEPTED_RELEASES = {PHONE_SOURCE_REVISION: EXPECTED_SHA256, LEGACY_PHONE_REVISION: LEGACY_EXPECTED_SHA256}
+ACCEPTED_RELEASES = {
+    PHONE_SOURCE_REVISION: EXPECTED_SHA256,
+    PREVIOUS_PHONE_REVISION: PREVIOUS_EXPECTED_SHA256,
+    LEGACY_PHONE_REVISION: LEGACY_EXPECTED_SHA256,
+}
 UUID = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
 
 
@@ -229,8 +239,9 @@ def trusted_phone(task, serial, deployment, by_id, wrapper_path):
     if current.parent.parent != CONTROL_RELEASES:return False
     allowed = (path == current and re.fullmatch(r'[0-9a-f]{40}', p.get('control_source_revision') or '')
                and current.parent.name == p['control_source_revision'])
-    allowed = allowed or (path.parent.parent == current.parent.parent and path.parent.name == LEGACY_CONTROL_REVISION
-              and p.get('control_source_revision') == LEGACY_CONTROL_REVISION and p.get('control_sha256') == LEGACY_CONTROL_SHA256)
+    historical_digest = HISTORICAL_CONTROL_SHA256.get(path.parent.name)
+    allowed = allowed or (path.parent.parent == current.parent.parent and historical_digest is not None
+              and p.get('control_source_revision') == path.parent.name and p.get('control_sha256') == historical_digest)
     try:
         return (allowed and hashlib.sha256(path.read_bytes()).hexdigest() == p.get('control_sha256') and parent.get('payload', {}).get('recovery_demand') is True
                 and demand_scope(parent, deployment) == p.get('original_scope'))
