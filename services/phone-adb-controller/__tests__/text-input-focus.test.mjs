@@ -316,3 +316,46 @@ test('XHS native valid missing-default attributes still pass resolve ready and t
  writeFileSync(c.xp,'<hierarchy>'+body+title.replace('输入标题','验收标题')+'</hierarchy>');
  assert.equal(run('readback',c.selection,c.xp).stdout,'验收标题');
 });
+
+const xhsTitle = phase => new URL('./fixtures/xhs-image-note-title-'+phase+'.xml', import.meta.url).pathname;
+const xhsTitleText = '晚风里的青蓝';
+function xhsTitleSelection(){
+  const c=setup(), selected=run('standard-resolve',xhsTitle('before'));
+  assert.equal(selected.status,0,selected.stderr);
+  writeFileSync(c.selection,selected.stdout);
+  return c;
+}
+
+test('小红书真机标题写入后显示清空控件，原聚焦框缩宽仍逐字读回',()=>{
+  const c=xhsTitleSelection();
+  assert.equal(run('standard-check',c.selection,xhsTitle('ready')).status,0);
+  const typed=run('standard-compare',c.selection,xhsTitle('typed'),xhsTitleText);
+  assert.equal(typed.status,0,typed.stderr);
+  const receipt=JSON.parse(typed.stdout);
+  assert.equal(receipt.comparison_mode,'exact');
+  assert.deepEqual(receipt.source,receipt.actual);
+  assert.equal(run('standard-readback',c.selection,xhsTitle('typed')).stdout,xhsTitleText);
+});
+
+test('小红书标题变化只允许在发送后且内容精确时读回',()=>{
+  const c=xhsTitleSelection();
+  assert.equal(run('standard-check',c.selection,xhsTitle('typed')).status,2);
+  assert.equal(run('standard-compare',c.selection,xhsTitle('typed'),'晚风里的蓝').status,2);
+});
+
+for(const [name,change] of [
+  ['找不到图文发布入口', x=>x.replace('text="发布笔记"', 'text="私信"')],
+  ['清空按钮不可点击', x=>x.replace(/(<node class="android.widget.ImageView"[^>]*clickable=")true/, '$1false')],
+  ['清空按钮未接在标题右端', x=>x.replace('[982,536][1074,641]','[983,536][1074,641]')],
+  ['输入框向上漂移', x=>x.replace('[49,506][982,670]','[49,500][982,670]')],
+  ['聚焦改为正文', x=>x.replace('focused="true"','focused="false"').replace(/(<node class="android.widget.EditText"[^>]*text="添加正文"[^>]*focused=")false/,'$1true')],
+  ['标题成为密码框', x=>x.replace(/(<node class="android.widget.EditText"[^>]*password=")false/,'$1true')],
+]){
+  test('小红书标题缩宽拒绝：'+name,()=>{
+    const c=xhsTitleSelection(), typed=readFileSync(xhsTitle('typed'),'utf8');
+    const changed=change(typed);
+    assert.notEqual(changed,typed);
+    writeFileSync(c.xp,changed);
+    assert.equal(run('standard-compare',c.selection,c.xp,xhsTitleText).status,2);
+  });
+}
