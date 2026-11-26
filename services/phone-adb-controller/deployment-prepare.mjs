@@ -56,7 +56,7 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
   return revision===sha?readDeploymentSource(root,sha,path,{materialize:true}):readArchivedDeploymentSource(root,revision,path);
  }});
  if(git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署预检期间工作区变化');
- if(mode==='candidate')return stageCandidateFn({root,sha,plan,attemptKey,request,brainUrl});
+ if(mode==='candidate')return stageCandidateFn({root,sha,plan,attemptKey,request,brainUrl,progressiveXianInstall:true});
  if(mode==='maintenance-install'){
   if(businessRunIds.length||Object.keys(acceptanceTaskIds).length)throw Error('安全安装不接收业务run或验收Task');
   const candidate=await stageCandidateFn({root,sha,plan,attemptKey,request,brainUrl});

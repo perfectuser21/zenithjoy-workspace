@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -119,17 +120,33 @@ def rename_exclusive(source, target):
         raise OSError(value, os.strerror(value))
 
 
-if mode == 'presence':
-    print(json.dumps(presence()))
-elif mode == 'install':
-    directory(base, create=True)
-    if presence()['state'] != 'absent':
-        raise ValueError('candidate appeared before install; retry readback')
+def receive_archive(archive):
+    expected, expected_hash = spec['archive_bytes'], spec['archive_sha256']
+    if type(expected) is not int or not 0 < expected <= 128 * 1024 * 1024:
+        raise ValueError('invalid candidate archive size')
+    archive_hash = hashlib.sha256()
+    received = reported = 0
+    while chunk := sys.stdin.buffer.read1(65536):
+        received += len(chunk)
+        if received > expected:
+            raise ValueError('candidate archive exceeds expected size')
+        archive.write(chunk)
+        archive_hash.update(chunk)
+        if received - reported >= 65536 and received < expected:
+            print(f'candidate_install_received_v1 {received}', flush=True)
+            reported = received
+    if received != expected or archive_hash.hexdigest() != expected_hash:
+        raise ValueError('candidate archive length or digest mismatch')
+    print(f'candidate_install_received_v1 {received}', flush=True)
+    archive.seek(0)
+
+
+def install_candidate(archive):
     stage = Path(tempfile.mkdtemp(prefix='.' + sha + '.', dir=base))
     try:
         if pending(stage) or final.exists() or final.is_symlink():
             raise ValueError('candidate writer appeared before extraction')
-        subprocess.run(['tar', '-xf', '-', '-C', str(stage)], stdin=sys.stdin.buffer, check=True)
+        subprocess.run(['tar', '-xf', '-', '-C', str(stage)], stdin=archive, check=True)
         if pending(stage) or final.exists() or final.is_symlink():
             raise ValueError('candidate writer appeared before commit')
         rename_exclusive(stage, final)
@@ -137,5 +154,28 @@ elif mode == 'install':
         # 只清理本人已终止操作的暂存，不碰任何其他未知安装。
         if stage.exists():
             shutil.rmtree(stage)
+
+
+def cancel_install(signum, _frame):
+    raise InterruptedError(f'candidate install interrupted by signal {signum}')
+
+
+if mode == 'presence':
+    print(json.dumps(presence()))
+elif mode == 'install':
+    directory(base, create=True)
+    if presence()['state'] != 'absent':
+        raise ValueError('candidate appeared before install; retry readback')
+    if 'archive_bytes' in spec:
+        signal.signal(signal.SIGHUP, cancel_install)
+        signal.signal(signal.SIGTERM, cancel_install)
+        # 未核验完整哈希之前，不得创建会挡住后续只读检查的命名暂存。
+        with tempfile.TemporaryFile(dir=base) as archive:
+            receive_archive(archive)
+            if presence()['state'] != 'absent':
+                raise ValueError('candidate appeared during transfer; retry readback')
+            install_candidate(archive)
+    else:
+        install_candidate(sys.stdin.buffer)
 else:
     raise ValueError('invalid candidate operation')
