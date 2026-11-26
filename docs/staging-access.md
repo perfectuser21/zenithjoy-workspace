@@ -30,7 +30,7 @@ ssh hk-vps 'curl -fsS http://127.0.0.1:5201/health'
 
 ## 生产发布与回退
 
-杭州 API 的日常晋级、回退和只读核对走 [杭州生产 API 发布](../scripts/deploy/HANGZHOU_API_RELEASE.md)。缺少生产迁移记录的候选会在切换前被拦截。香港 API 的 `promote-prod-hk.yml` 和 `rollback-prod.yml` 已停用。两个生产域名的 Dashboard 由同一个[生产发布与回滚工作流](../scripts/deploy/DASHBOARD_PRODUCTION_RELEASE.md)更新，并分别核对线上版本。
+杭州 API 的日常晋级、回退和只读核对走 [杭州生产 API 发布](../scripts/deploy/HANGZHOU_API_RELEASE.md)。缺少生产迁移记录的候选会在切换前被拦截。两个生产域名的 Dashboard 由同一个[生产发布与回滚工作流](../scripts/deploy/DASHBOARD_PRODUCTION_RELEASE.md)更新，并分别核对线上版本。API 与 Dashboard 各自记录前驱并独立回退。
 
 可以从两个生产域名只读核对 API 与 Dashboard 版本。两个域名分别提供 Dashboard 静态站点，核对 Dashboard 发布时应读取两份前端回执。
 
