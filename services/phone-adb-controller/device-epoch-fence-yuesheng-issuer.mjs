@@ -1,3 +1,4 @@
+import { lstatSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { userInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -78,7 +79,10 @@ export function createYueshengEpochIssuer({
   release = releaseCentralLease, releaseProof = readReleaseProof, now = Date.now,
   home = userInfo().homedir, registration = readRegistration, ensureRecords = ensureRecordRoot,
 }) {
-  const root = privateDirectory(join(home, '.local/share/zenithjoy'));
+  const root = join(home, '.local/share/zenithjoy');
+  const shared = lstatSync(root);
+  need(shared.isDirectory() && !shared.isSymbolicLink() && realpathSync(root) === root
+    && shared.uid === process.getuid() && (shared.mode & 0o022) === 0, 'ISSUE_ROOT');
   const line = 'yuesheng';
   return async ({ journal, plan, candidate, result, assertAuthority, assertHeld }) => {
     const planSha = digest(plan);
