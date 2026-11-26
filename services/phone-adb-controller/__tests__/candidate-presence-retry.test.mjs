@@ -37,7 +37,40 @@ test('首255重连后原Python发现文件漂移，不能观察/改写manifest',
 for(const mode of ['install-255','collect-255','manifest-255'])test('非presence原语255从不重试：'+mode,t=>{
  const f=transportFixture(t),r=f.run(mode);assert.equal(r.ok,false);const kind=mode.split('-')[0],calls=f.calls().filter(c=>kind==='install'?c.archive:c[kind]);assert.equal(calls.length,1);
 });
-test('第二连接真实挂起仅能消费剩余原30秒，不获得另一份30秒',t=>{
- const f=transportFixture(t),start=Date.now(),r=f.run('presence-connect-hang'),elapsed=Date.now()-start;
- assert.equal(r.ok,false);assert.equal(xian(f).length,2);const calls=options(f).filter(c=>c.host==='xian-m4'&&!c.install);assert.equal(calls.length,2);assert.ok(calls[0].timeout<=30000);assert.ok(calls[1].timeout<calls[0].timeout);assert.ok(elapsed<34000,'含真实fixture安装/启动的整个测试仍应有界：'+elapsed);
+test('慢速 M4 逐字节核验允许单次安装和后续重读，MMV 保持原 30 秒', t => {
+ const f=transportFixture(t);
+ const installed=f.run('presence-read-slow');
+ assert.equal(installed.ok,true,JSON.stringify(installed));
+ assert.equal(installed.result.observation_ids['xian-m4'],'obs-xian-m4');
+ assert.equal(f.calls().filter(c=>c.host==='xian-m4'&&c.archive).length,1);
+ const afterInstall=f.calls().length;
+ assert.equal(f.run('presence-read-slow').ok,true);
+ assert.equal(f.calls().slice(afterInstall).filter(c=>c.archive).length,0);
+ const afterRead=f.calls().length;
+ const mmv=f.run('presence-read-mmv');
+ assert.match(mmv.error,/mmv\/presence: ETIMEDOUT/);
+ assert.equal(f.calls().slice(afterRead).length,1);
+});
+
+test('已安装 M4 超时后只读失败，既不重连也不重放安装或产生观测', t => {
+ const f=transportFixture(t);
+ assert.equal(f.run('normal').ok,true);
+ const before=f.calls().length;
+ const result=f.run('presence-read-hang');
+ assert.match(result.error,/xian-m4\/presence: ETIMEDOUT/);
+ const calls=f.calls().slice(before).filter(c=>c.host==='xian-m4');
+ assert.equal(calls.length,1);
+ assert.ok(presence(calls[0]));
+ assert.equal(calls[0].archive,false);
+});
+
+test('第二个只读连接只消费原 M4 截止的余量', t => {
+ const f=transportFixture(t),result=f.run('presence-connect-hang');
+ assert.match(result.error,/xian-m4\/presence: ETIMEDOUT/);
+ assert.equal(xian(f).length,2);
+ const calls=options(f).filter(c=>c.host==='xian-m4'&&!c.install);
+ assert.equal(calls.length,2);
+ assert.ok(calls[0].timeout>30000&&calls[0].timeout<=60000);
+ assert.ok(calls[1].timeout<calls[0].timeout);
+ assert.equal(f.calls().filter(c=>c.host==='xian-m4'&&c.archive).length,0);
 });
