@@ -12370,7 +12370,25 @@ tests:
     status: active
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test discovers the actual fixture copy and synthetic ROM review inventory"
-    note: "账号预检夹具精确闭包不超过现有512守卫；保留真实Compose依赖，不改生产边界"
+    note: "真实运行包大于512项时仍校验整包，原生协议只接收当前设备的明确来源文件"
+
+  - id: fast-adb-daemon-observation
+    path: services/phone-adb-controller/__tests__/fast-adb-daemon-observation.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test validates a real local Darwin listener"
+    note: "验证监听端口、可执行文件、用户、进程启动及源字节；不接触业务设备"
+
+  - id: private-file-closure
+    path: services/phone-adb-controller/__tests__/private-file-closure.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: line02
+    execution: "ci-l3-code.yml / openclaw-scripts-test discovers exact frozen source identity tests"
+    note: "验证字节复核、inode和目录变化、权限变化、符号链接和同尺寸内容变更"
 
   - id: activity-host-tool-local-rejection-result
     path: services/phone-adb-controller/__tests__/activity-tool-result.test.mjs

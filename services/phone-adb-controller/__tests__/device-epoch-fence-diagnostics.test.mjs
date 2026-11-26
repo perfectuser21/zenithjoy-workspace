@@ -132,3 +132,36 @@ test('补充诊断固定只读活动与元数据；proc路径仅接受维护scop
 test('不完整补采JSON不能以CLI exit0被误认作成功；单query仍固定枚举',async()=>{
  const {diagnosticExitCode,validateDiagnosticQuery}=await import('../device-epoch-fence-review.mjs');assert.equal(diagnosticExitCode({diagnostics:[{wire_complete:false,exit_code:null}]}),2);assert.equal(diagnosticExitCode({diagnostics:[{wire_complete:true,exit_code:1}]}),2);assert.equal(diagnosticExitCode({diagnostics:[{wire_complete:true,exit_code:0}]}),0);assert.equal(validateDiagnosticQuery('exit_guardian_metadata'),'exit_guardian_metadata');assert.throws(()=>validateDiagnosticQuery('sh -c reboot'),/DIAGNOSTIC_QUERY/);
 });
+
+test('cloud Task pacing preserves every diagnostic authority read and rejects a late authorization before phone I/O',async()=>{
+ const {createCloudBrainReadPacer}=await import('../device-epoch-fence-cloud-host-reads.mjs');
+ const {runDiagnostic}=await load(),f=await fixture();
+ const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ const paths=[scope.maintenance_task_id,'0874e3fc-b7c2-46a6-b97e-cdc1264a693c','8c3b3479-3565-4f62-b211-9abbb898d740'].map(id=>'/tasks/'+id);
+ const observed=[],directories=[];
+ let now=0;
+ const read=createCloudBrainReadPacer(async path=>{observed.push(path);return {path};},{
+  now:()=>now,sleep:async ms=>{now+=ms;},
+ });
+ const authorize=async()=>{
+  assert.deepEqual((await Promise.all(paths.map(read))).map(row=>row.path),paths);
+  return {scope,lease_until:new Date(Date.now()+60_000).toISOString()};
+ };
+ const directory=()=>{const dir=mkdtempSync(join(realpathSync(tmpdir()),'zj-cloud-paced-diagnostic-'));directories.push(dir);return dir;};
+ try{
+  const ok=await runDiagnostic({query:'sdk',scope,directory:directory(),readAuthority:authorize});
+  assert.equal(ok.wire_complete,true);
+  assert.ok(observed.length>=18 && observed.length%paths.length===0);
+  assert.deepEqual(f.services,[
+   'host-serial:'+scope.serial+':features','host:transport:'+scope.serial,'shell,v2,raw:exec /system/bin/getprop ro.build.version.sdk',
+  ]);
+  f.services.length=0;
+  const late=await runDiagnostic({query:'sdk',scope,directory:directory(),timeoutMs:5,readAuthority:async()=>{
+   await new Promise(resolve=>setTimeout(resolve,25));
+   return authorize();
+  }});
+  assert.equal(late.error_code,'DIAGNOSTIC_DEADLINE');
+  assert.equal(late.wire_complete,false);
+  assert.deepEqual(f.services,[]);
+ }finally{await f.close();for(const dir of directories)rmSync(dir,{recursive:true,force:true});}
+});

@@ -41,7 +41,7 @@
       }
     },
     "douyin_video_discovery": {
-      "sha256": "394bcff1fc1b27c14be8789930e8672a40ac085f99a1ca559ec30dcd569846cb",
+      "sha256": "ae8ec5008bfc7a66bcfeba0d37a6c791e6cb4f2ed8ba958c562998ce325f4972",
       "activities": {
         "preflight": "b7df1bb93d94a003ed886a7cc5dd44b08ec32ae5fa8bbe00cf6d7422a1d847a5",
         "collect_videos": "661dfce29825653a24c91c8f5b58f13e4f6e7811c72ff23af4a697ff919d2e6e",

@@ -25,10 +25,11 @@ import {publicCodeNativeFixture} from './fixtures/public-code-preflight-native.m
 for(const workflow of ['douyin_video_discovery','douyin_video_processing'])test(workflow+' uses genuine reviewed shell-v2/ROM/nofork account preflight and exact owner cleanup', {skip:process.platform!=='darwin'},async t=>{
  const now=Date.now;let elapsed=0,advanced=false;
  t.mock.method(Date,'now',()=>now()+elapsed);
- const f=await publicCodeNativeFixture(t,{workflow,onDump:()=>{if(!advanced&&workflow==='douyin_video_discovery'){elapsed=125000;advanced=true;}}}),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs');
+ const discovery=workflow==='douyin_video_discovery';
+ const f=await publicCodeNativeFixture(t,{workflow,...(discovery?{activityBudgetMs:600000,domainBudgetMs:2700000}:{}),onDump:()=>{if(!advanced&&discovery){elapsed=125000;advanced=true;}}}),{createPublicCodePreflight}=await f.load('public-code-preflight.mjs');
  const runtime=createPublicCodePreflight(f),result=await runtime.preflight();
  assert.equal(result.douyin_id,'expected');assert.equal(f.state.executionUnknown,undefined);
- if(workflow==='douyin_video_discovery')assert.equal(advanced,true,'a complete reviewed dump after 125s remains inside the original 300s Activity, with no legacy 120s shell cap');
+ if(discovery)assert.equal(advanced,true,'the native worker admits the formal 600s Activity and completes a reviewed dump after 125s');
  assert.equal(readFileSync(join(f.locks,f.env.SERIAL+'.lock/owner'),'utf8').trim(),f.env.WFR_TAG);
  f.state.budgetDeadline=Date.now()+120000;
  const cleanup=await runtime.cleanup();assert.equal(cleanup.no_lock,true);assert.equal(cleanup.cleanup_readback_verified,1);

@@ -95,17 +95,17 @@ function originalShape(x,flow){
  }
  reseal(x);return x;
 }
-for(const [flow,total,work]of [['douyin_video_discovery',2820,2700],['douyin_video_processing',10020,9900]])test('new frozen '+flow+' budgets change only the Activity slices inside the original workflow total',async()=>{
+for(const [flow,total,work,cleanupGrace]of [['douyin_video_discovery',3000,2700,300],['douyin_video_processing',10020,9900,120]])test('frozen '+flow+' keeps the work budget and applies its own cleanup window',async()=>{
  const load=key=>parseYaml(readFileSync(new URL('../../../product-map/contracts/'+key+'.yaml',import.meta.url),'utf8'));
  const owner=load('douyin_video_processing'),declaration=load(flow),preflight=owner.activities.find(a=>a.key==='preflight'),cleanup=owner.activities.find(a=>a.key==='cleanup');
  assert.equal(preflight.budget.max_duration_s,600);assert.equal(cleanup.budget.max_duration_s,480);
- assert.deepEqual(declaration.recovery,{total_timeout_sec:total,cleanup_timeout_sec:120});
+ assert.deepEqual(declaration.recovery,{total_timeout_sec:total,cleanup_timeout_sec:cleanupGrace});
  const x=originalShape(await fixture(),flow);
  try{
   for(const a of x.frozen.activities){const actual=declaration.activities.find(c=>c.key===a.reference.slot_key)||owner.activities.find(c=>c.key===a.reference.slot_key);a.version.payload.contract.budget=structuredClone(actual.budget);a.version.payload.contract.version=actual.version;sign(a.version);}
   x.frozen.workflow_version.payload.contract.recovery=structuredClone(declaration.recovery);sign(x.frozen.workflow_version);x.frozen.release.payload.workflows=[x.frozen.workflow_version];x.frozen.release.payload.activities=x.frozen.activities.map(a=>a.version);reseal(x);
   const before=digest(x.frozen),p=(await import(source.href)).buildPublicDomainProfile(x).profile;
-  assert.equal(digest(x.frozen),before);assert.deepEqual(p.domain_adapter.budget,{max_duration_s:work,cleanup_grace_s:120});assert.equal(p.domain_adapter.budget.max_duration_s+p.domain_adapter.budget.cleanup_grace_s,total);
+  assert.equal(digest(x.frozen),before);assert.deepEqual(p.domain_adapter.budget,{max_duration_s:work,cleanup_grace_s:cleanupGrace});assert.equal(p.domain_adapter.budget.max_duration_s+p.domain_adapter.budget.cleanup_grace_s,total);
   assert.equal(p.contract.activities.find(a=>a.key==='preflight').budget.max_duration_s,600);assert.equal(p.contract.activities.find(a=>a.key==='cleanup').budget.max_duration_s,480);
   assert.equal(p.contract.activities.find(a=>a.key===(flow==='douyin_video_discovery'?'collect_videos':'collection')).budget.max_duration_s,flow==='douyin_video_discovery'?2400:7200);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}

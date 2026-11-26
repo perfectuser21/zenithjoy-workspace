@@ -8,6 +8,43 @@ import {createHash} from 'node:crypto';
 const sources=new WeakMap();
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
 const sourceFail=()=>{throw Object.assign(Error('NATIVE_PHONE_COMMAND_SOURCE'),{code:'NATIVE_PHONE_COMMAND_SOURCE'});};
+const policyPath='config/native-phone-command-sources.json';
+const protocolFiles=['native-phone-adb-read.mjs','native-phone-command-source.mjs','runtime-definition.mjs',
+ 'adb-shell-v2.mjs','adb-shell-v2-protocol.mjs',policyPath];
+
+function sourceFile(source,path){
+ if(!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(path)||path.split('/').some(part=>part==='.'||part==='..'))sourceFail();
+ const rows=source.files?.filter(entry=>entry.path===path);
+ if(rows?.length!==1||!/^[a-f0-9]{64}$/.test(rows[0].sha256||''))sourceFail();
+ return rows[0];
+}
+
+function pinnedSourceBytes(root,source,path){
+ const expected=sourceFile(source,path);
+ const file=resolve(root,path),stat=lstatSync(file);
+ if(realpathSync(file)!==file||!stat.isFile()||stat.isSymbolicLink()||![0,process.getuid()].includes(stat.uid)||(stat.mode&0o022))sourceFail();
+ const bytes=readFileSync(file);
+ if(sha(bytes)!==expected.sha256)sourceFail();
+ return bytes;
+}
+
+function readDevicePolicy(bytes,profile,serial){
+ const policy=JSON.parse(bytes);
+ const matching=policy?.device_sources?.filter(row=>row.profile===profile&&row.serial===serial);
+ if(policy.schema_version!==1||!Array.isArray(policy.device_sources)||matching?.length!==1)sourceFail();
+ return matching[0];
+}
+
+// The full frozen runtime is checked at the owning preflight boundary. Native
+// wire receipts pin only their own protocol and this device's reviewed files.
+export function selectPreflightNativeSource({runtimeRoot,source,profile,serial}){
+ if(!/^[a-f0-9]{40}$/.test(source?.commit||'')||!Array.isArray(source.files))sourceFail();
+ const row=readDevicePolicy(pinnedSourceBytes(runtimeRoot,source,policyPath),profile,serial);
+ if(!row.review?.path?.startsWith('config/native-phone-reviews/')||row.pillow&&!row.pillow.path?.startsWith('config/'))sourceFail();
+ const selected=[...protocolFiles,row.review.path,...(row.pillow?[row.pillow.path]:[])];
+ if(new Set(selected).size!==selected.length)sourceFail();
+ return {commit:source.commit,files:selected.map(path=>({...sourceFile(source,path)}))};
+}
 const fail=()=>{throw Object.assign(Error('NATIVE_PHONE_COMMAND'),{code:'NATIVE_PHONE_COMMAND'});};
 const quote=value=>"'"+value+"'";
 const nonce=value=>typeof value==='string'&&/^clipnonce[a-f0-9]{32}$/.test(value);
@@ -64,22 +101,16 @@ export function readNativePhoneCommandSource(capability,{scope,source}={}){
 // capability proves finite program source bytes; it is not a phone stop proof.
 export function createNativePhoneSourceIssuer({runtimeRoot,source,scope,context,reader}={}){
  if(!isNativePhoneAdbRead(reader)||!nativePhoneAdbReadMatches(reader,source,scope))sourceFail();
- const fixed=structuredClone(scope),src=structuredClone(source),ctx=structuredClone(context),scopeKey=canonical(fixed),sourceKey=canonical(src),policyPath='config/native-phone-command-sources.json';
+ const fixed=structuredClone(scope),src=structuredClone(source),ctx=structuredClone(context),scopeKey=canonical(fixed),sourceKey=canonical(src);
  if(fixed?.protocol!=='native-phone-adb-read/v1'||fixed.source_commit!==src?.commit||!/^[-a-f0-9]{36}$/.test(fixed.task_id||'')||fixed.profile!==ctx?.profile||fixed.serial!==ctx?.serial||!Number.isSafeInteger(fixed.worker_deadline_ms)||Date.now()>=fixed.worker_deadline_ms)sourceFail();
  let attempted=false,prepared=false,sealed=false,unknown=false;
- const pin=path=>{
-  if(!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(path)||path.split('/').some(s=>s==='.'||s==='..'))sourceFail();
-  const rows=src.files?.filter(f=>f.path===path);if(rows?.length!==1||!/^[a-f0-9]{64}$/.test(rows[0].sha256||''))sourceFail();
-  const file=resolve(runtimeRoot,path),st=lstatSync(file);if(realpathSync(file)!==file||!st.isFile()||st.isSymbolicLink()||![0,process.getuid()].includes(st.uid)||(st.mode&0o022))sourceFail();
-  const bytes=readFileSync(file);if(sha(bytes)!==rows[0].sha256)sourceFail();return bytes;
- };
+ const pin=path=>pinnedSourceBytes(runtimeRoot,src,path);
  function verify(action=false){
   if(sealed||unknown||Date.now()>=(action?fixed.worker_deadline_ms:fixed.cleanup_deadline_ms)||realpathSync(runtimeRoot)!==dirname(fileURLToPath(import.meta.url))||!Array.isArray(src.files)||new Set(src.files.map(f=>f.path)).size!==src.files.length)sourceFail();
   for(const f of src.files)pin(f.path);
   for(const p of ['native-phone-command-source.mjs','native-phone-adb-read.mjs','adb-shell-v2-protocol.mjs','runtime-definition.mjs',policyPath])pin(p);
  }
- verify();const policy=JSON.parse(pin(policyPath)),matches=policy?.device_sources?.filter(row=>row.profile===ctx.profile&&row.serial===ctx.serial);
- if(policy.schema_version!==1||!Array.isArray(policy.device_sources)||matches?.length!==1)sourceFail();const row=structuredClone(matches[0]);
+ verify();const row=structuredClone(readDevicePolicy(pin(policyPath),ctx.profile,ctx.serial));
  if(row.package!==ctx.package||ctx.package!=='com.ss.android.ugc.aweme'||row.width!==ctx.width||row.height!==ctx.height||!Number.isInteger(row.device_sdk)||row.device_sdk<21||!row.review?.path?.startsWith('config/native-phone-reviews/')||sha(pin(row.review.path))!==row.review.sha256||!Array.isArray(row.program_files)||row.program_files.length<1||row.program_files.length>64||new Set(row.program_files.map(f=>f.path)).size!==row.program_files.length||row.program_files.some(f=>!/^\/system\/(?:bin|framework)\/[A-Za-z0-9_.-]+$/.test(f.path)||!/^[a-f0-9]{64}$/.test(f.sha256))||!Array.isArray(row.commands)||!row.commands.length||new Set(row.commands).size!==row.commands.length||row.commands.some(c=>typeof c!=='string'||!/^[-a-z]+$/.test(c)))sourceFail();
  if(row.pillow&&(!row.pillow.path?.startsWith('config/')||sha(pin(row.pillow.path))!==row.pillow.sha256))sourceFail();
  const value={...(row.pillow?{pillow:row.pillow}:{}),protocol:'native-phone-command-source/v1',task_id:fixed.task_id,binding_id:fixed.binding_id,run_id:fixed.run_id,source_commit:fixed.source_commit,profile:fixed.profile,serial:fixed.serial,epoch:fixed.epoch,endpoint:fixed.endpoint,claim:structuredClone(fixed.claim),worker_deadline_ms:fixed.worker_deadline_ms,cleanup_deadline_ms:fixed.cleanup_deadline_ms,device_sdk:row.device_sdk,commands:row.commands,program_files:row.program_files,review:row.review,remote_execution_stopped:'not_attested'};

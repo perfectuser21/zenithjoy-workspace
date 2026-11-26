@@ -35,12 +35,13 @@ test('西安普通候选按远端收包延长预算，慢传仍完成原安装�
  assert.ok(result.result.observation_ids['xian-m4']);
 });
 test('西安完整候选与生产同等大小，持续接收超过旧720秒仍可完整校验和ACK',t=>{
- const f=transportFixture(t,{payloadBytes:10_826_560}),result=f.run('install-progress-live-sized');
+ // The larger collector closure takes three extra tar records. Keep the original fixture archive size.
+ const f=transportFixture(t,{payloadBytes:10_795_840}),result=f.run('install-progress-live-sized');
  assert.equal(result.ok,true,JSON.stringify(result));
  const calls=f.calls().filter(c=>c.host==='xian-m4');
  const transfers=calls.filter(c=>c.archive);
  assert.equal(transfers.length,1);
- assert.ok(Math.abs(transfers[0].input_bytes-11_530_240)<=10_240,'production-sized tar, allowing platform record padding');
+ assert.ok(Math.abs(transfers[0].input_bytes-11_530_240)<=10_240,`production-sized tar received ${transfers[0].input_bytes} bytes`);
  assert.equal(calls.filter(c=>c.collect).length,1);
  assert.ok(result.result.observation_ids['xian-m4']);
 });

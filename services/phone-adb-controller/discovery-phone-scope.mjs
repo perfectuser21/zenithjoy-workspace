@@ -4,7 +4,7 @@ import {canonicalRunId} from './public-domain-authority.mjs';
 import {readFileSync,writeFileSync,lstatSync,realpathSync,readdirSync,mkdirSync,symlinkSync} from 'node:fs';
 import {join,resolve,isAbsolute} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import {readFrozen} from './runtime-definition.mjs';
+import {readFrozen,canonical} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
 import {startCollectionLeafProducer,isPrelaunchExpired} from './collection-leaf-producer.mjs';
@@ -19,10 +19,10 @@ export const discoveryTapBudgetMs=discoveryCommandBudgetMs('tap-evidence')+3000+
 export const discoveryCaptureBudgetMs=4*discoveryCommandBudgetMs('lock-refresh')+discoveryCommandBudgetMs('search-video-cards')+discoveryCommandBudgetMs('search-kw-matches')+discoveryTapBudgetMs-discoveryCommandBudgetMs('lock-refresh');
 const digest=result=>{const {cleanup_phone_scope,execution_stopped,...body}=result||{};return hash(JSON.stringify(body));};
 const required=['leadgen-discovery-action.mjs','leadgen-phone-action.mjs','leadgen-handlers.mjs','qualification-identity-snapshot.mjs','central-device-lease.mjs','leadgen-workflow.mjs','leadgen-discovery.mjs','activity-commander.mjs','discovery-phone-scope.mjs','collection-leaf-producer.mjs','adb-managed-client.py','adb-existing-route.py','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','search-video-tab.py','discovery-cleanup-readback.mjs','discovery-metrics.js'];
-export function defaultDiscoveryPhoneScope({root,env,instanceId,epochId}){
+export function defaultDiscoveryPhoneScope({root,env,instanceId,epochId,epochSourceCompatibility}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_discovery')return undefined;
- try{const scope=readFrozen(env.WFR_RUN_DIR).discovery_phone_scope;if((instanceId!==undefined&&scope?.policy?.instance_id!==instanceId)||(epochId!==undefined&&scope?.policy_binding?.epoch_fence?.epoch_id!==epochId))throw Error('DISCOVERY_FROZEN_INSTANCE_MISMATCH');return scope;}catch(error){if(error.code!=='ENOENT')throw error;}
- return defaultCollectionPhoneScope({root,env:{...env,WF_BRAIN_WORKFLOW:'douyin_video_processing'},workflowKey:'douyin_video_discovery',instanceId,epochId});
+ try{const frozen=readFrozen(env.WFR_RUN_DIR),scope=frozen.discovery_phone_scope;if((epochSourceCompatibility!==undefined&&canonical(epochSourceCompatibility)!==canonical(frozen.epoch_source_compatibility))||(instanceId!==undefined&&scope?.policy?.instance_id!==instanceId)||(epochId!==undefined&&scope?.policy_binding?.epoch_fence?.epoch_id!==epochId))throw Error('DISCOVERY_FROZEN_INSTANCE_MISMATCH');return scope;}catch(error){if(error.code!=='ENOENT')throw error;}
+ return defaultCollectionPhoneScope({root,env:{...env,WF_BRAIN_WORKFLOW:'douyin_video_processing'},workflowKey:'douyin_video_discovery',instanceId,epochId,epochSourceCompatibility});
 }
 function pinned(tool){
  if(!isAbsolute(tool?.path||'')||!/^[a-f0-9]{64}$/.test(tool?.sha256||''))fail('TOOL_PIN_REQUIRED');

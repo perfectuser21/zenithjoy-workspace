@@ -204,3 +204,46 @@ test('exact disconnect journal and confirmed central CAS issue a consumer-verifi
   assert.equal(readCloudExistingEpochCompletion(record, { home }).manifest_sha256, plan.manifest_sha256);
   assert.equal(result.epoch_reference.sha256, digest(readFileSync(result.epoch_reference.path)));
 });
+
+test('cloud maintenance spreads concurrent Task reads without changing identities or caching replies', async () => {
+  const { createCloudBrainReadPacer } = await import('../device-epoch-fence-cloud-host-reads.mjs');
+  const paths = [taskId, original.task_id, cloudFenceOperator.task_id].map(id => '/tasks/' + id);
+  const starts = [];
+  let now = 0;
+  const read = createCloudBrainReadPacer(async path => {
+    starts.push({ path, at: now });
+    return { path, sequence: starts.length };
+  }, { now: () => now, sleep: async ms => { now += ms; } });
+  for (let batch = 0; batch < 40; batch++) {
+    const replies = await Promise.all([...paths, ...paths].map(read));
+    assert.deepEqual(replies.map(reply => reply.path), [...paths, ...paths]);
+    assert.equal(new Set(replies.map(reply => reply.sequence)).size, 6);
+  }
+  assert.equal(starts.length, 240);
+  assert.ok(starts.every((entry, index) => index === 0 || entry.at - starts[index - 1].at >= 350));
+  for (const entry of starts) {
+    assert.ok(starts.filter(other => other.at >= entry.at && other.at < entry.at + 60_000).length <= 172);
+  }
+  const before = now;
+  assert.equal((await read('/device-locks')).path, '/device-locks');
+  assert.equal(now, before);
+});
+
+test('cloud Task queue bounds delay and preserves one real failure without retry', async () => {
+  const { createCloudBrainReadPacer } = await import('../device-epoch-fence-cloud-host-reads.mjs');
+  const failure = new Error('Brain HTTP 429');
+  let now = 0;
+  const starts = [];
+  const read = createCloudBrainReadPacer(async path => {
+    if (starts.push(now) === 1) throw failure;
+    return path;
+  }, { now: () => now, sleep: async ms => { now += ms; } });
+  const path = '/tasks/' + taskId;
+  const replies = await Promise.allSettled(Array.from({ length: 23 }, () => read(path)));
+  assert.equal(replies[0].reason, failure);
+  assert.equal(starts[0], 0);
+  assert.equal(starts.length, 15);
+  assert.ok(replies.slice(15).every(reply => reply.reason?.code === 'CLOUD_FENCE_BRAIN_READ_PACING_TIMEOUT'));
+  assert.equal(await read(path), path);
+  assert.equal(starts.length, 16);
+});
