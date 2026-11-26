@@ -81,7 +81,7 @@ class MaterialsProjectionTest(unittest.TestCase):
     def test_unauthorized_existing_projection_is_not_modified(self):
         def notion(method, path, value=None):
             if path.endswith("/query"):
-                return {"results": [{"properties": {"素材ID": {"rich_text": [{"plain_text": self.mid}]},
+                return {"results": [{"id": "owned-existing-page", "properties": {"素材ID": {"rich_text": [{"plain_text": self.mid}]},
                          "组织ID": {"rich_text": [{"plain_text": "44444444-4444-4444-8444-444444444444"}]},
                          "来源数据库": {"select": {"name": "zenithjoy"}}}}], "has_more": False}
             return self.notion(method, path, value)
