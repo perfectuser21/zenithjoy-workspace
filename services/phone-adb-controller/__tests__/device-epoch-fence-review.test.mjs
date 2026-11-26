@@ -86,6 +86,17 @@ test('已完成独立清场的设备可单独启空服务，仍要求本次审�
 test('正式flat部署manifest完整闭包可校验；缺依赖/脏字节/错误来源不回退git',async()=>{
  const {reviewSource}=await load(),fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path'),crypto=await import('node:crypto');const root=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'epoch-flat-')),hash=x=>crypto.createHash('sha256').update(x).digest('hex'),a='import "./dep.mjs";\n',b='export const fixed=1;\n';
  try{fs.writeFileSync(path.join(root,'device-epoch-fence-review.mjs'),a);fs.writeFileSync(path.join(root,'dep.mjs'),b);const manifest={source_repo:'perfectuser21/zenithjoy-workspace',source_commit:'a'.repeat(40),target:'mmv',files:[['device-epoch-fence-review.mjs',a],['dep.mjs',b]].map(([n,bytes])=>({path:'services/phone-adb-controller/'+n,deployed_path:n,content_sha256:hash(bytes)}))};const write=()=>fs.writeFileSync(path.join(root,'deployment-manifest.json'),JSON.stringify(manifest));write();const options={runtimeRoot:root,repositoryRoot:'/no-git'};assert.equal(Object.keys(reviewSource(options).files).length,2);
+ const dep=manifest.files.at(-1);
+ const archived={...dep,deployed_path:'_foundation_sources/'+manifest.source_commit+'/'+dep.path};
+ manifest.files.push(archived);
+ write();
+ assert.equal(reviewSource(options).files[dep.path],dep.content_sha256);
+ manifest.files.push({...dep});
+ write();
+ assert.throws(()=>reviewSource(options),/REVIEW_SOURCE_BYTES/);
+ manifest.files.pop();
+ manifest.files.pop();
+ write();
  fs.writeFileSync(path.join(root,'dep.mjs'),b+'//drift');assert.throws(()=>reviewSource(options),/REVIEW_SOURCE_BYTES/);fs.writeFileSync(path.join(root,'dep.mjs'),b);manifest.files.pop();write();assert.throws(()=>reviewSource(options),/REVIEW_SOURCE_BYTES/);manifest.source_repo='wrong';write();assert.throws(()=>reviewSource(options),/REVIEW_DEPLOYMENT_SOURCE/);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
