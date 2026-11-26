@@ -1,6 +1,6 @@
 # ZenithJoy Dashboard 生产发布与回滚
 
-香港负责预发。杭州负责生产，`autopilot.zenjoymedia.media` 是旧生产兼容入口。两个生产域名由一个工作流更新，并分别核对各自实际返回的前端文件。
+香港负责预发。杭州负责生产，`autopilot.zenjoymedia.media` 是旧生产兼容入口。两个生产域名由一个工作流更新，并分别核对各自实际返回的前端文件。Dashboard 与杭州 API 共用生产发布队列。切换时依次重启两台 Nginx，经过对应入口的连接可能短暂重连。
 
 ## 晋级
 

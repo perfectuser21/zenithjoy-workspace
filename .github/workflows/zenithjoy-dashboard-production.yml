@@ -24,7 +24,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: zenithjoy-dashboard-production
+  group: zenithjoy-hangzhou-production-api
   cancel-in-progress: false
 
 jobs:

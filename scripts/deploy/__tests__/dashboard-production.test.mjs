@@ -19,6 +19,7 @@ test('manual main Dashboard promotion requires staging admission and one product
   const w = workflow('zenithjoy-dashboard-production');
   assert.deepEqual(Object.keys(w.on), ['workflow_dispatch']);
   assert.equal(w.concurrency['cancel-in-progress'], false);
+  assert.equal(w.concurrency.group, workflow('hangzhou-api-release').concurrency.group);
   assert.match(w.jobs.request.steps[0].run, /GITHUB_REF.*refs\/heads\/main/);
   assert.equal(w.jobs.admission.uses, './.github/workflows/release-admission.yml');
   assert.equal(w.jobs.admission.with.targets, 'dashboard');
