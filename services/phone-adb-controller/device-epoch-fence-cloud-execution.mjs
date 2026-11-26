@@ -160,6 +160,7 @@ export async function cloudFenceMain([operation, sourceCommit, input, stateFile,
     withDeviceGuard,
     disconnect: createDisconnect(reads),
     issueAdmission: createCloudEpochIssuer({ daemons: reads.daemons, host: reads.host, instance: reads.instance,
+      centralRead: path => reads.readBrain(path.slice('/api/brain'.length)),
       assertPostRelease: createPostReleaseCheck(reads, plan), home }),
   } });
 }
