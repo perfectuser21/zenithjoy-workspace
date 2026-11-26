@@ -396,6 +396,9 @@ jobs:
       - name: Run both private loopback native regression files on Darwin
         run: node --test --test-concurrency=1 services/phone-adb-controller/__tests__/public-code-preflight.test.mjs services/phone-adb-controller/__tests__/phone-epoch-producer.test.mjs
 
+      - name: Verify Yuesheng ADB listener identity against the Darwin kernel
+        run: python3 -B services/phone-adb-controller/__tests__/yuesheng-adb-daemon-binding.test.py
+
       - name: Verify actual recorder header visibility and AVIO failure handling
         run: |
           command -v cc >/dev/null
