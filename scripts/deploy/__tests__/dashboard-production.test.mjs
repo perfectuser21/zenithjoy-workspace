@@ -64,7 +64,8 @@ test('protected Dashboard verification and trusted compatibility check precede p
   const preflight = build.steps.findIndex(s => s.run?.includes('dashboard-api-compat.mjs'));
   assert.ok(preflight > 0);
   assert.equal(build.steps[0].with?.ref, undefined);
-  assert.equal(build.steps[0].with['fetch-depth'], 0);
+  assert.match(build.steps[preflight].run, /git fetch --no-tags --depth=1 origin/);
+  assert.equal(workflow('zenithjoy-dashboard-production').jobs.admission.secrets, undefined);
   assert.equal(build.steps[preflight].env.CANDIDATE_SHA, '${{ needs.admission.outputs.sha }}');
   assert.equal(build.steps[preflight + 1].with.ref, '${{ needs.admission.outputs.sha }}');
 });
