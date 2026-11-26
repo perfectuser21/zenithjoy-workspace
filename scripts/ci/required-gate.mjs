@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 // The same selection contract drives all three required aggregate checks.
+const codeFullJobs = [
+  'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test',
+  'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test',
+  'native-103-darwin-test',
+];
+
 export const gates = {
   wechat: {
     routes: ['cs_backend', 'android_cs'],
@@ -10,12 +16,12 @@ export const gates = {
   orphan: { routes: ['orphan'], conditional: { 'playwright-orphan-consolidation': 'orphan' }, always: [], manual: true },
   android: { routes: ['android'], conditional: { 'test-and-build': 'android' }, always: [] },
   code: {
-    routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'],
+    routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules', 'docs_only'],
     conditional: {
       'dashboard-build': 'dashboard',
       'api-lint': 'api', 'geoai-build': 'geoai', 'line-module-build': 'agent_modules',
     },
-    always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test', 'native-103-darwin-test', 'api-scripts-test'],
+    always: ['security', 'api-scripts-test', ...codeFullJobs],
   },
   runtime: {
     routes: ['dashboard', 'api', 'agent', 'ci', 'staff_hub'],
@@ -29,7 +35,7 @@ export const gates = {
   },
 };
 
-export function checkGate(profile, needs) {
+export function checkGate(profile, needs, eventName = process.env.GITHUB_EVENT_NAME) {
   const contract = gates[profile];
   if (!contract) throw new Error(`Unknown gate profile: ${profile}`);
   if (needs?.changes?.result !== 'success') throw new Error('Detect Changes must succeed');
@@ -37,10 +43,17 @@ export function checkGate(profile, needs) {
   for (const route of contract.routes) {
     if (outputs?.[route] !== 'true' && outputs?.[route] !== 'false') throw new Error(`Invalid or missing change output: ${route}`);
   }
+  const docsOnly = profile === 'code' && outputs.docs_only === 'true';
+  if (docsOnly && (eventName !== 'pull_request' || contract.routes.some(route => route !== 'docs_only' && outputs[route] === 'true'))) {
+    throw new Error('Invalid docs-only change selection');
+  }
   const required = [...contract.always, ...Object.entries(contract.conditional)
     .filter(([, route]) => outputs[route] === 'true' || outputs.ci === 'true')
     .map(([job]) => job)];
-  const failed = required.filter(job => needs[job]?.result !== 'success');
+  const failed = required.filter(job => {
+    const result = needs[job]?.result;
+    return result !== 'success' && !(docsOnly && codeFullJobs.includes(job) && result === 'skipped');
+  });
   for (const [job, state] of Object.entries(needs)) {
     if (['failure', 'cancelled'].includes(state?.result) && !failed.includes(job)) failed.push(job);
   }

@@ -3,8 +3,12 @@ import {fileURLToPath} from 'node:url';
 
 // Execute the real aggregate step, including its GitHub-provided JSON environment.
 export function runCodeGate(workflow, openclawResult, overrides = {}) {
-  const needs=Object.fromEntries(workflow.jobs['l3-passed'].needs.map(job=>[job,{result:workflow.jobs[job]?.if?'skipped':'success'}]));
-  needs.changes={result:'success',outputs:Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key=>[key,'false']))};
+  const needs = { changes: { result: 'success', outputs: Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, 'false'])) } };
+  for (const job of workflow.jobs['l3-passed'].needs.filter(job => job !== 'changes')) {
+    const condition = workflow.jobs[job].if;
+    const selected = !condition || Function('needs', 'return (' + condition + ')')(needs);
+    needs[job] = { result: selected ? 'success' : 'skipped' };
+  }
   needs['openclaw-scripts-test']={result:openclawResult};
   for(const [job,result] of Object.entries(overrides)) {
     if(result === null) delete needs[job]; else needs[job]={result};

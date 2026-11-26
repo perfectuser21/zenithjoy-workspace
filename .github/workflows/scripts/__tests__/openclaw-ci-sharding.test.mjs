@@ -8,7 +8,6 @@ import YAML from 'yaml';
 import {runCodeGate} from './helpers/run-code-gate.mjs';
 import {openclawStep,captureNodeArgs} from './helpers/openclaw-selection.mjs';
 import {isPhoneDarwinTest} from '../../../../scripts/ci/native-phone-ci-selection.mjs';
-import {checkGate} from '../../../../scripts/ci/required-gate.mjs';
 
 const workflow = YAML.parse(readFileSync(new URL('../../ci-l3-code.yml', import.meta.url), 'utf8'));
 const globs = [
@@ -28,7 +27,7 @@ function command(w = workflow) {
 }
 function validate(w) {
   const job = w.jobs['openclaw-scripts-test'];
-  assert.equal(job.if, undefined);
+  assert.equal(job.if, "needs.changes.outputs.docs_only != 'true'");assert.equal(job.needs, 'changes');
   assert.equal(job['continue-on-error'], undefined);
   assert.equal(job['timeout-minutes'], 10);
   assert.deepEqual(job.strategy, {'fail-fast': false, matrix: {shard: [1, 2, 3]}});
@@ -41,7 +40,7 @@ function validate(w) {
   const nativeJob=w.jobs['public-code-phone-darwin-test'];
   assert.equal(nativeJob['runs-on'],'macos-latest');
   assert.equal(nativeJob['timeout-minutes'],15);
-  assert.equal(nativeJob.if,undefined);assert.equal(nativeJob['continue-on-error'],undefined);
+  assert.equal(nativeJob.if, "needs.changes.outputs.docs_only != 'true'");assert.equal(nativeJob.needs, 'changes');assert.equal(nativeJob['continue-on-error'],undefined);
   assert.ok(w.jobs['l3-passed'].needs.includes('public-code-phone-darwin-test'));
   const nativeStep=nativeJob.steps.find(step=>step.name==='Run official child native lifecycle without platform skips');
   assert.equal(nativeStep.if,undefined);assert.equal(nativeStep['continue-on-error'],undefined);
@@ -49,7 +48,7 @@ function validate(w) {
   for(const name of epochNative)assert.ok(!nativeStep.run.includes(name),'new epoch suites must not consume the original Darwin budget');
   const epochJob=w.jobs[epochKey];assert.ok(epochJob,'epoch native coverage needs its own required job');
   assert.equal(epochJob.name,'Epoch Resume Darwin Test');assert.equal(epochJob['runs-on'],'macos-latest');assert.equal(epochJob['timeout-minutes'],10);
-  assert.equal(epochJob.if,undefined);assert.equal(epochJob['continue-on-error'],undefined);
+  assert.equal(epochJob.if, "needs.changes.outputs.docs_only != 'true'");assert.equal(epochJob.needs, 'changes');assert.equal(epochJob['continue-on-error'],undefined);
   assert.ok(w.jobs['l3-passed'].needs.includes(epochKey));
   const epochStep=epochJob.steps.at(-1);assert.equal(epochStep.if,undefined);assert.equal(epochStep['continue-on-error'],undefined);
   const setupEnd=nativeJob.steps.findIndex(step=>step.name==='Run both private loopback native regression files on Darwin');
@@ -57,8 +56,8 @@ function validate(w) {
   assert.doesNotMatch(epochStep.run,/ffmpeg/);
   assert.deepEqual(captureNodeArgs(epochStep.run),['--test','--test-concurrency=1',...epochNative.map(name=>'services/phone-adb-controller/__tests__/'+name)]);
   assert.deepEqual(actual.filter(arg=>!arg.startsWith('--')).sort(),baseline.filter(arg=>!arg.startsWith('--')&&!darwinOnly.test(arg)&&!isPhoneDarwinTest(arg)&&![...officialNative,...epochNative,...continuationNative,...privateNative].includes(arg.split('/').at(-1))).sort(),'actual shell argv must preserve the complete original selector union and the new CI contract, with true Darwin tests kept in the required owned-PG job');
-  const continuation=w.jobs['epoch-continuation-darwin-test'];assert.equal(continuation['runs-on'],'macos-latest');assert.equal(continuation['timeout-minutes'],10);assert.equal(continuation.if,undefined);assert.equal(continuation['continue-on-error'],undefined);assert.deepEqual(continuation.steps.slice(0,-1),epochJob.steps.slice(0,-1));assert.deepEqual(captureNodeArgs(continuation.steps.at(-1).run),['--test','--test-concurrency=1',...continuationNative.map(name=>'services/phone-adb-controller/__tests__/'+name)]);assert.ok(w.jobs['l3-passed'].needs.includes('epoch-continuation-darwin-test'));
-  const recoveryJob=w.jobs['epoch-private-recovery-darwin-test'];assert.equal(recoveryJob['runs-on'],'macos-latest');assert.equal(recoveryJob['timeout-minutes'],10);assert.equal(recoveryJob.if,undefined);assert.equal(recoveryJob['continue-on-error'],undefined);assert.deepEqual(recoveryJob.steps.slice(0,-1),epochJob.steps.slice(0,-1));assert.deepEqual(captureNodeArgs(recoveryJob.steps.at(-1).run),['--test','--test-concurrency=1',...privateNative.map(n=>'services/phone-adb-controller/__tests__/'+n)]);assert.ok(w.jobs['l3-passed'].needs.includes('epoch-private-recovery-darwin-test'));
+  const continuation=w.jobs['epoch-continuation-darwin-test'];assert.equal(continuation['runs-on'],'macos-latest');assert.equal(continuation['timeout-minutes'],10);assert.equal(continuation.if, "needs.changes.outputs.docs_only != 'true'");assert.equal(continuation.needs, 'changes');assert.equal(continuation['continue-on-error'],undefined);assert.deepEqual(continuation.steps.slice(0,-1),epochJob.steps.slice(0,-1));assert.deepEqual(captureNodeArgs(continuation.steps.at(-1).run),['--test','--test-concurrency=1',...continuationNative.map(name=>'services/phone-adb-controller/__tests__/'+name)]);assert.ok(w.jobs['l3-passed'].needs.includes('epoch-continuation-darwin-test'));
+  const recoveryJob=w.jobs['epoch-private-recovery-darwin-test'];assert.equal(recoveryJob['runs-on'],'macos-latest');assert.equal(recoveryJob['timeout-minutes'],10);assert.equal(recoveryJob.if, "needs.changes.outputs.docs_only != 'true'");assert.equal(recoveryJob.needs, 'changes');assert.equal(recoveryJob['continue-on-error'],undefined);assert.deepEqual(recoveryJob.steps.slice(0,-1),epochJob.steps.slice(0,-1));assert.deepEqual(captureNodeArgs(recoveryJob.steps.at(-1).run),['--test','--test-concurrency=1',...privateNative.map(n=>'services/phone-adb-controller/__tests__/'+n)]);assert.ok(w.jobs['l3-passed'].needs.includes('epoch-private-recovery-darwin-test'));
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');
@@ -119,11 +118,12 @@ test('resume/auth suites leave the actual Linux selector and remain required on 
   const detached=structuredClone(workflow);detached.jobs['l3-passed'].needs=detached.jobs['l3-passed'].needs.filter(key=>key!==epochKey);assert.throws(()=>validate(detached));
 });
 test('the real aggregate rejects missing, skipped, failed and cancelled epoch Darwin coverage',()=>{
-  const needs=Object.fromEntries(workflow.jobs['l3-passed'].needs.map(job=>[job,{result:workflow.jobs[job]?.if?'skipped':'success'}]));
-  needs.changes={result:'success',outputs:Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key=>[key,'false']))};
-  needs[epochKey]={result:'success'};assert.doesNotThrow(()=>checkGate('code',needs));
-  for(const status of ['skipped','failure','cancelled'])assert.throws(()=>checkGate('code',{...needs,[epochKey]:{result:status}}),/epoch-resume-darwin-test/);
-  delete needs[epochKey];assert.throws(()=>checkGate('code',needs),/epoch-resume-darwin-test=missing/);
+  assert.equal(runCodeGate(workflow, 'success').status, 0);
+  for (const status of [null, 'skipped', 'failure', 'cancelled']) {
+    const result = runCodeGate(workflow, 'success', { [epochKey]: status });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /epoch-resume-darwin-test/);
+  }
 });
 test('actual matrix commands execute the original file union exactly once across all three shards', t => {
   const f = fixture(t), all = run(f, original, 'all');
