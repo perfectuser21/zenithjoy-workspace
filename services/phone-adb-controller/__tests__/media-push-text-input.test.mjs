@@ -111,11 +111,11 @@ if (a[0] === "pull") {
     if ((read("typed") && process.env.FAKE_NESTED_TARGET_DRIFT === "1") || (read("ime").includes("adbkeyboard") && process.env.FAKE_NESTED_READY_DRIFT === "1")) xml=xml.replace('com.zhihu.android:id/editArticleTitle','com.zhihu.android:id/otherTitle');
     fs.writeFileSync(a[2],xml);process.exit(0);
   }
-  if (process.env.FAKE_XHS_IMAGE_TITLE_FIXTURES) {
+  if (process.env.FAKE_XHS_TITLE_FIXTURE_PREFIX) {
     const typed = read("typed");
     const phase = typed ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
-    const xml = fs.readFileSync(path.join(process.env.FAKE_XHS_IMAGE_TITLE_FIXTURES, "xhs-image-note-title-" + phase + ".xml"), "utf8");
-    fs.writeFileSync(a[2], typed ? xml.replace("晚风里的青蓝", esc(typed)) : xml);
+    const xml = fs.readFileSync(process.env.FAKE_XHS_TITLE_FIXTURE_PREFIX + phase + ".xml", "utf8");
+    fs.writeFileSync(a[2], typed ? xml.replace("晚风里的青蓝", esc(typed)).replace("雾色慢一点", esc(typed)) : xml);
     process.exit(0);
   }
   if (process.env.FAKE_XHS_NATIVE_INPUT === "1") {
@@ -615,17 +615,18 @@ for (const [name, attrs] of [
 });
 
 
-test("text-input 小红书图文标题框写后缩宽，单次输入逐字回读且恢复输入法", async () => {
-  const ctx = setup();
-  const title = "晚风里的青蓝";
-  const result = await run(ctx, ["text-input", title], {
-    FAKE_XHS_IMAGE_TITLE_FIXTURES: new URL("./fixtures/", import.meta.url).pathname,
+for (const [label, kind, title] of [["图文", "image", "晚风里的青蓝"], ["视频", "video", "雾色慢一点"]]) {
+  test("text-input 小红书" + label + "标题框写后缩宽，单次输入逐字回读且恢复输入法", async () => {
+    const ctx = setup();
+    const result = await run(ctx, ["text-input", title], {
+      FAKE_XHS_TITLE_FIXTURE_PREFIX: new URL("./fixtures/xhs-" + kind + "-note-title-", import.meta.url).pathname,
+    });
+    assert.equal(result.code, 0, result.err);
+    const receipt = parse(result.out);
+    assert.equal(receipt.comparison_mode, "exact");
+    assert.equal(receipt.source_sha256, receipt.actual_sha256);
+    assert.equal(readFileSync(join(ctx.state, "typed"), "utf8"), title);
+    assert.equal((calls(ctx).match(/ADB_INPUT_B64/g) || []).length, 1);
+    assert.equal(ime(ctx), ORIG_IME);
   });
-  assert.equal(result.code, 0, result.err);
-  const receipt = parse(result.out);
-  assert.equal(receipt.comparison_mode, "exact");
-  assert.equal(receipt.source_sha256, receipt.actual_sha256);
-  assert.equal(readFileSync(join(ctx.state, "typed"), "utf8"), title);
-  assert.equal((calls(ctx).match(/ADB_INPUT_B64/g) || []).length, 1);
-  assert.equal(ime(ctx), ORIG_IME);
-});
+}
