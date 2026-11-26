@@ -2,6 +2,8 @@
 
 纯 ADB 外驱真机 RPA:skill 层判据焊死为确定性命令,融合 Kotlin RPA(NodeAwait/DouyinCollectService)教义——等待用条件、坐标从树取、失败必归因。
 
+[安卓获客执行模式与命名](../../docs/android-rpa-execution-modes.md)
+
 ## ADB 宿主管理（任务 c9eff684-0f1a-48df-b694-9459216ee81e）
 
 管理归属：基础设施部／系统看护／设备与手机台账。代码真身在本目录，设备与租约以 Brain 为准。M4 的实体 USB 使用一个受管服务；MMV 云手机保留自己的网络入口，不复制 M4 的策略、密钥或隔离状态。
