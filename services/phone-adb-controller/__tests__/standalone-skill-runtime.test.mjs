@@ -70,6 +70,37 @@ async function runtimeFixture(){
  const dependencies={hostRegistry:registry,bootstrap:async()=>true,leaseFactory:()=>({acquire:async()=>effects.push('central-acquire'),release:async()=>effects.push('central-release')}),execute,guard:async()=>{effects.push('fresh-guard');return {authorized:true};},producerFactory:async()=>{effects.push('producer-start');return {env:{},isReturnUnknown:()=>leafUnknown,seal:async()=>{effects.push('leaf-seal');return {requests_returned:true};}};},rpcFactory:()=>async()=>({ok:true,result:{}}),ipcFactory:async({call})=>{dispatch=call;return {connectionPath:path.join(dir,'fake-test-connection.json'),close:async()=>effects.push('ipc-close')};}};
  return {dir,run,task,frozen,dependencies,effects,registry,unknownPath,execute,setLeafUnknown:v=>leafUnknown=v,dispatch:(...args)=>dispatch(...args),cleanup:()=>fs.rmSync(dir,{recursive:true,force:true}),fs,path};
 }
+test('installed host calls the verifier frozen in the current run directory', async () => {
+ const { startStandaloneSkillRuntime } = await import('../standalone-skill-runtime.mjs');
+ const { digest } = await import('../runtime-definition.mjs');
+ const f = await runtimeFixture();
+ try {
+  delete f.dependencies.guard;
+  const verifierPath = 'runtime/device-epoch-fence-admission.mjs';
+  const verifierSource = [
+   "import { fileURLToPath } from 'node:url';",
+   "import { dirname } from 'node:path';",
+   "export async function canAuthorizeNativeFrame({ root, env }) {",
+   "  if (root !== dirname(fileURLToPath(import.meta.url)) || !root.startsWith(env.WFR_RUN_DIR + '/')) {",
+   "    throw Error('EPOCH_ADMISSION_SCOPE');",
+   "  }",
+   "  return { authorized: true };",
+   "}",
+  ].join('\n');
+  f.fs.writeFileSync(f.path.join(f.dir, verifierPath), verifierSource, { mode: 0o600 });
+  f.frozen.files[verifierPath] = digest(verifierSource);
+  const { snapshot_sha256: _previous, ...body } = f.frozen;
+  f.fs.writeFileSync(f.path.join(f.dir, 'run-definition.json'), JSON.stringify({ ...body, snapshot_sha256: digest(body) }));
+  const host = await startStandaloneSkillRuntime({ runDirectory: f.dir, dependencies: f.dependencies });
+  const cleanup = await host.close();
+  assert.equal(cleanup.native_return_unknown, false);
+  assert.equal(cleanup.central_released, true);
+  assert.equal(cleanup.local_released, true);
+ } finally {
+  f.cleanup();
+ }
+});
+
 test('runtime claims the real host proof then fresh local ownership and closes in verified resource order',async()=>{
  const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),f=await runtimeFixture();
  try{

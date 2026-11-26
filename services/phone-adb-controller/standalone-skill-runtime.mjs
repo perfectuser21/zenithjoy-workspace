@@ -1,13 +1,12 @@
 // 独立Skill工具宿主；只管理资源和单步工具，不执行业务循环或启动模型。
 import {join,dirname,resolve} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {readFileSync,writeFileSync,appendFileSync,mkdirSync,realpathSync,lstatSync,openSync,closeSync,fsyncSync,constants} from 'node:fs';
 import {createRequire} from 'node:module';
 import {userInfo} from 'node:os';
 import {readFrozen} from './runtime-definition.mjs';
 import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches,standaloneHostProofPaths,createStandaloneHostProof} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
-import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
 import {createCentralDeviceLease} from './central-device-lease.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
 import {execInput,createRpc,safeExecutionDiagnostic} from './leadgen-client.mjs';
@@ -110,6 +109,11 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
  const collection=scope.workflow_key==='douyin_video_processing';
  if(!collection&&scope.workflow_key!=='douyin_video_discovery')fail('DIRECTORY');
  const phoneScope=collection?frozen.collection_phone_scope:frozen.discovery_phone_scope;
+ const verifierFile='runtime/device-epoch-fence-admission.mjs';
+ const verifierPath=join(dir,verifierFile);
+ if(!dependencies.guard&&(!Object.hasOwn(frozen.files,verifierFile)||realpathSync(verifierPath)!==verifierPath))fail('EPOCH_VERIFIER_UNFROZEN');
+ // 安装目录只负责加载宿主，准入校验必须从已读回哈希的本轮运行目录加载。
+ const verifyEpoch=dependencies.guard??(await import(pathToFileURL(verifierPath).href)).canAuthorizeNativeFrame;
  const env={...environment,WF_HOME:root,WF_DEPLOYMENT_ROOT:root,WFR_RUN_DIR:dir,WF_BRAIN_TASK_ID:identity.task_id,WFR_RUN_ID:identity.run_id,WFR_TAG:scope.run_tag,WFR_ATTEMPT:'a1',P:scope.profile,SERIAL:scope.serial,LEADGEN_LINE:scope.line,LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:scope.workflow_key,
   WF_RUN_START_TS:String(scope.run_start_ts),WF_RUN_MAX_SECONDS:String(scope.run_max_seconds),DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),ZJ_ADB_HOST_CONFIG:phoneScope.policy_binding.policy_path,ADB_SERVER_SOCKET:phoneScope.policy.endpoint,DOUYIN_ADB_PORT:String(phoneScope.policy.port??phoneScope.policy.endpoint.split(':').at(-1)),LEADGEN_MMV_DEVICE_RUNTIME:'1',ZJ_EXTERNAL_LEDGER:join(dir,'external-interactions.jsonl')};
  if(env.BRAIN_INTERNAL_TOKEN!==process.env.BRAIN_INTERNAL_TOKEN)fail('CREDENTIAL_CONTEXT');
@@ -147,7 +151,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    if(present(unknownPath)){revoke('EXISTING_REVOCATION');fail('HOST_REVOKED');}
    if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}
    const actual=readFrozen(dir);if(actual.snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');
-   return await (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:actual,env});
+   return await verifyEpoch({root,frozen:actual,env});
   }catch(error){if(!unknown)revoke('ADMISSION_REJECTED');throw error;}
  };
  const close=()=>{
