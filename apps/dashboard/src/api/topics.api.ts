@@ -1,15 +1,7 @@
 import type { PipelineRegistration } from './pipeline.api'
 /**
- * 选题池（topics）API 客户端 — 选题池 v1
- *
- * 对接 services/content-pipeline 的 `/api/topics` 路由。
- * 响应统一 `{ success, data, error }` 格式。
+ * 选题池 API 客户端。通过本站的员工会话访问内容工厂。
  */
-
-// 注意：topics API 挂在 creator 服务（默认 /api 转到 creator）
-// 单独暴露一个 baseURL，允许通过 VITE_CREATOR_API_BASE 覆盖；默认复用 /api
-const CREATOR_BASE =
-  (import.meta.env.VITE_CREATOR_API_BASE as string | undefined)?.replace(/\/$/, '') || ''
 
 export type TopicStatus = '待研究' | '已通过' | '研究中' | '已发布' | '已拒绝'
 
@@ -81,7 +73,7 @@ async function api<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const url = `${CREATOR_BASE}/api/topics${path}`
+  const url = `/api/content-factory/topics${path}`
 
   // 超时控制（fetch 默认无超时）
   const controller = new AbortController()
@@ -90,8 +82,7 @@ async function api<T>(
   let res: Response
   try {
     res = await fetch(url, {
-      // 注：本应用与后端同源，CSRF 由 SameSite cookie + 同源策略覆盖；
-      // 如未来跨域，需在此追加 X-CSRF-Token header。
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
         ...(init.headers || {}),

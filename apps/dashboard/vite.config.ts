@@ -118,6 +118,9 @@ export default defineConfig({
         target: 'http://localhost:5200/api',
         changeOrigin: true,
       },
+      '/api/content-factory/topics': {
+        target: 'http://localhost:5200',
+      },
       // Pipeline API — zenithjoy 数据所有权
       '/api/pipeline': {
         target: 'http://localhost:5200',
