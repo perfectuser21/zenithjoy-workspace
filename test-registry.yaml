@@ -8830,6 +8830,13 @@ tests:
     status: active
     product: CI治理
     note: 测试香港隔离草稿的认证、变更读回、版本冲突与安全恢复。正式工作流实测预发。
+  - id: hz-api-business-review-regression
+    path: scripts/release-gate/__tests__/hz-api-business-review.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 生产晋级只接受可信审批者绑定同 SHA 和镜像尝试的业务证据。
   - id: hz-api-candidate-regression
     path: scripts/deploy/__tests__/hz-api-candidate.test.mjs
     type: integration

@@ -27,7 +27,12 @@ test('only a trusted manual main run may activate the admitted Hangzhou API arti
   assert.deepEqual(admission.with, {sha: '${{ inputs.sha }}'});
   assert.equal(admission.secrets, undefined);
   assert.equal(workflow.on.workflow_dispatch.inputs.acceptance_run_key, undefined);
-  assert.match(execute.if, /inputs.action == 'promote' && needs.admission.result == 'success'/);
+  assert.match(execute.if, /inputs.action == 'promote' && needs.admission.result == 'success' && needs.business-review.result == 'success'/);
+  assert.match(execute.if, /needs.admission.result == 'skipped' && needs.business-review.result == 'skipped'/);
+  const review = workflow.jobs['business-review'];
+  assert.equal(review.environment, 'hangzhou-api-business-review');
+  assert.match(review.steps.at(-1).run, /hz-api-business-review\.mjs/);
+  assert.equal(review.steps.at(-1).env.STAGED_ATTEMPT, '${{ needs.admission.outputs.api_run_attempt }}');
   const download = execute.steps.find(step => step.uses?.startsWith('actions/download-artifact@'));
   assert.match(download.with.name, /api_run_id.*api_run_attempt/);
   assert.match(download.with['run-id'], /needs.admission.outputs.api_run_id/);

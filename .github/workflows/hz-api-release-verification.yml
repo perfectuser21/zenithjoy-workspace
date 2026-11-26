@@ -71,6 +71,12 @@ jobs:
           set -euo pipefail
           GITHUB_OUTPUT='' node scripts/release-gate/hz-api-staging-evidence.mjs "$SHA" > "$RUNNER_TEMP/hz-api-staging-after.json"
           cmp "$RUNNER_TEMP/hz-api-staging-before.json" "$RUNNER_TEMP/hz-api-staging-after.json"
+      - name: Summarize the candidate and verified staging attempt
+        env:
+          SHA: ${{ steps.stage.outputs.sha }}
+          STAGED_RUN: ${{ steps.stage.outputs.api_run_id }}
+          STAGED_ATTEMPT: ${{ steps.stage.outputs.api_run_attempt }}
+        run: printf 'API %s %s/%s\n' "$SHA" "$STAGED_RUN" "$STAGED_ATTEMPT" >> "$GITHUB_STEP_SUMMARY"
       - name: Store immutable API verification results
         uses: actions/upload-artifact@v4
         with:
