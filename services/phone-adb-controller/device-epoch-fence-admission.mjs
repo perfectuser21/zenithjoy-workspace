@@ -72,7 +72,8 @@ export function verifyEpochFacts(f){
   &&!f.oldInventory.some(d=>d.serial===spec.serial||d.serial===transportSerial)
   &&f.newInventory?.length===1&&f.newInventory[0].serial===transportSerial&&f.newInventory[0].state==='device','EPOCH_LIVE_ROUTES');
  if(r.resource.adb_serial!==undefined)need(f.newHardwareSerial===spec.serial,'EPOCH_DEVICE_IDENTITY');
- need(f.policySha256===r.new_route.policy_sha256&&f.policySha256===spec.policy_binding?.policy_sha256&&(frozen.epoch_source_compatibility?verifyEpochSourceCompatibility({frozen,record:r,recordSha256:f.recordSha256,source:f.source,reviewTask:f.compatibilityReview,developmentTask:f.compatibilityDevelopment}):same(f.source,r.runtime_source)&&f.source.commit===frozen.deployment.source_commit),'EPOCH_SOURCE_POLICY');
+ const sourceCompatibility=frozen.epoch_source_compatibility;
+ need(f.policySha256===r.new_route.policy_sha256&&f.policySha256===spec.policy_binding?.policy_sha256&&(sourceCompatibility?verifyEpochSourceCompatibility({frozen,record:r,recordSha256:f.recordSha256,source:f.source,reviewTask:f.compatibilityReview,developmentTask:f.compatibilityDevelopment}):same(f.source,r.runtime_source)&&f.source.commit===frozen.deployment.source_commit),'EPOCH_SOURCE_POLICY');
  const clean=isYueshengCleanEpoch(r);
  if(isCloudExistingEpoch(r)){
   const migration=r.cloud_migration,environment='staging:'+frozen.deployment.source_commit;
@@ -89,8 +90,10 @@ export function verifyEpochFacts(f){
    &&migration.release_id===frozen.release?.id&&migration.observation_id===frozen.deployment.observation_id,'EPOCH_CLOUD_AUTHORITY');
   need(f.cloudHardwareSerialSha256===migration.hardware_serial_sha256&&f.cloudBootIdSha256===migration.boot_id_sha256,'EPOCH_DEVICE_IDENTITY');
  }else if(clean){
-  need(f.cleanCompletionSha256===r.migration.completion_sha256&&r.migration.release_id===frozen.release?.id
-   &&r.migration.observation_id===frozen.deployment.observation_id&&!frozen.epoch_source_compatibility
+  const originalReleaseMatches = r.migration.release_id === frozen.release?.id
+    && r.migration.observation_id === frozen.deployment.observation_id;
+  // The source check above verifies any compatibility proof against this standalone task and candidate.
+  need(f.cleanCompletionSha256===r.migration.completion_sha256&&(sourceCompatibility?standalone:originalReleaseMatches)
    &&(!standalone||r.resource.line===scope.line),'EPOCH_CLEAN_AUTHORITY');
  }else need(f.archive&&r.original_quarantine&&f.archive.dev===r.original_quarantine.dev&&f.archive.ino===r.original_quarantine.ino
   &&same(f.archive.fields,r.original_quarantine.fields),'EPOCH_LOCAL_HANDOFF');

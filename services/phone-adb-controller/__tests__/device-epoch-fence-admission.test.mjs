@@ -22,10 +22,10 @@ test('official child retains every fresh epoch fact while declaring its exact ag
  for(const change of [v=>v.frozen.primary_host='other',v=>v.frozen.execution_transport='raw-model-v1',v=>v.frozen.agent_input.task_id=id('a'),v=>v.central.locked_by=id('a'),v=>v.oldInventory.push({serial:v.record.resource.serial,state:'device'}),v=>v.activeOwner='other\n']){const bad=structuredClone(f);change(bad);assert.throws(()=>verifyEpochFacts(bad));}
 });
 
-async function standaloneFixture(){
- const {agentInput}=await import('../runtime-definition.mjs'),f=fixture(),p=f.frozen.public_domain;
+async function standaloneFixture(f=fixture()){
+ const {agentInput}=await import('../runtime-definition.mjs'),p=f.frozen.public_domain;
  f.frozen.execution_mode='agent';f.frozen.primary_host='codex-exec-v1';f.frozen.workflow_version={payload:{key:'douyin_video_discovery'}};
- f.frozen.agent_input=agentInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_BRAIN_TASK_ID:f.task.id,WFR_TAG:'new-run',P:'cloud-phone-test',SERIAL:f.record.resource.serial,LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'90'});
+ f.frozen.agent_input=agentInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_BRAIN_TASK_ID:f.task.id,WFR_TAG:'new-run',P:f.record.resource.profile,SERIAL:f.record.resource.serial,LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'90'});
  const approved_keywords=['AI办公'];
  const scope={...f.frozen.agent_input,approved_keywords,source_commit:f.frozen.deployment.source_commit,expected_account:f.record.resource.expected_account,company:p.company,machine_id:p.machine_id};
  const skill={name:'douyin-leadgen-direct',version:'0.1.0',source_commit:'f'.repeat(40),path:'skill/SKILL.md',sha256:'1'.repeat(64)};
@@ -103,8 +103,8 @@ test('standalone discovery scope pins its approved keywords and rejects widening
   const bad=structuredClone(f);change(bad);assert.throws(()=>verifyEpochFacts(bad));
  }
 });
-async function compatibilityFixture(){
- const f=await standaloneFixture(),original=structuredClone(f.record.runtime_source),next='b'.repeat(40),newFile='2'.repeat(64);
+async function compatibilityFixture(input){
+ const f=input ?? await standaloneFixture(),original=structuredClone(f.record.runtime_source),next='b'.repeat(40),newFile='2'.repeat(64);
  f.source={commit:next,files:{...original.files,'standalone-skill-authority.mjs':newFile}};f.frozen.deployment.source_commit=next;f.frozen.discovery_phone_scope.source_commit=next;
  f.frozen.files['runtime/standalone-skill-authority.mjs']=newFile;f.binding.payload.runtime_snapshot_sha256=digest({'code.mjs':'0'.repeat(64),'standalone-skill-authority.mjs':newFile});
  f.task.payload.scope.source_commit=next;f.frozen.standalone_skill.scope_sha256=digest(f.task.payload.scope);f.task.result.codex_skill_direct=structuredClone(f.frozen.standalone_skill);f.taskRun.context.scope=structuredClone(f.task.payload.scope);
@@ -215,6 +215,47 @@ test('悦升干净切换对同一清场记录和当前业务租约准入，无�
    v=>v.newHardwareSerial='other',
    v=>v.activeQuarantined=true,
  ]){const p=cleanMigrationFixture().f;change(p);assert.throws(()=>verifyEpochFacts(p));}
+});
+
+async function reviewedCleanFixture() {
+ const {f}=cleanMigrationFixture();
+ f.frozen.release.id=f.binding.release_id=id('9');
+ f.frozen.deployment.observation_id=f.binding.observation_id=id('8');
+ return compatibilityFixture(await standaloneFixture(f));
+}
+
+test('同一悦升 clean epoch 接受独立审过的新轻盈底座候选', async () => {
+ const {verifyEpochFacts}=await load();
+ const f=await reviewedCleanFixture(), original=structuredClone(f.record);
+ assert.notEqual(f.frozen.release.id,original.migration.release_id);
+ assert.notEqual(f.frozen.deployment.observation_id,original.migration.observation_id);
+ const proof=verifyEpochFacts(f);
+ assert.equal(proof.authorized,true);
+ assert.equal(proof.source_commit,f.source.commit);
+ assert.equal(proof.endpoint,'tcp:127.0.0.1:5045');
+ assert.equal(proof.original_execution_stopped,false);
+ assert.deepEqual(f.record,original);
+});
+
+test('同一悦升 clean epoch 的新候选仍要求精确审查与旧迁移证明', async () => {
+ const {verifyEpochFacts}=await load();
+ for (const change of [
+  f=>delete f.frozen.epoch_source_compatibility,
+  f=>delete f.compatibilityReview,
+  f=>f.compatibilityReview.status='in_progress',
+  f=>f.compatibilityReview.payload.reviewer=f.task.claimed_by,
+  f=>f.source.files.unreviewed='9'.repeat(64),
+  f=>f.frozen.release.id=f.binding.release_id=id('7'),
+  f=>f.frozen.deployment.observation_id=f.binding.observation_id=id('7'),
+  f=>f.policySha256='3'.repeat(64),
+  f=>f.cleanCompletionSha256='3'.repeat(64),
+  f=>f.newHardwareSerial='other-device',
+  f=>f.activeQuarantined=true,
+ ]) {
+  const f=await reviewedCleanFixture();
+  change(f);
+  assert.throws(()=>verifyEpochFacts(f));
+ }
 });
 
 test('清场 epoch 冻结核对固定 journal 原始摘要、同一计划和候选，并拒绝未知终态',async()=>{
