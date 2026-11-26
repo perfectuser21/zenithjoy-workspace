@@ -70,7 +70,7 @@ export function reviewSource({runtimeRoot=here,repositoryRoot=resolve(here,'../.
  if(present){manifest=JSON.parse(bytes(manifestPath));need(manifest.source_repo==='perfectuser21/zenithjoy-workspace'&&/^[a-f0-9]{40}$/.test(manifest.source_commit||'')&&manifest.target==='mmv'&&Array.isArray(manifest.files),'REVIEW_DEPLOYMENT_SOURCE');commit=manifest.source_commit;}
  else{git=(...args)=>execFileSync('git',['-C',repositoryRoot,...args],{encoding:'utf8',timeout:10000,stdio:['ignore','pipe','pipe']});commit=git('rev-parse','HEAD').trim();}
  const files={},queue=['device-epoch-fence-review.mjs'];
- if(includeCloudIssuer)queue.push('device-epoch-fence-cloud-execution.mjs');
+ if(includeCloudIssuer)queue.push('device-epoch-fence-cloud-execution.mjs','public-code-preflight.mjs');
  while(queue.length){const n=queue.shift();if(Object.hasOwn(files,'services/phone-adb-controller/'+n))continue;need(!n.startsWith('../')&&queue.length<512,'REVIEW_IMPORT_SCOPE');const path='services/phone-adb-controller/'+n,b=bytes(join(runtimeRoot,n));
   if(manifest){
    // A candidate may also archive this repository path under a frozen revision.

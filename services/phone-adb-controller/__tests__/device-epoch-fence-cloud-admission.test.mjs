@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os, { tmpdir, userInfo } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { digest } from '../runtime-definition.mjs';
 import { selectPublicPreflightScope, freezePublicPreflightRoute } from '../public-preflight-route.mjs';
 import { preparePublicDomainSnapshot } from '../public-domain-snapshot.mjs';
@@ -294,6 +296,110 @@ test('reviewed formal Code 101 successor uses the immutable earlier physical epo
   assert.notEqual(proof.source_commit, f.record.runtime_source.commit);
   assert.equal(JSON.stringify(f.record), originalBytes);
   assert.equal(proof.original_execution_stopped, false);
+});
+
+test('the same signed Code 101 run admits its Python leaf lock through preflight, collect and cleanup', async t => {
+  const authority = await import('../public-domain-authority.mjs');
+  const admission = await import('../device-epoch-fence-admission.mjs');
+  const { standaloneLocalLockQuarantined } = await import('../standalone-skill-authority.mjs');
+  const f = reviewedSuccessor(), { frozen, record } = f;
+  frozen.snapshot_sha256 = digest(frozen);
+  const runDirectory = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-code-handoff-')));
+  t.after(() => rmSync(runDirectory, { recursive: true, force: true }));
+  const root = join(runDirectory, 'private-locks'), lockPath = join(root, serial + '.lock');
+  mkdirSync(root, { mode: 0o700 });
+  const owner = frozen.run_identity.tag, epoch = id('4'), p = frozen.public_domain;
+  const source = fileURLToPath(new URL('../preflight-local-step.py', import.meta.url));
+  const local = operation => JSON.parse(execFileSync('python3', ['-I', '-B', '-S', '-c',
+    "import json,runpy,sys; print(json.dumps(runpy.run_path(sys.argv[1])['lock_record'](*sys.argv[2:])))",
+    source, root, serial, operation, owner, epoch], { encoding: 'utf8' }));
+  const receipt = local('acquire');
+  const names = readdirSync(lockPath);
+  assert.deepEqual(names.sort(), ['acquired_at', 'owner', 'preflight_epoch', 'preflight_proof_required', 'standalone_review_required']);
+  assert.equal(standaloneLocalLockQuarantined(frozen, names), true, 'legacy readers still treat the Code lock as protected');
+  const unregister = authority.registerPublicDomainAuthority({
+    runDirectory, identity: { ...p, mode: 'formal' }, deadline_ms: Date.now() + 30000, cleanup_deadline_ms: Date.now() + 60000,
+    business_scope: { run: owner, run_id: p.run_id, task_id: p.task_id, source_commit: f.source.commit, profile, serial, attempt: 'a1' },
+  });
+  t.after(unregister);
+  const read = (overrides={}) => admission.readEpochLocalHandoff({ runDirectory, lockPath, frozen, record, ...overrides });
+  const check = () => verifyEpochFacts({ ...f, ...read() }).authorized;
+  assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+  let phase = 'preflight';
+  const proofScope = { runDirectory, lockPath, frozen, epoch, receipt,
+    isActive: () => ['preflight', 'collect_videos', 'cleanup'].includes(phase) };
+  assert.throws(() => authority.bindPublicCodePreflightLock({ ...proofScope, receipt: { ...receipt, readback_epoch: id('0') } }), /PUBLIC_DOMAIN_AUTHORITY/);
+  const revoke = authority.bindPublicCodePreflightLock(proofScope);
+  assert.equal(check(), true);
+  phase = 'collect_videos';
+  assert.equal(local('refresh').readback_epoch, epoch);
+  assert.equal(check(), true);
+  phase = 'cleanup';
+  assert.equal(local('refresh').readback_epoch, epoch);
+  assert.equal(check(), true);
+  assert.throws(() => read({ runDirectory: root }), /EPOCH_LOCAL_HANDOFF/);
+  assert.throws(() => read({ lockPath: root }), /EPOCH_LOCAL_HANDOFF/);
+  const otherRun = structuredClone(frozen);
+  otherRun.public_domain.run_id = id('0');
+  assert.throws(() => read({ frozen: otherRun }), /EPOCH_LOCAL_HANDOFF/);
+  const otherSnapshot = { ...frozen, snapshot_sha256: digest('different snapshot') };
+  assert.throws(() => read({ frozen: otherSnapshot }), /EPOCH_LOCAL_HANDOFF/);
+  const unrelatedRecord = { ...record, authority_basis: 'old-route-fenced-observed-noninterference/v1' };
+  assert.equal(read({ record: unrelatedRecord }).activeQuarantined, true);
+  for (const marker of ['standalone_quarantined', 'preflight_quarantined', 'epoch_fence_lost', 'unexpected']) {
+    const path = join(lockPath, marker);
+    writeFileSync(path, 'unexpected\n', { mode: 0o600 });
+    assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+    rmSync(path);
+  }
+  phase = 'other';
+  assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+  phase = 'cleanup';
+  assert.equal(check(), true);
+  revoke();
+  assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+  assert.throws(() => authority.bindPublicCodePreflightLock(proofScope), /PUBLIC_DOMAIN_AUTHORITY/);
+  assert.equal(local('release').readback_owner, 'none');
+});
+
+test('a protected Code lock refuses a replaced owner or either changed marker', async t => {
+  const { bindPublicCodePreflightLock, registerPublicDomainAuthority } = await import('../public-domain-authority.mjs');
+  const { readEpochLocalHandoff } = await import('../device-epoch-fence-admission.mjs');
+  for (const [name, change] of [
+    ['owner', path => { renameSync(path, path + '.original'); writeFileSync(path, 'current-run\n', { mode: 0o600 }); rmSync(path + '.original'); }],
+    ['preflight_epoch', path => writeFileSync(path, id('9') + '\n')],
+    ['preflight_proof_required', path => rmSync(path)],
+    ['standalone_review_required', path => writeFileSync(path, 'other-run\n')],
+  ]) {
+    const f = reviewedSuccessor(), { frozen, record } = f, p = frozen.public_domain;
+    frozen.snapshot_sha256 = digest(frozen);
+    const runDirectory = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-code-handoff-negative-')));
+    t.after(() => rmSync(runDirectory, { recursive: true, force: true }));
+    const lockPath = join(runDirectory, serial + '.lock'), epoch = id('4'), owner = frozen.run_identity.tag;
+    mkdirSync(lockPath, { mode: 0o700 });
+    for (const [marker, value] of Object.entries({ owner, preflight_epoch: epoch, preflight_proof_required: epoch,
+      standalone_review_required: owner, acquired_at: String(Math.floor(Date.now()/1000)) }))
+      writeFileSync(join(lockPath, marker), value + '\n', { mode: 0o600 });
+    const unregister = registerPublicDomainAuthority({
+      runDirectory, identity: { ...p, mode: 'formal' }, deadline_ms: Date.now() + 30000, cleanup_deadline_ms: Date.now() + 60000,
+      business_scope: { run: owner, run_id: p.run_id, task_id: p.task_id, source_commit: f.source.commit, profile, serial, attempt: 'a1' },
+    });
+    t.after(unregister);
+    bindPublicCodePreflightLock({ runDirectory, lockPath, frozen, epoch, isActive: () => true,
+      receipt: { lock: 'acquired', owner, epoch, readback_owner: owner, readback_epoch: epoch } });
+    const read = () => readEpochLocalHandoff({ runDirectory, lockPath, frozen, record });
+    assert.equal(read().activeQuarantined, false);
+    change(join(lockPath, name));
+    assert.throws(read, /EPOCH_LOCAL_HANDOFF/);
+  }
+});
+
+test('the fixed Cloud source review includes the lock producer call, ownership proof and epoch checkpoint', async () => {
+  const { reviewSource } = await import('../device-epoch-fence-review.mjs');
+  const { files } = reviewSource({ includeCloudIssuer: true });
+  for (const name of ['public-code-preflight.mjs', 'public-domain-authority.mjs', 'device-epoch-fence-admission.mjs', 'private-file-closure.mjs']) {
+    assert.equal(files['services/phone-adb-controller/' + name], digest(readFileSync(new URL('../' + name, import.meta.url))));
+  }
 });
 
 test('reviewed successor rejects an altered origin, new artifact, run, or device', () => {

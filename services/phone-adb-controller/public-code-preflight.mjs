@@ -2,8 +2,9 @@
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {publicDomainAuthority,publicDomainScopeMatches} from './public-domain-authority.mjs';
+import {bindPublicCodePreflightLock,publicDomainAuthority,publicDomainScopeMatches} from './public-domain-authority.mjs';
 import {readFrozen} from './runtime-definition.mjs';
+import {isCloudEpochSourceCompatibility} from './epoch-source-compatibility.mjs';
 import {PUBLIC_CODE_NATIVE_WORKER_MAX_MS,startPublicCodePreflightIO} from './public-code-preflight-io.mjs';
 import {startPreflightLocalLeaves} from './preflight-local-leaves.mjs';
 import {createPreflightPhoneDriver} from './preflight-phone-driver.mjs';
@@ -18,7 +19,9 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
  const frozen=readFrozen(dir),spec=frozen.discovery_phone_scope||frozen.collection_phone_scope,epoch=randomUUID();
  if(frozen.execution_mode!=='code'||!frozen.preflight_profile||!spec||!lease)throw fail('FROZEN');
  const sourceFiles=Object.fromEntries(Object.entries(frozen.files).filter(([p])=>p.startsWith('runtime/')).map(([p,h])=>[p.slice(8),h]));
- const rootLock=join(env.HOME,'.local/share/zenithjoy/phone-locks');let owned=false,unsafe=false,current=null,desktopProof=null,acquireAttempted=false;
+ const rootLock=join(env.HOME,'.local/share/zenithjoy/phone-locks'),lockPath=join(rootLock,env.SERIAL+'.lock');
+ const cloudSuccessor=isCloudEpochSourceCompatibility(frozen.epoch_source_compatibility);
+ let owned=false,unsafe=false,current=null,desktopProof=null,acquireAttempted=false,revokeLocalProof;
  const resourceUnknown=error=>{unsafe=true;state.executionUnknown=true;state.nativeStopUnproven=true;return Object.assign(error,{executionStopped:false,externalEffect:'unknown',resourceUnknown:true});};
  const lock=async(local,operation)=>{
   if(operation==='acquire')acquireAttempted=true;
@@ -26,7 +29,14 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
   const path=join(spec.evidence_root,`${env.WFR_TAG}-lock-${operation}.json`);
   const r=JSON.parse(await local.run('lock',JSON.stringify({root:rootLock,serial:env.SERIAL,operation,owner:env.WFR_TAG,epoch,receipt:{path,run:env.WFR_TAG,profile:env.P,serial:env.SERIAL}})));
   if(r.owner!==env.WFR_TAG||r.epoch!==epoch||r.readback_owner!==(operation==='release'?'none':env.WFR_TAG))throw fail('LOCAL_LOCK');
-  if(operation==='acquire'){owned=true;onLocked(true);}if(operation==='release'){owned=false;onLocked(false);}return r;
+  if(operation==='acquire'){
+   owned=true;
+   if(cloudSuccessor)revokeLocalProof=bindPublicCodePreflightLock({runDirectory:dir,lockPath,frozen,epoch,receipt:r,
+    isActive:()=>owned&&!unsafe&&!state.executionUnknown&&['preflight','collect_videos','cleanup'].includes(state.currentActivity)});
+   onLocked(true);
+  }
+  if(operation==='release'){owned=false;revokeLocalProof?.();onLocked(false);}
+  return r;
   }catch(error){throw resourceUnknown(error);}
  };
  const releaseCentral=async()=>{try{return await lease.release();}catch(error){throw resourceUnknown(error);}};

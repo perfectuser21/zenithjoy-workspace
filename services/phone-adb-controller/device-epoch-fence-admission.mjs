@@ -6,7 +6,7 @@ import {admissionFailure,epochErrorCode,projectEpochDiagnostic} from './epoch-ad
 import {bytes,recordBytes,readPrivatePolicy,validateEpochRecord,freezeFenceReference,epochTransportSerial,isYueshengCleanEpoch,readYueshengEpochCompletion,isCloudExistingEpoch,readCloudExistingEpochCompletion} from './device-epoch-fence-reference.mjs';
 export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
-import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
+import {publicDomainTaskProjectionMatches,readPublicCodePreflightLock} from './public-domain-authority.mjs';
 import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneHostProofPaths,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
 import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment,verifyCloudEpochSuccessorProjection} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
@@ -143,6 +143,16 @@ export async function readEpochDeviceIdentity({query, scope, directory, readBudg
   return proof.stdout.toString('utf8').replace(/\r?\n$/, '');
 }
 
+export function readEpochLocalHandoff({runDirectory,lockPath,frozen,record,standaloneHost}){
+ if(isCloudExistingEpoch(record)&&isCloudEpochSourceCompatibility(frozen.epoch_source_compatibility)){
+  try{return {activeOwner:readPublicCodePreflightLock({runDirectory,lockPath,frozen}),activeQuarantined:false};}
+  catch{need(false,'EPOCH_LOCAL_HANDOFF');}
+ }
+ const names=readdirSync(lockPath);
+ const marker=standaloneHost&&names.includes('standalone_review_required')?bytes(join(lockPath,'standalone_review_required')).toString():undefined;
+ return {activeOwner:bytes(join(lockPath,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,names,marker)};
+}
+
 export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includeCurrentAuthority=false}={}){
  let stage='scope';
  let daemonObservation;
@@ -230,9 +240,10 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  stage='final_record_policy';need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
  if(clean)need(readYueshengEpochCompletion(record)===cleanCompletionSha256,'EPOCH_ADMISSION_DRIFT');
  if(cloud)need(same(readCloudExistingEpochCompletion(record),cloudCompletion),'EPOCH_ADMISSION_DRIFT');
- stage='final_facts';const localNames=readdirSync(activeLock),standaloneMarker=standaloneHost&&localNames.includes('standalone_review_required')?bytes(join(activeLock,'standalone_review_required')).toString():undefined;
+ stage='final_facts';
  if(standaloneHost)need(same(standaloneHost,readStandaloneHostProof({frozen,runDirectory:env.WFR_RUN_DIR})),'EPOCH_STANDALONE_IDENTITY');
- const proof=verifyEpochFacts({record,recordSha256:sha(raw),frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,newHardwareSerial,policySha256:sha(policyRaw),source,...(clean?{cleanCompletionSha256}:cloud?{cloudCompletion,cloudHardwareSerialSha256,cloudBootIdSha256}:{archive:archiveSnapshot(record)}),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,localNames,standaloneMarker)});
+ const local=readEpochLocalHandoff({runDirectory:env.WFR_RUN_DIR,lockPath:activeLock,frozen,record,standaloneHost});
+ const proof=verifyEpochFacts({record,recordSha256:sha(raw),frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,newHardwareSerial,policySha256:sha(policyRaw),source,...(clean?{cleanCompletionSha256}:cloud?{cloudCompletion,cloudHardwareSerialSha256,cloudBootIdSha256}:{archive:archiveSnapshot(record)}),...local});
  if(readBudget!==undefined)need(Number.isSafeInteger(readBudget.deadlineMs)&&Date.now()<readBudget.deadlineMs,'EPOCH_ADMISSION_DEADLINE');
  if(cloudSuccessor&&includeCurrentAuthority)return {...proof,currentAuthority:{task:fresh.task,central:fresh.central}};
  return proof;
