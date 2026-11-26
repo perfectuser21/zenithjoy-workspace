@@ -12,13 +12,14 @@ import {createNativePhoneCommandObserver} from './adb-shell-v2.mjs';
 import {createNativePhonePreflightAdapter} from './native-phone-preflight-adapter.mjs';
 import {startPreflightNativeDomain,preflightDomainClosure} from './preflight-native-domain.mjs';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
-import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
+import {epochCompatibilityRecordScope,isCloudEpochSourceCompatibility} from './epoch-source-compatibility.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const fail=reason=>Error('PUBLIC_CODE_PREFLIGHT_'+reason);
 export const PUBLIC_CODE_NATIVE_WORKER_MAX_MS=300000;
 export async function startPublicCodePreflightIO({root,env,frozen,state,lease,purpose,workerDeadlineMs,receiptDeadlineMs,signal,prepareLocal,assertLocal}){
- const epochGuard=createPhoneEpochGuard({root,env,frozen,state,deadlineMs:workerDeadlineMs});
+ const cloudSuccessor=isCloudEpochSourceCompatibility(frozen.epoch_source_compatibility);
+ const epochGuard=createPhoneEpochGuard({root,env,frozen,state,deadlineMs:workerDeadlineMs,includeCurrentAuthority:cloudSuccessor});
  const formal=publicDomainAuthority(env.WFR_RUN_DIR),spec=frozen.discovery_phone_scope||frozen.collection_phone_scope,profile=frozen.preflight_profile;
  if(!formal||!spec||!profile||!['preflight','cleanup'].includes(purpose)||!publicDomainScopeMatches(env.WFR_RUN_DIR,{run:env.WFR_TAG,run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,profile:env.P,serial:env.SERIAL})
   ||frozen.execution_mode!=='code'||!['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||typeof prepareLocal!=='function'||typeof assertLocal!=='function'||!Number.isSafeInteger(workerDeadlineMs)||workerDeadlineMs>=receiptDeadlineMs||workerDeadlineMs>Date.now()+PUBLIC_CODE_NATIVE_WORKER_MAX_MS)throw fail('SCOPE');
@@ -33,7 +34,21 @@ export async function startPublicCodePreflightIO({root,env,frozen,state,lease,pu
  };
  const active=()=>{if(sealed||unknown||signal?.aborted||Date.now()>=workerDeadlineMs)throw fail('CLOSED');stable();if(localAdmitted)assertLocal();};
  const authorize=async()=>{
-  active();const job=(async()=>{const task=await lease.verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:env.LEADGEN_LINE,sourceCommit:state.source_commit,runTag:env.WFR_TAG});await lease.verifyHeld();active();if(localAdmitted&&epochGuard)await epochGuard();active();return task;})();
+  active();
+  const scope={workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:env.LEADGEN_LINE,sourceCommit:state.source_commit,runTag:env.WFR_TAG};
+  const job=(async()=>{
+   if(localAdmitted&&cloudSuccessor){
+    const proof=await epochGuard();
+    if(!proof?.currentAuthority)throw fail('CLAIM');
+    const task=lease.verifyCurrentAuthority(proof.currentAuthority,scope);
+    active();return task;
+   }
+   const task=await lease.verifyTask(scope);
+   await lease.verifyHeld();
+   active();
+   if(localAdmitted&&epochGuard)await epochGuard();
+   active();return task;
+  })();
   authorizations.add(job);try{return await job;}finally{authorizations.delete(job);}
  };
  const close=async()=>{

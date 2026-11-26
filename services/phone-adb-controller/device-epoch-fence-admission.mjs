@@ -142,7 +142,7 @@ export async function readEpochDeviceIdentity({query, scope, directory, readBudg
   return proof.stdout.toString('utf8').replace(/\r?\n$/, '');
 }
 
-export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
+export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includeCurrentAuthority=false}={}){
  let stage='scope';
  try{
  const spec=phone(frozen);if(spec?.policy?.schema_version===1)return {applicable:false};need(spec?.policy?.schema_version===2&&root===here&&realpathSync(root)===root&&typeof env?.WFR_RUN_DIR==='string'&&resolve(env.WFR_RUN_DIR)===env.WFR_RUN_DIR,'EPOCH_ADMISSION_SCOPE');
@@ -226,7 +226,9 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  stage='final_facts';const localNames=readdirSync(activeLock),standaloneMarker=standaloneHost&&localNames.includes('standalone_review_required')?bytes(join(activeLock,'standalone_review_required')).toString():undefined;
  if(standaloneHost)need(same(standaloneHost,readStandaloneHostProof({frozen,runDirectory:env.WFR_RUN_DIR})),'EPOCH_STANDALONE_IDENTITY');
  const proof=verifyEpochFacts({record,recordSha256:sha(raw),frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,newHardwareSerial,policySha256:sha(policyRaw),source,...(clean?{cleanCompletionSha256}:cloud?{cloudCompletion,cloudHardwareSerialSha256,cloudBootIdSha256}:{archive:archiveSnapshot(record)}),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,localNames,standaloneMarker)});
- if(readBudget!==undefined)need(Number.isSafeInteger(readBudget.deadlineMs)&&Date.now()<readBudget.deadlineMs,'EPOCH_ADMISSION_DEADLINE');return proof;
+ if(readBudget!==undefined)need(Number.isSafeInteger(readBudget.deadlineMs)&&Date.now()<readBudget.deadlineMs,'EPOCH_ADMISSION_DEADLINE');
+ if(cloudSuccessor&&includeCurrentAuthority)return {...proof,currentAuthority:{task:fresh.task,central:fresh.central}};
+ return proof;
  }catch(error){throw admissionFailure(error,stage);}
 }
 export async function main(args){

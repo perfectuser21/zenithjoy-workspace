@@ -112,6 +112,19 @@ test('中央锁 owner 必须来自已登记、已认领且与本次来源吻合�
   await assert.rejects(f.lease.verifyTask({workflowKey:'douyin_video_discovery',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run'}),/CENTRAL_LOCK_TASK_MISMATCH/);
 });
 
+test('已有的实时 Task 和租约投影沿用原校验，且不会重复请求',async()=>{
+  const {lease,calls}=fixture();
+  const scope={workflowKey:'douyin_video_processing',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run'};
+  const task=await lease.verifyTask(scope);
+  const central=await lease.acquire();
+  const count=calls.length;
+  assert.equal(lease.verifyCurrentAuthority({task,central},scope),task);
+  assert.throws(()=>lease.verifyCurrentAuthority({task:{...task,status:'blocked'},central},scope),/CENTRAL_LOCK_TASK_MISMATCH/);
+  assert.throws(()=>lease.verifyCurrentAuthority({task,central:{...central,locked_by:null}},scope),/CENTRAL_LOCK_OWNER_MISMATCH/);
+  assert.throws(()=>lease.verifyCurrentAuthority({task,central:{...central,expires_at:new Date().toISOString()}},scope),/CENTRAL_LOCK_EXPIRED/);
+  assert.equal(calls.length,count);
+});
+
 test('其他公司的合法项目可运行，调用方声明项目时必须精确一致',async()=>{
   const other='11111111-2222-4333-8444-555555555555';
   const taskFields={workflowKey:'douyin_video_processing',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run'};

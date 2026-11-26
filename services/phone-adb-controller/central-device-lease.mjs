@@ -52,11 +52,8 @@ export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,d
     if(!data||typeof data!=='object')throw failure('BODY');
     return data;
   }
-  async function readback(expected){
-    const data=await request('/device-locks');
-    const rows=data.locks?.filter(row=>row.device_name===deviceName);
-    if(data.success!==true||rows?.length!==1)throw Error('CENTRAL_LOCK_UNKNOWN');
-    const lock=rows[0];
+  function verifyLockReadback(lock,expected){
+    if(lock?.device_name!==deviceName)throw Error('CENTRAL_LOCK_UNKNOWN');
     if(lock.locked_by!==expected)throw Error('CENTRAL_LOCK_OWNER_MISMATCH');
     if(expected){
       const expires=Date.parse(lock.expires_at||'');
@@ -64,6 +61,12 @@ export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,d
       expiresAt=expires;
     }else expiresAt=0;
     lastVerified=now();return lock;
+  }
+  async function readback(expected){
+    const data=await request('/device-locks');
+    const rows=data.locks?.filter(row=>row.device_name===deviceName);
+    if(data.success!==true||rows?.length!==1)throw Error('CENTRAL_LOCK_UNKNOWN');
+    return verifyLockReadback(rows[0],expected);
   }
   async function acquire(){
     attempted=true;
@@ -91,8 +94,7 @@ export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,d
     if(result.success!==true||result.released?.device_name!==deviceName||result.released?.locked_by!==null)throw Error('CENTRAL_LOCK_RELEASE_UNKNOWN');
     await readback(null);held=false;attempted=false;return true;
   }
-  async function verifyTask({workflowKey,companyLine,sourceCommit,runTag}){
-    const task=await request('/tasks/'+taskId);
+  function verifyTaskReadback(task,{workflowKey,companyLine,sourceCommit,runTag}){
     const p=task.payload;
     if(publicDomainDirectory){
       if(!publicDomainTaskMatches(task,publicDomainDirectory)||publicDomainAuthority(publicDomainDirectory)?.binding.run_id!==runId)throw Error('CENTRAL_LOCK_PUBLIC_TASK_MISMATCH');
@@ -104,5 +106,14 @@ export function createCentralDeviceLease({publicDomainDirectory,brainUrl,token,d
       ||p.source_commit!==sourceCommit||p.run_tag!==runTag)throw Error('CENTRAL_LOCK_TASK_MISMATCH');
     return task;
   }
-  return {verifyTask,acquire,renew,ensure,verifyHeld,release,get held(){return held;},get attempted(){return attempted;},taskId,runId,deviceName};
+  async function verifyTask(scope){
+    return verifyTaskReadback(await request('/tasks/'+taskId),scope);
+  }
+  function verifyCurrentAuthority({task,central},scope){
+    if(!held)throw Error('CENTRAL_LOCK_NOT_HELD');
+    verifyTaskReadback(task,scope);
+    verifyLockReadback(central,taskId);
+    return task;
+  }
+  return {verifyTask,verifyCurrentAuthority,acquire,renew,ensure,verifyHeld,release,get held(){return held;},get attempted(){return attempted;},taskId,runId,deviceName};
 }
