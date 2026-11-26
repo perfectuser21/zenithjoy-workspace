@@ -10,7 +10,7 @@ import {spawnSync} from 'node:child_process';
 import {startNativePhoneAdbFixture} from './native-phone-public-fixture.mjs';
 import {preflightTestPython} from '../helpers/preflight-test-python.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
-export async function publicCodeNativeFixture(t,{workflow='douyin_video_discovery',slowDump=false,deviceProfile='fixture',deviceSerial='192.0.2.31:10001',expectedAccount='expected',onDump=()=>{},sourceTransform=()=>{}}={}){
+export async function publicCodeNativeFixture(t,{workflow='douyin_video_discovery',activityBudgetMs=300000,domainBudgetMs=300000,slowDump=false,deviceProfile='fixture',deviceSerial='192.0.2.31:10001',expectedAccount='expected',onDump=()=>{},sourceTransform=()=>{}}={}){
  const directory=realpathSync(mkdtempSync(join(tmpdir(),'public-code-native-'))),root=join(directory,'runtime'),home=join(directory,'home'),evidence=join(directory,'evidence');
  t.after(()=>rmSync(directory,{recursive:true,force:true}));mkdirSync(home,{mode:0o700});mkdirSync(evidence,{mode:0o700});
  // Account preflight uses the frozen native Code runtime. Host maintenance and
@@ -40,7 +40,7 @@ export async function publicCodeNativeFixture(t,{workflow='douyin_video_discover
  const env={...process.env,HOME:home,WFR_RUN_DIR:directory,WF_BRAIN_WORKFLOW:workflow,WFR_TAG:'fixture_public',WFR_ATTEMPT:'a1',P:profile,SERIAL:serial,LEADGEN_LINE:'yuesheng',ZJ_ADB_HOST_CONFIG:policyPath,DOUYIN_PHONE_REGISTRY:registry};
  sourceTransform({root,env,policy});
  const load=n=>import(pathToFileURL(join(root,n)).href),authority=await load('public-domain-authority.mjs'),definitions=await load('runtime-definition.mjs');
- const state={run_id:identity.run_id,task_id:identity.task_id,source_commit:'a'.repeat(40),budgetDeadline:Date.now()+300000,company_config:{expected_sender:account}},deadline=Date.now()+300000;
+ const state={run_id:identity.run_id,task_id:identity.task_id,source_commit:'a'.repeat(40),budgetDeadline:Date.now()+activityBudgetMs,company_config:{expected_sender:account}},deadline=Date.now()+domainBudgetMs;
  const unregister=authority.registerPublicDomainAuthority({runDirectory:directory,identity,deadline_ms:deadline,cleanup_deadline_ms:deadline+120000,business_scope:{run:env.WFR_TAG,run_id:identity.run_id,task_id:identity.task_id,source_commit:state.source_commit,profile,serial,attempt:'a1'}});t.after(unregister);
  const files={};function inventory(base,prefix=''){for(const row of readdirSync(base,{withFileTypes:true})){const relative=prefix+row.name,path=join(base,row.name);if(row.isDirectory())inventory(path,relative+'/');else files['runtime/'+relative]=hash(readFileSync(path));}}inventory(root);
  const frozen={execution_mode:'code',deployment:{source_commit:state.source_commit},preflight_profile:(await load('preflight-control-scope.mjs')).freezePreflightProfile({env}),files,[workflow==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope']:{policy,executables:{python:{path:realpathSync(preflightTestPython),sha256:hash(readFileSync(preflightTestPython))}},profile,serial,expected_account:account,evidence_root:evidence}};frozen.snapshot_sha256=definitions.digest(frozen);writeFileSync(join(directory,'run-definition.json'),JSON.stringify(frozen));
