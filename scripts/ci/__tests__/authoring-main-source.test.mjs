@@ -203,6 +203,33 @@ test('真实本地HTTP六阶段完整执行，写后断线GET恢复且同任务�
  }finally{await new Promise(r=>server.close(r));}
 });
 
+test('Brain 冻结错误报告固定阶段和已知诊断，隐藏不受信响应正文',async()=>{
+ const {createServer}=await import('node:http');
+ const {createBrainApi,submitSourceRegistration}=await import('../authoring-main-source.mjs');
+ const statuses=[
+  {error:'definition_source_invalid',message:'冻结来源：GitHub对象不可读',expected:'AUTHORING_STAGE_compose AUTHORING_API_422:definition_source_invalid:github_object_unreadable'},
+  {error:'definition_source_invalid',message:'private-fixture-token',expected:'AUTHORING_STAGE_compose AUTHORING_API_422:definition_source_invalid'},
+  {error:'private-fixture-token!',message:'private-fixture-token',expected:'AUTHORING_STAGE_compose AUTHORING_API_422:unknown'},
+ ];
+ const state={stage:'compose',revision:2,receipts:[],outputs:{}};
+ let failure;
+ const server=createServer((req,res)=>{
+  if(req.method==='POST')res.writeHead(422);
+  res.end(JSON.stringify(req.method==='POST'?failure:state));
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try{
+  const api=createBrainApi(`http://127.0.0.1:${server.address().port}`,'fixture-token');
+  const task={id:'task-id',result:{workflow_authoring:state}};
+  const item={definition:{key:'workflow',source:{revision:'a'.repeat(40)}},owner:{id:'workflow-id'}};
+  const validation={id:'validation',result:{workflow_validation:{evidence_refs:['fixture']}}};
+  for(const response of statuses){
+   failure=response;
+   await assert.rejects(submitSourceRegistration(api,task,item,validation,()=>''),{message:response.expected});
+  }
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
 test('正式main CLI真实Git origin预检接受checkout规范三形态，拒绝外源且不会调用生产API',async()=>{
  const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');
  const {tmpdir}=await import('node:os');const {join}=await import('node:path');
