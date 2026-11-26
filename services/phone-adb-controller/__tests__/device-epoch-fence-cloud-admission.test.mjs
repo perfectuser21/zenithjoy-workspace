@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir, userInfo } from 'node:os';
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import os, { tmpdir, userInfo } from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { digest } from '../runtime-definition.mjs';
+import { selectPublicPreflightScope, freezePublicPreflightRoute } from '../public-preflight-route.mjs';
+import { preparePublicDomainSnapshot } from '../public-domain-snapshot.mjs';
+import { freezePreflightProfile } from '../preflight-control-scope.mjs';
+import { epochCompatibilityRecordScope } from '../epoch-source-compatibility.mjs';
 import { verifyEpochFacts } from '../device-epoch-fence-admission.mjs';
 import { freezeFenceReference, readCloudExistingEpochCompletion, validateEpochRecord } from '../device-epoch-fence-reference.mjs';
 
@@ -226,4 +231,166 @@ test('an existing-route reference verifies the journal and one exact wire acknow
   assert.equal(freeze().path, path);
   write('unknown.json', { retry_allowed: false });
   assert.throws(freeze, /EPOCH_CLOUD_JOURNAL/);
+});
+
+function reviewedSuccessor(f = fixture().facts, originalRef) {
+  const { frozen, record } = f;
+  const spec = frozen.discovery_phone_scope;
+  const release = { id: id('e'), target: 'mmv', environment: 'staging:' + 'b'.repeat(40), payload: {
+    components: [{ kind: 'repo', repo: 'perfectuser21/zenithjoy-workspace', revision: 'b'.repeat(40) }],
+    verification: { status: 'verified', ci_status: 'verified' },
+  } };
+  release.manifest_sha256 = digest({ environment: release.environment, target: release.target, payload: release.payload });
+  const observation = { id: id('f'), release_id: release.id, payload: {
+    environment: release.environment, target: 'mmv', components: release.payload.components,
+  } };
+  observation.payload_sha256 = digest(observation.payload);
+  const gate = { release_id: release.id, current_observation_id: observation.id, deployed: true,
+    actual_matches: true, current_status: 'deployed', gaps: [], verification: { status: 'verified', ci_status: 'verified' } };
+  const original = { release_id: frozen.release.id, observation_id: frozen.deployment.observation_id,
+    manifest_sha256: frozen.release.manifest_sha256 };
+  const candidate = { commit: 'b'.repeat(40), files: { 'code.mjs': digest('successor-runtime') } };
+  f.source = candidate;
+  f.recordSha256 = originalRef?.sha256 ?? digest(record);
+  spec.source_commit = candidate.commit;
+  spec.run_id = frozen.public_domain.run_id;
+  f.task.result.common_runner.mode = 'formal';
+  spec.policy_binding.epoch_fence = originalRef ?? { protocol: 'device-epoch-fence-reference/v1', epoch_id: record.epoch_id, sha256: f.recordSha256 };
+  const receipt = { protocol: 'cloud-101-epoch-source-compatibility/v1', business_run_id: frozen.public_domain.run_id,
+    original_record_sha256: f.recordSha256, original_runtime_source: record.runtime_source,
+    original, candidate_runtime_source: candidate, candidate_manifest_sha256: digest(candidate.files),
+    candidate_release_manifest_sha256: release.manifest_sha256,
+    release_id: release.id, observation_id: observation.id,
+    serial: spec.serial, instance_id: spec.policy.instance_id, policy_sha256: spec.policy_binding.policy_sha256,
+    changes: [{ path: 'code.mjs', before_sha256: record.runtime_source.files['code.mjs'], after_sha256: candidate.files['code.mjs'] }],
+    evidence_refs: ['artifact://source-review'], actor: 'independent-reviewer' };
+  Object.assign(frozen.deployment, { source_commit: candidate.commit, environment: release.environment, release_id: release.id,
+    observation_id: observation.id });
+  frozen.release = release;
+  frozen.epoch_source_compatibility = { review_task_id: id('8'), receipt, receipt_sha256: digest(receipt) };
+  frozen.files = { 'runtime/code.mjs': candidate.files['code.mjs'] };
+  f.binding.payload.runtime_snapshot_sha256 = digest(candidate.files);
+  f.binding.release_id = release.id;
+  f.binding.observation_id = observation.id;
+  f.compatibilityReview = { id: id('8'), status: 'completed', task_type: 'research', parent_task_id: id('9'), payload: {
+    work_kind: 'epoch_source_compatibility_review', reviewer: receipt.actor, business_run_id: receipt.business_run_id,
+    candidate_source_commit: candidate.commit, original_record_sha256: f.recordSha256, development_task_id: id('9'),
+  }, result: { actor: receipt.actor, audit_evidence: { path: receipt.evidence_refs[0], sha256: digest('review'), verdict: 'pass' },
+    epoch_source_compatibility: structuredClone(receipt) } };
+  f.compatibilityDevelopment = { id: id('9'), task_type: 'dev', result: { ship_candidate: {
+    schema_version: 1, stage: 'candidate', task_id: id('9'), repo: 'perfectuser21/zenithjoy-workspace',
+    head_sha: candidate.commit, actor: 'developer',
+  } } };
+  f.compatibilityRelease = { release, observation, gate };
+  return f;
+}
+
+test('reviewed formal Code 101 successor uses the immutable earlier physical epoch and new release', () => {
+  const f = reviewedSuccessor();
+  const originalBytes = JSON.stringify(f.record);
+  const proof = verifyEpochFacts(f);
+  assert.equal(proof.authorized, true);
+  assert.equal(proof.source_commit, f.frozen.deployment.source_commit);
+  assert.notEqual(proof.source_commit, f.record.runtime_source.commit);
+  assert.equal(JSON.stringify(f.record), originalBytes);
+  assert.equal(proof.original_execution_stopped, false);
+});
+
+test('reviewed successor rejects an altered origin, new artifact, run, or device', () => {
+  for (const change of [
+    f => { f.compatibilityRelease.gate.current_observation_id = id('0'); },
+    f => { f.compatibilityRelease.observation.payload_sha256 = digest('wrong observation'); },
+    f => { f.cloudCompletion.manifest_sha256 = f.frozen.release.manifest_sha256; },
+    f => { f.compatibilityReview.payload.business_run_id = id('0'); },
+    f => { f.compatibilityReview.status = 'in_progress'; },
+    f => { f.compatibilityDevelopment.result.ship_candidate.actor = f.compatibilityReview.result.actor; },
+    f => { f.task.result.common_runner.mode = 'exploration'; },
+    f => { f.originalTask.result = { execution_stopped: true }; },
+    f => { f.cloudBootIdSha256 = digest('different boot'); },
+  ]) {
+    const f = reviewedSuccessor();
+    change(f);
+    assert.throws(() => verifyEpochFacts(f), /EPOCH_/);
+  }
+});
+
+
+test('the reviewed successor selects and reopens the original on-disk epoch through the formal route boundary', t => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-successor-route-')));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const user = userInfo();
+  const homeMock = t.mock.method(os, 'userInfo', () => ({ ...user, homedir: home }));
+  syncBuiltinESMExports();
+  t.after(() => { homeMock.mock.restore(); syncBuiltinESMExports(); });
+
+  const rig = fixture(home), { record, spec } = rig;
+  const work = join(home, 'candidate');
+  const registryPath = 'config/adb-host-instances.json';
+  const registry = JSON.stringify({ schema_version: 1, instances: [
+    { instance_id: instance, kind: 'managed', policy_path: record.new_route.policy_path, policy: spec.policy },
+  ] });
+  const registryHash = digest(registry);
+  mkdirSync(join(work, 'config'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(work, registryPath), registry, { mode: 0o600 });
+  mkdirSync(join(record.new_route.policy_path, '..'), { recursive: true, mode: 0o700 });
+  writeFileSync(record.new_route.policy_path, JSON.stringify(spec.policy), { mode: 0o600 });
+  makeJournal(rig);
+  const path = join(home, '.local/share/zenithjoy/device-epoch-fences', serial, record.epoch_id + '.json');
+  mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 });
+  const immutable = Buffer.from(JSON.stringify(record));
+  writeFileSync(path, immutable, { mode: 0o600 });
+  const originalRef = freezeFenceReference({ scope: spec, epochId: record.epoch_id });
+  rig.facts.cloudCompletion = readCloudExistingEpochCompletion(record);
+  const f = reviewedSuccessor(rig.facts, originalRef);
+  const { policy_binding, ...registered } = spec;
+  assert.equal(policy_binding.epoch_fence.sha256, originalRef.sha256);
+  const opts = { root: work, manifest: { ...f.frozen.deployment, files: [
+    { path: 'services/phone-adb-controller/' + registryPath, deployed_path: registryPath, content_sha256: registryHash },
+  ] }, scope: registered, instanceId: instance, epochId: record.epoch_id, workflowKey: 'douyin_video_discovery' };
+  assert.throws(() => selectPublicPreflightScope(opts), /EPOCH_RECORD_SCOPE/);
+  const fixed = selectPublicPreflightScope({ ...opts, epochSourceCompatibility: f.frozen.epoch_source_compatibility });
+  assert.deepEqual(fixed.policy_binding.epoch_fence, originalRef);
+  assert.equal(fixed.source_commit, f.source.commit);
+  f.frozen.discovery_phone_scope = fixed;
+  const route = freezePublicPreflightRoute({ root: work, files: { [registryPath]: registryHash },
+    scope: epochCompatibilityRecordScope(f.frozen) });
+  assert.deepEqual(route, fixed.policy_binding);
+  assert.equal(verifyEpochFacts(f).authorized, true);
+  assert.deepEqual(readFileSync(path), immutable);
+
+  const stepsPath = 'steps.json';
+  const registryFile = join(work, 'registry.tsv');
+  writeFileSync(registryFile, `profile\tserial\tmodel\twidth\theight\tenabled\n${profile}\t${serial}\tFixture\t720\t1280\ttrue\n`, { mode: 0o600 });
+  writeFileSync(join(work, stepsPath), '{}', { mode: 0o600 });
+  const env = { P: profile, SERIAL: serial, WFR_TAG: 'reviewed-fixture', LEADGEN_LINE: 'yuesheng', LEADGEN_LIMIT: '1',
+    LEADGEN_MMV_DEVICE_RUNTIME: '1', DOUYIN_PHONE_REGISTRY: registryFile, DOUYIN_ADB_PORT: '5042', ADB_SERVER_SOCKET: newEndpoint };
+  const { public_domain: business, ...template } = structuredClone(f.frozen);
+  const { run_binding: runBinding } = business;
+  template.preflight_profile = freezePreflightProfile({ env });
+  template.public_preflight_route = route;
+  template.workflow_version.payload.workflow_id = runBinding.workflow_id;
+  const step = runBinding.activities.preflight;
+  template.activities = [{ reference: { slot_key: 'preflight', reference_id: step.reference_id, activity_id: step.activity_id },
+    version: { id: step.activity_definition_version_id } }];
+  const profileFiles = { [registryPath]: registryHash, [stepsPath]: digest('{}') };
+  template.epoch_source_compatibility.receipt.candidate_manifest_sha256 = digest(profileFiles);
+  template.epoch_source_compatibility.receipt_sha256 = digest(template.epoch_source_compatibility.receipt);
+  const candidateProfile = { cwd: work, files: profileFiles, contract: { activities: [{ key: 'preflight' }] },
+    metadata: { preflight: { activity_id: step.activity_id, executor_kind: 'code', runtime_snapshot_sha256: digest(profileFiles) } },
+    domain_adapter: { budget: { max_duration_s: 90 }, config: { workflow_key: 'douyin_video_discovery', execution_mode: 'code',
+      env, resources: { machine: 'us-mac-m4', profile, serial, account: expectedAccount, line: 'yuesheng' },
+      company: record.resource.company, step_spec: stepsPath, snapshot: template } } };
+  const identity = { ...business, mode: 'formal', profile_sha256: digest(candidateProfile) };
+  const prepare = (runId, name) => preparePublicDomainSnapshot({
+    identity: { ...identity, run_id: runId }, profile: candidateProfile, runDirectory: join(home, name),
+    deadline_ms: Date.now() + 90000, cleanup_deadline_ms: Date.now() + 100000,
+  });
+  assert.throws(() => prepare(id('0'), 'never-materialized'), /EPOCH_SOURCE_COMPATIBILITY/);
+  const prepared = prepare(business.run_id, 'successor-run');
+  assert.deepEqual(prepared.snapshot.epoch_source_compatibility, template.epoch_source_compatibility);
+  assert.deepEqual(prepared.snapshot.discovery_phone_scope.policy_binding.epoch_fence, originalRef);
+  assert.deepEqual(readFileSync(path), immutable);
+
+  assert.throws(() => selectPublicPreflightScope({ ...opts, workflowKey: 'douyin_video_processing',
+    epochSourceCompatibility: f.frozen.epoch_source_compatibility }), /PUBLIC_PREFLIGHT_ROUTE_SOURCE/);
 });

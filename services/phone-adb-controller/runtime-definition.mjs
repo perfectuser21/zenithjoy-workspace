@@ -1,5 +1,6 @@
 import {issueNativeTaskLease,consumeNativeTaskLease,assertFrozenNativeTaskLease} from './native-task-lease.mjs';
 import {prepareFrozenPreflightPg,prepareFrozenScoringPg} from './preflight-pg-dependencies.mjs';
+import {epochSourceCompatibilityReference} from './epoch-source-compatibility.mjs';
 import {controlAcceptanceFromTask,validateFrozenControlAcceptance} from './control-acceptance-tools.mjs';
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
 import outreachScope from './leadgen-outreach-scope.js';
@@ -292,7 +293,11 @@ export async function freezeDefinition(o) {
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_input||null)!==canonical(o.discoveryInput||null))throw Error('DISCOVERY_INPUT_RESUME_MISMATCH');
   if(o.producerDescriptor){const d=validateProducerDescriptor(o.producerDescriptor);assertProducerSampling(d,o.samplingInput);if(o.workflowKey!=='douyin_video_processing'||o.runIdentity?.profile!==d.profile||o.runIdentity?.serial!==d.serial||o.samplingInput?.source_run!==d.run_tag)throw Error('PRODUCER_DESCRIPTOR_FREEZE_SCOPE_INVALID');}
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).producer_descriptor||null)!==canonical(o.producerDescriptor||null))throw Error('PRODUCER_DESCRIPTOR_RESUME_MISMATCH');
-  if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_phone_scope||null)!==canonical(o.discoveryPhoneScope||null))throw Error('discovery phone scope续跑输入与冻结请求不符');
+  if(existsSync(resolve(o.runDir,'run-definition.json'))){
+    const previous=readFrozen(o.runDir);
+    if(canonical(previous.discovery_phone_scope||null)!==canonical(o.discoveryPhoneScope||null))throw Error('discovery phone scope续跑输入与冻结请求不符');
+    if(canonical(previous.epoch_source_compatibility||null)!==canonical(o.epochSourceCompatibility||null))throw Error('EPOCH_SOURCE_COMPATIBILITY');
+  }
   if(o.samplingInput){
     const q=o.samplingInput;
     const checked=commentSamplingInput({LEADGEN_COMMENT_LIMIT:String(q.comment_limit),WF_BRAIN_WORKFLOW:q.workflow_key,WFR_TAG:q.run_tag,P:q.profile,SERIAL:q.serial,LEADGEN_LINE:q.line,LEADGEN_SOURCE_RUN:q.source_run,...(Object.hasOwn(q,'collection_budget_s')?{QUEUED_VIDEO_COLLECTION_SECONDS:String(q.collection_budget_s)}:{})});
@@ -397,6 +402,12 @@ export async function freezeDefinition(o) {
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
     ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput),...(executionTransport||{}),...(controlAuthority||{})}:{}),...(hasScoring?{scoring_pg:structuredClone(o.scoringPg),scoring_control_scope:structuredClone(o.scoringControlScope)}:{}),...(hasPreflight?{preflight_pg:structuredClone(o.preflightPg),preflight_control_scope:structuredClone(o.preflightControlScope),preflight_profile:structuredClone(o.preflightProfile)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+  if(o.epochSourceCompatibility!==undefined){
+    if(executionMode!=='code')throw Error('EPOCH_SOURCE_COMPATIBILITY');
+    body.execution_mode='code';
+    body.epoch_source_compatibility=structuredClone(o.epochSourceCompatibility);
+    epochSourceCompatibilityReference(body);
+  }
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   let snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});

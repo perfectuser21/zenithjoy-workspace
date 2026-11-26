@@ -5,7 +5,7 @@ import {join,resolve,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
-import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
+import {epochCompatibilityRecordScope,isCloudEpochSourceCompatibility} from './epoch-source-compatibility.mjs';
 import {agentInput} from './runtime-definition.mjs';
 import {validateStandaloneIdentity,standaloneScope} from './standalone-skill-authority.mjs';
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -64,7 +64,10 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   if(!scope||scope.profile!==fixed.profile||scope.serial!==fixed.serial||scope.expected_account!==fixed.account||scope.target!==phoneHost||scope.policy?.host_id!==phoneHost)fail('RESOURCE_SCOPE');
   if(scope.policy.schema_version===2){
    // 使用真实本轮身份构造原record验证视图，不改候选scope或原epoch事实。
-   const recordScope=standalone?epochCompatibilityRecordScope({...template,execution_mode:cfg.execution_mode,primary_host:cfg.primary_host,standalone_skill:identity}):scope;
+   const cloudSuccessor=isCloudEpochSourceCompatibility(template.epoch_source_compatibility);
+   if(cloudSuccessor&&(!identity.run_id||identity.mode!=='formal'||template.epoch_source_compatibility.receipt.candidate_manifest_sha256!==hash(profile.files)))fail('COMPATIBILITY_SOURCE');
+   const recordScope=standalone?epochCompatibilityRecordScope({...template,execution_mode:cfg.execution_mode,primary_host:cfg.primary_host,standalone_skill:identity})
+    :cloudSuccessor?epochCompatibilityRecordScope({...template,public_domain:identity}):scope;
    if(hash(freezePublicPreflightRoute({root,files:profile.files,scope:recordScope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
    env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
   }else if(scope.policy?.endpoint!==(phoneHost==='xian-m4'?'tcp:127.0.0.1:5037':'tcp:127.0.0.1:5041')||phoneHost==='xian-m4'&&scope.policy.transport!=='usb'||template.public_preflight_route)fail('RESOURCE_SCOPE');

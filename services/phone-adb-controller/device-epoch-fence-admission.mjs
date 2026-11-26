@@ -8,7 +8,7 @@ export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
 import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
 import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
-import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection} from './epoch-source-compatibility.mjs';
+import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {runDiagnostic,readDiagnosticProof} from './device-epoch-fence-diagnostics.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,sha=b=>createHash('sha256').update(b).digest('hex');
@@ -54,7 +54,7 @@ export function readBoundAdbDaemon(expected,{run=(bin,args)=>execFileSync(bin,ar
 }
 export function businessAuthorityProjection(value){
  const task=value.task,c=task?.result?.common_runner,b=value.binding,r=value.taskRun,l=value.central;
- return {task:{id:task?.id,status:task?.status,claimed_by:task?.claimed_by,claimed_at:task?.claimed_at,common_runner:c&&Object.fromEntries(['run_id','task_id','machine_id','profile_sha256','run_binding'].map(k=>[k,c[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{standalone_payload:{execution_mode:task.payload?.execution_mode,scope:task.payload?.scope,skill:task.payload?.skill},codex_skill_direct:standaloneIdentityProjection(task.result?.codex_skill_direct)}:{})},binding:b&&{...Object.fromEntries(['id','run_id','source_kind','workflow_id','workflow_definition_version_id','attempt_key','task_run_id','release_id','observation_id'].map(k=>[k,b[k]])),runtime_snapshot_sha256:b.payload?.runtime_snapshot_sha256},links:value.links&&{task_id:value.links.task_id,task_run_id:value.links.task_run_id},task_run:r&&{...Object.fromEntries(['id','task_id','run_id','status','ended_at'].map(k=>[k,r[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{context:standaloneExecutionContextProjection(r.context)}:{})},central:l&&{device_name:l.device_name,locked_by:l.locked_by},...(value.compatibilityReview?{compatibility_review:compatibilityReviewProjection(value.compatibilityReview),compatibility_development:value.compatibilityDevelopment&&{id:value.compatibilityDevelopment.id,task_type:value.compatibilityDevelopment.task_type}}:{})};
+ return {task:{id:task?.id,status:task?.status,claimed_by:task?.claimed_by,claimed_at:task?.claimed_at,common_runner:c&&Object.fromEntries(['run_id','task_id','machine_id','profile_sha256','run_binding','mode'].map(k=>[k,c[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{standalone_payload:{execution_mode:task.payload?.execution_mode,scope:task.payload?.scope,skill:task.payload?.skill},codex_skill_direct:standaloneIdentityProjection(task.result?.codex_skill_direct)}:{})},binding:b&&{...Object.fromEntries(['id','run_id','source_kind','workflow_id','workflow_definition_version_id','attempt_key','task_run_id','release_id','observation_id'].map(k=>[k,b[k]])),runtime_snapshot_sha256:b.payload?.runtime_snapshot_sha256},links:value.links&&{task_id:value.links.task_id,task_run_id:value.links.task_run_id},task_run:r&&{...Object.fromEntries(['id','task_id','run_id','status','ended_at'].map(k=>[k,r[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{context:standaloneExecutionContextProjection(r.context)}:{})},central:l&&{device_name:l.device_name,locked_by:l.locked_by},...(value.compatibilityReview?{compatibility_review:compatibilityReviewProjection(value.compatibilityReview),compatibility_development:value.compatibilityDevelopment&&{id:value.compatibilityDevelopment.id,task_type:value.compatibilityDevelopment.task_type}}:{})};
 }
 export function verifyEpochFacts(f){
  const {record:r,frozen,task,binding:b,links,taskRun,central:c}=f,spec=phone(frozen),p=identity(frozen);validateEpochRecord(r,epochCompatibilityRecordScope(frozen));
@@ -77,16 +77,20 @@ export function verifyEpochFacts(f){
  const clean=isYueshengCleanEpoch(r);
  if(isCloudExistingEpoch(r)){
   const migration=r.cloud_migration,environment='staging:'+frozen.deployment.source_commit;
+  const compatibility=frozen.epoch_source_compatibility,successor=isCloudEpochSourceCompatibility(compatibility);
   need(!standalone&&frozen.discovery_phone_scope===spec&&frozen.deployment.target==='mmv'
    &&frozen.release?.target==='mmv'&&frozen.release.environment===environment&&frozen.deployment.environment===environment
    &&frozen.deployment.release_id===frozen.release.id
    &&frozen.workflow_version?.id===p.run_binding.workflow_definition_version_id
    &&frozen.workflow_version.payload?.key==='douyin_video_discovery'
    &&frozen.run_identity.capability==='douyin_video_discovery'&&p.machine_id==='us-mac-m4'
-   &&!frozen.epoch_source_compatibility&&f.originalTask?.id===r.original.task_id&&f.originalTask?.status==='blocked'
+   &&(!compatibility||successor)&&f.originalTask?.id===r.original.task_id&&f.originalTask?.status==='blocked'
    &&f.originalTask.result?.execution_stopped!==true,'EPOCH_CLOUD_AUTHORITY');
-  need(f.cloudCompletion?.completion_sha256===migration.completion_sha256
-   &&/^[a-f0-9]{64}$/.test(frozen.release?.manifest_sha256??'')&&f.cloudCompletion.manifest_sha256===frozen.release.manifest_sha256
+  need(f.cloudCompletion?.completion_sha256===migration.completion_sha256,'EPOCH_CLOUD_AUTHORITY');
+  if(successor){
+   need(task.result?.common_runner?.mode==='formal'&&f.cloudCompletion.manifest_sha256===compatibility.receipt.original.manifest_sha256,'EPOCH_CLOUD_AUTHORITY');
+   verifyCloudEpochSuccessorDeployment(frozen,f.compatibilityRelease);
+  }else need(/^[a-f0-9]{64}$/.test(frozen.release?.manifest_sha256??'')&&f.cloudCompletion.manifest_sha256===frozen.release.manifest_sha256
    &&migration.release_id===frozen.release?.id&&migration.observation_id===frozen.deployment.observation_id,'EPOCH_CLOUD_AUTHORITY');
   need(f.cloudHardwareSerialSha256===migration.hardware_serial_sha256&&f.cloudBootIdSha256===migration.boot_id_sha256,'EPOCH_DEVICE_IDENTITY');
  }else if(clean){
@@ -126,12 +130,25 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  const standaloneHost=frozen.standalone_skill?readStandaloneHostProof({frozen,runDirectory:env.WFR_RUN_DIR}):null;
  const compatibilityRef=epochSourceCompatibilityReference(frozen);
  const transportSerial=epochTransportSerial(record.resource);
- const readBusiness=async()=>{
-  const [tv,definition,reconciliation,locks,review,original]=await Promise.all([
+ const cloudSuccessor=isCloudEpochSourceCompatibility(compatibilityRef);
+ const readSuccessor=async(immutable)=>{
+  const {release_id:id,observation_id:observationId}=compatibilityRef.receipt,path='/api/brain/releases/'+id;
+  // Release and observation bytes are immutable. The gate is checked again after the device reads.
+  const [release,observation,gate]=await Promise.all([
+   immutable?.release??readBrain(path,readBudget).then(value=>value.release),
+   immutable?.observation??readBrain(path+'/observations/'+observationId,readBudget).then(value=>value.observation),
+   readBrain(path+'/gate',readBudget)]);
+  const current={release,observation,gate};
+  verifyCloudEpochSuccessorDeployment(frozen,current);
+  return current;
+ };
+ const readBusiness=async(immutable)=>{
+  const [tv,definition,reconciliation,locks,review,original,compatibilityRelease]=await Promise.all([
    readBrain('/api/brain/tasks/'+p.task_id,readBudget),readBrain('/api/brain/runs/'+p.run_id+'/definition',readBudget),
    readBrain('/api/brain/runs/'+p.run_id+'/reconciliation',readBudget),readBrain('/api/brain/device-locks',readBudget),
    compatibilityRef?readBrain('/api/brain/tasks/'+compatibilityRef.review_task_id,readBudget):undefined,
-   cloud?readBrain('/api/brain/tasks/'+record.original.task_id,readBudget):undefined
+   cloud?readBrain('/api/brain/tasks/'+record.original.task_id,readBudget):undefined,
+   cloudSuccessor?readSuccessor(immutable):undefined
   ]);
   const rows=locks.locks?.filter(r=>r.device_name===spec.serial);need(locks.success===true&&rows?.length===1,'EPOCH_CENTRAL_INVENTORY');
   const compatibilityReview=review?.task??review;let compatibilityDevelopment;
@@ -141,7 +158,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
    const dev=await readBrain('/api/brain/tasks/'+developmentId,readBudget);compatibilityDevelopment=dev.task??dev;
   }
   return {task:tv.task??tv,binding:definition.binding,links:reconciliation.links,taskRun:reconciliation.task_run,central:rows[0],
-   ...(compatibilityRef?{compatibilityReview,compatibilityDevelopment}:{}),...(cloud?{originalTask:original?.task??original}:{})};
+   ...(compatibilityRef?{compatibilityReview,compatibilityDevelopment}:{}),...(cloudSuccessor?{compatibilityRelease}:{}),...(cloud?{originalTask:original?.task??original}:{})};
  };
  stage='initial_business';const initial=await readBusiness();
  stage='source';const source=reviewSource({includeCloudIssuer:cloud});if(compatibilityRef)verifyEpochSourceCompatibility({frozen,record,recordSha256:sha(raw),source,reviewTask:initial.compatibilityReview,developmentTask:initial.compatibilityDevelopment});
@@ -184,7 +201,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
   }
  }
 
- stage='fresh_business';const fresh=await readBusiness();
+ stage='fresh_business';const fresh=await readBusiness(initial.compatibilityRelease);
  stage='business_drift';need(same(businessAuthorityProjection(initial),businessAuthorityProjection(fresh)),'EPOCH_BUSINESS_DRIFT');
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
  stage='final_old_daemon';await readDaemon(record.old_route);

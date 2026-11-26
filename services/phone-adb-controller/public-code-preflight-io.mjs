@@ -12,6 +12,7 @@ import {createNativePhoneCommandObserver} from './adb-shell-v2.mjs';
 import {createNativePhonePreflightAdapter} from './native-phone-preflight-adapter.mjs';
 import {startPreflightNativeDomain,preflightDomainClosure} from './preflight-native-domain.mjs';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
+import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const fail=reason=>Error('PUBLIC_CODE_PREFLIGHT_'+reason);
@@ -27,7 +28,7 @@ export async function startPublicCodePreflightIO({root,env,frozen,state,lease,pu
  const stable=()=>{
   if(realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||readFrozen(env.WFR_RUN_DIR).snapshot_sha256!==frozen.snapshot_sha256||canonical(freezePreflightProfile({env}))!==canonical(profile))throw fail('SOURCE');
   for(const f of source.files){const path=join(root,f.path),s=lstatSync(path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||hash(readFileSync(path))!==f.sha256)throw fail('SOURCE');}
-  const route=freezePublicPreflightRoute({root,files:Object.fromEntries(source.files.map(f=>[f.path,f.sha256])),scope:spec});
+  const route=freezePublicPreflightRoute({root,files:Object.fromEntries(source.files.map(f=>[f.path,f.sha256])),scope:epochCompatibilityRecordScope(frozen)});
   if(canonical(route)!==canonical(frozen.public_preflight_route||null))throw fail('ROUTE_SOURCE');
  };
  const active=()=>{if(sealed||unknown||signal?.aborted||Date.now()>=workerDeadlineMs)throw fail('CLOSED');stable();if(localAdmitted)assertLocal();};
@@ -70,7 +71,7 @@ export async function startPublicCodePreflightIO({root,env,frozen,state,lease,pu
   adapter=createNativePhonePreflightAdapter({context:{...context,owner:env.WFR_TAG,purpose,deadlineMs:workerDeadlineMs},io:{command,readEvidence},hostAdb:(...args)=>local.adb(...args)});
   const sdk=await command('sdk',[]),review=readNativePhoneCommandSource(commandSource);
   if(sdk.code!==0||sdk.stdout.toString().replaceAll('\r','').trim()!==String(review.device_sdk))throw fail('SDK_SCOPE');
-  const route=freezePublicPreflightRoute({root,files:Object.fromEntries(source.files.map(f=>[f.path,f.sha256])),scope:spec});
+  const route=freezePublicPreflightRoute({root,files:Object.fromEntries(source.files.map(f=>[f.path,f.sha256])),scope:epochCompatibilityRecordScope(frozen)});
   if(canonical(route)!==canonical(frozen.public_preflight_route||null))throw fail('ROUTE_SOURCE');
   await local.local('route',JSON.stringify({config:route?.policy_path||env.ZJ_ADB_HOST_CONFIG||join(env.HOME,'.config/zenithjoy/adb-service.json'),policy:spec.policy,serial:env.SERIAL}));
   return {adb:(...args)=>adapter.adb(...args),local:{run:(...args)=>local.local(...args)},desktop:(launcher,xml)=>local.desktop(launcher,xml),assertResources:authorize,close,directory};

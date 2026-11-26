@@ -38,10 +38,10 @@ export function validateReviewFacts(f,releaseReceipt){
  return {protocol:'device-epoch-fence-review/v1',scope:{maintenance_task_id:m.id,claim:{claimed_by:m.claimed_by,claimed_at:m.claimed_at},original_task_id:o.id,original_run_id:id.run_id,profile_sha256:id.profile_sha256,serial:p.serial,endpoint},central_readback:c,original_execution_stopped:false,remote_quiescence:'unknown',resource_authority:'not_attested'};
 }
 export async function readBrain(path,{deadlineMs,maxAttempts=1}={}){
- need(/^\/api\/brain\/(?:(?:tasks|pending-actions)\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/(?:definition|reconciliation)|device-locks)$/.test(path),'BRAIN_READ_PATH');
+ need(/^\/api\/brain\/(?:(?:tasks|pending-actions)\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/(?:definition|reconciliation)|releases\/[a-f0-9-]{36}(?:\/gate|\/observations\/[a-f0-9-]{36})?|device-locks)$/.test(path),'BRAIN_READ_PATH');
  need([1,2].includes(maxAttempts)&&(deadlineMs===undefined?maxAttempts===1:Number.isSafeInteger(deadlineMs)&&deadlineMs>Date.now()),'BRAIN_READ_BUDGET');
  const token=process.env.BRAIN_INTERNAL_TOKEN;need(typeof token==='string'&&token&&!/[\r\n]/.test(token),'EXPLICIT_CREDENTIAL_REQUIRED');
- const endpoint=path.endsWith('/device-locks')?'device_locks':path.includes('/tasks/')?'task':path.includes('/pending-actions/')?'pending_action':path.endsWith('/definition')?'definition':'reconciliation';
+ const endpoint=path.endsWith('/device-locks')?'device_locks':path.includes('/tasks/')?'task':path.includes('/pending-actions/')?'pending_action':path.endsWith('/definition')?'definition':path.includes('/releases/')?'release':'reconciliation';
  const url='http://127.0.0.1:5221'+path,headers={'X-Internal-Token':token};
  for(let attempt=0;attempt<maxAttempts;attempt++){
   const timeoutMs=Math.min(10000,deadlineMs===undefined?10000:deadlineMs-Date.now());need(timeoutMs>0,'BRAIN_READ_BUDGET');
