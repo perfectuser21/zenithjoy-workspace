@@ -4,6 +4,7 @@ import {createServer} from 'node:net';
 import {mkdtempSync,readFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {setTimeout as delay} from 'node:timers/promises';
 const load=()=>import('../device-epoch-fence-diagnostics.mjs');
 const frame=(id,data)=>{const b=Buffer.alloc(5);b[0]=id;b.writeUInt32LE(data.length,1);return Buffer.concat([b,data]);};
 async function fixture(mode='ok'){
@@ -41,6 +42,44 @@ test('旧listener PID/start换代在下一connect/write前拒绝，不再发命�
 test('authority读回期间已收到EXIT/EOF仍正确收回，不把可选CloseStdin当失败',async()=>{
  const {runDiagnostic}=await load(),f=await fixture(),directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-eof-'));const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
  try{const r=await runDiagnostic({query:'sdk',scope,directory,readAuthority:async()=>{await new Promise(r=>setTimeout(r,15));return {scope,lease_until:new Date(Date.now()+60000).toISOString()};}});assert.equal(r.wire_complete,true);assert.equal(r.exit_code,0);}finally{await f.close();rmSync(directory,{recursive:true,force:true});}
+});
+test('云机身份读回等待已收到 EXIT 后的有效权属复核', async () => {
+ const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
+ const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-cloud-identity-'));
+ const scope={endpoint:f.endpoint,serial:'127.0.0.1:15555',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ let delayed=false;
+ try {
+  const serial=await readEpochDeviceIdentity({query:'hardware_serial',scope,directory,readAuthority:async()=>{
+   if (!delayed && f.services.some(service=>service.startsWith('shell,v2,raw:'))) {
+    delayed=true;
+    await delay(5250);
+   }
+   return {scope,lease_until:new Date(Date.now()+60000).toISOString()};
+  }});
+  assert.equal(delayed,true);
+  assert.equal(serial,'31');
+  const result=JSON.parse(readFileSync(join(directory,'diagnostic.json')));
+  assert.equal(result.wire_complete,true);
+  assert.equal(result.open_sockets,0);
+  assert.equal(result.pending,0);
+ } finally {
+  await f.close();
+  rmSync(directory,{recursive:true,force:true});
+ }
+});
+test('云机身份读回遵守外层已到期的准入期限', async () => {
+ const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
+ const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-cloud-budget-'));
+ const scope={endpoint:f.endpoint,serial:'127.0.0.1:15555',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ try {
+  await assert.rejects(readEpochDeviceIdentity({query:'hardware_serial',scope,directory,
+   readBudget:{deadlineMs:Date.now()-1},readAuthority:async()=>{throw Error('unexpected authority read');}
+  }),{code:'EPOCH_ADMISSION_DEADLINE'});
+  assert.deepEqual(f.services,[]);
+ } finally {
+  await f.close();
+  rmSync(directory,{recursive:true,force:true});
+ }
 });
 test('补充诊断固定只读活动与元数据；proc路径仅接受维护scope整数PID',async()=>{
  const {compileDiagnosticCommand,SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,PROCESS_DIAGNOSTIC_COMMANDS}=await load();

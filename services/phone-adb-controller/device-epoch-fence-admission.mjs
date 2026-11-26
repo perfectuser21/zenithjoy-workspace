@@ -98,6 +98,18 @@ export function verifyEpochFacts(f){
  return {protocol:'device-epoch-fence-admission/v1',authorized:true,epoch_id:r.epoch_id,task_id:p.task_id,run_id:p.run_id,source_commit:f.source.commit,instance_id:r.new_route.instance_id,endpoint:r.new_route.endpoint,serial:spec.serial,...(r.resource.adb_serial===undefined?{}:{adb_serial:transportSerial}),old_route_absent:true,original_execution_stopped:false,android_internal:'not_attested'};
 }
 function archiveSnapshot(record){const path=record.original_quarantine.archive_path,s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&![...readdirSync(path)].some(n=>!['owner','pid','acquired_at','standalone_review_required','standalone_quarantined'].includes(n)),'EPOCH_ARCHIVE');const names=Object.keys(record.original_quarantine.fields),fields=Object.fromEntries(names.map(n=>[n,bytes(join(path,n)).toString()]));need(same(readdirSync(path).sort(),names.sort())&&(!Object.hasOwn(fields,'standalone_quarantined')||fields.standalone_quarantined===fields.owner),'EPOCH_ARCHIVE');return {dev:s.dev,ino:s.ino,fields};}
+export async function readEpochDeviceIdentity({query,scope,directory,readBudget,readAuthority}){
+  // The diagnostic rechecks daemon authority after both ADB sockets close.
+  const wireBudgetMs = 15_000;
+  const timeoutMs = readBudget ? Math.min(wireBudgetMs, readBudget.deadlineMs - Date.now()) : wireBudgetMs;
+  need(timeoutMs > 0, 'EPOCH_ADMISSION_DEADLINE');
+  const result = await runDiagnostic({query, scope, directory, timeoutMs, readAuthority});
+  need(result.wire_complete, 'EPOCH_DEVICE_IDENTITY');
+  const proof = readDiagnosticProof(result);
+  need(proof.stderr.length === 0, 'EPOCH_DEVICE_IDENTITY');
+  return proof.stdout.toString('utf8').replace(/\r?\n$/, '');
+}
+
 export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  let stage='scope';
  try{
@@ -154,17 +166,11 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
   const scope={endpoint:record.new_route.endpoint,serial:transportSerial,maintenance_task_id:p.task_id};
   const readDeviceIdentity=async(query,label)=>{
    const out=join(directory,label);mkdirSync(out,{mode:0o700});
-   const timeoutMs=readBudget?Math.min(5000,readBudget.deadlineMs-Date.now()):5000;
-   need(timeoutMs>0,'EPOCH_ADMISSION_DEADLINE');
-   const result=await runDiagnostic({query,scope,directory:out,timeoutMs,readAuthority:async()=>{
+   return readEpochDeviceIdentity({query,scope,directory:out,readBudget,readAuthority:async()=>{
     await readDaemon(record.new_route);
     need(initial.central.locked_by===p.task_id&&initial.central.expired!==true,'EPOCH_BUSINESS_CENTRAL');
     return {scope,lease_until:initial.central.expires_at};
    }});
-   need(result.wire_complete,'EPOCH_DEVICE_IDENTITY');
-   const proof=readDiagnosticProof(result);
-   need(proof.stderr.length===0,'EPOCH_DEVICE_IDENTITY');
-   return proof.stdout.toString('utf8').replace(/\r?\n$/,'');
   };
   newHardwareSerial=await readDeviceIdentity('hardware_serial','hardware-serial');
   if(cloud){
