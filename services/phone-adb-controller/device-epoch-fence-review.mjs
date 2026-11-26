@@ -119,8 +119,14 @@ function readStartupInstance({instanceId,registrySha256,policySha256}){
  need(row.policy.schema_version===2&&row.policy.instance_id===instanceId&&/^tcp:127\.0\.0\.1:[1-9]\d{0,4}$/.test(row.policy.endpoint)&&row.policy.endpoint!=='tcp:127.0.0.1:5041','STARTUP_PRIVATE_ENDPOINT');const partners=registry.instances.filter(r=>row.coexists_with?.includes(r.instance_id)&&r.kind==='external_existing');need(partners.length===1&&partners[0].coexists_with?.includes(instanceId),'STARTUP_COEXISTENCE');const partner=partners[0];return {instance_id:instanceId,policy_path:row.policy_path,endpoint:row.policy.endpoint,registry_sha256:registrySha256,policy_sha256:policySha256,partner:{policy_path:partner.policy_path,policy:partner.policy,actual_policy:JSON.parse(bytes(partner.policy_path))}};
 }
 function loadStartupReceipt(path){const st=lstatSync(path);need((st.mode&0o777)===0o600,'STARTUP_RECEIPT_MODE');return JSON.parse(bytes(path));}
+function readExistingCleanKey(path,home=userInfo().homedir){
+ const root=join(home,'.credentials'),directory=dirname(path);
+ need(dirname(directory)===root&&/^aliyun-adb-reverse-[0-9]{8}$/.test(basename(directory))&&basename(path)==='adbkey'
+  &&lstatSync(directory).isDirectory()&&(lstatSync(path).mode&0o777)===0o600,'CLEAN_STARTUP_KEY');
+ return sha(bytes(path));
+}
 async function verifyCleanStartupReceipt(receipt,{receiptPath,instanceId,registrySha256,sourceCommit,policySha256,
- source=reviewSource,instance=readStartupInstance,read=readBrain}){
+ source=reviewSource,instance=readStartupInstance,read=readBrain,readExistingKey=readExistingCleanKey}){
  const scope=receipt.scope,issued=Date.parse(receipt.issued_at),expires=Date.parse(receipt.expires_at),now=Date.now();
  const version=value=>typeof value==='string'&&/^[1-9]\d{0,9}$/.test(value)&&Number(value)<=4294967295;
  const locator=typeof scope?.adb_serial==='string'&&scope.adb_serial.match(/^([^:]+):([1-9]\d{0,4})$/);
@@ -163,8 +169,15 @@ async function verifyCleanStartupReceipt(receipt,{receiptPath,instanceId,registr
  const rows=lockValue?.locks?.filter(row=>row.device_name===scope.serial),lock=rows?.[0];
  need(lockValue?.success===true&&rows?.length===1&&lock.locked_by===scope.task_id&&lock.expired===false
   &&lock.lease_version===receipt.lease_version&&Date.parse(lock.expires_at)>=expires&&expires>Date.now(),'CLEAN_STARTUP_LEASE');
+ const existing=scope.existing_adb_auth;
+ if(existing!==undefined){
+  need(existing&&Object.keys(existing).sort().join(',')==='key_path,key_sha256'
+    &&typeof existing.key_path==='string'&&resolve(existing.key_path)===existing.key_path
+    &&/^[a-f0-9]{64}$/.test(existing.key_sha256||'')&&readExistingKey(existing.key_path)===existing.key_sha256,'CLEAN_STARTUP_KEY');
+ }
  return {protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',
-  instance_id:instanceId,endpoint:fixed.endpoint,source_commit:sourceCommit,registry_sha256:registrySha256,policy_sha256:policySha256};
+  instance_id:instanceId,endpoint:fixed.endpoint,source_commit:sourceCommit,registry_sha256:registrySha256,policy_sha256:policySha256,
+  ...(existing!==undefined?{existing_adb_auth:existing}:{})};
 }
 export async function verifyStartupReceipt(options={}){
  const loaded=(options.load??loadStartupReceipt)(options.receiptPath);if(loaded?.protocol==='device-epoch-fence-resume-startup/v1')return (await import('./device-epoch-fence-resume-startup.mjs')).verifyResumeStartupReceipt(options);
