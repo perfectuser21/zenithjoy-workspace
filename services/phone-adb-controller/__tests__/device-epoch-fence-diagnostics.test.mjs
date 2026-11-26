@@ -43,13 +43,13 @@ test('authority读回期间已收到EXIT/EOF仍正确收回，不把可选CloseS
  const {runDiagnostic}=await load(),f=await fixture(),directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-eof-'));const scope={endpoint:f.endpoint,serial:'47.100.213.173:10001',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
  try{const r=await runDiagnostic({query:'sdk',scope,directory,readAuthority:async()=>{await new Promise(r=>setTimeout(r,15));return {scope,lease_until:new Date(Date.now()+60000).toISOString()};}});assert.equal(r.wire_complete,true);assert.equal(r.exit_code,0);}finally{await f.close();rmSync(directory,{recursive:true,force:true});}
 });
-test('云机身份读回等待已收到 EXIT 后的有效权属复核', async () => {
+test('受管云机身份读回可等待 shell 请求之后的有效权属复核', async () => {
  const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
  const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-cloud-identity-'));
  const scope={endpoint:f.endpoint,serial:'127.0.0.1:15555',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
  let delayed=false;
  try {
-  const serial=await readEpochDeviceIdentity({query:'hardware_serial',scope,directory,readAuthority:async()=>{
+  const serial=await readEpochDeviceIdentity({query:'hardware_serial',scope,directory,managedCloud:true,readAuthority:async()=>{
    if (!delayed && f.services.some(service=>service.startsWith('shell,v2,raw:'))) {
     delayed=true;
     await delay(5250);
@@ -62,6 +62,47 @@ test('云机身份读回等待已收到 EXIT 后的有效权属复核', async ()
   assert.equal(result.wire_complete,true);
   assert.equal(result.open_sockets,0);
   assert.equal(result.pending,0);
+ } finally {
+  await f.close();
+  rmSync(directory,{recursive:true,force:true});
+ }
+});
+test('普通身份读回仍拒绝超过五秒的权属复核', async () => {
+ const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
+ const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-default-identity-'));
+ const scope={endpoint:f.endpoint,serial:'fixture-device',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ let delayed=false;
+ try {
+  await assert.rejects(readEpochDeviceIdentity({query:'hardware_serial',scope,directory,readAuthority:async()=>{
+   if (!delayed && f.services.some(service=>service.startsWith('shell,v2,raw:'))) {
+    delayed=true;
+    await delay(5250);
+   }
+   return {scope,lease_until:new Date(Date.now()+60000).toISOString()};
+  }}),{code:'EPOCH_DEVICE_IDENTITY'});
+  assert.equal(delayed,true);
+  const result=JSON.parse(readFileSync(join(directory,'diagnostic.json')));
+  assert.equal(result.error_code,'DIAGNOSTIC_DEADLINE');
+  assert.equal(result.wire_complete,false);
+  assert.equal(result.open_sockets,0);
+ } finally {
+  await f.close();
+  rmSync(directory,{recursive:true,force:true});
+ }
+});
+test('受管云机不会用自己的预算延长还未耗尽的外层准入期限', async () => {
+ const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
+ const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-cloud-short-budget-'));
+ const scope={endpoint:f.endpoint,serial:'127.0.0.1:15555',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ try {
+  await assert.rejects(readEpochDeviceIdentity({query:'hardware_serial',scope,directory,managedCloud:true,
+   readBudget:{deadlineMs:Date.now()+100},readAuthority:async()=>{
+    await delay(150);
+    return {scope,lease_until:new Date(Date.now()+60000).toISOString()};
+   }
+  }),{code:'EPOCH_DEVICE_IDENTITY'});
+  assert.equal(JSON.parse(readFileSync(join(directory,'diagnostic.json'))).error_code,'DIAGNOSTIC_DEADLINE');
+  assert.deepEqual(f.services,[]);
  } finally {
   await f.close();
   rmSync(directory,{recursive:true,force:true});
