@@ -24,12 +24,11 @@ class SharedValidationTests(unittest.TestCase):
         self.assertEqual(shared.ACCEPTED_RELEASES[old]['runner.py'], '26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce')
         self.assertEqual(shared.LEGACY_CONTROL_SHA256, '988f3f65522dbc9a0f33cf3161ca58e08981b6713e185972eb5d499dce58b596')
         historical = self.state / 'releases' / old;historical.mkdir()
-        # 隔离密码学fixture使用已有八文件真实字节；生产旧版hash白名单不被改写。
-        for name in shared.EXPECTED_SHA256:(historical / name).write_bytes((self.release / name).read_bytes())
+        for name in self.fixture_hashes:(historical / name).write_bytes((self.release / name).read_bytes())
         manifest = dict(self.deployment, source_revision=old);manifest.pop('release')
         (historical / 'deployment.json').write_text(json.dumps(manifest))
         pointer = (self.state / 'deployment-current.json').read_bytes()
-        with patch.dict(shared.ACCEPTED_RELEASES, {old: shared.EXPECTED_SHA256}):
+        with patch.dict(shared.ACCEPTED_RELEASES, {old: self.fixture_hashes}):
             accepted = shared.load_historical_deployment(self.state, old, self.deployment)
             self.assertEqual(accepted['source_revision'], old)
             with self.assertRaises(ValueError):shared.load_historical_deployment(self.state, old, dict(self.deployment, schedule_id=PROJECT))
@@ -44,11 +43,17 @@ class SharedValidationTests(unittest.TestCase):
         self.state = pathlib.Path(self.temp.name)
         self.release = self.state / 'releases' / shared.PHONE_SOURCE_REVISION
         self.release.mkdir(parents=True)
+        self.fixture_hashes = {}
         for name in shared.EXPECTED_SHA256:
-            (self.release / name).write_bytes(pathlib.Path(__file__).with_name(name).read_bytes())
+            content = f'frozen fixture payload for {name}\n'.encode()
+            (self.release / name).write_bytes(content)
+            self.fixture_hashes[name] = hashlib.sha256(content).hexdigest()
+        fixture_release = patch.dict(shared.ACCEPTED_RELEASES, {shared.PHONE_SOURCE_REVISION: self.fixture_hashes})
+        fixture_release.start()
+        self.addCleanup(fixture_release.stop)
         self.deployment = {'release': str(self.release), 'source_revision': shared.PHONE_SOURCE_REVISION,
                            'single_workflow_id': WF, 'batch_workflow_id': TASK, 'project_id': PROJECT,
-                           'schedule_id': CHILD, 'sha256': dict(shared.EXPECTED_SHA256)}
+                           'schedule_id': CHILD, 'sha256': dict(self.fixture_hashes)}
         self.write_deployment(self.deployment)
         self.receipt = {'status': 'queued', 'task_id': TASK, 'source_revision': shared.PHONE_SOURCE_REVISION,
                         'children': [{'task_id': CHILD, 'serial': 'phone-a'}]}
