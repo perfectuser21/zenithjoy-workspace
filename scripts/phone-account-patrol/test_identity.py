@@ -18,16 +18,17 @@ class IdentityEvidenceTests(unittest.TestCase):
         self.assertTrue(result['account_id_trusted'])
 
     def test_zhihu_feed_disagreement_does_not_block_own_page(self):
-        # Text from the M4 小彩 launch tree and OCR; it belongs to a feed card.
+        # Dismissing the optional opening prompt exposed this M4 小彩 feed card.
         quote = '情窦初开的时候，父母不同意，情窦再开的时候'
-        feed = ([{'text': '推荐'}, {'text': quote}], [{'text': quote}], 'launch.png')
+        prompt = ([{'text': '暂不开启'}, {'text': '我的'}], [], 'launch.png')
+        feed = ([{'text': '推荐'}, {'text': quote}, {'text': '我的'}], [{'text': quote}], 'dismiss.png')
         own = ([{'resource-id': 'com.zhihu.android:id/tv_name', 'text': '本人甲'}], [], 'own.png')
         probe = Probe.__new__(Probe)
         probe.serial = 'sample-phone'
         with patch('collector.subprocess.run', return_value=SimpleNamespace(returncode=0, stdout=b'package:test')), \
              patch('collector.time.sleep'), patch.object(probe, 'adb'), \
-             patch.object(probe, 'capture', side_effect=[feed, own]), \
-             patch.object(probe, 'findtap', side_effect=[False, True, False]):
+             patch.object(probe, 'capture', side_effect=[prompt, prompt, feed, own]), \
+             patch.object(probe, 'findtap', side_effect=[False, True, True, True]):
             result = probe.inspect('知乎')
 
         self.assertEqual(result['state'], '已登录')
@@ -46,6 +47,7 @@ class IdentityEvidenceTests(unittest.TestCase):
             result = probe.inspect('知乎')
 
         self.assertEqual(result['state'], '待确认')
+        self.assertEqual(result['reason'], '首次使用协议阻挡，未同意协议')
         self.assertEqual(result['evidence'], 'consent.png')
         self.assertFalse(any(call.args[:3] == ('shell', 'input', 'tap') for call in adb.call_args_list))
 
