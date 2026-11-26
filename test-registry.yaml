@@ -8750,6 +8750,28 @@ tests:
     product: AI视频
     note: 在 Comfy CPU 镜像运行，验证上传选图、解码前像素限制及节点幂等。
 
+  - id: dashboard-production-regression
+    path: scripts/deploy/__tests__/dashboard-production.test.mjs
+    type: integration
+    ci: L1
+    status: active
+    product: CI治理
+    note: Dashboard 同版本生产包、双入口发布、失败恢复与回滚。
+  - id: dashboard-production-coordinator-python
+    path: scripts/deploy/__tests__/dashboard-production.test.py
+    type: unit
+    ci: L1
+    status: active
+    product: CI治理
+    note: 由 Node 发布回归调用，验证两个站点的共同发布记录与中断恢复。
+  - id: dashboard-production-host-python
+    path: scripts/deploy/__tests__/dashboard-production-host.test.py
+    type: integration
+    ci: L1
+    status: active
+    product: CI治理
+    note: 由 Node 发布回归调用，验证生产静态产物与宿主切换边界。
+
   - id: hz-api-release-regression
     path: scripts/deploy/__tests__/hz-api-release.test.mjs
     type: integration
