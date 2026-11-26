@@ -40,6 +40,7 @@ const S = process.env.STATE_DIR;
 const argv = process.argv.slice(2);
 fs.appendFileSync(path.join(S, "calls.log"), JSON.stringify(argv) + "\\n");
 let a = argv;
+if (a[0] === "-H" && a[2] === "-P") a = a.slice(4);
 if (a[0] === "-s") a = a.slice(2);
 const sd = (p) => path.join(S, "sdcard", p);
 const read = (f, d = "") => { try { return fs.readFileSync(path.join(S, f), "utf8"); } catch { return d; } };
@@ -52,6 +53,32 @@ if (a[0] === "push") {
   fs.copyFileSync(a[1], dst); out("1 file pushed\\n"); process.exit(0);
 }
 if (a[0] === "pull") {
+  if (process.env.FAKE_DOUYIN_TITLE_FIXTURE) {
+    const phase = read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
+    let xml = fs.readFileSync(process.env.FAKE_DOUYIN_TITLE_FIXTURE, "utf8");
+    if (phase !== "before" && process.env.FAKE_DOUYIN_TITLE_READY !== "page") {
+      for (const [before, after] of [
+        ["[0,311][1200,1393]", "[0,891][1200,1568]"],
+        ["[52,363][1068,465]", "[52,943][1068,1045]"],
+        ["[1081,372][1174,456]", "[1081,952][1174,1036]"],
+        ["[52,465][1174,1223]", "[52,1045][1174,1398]"],
+      ]) xml = xml.replace(before, after);
+    }
+    if (phase === "ready" && process.env.FAKE_DOUYIN_TITLE_READY === "page") {
+      xml = xml.replace('text="发作品"', 'text="保存"');
+    }
+    if (phase === "ready" && process.env.FAKE_DOUYIN_TITLE_READY === "focus") {
+      xml = xml.replace('focused="true"', 'focused="false"');
+    }
+    if (phase === "ready" && process.env.FAKE_DOUYIN_TITLE_READY === "geometry") {
+      xml = xml.replace("[52,943][1068,1045]", "[52,944][1068,1046]");
+    }
+    if (phase === "typed") {
+      xml = xml.replace('text="添加标题"', 'text="' + esc(read("typed")) + '"')
+               .replace('text="0/20"', 'text="' + [...read("typed")].length + '/20"');
+    }
+    fs.writeFileSync(a[2], xml);process.exit(0);
+  }
   if (process.env.FAKE_ZHIHU_SEARCH_FIXTURES) {
     const phase=read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
     let xml=fs.readFileSync(path.join(process.env.FAKE_ZHIHU_SEARCH_FIXTURES,"zhihu-search-"+phase+".xml"),"utf8");
@@ -177,6 +204,15 @@ function setup({ lockOwner = RUN, lockAgeSec = 10 } = {}) {
   const adb = join(dir, "fake-adb");
   writeFileSync(adb, FAKE_ADB);
   chmodSync(adb, 0o755);
+  const adbPolicy = join(dir, "adb-service.json");
+  writeFileSync(adbPolicy, JSON.stringify({
+    schema_version: 1,
+    host_id: "xian-m4",
+    transport: "usb",
+    endpoint: process.env.ADB_SERVER_SOCKET,
+    forbidden_ports: [],
+    adb_bin: fixtureAdb(adb),
+  }), { mode: 0o600 });
   const tmpRoot = join(dir, "tmp");
   if (lockOwner) {
     const lock = join(tmpRoot, "locks", "SER1.lock");
@@ -186,7 +222,7 @@ function setup({ lockOwner = RUN, lockAgeSec = 10 } = {}) {
   }
   const video = join(dir, "clip.mp4");
   writeFileSync(video, Buffer.alloc(2048, 7));
-  return { dir, state, reg, adb, tmpRoot, video };
+  return { dir, state, reg, adbPolicy, tmpRoot, video };
 }
 
 function run(ctx, args, extraEnv = {}, { owner = RUN } = {}) {
@@ -194,7 +230,7 @@ function run(ctx, args, extraEnv = {}, { owner = RUN } = {}) {
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", ...pre, ...args], {
       env: {
-        ...process.env, ...phoneLockFixtureEnv(ctx.reg, ctx.tmpRoot), STATE_DIR: ctx.state, DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
+        ...process.env, ...phoneLockFixtureEnv(ctx.reg, ctx.tmpRoot), STATE_DIR: ctx.state, ZJ_ADB_HOST_CONFIG: ctx.adbPolicy,
         DOUYIN_PHONE_TMP_ROOT: ctx.tmpRoot, DOUYIN_PYTHON_BIN: TEST_PYTHON_BIN, ...extraEnv,
       },
     });
@@ -455,6 +491,39 @@ test('text-input 切IME后标准目标变化不clear不输入且恢复IME',async
   const ctx=setup();const r=await run(ctx,['text-input','测试'],{FAKE_NESTED_FOCUS_XML:nestedFixture,FAKE_NESTED_READY_DRIFT:'1'});
   assert.notEqual(r.code,0);assert.equal(parse(r.out).reason,'no_focused_input');assert.equal(ime(ctx),ORIG_IME);
   assert.doesNotMatch(calls(ctx),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
+});
+
+const douyinTitleEnv = {
+  FAKE_DOUYIN_TITLE_FIXTURE: new URL("./fixtures/douyin-composer-title-before.xml", import.meta.url).pathname,
+};
+test("text-input 抖音发布标题随输入法切换平移，单次输入并精确读回", async () => {
+  const ctx = setup();
+  const title = "轻量验收样本";
+  const r = await run(ctx, ["text-input", title], douyinTitleEnv);
+  assert.equal(r.code, 0, r.err);
+  assert.equal(parse(r.out).field, "com.ss.android.ugc.aweme:id/ij+");
+  assert.equal(parse(r.out).source_sha256, parse(r.out).actual_sha256);
+  assert.equal(readFileSync(join(ctx.state, "typed"), "utf8"), title);
+  assert.equal((calls(ctx).match(/ADB_INPUT_B64/g) || []).length, 1);
+  assert.equal(ime(ctx), ORIG_IME);
+});
+
+for (const change of ["page", "focus", "geometry"]) test("text-input 抖音发布标题拒绝切IME后漂移: " + change, async () => {
+  const ctx = setup();
+  const r = await run(ctx, ["text-input", "轻量验收样本"], { ...douyinTitleEnv, FAKE_DOUYIN_TITLE_READY: change });
+  assert.equal(r.code, 2);
+  assert.equal(parse(r.out).reason, "no_focused_input");
+  assert.doesNotMatch(calls(ctx), /ADB_CLEAR_TEXT|ADB_INPUT_B64/);
+  assert.equal(ime(ctx), ORIG_IME);
+});
+
+test("text-input 抖音发布标题实字读回不符时失败，不重输", async () => {
+  const ctx = setup();
+  const r = await run(ctx, ["text-input", "轻量验收样本"], { ...douyinTitleEnv, FAKE_TYPED_OVERRIDE: "错误标题" });
+  assert.equal(r.code, 2);
+  assert.equal(parse(r.out).reason, "readback_mismatch");
+  assert.equal((calls(ctx).match(/ADB_INPUT_B64/g) || []).length, 1);
+  assert.equal(ime(ctx), ORIG_IME);
 });
 
 const zhBodyFixtures=new URL('./fixtures/',import.meta.url).pathname;
