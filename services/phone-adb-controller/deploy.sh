@@ -66,6 +66,7 @@ source "$D/deployment-functions.sh"
 
 MMV_JS_FILES=(profile-card-link-evidence.js comment-compose-rows.py
   qualification-artifacts.mjs qualification-artifacts.py activity-tool-result.py
+  device-epoch-fence-yuesheng-host-reads.mjs device-epoch-fence-yuesheng-migration.mjs device-epoch-fence-yuesheng-plan.mjs device-epoch-fence-yuesheng-readback.mjs
   standalone-skill-authority.mjs standalone-skill-tools.mjs standalone-scoring-tools.mjs standalone-collection-tools.mjs standalone-comment-observer.mjs standalone-skill-ipc.mjs standalone-skill-runtime.mjs epoch-source-compatibility.mjs
   adb-private-auth.py adb-private-supervisor.py device-epoch-fence-auth-reference.mjs device-epoch-fence-files.mjs device-epoch-fence-resume-authority.mjs device-epoch-fence-resume-history.mjs device-epoch-fence-stop-continuation.mjs device-epoch-fence-diagnostic-recovery.mjs device-epoch-fence-resume-process.mjs device-epoch-fence-resume-sequence.mjs device-epoch-fence-resume-startup.mjs device-epoch-fence-resume.mjs device-epoch-fence-runtime.mjs
   skill-public-authority.mjs official-child-host.mjs official-child-primitives.mjs official-phone-peer-protocol.mjs official-phone-peer-runtime.mjs official-phone-peer.mjs official-phone-audio-transfer.mjs runtime-receipts.mjs official-phone-peer-transport.mjs official-phone-peer-authority.mjs official-phone-execution.mjs official-phone-peer-host.mjs official-phone-peer-private-env.mjs official-cli-closure.mjs official-cli-quarantine.py official-recording-producer.mjs official-recording-observer.py

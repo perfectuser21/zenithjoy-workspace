@@ -11615,6 +11615,15 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；按现行 Brain 维护任务、候选发布和强租约生成待批计划摘要"
 
+  - id: phone-device-epoch-fence-yuesheng-host-reads
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-host-reads.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；通过隔离 ADB socket 复核悦升云机物理身份、两端监听与同一维护租约"
+
   - id: leadgen-activity-skill-public-source
     path: services/phone-adb-controller/__tests__/activity-skill-public-source.test.mjs
     type: unit

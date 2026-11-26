@@ -25,6 +25,10 @@ export const SUPPLEMENTAL_DIAGNOSTIC_COMMANDS=Object.freeze({
 });
 export const PROCESS_DIAGNOSTIC_COMMANDS=Object.freeze({process_stat:'stat',process_status:'status',process_cmdline:'cmdline',process_fds:'fd',process_wchan:'wchan'});
 export function compileDiagnosticCommand(query,scope){
+ if(query==='yuesheng_physical_serial'){
+  if(scope?.maintenance_task_id!=='8f5f6442-540f-48b6-9577-c21cd848aa02'||scope.serial!=='127.0.0.1:15555'||!['tcp:127.0.0.1:5044','tcp:127.0.0.1:5045'].includes(scope.endpoint))throw fail('DIAGNOSTIC_SCOPE');
+  return 'exec /system/bin/getprop ro.serialno';
+ }
  if(Object.hasOwn(DIAGNOSTIC_COMMANDS,query))return DIAGNOSTIC_COMMANDS[query];
  if(Object.hasOwn(SUPPLEMENTAL_DIAGNOSTIC_COMMANDS,query))return SUPPLEMENTAL_DIAGNOSTIC_COMMANDS[query];
  if(Object.hasOwn(PROCESS_DIAGNOSTIC_COMMANDS,query)){

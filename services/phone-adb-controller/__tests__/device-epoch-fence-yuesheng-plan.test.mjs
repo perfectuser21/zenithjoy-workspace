@@ -77,7 +77,8 @@ test('cannot produce an approval digest without the same active task, exact lock
     [x => { x.replies['/device-locks'].locks.push({ ...x.lease }); }, 'LEASE'],
     [x => { x.replies['/releases/' + releaseId + '/gate'].current_observation_id = releaseId; }, 'CANDIDATE_GATE'],
     [x => { const read = x.io.readBefore; x.io.readBefore = async () => { x.lease.lease_version = '99'; return read(); }; }, 'PENDING_ACTION'],
-    [x => { const read = x.io.readBefore; x.io.readBefore = async () => { x.task.claimed_by = 'another-worker'; return read(); }; }, 'AUTHORITY_CHANGED'],
+    [x => { const read = x.io.readBefore; x.io.readBefore = async lease => { assert.deepEqual(lease, x.lease); x.task.claimed_by = 'another-worker'; return read(); }; }, 'AUTHORITY_CHANGED'],
+    [x => { const read = x.io.readBefore; x.io.readBefore = async () => { x.manifest.files.push({ path: 'changed' }); return read(); }; }, 'CANDIDATE_CHANGED'],
   ]) {
     const x = setup();
     mutate(x);
