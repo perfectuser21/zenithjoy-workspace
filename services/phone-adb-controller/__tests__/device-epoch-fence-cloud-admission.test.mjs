@@ -9,7 +9,7 @@ import { selectPublicPreflightScope, freezePublicPreflightRoute } from '../publi
 import { preparePublicDomainSnapshot } from '../public-domain-snapshot.mjs';
 import { freezePreflightProfile } from '../preflight-control-scope.mjs';
 import { epochCompatibilityRecordScope } from '../epoch-source-compatibility.mjs';
-import { verifyEpochFacts } from '../device-epoch-fence-admission.mjs';
+import { readCloud101BusinessFacts, verifyEpochFacts } from '../device-epoch-fence-admission.mjs';
 import { freezeFenceReference, readCloudExistingEpochCompletion, validateEpochRecord } from '../device-epoch-fence-reference.mjs';
 
 const id = n => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
@@ -314,6 +314,69 @@ test('reviewed successor rejects an altered origin, new artifact, run, or device
   }
 });
 
+function brainSnapshot(facts) {
+  const { compatibilityReview, compatibilityRelease, compatibilityDevelopment, originalTask, task, binding, links, taskRun, central } = facts;
+  const { release, observation, gate } = compatibilityRelease;
+  const review = structuredClone(compatibilityReview);
+  review.result.epoch_source_compatibility_sha256 = digest(review.result.epoch_source_compatibility);
+  delete review.result.epoch_source_compatibility;
+  return { protocol: 'cloud-101-admission-snapshot/v1', task, binding, links, taskRun, central, originalTask, compatibilityDevelopment, compatibilityReview: review,
+    compatibilityRelease: { release_id: release.id, observation_id: observation.id,
+      environment: release.environment, target: release.target, source_commit: facts.frozen.deployment.source_commit,
+      manifest_sha256: release.manifest_sha256, observation_payload_sha256: observation.payload_sha256,
+      release_components_sha256: digest(release.payload.components), observation_components_sha256: digest(observation.payload.components),
+      gate: structuredClone(gate) } };
+}
+
+test('formal successor reads one coherent Brain projection per phase and preserves local epoch evidence', async () => {
+  const facts = reviewedSuccessor();
+  const { frozen, record } = facts;
+  const snapshot = brainSnapshot(facts);
+  const readBudget = { deadlineMs: Date.now() + 3000, maxAttempts: 1 };
+  const seen = [];
+  const read = async (path, budget) => {
+    seen.push(path);
+    const endpoint = new URL(path, 'http://localhost');
+    assert.equal(endpoint.pathname, '/api/brain/cloud-101-admission/' + frozen.public_domain.run_id);
+    assert.deepEqual(Object.fromEntries(endpoint.searchParams), {
+      task_id: facts.task.id, binding_id: facts.binding.id,
+      release_id: frozen.release.id, observation_id: frozen.deployment.observation_id,
+      device_name: frozen.discovery_phone_scope.serial, profile: frozen.discovery_phone_scope.profile,
+      profile_sha256: frozen.public_domain.profile_sha256, source_commit: frozen.deployment.source_commit,
+      original_task_id: record.original.task_id, review_task_id: facts.compatibilityReview.id,
+    });
+    assert.equal(budget, readBudget);
+    return {...snapshot, record: { status: 'foreign' }, frozen: {} };
+  };
+  const first = await readCloud101BusinessFacts({ frozen, record, readBudget, read });
+  assert.equal(seen.length, 1);
+  assert.equal(Object.hasOwn(first, 'record'), false);
+  assert.equal(Object.hasOwn(first, 'frozen'), false);
+  assert.equal(verifyEpochFacts({...facts,...first}).authorized, true);
+  snapshot.compatibilityRelease.gate.deployed = false;
+  await assert.rejects(readCloud101BusinessFacts({ frozen, record, readBudget, read }), /EPOCH_SOURCE_COMPATIBILITY/);
+  assert.equal(seen.length, 2);
+});
+
+test('formal successor refuses unavailable snapshots, changed reviews and mismatched release components', async () => {
+  const facts = reviewedSuccessor();
+  const { frozen, record } = facts;
+  let attempted = 0;
+  await assert.rejects(readCloud101BusinessFacts({ frozen, record, read: async () => {
+    attempted++;
+    throw Error('snapshot unavailable');
+  }}), /snapshot unavailable/);
+  assert.equal(attempted, 1);
+  for (const corrupt of [
+    snapshot => { snapshot.compatibilityReview.result.epoch_source_compatibility_sha256 = digest('new review'); },
+    snapshot => { snapshot.compatibilityRelease.observation_components_sha256 = digest('other observation'); },
+    snapshot => { snapshot.compatibilityRelease.manifest_sha256 = digest('swapped manifest'); },
+  ]) {
+    const snapshot = brainSnapshot(facts);
+    corrupt(snapshot);
+    await assert.rejects(readCloud101BusinessFacts({ frozen, record, read: async () => snapshot }), /EPOCH_SOURCE_COMPATIBILITY/);
+  }
+});
 
 test('the reviewed successor selects and reopens the original on-disk epoch through the formal route boundary', t => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-successor-route-')));

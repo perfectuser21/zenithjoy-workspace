@@ -8,7 +8,7 @@ export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
 import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
 import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
-import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment} from './epoch-source-compatibility.mjs';
+import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment,verifyCloudEpochSuccessorProjection} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {runDiagnostic,readDiagnosticProof} from './device-epoch-fence-diagnostics.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,sha=b=>createHash('sha256').update(b).digest('hex');
@@ -89,7 +89,8 @@ export function verifyEpochFacts(f){
   need(f.cloudCompletion?.completion_sha256===migration.completion_sha256,'EPOCH_CLOUD_AUTHORITY');
   if(successor){
    need(task.result?.common_runner?.mode==='formal'&&f.cloudCompletion.manifest_sha256===compatibility.receipt.original.manifest_sha256,'EPOCH_CLOUD_AUTHORITY');
-   verifyCloudEpochSuccessorDeployment(frozen,f.compatibilityRelease);
+   if(f.compatibilityReleaseProjection)verifyCloudEpochSuccessorProjection(frozen,f.compatibilityReleaseProjection);
+   else verifyCloudEpochSuccessorDeployment(frozen,f.compatibilityRelease);
   }else need(/^[a-f0-9]{64}$/.test(frozen.release?.manifest_sha256??'')&&f.cloudCompletion.manifest_sha256===frozen.release.manifest_sha256
    &&migration.release_id===frozen.release?.id&&migration.observation_id===frozen.deployment.observation_id,'EPOCH_CLOUD_AUTHORITY');
   need(f.cloudHardwareSerialSha256===migration.hardware_serial_sha256&&f.cloudBootIdSha256===migration.boot_id_sha256,'EPOCH_DEVICE_IDENTITY');
@@ -103,6 +104,30 @@ export function verifyEpochFacts(f){
   &&same(f.archive.fields,r.original_quarantine.fields),'EPOCH_LOCAL_HANDOFF');
  need(f.activeOwner===frozen.run_identity.tag+'\n'&&f.activeQuarantined===false,'EPOCH_LOCAL_HANDOFF');
  return {protocol:'device-epoch-fence-admission/v1',authorized:true,epoch_id:r.epoch_id,task_id:p.task_id,run_id:p.run_id,source_commit:f.source.commit,instance_id:r.new_route.instance_id,endpoint:r.new_route.endpoint,serial:spec.serial,...(r.resource.adb_serial===undefined?{}:{adb_serial:transportSerial}),old_route_absent:true,original_execution_stopped:false,android_internal:'not_attested'};
+}
+
+export async function readCloud101BusinessFacts({frozen,record,readBudget,read=readBrain}){
+ const ref=epochSourceCompatibilityReference(frozen);
+ need(isCloudEpochSourceCompatibility(ref)&&isCloudExistingEpoch(record),'EPOCH_CLOUD_AUTHORITY');
+ const p=identity(frozen),spec=phone(frozen),release=ref.receipt;
+ need(uuid.test(p?.task_id||'')&&uuid.test(p?.run_id||'')&&uuid.test(p.run_binding?.run_binding_id||'')
+  &&/^[a-f0-9]{64}$/.test(p.profile_sha256??'')&&uuid.test(record.original?.task_id||''),'EPOCH_CLOUD_AUTHORITY');
+ const query=new URLSearchParams({
+  task_id:p.task_id,binding_id:p.run_binding.run_binding_id,release_id:release.release_id,
+  observation_id:release.observation_id,device_name:spec.serial,profile:spec.profile,
+  profile_sha256:p.profile_sha256,source_commit:frozen.deployment.source_commit,
+  original_task_id:record.original.task_id,review_task_id:ref.review_task_id,
+ });
+ const snapshot=await read('/api/brain/cloud-101-admission/'+p.run_id+'?'+query,readBudget);
+ need(snapshot?.protocol==='cloud-101-admission-snapshot/v1','EPOCH_CLOUD_AUTHORITY');
+ const {task,binding,links,taskRun,central,originalTask,compatibilityDevelopment,compatibilityRelease,compatibilityReview}=snapshot??{};
+ verifyCloudEpochSuccessorProjection(frozen,compatibilityRelease);
+ need(compatibilityReview?.id===ref.review_task_id
+  &&compatibilityReview.result?.epoch_source_compatibility_sha256===ref.receipt_sha256,'EPOCH_SOURCE_COMPATIBILITY');
+ return {
+  task,binding,links,taskRun,central,originalTask,compatibilityDevelopment,compatibilityReleaseProjection:compatibilityRelease,
+  compatibilityReview:{...compatibilityReview,result:{...compatibilityReview.result,epoch_source_compatibility:ref.receipt}},
+ };
 }
 function archiveSnapshot(record){const path=record.original_quarantine.archive_path,s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&![...readdirSync(path)].some(n=>!['owner','pid','acquired_at','standalone_review_required','standalone_quarantined'].includes(n)),'EPOCH_ARCHIVE');const names=Object.keys(record.original_quarantine.fields),fields=Object.fromEntries(names.map(n=>[n,bytes(join(path,n)).toString()]));need(same(readdirSync(path).sort(),names.sort())&&(!Object.hasOwn(fields,'standalone_quarantined')||fields.standalone_quarantined===fields.owner),'EPOCH_ARCHIVE');return {dev:s.dev,ino:s.ino,fields};}
 export async function readEpochDeviceIdentity({query, scope, directory, readBudget, readAuthority, managedCloud = false}) {
@@ -131,24 +156,13 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  const compatibilityRef=epochSourceCompatibilityReference(frozen);
  const transportSerial=epochTransportSerial(record.resource);
  const cloudSuccessor=isCloudEpochSourceCompatibility(compatibilityRef);
- const readSuccessor=async(immutable)=>{
-  const {release_id:id,observation_id:observationId}=compatibilityRef.receipt,path='/api/brain/releases/'+id;
-  // Release and observation bytes are immutable. The gate is checked again after the device reads.
-  const [release,observation,gate]=await Promise.all([
-   immutable?.release??readBrain(path,readBudget).then(value=>value.release),
-   immutable?.observation??readBrain(path+'/observations/'+observationId,readBudget).then(value=>value.observation),
-   readBrain(path+'/gate',readBudget)]);
-  const current={release,observation,gate};
-  verifyCloudEpochSuccessorDeployment(frozen,current);
-  return current;
- };
- const readBusiness=async(immutable)=>{
-  const [tv,definition,reconciliation,locks,review,original,compatibilityRelease]=await Promise.all([
+ const readBusiness=async()=>{
+  if(cloudSuccessor)return readCloud101BusinessFacts({frozen,record,readBudget});
+  const [tv,definition,reconciliation,locks,review,original]=await Promise.all([
    readBrain('/api/brain/tasks/'+p.task_id,readBudget),readBrain('/api/brain/runs/'+p.run_id+'/definition',readBudget),
    readBrain('/api/brain/runs/'+p.run_id+'/reconciliation',readBudget),readBrain('/api/brain/device-locks',readBudget),
    compatibilityRef?readBrain('/api/brain/tasks/'+compatibilityRef.review_task_id,readBudget):undefined,
-   cloud?readBrain('/api/brain/tasks/'+record.original.task_id,readBudget):undefined,
-   cloudSuccessor?readSuccessor(immutable):undefined
+   cloud?readBrain('/api/brain/tasks/'+record.original.task_id,readBudget):undefined
   ]);
   const rows=locks.locks?.filter(r=>r.device_name===spec.serial);need(locks.success===true&&rows?.length===1,'EPOCH_CENTRAL_INVENTORY');
   const compatibilityReview=review?.task??review;let compatibilityDevelopment;
@@ -158,7 +172,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
    const dev=await readBrain('/api/brain/tasks/'+developmentId,readBudget);compatibilityDevelopment=dev.task??dev;
   }
   return {task:tv.task??tv,binding:definition.binding,links:reconciliation.links,taskRun:reconciliation.task_run,central:rows[0],
-   ...(compatibilityRef?{compatibilityReview,compatibilityDevelopment}:{}),...(cloudSuccessor?{compatibilityRelease}:{}),...(cloud?{originalTask:original?.task??original}:{})};
+   ...(compatibilityRef?{compatibilityReview,compatibilityDevelopment}:{}),...(cloud?{originalTask:original?.task??original}:{})};
  };
  stage='initial_business';const initial=await readBusiness();
  stage='source';const source=reviewSource({includeCloudIssuer:cloud});if(compatibilityRef)verifyEpochSourceCompatibility({frozen,record,recordSha256:sha(raw),source,reviewTask:initial.compatibilityReview,developmentTask:initial.compatibilityDevelopment});
@@ -201,7 +215,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
   }
  }
 
- stage='fresh_business';const fresh=await readBusiness(initial.compatibilityRelease);
+ stage='fresh_business';const fresh=await readBusiness();
  stage='business_drift';need(same(businessAuthorityProjection(initial),businessAuthorityProjection(fresh)),'EPOCH_BUSINESS_DRIFT');
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
  stage='final_old_daemon';await readDaemon(record.old_route);

@@ -81,6 +81,13 @@ export function verifyEpochSourceCompatibility({frozen,record,recordSha256,sourc
  return true;
 }
 
+function verifySuccessorGate(gate, receipt){
+ need(gate?.release_id===receipt.release_id&&gate.current_observation_id===receipt.observation_id
+  &&gate.current_status==='deployed'&&gate.actual_matches===true&&gate.deployed===true
+  &&Array.isArray(gate.gaps)&&gate.gaps.length===0
+  &&gate.verification?.status==='verified'&&gate.verification?.ci_status==='verified');
+}
+
 export function verifyCloudEpochSuccessorDeployment(frozen, current){
  const ref=epochSourceCompatibilityReference(frozen);need(isCloudEpochSourceCompatibility(ref));
  const {release,observation,gate}=current??{},r=ref.receipt,d=frozen.deployment;
@@ -91,9 +98,21 @@ export function verifyCloudEpochSuccessorDeployment(frozen, current){
   &&observation?.id===r.observation_id&&observation.release_id===r.release_id
   &&observation.payload?.target==='mmv'&&observation.payload.environment===d.environment
   &&observation.payload_sha256===digest(observation.payload)
-  &&same(observation.payload.components,release.payload.components)
-  &&gate?.release_id===r.release_id&&gate.current_observation_id===r.observation_id&&gate.current_status==='deployed'
-  &&gate.actual_matches===true&&gate.deployed===true&&Array.isArray(gate.gaps)&&gate.gaps.length===0
-  &&gate.verification?.status==='verified'&&gate.verification?.ci_status==='verified');
+  &&same(observation.payload.components,release.payload.components));
+ verifySuccessorGate(gate,r);
+ return true;
+}
+
+export function verifyCloudEpochSuccessorProjection(frozen,current){
+ const ref=epochSourceCompatibilityReference(frozen);
+ need(isCloudEpochSourceCompatibility(ref));
+ const r=ref.receipt,d=frozen.deployment,release=frozen.release;
+ const expectedComponents=digest(release.payload.components);
+ need(current?.release_id===r.release_id&&current.observation_id===r.observation_id
+  &&current.target==='mmv'&&current.environment===d.environment&&current.source_commit===d.source_commit
+  &&current.manifest_sha256===r.candidate_release_manifest_sha256&&current.manifest_sha256===release.manifest_sha256
+  &&sha.test(current.observation_payload_sha256||'')&&current.release_components_sha256===expectedComponents
+  &&current.observation_components_sha256===expectedComponents);
+ verifySuccessorGate(current.gate,r);
  return true;
 }

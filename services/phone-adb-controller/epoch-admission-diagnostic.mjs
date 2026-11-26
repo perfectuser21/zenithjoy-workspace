@@ -1,5 +1,5 @@
 const stages=new Set(['scope','frozen','record','policy','initial_business','source','initial_old_daemon','initial_new_daemon','evidence_root','new_inventory','old_inventory','hardware_serial','fresh_business','business_drift','final_old_daemon','final_new_daemon','final_record_policy','final_facts','unknown']);
-const endpoints=new Set(['task','definition','reconciliation','device_locks','pending_action','release','none']);
+const endpoints=new Set(['task','definition','reconciliation','device_locks','pending_action','release','cloud_101_admission','none']);
 const phases=new Set(['request','response','body','json','none']);
 const failures=new Set(['timeout','socket','http_status','content_type','body_limit','invalid_json','native_or_fs','coded_guard','unknown']);
 const transportCodes=new Set(['UND_ERR_SOCKET','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','ECONNRESET','ECONNREFUSED','EHOSTUNREACH','ENETUNREACH','ETIMEDOUT','ENOTFOUND','ENOENT','EACCES','EIO']);
