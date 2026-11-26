@@ -8247,7 +8247,7 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: 原presence总30秒内的真实fakeSSH进程有限重连及失败闭包；不执行真实设备或安装。
+    note: 真实子进程和 Python 候选闭包夹具覆盖 M4 60 秒、MMV 30 秒、同预算重连及超时不重放。
 
   - id: collection-claimed-workset
     path: services/phone-adb-controller/__tests__/collection-claimed-workset.test.mjs

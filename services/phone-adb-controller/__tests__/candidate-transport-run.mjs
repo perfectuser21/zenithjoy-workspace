@@ -6,6 +6,7 @@ import childProcess from 'node:child_process';
 import {syncBuiltinESMExports} from 'node:module';
 const c=JSON.parse(readFileSync(process.argv[2])),observations=new Map();
 const receiveProgress=c.mode.startsWith('install-progress-');
+const acceleratedPresence=c.mode.startsWith('presence-read-')||c.mode==='presence-connect-hang';
 const originalExec=childProcess.execFileSync,originalAsyncExec=childProcess.execFile,originalTimeout=global.setTimeout;
 if(receiveProgress){
  global.setTimeout=(callback,ms,...args)=>originalTimeout(callback,ms===90000?1000:ms,...args);
@@ -13,6 +14,12 @@ if(receiveProgress){
 }
 childProcess.execFileSync=(file,args,options)=>{
  if(file==='ssh')appendFileSync(join(c.top,'ssh-options.jsonl'),JSON.stringify({host:args.at(-2),install:args.at(-1).includes("' install "),timeout:options?.timeout,input_bytes:options?.input?.length})+'\n');
+ if(acceleratedPresence&&file==='ssh'&&args.at(-1).includes("' presence ")){
+  // Keep the native subprocess deadline and its SIGTERM while scaling only fixture wall time.
+  const timeout=Math.ceil(options.timeout/20);
+  const isMmv=args.at(-2)==='mmv';
+  if(!isMmv||c.mode==='presence-read-mmv')options={...options,timeout};
+ }
  if(receiveProgress&&file==='ssh'&&args.at(-2)==='xian-m4'&&args.at(-1).includes("' install "))options={...options,timeout:1300};
  return originalExec(file,args,options);
 };

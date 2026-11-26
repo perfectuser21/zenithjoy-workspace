@@ -52,7 +52,9 @@ function installXianWithProgress(spec,archive){
  });
 }
 function presenceOutput(host,spec){
- const started=performance.now(),deadline=started+30000,command=remoteCommand('presence',spec);
+ // The relayed M4 full-file readback uses the same cap as candidate collection.
+ const budgetMs=host==='xian-m4'?60000:30000;
+ const started=performance.now(),deadline=started+budgetMs,command=remoteCommand('presence',spec);
  for(let attempt=1;attempt<=2;attempt++){
   const remaining=Math.floor(deadline-performance.now());need(remaining>0,'presence预算耗尽');
   try{
