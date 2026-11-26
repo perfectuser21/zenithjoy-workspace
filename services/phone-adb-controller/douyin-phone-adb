@@ -1871,7 +1871,17 @@ evidence_bundle() {
 foreground_package() {
   # 全量 window 会先输出 LAST ANR 保存的旧焦点；displays 只读取当前显示状态。
   "$ADB" -s "$SERIAL" shell dumpsys window displays 2>/dev/null \
-    | /usr/bin/awk '/mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }' \
+    | /usr/bin/awk -v mode="${1:-}" '
+      mode == "unique-current" {
+        if ($0 ~ /^[[:space:]]*mCurrentFocus=/) {
+          count++
+          if ($0 !~ /=null([[:space:]]|$)/) focus = $0
+        }
+        next
+      }
+      /mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }
+      END { if (mode == "unique-current" && count == 1 && focus != "") print focus }
+    ' \
     | tr -d '\r'
 }
 
@@ -5449,13 +5459,15 @@ print("COLLECTION_COMMENT_PANEL_READBACK_FAILED xml_path_b64="+base64.b64encode(
     if [[ "$launcher_activity" == .* ]]; then launcher_activity="$launcher_pkg$launcher_activity"; fi
     rsd_ok=0
     for rsd_try in 0 1 2 3; do
+      focus_mode=""
       if (( rsd_try == 0 )); then
         [[ "$launcher_activity" == "$launcher_pkg".* ]] || continue
+        focus_mode=unique-current
       else
         "$ADB" -s "$SERIAL" shell input keyevent 3 || die "SAFE_DESKTOP_HOME_INPUT_FAILED"
         wait_ms 1000
       fi
-      focus="$(foreground_package)" || die "SAFE_DESKTOP_FOREGROUND_QUERY_FAILED"
+      focus="$(foreground_package "$focus_mode")" || die "SAFE_DESKTOP_FOREGROUND_QUERY_FAILED"
       focus_component="$(print -r -- "$focus" | /usr/bin/sed -nE 's@.*[[:space:]]([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)([[:space:]}].*|$)@\1@p')"
       focus_pkg="${focus_component%%/*}"
       [[ "$focus_pkg" == "$launcher_pkg" ]] || continue

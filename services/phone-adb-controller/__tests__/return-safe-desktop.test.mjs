@@ -25,7 +25,7 @@ test("前置：zsh 可用", () => {
 
 // 假 adb：resolve-activity 返回可配置的 launcher 包名；dumpsys window 的前台按
 // "跳过前N次是抖音,之后是launcher"的策略回，模拟"按了几次HOME才真正回到桌面"。
-function makeFakeAdb({ launcherPkg = "com.hihonor.android.launcher", settleAfter = 1, foregroundPkg = launcherPkg, priorActivity = ".MainActivity", priorFocus = "mCurrentFocus" }) {
+function makeFakeAdb({ launcherPkg = "com.hihonor.android.launcher", settleAfter = 1, foregroundPkg = launcherPkg, priorActivity = ".MainActivity", priorFocus = "mCurrentFocus", additionalDisplay = false }) {
   return `#!/bin/sh
 HOME_PRESS_COUNT_FILE="\${TMPDIR:-/tmp}/rsd-home-presses-$$-marker"
 [ -n "$RSD_COUNT_FILE" ] && HOME_PRESS_COUNT_FILE="$RSD_COUNT_FILE"
@@ -41,6 +41,9 @@ case "$args" in
     if [ "$n" -ge "${settleAfter}" ]; then
       if [ "$n" -eq 0 ]; then
         printf '${priorFocus}=Window{abc u0 ${foregroundPkg}/${priorActivity}}\\n'
+        if [ "${additionalDisplay}" = true ]; then
+          printf 'mCurrentFocus=Window{other u0 com.ss.android.ugc.aweme/.MainActivity}\\n'
+        fi
       else
         printf 'mCurrentFocus=Window{abc u0 ${foregroundPkg}/.MainActivity}\\n'
       fi
@@ -123,6 +126,12 @@ test("mFocusedApp 的桌面记录不能替代当前焦点", async () => {
 
 test("默认桌面同包的设置 Activity 仍须实际按 HOME", async () => {
   const r = await run({ launcherPkg: "com.android.launcher3", settleAfter: 0, priorActivity: ".SettingsActivity" });
+  assert.equal(r.code, 0, r.err);
+  assert.equal(r.homePresses, 1);
+});
+
+test("多显示器分别有焦点时不能把第一条 HOME 当作当前桌面", async () => {
+  const r = await run({ launcherPkg: "com.android.launcher3", settleAfter: 0, additionalDisplay: true });
   assert.equal(r.code, 0, r.err);
   assert.equal(r.homePresses, 1);
 });
