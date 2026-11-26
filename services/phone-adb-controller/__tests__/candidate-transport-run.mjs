@@ -10,7 +10,7 @@ const acceleratedPresence=c.mode.startsWith('presence-read-')||c.mode==='presenc
 const originalExec=childProcess.execFileSync,originalAsyncExec=childProcess.execFile,originalTimeout=global.setTimeout;
 if(receiveProgress){
  global.setTimeout=(callback,ms,...args)=>originalTimeout(callback,ms===90000?1000:ms,...args);
- childProcess.execFile=(file,args,options,callback)=>originalAsyncExec(file,args,{...options,timeout:options.timeout===720000?3500:options.timeout},callback);
+ childProcess.execFile=(file,args,options,callback)=>originalAsyncExec(file,args,{...options,timeout:Math.round(options.timeout*3500/720000)},callback);
 }
 childProcess.execFileSync=(file,args,options)=>{
  if(file==='ssh')appendFileSync(join(c.top,'ssh-options.jsonl'),JSON.stringify({host:args.at(-2),install:args.at(-1).includes("' install "),timeout:options?.timeout,input_bytes:options?.input?.length})+'\n');

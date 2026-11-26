@@ -18,11 +18,29 @@ test('预算随包大小增加且始终限制在120–300秒，异常尺寸拒�
  for(const value of [0,-1,1.5,NaN,Infinity,128*1024*1024+1])assert.throws(()=>budget(value),/archive size/);
 });
 
+test('有实收进度的西安候选按包大小获得有界总预算',()=>{
+ const budget=bytes=>candidate.candidateInstallTimeout(bytes,{progressive:true});
+ assert.equal(budget(1024),12*60_000);
+ assert.equal(budget(11_530_240),1_216_000);
+ assert.equal(budget(128*1024*1024),22*60_000);
+ assert.throws(()=>budget(128*1024*1024+1),/archive size/);
+});
+
 test('西安普通候选按远端收包延长预算，慢传仍完成原安装与回执',t=>{
  const f=transportFixture(t),result=f.run('install-progress-slow');
  assert.equal(result.ok,true,JSON.stringify(result));
  const calls=f.calls().filter(c=>c.host==='xian-m4');
  assert.equal(calls.filter(c=>c.archive).length,1);
+ assert.equal(calls.filter(c=>c.collect).length,1);
+ assert.ok(result.result.observation_ids['xian-m4']);
+});
+test('西安完整候选与生产同等大小，持续接收超过旧720秒仍可完整校验和ACK',t=>{
+ const f=transportFixture(t,{payloadBytes:10_826_560}),result=f.run('install-progress-live-sized');
+ assert.equal(result.ok,true,JSON.stringify(result));
+ const calls=f.calls().filter(c=>c.host==='xian-m4');
+ const transfers=calls.filter(c=>c.archive);
+ assert.equal(transfers.length,1);
+ assert.ok(Math.abs(transfers[0].input_bytes-11_530_240)<=10_240,'production-sized tar, allowing platform record padding');
  assert.equal(calls.filter(c=>c.collect).length,1);
  assert.ok(result.result.observation_ids['xian-m4']);
 });
