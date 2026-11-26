@@ -43,26 +43,102 @@ jobs:
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
       - name: 仅主线刷新并导出中央规范快照
+        timeout-minutes: 12
         env:
           BRAIN_URL: ${{ secrets.BRAIN_DEPLOY_URL || 'http://100.79.41.61:5221' }}
           CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p evidence
           trap 'code=$?; if (( code != 0 )); then printf "%s\n" "{\"status\":\"unknown\",\"stage\":\"pilot_snapshot\",\"exit_code\":$code}" > evidence/gap.json; fi' EXIT
           test -n "$CECELIA_INTERNAL_TOKEN"
           jq -n --arg scope "$MAP_SCOPE" --arg repo "$SOURCE_REPO" --arg revision "$HEAD" '{scope:$scope,repo:$repo,revision:$revision}' > evidence/request.json
-          status=$(curl --silent --show-error --output evidence/head.json --write-out '%{http_code}' "$BRAIN_URL/api/brain/implementation-ci/refresh" \
-            -H "X-Internal-Token: $CECELIA_INTERNAL_TOKEN" -H 'Content-Type: application/json' \
-            --data-binary @evidence/request.json)
-          if [[ "$status" == 409 ]]; then
-            curl --fail-with-body --silent --show-error --get "$BRAIN_URL/api/brain/implementation-ci/snapshot" \
-              -H "X-Internal-Token: $CECELIA_INTERNAL_TOKEN" --data-urlencode "scope=$MAP_SCOPE" \
-              --data-urlencode "repo=$SOURCE_REPO" --data-urlencode "revision=$HEAD" > evidence/head.json
-          else
-            [[ "$status" == 200 ]]
-          fi
-          jq -e '.snapshot.status == "verified" and (.snapshot.gaps | length == 0)' evidence/head.json
+          deadline=$((SECONDS+660))
+          response=evidence/response.tmp
+          transport_loss() {
+            [[ "$2" == 000 || "$2" == 200 ]] || return 1
+            case "$1" in 7|18|28|52|55|56) return 0 ;; *) return 1 ;; esac
+          }
+          request() {
+            local method=$1 remaining=$((deadline-SECONDS)) route=refresh
+            local args=(-H 'Content-Type: application/json' --data-binary @evidence/request.json)
+            (( remaining > 0 )) || return 28
+            if [[ "$method" == GET ]]; then
+              (( remaining <= 4 )) || remaining=4
+              route=snapshot
+              args=(--get --data-urlencode "scope=$MAP_SCOPE" --data-urlencode "repo=$SOURCE_REPO" --data-urlencode "revision=$HEAD")
+            elif (( remaining > 600 )); then
+              remaining=600
+            fi
+            curl -q --silent --show-error --connect-timeout 5 --max-time "$remaining" \
+              -H "X-Internal-Token: $CECELIA_INTERNAL_TOKEN" --output "$response" --write-out '%{http_code}' \
+              "${args[@]}" "$BRAIN_URL/api/brain/implementation-ci/$route"
+          }
+          check_main() {
+            local remaining=$((deadline-SECONDS)) actual
+            (( remaining > 0 )) || return 28
+            (( remaining <= 10 )) || remaining=10
+            actual=$(timeout "${remaining}s" gh api "repos/$SOURCE_REPO/git/ref/heads/main" --jq .object.sha) || return
+            [[ "$actual" == "$HEAD" ]]
+          }
+          read_back() {
+            local poll status code
+            for poll in 1 2 3 4 5 6; do
+              if status=$(request GET); then
+                [[ "$status" == 200 ]] || { echo "Pilot snapshot read-back HTTP $status" >&2; return 1; }
+                return 0
+              else
+                code=$?
+              fi
+              transport_loss "$code" "$status" && (( poll < 6 && SECONDS+2 < deadline )) || return "$code"
+              sleep 2
+            done
+          }
+          validate() {
+            jq -es --slurpfile request evidence/request.json "
+              length == 1 and (.[0] | (has(\"error\") | not) and
+                .snapshot.schema_version == 1 and
+                (.snapshot | {scope,repo,revision}) == \$request[0] and
+                (.snapshot.snapshot_sha256 | (type == \"string\" and test(\"^[0-9a-f]{64}$\"))) and
+                (.snapshot.gaps | type == \"array\") and ($1))" "$response" >/dev/null
+          }
+          verified() { validate '.snapshot.status == "verified" and (.snapshot.gaps | length == 0)'; }
+          for attempt in 1 2; do
+            lost=false
+            if status=$(request POST); then
+              if [[ "$status" == 200 ]]; then
+                verified || exit 1
+                mv "$response" evidence/head.json
+                exit 0
+              fi
+              if [[ "$status" != 409 ]] || ! jq -e '.error.code | IN("ACTIVITY_CONTRACT_SNAPSHOT_CHANGED","MAP_MANIFEST_ACTIVE_CONFLICT")' "$response" >/dev/null; then
+                echo "Pilot snapshot refresh HTTP $status" >&2
+                mv "$response" evidence/refresh-error.json
+                exit 1
+              fi
+            else
+              code=$?
+              transport_loss "$code" "$status" || exit "$code"
+              echo "Pilot snapshot refresh outcome unknown after curl $code, checking the exact snapshot" >&2
+              lost=true
+            fi
+            read_back || exit $?
+            if verified; then
+              check_main || exit $?
+              mv "$response" evidence/head.json
+              exit 0
+            fi
+            [[ "$lost" == true && "$attempt" == 1 ]] || exit 1
+            # Only the exact empty server state permits a single new refresh.
+            validate '.snapshot as $s | $s.status == "unknown" and
+              ($s.gaps | map(.code) | sort) == ["definition_snapshot_missing","scope_manifest_missing"] and
+              $s.definitions.workflows == [] and $s.definitions.activities == [] and
+              ($s.map | has("manifest")) and $s.map.manifest == null' || exit 1
+            check_main || exit $?
+            echo 'Pilot snapshot is absent on the same main revision, refreshing once more' >&2
+          done
+          exit 1
       - name: 快照前置失败保留缺口
         if: failure()
         run: |

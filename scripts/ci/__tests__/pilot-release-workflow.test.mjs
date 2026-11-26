@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
+import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import YAML from 'yaml';
@@ -59,6 +60,83 @@ test('巡查定义有独立完整发布证明，保留现有范围且不以影�
 });
 
 function regression(){return YAML.parse(readFileSync(new URL('../../../.github/workflows/pilot-release-regression.yml',import.meta.url),'utf8'));}
+
+async function runSnapshotStep(t,responses,{main}={}){
+ const root=mkdtempSync(join(tmpdir(),'pilot-refresh-'));
+ t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const identity={scope:'zenithjoy',repo:'perfectuser21/zenithjoy-workspace',revision:'a'.repeat(40)},token='fixture-local-token';
+ const calls=[];
+ const server=createServer(async(req,res)=>{
+  const url=new URL(req.url,'http://localhost');
+  const chunks=[];for await(const chunk of req)chunks.push(chunk);
+  const body=chunks.length?JSON.parse(Buffer.concat(chunks).toString('utf8')):null;
+  calls.push({method:req.method,path:url.pathname,identity:body??Object.fromEntries(url.searchParams),authenticated:req.headers['x-internal-token']===token});
+  const reply=responses[calls.length-1];
+  if(reply==='drop')return req.socket.destroy();
+  if(reply?.truncated)return res.writeHead(reply.status,{'Content-Length':100,'Connection':'close'}).end('{}');
+  const snapshot={schema_version:1,...identity,status:'verified',gaps:[],snapshot_sha256:'b'.repeat(64),...reply?.snapshot};
+  res.writeHead(reply?.status??(reply?200:500),{'Content-Type':'application/json'}).end(JSON.stringify(reply?.body??{snapshot}));
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(()=>{server.closeAllConnections();server.close();});
+ writeFileSync(join(root,'gh'),'#!/bin/sh\nprintf "%s\\n" "$FIXTURE_MAIN"\n',{mode:0o700});
+ const step=regression().jobs.snapshot.steps.find(s=>s.name==='仅主线刷新并导出中央规范快照');
+ const child=spawn('bash',['-c',step.run],{cwd:root,env:{...process.env,PATH:`${root}:${process.env.PATH}`,MAP_SCOPE:identity.scope,SOURCE_REPO:identity.repo,HEAD:identity.revision,FIXTURE_MAIN:main??identity.revision,BRAIN_URL:`http://127.0.0.1:${server.address().port}`,CECELIA_INTERNAL_TOKEN:token}});
+ let stderr='';child.stderr.on('data',data=>stderr+=data);child.stdout.resume();
+ const timeout=setTimeout(()=>child.kill('SIGKILL'),15000);
+ let status;try{status=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});}finally{clearTimeout(timeout);}
+ for(const call of calls){
+  assert.deepEqual(call.identity,identity);
+  assert.equal(call.authenticated,true);
+  assert.equal(call.path,`/api/brain/implementation-ci/${call.method==='POST'?'refresh':'snapshot'}`);
+ }
+ const load=name=>{const path=join(root,`evidence/${name}.json`);return existsSync(path)?JSON.parse(readFileSync(path,'utf8')):null;};
+ return {status,stderr,methods:calls.map(call=>call.method),head:load('head'),gap:load('gap')};
+}
+const exactMissing={snapshot:{status:'unknown',gaps:[{code:'definition_snapshot_missing'},{code:'scope_manifest_missing'}],definitions:{workflows:[],activities:[]},map:{manifest:null}}};
+test('Pilot POST 断线后复用已提交的同范围同提交快照，不重发刷新',async t=>{
+ const r=await runSnapshotStep(t,['drop',{}]);
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(r.methods,['POST','GET']);assert.equal(r.head.snapshot.status,'verified');assert.equal(r.gap,null);
+});
+test('Cecelia 重启期间只重试读取，待恢复后复用准确快照',async t=>{
+ const r=await runSnapshotStep(t,['drop','drop',{}]);
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(r.methods,['POST','GET','GET']);assert.equal(r.head.snapshot.status,'verified');
+});
+test('Pilot 只在准确证实尚无定义及地图快照时重发一次，二次断线仅做最终只读核验',async t=>{
+ const recovered=await runSnapshotStep(t,['drop',exactMissing,{}]);
+ assert.equal(recovered.status,0,recovered.stderr);assert.deepEqual(recovered.methods,['POST','GET','POST']);
+ const r=await runSnapshotStep(t,['drop',exactMissing,'drop',{}]);
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(r.methods,['POST','GET','POST','GET']);assert.equal(r.head.snapshot.status,'verified');
+ const exhausted=await runSnapshotStep(t,['drop',exactMissing,'drop',exactMissing]);
+ assert.notEqual(exhausted.status,0);assert.deepEqual(exhausted.methods,['POST','GET','POST','GET']);assert.equal(exhausted.head,null);assert.equal(exhausted.gap.status,'unknown');
+});
+test('Pilot 拒绝错误身份、残缺定义、诊断错误、正式HTTP错误、main前移',async t=>{
+ const refused=[
+  {name:'other scope',requests:['drop',{snapshot:{scope:'commander-generic'}}],methods:['POST','GET']},
+  {name:'other repo',requests:['drop',{snapshot:{repo:'perfectuser21/cecelia'}}],methods:['POST','GET']},
+  {name:'other revision',requests:['drop',{snapshot:{revision:'c'.repeat(40)}}],methods:['POST','GET']},
+  {name:'missing gaps',requests:['drop',{snapshot:{gaps:null}}],methods:['POST','GET']},
+  {name:'misconfigured definitions',requests:['drop',{snapshot:{...exactMissing.snapshot,gaps:[{code:'scope_repository_missing'}]}}],methods:['POST','GET']},
+  {name:'partial write',requests:['drop',{snapshot:{...exactMissing.snapshot,definitions:{workflows:[{}],activities:[]}}}],methods:['POST','GET']},
+  {name:'GET HTTP error',requests:['drop',{status:404}],methods:['POST','GET']},
+  {name:'HTTP failure',requests:[{status:503},{}],methods:['POST']},
+  {name:'HTTP failure with a truncated body',requests:[{status:503,truncated:true},{}],methods:['POST']},
+  {name:'complete unknown result',requests:[exactMissing,{}],methods:['POST']},
+  {name:'source moved',requests:[{status:409,body:{error:{code:'IMPLEMENTATION_CI_MAIN_MOVED'}}},{}],methods:['POST']},
+  {name:'main moved before retry',requests:['drop',exactMissing,{}],methods:['POST','GET'],main:'c'.repeat(40)},
+ ];
+ for(const {name,requests,methods,main} of refused)await t.test(name,async t=>{
+  const r=await runSnapshotStep(t,requests,{main});
+  assert.notEqual(r.status,0);assert.deepEqual(r.methods,methods);assert.equal(r.head,null);assert.equal(r.gap.status,'unknown');
+ });
+});
+test('Pilot 并发冲突只允许读回已经认证的准确快照',async t=>{
+ const conflict={status:409,body:{error:{code:'ACTIVITY_CONTRACT_SNAPSHOT_CHANGED'}}};
+ const r=await runSnapshotStep(t,[conflict,{}]);
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(r.methods,['POST','GET']);
+ const unknown=await runSnapshotStep(t,[conflict,exactMissing]);
+ assert.notEqual(unknown.status,0);assert.deepEqual(unknown.methods,['POST','GET']);assert.equal(unknown.head,null);
+});
 function extractSnapshot(input){
  const step=regression().jobs.verify.steps.find(s=>s.name==='准备固定中央Skill对象缓存');
  const command=step.run.split('\n').find(line=>line.trimStart().startsWith('jq '));
@@ -80,7 +158,9 @@ test('完整发布本地兼容入口仅允许被调用，固定工具、同SHA�
  assert.equal(steps.find(s=>s.with?.path==='source').with.ref,'${{ inputs.head_revision || github.sha }}');
  assert.ok(steps.some(s=>s.run?.includes('node tooling/scripts/ci/pilot-release-verification.mjs --repo-root "$PWD/source"')));
  assert.ok(steps.some(s=>s.run?.includes('--snapshot "$PWD/snapshot/head.json"')));
- assert.ok(w.jobs.snapshot.steps.some(s=>s.run?.includes('.snapshot.status == "verified" and (.snapshot.gaps | length == 0)')));
+ const refresh=w.jobs.snapshot.steps.find(s=>s.run?.includes('.snapshot.status == "verified" and (.snapshot.gaps | length == 0)'));
+ assert.equal(refresh['timeout-minutes'],12);
+ assert.equal(refresh.env.GH_TOKEN,'${{ github.token }}');
 });
 test('发布产物按 attempt 命名，verify 下载其 snapshot 依赖实际使用的 attempt',()=>{
  const {snapshot,verify}=regression().jobs;
