@@ -78,8 +78,10 @@ def compose_row(row, slot, viewport):
     if len(dates) != 1 or len(regions) != 1 or len(replies) != 1:
         return None
     db, gb, qb = map(compose_bounds, (dates[0], regions[0], replies[0]))
+    # Compose can inset the timestamp by one pixel at both edges while scrolling.
+    date_aligned = db[1] == gb[1] or (db[1] == gb[1] + 1 and db[3] == gb[3] - 1)
     if not (db[0] == nb[0] and db[1] >= compose_bounds(body)[3]
-            and db[1] == gb[1] == qb[1] and db[2] <= gb[0] < gb[2] <= qb[0]):
+            and date_aligned and gb[1] == qb[1] and db[2] <= gb[0] < gb[2] <= qb[0]):
         return None
     likes = [n for n in children if n.get('clickable') == 'true' and len(n) == 1
              and re.fullmatch(r'赞[0-9万.+]+,(?:未选中|已选中)', n[0].get('content-desc', ''))]

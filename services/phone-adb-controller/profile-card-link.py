@@ -47,10 +47,20 @@ def select(mode, raw, uid, nick, body):
     if mode == 'profile':
         profile(raw, uid, nick)
         return 'verified'
-    if mode == 'comment':
-        rows = [r for r in panel(raw)['rows'] if not r['author'] and r['nickname'] == nick and hashlib.sha256(r['body'].encode()).hexdigest() == body]
-        need(len(rows) == 1)
-        return rows[0]['x']+' '+rows[0]['y']
+    if mode in ('comment', 'comment-scroll'):
+        current = panel(raw)
+        rows = [r for r in current['rows'] if not r['author'] and r['nickname'] == nick and hashlib.sha256(r['body'].encode()).hexdigest() == body]
+        if mode == 'comment':
+            need(len(rows) == 1)
+            return rows[0]['x']+' '+rows[0]['y']
+        # A valid panel may place the target below the initial viewport. Ambiguous matches still fail.
+        need(not rows)
+        viewport = current['scroll_viewport']
+        left, top, right, bottom = (viewport[key] for key in ('left', 'top', 'right', 'bottom'))
+        x = left + (right - left) * 2 // 3
+        start_y = top + (bottom - top) * 3 // 4
+        end_y = top + (bottom - top) // 3
+        return f'{x} {start_y} {end_y}'
     if mode == 'more':
         profile(raw, uid, nick)
         selected = [n for n in ns if n.get('content-desc') == '更多' and n.get('clickable') == 'true' and n.get('enabled') == 'true']
