@@ -12,12 +12,27 @@ export {loadAuthoringScope};
 const REPO='perfectuser21/zenithjoy-workspace',SHA=/^[a-f0-9]{40}$/;
 const SPECS=[['commander-generic',AUTHORING_FILES.slice(0,2)],['cecelia-device-patrol-definitions',AUTHORING_FILES.slice(2)]];
 const unwrap=x=>x?.task??x?.data??x;
+const freezeReasons=new Map([
+ ['冻结来源：GitHub对象不可读','github_object_unreadable'],
+ ['冻结来源：固定来源文件不可读','fixed_source_unreadable'],
+ ['冻结来源：文件缺失或不是常规文件','git_blob_missing'],
+ ['冻结来源：文件字节hash不匹配','git_blob_hash_mismatch'],
+ ['冻结来源文件不是JSON','definition_json_invalid'],
+ ['冻结来源内容与已验收完整定义不一致','definition_digest_mismatch'],
+]);
 export function createBrainApi(url,token,{fetchFn=globalThis.fetch}={}){
  const origin=new URL(url);if(!['http:','https:'].includes(origin.protocol)||origin.username||origin.password||origin.search||origin.hash||origin.pathname!=='/')throw Error('AUTHORING_BRAIN_URL_INVALID');
  return async(method,path,body)=>{
   const response=await fetchFn(new URL(`/api/brain/${path}`,origin),{method,redirect:'error',headers:{'X-Internal-Token':token,'X-Session-ID':'ci:authoring-main-source','Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(90000)});
   const text=await response.text();if(text.length>8*1024*1024)throw Error('AUTHORING_API_RESPONSE_TOO_LARGE');
-  const value=JSON.parse(text);if(!response.ok)throw Object.assign(Error(`AUTHORING_API_${response.status}:${value.error?.code??value.error??'unknown'}`),{status:response.status});return value;
+  const value=JSON.parse(text);
+  if(!response.ok){
+   const reportedCode=value?.error?.code??value?.error;
+   const code=typeof reportedCode==='string'&&/^[a-z][a-z0-9_]{0,79}$/.test(reportedCode)?reportedCode:'unknown';
+   const reason=code==='definition_source_invalid'?freezeReasons.get(value?.message):undefined;
+   throw Object.assign(Error(`AUTHORING_API_${response.status}:${code}${reason?':'+reason:''}`),{status:response.status});
+  }
+  return value;
  };
 }
 export async function createSourceTask(api,revision,key,parent,authoring=false,dependsOn=[]){
@@ -63,7 +78,13 @@ export async function submitSourceRegistration(api,task,item,validation,hash,che
   const body={stage,revision:state.revision,submission_id:`main-source:${d.source.revision}:${stage}`,output:outputs[stage]};
   await checkMain();
   try{state=(await api('POST',`workflow-authoring/runs/${task.id}/submit`,body)).state;}
-  catch(error){const observed=await api('GET',`workflow-authoring/runs/${task.id}`);await checkMain();if(!observed.receipts?.some(r=>r.submission_id===body.submission_id))throw error;state=observed;}
+  catch(error){
+   const observed=await api('GET',`workflow-authoring/runs/${task.id}`);await checkMain();
+   if(!observed.receipts?.some(r=>r.submission_id===body.submission_id)){
+    throw new Error(`AUTHORING_STAGE_${stage} ${error.message}`,{cause:error});
+   }
+   state=observed;
+  }
  }
  const registered=state.outputs.register;
  if(!registered?.readback_verified||registered.workflow_id!==item.owner.id||registered.definition_sha256!==hash(d)||registered.version!==d.version)throw Error('AUTHORING_REGISTRATION_READBACK_FAILED');

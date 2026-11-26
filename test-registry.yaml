@@ -4552,9 +4552,9 @@ tests:
     path: apps/api/tests/deploy/promote-all-prod-workflow.test.ts
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: 平台基础
-    note: "回归测试(2026-07-30)：promote-all-prod.yml 的 promote-backend job 07-15拆库刀3后端迁hk-vps docker时未同步更新，仍SSH到已废弃US_MAC_HOST走老蓝绿部署。断言不再引用US_MAC_*secrets且走Tailscale+HK_VPS_SSH_KEY+docker健康冒烟；顺带断言已废弃的promote-prod.yml已被删除。"
+    retirement: 2026-11-26 旧香港 API 和联合晋级入口退役。现役回归见 hz-api-release-regression 和 production-release-entrypoints。
 
   - id: line04-per-cs-config-store-sprint
     path: sprints/06222337-line04-per-cs-config/tests/cs-account-config-store.test.ts
@@ -9059,15 +9059,15 @@ tests:
   - {"id":"inventory-5d5cb8581f2f5b95","path":"scripts/phone-account-patrol/test_openclaw_native.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-5b9e8981fe9e2a76","path":"scripts/phone-account-patrol/test_runner.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-602aea640f73f174","path":"scripts/phone-account-patrol/test_runtime_safety.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-4a0ec799b6bcf470","path":"scripts/release-gate/__tests__/all-release-recovery.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-ed3036eb193cfc62","path":"scripts/release-gate/__tests__/app-workflow-wiring.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-4a0ec799b6bcf470","path":"scripts/release-gate/__tests__/all-release-recovery.test.mjs","type":"contract","ci":"L1","status":"deprecated","product":"CI治理","retirement":"2026-11-26 旧联合晋级和跨组件自动回退已退役。现役组件分别由 hz-api-release-regression 和 dashboard-production-regression 验证回退。"}
+  - {"id":"inventory-ed3036eb193cfc62","path":"scripts/release-gate/__tests__/app-workflow-wiring.test.mjs","type":"contract","ci":"L1","status":"deprecated","product":"CI治理","retirement":"2026-11-26 旧生产准入与回滚入口退役。现役入口及私有画布退役守卫移至 production-release-entrypoints。"}
   - {"id":"inventory-d9b8a9ccdb75ce61","path":"scripts/release-gate/__tests__/create-release-acceptance.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-03227d06ee8564f1","path":"scripts/release-gate/__tests__/frontend-release.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-00ec8aba7058be5f","path":"scripts/release-gate/__tests__/frontend-staging.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c13a3377edd30b31","path":"scripts/release-gate/__tests__/process-and-business-gates.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-50112f6769a93c25","path":"scripts/release-gate/__tests__/production-backup.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b1da779048d91a09","path":"scripts/release-gate/__tests__/release-admission.test.mjs","type":"contract","ci":"L1","status":"active","product":"unclassified","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"Actual mandatory Brain workflow shell and stdin validation module run with SSH/fetch transports isolated; frozen same-SHA S2/S3 required. No real Brain/network/credentials/device/message operations."}
-  - {"id":"inventory-6f6c437d7497b596","path":"scripts/release-gate/__tests__/retired-entrypoints.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"production-release-entrypoints","path":"scripts/release-gate/__tests__/retired-entrypoints.test.mjs","type":"contract","ci":"L1","status":"active","product":"CI治理","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"拦截已退役入口回流，执行杭州 API 和双域 Dashboard 的真实请求校验脚本。"}
   - {"id":"inventory-72ea866ce3cd0d07","path":"scripts/release-gate/__tests__/staff-staging-project.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-52c5a89611ead670","path":"scripts/test_skill_source_ownership.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-7a16de0d19215de1","path":"services/agent/build-modules/line04/wechat-rpa/tests/test_always_double_read.py","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:services/agent/build-modules/line04/wechat-rpa/tests/test_always_double_read.py. Runtime/package mirror duplicated authoring tests; single source services/agent/wechat-rpa retains current assertions. Package byte comparator and build exclusions reject regenerated duplicate tests. Overlay subset and obsolete recovery field compared separately; current source 51 cases verified."}

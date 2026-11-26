@@ -137,3 +137,9 @@ test('恢复模式 Pilot run ID 为空时，SSH 远端参数仍保留固定工�
  assert.match(text,/TOOL_SHA="\$5"/);
  assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT" "\$DEPLOY_MODE" "\$\(git rev-parse HEAD\)" "\$IMPLEMENTATION_RUN_ID"/);
 });
+
+test('自动候选把触发它的 Pilot attempt 传给证据下载器',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.ok(text.includes('IMPLEMENTATION_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}'));
+ assert.match(text,/phone-deploy-evidence\.mjs.*"\$IMPLEMENTATION_RUN_ATTEMPT"/);
+});

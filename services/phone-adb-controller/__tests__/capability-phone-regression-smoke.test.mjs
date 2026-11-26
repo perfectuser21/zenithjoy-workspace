@@ -67,7 +67,7 @@ test('capability依赖守卫拒绝包缺失、准备入口或helper断链及漏�
  for(const tool of ['zsh','python3','jq','xmllint'])assert.throws(()=>capabilityDependency(workflow,smokeWrapper.replace('\n'+tool+' --version\n','\ntrue\n'),signedInstaller));
  for(const wrapper of [smokeWrapper.replace('prepare-openclaw-os-packages.sh','unrelated.sh'),smokeWrapper.replace('"${packages[@]}"','"zsh"')])assert.throws(()=>capabilityDependency(workflow,wrapper,signedInstaller));
  assert.throws(()=>capabilityDependency(workflow.replace('prepare-smoke-os-packages.sh','unrelated.sh'),smokeWrapper,signedInstaller));
- assert.throws(()=>capabilityDependency(workflow,smokeWrapper,signedInstaller.replace('install -y "$@"','install -y zsh')));
+ assert.throws(()=>capabilityDependency(workflow,smokeWrapper,signedInstaller.replaceAll('install -y "$@"','install -y zsh')));
 });
 test('OpenClaw全套执行真实YAML契约前安装已锁定根依赖，不靠全局包或跳过',()=>{
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8');

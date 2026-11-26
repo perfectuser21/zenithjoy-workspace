@@ -13,9 +13,9 @@ function decoderDependency(ci,installer){
  const step=YAML.parse(ci).jobs['openclaw-scripts-test'].steps.find(s=>s.id==='openclaw-os-packages');
  assert.match(step.run,/for pair in zsh:zsh xmllint:libxml2-utils ffmpeg:ffmpeg;/);
  assert.match(step.run,/missing\+=\("\$\{pair#\*:\}"\)/);
- assert.match(step.run,/timeout 300s bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh[^\n]*"\$\{missing\[@\]\}"/);
+ assert.match(step.run,/timeout 300s bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh --runner-sources[^\n]*"\$\{missing\[@\]\}"/);
  assert.match(step.run,/ffmpeg -version/);
- assert.match(installer,/stage official-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{isolated\[@\]\}" "\$\{opts\[@\]\}" install -y "\$@"/);
+ assert.match(installer,/stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{original_isolated\[@\]\}" "\$\{opts\[@\]\}" --no-remove install -y "\$@"/);
 }
 const ci=readFileSync(path('.github/workflows/ci-l3-code.yml'),'utf8');
 const installer=readFileSync(path('.github/workflows/scripts/prepare-openclaw-os-packages.sh'),'utf8');
