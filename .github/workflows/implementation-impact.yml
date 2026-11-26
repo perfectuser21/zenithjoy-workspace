@@ -109,7 +109,8 @@ jobs:
       base_revision: ${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}
       head_revision: ${{ github.event.pull_request.head.sha || github.sha }}
       mode: ${{ github.event_name == 'pull_request' && 'pr' || 'main' }}
-      tooling_revision: 095d81687079f975c65f14babc27364b4da3e374
+      # The fixed reusable workflow selects tools and identity evidence independently.
+      tooling_revision: 8dfe1b4af891879e0adbbc5d1256ae6e6da6e509
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}

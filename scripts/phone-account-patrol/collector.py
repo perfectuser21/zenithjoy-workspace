@@ -96,6 +96,19 @@ class Probe:
   self.adb('shell','am','force-stop',package)
   self.adb('shell','monkey','-p',package,'-c','android.intent.category.LAUNCHER','1');time.sleep(6)
   nodes,ocr,evidence=self.capture(platform,'launch')
+  if platform=='微信':
+   focus=self.adb('shell','dumpsys','window').decode(errors='replace')
+   login_activity=(r'(?m)^[ \t]*mCurrentFocus=Window\{[^\r\n}]*[ \t]com\.tencent\.mm/(?:com\.tencent\.mm)?'
+                   r'(\.ui\.AccountExpiredUI|\.plugin\.account\.ui\.LoginPasswordUI)(?=[ \t}])')
+   match=re.search(login_activity,focus)
+   if match:
+    return {
+        'state':'未登录',
+        'installed':True,
+        'checked_at':at,
+        'reason':'微信前台显示账号登录已过期' if match[1]=='.ui.AccountExpiredUI' else '微信前台要求密码登录',
+        'evidence':evidence,
+    }
   immediate=classify(platform,nodes,ocr,False)
   if immediate.get('reason','').startswith('首次'):return {**immediate,'installed':True,'checked_at':at,'evidence':evidence}
   if self.findtap(nodes,ocr,['跳过','跳过广告','跳过 1','跳过 2','跳过1','跳过2']):nodes,ocr,evidence=self.capture(platform,'skip')
