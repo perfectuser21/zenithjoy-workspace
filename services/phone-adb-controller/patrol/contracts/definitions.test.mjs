@@ -6,6 +6,8 @@ import {createHash} from 'node:crypto';
 const repo='perfectuser21/zenithjoy-workspace';
 const root=new URL('../../../../',import.meta.url);
 const files=['single','batch','maintenance'];
+const xiaocaiCandidate='29e27d24517c1f7cfdd82f87d5903a1ebc4ddf2a';
+const xiaocaiCommand=`/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/${xiaocaiCandidate}/runner.py phone --serial ANGYVB4311010223 --execution-script "$0"`;
 for(const name of files)test(`正式${name}定义完整绑定真实固定字节及精确入口`,()=>{
  const d=JSON.parse(readFileSync(new URL(`${name}.json`,import.meta.url)));
  assert.equal(d.source,undefined,'源文件不得自引用commit');
@@ -46,7 +48,8 @@ for(const name of files)test(`正式${name}定义完整绑定真实固定字节�
  assert.ok([legacy,diagnostic].includes(phone));
  const phoneSchema=d.input_schema.properties.phone_source_revision;
  const phoneVersions=Object.hasOwn(phoneSchema,'const')?[phoneSchema.const]:phoneSchema.enum;
- assert.ok(Array.isArray(phoneVersions)&&phoneVersions.length>0&&phoneVersions.every(v=>[legacy,diagnostic].includes(v)));
+ const allowed=[legacy,diagnostic,...(name==='single'?[xiaocaiCandidate]:[])];
+ assert.ok(Array.isArray(phoneVersions)&&phoneVersions.length>0&&phoneVersions.every(v=>allowed.includes(v)));
  const requiredPhoneVersions=new Set([...phoneVersions,...(name==='single'?[diagnostic]:[])]);
  const expected=new Set();
  for(const revision of requiredPhoneVersions){
@@ -97,8 +100,8 @@ for(const name of ['single','batch'])test(`${name}默认当前864并精确兼容
  const old='4f899cab6425341646e27c5fca20979b8ac42be7',current='864154c57e88e8085d2add741a79103a28891a44',control='f38c5a5635d2f57554efcfee4b09163d10cfe39b';
  const command=revision=>`/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/${revision}/runner.py ${name==='single'?'phone --serial {{phone_serial}}':'batch'} --execution-script "$0"`;
  assert.equal(d.runtime.entrypoint,command(current));
- assert.deepEqual(d.input_schema.properties.phone_source_revision,{enum:[old,current]});
- assert.deepEqual(d.input_schema.properties.source_revision,{enum:name==='single'?[old,current,control]:[old,current]});
+ assert.deepEqual(d.input_schema.properties.phone_source_revision,{enum:[old,current,...(name==='single'?[xiaocaiCandidate]:[])]});
+ assert.deepEqual(d.input_schema.properties.source_revision,{enum:name==='single'?[old,current,control,xiaocaiCandidate]:[old,current]});
  assert.deepEqual(d.input_schema.properties.control_source_revision,{const:control});
- assert.deepEqual(d.runtime.script.commands,[command(current),command(old),...(name==='single'?[`/usr/bin/python3 /Users/administrator/.local/share/infra-workflow-commander/releases/${control}/openclaw_native.py recovery-phone --demand-task-id {{recovery_demand_id}} --serial {{phone_serial}} --execution-script "$0"`]:[])]);
+ assert.deepEqual(d.runtime.script.commands,[command(current),command(old),...(name==='single'?[`/usr/bin/python3 /Users/administrator/.local/share/infra-workflow-commander/releases/${control}/openclaw_native.py recovery-phone --demand-task-id {{recovery_demand_id}} --serial {{phone_serial}} --execution-script "$0"`,xiaocaiCommand]:[])]);
 });
