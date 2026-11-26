@@ -29,7 +29,7 @@ function installXianWithProgress(spec,archive){
  return new Promise((resolve,reject)=>{
   let received=0,failure;
   const child=execFile('ssh',[...sshOptions,'-o','ConnectTimeout=20',host,command],
-   {timeout:720000,killSignal:'SIGKILL'},error=>{
+   {timeout:candidateInstallTimeout(archive.length,{progressive:true}),killSignal:'SIGKILL'},error=>{
     clearTimeout(idle);
     if(failure||error||received!==archive.length){
      const deadline=received===archive.length?'extraction deadline':'transfer deadline';
@@ -78,11 +78,13 @@ function presence(host,spec){
 }
 const prefix='services/phone-adb-controller/';
 const need=(v,m)=>{if(!v)throw Error('候选准备: '+m);};
-// Measured 2.87 MB over the existing Xian route takes 166s; bound size-based
-// transfer time at 10 KiB/s plus 30s connection overhead, never beyond 5min.
-export function candidateInstallTimeout(bytes){
+export function candidateInstallTimeout(bytes,{progressive=false}={}){
  need(Number.isSafeInteger(bytes)&&bytes>0&&bytes<=128*1024*1024,'invalid archive size');
- return Math.min(300000,Math.max(120000,30000+Math.ceil(bytes/10240)*1000));
+ const transferMs=Math.ceil(bytes/10240)*1000;
+ // Progressive M4 installs have a separate 90s idle limit. Allow steady
+ // uploads at 10 KiB/s while reserving at least 8min of the 30min deploy step.
+ if(progressive)return Math.min(22*60_000,Math.max(12*60_000,90_000+transferMs));
+ return Math.min(300000,Math.max(120000,30000+transferMs));
 }
 export function candidateRelativeRoot(sha){
  need(/^[a-f0-9]{40}$/.test(sha),'非法版本');
