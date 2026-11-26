@@ -16,6 +16,7 @@ import {mkdtempSync,writeFileSync,mkdirSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {digest} from '../runtime-definition.mjs';
+import {candidateArchivePath} from '../runtime-release.mjs';
 import {parse as parseYaml} from 'yaml';
 import {installPreflightPg,preflightPgDeployment} from '../preflight-pg-dependencies.mjs';
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -251,6 +252,19 @@ test('agent-first public metadata binds a verified business Skill and rejects an
   assert.equal(p.metadata.scoring.implementation.kind,'agent');assert.equal(p.domain_adapter.config.execution_mode,'agent');
   const bad=structuredClone(x);bad.frozen.activities[0].implementations[0].execution_verification='unknown';delete bad.frozen.snapshot_sha256;bad.frozen.snapshot_sha256=digest(bad.frozen);
   assert.throws(()=>buildPublicDomainProfile(bad),/SKILL/);
+  const revision='c'.repeat(40),archiveText='# Archived host evidence\n',archiveDigest=digest(archiveText),archivePath=candidateArchivePath(revision,b.path);
+  const archive={...b,revision,purpose:'foundation_host',content_sha256:archiveDigest};
+  mkdirSync(join(x.sourceRoot,archivePath,'..'),{recursive:true});writeFileSync(join(x.sourceRoot,archivePath),archiveText,{mode:0o600});
+  f.deployment.files.push({path:b.path,deployed_path:archivePath,source_revision:revision,content_sha256:archiveDigest});
+  f.release.payload.components.push({kind:'skill',repo:b.repo,path:b.path,revision,digest:`sha256:${archiveDigest}`});
+  a.version.payload.implementation_bindings.push(archive);sign(a.version);
+  const implementation={...archive,execution_verification:'verified_local',actual_content_sha256:archiveDigest,execution_path:`runtime/${archivePath}`};
+  a.implementations.push(implementation);reseal(x);
+  const withArchive=buildPublicDomainProfile(x).profile;
+  assert.deepEqual(withArchive.metadata.scoring.skill,p.metadata.scoring.skill);
+  assert.equal(withArchive.files[archivePath],archiveDigest);
+  delete archive.purpose;delete implementation.purpose;sign(a.version);reseal(x);
+  assert.throws(()=>buildPublicDomainProfile(x),/SKILL_BINDING/);
  }finally{rmSync(x.sourceRoot,{recursive:true,force:true});}
 });
 

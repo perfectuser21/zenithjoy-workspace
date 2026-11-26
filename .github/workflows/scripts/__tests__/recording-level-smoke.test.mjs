@@ -15,7 +15,7 @@ function decoderDependency(ci,installer){
  assert.match(step.run,/missing\+=\("\$\{pair#\*:\}"\)/);
  assert.match(step.run,/timeout 300s bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh --runner-sources[^\n]*"\$\{missing\[@\]\}"/);
  assert.match(step.run,/ffmpeg -version/);
- assert.match(installer,/stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{original_isolated\[@\]\}" "\$\{opts\[@\]\}" --no-remove install -y "\$@"/);
+ assert.match(installer,/stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{original_isolated\[@\]\}" "\$\{opts\[@\]\}" --no-remove --no-install-recommends install -y "\$@"/);
 }
 const ci=readFileSync(path('.github/workflows/ci-l3-code.yml'),'utf8');
 const installer=readFileSync(path('.github/workflows/scripts/prepare-openclaw-os-packages.sh'),'utf8');
@@ -23,4 +23,5 @@ test('OpenClaw CI安装实际decoder回归的ffmpeg依赖',()=>decoderDependency
 test('decoder依赖守卫拒绝删除ffmpeg映射、断helper/参数或漏真实版本核验',()=>{
  for(const mutated of [ci.replace('ffmpeg:ffmpeg',''),ci.replace('bash .github/workflows/scripts/prepare-openclaw-os-packages.sh','bash unrelated.sh'),ci.replace('"${missing[@]}"','"zsh"'),ci.replace('ffmpeg -version','true')])assert.throws(()=>decoderDependency(mutated,installer));
  assert.throws(()=>decoderDependency(ci,installer.replace('install -y "$@"','install -y zsh')));
+ assert.throws(()=>decoderDependency(ci,installer.replace('--no-install-recommends ','')));
 });

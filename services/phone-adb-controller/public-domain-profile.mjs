@@ -5,6 +5,7 @@ import {validatePhoneExecution} from './official-phone-execution.mjs';
 import {readFileSync,lstatSync,realpathSync} from 'node:fs';
 import {join,isAbsolute} from 'node:path';
 import {digest,canonical} from './runtime-definition.mjs';
+import {releaseHasArchiveBinding} from './runtime-release.mjs';
 import {preflightPgDeployment,preflightPgLockIdentity} from './preflight-pg-dependencies.mjs';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
@@ -130,8 +131,10 @@ function buildProfile({sourceRoot,frozen,observation,gate,resources,company,comm
   let skill;
   if(standaloneSkill){skill={...clone(standaloneSkill),entry:standaloneSkill.path};}
   else if(executionMode==='agent'){
-   const bindings=(av.payload.implementation_bindings||[]).filter(b=>b.kind==='skill');
-   const verified=(original.implementations||[]).filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local');
+   const primarySkill=b=>b.kind==='skill'&&!(r.environment===`staging:${d.source_commit}`&&b.purpose==='foundation_host'
+    &&b.revision!==d.source_commit&&b.status==='verified'&&b.repo===av.source_repo&&releaseHasArchiveBinding(r,b));
+   const bindings=(av.payload.implementation_bindings||[]).filter(primarySkill);
+   const verified=(original.implementations||[]).filter(b=>primarySkill(b)&&b.execution_verification==='verified_local');
    need(bindings.length===1&&verified.length===1,'SKILL_BINDING');const b=bindings[0],v=verified[0],prefix='services/phone-adb-controller/';
    need(b.status==='verified'&&b.repo===av.source_repo&&b.revision===d.source_commit&&b.path?.startsWith(prefix+'skills/')&&b.path===v.path&&b.version===v.version&&b.name===v.name,'SKILL_BINDING');
    const name=b.path.slice(prefix.length),expected=b.content_sha256||b.digest?.replace(/^sha256:/,'');
