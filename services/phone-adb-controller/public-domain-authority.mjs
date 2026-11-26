@@ -1,7 +1,10 @@
 import {phonePeerPermitRecord} from './official-phone-peer-authority.mjs';
-import {realpathSync} from 'node:fs';
+import {constants,lstatSync,readFileSync,readdirSync,realpathSync} from 'node:fs';
+import {basename,join} from 'node:path';
+import {pinPrivateFileClosure} from './private-file-closure.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const authorities=new Map();
+const codePreflightLocks=new WeakMap();
 const fail=()=>{throw Error('PUBLIC_DOMAIN_AUTHORITY');};
 export function validatePublicDomainIdentity(identity){
  const b=identity?.run_binding;
@@ -28,6 +31,64 @@ export function publicDomainScopeMatches(runDirectory,scope){
  return Boolean(fixed&&Date.now()<a.cleanup_deadline_ms&&['run','run_id','task_id','source_commit','profile','serial'].every(k=>scope?.[k]===fixed[k])&&(scope.attempt===undefined||scope.attempt===fixed.attempt));
 }
 export function canonicalRunId(env){return readPublicDomainBinding(env.WFR_RUN_DIR)?.run_id??`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`;}
+function code101LockAuthority(runDirectory,frozen){
+ const a=authorities.get(runDirectory),p=frozen?.public_domain,spec=frozen?.discovery_phone_scope,b=a?.business_scope;
+ if(!b||Date.now()>=a.cleanup_deadline_ms||frozen.execution_mode!=='code'||frozen.standalone_skill!==undefined
+  ||frozen.workflow_version?.payload?.key!=='douyin_video_discovery'||frozen.epoch_source_compatibility?.receipt?.protocol!=='cloud-101-epoch-source-compatibility/v1'
+  ||p?.protocol!=='workflow-domain/v1'||p.machine_id!=='us-mac-m4'||p.machine_id!==a.identity.machine_id||p.profile_sha256!==a.identity.profile_sha256
+  ||p.run_id!==b.run_id||p.task_id!==b.task_id||p.run_binding?.run_binding_id!==a.binding.id
+  ||frozen.run_identity?.tag!==b.run||frozen.deployment?.source_commit!==b.source_commit||spec?.profile!==b.profile||spec?.serial!==b.serial
+  ||!/^[a-f0-9]{64}$/.test(frozen.snapshot_sha256||''))fail();
+ return a;
+}
+
+export function bindPublicCodePreflightLock({runDirectory,lockPath,frozen,epoch,receipt,isActive}){
+ const authority=code101LockAuthority(runDirectory,frozen),{run:owner,serial}=authority.business_scope;
+ if(codePreflightLocks.has(authority)||!UUID.test(epoch||'')||basename(lockPath)!==serial+'.lock'||typeof isActive!=='function'
+  ||receipt?.lock!=='acquired'||receipt.owner!==owner||receipt.readback_owner!==owner||receipt.epoch!==epoch||receipt.readback_epoch!==epoch)fail();
+ const fields={owner,preflight_epoch:epoch,preflight_proof_required:epoch,standalone_review_required:owner};
+ const expectedNames=new Set([...Object.keys(fields),'acquired_at']);
+ const acquiredPath=join(lockPath,'acquired_at');
+ const privateField=path=>{
+  const s=lstatSync(path,{bigint:true});
+  if(!s.isFile()||s.uid!==BigInt(process.getuid())||(s.mode&0o777n)!==0o600n||s.nlink!==1n||s.size>1024n)fail();
+  return [s.dev,s.ino].join(':');
+ };
+ const root=()=>{
+  const s=lstatSync(lockPath,{bigint:true});
+  if(!s.isDirectory()||s.uid!==BigInt(process.getuid())||(s.mode&0o777n)!==0o700n||realpathSync(lockPath)!==lockPath)fail();
+  return [s.dev,s.ino].join(':');
+ };
+ const lockIdentity=root(),acquiredIdentity=privateField(acquiredPath);
+ const exactInventory=()=>{
+  const names=readdirSync(lockPath);
+  if(root()!==lockIdentity||names.length!==expectedNames.size||names.some(name=>!expectedNames.has(name))||privateField(acquiredPath)!==acquiredIdentity
+   ||!/^\d{1,12}\n$/.test(readFileSync(acquiredPath,{encoding:'utf8',flag:constants.O_RDONLY|constants.O_NOFOLLOW}))
+   ||privateField(acquiredPath)!==acquiredIdentity)fail();
+ };
+ const closure=pinPrivateFileClosure({root:lockPath,files:Object.keys(fields).map(name=>join(lockPath,name)),verify:()=>{
+  exactInventory();
+  for(const [name,value] of Object.entries(fields)){
+   const path=join(lockPath,name);
+   privateField(path);
+   if(readFileSync(path,{encoding:'utf8',flag:constants.O_RDONLY|constants.O_NOFOLLOW})!==value+'\n')fail();
+  }
+ }});
+ const proof={lockPath,snapshot:frozen.snapshot_sha256,read:()=>{
+  if(!isActive())fail();
+  closure.check();exactInventory();closure.check();
+  return owner+'\n';
+ }};
+ codePreflightLocks.set(authority,proof);
+ return ()=>{if(codePreflightLocks.get(authority)===proof)codePreflightLocks.set(authority,null);};
+}
+
+export function readPublicCodePreflightLock({runDirectory,lockPath,frozen}){
+ const authority=code101LockAuthority(runDirectory,frozen),proof=codePreflightLocks.get(authority);
+ if(!proof||proof.lockPath!==lockPath||proof.snapshot!==frozen.snapshot_sha256)fail();
+ return proof.read();
+}
+
 export function publicDomainTaskProjectionMatches(task,a){
  if(!a)return false;
  const c=task?.result?.common_runner,b=a.binding;
