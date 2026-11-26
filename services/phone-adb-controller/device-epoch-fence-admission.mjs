@@ -6,11 +6,12 @@ import {admissionFailure,epochErrorCode,projectEpochDiagnostic} from './epoch-ad
 import {bytes,recordBytes,readPrivatePolicy,validateEpochRecord,freezeFenceReference,epochTransportSerial,isYueshengCleanEpoch,readYueshengEpochCompletion,isCloudExistingEpoch,readCloudExistingEpochCompletion} from './device-epoch-fence-reference.mjs';
 export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
-import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
-import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
-import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection} from './epoch-source-compatibility.mjs';
+import {publicDomainTaskProjectionMatches,readPublicCodePreflightLock} from './public-domain-authority.mjs';
+import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneHostProofPaths,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
+import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment,verifyCloudEpochSuccessorProjection} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {runDiagnostic,readDiagnosticProof} from './device-epoch-fence-diagnostics.mjs';
+import {openFastAdbDaemonObservation} from './fast-adb-daemon-observation.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,sha=b=>createHash('sha256').update(b).digest('hex');
 const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});},same=(a,b)=>canonical(a)===canonical(b),phone=f=>f.discovery_phone_scope??f.collection_phone_scope,identity=f=>f.standalone_skill??f.public_domain;
 function preserveVerifierDiagnostic(runDir,frozen,error){
@@ -54,7 +55,7 @@ export function readBoundAdbDaemon(expected,{run=(bin,args)=>execFileSync(bin,ar
 }
 export function businessAuthorityProjection(value){
  const task=value.task,c=task?.result?.common_runner,b=value.binding,r=value.taskRun,l=value.central;
- return {task:{id:task?.id,status:task?.status,claimed_by:task?.claimed_by,claimed_at:task?.claimed_at,common_runner:c&&Object.fromEntries(['run_id','task_id','machine_id','profile_sha256','run_binding'].map(k=>[k,c[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{standalone_payload:{execution_mode:task.payload?.execution_mode,scope:task.payload?.scope,skill:task.payload?.skill},codex_skill_direct:standaloneIdentityProjection(task.result?.codex_skill_direct)}:{})},binding:b&&{...Object.fromEntries(['id','run_id','source_kind','workflow_id','workflow_definition_version_id','attempt_key','task_run_id','release_id','observation_id'].map(k=>[k,b[k]])),runtime_snapshot_sha256:b.payload?.runtime_snapshot_sha256},links:value.links&&{task_id:value.links.task_id,task_run_id:value.links.task_run_id},task_run:r&&{...Object.fromEntries(['id','task_id','run_id','status','ended_at'].map(k=>[k,r[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{context:standaloneExecutionContextProjection(r.context)}:{})},central:l&&{device_name:l.device_name,locked_by:l.locked_by},...(value.compatibilityReview?{compatibility_review:compatibilityReviewProjection(value.compatibilityReview),compatibility_development:value.compatibilityDevelopment&&{id:value.compatibilityDevelopment.id,task_type:value.compatibilityDevelopment.task_type}}:{})};
+ return {task:{id:task?.id,status:task?.status,claimed_by:task?.claimed_by,claimed_at:task?.claimed_at,common_runner:c&&Object.fromEntries(['run_id','task_id','machine_id','profile_sha256','run_binding','mode'].map(k=>[k,c[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{standalone_payload:{execution_mode:task.payload?.execution_mode,scope:task.payload?.scope,skill:task.payload?.skill},codex_skill_direct:standaloneIdentityProjection(task.result?.codex_skill_direct)}:{})},binding:b&&{...Object.fromEntries(['id','run_id','source_kind','workflow_id','workflow_definition_version_id','attempt_key','task_run_id','release_id','observation_id'].map(k=>[k,b[k]])),runtime_snapshot_sha256:b.payload?.runtime_snapshot_sha256},links:value.links&&{task_id:value.links.task_id,task_run_id:value.links.task_run_id},task_run:r&&{...Object.fromEntries(['id','task_id','run_id','status','ended_at'].map(k=>[k,r[k]])),...(task?.payload?.execution_mode==='standalone-skill'||task?.result?.codex_skill_direct?{context:standaloneExecutionContextProjection(r.context)}:{})},central:l&&{device_name:l.device_name,locked_by:l.locked_by},...(value.compatibilityReview?{compatibility_review:compatibilityReviewProjection(value.compatibilityReview),compatibility_development:value.compatibilityDevelopment&&{id:value.compatibilityDevelopment.id,task_type:value.compatibilityDevelopment.task_type}}:{})};
 }
 export function verifyEpochFacts(f){
  const {record:r,frozen,task,binding:b,links,taskRun,central:c}=f,spec=phone(frozen),p=identity(frozen);validateEpochRecord(r,epochCompatibilityRecordScope(frozen));
@@ -72,34 +73,89 @@ export function verifyEpochFacts(f){
   &&!f.oldInventory.some(d=>d.serial===spec.serial||d.serial===transportSerial)
   &&f.newInventory?.length===1&&f.newInventory[0].serial===transportSerial&&f.newInventory[0].state==='device','EPOCH_LIVE_ROUTES');
  if(r.resource.adb_serial!==undefined)need(f.newHardwareSerial===spec.serial,'EPOCH_DEVICE_IDENTITY');
- need(f.policySha256===r.new_route.policy_sha256&&f.policySha256===spec.policy_binding?.policy_sha256&&(frozen.epoch_source_compatibility?verifyEpochSourceCompatibility({frozen,record:r,recordSha256:f.recordSha256,source:f.source,reviewTask:f.compatibilityReview,developmentTask:f.compatibilityDevelopment}):same(f.source,r.runtime_source)&&f.source.commit===frozen.deployment.source_commit),'EPOCH_SOURCE_POLICY');
+ const sourceCompatibility=frozen.epoch_source_compatibility;
+ need(f.policySha256===r.new_route.policy_sha256&&f.policySha256===spec.policy_binding?.policy_sha256&&(sourceCompatibility?verifyEpochSourceCompatibility({frozen,record:r,recordSha256:f.recordSha256,source:f.source,reviewTask:f.compatibilityReview,developmentTask:f.compatibilityDevelopment}):same(f.source,r.runtime_source)&&f.source.commit===frozen.deployment.source_commit),'EPOCH_SOURCE_POLICY');
  const clean=isYueshengCleanEpoch(r);
  if(isCloudExistingEpoch(r)){
   const migration=r.cloud_migration,environment='staging:'+frozen.deployment.source_commit;
+  const compatibility=frozen.epoch_source_compatibility,successor=isCloudEpochSourceCompatibility(compatibility);
   need(!standalone&&frozen.discovery_phone_scope===spec&&frozen.deployment.target==='mmv'
    &&frozen.release?.target==='mmv'&&frozen.release.environment===environment&&frozen.deployment.environment===environment
    &&frozen.deployment.release_id===frozen.release.id
    &&frozen.workflow_version?.id===p.run_binding.workflow_definition_version_id
    &&frozen.workflow_version.payload?.key==='douyin_video_discovery'
    &&frozen.run_identity.capability==='douyin_video_discovery'&&p.machine_id==='us-mac-m4'
-   &&!frozen.epoch_source_compatibility&&f.originalTask?.id===r.original.task_id&&f.originalTask?.status==='blocked'
+   &&(!compatibility||successor)&&f.originalTask?.id===r.original.task_id&&f.originalTask?.status==='blocked'
    &&f.originalTask.result?.execution_stopped!==true,'EPOCH_CLOUD_AUTHORITY');
-  need(f.cloudCompletion?.completion_sha256===migration.completion_sha256
-   &&/^[a-f0-9]{64}$/.test(frozen.release?.manifest_sha256??'')&&f.cloudCompletion.manifest_sha256===frozen.release.manifest_sha256
+  need(f.cloudCompletion?.completion_sha256===migration.completion_sha256,'EPOCH_CLOUD_AUTHORITY');
+  if(successor){
+   need(task.result?.common_runner?.mode==='formal'&&f.cloudCompletion.manifest_sha256===compatibility.receipt.original.manifest_sha256,'EPOCH_CLOUD_AUTHORITY');
+   if(f.compatibilityReleaseProjection)verifyCloudEpochSuccessorProjection(frozen,f.compatibilityReleaseProjection);
+   else verifyCloudEpochSuccessorDeployment(frozen,f.compatibilityRelease);
+  }else need(/^[a-f0-9]{64}$/.test(frozen.release?.manifest_sha256??'')&&f.cloudCompletion.manifest_sha256===frozen.release.manifest_sha256
    &&migration.release_id===frozen.release?.id&&migration.observation_id===frozen.deployment.observation_id,'EPOCH_CLOUD_AUTHORITY');
   need(f.cloudHardwareSerialSha256===migration.hardware_serial_sha256&&f.cloudBootIdSha256===migration.boot_id_sha256,'EPOCH_DEVICE_IDENTITY');
  }else if(clean){
-  need(f.cleanCompletionSha256===r.migration.completion_sha256&&r.migration.release_id===frozen.release?.id
-   &&r.migration.observation_id===frozen.deployment.observation_id&&!frozen.epoch_source_compatibility
+  const originalReleaseMatches = r.migration.release_id === frozen.release?.id
+    && r.migration.observation_id === frozen.deployment.observation_id;
+  // The source check above verifies any compatibility proof against this standalone task and candidate.
+  need(f.cleanCompletionSha256===r.migration.completion_sha256&&(sourceCompatibility?standalone:originalReleaseMatches)
    &&(!standalone||r.resource.line===scope.line),'EPOCH_CLEAN_AUTHORITY');
  }else need(f.archive&&r.original_quarantine&&f.archive.dev===r.original_quarantine.dev&&f.archive.ino===r.original_quarantine.ino
   &&same(f.archive.fields,r.original_quarantine.fields),'EPOCH_LOCAL_HANDOFF');
  need(f.activeOwner===frozen.run_identity.tag+'\n'&&f.activeQuarantined===false,'EPOCH_LOCAL_HANDOFF');
  return {protocol:'device-epoch-fence-admission/v1',authorized:true,epoch_id:r.epoch_id,task_id:p.task_id,run_id:p.run_id,source_commit:f.source.commit,instance_id:r.new_route.instance_id,endpoint:r.new_route.endpoint,serial:spec.serial,...(r.resource.adb_serial===undefined?{}:{adb_serial:transportSerial}),old_route_absent:true,original_execution_stopped:false,android_internal:'not_attested'};
 }
+
+export async function readCloud101BusinessFacts({frozen,record,readBudget,read=readBrain}){
+ const ref=epochSourceCompatibilityReference(frozen);
+ need(isCloudEpochSourceCompatibility(ref)&&isCloudExistingEpoch(record),'EPOCH_CLOUD_AUTHORITY');
+ const p=identity(frozen),spec=phone(frozen),release=ref.receipt;
+ need(uuid.test(p?.task_id||'')&&uuid.test(p?.run_id||'')&&uuid.test(p.run_binding?.run_binding_id||'')
+  &&/^[a-f0-9]{64}$/.test(p.profile_sha256??'')&&uuid.test(record.original?.task_id||''),'EPOCH_CLOUD_AUTHORITY');
+ const query=new URLSearchParams({
+  task_id:p.task_id,binding_id:p.run_binding.run_binding_id,release_id:release.release_id,
+  observation_id:release.observation_id,device_name:spec.serial,profile:spec.profile,
+  profile_sha256:p.profile_sha256,source_commit:frozen.deployment.source_commit,
+  original_task_id:record.original.task_id,review_task_id:ref.review_task_id,
+ });
+ const snapshot=await read('/api/brain/cloud-101-admission/'+p.run_id+'?'+query,readBudget);
+ need(snapshot?.protocol==='cloud-101-admission-snapshot/v1','EPOCH_CLOUD_AUTHORITY');
+ const {task,binding,links,taskRun,central,originalTask,compatibilityDevelopment,compatibilityRelease,compatibilityReview}=snapshot??{};
+ verifyCloudEpochSuccessorProjection(frozen,compatibilityRelease);
+ need(compatibilityReview?.id===ref.review_task_id
+  &&compatibilityReview.result?.epoch_source_compatibility_sha256===ref.receipt_sha256,'EPOCH_SOURCE_COMPATIBILITY');
+ return {
+  task,binding,links,taskRun,central,originalTask,compatibilityDevelopment,compatibilityReleaseProjection:compatibilityRelease,
+  compatibilityReview:{...compatibilityReview,result:{...compatibilityReview.result,epoch_source_compatibility:ref.receipt}},
+ };
+}
 function archiveSnapshot(record){const path=record.original_quarantine.archive_path,s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&![...readdirSync(path)].some(n=>!['owner','pid','acquired_at','standalone_review_required','standalone_quarantined'].includes(n)),'EPOCH_ARCHIVE');const names=Object.keys(record.original_quarantine.fields),fields=Object.fromEntries(names.map(n=>[n,bytes(join(path,n)).toString()]));need(same(readdirSync(path).sort(),names.sort())&&(!Object.hasOwn(fields,'standalone_quarantined')||fields.standalone_quarantined===fields.owner),'EPOCH_ARCHIVE');return {dev:s.dev,ino:s.ino,fields};}
-export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
+export async function readEpochDeviceIdentity({query, scope, directory, readBudget, readAuthority, managedCloud = false}) {
+  // The diagnostic rechecks daemon authority after both ADB sockets close.
+  const wireBudgetMs = managedCloud ? 15_000 : 5_000;
+  const timeoutMs = readBudget ? Math.min(wireBudgetMs, readBudget.deadlineMs - Date.now()) : wireBudgetMs;
+  need(timeoutMs > 0, 'EPOCH_ADMISSION_DEADLINE');
+  const result = await runDiagnostic({query, scope, directory, timeoutMs, readAuthority});
+  need(result.wire_complete, 'EPOCH_DEVICE_IDENTITY');
+  const proof = readDiagnosticProof(result);
+  need(proof.stderr.length === 0, 'EPOCH_DEVICE_IDENTITY');
+  return proof.stdout.toString('utf8').replace(/\r?\n$/, '');
+}
+
+export function readEpochLocalHandoff({runDirectory,lockPath,frozen,record,standaloneHost}){
+ if(isCloudExistingEpoch(record)&&isCloudEpochSourceCompatibility(frozen.epoch_source_compatibility)){
+  try{return {activeOwner:readPublicCodePreflightLock({runDirectory,lockPath,frozen}),activeQuarantined:false};}
+  catch{need(false,'EPOCH_LOCAL_HANDOFF');}
+ }
+ const names=readdirSync(lockPath);
+ const marker=standaloneHost&&names.includes('standalone_review_required')?bytes(join(lockPath,'standalone_review_required')).toString():undefined;
+ return {activeOwner:bytes(join(lockPath,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,names,marker)};
+}
+
+export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includeCurrentAuthority=false}={}){
  let stage='scope';
+ let daemonObservation;
  try{
  const spec=phone(frozen);if(spec?.policy?.schema_version===1)return {applicable:false};need(spec?.policy?.schema_version===2&&root===here&&realpathSync(root)===root&&typeof env?.WFR_RUN_DIR==='string'&&resolve(env.WFR_RUN_DIR)===env.WFR_RUN_DIR,'EPOCH_ADMISSION_SCOPE');
  stage='frozen';const current=readFrozen(env.WFR_RUN_DIR);need(same(current,frozen),'EPOCH_FROZEN_DRIFT');stage='record';const ref=spec.policy_binding?.epoch_fence;need(ref?.protocol==='device-epoch-fence-reference/v1'&&uuid.test(ref.epoch_id||'')&&ref.path===join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',spec.serial,ref.epoch_id+'.json'),'EPOCH_FROZEN_REFERENCE');const raw=recordBytes(ref.path);need(sha(raw)===ref.sha256,'EPOCH_RECORD_DIGEST');const record=validateEpochRecord(JSON.parse(raw),epochCompatibilityRecordScope(frozen));need(record.epoch_id===ref.epoch_id,'EPOCH_REFERENCE_ID');
@@ -111,7 +167,9 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  const standaloneHost=frozen.standalone_skill?readStandaloneHostProof({frozen,runDirectory:env.WFR_RUN_DIR}):null;
  const compatibilityRef=epochSourceCompatibilityReference(frozen);
  const transportSerial=epochTransportSerial(record.resource);
+ const cloudSuccessor=isCloudEpochSourceCompatibility(compatibilityRef);
  const readBusiness=async()=>{
+  if(cloudSuccessor)return readCloud101BusinessFacts({frozen,record,readBudget});
   const [tv,definition,reconciliation,locks,review,original]=await Promise.all([
    readBrain('/api/brain/tasks/'+p.task_id,readBudget),readBrain('/api/brain/runs/'+p.run_id+'/definition',readBudget),
    readBrain('/api/brain/runs/'+p.run_id+'/reconciliation',readBudget),readBrain('/api/brain/device-locks',readBudget),
@@ -132,6 +190,10 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  stage='source';const source=reviewSource({includeCloudIssuer:cloud});if(compatibilityRef)verifyEpochSourceCompatibility({frozen,record,recordSha256:sha(raw),source,reviewTask:initial.compatibilityReview,developmentTask:initial.compatibilityDevelopment});
  stage='initial_old_daemon';
  let readDaemon=readBoundAdbDaemon;
+ if(cloudSuccessor){
+  daemonObservation=openFastAdbDaemonObservation({python:spec.executables.python,frozen,deadlineMs:readBudget?.deadlineMs});
+  readDaemon=daemonObservation.read;
+ }
  if(clean){
   const bindingRoot=join(userInfo().homedir,'.local/share/zenithjoy/phone-candidates',record.runtime_source.commit,'runtime');
   for(const [name,hash] of Object.entries(record.migration.binding_sha256))need(sha(bytes(join(bindingRoot,name)))===hash,'EPOCH_SOURCE_POLICY');
@@ -154,17 +216,11 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
   const scope={endpoint:record.new_route.endpoint,serial:transportSerial,maintenance_task_id:p.task_id};
   const readDeviceIdentity=async(query,label)=>{
    const out=join(directory,label);mkdirSync(out,{mode:0o700});
-   const timeoutMs=readBudget?Math.min(5000,readBudget.deadlineMs-Date.now()):5000;
-   need(timeoutMs>0,'EPOCH_ADMISSION_DEADLINE');
-   const result=await runDiagnostic({query,scope,directory:out,timeoutMs,readAuthority:async()=>{
+   return readEpochDeviceIdentity({query,scope,directory:out,readBudget,managedCloud:clean || cloud,readAuthority:async()=>{
     await readDaemon(record.new_route);
     need(initial.central.locked_by===p.task_id&&initial.central.expired!==true,'EPOCH_BUSINESS_CENTRAL');
     return {scope,lease_until:initial.central.expires_at};
    }});
-   need(result.wire_complete,'EPOCH_DEVICE_IDENTITY');
-   const proof=readDiagnosticProof(result);
-   need(proof.stderr.length===0,'EPOCH_DEVICE_IDENTITY');
-   return proof.stdout.toString('utf8').replace(/\r?\n$/,'');
   };
   newHardwareSerial=await readDeviceIdentity('hardware_serial','hardware-serial');
   if(cloud){
@@ -180,17 +236,42 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget}={}){
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
  stage='final_old_daemon';await readDaemon(record.old_route);
  stage='final_new_daemon';await readDaemon(record.new_route);
+ if(daemonObservation){await daemonObservation.close(true);daemonObservation=undefined;}
  stage='final_record_policy';need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
  if(clean)need(readYueshengEpochCompletion(record)===cleanCompletionSha256,'EPOCH_ADMISSION_DRIFT');
  if(cloud)need(same(readCloudExistingEpochCompletion(record),cloudCompletion),'EPOCH_ADMISSION_DRIFT');
- stage='final_facts';const localNames=readdirSync(activeLock),standaloneMarker=standaloneHost&&localNames.includes('standalone_review_required')?bytes(join(activeLock,'standalone_review_required')).toString():undefined;
+ stage='final_facts';
  if(standaloneHost)need(same(standaloneHost,readStandaloneHostProof({frozen,runDirectory:env.WFR_RUN_DIR})),'EPOCH_STANDALONE_IDENTITY');
- const proof=verifyEpochFacts({record,recordSha256:sha(raw),frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,newHardwareSerial,policySha256:sha(policyRaw),source,...(clean?{cleanCompletionSha256}:cloud?{cloudCompletion,cloudHardwareSerialSha256,cloudBootIdSha256}:{archive:archiveSnapshot(record)}),activeOwner:bytes(join(activeLock,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,localNames,standaloneMarker)});
- if(readBudget!==undefined)need(Number.isSafeInteger(readBudget.deadlineMs)&&Date.now()<readBudget.deadlineMs,'EPOCH_ADMISSION_DEADLINE');return proof;
+ const local=readEpochLocalHandoff({runDirectory:env.WFR_RUN_DIR,lockPath:activeLock,frozen,record,standaloneHost});
+ const proof=verifyEpochFacts({record,recordSha256:sha(raw),frozen,...fresh,oldDaemon,newDaemon,oldInventory,newInventory,newHardwareSerial,policySha256:sha(policyRaw),source,...(clean?{cleanCompletionSha256}:cloud?{cloudCompletion,cloudHardwareSerialSha256,cloudBootIdSha256}:{archive:archiveSnapshot(record)}),...local});
+ if(readBudget!==undefined)need(Number.isSafeInteger(readBudget.deadlineMs)&&Date.now()<readBudget.deadlineMs,'EPOCH_ADMISSION_DEADLINE');
+ if(cloudSuccessor&&includeCurrentAuthority)return {...proof,currentAuthority:{task:fresh.task,central:fresh.central}};
+ return proof;
  }catch(error){throw admissionFailure(error,stage);}
+ finally{if(daemonObservation)await daemonObservation.close(false);}
 }
 export async function main(args){
- need(args.length===3&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');const runDir=args[2];let frozen;
- try{frozen=readFrozen(runDir);const spec=phone(frozen),result=await canAuthorizeNativeFrame({root:here,frozen,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;}
+ const hasDeadline=args.length===5&&args[3]==='--read-deadline-ms'&&/^[1-9]\d{0,15}$/.test(args[4]);
+ need((args.length===3||hasDeadline)&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');
+ const runDir=args[2];let frozen;
+ try{
+  frozen=readFrozen(runDir);const spec=phone(frozen);let readBudget;
+  const standalone=frozen.standalone_skill?.protocol==='codex-exec-v1';
+  need(!hasDeadline||standalone,'EPOCH_ADMISSION_DEADLINE');
+  if(standalone){
+   let phaseDeadline=frozen.standalone_skill.deadline_ms;
+   const {proof_path:proofPath}=standaloneHostProofPaths(frozen);let marker;
+   try{marker=recordBytes(proofPath.replace(/\.json$/,'.cleanup'));}catch(error){if(error.code!=='ENOENT')throw error;}
+   if(marker!==undefined){
+    need(marker.equals(Buffer.from(sha(recordBytes(proofPath))+'\n')),'EPOCH_ADMISSION_DEADLINE');
+    phaseDeadline=frozen.standalone_skill.cleanup_deadline_ms;
+   }
+   const now=Date.now(),deadlineMs=hasDeadline?Number(args[4]):Math.min(phaseDeadline,now+45000);
+   need(Number.isSafeInteger(deadlineMs)&&deadlineMs>now&&deadlineMs<=phaseDeadline&&deadlineMs<=now+45000,'EPOCH_ADMISSION_DEADLINE');
+   readBudget={deadlineMs};
+  }
+  const result=await canAuthorizeNativeFrame({root:here,frozen,readBudget,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});
+  need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;
+ }
  catch(error){if(frozen)preserveVerifierDiagnostic(runDir,frozen,error);throw error;}
 }

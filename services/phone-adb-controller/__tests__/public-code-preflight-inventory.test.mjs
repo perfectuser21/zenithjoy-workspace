@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cpSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
+import {cpSync,mkdtempSync,readFileSync,readdirSync,realpathSync,rmSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,relative} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {createHash} from 'node:crypto';
+import {selectPreflightNativeSource} from '../native-phone-command-source.mjs';
 
-test('actual account-preflight fixture inventory remains within the unchanged native source limit',t=>{
- const directory=mkdtempSync(join(tmpdir(),'preflight-inventory-')),root=join(directory,'runtime');
+test('account preflight selects a bounded native source even when the frozen runtime exceeds the protocol cap',t=>{
+ const directory=realpathSync(mkdtempSync(join(tmpdir(),'preflight-inventory-'))),root=join(directory,'runtime');
  t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const fixture=readFileSync(new URL('./fixtures/public-code-preflight-native.mjs',import.meta.url),'utf8');
  const copy=fixture.match(/ const sourceRoot=new URL\('\.\.\/\.\.\/',import.meta.url\),[\s\S]*?\n cpSync\([^\n]+\);/)[0];
@@ -27,7 +29,22 @@ test('actual account-preflight fixture inventory remains within the unchanged na
  assert.equal(files.includes('activity-upstream-source.mjs'),false,'account preflight has no producer metrics readback import');
  assert.equal(files.some(name=>name.startsWith('leadgen-foundation/')),false,'account preflight does not import the offline foundation assembler or its source archives');
  assert.equal(files.some(name=>name.startsWith('commander/skills/')),false,'public Code does not execute Commander Agent skills');
- assert.ok(files.length<=512,JSON.stringify({files:files.length,synthetic_review:1,qualification:files.filter(x=>x.startsWith('qualification-artifacts.')),extra_source_paths:files.filter(p=>p!=='config/native-phone-reviews/fixture-public-code.md'&&!tracked.has(p)).sort()}));
+ const sha256=value=>createHash('sha256').update(value).digest('hex');
+ const policyPath='config/native-phone-command-sources.json';
+ const row=JSON.parse(readFileSync(join(root,policyPath))).device_sources[0];
+ const scope={runtimeRoot:root,profile:row.profile,serial:row.serial};
+ const source={commit:'a'.repeat(40),files:files.map(path=>({path,sha256:sha256(readFileSync(join(root,path)))}))};
+ for(let i=0;source.files.length<=512;i++)source.files.push({path:'other-runtime-'+i,sha256:sha256(String(i))});
+ const selected=selectPreflightNativeSource({...scope,source});
+ assert.deepEqual(new Set(selected.files.map(file=>file.path)),new Set([
+  'native-phone-adb-read.mjs','native-phone-command-source.mjs','runtime-definition.mjs','adb-shell-v2.mjs',
+  'adb-shell-v2-protocol.mjs',policyPath,row.review.path,row.pillow.path,
+ ]));
+ assert.ok(selected.files.every(file=>tracked.has(file.path)));
+ const missing={...source,files:source.files.filter(file=>file.path!==row.pillow.path)};
+ assert.throws(()=>selectPreflightNativeSource({...scope,source:missing}),/NATIVE_PHONE_COMMAND_SOURCE/);
+ const changed={...source,files:source.files.map(file=>file.path===policyPath?{...file,sha256:sha256('different policy')}:file)};
+ assert.throws(()=>selectPreflightNativeSource({...scope,source:changed}),/NATIVE_PHONE_COMMAND_SOURCE/);
 });
 
 test('actual fixture excludes only the generated commander mutex while retaining neighbouring source and locks',t=>{

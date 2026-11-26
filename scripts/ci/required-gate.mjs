@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // The same selection contract drives all three required aggregate checks.
-const codeFullJobs = [
-  'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test',
+const darwinJobs = [
+  'collection-phone-darwin-test', 'public-code-phone-darwin-test',
   'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test',
   'native-103-darwin-test',
 ];
+const codeFullJobs = ['openclaw-scripts-test', ...darwinJobs];
 
 export const gates = {
   wechat: {
@@ -16,7 +17,7 @@ export const gates = {
   orphan: { routes: ['orphan'], conditional: { 'playwright-orphan-consolidation': 'orphan' }, always: [], manual: true },
   android: { routes: ['android'], conditional: { 'test-and-build': 'android' }, always: [] },
   code: {
-    routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules', 'docs_only'],
+    routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules', 'docs_only', 'darwin_unrelated'],
     conditional: {
       'dashboard-build': 'dashboard',
       'api-lint': 'api', 'geoai-build': 'geoai', 'line-module-build': 'agent_modules',
@@ -47,12 +48,18 @@ export function checkGate(profile, needs, eventName = process.env.GITHUB_EVENT_N
   if (docsOnly && (eventName !== 'pull_request' || contract.routes.some(route => route !== 'docs_only' && outputs[route] === 'true'))) {
     throw new Error('Invalid docs-only change selection');
   }
+  const darwinUnrelated = profile === 'code' && outputs.darwin_unrelated === 'true';
+  if (darwinUnrelated && (eventName !== 'pull_request' || outputs.dashboard !== 'true' ||
+    ['api', 'geoai', 'ci', 'agent_modules', 'docs_only'].some(route => outputs[route] === 'true'))) {
+    throw new Error('Invalid Darwin-unrelated change selection');
+  }
   const required = [...contract.always, ...Object.entries(contract.conditional)
     .filter(([, route]) => outputs[route] === 'true' || outputs.ci === 'true')
     .map(([job]) => job)];
   const failed = required.filter(job => {
     const result = needs[job]?.result;
-    return result !== 'success' && !(docsOnly && codeFullJobs.includes(job) && result === 'skipped');
+    const maySkip = (docsOnly && codeFullJobs.includes(job)) || (darwinUnrelated && darwinJobs.includes(job));
+    return result !== 'success' && !(maySkip && result === 'skipped');
   });
   for (const [job, state] of Object.entries(needs)) {
     if (['failure', 'cancelled'].includes(state?.result) && !failed.includes(job)) failed.push(job);

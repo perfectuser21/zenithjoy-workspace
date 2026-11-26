@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir, userInfo } from 'node:os';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import os, { tmpdir, userInfo } from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { digest } from '../runtime-definition.mjs';
-import { verifyEpochFacts } from '../device-epoch-fence-admission.mjs';
+import { selectPublicPreflightScope, freezePublicPreflightRoute } from '../public-preflight-route.mjs';
+import { preparePublicDomainSnapshot } from '../public-domain-snapshot.mjs';
+import { freezePreflightProfile } from '../preflight-control-scope.mjs';
+import { epochCompatibilityRecordScope } from '../epoch-source-compatibility.mjs';
+import { readCloud101BusinessFacts, verifyEpochFacts } from '../device-epoch-fence-admission.mjs';
 import { freezeFenceReference, readCloudExistingEpochCompletion, validateEpochRecord } from '../device-epoch-fence-reference.mjs';
 
 const id = n => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
@@ -226,4 +233,333 @@ test('an existing-route reference verifies the journal and one exact wire acknow
   assert.equal(freeze().path, path);
   write('unknown.json', { retry_allowed: false });
   assert.throws(freeze, /EPOCH_CLOUD_JOURNAL/);
+});
+
+function reviewedSuccessor(f = fixture().facts, originalRef) {
+  const { frozen, record } = f;
+  const spec = frozen.discovery_phone_scope;
+  const release = { id: id('e'), target: 'mmv', environment: 'staging:' + 'b'.repeat(40), payload: {
+    components: [{ kind: 'repo', repo: 'perfectuser21/zenithjoy-workspace', revision: 'b'.repeat(40) }],
+    verification: { status: 'verified', ci_status: 'verified' },
+  } };
+  release.manifest_sha256 = digest({ environment: release.environment, target: release.target, payload: release.payload });
+  const observation = { id: id('f'), release_id: release.id, payload: {
+    environment: release.environment, target: 'mmv', components: release.payload.components,
+  } };
+  observation.payload_sha256 = digest(observation.payload);
+  const gate = { release_id: release.id, current_observation_id: observation.id, deployed: true,
+    actual_matches: true, current_status: 'deployed', gaps: [], verification: { status: 'verified', ci_status: 'verified' } };
+  const original = { release_id: frozen.release.id, observation_id: frozen.deployment.observation_id,
+    manifest_sha256: frozen.release.manifest_sha256 };
+  const candidate = { commit: 'b'.repeat(40), files: { 'code.mjs': digest('successor-runtime') } };
+  f.source = candidate;
+  f.recordSha256 = originalRef?.sha256 ?? digest(record);
+  spec.source_commit = candidate.commit;
+  spec.run_id = frozen.public_domain.run_id;
+  f.task.result.common_runner.mode = 'formal';
+  spec.policy_binding.epoch_fence = originalRef ?? { protocol: 'device-epoch-fence-reference/v1', epoch_id: record.epoch_id, sha256: f.recordSha256 };
+  const receipt = { protocol: 'cloud-101-epoch-source-compatibility/v1', business_run_id: frozen.public_domain.run_id,
+    original_record_sha256: f.recordSha256, original_runtime_source: record.runtime_source,
+    original, candidate_runtime_source: candidate, candidate_manifest_sha256: digest(candidate.files),
+    candidate_release_manifest_sha256: release.manifest_sha256,
+    release_id: release.id, observation_id: observation.id,
+    serial: spec.serial, instance_id: spec.policy.instance_id, policy_sha256: spec.policy_binding.policy_sha256,
+    changes: [{ path: 'code.mjs', before_sha256: record.runtime_source.files['code.mjs'], after_sha256: candidate.files['code.mjs'] }],
+    evidence_refs: ['artifact://source-review'], actor: 'independent-reviewer' };
+  Object.assign(frozen.deployment, { source_commit: candidate.commit, environment: release.environment, release_id: release.id,
+    observation_id: observation.id });
+  frozen.release = release;
+  frozen.epoch_source_compatibility = { review_task_id: id('8'), receipt, receipt_sha256: digest(receipt) };
+  frozen.files = { 'runtime/code.mjs': candidate.files['code.mjs'] };
+  f.binding.payload.runtime_snapshot_sha256 = digest(candidate.files);
+  f.binding.release_id = release.id;
+  f.binding.observation_id = observation.id;
+  f.compatibilityReview = { id: id('8'), status: 'completed', task_type: 'research', parent_task_id: id('9'), payload: {
+    work_kind: 'epoch_source_compatibility_review', reviewer: receipt.actor, business_run_id: receipt.business_run_id,
+    candidate_source_commit: candidate.commit, original_record_sha256: f.recordSha256, development_task_id: id('9'),
+  }, result: { actor: receipt.actor, audit_evidence: { path: receipt.evidence_refs[0], sha256: digest('review'), verdict: 'pass' },
+    epoch_source_compatibility: structuredClone(receipt) } };
+  f.compatibilityDevelopment = { id: id('9'), task_type: 'dev', result: { ship_candidate: {
+    schema_version: 1, stage: 'candidate', task_id: id('9'), repo: 'perfectuser21/zenithjoy-workspace',
+    head_sha: candidate.commit, actor: 'developer',
+  } } };
+  f.compatibilityRelease = { release, observation, gate };
+  return f;
+}
+
+test('reviewed formal Code 101 successor uses the immutable earlier physical epoch and new release', () => {
+  const f = reviewedSuccessor();
+  const originalBytes = JSON.stringify(f.record);
+  const proof = verifyEpochFacts(f);
+  assert.equal(proof.authorized, true);
+  assert.equal(proof.source_commit, f.frozen.deployment.source_commit);
+  assert.notEqual(proof.source_commit, f.record.runtime_source.commit);
+  assert.equal(JSON.stringify(f.record), originalBytes);
+  assert.equal(proof.original_execution_stopped, false);
+});
+
+test('the same signed Code 101 run admits its Python leaf lock through preflight, collect and cleanup', async t => {
+  const authority = await import('../public-domain-authority.mjs');
+  const admission = await import('../device-epoch-fence-admission.mjs');
+  const { standaloneLocalLockQuarantined } = await import('../standalone-skill-authority.mjs');
+  const f = reviewedSuccessor(), { frozen, record } = f;
+  frozen.snapshot_sha256 = digest(frozen);
+  const runDirectory = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-code-handoff-')));
+  t.after(() => rmSync(runDirectory, { recursive: true, force: true }));
+  const root = join(runDirectory, 'private-locks'), lockPath = join(root, serial + '.lock');
+  mkdirSync(root, { mode: 0o700 });
+  const owner = frozen.run_identity.tag, epoch = id('4'), p = frozen.public_domain;
+  const source = fileURLToPath(new URL('../preflight-local-step.py', import.meta.url));
+  const local = operation => JSON.parse(execFileSync('python3', ['-I', '-B', '-S', '-c',
+    "import json,runpy,sys; print(json.dumps(runpy.run_path(sys.argv[1])['lock_record'](*sys.argv[2:])))",
+    source, root, serial, operation, owner, epoch], { encoding: 'utf8' }));
+  const receipt = local('acquire');
+  const names = readdirSync(lockPath);
+  assert.deepEqual(names.sort(), ['acquired_at', 'owner', 'preflight_epoch', 'preflight_proof_required', 'standalone_review_required']);
+  assert.equal(standaloneLocalLockQuarantined(frozen, names), true, 'legacy readers still treat the Code lock as protected');
+  const unregister = authority.registerPublicDomainAuthority({
+    runDirectory, identity: { ...p, mode: 'formal' }, deadline_ms: Date.now() + 30000, cleanup_deadline_ms: Date.now() + 60000,
+    business_scope: { run: owner, run_id: p.run_id, task_id: p.task_id, source_commit: f.source.commit, profile, serial, attempt: 'a1' },
+  });
+  t.after(unregister);
+  const read = (overrides={}) => admission.readEpochLocalHandoff({ runDirectory, lockPath, frozen, record, ...overrides });
+  const check = () => verifyEpochFacts({ ...f, ...read() }).authorized;
+  assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+  let phase = 'preflight';
+  const proofScope = { runDirectory, lockPath, frozen, epoch, receipt,
+    isActive: () => ['preflight', 'collect_videos', 'cleanup'].includes(phase) };
+  assert.throws(() => authority.bindPublicCodePreflightLock({ ...proofScope, receipt: { ...receipt, readback_epoch: id('0') } }), /PUBLIC_DOMAIN_AUTHORITY/);
+  const revoke = authority.bindPublicCodePreflightLock(proofScope);
+  assert.equal(check(), true);
+  phase = 'collect_videos';
+  assert.equal(local('refresh').readback_epoch, epoch);
+  assert.equal(check(), true);
+  phase = 'cleanup';
+  assert.equal(local('refresh').readback_epoch, epoch);
+  assert.equal(check(), true);
+  assert.throws(() => read({ runDirectory: root }), /EPOCH_LOCAL_HANDOFF/);
+  assert.throws(() => read({ lockPath: root }), /EPOCH_LOCAL_HANDOFF/);
+  const otherRun = structuredClone(frozen);
+  otherRun.public_domain.run_id = id('0');
+  assert.throws(() => read({ frozen: otherRun }), /EPOCH_LOCAL_HANDOFF/);
+  const otherSnapshot = { ...frozen, snapshot_sha256: digest('different snapshot') };
+  assert.throws(() => read({ frozen: otherSnapshot }), /EPOCH_LOCAL_HANDOFF/);
+  const unrelatedRecord = { ...record, authority_basis: 'old-route-fenced-observed-noninterference/v1' };
+  assert.equal(read({ record: unrelatedRecord }).activeQuarantined, true);
+  for (const marker of ['standalone_quarantined', 'preflight_quarantined', 'epoch_fence_lost', 'unexpected']) {
+    const path = join(lockPath, marker);
+    writeFileSync(path, 'unexpected\n', { mode: 0o600 });
+    assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+    rmSync(path);
+  }
+  phase = 'other';
+  assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+  phase = 'cleanup';
+  assert.equal(check(), true);
+  revoke();
+  assert.throws(check, /EPOCH_LOCAL_HANDOFF/);
+  assert.throws(() => authority.bindPublicCodePreflightLock(proofScope), /PUBLIC_DOMAIN_AUTHORITY/);
+  assert.equal(local('release').readback_owner, 'none');
+});
+
+test('a protected Code lock refuses a replaced owner or either changed marker', async t => {
+  const { bindPublicCodePreflightLock, registerPublicDomainAuthority } = await import('../public-domain-authority.mjs');
+  const { readEpochLocalHandoff } = await import('../device-epoch-fence-admission.mjs');
+  for (const [name, change] of [
+    ['owner', path => { renameSync(path, path + '.original'); writeFileSync(path, 'current-run\n', { mode: 0o600 }); rmSync(path + '.original'); }],
+    ['preflight_epoch', path => writeFileSync(path, id('9') + '\n')],
+    ['preflight_proof_required', path => rmSync(path)],
+    ['standalone_review_required', path => writeFileSync(path, 'other-run\n')],
+  ]) {
+    const f = reviewedSuccessor(), { frozen, record } = f, p = frozen.public_domain;
+    frozen.snapshot_sha256 = digest(frozen);
+    const runDirectory = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-code-handoff-negative-')));
+    t.after(() => rmSync(runDirectory, { recursive: true, force: true }));
+    const lockPath = join(runDirectory, serial + '.lock'), epoch = id('4'), owner = frozen.run_identity.tag;
+    mkdirSync(lockPath, { mode: 0o700 });
+    for (const [marker, value] of Object.entries({ owner, preflight_epoch: epoch, preflight_proof_required: epoch,
+      standalone_review_required: owner, acquired_at: String(Math.floor(Date.now()/1000)) }))
+      writeFileSync(join(lockPath, marker), value + '\n', { mode: 0o600 });
+    const unregister = registerPublicDomainAuthority({
+      runDirectory, identity: { ...p, mode: 'formal' }, deadline_ms: Date.now() + 30000, cleanup_deadline_ms: Date.now() + 60000,
+      business_scope: { run: owner, run_id: p.run_id, task_id: p.task_id, source_commit: f.source.commit, profile, serial, attempt: 'a1' },
+    });
+    t.after(unregister);
+    bindPublicCodePreflightLock({ runDirectory, lockPath, frozen, epoch, isActive: () => true,
+      receipt: { lock: 'acquired', owner, epoch, readback_owner: owner, readback_epoch: epoch } });
+    const read = () => readEpochLocalHandoff({ runDirectory, lockPath, frozen, record });
+    assert.equal(read().activeQuarantined, false);
+    change(join(lockPath, name));
+    assert.throws(read, /EPOCH_LOCAL_HANDOFF/);
+  }
+});
+
+test('the fixed Cloud source review includes the lock producer call, ownership proof and epoch checkpoint', async () => {
+  const { reviewSource } = await import('../device-epoch-fence-review.mjs');
+  const { files } = reviewSource({ includeCloudIssuer: true });
+  for (const name of ['public-code-preflight.mjs', 'public-domain-authority.mjs', 'device-epoch-fence-admission.mjs', 'private-file-closure.mjs']) {
+    assert.equal(files['services/phone-adb-controller/' + name], digest(readFileSync(new URL('../' + name, import.meta.url))));
+  }
+});
+
+test('reviewed successor rejects an altered origin, new artifact, run, or device', () => {
+  for (const change of [
+    f => { f.compatibilityRelease.gate.current_observation_id = id('0'); },
+    f => { f.compatibilityRelease.observation.payload_sha256 = digest('wrong observation'); },
+    f => { f.cloudCompletion.manifest_sha256 = f.frozen.release.manifest_sha256; },
+    f => { f.compatibilityReview.payload.business_run_id = id('0'); },
+    f => { f.compatibilityReview.status = 'in_progress'; },
+    f => { f.compatibilityDevelopment.result.ship_candidate.actor = f.compatibilityReview.result.actor; },
+    f => { f.task.result.common_runner.mode = 'exploration'; },
+    f => { f.originalTask.result = { execution_stopped: true }; },
+    f => { f.cloudBootIdSha256 = digest('different boot'); },
+  ]) {
+    const f = reviewedSuccessor();
+    change(f);
+    assert.throws(() => verifyEpochFacts(f), /EPOCH_/);
+  }
+});
+
+function brainSnapshot(facts) {
+  const { compatibilityReview, compatibilityRelease, compatibilityDevelopment, originalTask, task, binding, links, taskRun, central } = facts;
+  const { release, observation, gate } = compatibilityRelease;
+  const review = structuredClone(compatibilityReview);
+  review.result.epoch_source_compatibility_sha256 = digest(review.result.epoch_source_compatibility);
+  delete review.result.epoch_source_compatibility;
+  return { protocol: 'cloud-101-admission-snapshot/v1', task, binding, links, taskRun, central, originalTask, compatibilityDevelopment, compatibilityReview: review,
+    compatibilityRelease: { release_id: release.id, observation_id: observation.id,
+      environment: release.environment, target: release.target, source_commit: facts.frozen.deployment.source_commit,
+      manifest_sha256: release.manifest_sha256, observation_payload_sha256: observation.payload_sha256,
+      release_components_sha256: digest(release.payload.components), observation_components_sha256: digest(observation.payload.components),
+      gate: structuredClone(gate) } };
+}
+
+test('formal successor reads one coherent Brain projection per phase and preserves local epoch evidence', async () => {
+  const facts = reviewedSuccessor();
+  const { frozen, record } = facts;
+  const snapshot = brainSnapshot(facts);
+  const readBudget = { deadlineMs: Date.now() + 3000, maxAttempts: 1 };
+  const seen = [];
+  const read = async (path, budget) => {
+    seen.push(path);
+    const endpoint = new URL(path, 'http://localhost');
+    assert.equal(endpoint.pathname, '/api/brain/cloud-101-admission/' + frozen.public_domain.run_id);
+    assert.deepEqual(Object.fromEntries(endpoint.searchParams), {
+      task_id: facts.task.id, binding_id: facts.binding.id,
+      release_id: frozen.release.id, observation_id: frozen.deployment.observation_id,
+      device_name: frozen.discovery_phone_scope.serial, profile: frozen.discovery_phone_scope.profile,
+      profile_sha256: frozen.public_domain.profile_sha256, source_commit: frozen.deployment.source_commit,
+      original_task_id: record.original.task_id, review_task_id: facts.compatibilityReview.id,
+    });
+    assert.equal(budget, readBudget);
+    return {...snapshot, record: { status: 'foreign' }, frozen: {} };
+  };
+  const first = await readCloud101BusinessFacts({ frozen, record, readBudget, read });
+  assert.equal(seen.length, 1);
+  assert.equal(Object.hasOwn(first, 'record'), false);
+  assert.equal(Object.hasOwn(first, 'frozen'), false);
+  assert.equal(verifyEpochFacts({...facts,...first}).authorized, true);
+  snapshot.compatibilityRelease.gate.deployed = false;
+  await assert.rejects(readCloud101BusinessFacts({ frozen, record, readBudget, read }), /EPOCH_SOURCE_COMPATIBILITY/);
+  assert.equal(seen.length, 2);
+});
+
+test('formal successor refuses unavailable snapshots, changed reviews and mismatched release components', async () => {
+  const facts = reviewedSuccessor();
+  const { frozen, record } = facts;
+  let attempted = 0;
+  await assert.rejects(readCloud101BusinessFacts({ frozen, record, read: async () => {
+    attempted++;
+    throw Error('snapshot unavailable');
+  }}), /snapshot unavailable/);
+  assert.equal(attempted, 1);
+  for (const corrupt of [
+    snapshot => { snapshot.compatibilityReview.result.epoch_source_compatibility_sha256 = digest('new review'); },
+    snapshot => { snapshot.compatibilityRelease.observation_components_sha256 = digest('other observation'); },
+    snapshot => { snapshot.compatibilityRelease.manifest_sha256 = digest('swapped manifest'); },
+  ]) {
+    const snapshot = brainSnapshot(facts);
+    corrupt(snapshot);
+    await assert.rejects(readCloud101BusinessFacts({ frozen, record, read: async () => snapshot }), /EPOCH_SOURCE_COMPATIBILITY/);
+  }
+});
+
+test('the reviewed successor selects and reopens the original on-disk epoch through the formal route boundary', t => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'cloud-successor-route-')));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const user = userInfo();
+  const homeMock = t.mock.method(os, 'userInfo', () => ({ ...user, homedir: home }));
+  syncBuiltinESMExports();
+  t.after(() => { homeMock.mock.restore(); syncBuiltinESMExports(); });
+
+  const rig = fixture(home), { record, spec } = rig;
+  const work = join(home, 'candidate');
+  const registryPath = 'config/adb-host-instances.json';
+  const registry = JSON.stringify({ schema_version: 1, instances: [
+    { instance_id: instance, kind: 'managed', policy_path: record.new_route.policy_path, policy: spec.policy },
+  ] });
+  const registryHash = digest(registry);
+  mkdirSync(join(work, 'config'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(work, registryPath), registry, { mode: 0o600 });
+  mkdirSync(join(record.new_route.policy_path, '..'), { recursive: true, mode: 0o700 });
+  writeFileSync(record.new_route.policy_path, JSON.stringify(spec.policy), { mode: 0o600 });
+  makeJournal(rig);
+  const path = join(home, '.local/share/zenithjoy/device-epoch-fences', serial, record.epoch_id + '.json');
+  mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 });
+  const immutable = Buffer.from(JSON.stringify(record));
+  writeFileSync(path, immutable, { mode: 0o600 });
+  const originalRef = freezeFenceReference({ scope: spec, epochId: record.epoch_id });
+  rig.facts.cloudCompletion = readCloudExistingEpochCompletion(record);
+  const f = reviewedSuccessor(rig.facts, originalRef);
+  const { policy_binding, ...registered } = spec;
+  assert.equal(policy_binding.epoch_fence.sha256, originalRef.sha256);
+  const opts = { root: work, manifest: { ...f.frozen.deployment, files: [
+    { path: 'services/phone-adb-controller/' + registryPath, deployed_path: registryPath, content_sha256: registryHash },
+  ] }, scope: registered, instanceId: instance, epochId: record.epoch_id, workflowKey: 'douyin_video_discovery' };
+  assert.throws(() => selectPublicPreflightScope(opts), /EPOCH_RECORD_SCOPE/);
+  const fixed = selectPublicPreflightScope({ ...opts, epochSourceCompatibility: f.frozen.epoch_source_compatibility });
+  assert.deepEqual(fixed.policy_binding.epoch_fence, originalRef);
+  assert.equal(fixed.source_commit, f.source.commit);
+  f.frozen.discovery_phone_scope = fixed;
+  const route = freezePublicPreflightRoute({ root: work, files: { [registryPath]: registryHash },
+    scope: epochCompatibilityRecordScope(f.frozen) });
+  assert.deepEqual(route, fixed.policy_binding);
+  assert.equal(verifyEpochFacts(f).authorized, true);
+  assert.deepEqual(readFileSync(path), immutable);
+
+  const stepsPath = 'steps.json';
+  const registryFile = join(work, 'registry.tsv');
+  writeFileSync(registryFile, `profile\tserial\tmodel\twidth\theight\tenabled\n${profile}\t${serial}\tFixture\t720\t1280\ttrue\n`, { mode: 0o600 });
+  writeFileSync(join(work, stepsPath), '{}', { mode: 0o600 });
+  const env = { P: profile, SERIAL: serial, WFR_TAG: 'reviewed-fixture', LEADGEN_LINE: 'yuesheng', LEADGEN_LIMIT: '1',
+    LEADGEN_MMV_DEVICE_RUNTIME: '1', DOUYIN_PHONE_REGISTRY: registryFile, DOUYIN_ADB_PORT: '5042', ADB_SERVER_SOCKET: newEndpoint };
+  const { public_domain: business, ...template } = structuredClone(f.frozen);
+  const { run_binding: runBinding } = business;
+  template.preflight_profile = freezePreflightProfile({ env });
+  template.public_preflight_route = route;
+  template.workflow_version.payload.workflow_id = runBinding.workflow_id;
+  const step = runBinding.activities.preflight;
+  template.activities = [{ reference: { slot_key: 'preflight', reference_id: step.reference_id, activity_id: step.activity_id },
+    version: { id: step.activity_definition_version_id } }];
+  const profileFiles = { [registryPath]: registryHash, [stepsPath]: digest('{}') };
+  template.epoch_source_compatibility.receipt.candidate_manifest_sha256 = digest(profileFiles);
+  template.epoch_source_compatibility.receipt_sha256 = digest(template.epoch_source_compatibility.receipt);
+  const candidateProfile = { cwd: work, files: profileFiles, contract: { activities: [{ key: 'preflight' }] },
+    metadata: { preflight: { activity_id: step.activity_id, executor_kind: 'code', runtime_snapshot_sha256: digest(profileFiles) } },
+    domain_adapter: { budget: { max_duration_s: 90 }, config: { workflow_key: 'douyin_video_discovery', execution_mode: 'code',
+      env, resources: { machine: 'us-mac-m4', profile, serial, account: expectedAccount, line: 'yuesheng' },
+      company: record.resource.company, step_spec: stepsPath, snapshot: template } } };
+  const identity = { ...business, mode: 'formal', profile_sha256: digest(candidateProfile) };
+  const prepare = (runId, name) => preparePublicDomainSnapshot({
+    identity: { ...identity, run_id: runId }, profile: candidateProfile, runDirectory: join(home, name),
+    deadline_ms: Date.now() + 90000, cleanup_deadline_ms: Date.now() + 100000,
+  });
+  assert.throws(() => prepare(id('0'), 'never-materialized'), /EPOCH_SOURCE_COMPATIBILITY/);
+  const prepared = prepare(business.run_id, 'successor-run');
+  assert.deepEqual(prepared.snapshot.epoch_source_compatibility, template.epoch_source_compatibility);
+  assert.deepEqual(prepared.snapshot.discovery_phone_scope.policy_binding.epoch_fence, originalRef);
+  assert.deepEqual(readFileSync(path), immutable);
+
+  assert.throws(() => selectPublicPreflightScope({ ...opts, workflowKey: 'douyin_video_processing',
+    epochSourceCompatibility: f.frozen.epoch_source_compatibility }), /PUBLIC_PREFLIGHT_ROUTE_SOURCE/);
 });

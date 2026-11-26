@@ -20,7 +20,7 @@ const suites=['collection-phone-proof','collection-cleanup-only','collection-evi
 
 function validate(w=workflow){
   const job=w.jobs[key],matrix=job.strategy?.matrix?.include;
-  assert.equal(job.if, "needs.changes.outputs.docs_only != 'true'");assert.equal(job.needs, 'changes');assert.equal(job['continue-on-error'],undefined);
+  assert.equal(job.if, "needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'");assert.equal(job.needs, 'changes');assert.equal(job['continue-on-error'],undefined);
   assert.equal(job['runs-on'],'macos-latest');assert.equal(job['timeout-minutes'],10);
   assert.equal(job.strategy['fail-fast'],false);assert.deepEqual(matrix.map(x=>x.shard),[0,1]);
   assert.deepEqual(matrix[0].suites.trim().split(/\s+/),suites.slice(0,8));

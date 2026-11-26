@@ -130,7 +130,7 @@ export function verifyPatrolRequiredConsumer(repoRoot){
  const result=run(['--test','--test-reporter=tap','scripts/phone-account-patrol/implementation-regression.test.mjs']);
  if(result.error||result.signal||result.status!==0||!(Number(result.stdout.match(/^# tests ([0-9]+)$/m)?.[1])>=2)||!/^# fail 0$/m.test(result.stdout)||!/^# skipped 0$/m.test(result.stdout)||!/^# todo 0$/m.test(result.stdout))fail('REQUIRED_RUNTIME_FAILED');
  const needs=Object.fromEntries(gate.needs.map(job=>[job,{result:'success'}]));
- needs.changes.outputs=Object.fromEntries(['dashboard','api','geoai','ci','agent_modules','docs_only'].map(key=>[key,'false']));
+ needs.changes.outputs=Object.fromEntries(Object.keys(w.jobs.changes.outputs).map(key=>[key,'false']));
  for(const state of ['success','failure','cancelled','skipped','missing']){
   if(state==='missing')delete needs['api-scripts-test'];else needs['api-scripts-test']={result:state};
   const r=run(['scripts/ci/required-gate.mjs','code'],{GATE_NEEDS:JSON.stringify(needs)});

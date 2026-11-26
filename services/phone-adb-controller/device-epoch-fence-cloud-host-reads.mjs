@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { readBoundAdbDaemon } from './device-epoch-fence-admission.mjs';
 import { validateAuthReference } from './device-epoch-fence-auth-reference.mjs';
 import { readDeclaredFenceInstance, readPrivateFenceDaemon, verifyLegacyControllerSource } from './device-epoch-fence-controller.mjs';
@@ -29,6 +30,32 @@ function need(value, reason) {
   if (value) return;
   const code = 'CLOUD_FENCE_' + reason;
   throw Object.assign(Error(code), { code });
+}
+
+// Brain's shared Task-read limit is 300/min. One CLI invocation starts at
+// most 172/min and leaves room for other callers. Gate only the starts so
+// slow responses cannot turn into queued outgoing requests in a later burst.
+export function createCloudBrainReadPacer(request, { now = () => performance.now(), sleep = delay } = {}) {
+  const intervalMs = 350;
+  const maxQueueMs = 5000;
+  let nextStart = 0;
+  let queue = Promise.resolve();
+  return async function read(path) {
+    if (!path.startsWith('/tasks/')) return request(path);
+    const expiresAt = now() + maxQueueMs;
+    const slot = queue.then(async () => {
+      const startAt = Math.max(nextStart, now());
+      need(startAt < expiresAt, 'BRAIN_READ_PACING_TIMEOUT');
+      const wait = Math.ceil(startAt - now());
+      if (wait > 0) await sleep(wait);
+      const startedAt = now();
+      need(startedAt < expiresAt, 'BRAIN_READ_PACING_TIMEOUT');
+      nextStart = startedAt + intervalMs;
+      return { response: request(path) };
+    });
+    queue = slot.then(() => undefined, () => undefined);
+    return (await slot).response;
+  };
 }
 
 function readLegacySource(statePath, home) {
@@ -123,13 +150,14 @@ export async function createCloudHostReads({ sourceCommit, taskId, stateFile, au
     old: readOldDaemon({ home, endpoint: route.old_endpoint, policy: oldPolicy }),
     next: readPrivateFenceDaemon({ ...instance, policy_sha256: digest(currentPolicy) }),
   };
+  const readBrain = createCloudBrainReadPacer(request);
   const readTask = async id => {
-    const reply = await request('/tasks/' + id);
+    const reply = await readBrain('/tasks/' + id);
     return reply.task ?? reply;
   };
   const readAuthority = async () => {
     const [task, originalTask, operatorTask, deviceLocks] = await Promise.all([
-      readTask(taskId), readTask(cloudFenceOriginal.task_id), readTask(cloudFenceOperator.task_id), request('/device-locks'),
+      readTask(taskId), readTask(cloudFenceOriginal.task_id), readTask(cloudFenceOperator.task_id), readBrain('/device-locks'),
     ]);
     return { task, originalTask, operatorTask, deviceLocks };
   };
@@ -143,7 +171,7 @@ export async function createCloudHostReads({ sourceCommit, taskId, stateFile, au
     verifyCandidateFiles(runtimeRoot, manifest);
     const endpoint = '/releases/' + manifest.release_id;
     const [releaseReply, gate, observationReply] = await Promise.all([
-      request(endpoint), request(endpoint + '/gate'), request(endpoint + '/observations/' + manifest.observation_id),
+      readBrain(endpoint), readBrain(endpoint + '/gate'), readBrain(endpoint + '/observations/' + manifest.observation_id),
     ]);
     const release = verifyTargetRelease(releaseReply.release, 'mmv', sourceCommit, undefined, manifest.environment);
     const observation = observationReply.observation;
@@ -260,6 +288,6 @@ export async function createCloudHostReads({ sourceCommit, taskId, stateFile, au
     need(same(old, before.old_device === null ? [] : [before.old_device]) && same(next, [before.new_device])
       && checkReconnectConsumers(home) === before.consumer_readback_sha256, 'ROUTES_DRIFT');
   };
-  return { daemons, host, instance, readAuthority, readCandidate, observe, verifyRoutes,
+  return { daemons, host, instance, readBrain, readAuthority, readCandidate, observe, verifyRoutes,
     assertConsumerAbsent: () => checkReconnectConsumers(home) };
 }

@@ -10,7 +10,11 @@ def stamp():return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def classify(platform,nodes,ocr,own):
  labels=[n.get('text','') or n.get('content-desc','') for n in nodes]+[o['text'] for o in ocr]
  joined='\n'.join(labels)
- if any(x in joined for x in ['同意并继续','不同意','请充分阅读并理解']):return {'state':'待确认','reason':'首次使用协议阻挡，未同意协议'}
+ choices={label.strip() for label in labels}
+ policy_terms=('用户协议','隐私政策','隐私条款','个人信息保护指引','个人信息保护政策')
+ if ('不同意' in choices and choices.intersection({'同意','同意并继续'})
+     and any(term in joined for term in policy_terms)):
+  return {'state':'待确认','reason':'首次使用协议阻挡，未同意协议'}
  # A login entry can exist on a logged-in profile; positive own identity has priority.
  fields={'今日头条':[':id/hqt'],'知乎':[':id/tv_name'],'B站':[':id/nick_name'],'抖音':[':id/tqn',':id/tj1',':id/tk+',':id/ttw']}
  if own:

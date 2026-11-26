@@ -1,3 +1,4 @@
+import {epochCompatibilityRecordScope} from './epoch-source-compatibility.mjs';
 import {freezeFenceReference} from './device-epoch-fence-reference.mjs';
 // A route is fixed by the released registry and protected profile, never a
 // Task input, environment override, discovered port or borrowed legacy server.
@@ -6,8 +7,9 @@ import {join,isAbsolute} from 'node:path';
 import {digest,canonical} from './runtime-definition.mjs';
 const fail=()=>{throw Error('PUBLIC_PREFLIGHT_ROUTE_SOURCE');};
 // Code-only offline assembly parameter. No environment or Task input is read.
-export function selectPublicPreflightScope({root,manifest,scope,instanceId,epochId}){
- if(instanceId===undefined){if(epochId!==undefined)fail();return scope;}
+export function selectPublicPreflightScope({root,manifest,scope,instanceId,epochId,workflowKey,epochSourceCompatibility}){
+ if(instanceId===undefined){if(epochId!==undefined||epochSourceCompatibility!==undefined)fail();return scope;}
+ if(epochSourceCompatibility!==undefined&&(epochId===undefined||workflowKey!=='douyin_video_discovery'))fail();
  if(typeof instanceId!=='string'||!/^[-a-z0-9]{1,80}$/.test(instanceId)||scope?.target!=='mmv'||manifest?.target!=='mmv')fail();
  const registry_path='config/adb-host-instances.json',rows=manifest.files?.filter(f=>f.deployed_path===registry_path);
  if(rows?.length!==1||rows[0].path!=='services/phone-adb-controller/'+registry_path)fail();
@@ -16,7 +18,16 @@ export function selectPublicPreflightScope({root,manifest,scope,instanceId,epoch
  if(registry.schema_version!==1||matches?.length!==1)fail();const policy=matches[0].policy;
  if(policy?.schema_version!==2||policy.instance_id!==instanceId||policy.host_id!==scope.policy?.host_id||policy.transport!==scope.policy?.transport||['adb_bin','adb_realpath','adb_sha256'].some(k=>policy[k]!==scope.policy[k]))fail();
  const selected={...structuredClone(scope),policy:structuredClone(policy)};
- selected.policy_binding=freezePublicPreflightRoute({root,files:{[registry_path]:rows[0].content_sha256},scope:selected});if(epochId!==undefined)selected.policy_binding.epoch_fence=freezeFenceReference({scope:selected,epochId});return selected;
+ selected.policy_binding=freezePublicPreflightRoute({root,files:{[registry_path]:rows[0].content_sha256},scope:selected});
+ if(epochId!==undefined){
+  const recordScope=epochCompatibilityRecordScope({execution_mode:'code',deployment:manifest,workflow_version:{payload:{key:workflowKey}},
+   discovery_phone_scope:selected,epoch_source_compatibility:epochSourceCompatibility});
+  const ref=freezeFenceReference({scope:recordScope,epochId});
+  if(epochSourceCompatibility&&(ref.sha256!==epochSourceCompatibility.receipt.original_record_sha256
+    ||epochSourceCompatibility.receipt.policy_sha256!==selected.policy_binding.policy_sha256))fail();
+  selected.policy_binding.epoch_fence=ref;
+ }
+ return selected;
 }
 export function freezePublicPreflightRoute({root,files,scope}){
  const policy=scope?.policy;

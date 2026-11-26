@@ -140,7 +140,7 @@ export function readCollectionPhoneScopeInput(path){
  }catch(error){if(error.code==='ELOOP')throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');throw error;}finally{if(fd!==undefined)closeSync(fd);}
 }
 // 模板是发布清单内已批准的只读输入；续跑永远取原快照，不追当前模板。
-export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_WORKFLOW,instanceId,epochId}){
+export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_WORKFLOW,instanceId,epochId,epochSourceCompatibility}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_processing')return undefined;
  if(existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))){const scope=readFrozen(env.WFR_RUN_DIR).collection_phone_scope;if((instanceId!==undefined&&scope?.policy?.instance_id!==instanceId)||(epochId!==undefined&&scope?.policy_binding?.epoch_fence?.epoch_id!==epochId))throw Error('COLLECTION_FROZEN_INSTANCE_MISMATCH');return scope;}
  const manifest=JSON.parse(readFileSync(env.WF_DEPLOYMENT_MANIFEST||join(root,'deployment-manifest.json'),'utf8'));
@@ -157,7 +157,7 @@ export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_W
  const specification={...structuredClone(matches[0]),version:1,task_id:taskIds[0]||null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};
  if(specification.evidence_alias)specification.evidence_identity=evidenceIdentity(specification);
  else if(specification.evidence_identity)throw Error('COLLECTION_EVIDENCE_ALIAS_INVALID');
- return selectPublicPreflightScope({root,manifest,scope:specification,instanceId,epochId});
+ return selectPublicPreflightScope({root,manifest,scope:specification,instanceId,epochId,workflowKey,epochSourceCompatibility});
 }
 function pinnedTool(tool){
  if(!tool||!isAbsolute(tool.path||'')||!/^[a-f0-9]{64}$/.test(tool.sha256||''))throw Error('COLLECTION_INTERPRETER_PIN_REQUIRED');

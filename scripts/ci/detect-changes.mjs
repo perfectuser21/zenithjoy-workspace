@@ -7,6 +7,8 @@ import { AUTHORING_FILES, greaterVersion } from './authoring-source-version.mjs'
 // This document is linked from the controller README and has no runtime readers.
 const standaloneDocs = new Set(['docs/android-rpa-execution-modes.md']);
 const authoring = new Set(AUTHORING_FILES);
+const dashboardSource = /^apps\/dashboard\/src\/(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.(?:css|ts|tsx)$/;
+const dodMetadata = /^\.dod-cp-[a-zA-Z0-9_.-]+\.md$/;
 const versionHeader = /^(  "version": ")([0-9.]+)(",\r?)$/m;
 
 const zero = '0'.repeat(40);
@@ -39,23 +41,47 @@ function isVersionHeaderBump(oldBlob, newBlob) {
   }
 }
 
-function isDocsOnlyPr(base, head, paths) {
-  if (!paths.some(path => standaloneDocs.has(path)) || paths.some(path => !standaloneDocs.has(path) && !authoring.has(path))) return false;
-  const bumps = paths.filter(path => authoring.has(path)).length;
-  if (bumps !== 0 && bumps !== AUTHORING_FILES.length) return false;
-
+function matchesPrCheckout(base, head) {
   // L2 compares against the current PR base and tests run on the checkout tree.
-  if (git('merge-base', base, head).trim() !== base) return false;
-  if (git('rev-parse', 'HEAD^{tree}') !== git('rev-parse', `${head}^{tree}`)) return false;
+  return git('merge-base', base, head).trim() === base &&
+    git('rev-parse', 'HEAD^{tree}') === git('rev-parse', `${head}^{tree}`);
+}
 
+function prDiff(base, head, paths) {
   const records = git('diff', '--raw', '--abbrev=40', '-z', '--no-renames', '--ignore-submodules=none', base, head, '--').split('\0');
   if (records.length !== paths.length * 2 + 1 || records.at(-1) !== '') throw new Error('Invalid raw PR diff');
-  for (let i = 0; i < records.length - 1; i += 2) {
-    const path = records[i + 1];
-    const match = /^:100644 100644 ([a-f0-9]{40}) ([a-f0-9]{40}) M$/.exec(records[i]);
-    if (!match || (!standaloneDocs.has(path) && !(authoring.has(path) && isVersionHeaderBump(match[1], match[2])))) return false;
-  }
-  return true;
+  const pattern = /^:(?<oldMode>[0-7]{6}) (?<newMode>[0-7]{6}) (?<oldBlob>[a-f0-9]{40}) (?<newBlob>[a-f0-9]{40}) (?<status>[AMD])$/;
+  return paths.map((path, i) => {
+    if (records[i * 2 + 1] !== path) throw new Error('Inconsistent raw PR diff');
+    return { path, ...pattern.exec(records[i * 2])?.groups };
+  });
+}
+
+function versionHeadersOnly(rows) {
+  const versions = rows.filter(({ path }) => authoring.has(path));
+  return versions.length === 0 || (
+    versions.length === AUTHORING_FILES.length && versions.every(({ oldMode, newMode, status, oldBlob, newBlob }) =>
+      oldMode === '100644' && newMode === '100644' && status === 'M' && isVersionHeaderBump(oldBlob, newBlob))
+  );
+}
+
+function isDocsOnlyPr(base, head, paths) {
+  if (!paths.some(path => standaloneDocs.has(path)) || paths.some(path => !standaloneDocs.has(path) && !authoring.has(path))) return false;
+  if (!matchesPrCheckout(base, head)) return false;
+  const rows = prDiff(base, head, paths);
+  return rows.every(({ path, oldMode, newMode, status }) => authoring.has(path) ||
+    (oldMode === '100644' && newMode === '100644' && status === 'M')) && versionHeadersOnly(rows);
+}
+
+function isDarwinUnrelatedPr(base, head, paths) {
+  // Darwin's phone/PG suites can read shared dependencies such as API migrations.
+  // Admit only this audited frontend family and its exact companion metadata.
+  if (!paths.some(path => dashboardSource.test(path)) ||
+    paths.some(path => !dashboardSource.test(path) && !dodMetadata.test(path) && !authoring.has(path))) return false;
+  if (!matchesPrCheckout(base, head)) return false;
+  const rows = prDiff(base, head, paths);
+  return rows.every(({ path, status, oldMode, newMode }) => authoring.has(path) ||
+    (status && ['000000', '100644'].includes(oldMode) && ['000000', '100644'].includes(newMode))) && versionHeadersOnly(rows);
 }
 
 export function detectChanges(profile, eventName, event) {
@@ -66,7 +92,7 @@ export function detectChanges(profile, eventName, event) {
   if (eventName === 'push') {
     head = commit(event.after, 'push head');
     // A branch creation has no base commit; run every check rather than guess a diff.
-    if (event.before === zero) return Object.fromEntries(contract.routes.map(route => [route, String(route !== 'docs_only')]));
+    if (event.before === zero) return Object.fromEntries(contract.routes.map(route => [route, String(route !== 'docs_only' && route !== 'darwin_unrelated')]));
     base = commit(event.before, 'push base');
     range = [base, head];
   } else if (eventName === 'pull_request') {
@@ -94,6 +120,7 @@ export function detectChanges(profile, eventName, event) {
   const apiOrDashboard = has(/^apps\/(?:api|dashboard)\//);
   const selected = {
     docs_only: profile === 'code' && eventName === 'pull_request' && isDocsOnlyPr(base, head, paths),
+    darwin_unrelated: profile === 'code' && eventName === 'pull_request' && isDarwinUnrelatedPr(base, head, paths),
     dashboard: ci || rootDependencies || has(/^apps\/dashboard\//),
     api: ci || rootDependencies || companyPostgres || has(/^apps\/api\//),
     geoai: ci || rootDependencies || has(/^apps\/geoai\//),

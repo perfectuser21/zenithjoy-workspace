@@ -2,22 +2,26 @@
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {publicDomainAuthority,publicDomainScopeMatches} from './public-domain-authority.mjs';
+import {bindPublicCodePreflightLock,publicDomainAuthority,publicDomainScopeMatches} from './public-domain-authority.mjs';
 import {readFrozen} from './runtime-definition.mjs';
-import {startPublicCodePreflightIO} from './public-code-preflight-io.mjs';
+import {isCloudEpochSourceCompatibility} from './epoch-source-compatibility.mjs';
+import {PUBLIC_CODE_NATIVE_WORKER_MAX_MS,startPublicCodePreflightIO} from './public-code-preflight-io.mjs';
 import {startPreflightLocalLeaves} from './preflight-local-leaves.mjs';
 import {createPreflightPhoneDriver} from './preflight-phone-driver.mjs';
 import {captureCleanupReadback,verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
 import {collectionCleanupEvidence} from './collection-phone-scope.mjs';
 import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 const fail=reason=>Error('PUBLIC_CODE_PREFLIGHT_'+reason);
+const NATIVE_CLOSE_RESERVE_MS=10000;
 export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}={}){
  const dir=env?.WFR_RUN_DIR,formal=dir&&publicDomainAuthority(dir);
  if(!formal||!['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||!publicDomainScopeMatches(dir,{run:env.WFR_TAG,run_id:state?.run_id,task_id:state?.task_id,source_commit:state?.source_commit,profile:env.P,serial:env.SERIAL}))throw fail('ADMISSION');
  const frozen=readFrozen(dir),spec=frozen.discovery_phone_scope||frozen.collection_phone_scope,epoch=randomUUID();
  if(frozen.execution_mode!=='code'||!frozen.preflight_profile||!spec||!lease)throw fail('FROZEN');
  const sourceFiles=Object.fromEntries(Object.entries(frozen.files).filter(([p])=>p.startsWith('runtime/')).map(([p,h])=>[p.slice(8),h]));
- const rootLock=join(env.HOME,'.local/share/zenithjoy/phone-locks');let owned=false,unsafe=false,current=null,desktopProof=null,acquireAttempted=false;
+ const rootLock=join(env.HOME,'.local/share/zenithjoy/phone-locks'),lockPath=join(rootLock,env.SERIAL+'.lock');
+ const cloudSuccessor=isCloudEpochSourceCompatibility(frozen.epoch_source_compatibility);
+ let owned=false,unsafe=false,current=null,desktopProof=null,acquireAttempted=false,revokeLocalProof;
  const resourceUnknown=error=>{unsafe=true;state.executionUnknown=true;state.nativeStopUnproven=true;return Object.assign(error,{executionStopped:false,externalEffect:'unknown',resourceUnknown:true});};
  const lock=async(local,operation)=>{
   if(operation==='acquire')acquireAttempted=true;
@@ -25,17 +29,27 @@ export function createPublicCodePreflight({root,env,state,lease,onLocked=()=>{}}
   const path=join(spec.evidence_root,`${env.WFR_TAG}-lock-${operation}.json`);
   const r=JSON.parse(await local.run('lock',JSON.stringify({root:rootLock,serial:env.SERIAL,operation,owner:env.WFR_TAG,epoch,receipt:{path,run:env.WFR_TAG,profile:env.P,serial:env.SERIAL}})));
   if(r.owner!==env.WFR_TAG||r.epoch!==epoch||r.readback_owner!==(operation==='release'?'none':env.WFR_TAG))throw fail('LOCAL_LOCK');
-  if(operation==='acquire'){owned=true;onLocked(true);}if(operation==='release'){owned=false;onLocked(false);}return r;
+  if(operation==='acquire'){
+   owned=true;
+   if(cloudSuccessor)revokeLocalProof=bindPublicCodePreflightLock({runDirectory:dir,lockPath,frozen,epoch,receipt:r,
+    isActive:()=>owned&&!unsafe&&!state.executionUnknown&&['preflight','collect_videos','cleanup'].includes(state.currentActivity)});
+   onLocked(true);
+  }
+  if(operation==='release'){owned=false;revokeLocalProof?.();onLocked(false);}
+  return r;
   }catch(error){throw resourceUnknown(error);}
  };
  const releaseCentral=async()=>{try{return await lease.release();}catch(error){throw resourceUnknown(error);}};
  const assertLocal=()=>{try{if(!owned||readFileSync(join(rootLock,env.SERIAL+'.lock','owner'),'utf8').trim()!==env.WFR_TAG||readFileSync(join(rootLock,env.SERIAL+'.lock','preflight_epoch'),'utf8').trim()!==epoch)throw fail('OWNER_CHANGED');}catch(error){throw resourceUnknown(error);}};
  const perform=async(purpose,signal,body)=>{
   if(unsafe||current||state.executionUnknown)throw fail('PREVIOUS_UNKNOWN');
-  const deadline=Math.min(state.budgetDeadline,purpose==='cleanup'?formal.cleanup_deadline_ms:formal.deadline_ms);
-  if(!Number.isSafeInteger(deadline)||deadline<=Date.now()+10000)throw fail('BUDGET');
-  // Reserve protocol closure inside the original Activity budget, never 120s per shell tree.
-  let io,driver,result,error;const workerDeadlineMs=deadline-10000;
+  const now=Date.now();
+  // The nested native worker and its close reserve both fit within the Activity budget.
+  const deadline=Math.min(state.budgetDeadline,purpose==='cleanup'?formal.cleanup_deadline_ms:formal.deadline_ms,
+   now+PUBLIC_CODE_NATIVE_WORKER_MAX_MS+NATIVE_CLOSE_RESERVE_MS);
+  const workerDeadlineMs=deadline-NATIVE_CLOSE_RESERVE_MS;
+  if(!Number.isSafeInteger(deadline)||workerDeadlineMs<=now)throw fail('BUDGET');
+  let io,driver,result,error;
   try{
    current={purpose};io=await startPublicCodePreflightIO({root,env,frozen,state,lease,purpose,workerDeadlineMs,receiptDeadlineMs:deadline,signal,prepareLocal:local=>lock(local,purpose==='preflight'?'acquire':'refresh'),assertLocal});
    driver=createPreflightPhoneDriver({adb:io.adb,local:io.local,evidenceRoot:spec.evidence_root,owner:env.WFR_TAG,profile:env.P,serial:env.SERIAL,...frozen.preflight_profile,expectedAccount:spec.expected_account,deadlineMs:workerDeadlineMs,assertResources:async()=>{await io.assertResources();if(owned){if(readFileSync(join(rootLock,env.SERIAL+'.lock','owner'),'utf8').trim()!==env.WFR_TAG||readFileSync(join(rootLock,env.SERIAL+'.lock','preflight_epoch'),'utf8').trim()!==epoch)throw fail('OWNER_CHANGED');}},purpose,signal});

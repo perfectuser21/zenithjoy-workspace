@@ -10,7 +10,7 @@ import { AUTHORING_FILES } from '../../../../scripts/ci/authoring-source-version
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profiles = [
-  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules', 'docs_only'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
+  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules', 'docs_only', 'darwin_unrelated'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
   { name: 'runtime', file: 'ci-l4-runtime.yml', gate: 'l4-passed', routes: ['dashboard', 'api', 'agent', 'ci', 'staff_hub'], always: [] },
   { name: 'integration', file: 'ci-l4-integration.yml', gate: 'integration-gate', routes: ['api'], always: [] },
 ];
@@ -102,7 +102,7 @@ for (const p of profiles) {
       });
     }
   }
-  for (const route of p.routes.filter(route => route !== 'docs_only')) {
+  for (const route of p.routes.filter(route => !['docs_only', 'darwin_unrelated'].includes(route))) {
     test(`${p.name}: ${route} selection agrees with real workflow job conditions`, () => {
       const w = workflow(p);
       const outputs = Object.fromEntries(p.routes.map(k => [k, k === route ? 'true' : 'false']));
@@ -121,7 +121,7 @@ for (const p of profiles) {
   }
   test(`${p.name}: selected jobs must all succeed`, () => {
     const w = workflow(p);
-    const outputs = Object.fromEntries(p.routes.map(k => [k, String(k !== 'docs_only')]));
+    const outputs = Object.fromEntries(p.routes.map(k => [k, String(!['docs_only', 'darwin_unrelated'].includes(k))]));
     const jobs = Object.fromEntries(w.jobs[p.gate].needs.filter(k => k !== 'changes').map(k => [k, 'success']));
     assert.equal(gate(p, { outputs, jobs }).status, 0);
     for (const job of Object.keys(jobs)) for (const result of ['failure', 'cancelled', 'skipped', '']) {
@@ -181,7 +181,7 @@ for (const p of profiles) {
     const { head } = fixture(dir, 'apps/api/src/a.ts');
     const result = detect(p, dir, 'push', { before: '0'.repeat(40), after: head });
     assert.equal(result.status, 0, result.stderr);
-    for (const route of p.routes) assert.equal(result.outputs[route], String(route !== 'docs_only'));
+    for (const route of p.routes) assert.equal(result.outputs[route], String(!['docs_only', 'darwin_unrelated'].includes(route)));
   }));
   test(`${p.name}: neighboring paths do not select API`, () => temp(dir => {
     const { base, head } = fixture(dir, 'apps/api-old/src/a.ts');
@@ -398,6 +398,105 @@ test('code routing: other event types and PR checkout drift retain full coverage
   assert.equal(mismatch.outputs.docs_only, 'false');
 }));
 
+
+test('code routing: Dashboard source skips only the Darwin jobs with exact PR evidence', () => temp(dir => {
+  const dashboardPath = 'apps/dashboard/src/pages/Example.tsx';
+  const { base, head } = fixture(dir, dashboardPath, () => {
+    write(dir, dashboardPath, 'old UI\n');
+    for (const path of AUTHORING_FILES) write(dir, path, sourceBefore);
+  }, () => {
+    write(dir, '.dod-cp-example.md', 'verification\n');
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+  });
+  const event = { before: base, after: head, merge_group: { base_sha: base, head_sha: head }, pull_request: { base: { sha: base }, head: { sha: head } } };
+  const merge = git(dir, ['commit-tree', git(dir, ['rev-parse', head + '^{tree}']), '-p', base, '-p', head, '-m', 'Merge PR']);
+  git(dir, ['update-ref', 'refs/heads/change', merge]);
+  const workflowConfig = workflow(code);
+  const { status, stderr, outputs } = detect(code, dir, 'pull_request', event);
+  assert.equal(status, 0, stderr);
+  assert.equal(outputs.darwin_unrelated, 'true');
+  assert.equal(outputs.docs_only, 'false');
+  const jobs = Object.fromEntries(workflowConfig.jobs[code.gate].needs.filter(k => k !== 'changes').map(k => {
+    const condition = workflowConfig.jobs[k].if;
+    return [k, !condition || Function('needs', 'return (' + condition + ')')({ changes: { outputs } }) ? 'success' : 'skipped'];
+  }));
+  const macJobs = code.always.filter(job => workflowConfig.jobs[job]['runs-on'] === 'macos-latest');
+  assert.equal(macJobs.length, 6);
+  for (const job of macJobs) assert.equal(jobs[job], 'skipped', job);
+  assert.equal(gate(code, { outputs, jobs }).status, 0);
+  for (const job of ['dashboard-build', 'openclaw-scripts-test', 'api-scripts-test', 'security']) {
+    assert.equal(jobs[job], 'success', job);
+    assert.notEqual(gate(code, { outputs, jobs: { ...jobs, [job]: 'skipped' } }).status, 0);
+  }
+  for (const job of macJobs) {
+    for (const result of ['failure', 'cancelled', '']) assert.notEqual(gate(code, { outputs, jobs: { ...jobs, [job]: result } }).status, 0);
+    assert.notEqual(gate(code, { outputs, jobs, absentJobs: [job] }).status, 0);
+  }
+  assert.notEqual(gate(code, { outputs: { ...outputs, darwin_unrelated: 'false' }, jobs }).status, 0);
+  for (const eventName of ['push', 'merge_group']) {
+    assert.equal(detect(code, dir, eventName, event, eventName === 'merge_group' ? '' : 'main').outputs.darwin_unrelated, 'false');
+    assert.notEqual(gate(code, { outputs, jobs, eventName }).status, 0);
+  }
+  for (const invalid of [{ dashboard: 'false' }, { api: 'true' }, { ci: 'true' }, { docs_only: 'true' }]) {
+    assert.notEqual(gate(code, { outputs: { ...outputs, ...invalid }, jobs }).status, 0);
+  }
+  const advancedBase = git(dir, ['commit-tree', git(dir, ['rev-parse', base + '^{tree}']), '-p', base, '-m', 'Main advanced']);
+  assert.equal(detect(code, dir, 'pull_request', { pull_request: { base: { sha: advancedBase }, head: { sha: head } } }).outputs.darwin_unrelated, 'false');
+  git(dir, ['update-ref', 'refs/heads/change', base]);
+  assert.equal(detect(code, dir, 'pull_request', event).outputs.darwin_unrelated, 'false');
+}));
+
+test('code routing: standalone Dashboard CSS can skip Darwin', () => temp(dir => {
+  const { base, head } = fixture(dir, 'apps/dashboard/src/index.css');
+  const result = detect(code, dir, 'pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.outputs.darwin_unrelated, 'true');
+}));
+
+for (const path of [
+  'apps/dashboard/package.json',
+  'apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql',
+  'services/phone-adb-controller/phone-lock-root.py',
+  'scripts/ci/native-103-darwin-tests.mjs',
+  '.github/workflows/ci-l3-code.yml',
+  '.skills-source.json',
+  'package-lock.json',
+  'test-registry.yaml',
+  'docs/unrelated-but-unproven.md',
+]) {
+  test('code routing: the Dashboard shortcut keeps Darwin with ' + path, () => temp(dir => {
+    const { base, head } = fixture(dir, 'apps/dashboard/src/pages/Example.tsx', () => {}, () => write(dir, path, 'new\n'));
+    const result = detect(code, dir, 'pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.outputs.darwin_unrelated, 'false');
+  }));
+}
+
+for (const [name, change] of [
+  ['partial contract headers', dir => write(dir, AUTHORING_FILES[0], sourceAfter)],
+  ['contract body changes', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+    write(dir, AUTHORING_FILES[0], sourceAfter.replace('2.0.0', '2.0.1'));
+  }],
+  ['a symlink', (dir, path) => {
+    rmSync(join(dir, path));
+    symlinkSync('../README.md', join(dir, path));
+  }],
+  ['a mode change', (dir, path) => chmodSync(join(dir, path), 0o755)],
+  ['an unclassified side of a rename', (dir, path) => renameSync(join(dir, 'outside.tsx'), join(dir, path))],
+]) {
+  test('code routing: the Dashboard shortcut keeps Darwin with ' + name, () => temp(dir => {
+    const path = 'apps/dashboard/src/pages/Example.tsx';
+    const { base, head } = fixture(dir, path, () => {
+      write(dir, path, 'old UI\n');
+      write(dir, 'outside.tsx', 'outside\n');
+      for (const contract of AUTHORING_FILES) write(dir, contract, sourceBefore);
+    }, () => change(dir, path));
+    const result = detect(code, dir, 'pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.outputs.darwin_unrelated, 'false');
+  }));
+}
 
 test('code routing: workflow admission and independent security/patrol checks stay required', () => {
   const w = workflow(code);

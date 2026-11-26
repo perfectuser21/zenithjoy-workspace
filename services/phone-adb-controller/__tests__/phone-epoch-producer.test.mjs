@@ -21,3 +21,86 @@ test('post-leaf epoch drift preserves its real close facts and prevents any foll
 test('schema2 actual native client receives no Brain database or model credentials',{skip:process.platform!=='darwin'},async t=>{
  const f=await rig(t),p=await startCollectionLeafProducer({...f.options,env:{...f.options.env,BRAIN_INTERNAL_TOKEN:'fixture-only',DATABASE_URL:'fixture-only',OPENAI_API_KEY:'fixture-only'},assertAdmission:async()=>{}});t.after(()=>p.close());const reply=await f.call(p);assert.equal(reply.code,0,'private credentials must remain in the Code validator process');assert.equal((await p.seal()).complete,true);
 });
+
+async function requestLeaf(producer, argv, nonce=producer.env.WFR_COLLECTION_LEAF_NONCE){
+ return new Promise((resolve,reject)=>{
+  const socket=createConnection(producer.env.WFR_COLLECTION_LEAF_SOCKET);
+  let reply='';
+  socket.on('error',reject);
+  socket.on('connect',()=>socket.end(JSON.stringify({nonce,argv})));
+  socket.on('data',bytes=>reply+=bytes);
+  socket.on('end',()=>resolve(JSON.parse(reply)));
+ });
+}
+
+test('standalone local version keeps the native ledger and cannot connect or inherit the ADB route',{skip:process.platform!=='darwin'},async t=>{
+ const f=await rig(t),binary=f.options.policy.adb_bin;
+ writeFileSync(binary+'.c',`#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+int main(int argc,char **argv){
+ if(argc!=2||strcmp(argv[1],"version")||getenv("ADB_SERVER_SOCKET"))return 9;
+ int fd=socket(AF_INET,SOCK_STREAM,0);
+ if(fd<0){if(errno!=EPERM&&errno!=EACCES)return 10;}
+ else {
+  struct sockaddr_in address={.sin_family=AF_INET,.sin_port=htons(1),.sin_addr={.s_addr=htonl(INADDR_LOOPBACK)}};
+  if(connect(fd,(void*)&address,sizeof(address))==0||(errno!=EPERM&&errno!=EACCES))return 11;
+ }
+ puts("Android Debug Bridge version 1.0.41");return 0;
+}`);
+ const cc=spawnSync('cc',[binary+'.c','-o',binary],{encoding:'utf8'});assert.equal(cc.status,0,cc.stderr);
+ f.options.policy.adb_sha256=createHash('sha256').update(readFileSync(binary)).digest('hex');
+ let guarded=0,local=0;
+ const producer=await startCollectionLeafProducer({...f.options,
+  assertAdmission:async()=>{guarded++;},
+  beginLocalVersion:()=>({deadlineMs:f.options.deadlineMs,assertActive:()=>{local++;}}),
+ });
+ t.after(()=>producer.close());
+ const result=await requestLeaf(producer,['version']);
+ assert.equal(result.code,0,JSON.stringify(result));
+ assert.equal(Buffer.from(result.stdout,'base64').toString(),'Android Debug Bridge version 1.0.41\n');
+ assert.equal(guarded,0);
+ assert.equal(local,2);
+ const sealed=await producer.seal();
+ assert.equal(sealed.complete,true);
+ assert.equal(sealed.leaves.length,1);
+ assert.equal(sealed.leaves[0].argv_sha256,createHash('sha256').update(JSON.stringify(['version'])).digest('hex'));
+});
+
+for(const revokedAt of [1,2]){
+ test(`standalone local version does not affect actual device guard rejection at check ${revokedAt}`,{skip:process.platform!=='darwin'},async t=>{
+  const f=await rig(t);let guarded=0,beforeDevice=0;
+  const producer=await startCollectionLeafProducer({...f.options,
+   assertAdmission:async()=>{
+    assert.equal(beforeDevice,2);
+    if(++guarded===revokedAt)throw Object.assign(Error('EPOCH_FIXTURE_LOST'),{epochFenceLost:true});
+   },
+   beginLocalVersion:()=>({deadlineMs:f.options.deadlineMs,assertActive:()=>{beforeDevice++;}}),
+  });
+  t.after(()=>producer.close());
+  assert.equal((await requestLeaf(producer,['version'])).code,0);
+  assert.equal(readFileSync(f.marker,'utf8'),'called\n');
+  assert.equal((await f.call(producer)).ok,false);
+  assert.equal((await f.call(producer)).ok,false);
+  assert.equal(guarded,revokedAt);
+  const sealed=await producer.seal();
+  assert.equal(sealed.epoch_fence_lost,true);
+  assert.equal(sealed.leaves.length,revokedAt);
+  assert.equal(readFileSync(f.marker,'utf8'),'called\n'.repeat(revokedAt));
+ });
+}
+
+test('standalone local version still rejects a wrong IPC nonce before a native launch',{skip:process.platform!=='darwin'},async t=>{
+ const f=await rig(t);let guarded=0;
+ const producer=await startCollectionLeafProducer({...f.options,assertAdmission:async()=>{guarded++;},
+  beginLocalVersion:()=>({deadlineMs:f.options.deadlineMs,assertActive:()=>{guarded++;}}),
+ });
+ t.after(()=>producer.close());
+ assert.equal((await requestLeaf(producer,['version'],'0'.repeat(48))).ok,false);
+ assert.equal((await producer.seal()).leaves.length,0);
+ assert.equal(existsSync(f.marker),false);
+ assert.equal(guarded,0);
+});
