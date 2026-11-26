@@ -142,17 +142,32 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   const result=await execute(join(root,'douyin-phone-adb'),['--profile',scope.profile,op,...args],{env,timeoutMs:360000});
   if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code});return result;
  };
- const guard=async({cleanup=false}={})=>{
+ const phaseDeadline=cleanup=>cleanup?identity.cleanup_deadline_ms:identity.deadline_ms;
+ const checkHost=cleanup=>{
   if(unknown)fail('HOST_REVOKED');if(closing&&!cleanup)fail('CLOSING');
   // 截止前置拒绝尚未调用provider，不因此撤销可用的收尾能力。
-  const deadlineMs=cleanup?identity.cleanup_deadline_ms:identity.deadline_ms;
-  if(Date.now()>=deadlineMs)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
+  if(Date.now()>=phaseDeadline(cleanup))fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
+ };
+ const readActiveSnapshot=()=>{
+  if(present(unknownPath)){revoke('EXISTING_REVOCATION');fail('HOST_REVOKED');}
+  if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}
+  const actual=readFrozen(dir);if(actual.snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');
+  return actual;
+ };
+ const guard=async({cleanup=false}={})=>{
+  checkHost(cleanup);
   try{
-   if(present(unknownPath)){revoke('EXISTING_REVOCATION');fail('HOST_REVOKED');}
-   if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}
-   const actual=readFrozen(dir);if(actual.snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');
-   return await (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:actual,env,readBudget:{deadlineMs}});
+   return await (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:readActiveSnapshot(),env,readBudget:{deadlineMs:phaseDeadline(cleanup)}});
   }catch(error){if(!unknown)revoke('ADMISSION_REJECTED');throw error;}
+ };
+ const beginLocalVersion=()=>{
+  const cleanup=cleanupActive;
+  return {deadlineMs:phaseDeadline(cleanup),assertActive(){
+   if(cleanup!==cleanupActive)fail('VERSION_PHASE_CHANGED');
+   checkHost(cleanup);
+   try{readActiveSnapshot();}catch(error){if(!unknown)revoke('ADMISSION_REJECTED');throw error;}
+   checkHost(cleanup);
+  }};
  };
  const close=()=>{
   if(closingPromise)return closingPromise;closing=true;
@@ -192,7 +207,11 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   local=true;const acquired=await controller('lock-acquire-new',[scope.run_tag]),acquiredStates=acquired.stdout.split('\n').filter(s=>s.startsWith('lock='));
   if(acquiredStates.length!==1||acquiredStates[0]!==`lock=acquired owner=${scope.run_tag}`)fail('ACQUIRE_READBACK');
   await guard();
-  leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({directory:join(dir,'standalone-leaves'),policy:phoneScope.policy,serial:scope.serial,deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,env,assertAdmission:()=>guard({cleanup:cleanupActive})});Object.assign(env,leaf.env);
+  leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({
+   directory:join(dir,'standalone-leaves'),policy:phoneScope.policy,serial:scope.serial,
+   deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,
+   env,assertAdmission:()=>guard({cleanup:cleanupActive}),beginLocalVersion,
+  });Object.assign(env,leaf.env);
   const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
   const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>cleanupActive}),assertAuthority=()=>guard();
   const phone=collection?async input=>{
