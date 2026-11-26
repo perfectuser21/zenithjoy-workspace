@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fetchPipelines, runPipeline, fetchWorkerCapability } from '../pipeline.api'
-import { createTopic, getPacingConfig, publishTopicNow, type Topic } from '../topics.api'
+import { publishTopicNow, type Topic } from '../topics.api'
 
 afterEach(() => vi.unstubAllGlobals())
 const response = (body: unknown, ok = true) => ({ok, json:async()=>body})
@@ -11,18 +11,6 @@ describe('local content handoff API', () => {
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response([{id:'old',topic:'旧图文',content_type:'post',status:'pending',created_at:'2026-11-14'}])))
     const [run] = await fetchPipelines()
     expect(run).toMatchObject({id:'old',title:'旧图文',status:'queued',payload:{content_type:'post'}})
-  })
-  it('uses the same-origin employee session for topics and pacing', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response({ success: true, data: topic }))
-      .mockResolvedValueOnce(response({ success: true, data: { daily_limit: 1 } }))
-    vi.stubGlobal('fetch', fetchMock)
-    expect(await createTopic({ title: topic.title })).toEqual(topic)
-    expect(await getPacingConfig()).toEqual({ daily_limit: 1 })
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/content-factory/topics',
-      expect.objectContaining({ credentials: 'same-origin', method: 'POST' }))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/content-factory/topics/pacing/config',
-      expect.objectContaining({ credentials: 'same-origin' }))
   })
   it('takes a valid pending registration envelope without declaring it running', async () => {
     const fetchMock=vi.fn().mockResolvedValue(response({success:true,data:{id:'p1',status:'pending',cecelia_task_id:'task1'}}))

@@ -489,12 +489,20 @@ tests:
     note: "Topics CRUD 路由单元测试（mock DB + internal-auth 鉴权）— 彻底重构 PR-a"
 
   - id: api-content-factory-topics-session
-    path: apps/api/tests/content-factory-topics.test.ts
+    path: apps/api/src/routes/content-factory-topics.test.ts
     type: unit
     ci: L3
     status: active
     product: 新媒体运营
     note: "内容工厂选题共享池的员工会话、同源写入、草稿读回和旧 worker 鉴权回归。"
+
+  - id: dashboard-content-factory-topics-session
+    path: apps/dashboard/src/api/__tests__/topics.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: 选题和节奏配置使用同站员工会话。
 
   - id: api-pacing-config-route
     path: apps/api/tests/pacing-config.test.ts

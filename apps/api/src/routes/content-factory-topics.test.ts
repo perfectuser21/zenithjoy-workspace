@@ -2,13 +2,13 @@ import request from 'supertest';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 const { getSession, query } = vi.hoisted(() => ({ getSession: vi.fn(), query: vi.fn() }));
-vi.mock('../src/auth', () => ({
+vi.mock('../auth', () => ({
   AUTH_TRUSTED_ORIGINS: ['https://compat.example.test'],
   auth: { handler: vi.fn(), api: { getSession } },
 }));
-vi.mock('../src/db/connection', () => ({ default: { query } }));
+vi.mock('../db/connection', () => ({ default: { query } }));
 
-import app from '../src/app';
+import app from '../app';
 
 const route = '/api/content-factory/topics';
 const staffEmail = 'employee@example.test';
