@@ -2,9 +2,8 @@
 # Staff Hub Staging — 员工前端候选环境（对齐 apps/api 已有的
 # docker-compose.staging-api.yml / docker-compose.prod-api.yml 分离模式）。
 #
-#   push main（apps/staff-hub/** 或 deploy/staff-hub/**）→ deploy-staff-hub-staging.yml
+#   Staff Hub 常规预发已退役（2026-11-26）。保留本配置供历史回溯。
 #   自动 rsync + docker compose up 到本容器，绝不碰生产 staff-hub（deploy/docker-compose.hk.yml）。
-#   生产更新走人工闸门 promote-staff-hub-prod-hk.yml（workflow_dispatch）。
 #
 #   /api/ 代理目标是 zenithjoy-api-staging（见 common-staging.conf），
 #   跟生产 staff-hub 代理 zenithjoy-api-prod 物理隔离。

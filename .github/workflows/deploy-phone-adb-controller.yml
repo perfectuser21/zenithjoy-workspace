@@ -4,8 +4,7 @@ name: Deploy phone-adb-controller to mmv+xian-m4
 # Pilot仅证明登记回归；自动事件只准备独立候选，不切生产。
 # 显式promote必须带同SHA真实候选run IDs，Brain逐项对账后才写正式根。
 #
-# 连接模式完全复用 deploy-us-vps.yml / promote-prod-hk.yml 已验证过的
-# tailscale/github-action + SSH 到 mmv，不新建任何连接通道。
+# 通过 Tailscale 和 SSH 连接 mmv，再由 mmv 访问另一台主机。
 # mmv 自己已配置好到 xian-m4 的 SSH 别名，deploy.sh 从 mmv 上跑就能推两机。
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -79,9 +78,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           IMPLEMENTATION_RUN_ID: ${{ inputs.implementation_run_id || github.event.workflow_run.id }}
+          IMPLEMENTATION_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'candidate' }}
-        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA" "$DEPLOY_MODE"
+        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA" "$DEPLOY_MODE" "$IMPLEMENTATION_RUN_ATTEMPT"
       - name: 接入 Tailscale
         uses: tailscale/github-action@v3
         with:

@@ -1,4 +1,6 @@
 name: Promote staff-hub to Production (verified candidate)
+
+# Staff Hub 常规生产发布已退役（2026-11-26）。GitHub 状态为 disabled_manually，保留原流程供历史回溯。
 on:
   workflow_dispatch:
     inputs:

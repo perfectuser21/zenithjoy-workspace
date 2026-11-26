@@ -82,6 +82,16 @@ test('完整发布本地兼容入口仅允许被调用，固定工具、同SHA�
  assert.ok(steps.some(s=>s.run?.includes('--snapshot "$PWD/snapshot/head.json"')));
  assert.ok(w.jobs.snapshot.steps.some(s=>s.run?.includes('.snapshot.status == "verified" and (.snapshot.gaps | length == 0)')));
 });
+test('发布产物按 attempt 命名，verify 下载其 snapshot 依赖实际使用的 attempt',()=>{
+ const {snapshot,verify}=regression().jobs;
+ const uploadSnapshot=snapshot.steps.find(s=>s.uses==='actions/upload-artifact@v4');
+ const downloadSnapshot=verify.steps.find(s=>s.uses==='actions/download-artifact@v4');
+ const uploadReport=verify.steps.find(s=>s.uses==='actions/upload-artifact@v4');
+ assert.equal(uploadReport.with.name,'pilot-release-verification-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}-attempt-${{ github.run_attempt }}');
+ assert.equal(uploadSnapshot.with.name,'pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}-attempt-${{ github.run_attempt }}');
+ assert.equal(snapshot.outputs.run_attempt,'${{ github.run_attempt }}');
+ assert.equal(downloadSnapshot.with.name,'pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}-attempt-${{ needs.snapshot.outputs.run_attempt }}');
+});
 test('真实工作流转换保持大型快照完整且紧凑，避免漂亮格式越过原4MiB文件上限',()=>{
  const snapshot={status:'verified',items:Array.from({length:90000},(_,id)=>({id,value:'abcdefghijklmnop'}))};
  const limit=4*1024*1024;

@@ -2,13 +2,60 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { gates } from './required-gate.mjs';
+import { AUTHORING_FILES, greaterVersion } from './authoring-source-version.mjs';
+
+// This document is linked from the controller README and has no runtime readers.
+const standaloneDocs = new Set(['docs/android-rpa-execution-modes.md']);
+const authoring = new Set(AUTHORING_FILES);
+const versionHeader = /^(  "version": ")([0-9.]+)(",\r?)$/m;
 
 const zero = '0'.repeat(40);
-function git(...args) { return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); }
+function gitBuffer(...args) { return execFileSync('git', args, { maxBuffer: 64 * 1024 * 1024 }); }
+function git(...args) { return gitBuffer(...args).toString('utf8'); }
 function commit(sha, label) {
   if (typeof sha !== 'string' || !/^[a-fA-F0-9]{40}$/.test(sha) || sha === zero) throw new Error(`Invalid ${label} SHA`);
   git('cat-file', '-e', `${sha}^{commit}`);
   return sha;
+}
+
+function isVersionHeaderBump(oldBlob, newBlob) {
+  const oldBytes = gitBuffer('cat-file', 'blob', oldBlob);
+  const newBytes = gitBuffer('cat-file', 'blob', newBlob);
+  try {
+    const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+    const before = decoder.decode(oldBytes);
+    const after = decoder.decode(newBytes);
+    const oldHeader = versionHeader.exec(before);
+    const newHeader = versionHeader.exec(after);
+    if (!oldHeader || !newHeader) return false;
+    const oldVersion = oldHeader[2];
+    const newVersion = newHeader[2];
+    return JSON.parse(before).version === oldVersion && JSON.parse(after).version === newVersion &&
+      greaterVersion(newVersion, oldVersion) &&
+      Buffer.from(before.replace(versionHeader, (_, prefix, _version, suffix) => prefix + newVersion + suffix)).equals(newBytes);
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof TypeError || error.message === 'AUTHORING_SOURCE_VERSION_INVALID') return false;
+    throw error;
+  }
+}
+
+function isDocsOnlyPr(base, head, paths) {
+  if (!paths.some(path => standaloneDocs.has(path)) || paths.some(path => !standaloneDocs.has(path) && !authoring.has(path))) return false;
+  const bumps = paths.filter(path => authoring.has(path)).length;
+  if (bumps !== 0 && bumps !== AUTHORING_FILES.length) return false;
+
+  // L2 compares against the current PR base and tests run on the checkout tree.
+  if (git('merge-base', base, head).trim() !== base) return false;
+  if (git('rev-parse', 'HEAD^{tree}') !== git('rev-parse', `${head}^{tree}`)) return false;
+
+  const records = git('diff', '--raw', '--abbrev=40', '-z', '--no-renames', '--ignore-submodules=none', base, head, '--').split('\0');
+  if (records.length !== paths.length * 2 + 1 || records.at(-1) !== '') throw new Error('Invalid raw PR diff');
+  for (let i = 0; i < records.length - 1; i += 2) {
+    const path = records[i + 1];
+    const match = /^:100644 100644 ([a-f0-9]{40}) ([a-f0-9]{40}) M$/.exec(records[i]);
+    if (!match || (!standaloneDocs.has(path) && !(authoring.has(path) && isVersionHeaderBump(match[1], match[2])))) return false;
+  }
+  return true;
 }
 
 export function detectChanges(profile, eventName, event) {
@@ -19,7 +66,7 @@ export function detectChanges(profile, eventName, event) {
   if (eventName === 'push') {
     head = commit(event.after, 'push head');
     // A branch creation has no base commit; run every check rather than guess a diff.
-    if (event.before === zero) return Object.fromEntries(contract.routes.map(route => [route, 'true']));
+    if (event.before === zero) return Object.fromEntries(contract.routes.map(route => [route, String(route !== 'docs_only')]));
     base = commit(event.before, 'push base');
     range = [base, head];
   } else if (eventName === 'pull_request') {
@@ -46,6 +93,7 @@ export function detectChanges(profile, eventName, event) {
   const wechatCs = ci || rootDependencies || has(/^(?:services\/wechat-cs-android\/|apps\/api\/)/);
   const apiOrDashboard = has(/^apps\/(?:api|dashboard)\//);
   const selected = {
+    docs_only: profile === 'code' && eventName === 'pull_request' && isDocsOnlyPr(base, head, paths),
     dashboard: ci || rootDependencies || has(/^apps\/dashboard\//),
     api: ci || rootDependencies || companyPostgres || has(/^apps\/api\//),
     geoai: ci || rootDependencies || has(/^apps\/geoai\//),
