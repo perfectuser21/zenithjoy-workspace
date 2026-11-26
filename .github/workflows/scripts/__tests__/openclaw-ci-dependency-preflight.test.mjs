@@ -6,19 +6,19 @@ import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 const workflow=YAML.parse(readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8'));
-const ids=['openclaw-apt-index','openclaw-os-packages','openclaw-pillow'];
+const ids=['openclaw-os-packages','openclaw-pillow'];
 function setup(w=workflow){return ids.map(id=>w.jobs['openclaw-scripts-test'].steps.find(s=>s.id===id));}
 function validate(w){
  assert.equal(w.jobs['openclaw-scripts-test']['timeout-minutes'],10);
  for(const [i,s] of setup(w).entries()){
   assert.ok(s,`missing separately visible dependency phase ${ids[i]}`);
-  assert.equal(s['timeout-minutes'],i===1?6:2);assert.equal(s['continue-on-error'],undefined);assert.equal(s.if,undefined);
-  assert.match(s.run,/PREFLIGHT_START/);assert.match(s.run,/PREFLIGHT_DONE/);assert.match(s.run,new RegExp('timeout '+[90,300,60][i]+'s '));
+  assert.equal(s['timeout-minutes'],i===0?6:2);assert.equal(s['continue-on-error'],undefined);assert.equal(s.if,undefined);
+  assert.match(s.run,/PREFLIGHT_START/);assert.match(s.run,/PREFLIGHT_DONE/);assert.match(s.run,new RegExp('timeout '+[300,60][i]+'s '));
  }
- assert.match(setup(w)[0].run,/apt-get.*update/);assert.match(setup(w)[1].run,/for pair in zsh:zsh xmllint:libxml2-utils ffmpeg:ffmpeg/);assert.match(setup(w)[1].run,/prepare-openclaw-os-packages\.sh.*"\$\{missing\[@\]\}"/);
- assert.match(setup(w)[2].run,/pip install.*Pillow/);
+ assert.match(setup(w)[0].run,/for pair in zsh:zsh xmllint:libxml2-utils ffmpeg:ffmpeg/);assert.match(setup(w)[0].run,/prepare-openclaw-os-packages\.sh --runner-sources .*"\$\{missing\[@\]\}"/);
+ assert.match(setup(w)[1].run,/pip install.*Pillow/);
 }
-test('依赖准备拆成可定位有界三阶段，原10分钟和全量门禁保持',()=>validate(workflow));
+test('依赖准备保留有界系统包与Pillow阶段，原10分钟和全量门禁保持',()=>validate(workflow));
 function invoke(t,failed='',present=[],broken='',expired=false){
  validate(workflow);const top=mkdtempSync(join(tmpdir(),'ci-dependency-preflight-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const trace=join(top,'trace');
@@ -27,7 +27,7 @@ function invoke(t,failed='',present=[],broken='',expired=false){
  put('env','exec /usr/bin/env "$@"');
  const source=join(top,'ubuntu.sources'),mirrors=join(top,'apt-mirrors.txt');
  writeFileSync(source,'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates noble-backports\nComponents: main universe restricted multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n');writeFileSync(mirrors,'https://archive.ubuntu.com/ubuntu/\n');
- put('bash','script=$1; shift; shift 3; exec /bin/bash "$script" "$DEPENDENCY_BIN" "$DEPENDENCY_SOURCE" "$DEPENDENCY_MIRRORS" "$@"');
+ put('bash','script=$1; mode=$2; shift 5; exec /bin/bash "$script" "$mode" "$DEPENDENCY_BIN" "$DEPENDENCY_SOURCE" "$DEPENDENCY_MIRRORS" "$@"');
  put('apt-get',`printf "apt %s\\n" "$*" >> "$DEPENDENCY_TRACE"
  case "$*" in *update*) phase=apt-index;; *) phase=os-packages;; esac
  [ "$DEPENDENCY_FAILED" != "$phase" ] || exit 43
@@ -52,10 +52,20 @@ function invoke(t,failed='',present=[],broken='',expired=false){
  }
  return {status,output,trace:readFileSync(trace,'utf8')};
 }
-test('实际阶段命令包含所有原依赖，成功才发DONE',t=>{const r=invoke(t);assert.equal(r.status,0,r.output);assert.match(r.trace,/apt .*update/);assert.match(r.trace,/apt .*install.*zsh libxml2-utils ffmpeg/);assert.match(r.trace,/pip install.*Pillow/);assert.equal((r.output.match(/PREFLIGHT_DONE/g)||[]).length,3);});
-for(const [i,phase] of ['apt-index','os-packages','pillow'].entries())test('依赖失败保留精确阶段且不执行后续：'+phase,t=>{const r=invoke(t,phase);assert.equal(r.status,43,r.output);assert.equal((r.output.match(/PREFLIGHT_START/g)||[]).length,i+1);assert.equal((r.output.match(/PREFLIGHT_DONE/g)||[]).length,i);});
+test('实际阶段命令包含所有原依赖，成功才发DONE',t=>{const r=invoke(t);assert.equal(r.status,0,r.output);assert.match(r.trace,/apt .*update/);assert.match(r.trace,/apt .*install.*zsh libxml2-utils ffmpeg/);assert.match(r.trace,/pip install.*Pillow/);assert.equal((r.output.match(/PREFLIGHT_DONE/g)||[]).length,2);});
+for(const [phase,finished] of [['apt-index',0],['os-packages',0],['pillow',1]])test('依赖失败保留精确阶段且不执行后续：'+phase,t=>{
+ const r=invoke(t,phase);
+ assert.equal(r.status,43,r.output);
+ assert.equal((r.output.match(/PREFLIGHT_DONE/g)||[]).length,finished);
+ if(phase==='apt-index'){
+  assert.match(r.output,/PREFLIGHT_APT_STAGE original-index start/);
+  assert.doesNotMatch(r.trace,/^apt .* install /m);
+ }
+ if(phase==='os-packages')assert.match(r.output,/PREFLIGHT_APT_STAGE original-install start/);
+ if(phase!=='pillow')assert.doesNotMatch(r.output,/PREFLIGHT_START pillow/);
+});
 test('准备阶段缺失/放行失败/扩大总时限仍被守卫拒绝',()=>{
- for(const mutate of [w=>{w.jobs['openclaw-scripts-test']['timeout-minutes']=11;},w=>{w.jobs['openclaw-scripts-test'].steps=w.jobs['openclaw-scripts-test'].steps.filter(s=>s.id!==ids[0]);},w=>{setup(w)[1]['continue-on-error']=true;}]){const w=structuredClone(workflow);mutate(w);assert.throws(()=>validate(w));}
+ for(const mutate of [w=>{w.jobs['openclaw-scripts-test']['timeout-minutes']=11;},w=>{w.jobs['openclaw-scripts-test'].steps=w.jobs['openclaw-scripts-test'].steps.filter(s=>s.id!==ids[0]);},w=>{setup(w)[0]['continue-on-error']=true;}]){const w=structuredClone(workflow);mutate(w);assert.throws(()=>validate(w));}
 });
 
 test('已有ffmpeg不重复下载其依赖，确实缺zsh/xmllint仍安装',t=>{const r=invoke(t,'',['ffmpeg']);assert.equal(r.status,0,r.output);const install=r.trace.split('\n').find(l=>l.startsWith('apt ')&&l.includes(' install '));assert.ok(install);assert.match(install,/zsh libxml2-utils/);assert.doesNotMatch(install,/\bffmpeg\b/);});
@@ -65,8 +75,9 @@ test('install请求超时20秒/失败文件仅重试1次，外层限定300秒',t
 test('PATH可找到但真实工具不可执行时硬失败，不发OS完成或进Pillow',t=>{const r=invoke(t,'',['zsh','xmllint','ffmpeg'],'ffmpeg');assert.equal(r.status,44,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);});
 test('安装失败前也保留三工具实际已有路径/缺失证据',t=>{const r=invoke(t,'os-packages',['ffmpeg']);assert.equal(r.status,43,r.output);assert.match(r.output,/PREFLIGHT_TOOL ffmpeg existing_path=\S+/);assert.match(r.output,/PREFLIGHT_TOOL zsh existing_path=missing/);assert.match(r.output,/PREFLIGHT_TOOL xmllint existing_path=missing/);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages/);});
 
-test('仅OS安装采用300秒外层与6分钟step，job和其余阶段预算保持',()=>{const steps=setup();assert.equal(steps[1]['timeout-minutes'],6);assert.match(steps[1].run,/timeout 300s /);assert.equal(workflow.jobs['openclaw-scripts-test']['timeout-minutes'],10);assert.equal(steps[0]['timeout-minutes'],2);assert.equal(steps[2]['timeout-minutes'],2);});
+test('仅OS安装采用300秒外层与6分钟step，job和其余阶段预算保持',()=>{const steps=setup();assert.equal(steps[0]['timeout-minutes'],6);assert.match(steps[0].run,/timeout 300s /);assert.equal(workflow.jobs['openclaw-scripts-test']['timeout-minutes'],10);assert.equal(steps[1]['timeout-minutes'],2);});
 test('实际bash中OS外层300秒耗尽仍硬失败且不执行Pillow/测试',t=>{const r=invoke(t,'',[], '',true);assert.equal(r.status,124,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);assert.match(r.trace,/timeout 300s bash .*prepare-openclaw-os-packages/);});
+
 test('缺工具时同一签名runner来源只刷新一次并为其安装，已有工具时完全跳过APT',t=>{
  const missing=invoke(t,'',['zsh','ffmpeg']);
  assert.equal(missing.status,0,missing.output);

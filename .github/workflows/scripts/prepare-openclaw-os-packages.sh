@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# The caller owns the single 300s deadline. No host sources or network settings change.
+# The caller owns the deadline. No host sources or network settings change.
+runner_sources=false
+if [[ ${1:-} == --runner-sources ]]; then
+  runner_sources=true
+  shift
+fi
 temp_root=$1 source_file=$2 mirror_file=$3
 shift 3
 stage() {
@@ -51,11 +56,18 @@ pathlib.Path(sys.argv[2]).write_text('\n\n'.join(blocks)+'\n')
 pathlib.Path(sys.argv[3]).write_text('\n\n'.join(original)+'\n')
 PY
 /bin/chmod 0644 "$work/ubuntu.sources" "$work/original.sources"
-echo 'PREFLIGHT_APT_CONFIG selected-official-sources'
-/bin/cat "$work/ubuntu.sources"
 opts=(-o DPkg::Lock::Timeout=20 -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
 isolated=(-o "Dir::Etc::sourcelist=$work/ubuntu.sources" -o Dir::Etc::sourceparts=- -o "Dir::State::lists=$work/lists")
 original_isolated=(-o "Dir::Etc::sourcelist=$work/original.sources" -o Dir::Etc::sourceparts=- -o "Dir::State::lists=$work/original-lists")
+# Use the runner's regional mirror preferences for both signed metadata and packages.
+if "$runner_sources"; then
+  stage original-index sudo env LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" -o APT::Update::Error-Mode=any update
+  stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" --no-remove install -y "$@"
+  echo 'PREFLIGHT_APT_DONE'
+  exit 0
+fi
+echo 'PREFLIGHT_APT_CONFIG selected-official-sources'
+/bin/cat "$work/ubuntu.sources"
 # Keep the image cache as diagnosis, never compare it with a freshly fetched index.
 stage cached-plan sudo env LC_ALL=C apt-get --simulate "${opts[@]}" install "$@" > "$work/cached.plan"
 echo 'PREFLIGHT_APT_CACHED_PLAN_BEGIN'
