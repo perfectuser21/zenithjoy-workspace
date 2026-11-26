@@ -11,6 +11,7 @@ import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMat
 import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment,verifyCloudEpochSuccessorProjection} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {runDiagnostic,readDiagnosticProof} from './device-epoch-fence-diagnostics.mjs';
+import {openFastAdbDaemonObservation} from './fast-adb-daemon-observation.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,sha=b=>createHash('sha256').update(b).digest('hex');
 const need=(v,c)=>{if(!v)throw Object.assign(new Error(c),{code:c});},same=(a,b)=>canonical(a)===canonical(b),phone=f=>f.discovery_phone_scope??f.collection_phone_scope,identity=f=>f.standalone_skill??f.public_domain;
 function preserveVerifierDiagnostic(runDir,frozen,error){
@@ -144,6 +145,7 @@ export async function readEpochDeviceIdentity({query, scope, directory, readBudg
 
 export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includeCurrentAuthority=false}={}){
  let stage='scope';
+ let daemonObservation;
  try{
  const spec=phone(frozen);if(spec?.policy?.schema_version===1)return {applicable:false};need(spec?.policy?.schema_version===2&&root===here&&realpathSync(root)===root&&typeof env?.WFR_RUN_DIR==='string'&&resolve(env.WFR_RUN_DIR)===env.WFR_RUN_DIR,'EPOCH_ADMISSION_SCOPE');
  stage='frozen';const current=readFrozen(env.WFR_RUN_DIR);need(same(current,frozen),'EPOCH_FROZEN_DRIFT');stage='record';const ref=spec.policy_binding?.epoch_fence;need(ref?.protocol==='device-epoch-fence-reference/v1'&&uuid.test(ref.epoch_id||'')&&ref.path===join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',spec.serial,ref.epoch_id+'.json'),'EPOCH_FROZEN_REFERENCE');const raw=recordBytes(ref.path);need(sha(raw)===ref.sha256,'EPOCH_RECORD_DIGEST');const record=validateEpochRecord(JSON.parse(raw),epochCompatibilityRecordScope(frozen));need(record.epoch_id===ref.epoch_id,'EPOCH_REFERENCE_ID');
@@ -178,6 +180,10 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  stage='source';const source=reviewSource({includeCloudIssuer:cloud});if(compatibilityRef)verifyEpochSourceCompatibility({frozen,record,recordSha256:sha(raw),source,reviewTask:initial.compatibilityReview,developmentTask:initial.compatibilityDevelopment});
  stage='initial_old_daemon';
  let readDaemon=readBoundAdbDaemon;
+ if(cloudSuccessor){
+  daemonObservation=openFastAdbDaemonObservation({python:spec.executables.python,frozen,deadlineMs:readBudget?.deadlineMs});
+  readDaemon=daemonObservation.read;
+ }
  if(clean){
   const bindingRoot=join(userInfo().homedir,'.local/share/zenithjoy/phone-candidates',record.runtime_source.commit,'runtime');
   for(const [name,hash] of Object.entries(record.migration.binding_sha256))need(sha(bytes(join(bindingRoot,name)))===hash,'EPOCH_SOURCE_POLICY');
@@ -220,6 +226,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
  stage='final_old_daemon';await readDaemon(record.old_route);
  stage='final_new_daemon';await readDaemon(record.new_route);
+ if(daemonObservation){await daemonObservation.close(true);daemonObservation=undefined;}
  stage='final_record_policy';need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
  if(clean)need(readYueshengEpochCompletion(record)===cleanCompletionSha256,'EPOCH_ADMISSION_DRIFT');
  if(cloud)need(same(readCloudExistingEpochCompletion(record),cloudCompletion),'EPOCH_ADMISSION_DRIFT');
@@ -230,6 +237,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  if(cloudSuccessor&&includeCurrentAuthority)return {...proof,currentAuthority:{task:fresh.task,central:fresh.central}};
  return proof;
  }catch(error){throw admissionFailure(error,stage);}
+ finally{if(daemonObservation)await daemonObservation.close(false);}
 }
 export async function main(args){
  need(args.length===3&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');const runDir=args[2];let frozen;
