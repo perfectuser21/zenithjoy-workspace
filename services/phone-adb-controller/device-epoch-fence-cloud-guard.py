@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hold one existing hard-linked phone guard while the parent checks the epoch."""
+"""Hold the existing durable phone guard while the parent checks the epoch."""
 
 import fcntl
 import json
@@ -15,20 +15,30 @@ def check(condition):
         raise ValueError('CLOUD_FENCE_LOCAL_GUARD')
 
 
+def directory_identity(path, private=False):
+    info = path.lstat()
+    check(path.resolve(strict=True) == path and stat.S_ISDIR(info.st_mode)
+          and info.st_uid == os.getuid() and not info.st_mode & 0o022
+          and (not private or stat.S_IMODE(info.st_mode) == 0o700))
+    return (info.st_dev, info.st_ino)
+
+
+def guard_identity(base, serial, links):
+    check(not os.path.lexists(base / (serial + '.lock')))
+    info = (base / (serial + '.guard')).lstat()
+    check(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600
+          and info.st_uid == os.getuid() and info.st_nlink == links and info.st_size == 0)
+    return (info.st_dev, info.st_ino)
+
+
 def snapshot(root, legacy, serial):
-    facts = []
-    for base in (root, legacy):
-        info = base.lstat()
-        check(base.resolve(strict=True) == base and stat.S_ISDIR(info.st_mode)
-              and info.st_uid == os.getuid() and not info.st_mode & 0o022
-              and (base != root or stat.S_IMODE(info.st_mode) == 0o700))
-        check(not os.path.lexists(base / (serial + '.lock')))
-        guard = base / (serial + '.guard')
-        info = guard.lstat()
-        check(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600
-              and info.st_uid == os.getuid() and info.st_nlink == 2 and info.st_size == 0)
-        facts.append((info.st_dev, info.st_ino))
-    check(facts[0] == facts[1])
+    durable_root = directory_identity(root, private=True)
+    legacy_parent = directory_identity(legacy.parent)
+    legacy_present = os.path.lexists(legacy)
+    legacy_root = directory_identity(legacy) if legacy_present else None
+    guard = guard_identity(root, serial, 2 if legacy_present else 1)
+    if legacy_present:
+        check(guard_identity(legacy, serial, 2) == guard)
     marker = root / '.migration-complete.json'
     descriptor = os.open(marker, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(descriptor, 'rb') as stream:
@@ -41,7 +51,12 @@ def snapshot(root, legacy, serial):
           and isinstance(marker.get('source_sha256'), str)
           and re.fullmatch(r'[0-9a-f]{64}', marker['source_sha256'])
           and marker.get('legacy_root') == str(legacy))
-    return facts[0], marker_raw
+    if not legacy_present:
+        # macOS may remove the temporary namespace after a clean bootstrap.
+        # The durable inode survives, and any return of the legacy root ends this guard.
+        check(marker.get('bootstrap_type') == 'clean' and marker.get('review_owners') == 0
+              and type(marker.get('entries')) is int and marker['entries'] > 0)
+    return guard, durable_root, legacy_parent, legacy_root, marker_raw
 
 
 def main(root, legacy, serial):
