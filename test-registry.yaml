@@ -8816,6 +8816,20 @@ tests:
     status: active
     product: CI治理
     note: 杭州生产 API 宿主身份、迁移账本、切换回读及可重放的回退。
+  - id: hz-api-staging-evidence-regression
+    path: scripts/release-gate/__tests__/hz-api-staging-evidence.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 仅接受香港实际运行 SHA 对应的 GitHub 预发镜像产物及精确尝试编号。
+  - id: hz-api-business-smoke-regression
+    path: scripts/release-gate/__tests__/hz-api-business-smoke.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 测试香港隔离草稿的认证、变更读回、版本冲突与安全恢复。正式工作流实测预发。
   - id: hz-api-candidate-regression
     path: scripts/deploy/__tests__/hz-api-candidate.test.mjs
     type: integration

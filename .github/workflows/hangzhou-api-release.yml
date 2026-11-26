@@ -12,9 +12,6 @@ on:
       sha:
         description: 'Full commit SHA required for promote and rollback'
         type: string
-      acceptance_run_key:
-        description: 'Same-version Brain acceptance key required for promote'
-        type: string
       confirm:
         description: 'Type PROMOTE or ROLLBACK to change the API'
         type: string
@@ -36,28 +33,23 @@ jobs:
         env:
           MODE: ${{ inputs.action }}
           SHA: ${{ inputs.sha }}
-          RUN_KEY: ${{ inputs.acceptance_run_key }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == refs/heads/main ]]
           case "$MODE" in
-            inspect) [[ -z "$SHA$RUN_KEY$CONFIRM" ]] ;;
-            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ && "$CONFIRM" == PROMOTE ]] ;;
-            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && -z "$RUN_KEY" && "$CONFIRM" == ROLLBACK ]] ;;
+            inspect) [[ -z "$SHA$CONFIRM" ]] ;;
+            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$CONFIRM" == PROMOTE ]] ;;
+            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$CONFIRM" == ROLLBACK ]] ;;
             *) exit 1 ;;
           esac
 
   admission:
     needs: request
     if: inputs.action == 'promote'
-    uses: ./.github/workflows/release-admission.yml
+    uses: ./.github/workflows/hz-api-release-verification.yml
     with:
       sha: ${{ inputs.sha }}
-      targets: api
-      bind_api_artifact: true
-      acceptance_run_key: ${{ inputs.acceptance_run_key }}
-    secrets: inherit
 
   execute:
     needs: [request, admission]
