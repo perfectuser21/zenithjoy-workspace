@@ -22,7 +22,7 @@ function readCandidateManifest(sourceCommit) {
   return JSON.parse(readPrivatePolicy(location));
 }
 
-async function readAuthority({ taskId, pendingActionId, read, now }) {
+async function readAuthority({ taskId, pendingActionId, sourceCommit, read, now }) {
   const [taskReply, actionReply, deviceLocks] = await Promise.all([
     read('/tasks/' + taskId), read('/pending-actions/' + pendingActionId), read('/device-locks'),
   ]);
@@ -33,8 +33,6 @@ async function readAuthority({ taskId, pendingActionId, read, now }) {
   need(task?.id === taskId && task.status === 'in_progress' && task.payload?.work_kind === 'coding_review'
     && Array.isArray(task.payload.scope) && task.payload.scope.includes('enable_mmv_yuesheng_5045')
     && typeof task.claimed_by === 'string' && task.claimed_by.trim().length > 0 && claimedAt <= observedAt, 'TASK');
-  need(action?.id === pendingActionId && action.status === 'pending_approval'
-    && action.action_type === 'owner_decision' && action.params?.task_id === taskId, 'PENDING_ACTION');
   const matches = deviceLocks?.success === true && Array.isArray(deviceLocks.locks)
     && deviceLocks.locks.filter(row => row.device_name === yueshengMigrationRoute.physical_serial);
   const lease = matches?.[0];
@@ -43,6 +41,10 @@ async function readAuthority({ taskId, pendingActionId, read, now }) {
     && typeof lease.lease_version === 'string' && /^[1-9][0-9]{0,9}$/.test(lease.lease_version)
     && Number(lease.lease_version) <= 4_294_967_295 && claimedAt <= lockedAt && lockedAt <= observedAt
     && Date.parse(lease.expires_at) > observedAt + 5_000, 'LEASE');
+  need(action?.id === pendingActionId && action.status === 'pending_approval'
+    && action.action_type === 'owner_decision' && action.source === 'yuesheng_adb_migration'
+    && canonical(action.params ?? null) === canonical({ protocol: 'yuesheng-adb-migration-request/v1',
+      task_id: taskId, device_name: lease.device_name, lease_version: lease.lease_version, source_commit: sourceCommit }), 'PENDING_ACTION');
   return { claim: { claimed_by: task.claimed_by, claimed_at: task.claimed_at },
     lease: Object.fromEntries(leaseKeys.map(key => [key, lease[key]])) };
 }
@@ -52,7 +54,7 @@ export async function planYueshengMigration({ taskId, pendingActionId, sourceCom
 } = {}) {
   need(taskId === maintenanceTask && uuid.test(pendingActionId ?? '') && commit.test(sourceCommit ?? '')
     && typeof readBefore === 'function', 'PLAN_INPUT');
-  const authorityArgs = { taskId, pendingActionId, read, now };
+  const authorityArgs = { taskId, pendingActionId, sourceCommit, read, now };
   const authority = await readAuthority(authorityArgs);
   const manifest = await readManifest(sourceCommit);
   need(manifest?.source_commit === sourceCommit && uuid.test(manifest.release_id ?? ''), 'CANDIDATE');

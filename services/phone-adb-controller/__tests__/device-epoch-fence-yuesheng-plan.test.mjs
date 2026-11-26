@@ -16,8 +16,10 @@ const actionId = '44444444-4444-4444-8444-444444444444';
 function setup(referenceTime = now) {
   const x = fixture(referenceTime);
   const task = { ...x.task, id: taskId, payload: { work_kind: 'coding_review', scope: ['enable_mmv_yuesheng_5045'] } };
-  const action = { id: actionId, action_type: 'owner_decision', status: 'pending_approval', params: { task_id: taskId } };
   const lease = { ...x.current_lock, locked_by: taskId };
+  const action = { id: actionId, action_type: 'owner_decision', status: 'pending_approval', source: 'yuesheng_adb_migration',
+    params: { protocol: 'yuesheng-adb-migration-request/v1', task_id: taskId, device_name: lease.device_name,
+      lease_version: lease.lease_version, source_commit: sha } };
   const calls = [];
   const replies = {
     ['/tasks/' + taskId]: task,
@@ -68,10 +70,14 @@ test('cannot produce an approval digest without the same active task, exact lock
     [x => { x.task.payload.scope = []; }, 'TASK'],
     [x => { x.action.params.task_id = 'wrong'; }, 'PENDING_ACTION'],
     [x => { x.action.status = 'approved'; }, 'PENDING_ACTION'],
+    [x => { x.action.source = 'owner_decision_guard'; }, 'PENDING_ACTION'],
+    [x => { x.action.params.lease_version = '99'; }, 'PENDING_ACTION'],
+    [x => { x.action.params.source_commit = '0'.repeat(40); }, 'PENDING_ACTION'],
     [x => { x.lease.locked_by = null; }, 'LEASE'],
     [x => { x.replies['/device-locks'].locks.push({ ...x.lease }); }, 'LEASE'],
     [x => { x.replies['/releases/' + releaseId + '/gate'].current_observation_id = releaseId; }, 'CANDIDATE_GATE'],
-    [x => { const read = x.io.readBefore; x.io.readBefore = async () => { x.lease.lease_version = '99'; return read(); }; }, 'AUTHORITY_CHANGED'],
+    [x => { const read = x.io.readBefore; x.io.readBefore = async () => { x.lease.lease_version = '99'; return read(); }; }, 'PENDING_ACTION'],
+    [x => { const read = x.io.readBefore; x.io.readBefore = async () => { x.task.claimed_by = 'another-worker'; return read(); }; }, 'AUTHORITY_CHANGED'],
   ]) {
     const x = setup();
     mutate(x);

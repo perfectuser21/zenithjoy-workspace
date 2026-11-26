@@ -59,7 +59,9 @@ function verifyAuthority({ plan, planSha, snapshot, now }) {
     && same(approval.actions, actions) && typeof approval.approved_by === 'string' && approval.approved_by.trim().length > 0
     && approvedAt >= Date.parse(plan.claim.claimed_at) && approvedAt <= now
     && pendingAction?.id === plan.pending_action_id && pendingAction.status === 'approved'
-    && pendingAction.action_type === 'owner_decision' && pendingAction.params?.task_id === task.id
+    && pendingAction.action_type === 'owner_decision' && pendingAction.source === 'yuesheng_adb_migration'
+    && same(pendingAction.params ?? null, { protocol: 'yuesheng-adb-migration-request/v1',
+      task_id: task.id, device_name: plan.physical_serial, lease_version: plan.lease.lease_version, source_commit: plan.source_commit })
     && same(pendingAction.execution_result, approval), 'AUTHORITY_APPROVAL');
   return { task: { id: task.id, status: task.status, ...plan.claim }, lease: { ...plan.lease }, approvalSha: digest(approval) };
 }

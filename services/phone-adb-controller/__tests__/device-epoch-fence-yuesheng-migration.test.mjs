@@ -25,7 +25,9 @@ function setup(t) {
     plan_sha256: digest(plan), actions: ['disconnect_old', 'connect_new'] };
   const facts = { task: { ...evidence.task, result: { yuesheng_adb_migration_approval: approval } },
     deviceLocks: { success: true, locks: [evidence.current_lock] },
-    pendingAction: { id: plan.pending_action_id, status: 'approved', action_type: 'owner_decision', params: { task_id: taskId }, execution_result: approval } };
+    pendingAction: { id: plan.pending_action_id, status: 'approved', action_type: 'owner_decision', source: 'yuesheng_adb_migration',
+      params: { protocol: 'yuesheng-adb-migration-request/v1', task_id: taskId, device_name: physicalSerial,
+        lease_version: plan.lease.lease_version, source_commit: sha }, execution_result: approval } };
   const operations = [];
   const read = name => JSON.parse(readFileSync(join(journal, `${name}.json`), 'utf8'));
   let currentTime = now - 30_000;
@@ -123,11 +125,18 @@ test('接入阶段授权或 CAS 租约变化，不接入也不回滚', async t =
 });
 
 test('只有观察材料或有别的批准，不能开始设备动作', async t => {
-  const x = setup(t);
-  x.facts.task.result.yuesheng_adb_migration_approval.plan_sha256 = '0'.repeat(64);
-  await assert.rejects(x.run(), { code: 'YUESHENG_MIGRATION_AUTHORITY_APPROVAL' });
-  assert.deepEqual(x.operations, []);
-  assert.deepEqual(readdirSync(x.root), []);
+  for (const mutate of [
+    facts => { facts.task.result.yuesheng_adb_migration_approval.plan_sha256 = '0'.repeat(64); },
+    facts => { facts.pendingAction.source = 'owner_decision_guard'; },
+    facts => { facts.pendingAction.params.lease_version = '99'; },
+    facts => { facts.pendingAction.params.source_commit = '0'.repeat(40); },
+  ]) {
+    const x = setup(t);
+    mutate(x.facts);
+    await assert.rejects(x.run(), { code: 'YUESHENG_MIGRATION_AUTHORITY_APPROVAL' });
+    assert.deepEqual(x.operations, []);
+    assert.deepEqual(readdirSync(x.root), []);
+  }
 });
 
 
