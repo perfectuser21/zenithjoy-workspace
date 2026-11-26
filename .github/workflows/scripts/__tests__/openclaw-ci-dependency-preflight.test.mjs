@@ -67,3 +67,15 @@ test('安装失败前也保留三工具实际已有路径/缺失证据',t=>{cons
 
 test('仅OS安装采用300秒外层与6分钟step，job和其余阶段预算保持',()=>{const steps=setup();assert.equal(steps[1]['timeout-minutes'],6);assert.match(steps[1].run,/timeout 300s /);assert.equal(workflow.jobs['openclaw-scripts-test']['timeout-minutes'],10);assert.equal(steps[0]['timeout-minutes'],2);assert.equal(steps[2]['timeout-minutes'],2);});
 test('实际bash中OS外层300秒耗尽仍硬失败且不执行Pillow/测试',t=>{const r=invoke(t,'',[], '',true);assert.equal(r.status,124,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);assert.match(r.trace,/timeout 300s bash .*prepare-openclaw-os-packages/);});
+test('缺工具时同一签名runner来源只刷新一次并为其安装，已有工具时完全跳过APT',t=>{
+ const missing=invoke(t,'',['zsh','ffmpeg']);
+ assert.equal(missing.status,0,missing.output);
+ const apt=missing.trace.split('\n').filter(line=>line.startsWith('apt '));
+ assert.equal(apt.filter(line=>line.endsWith(' update')).length,1);
+ assert.ok(apt.every(line=>line.includes('/original.sources') && line.includes('/original-lists')),missing.trace);
+ assert.ok(apt.some(line=>line.includes('APT::Update::Error-Mode=any') && line.endsWith(' update')),missing.trace);
+ assert.ok(apt.some(line=>line.includes('--no-remove') && / install .*libxml2-utils/.test(line)),missing.trace);
+ const present=invoke(t,'',['zsh','xmllint','ffmpeg']);
+ assert.equal(present.status,0,present.output);
+ assert.doesNotMatch(present.trace,/^apt /m);
+});
