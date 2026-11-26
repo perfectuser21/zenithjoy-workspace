@@ -98,13 +98,15 @@ class Probe:
   nodes,ocr,evidence=self.capture(platform,'launch')
   if platform=='微信':
    focus=self.adb('shell','dumpsys','window').decode(errors='replace')
-   expired_activity=r'(?m)^[ \t]*mCurrentFocus=Window\{[^\r\n}]*[ \t]com\.tencent\.mm/(?:com\.tencent\.mm)?\.ui\.AccountExpiredUI(?=[ \t}])'
-   if re.search(expired_activity,focus):
+   login_activity=(r'(?m)^[ \t]*mCurrentFocus=Window\{[^\r\n}]*[ \t]com\.tencent\.mm/(?:com\.tencent\.mm)?'
+                   r'(\.ui\.AccountExpiredUI|\.plugin\.account\.ui\.LoginPasswordUI)(?=[ \t}])')
+   match=re.search(login_activity,focus)
+   if match:
     return {
         'state':'未登录',
         'installed':True,
         'checked_at':at,
-        'reason':'微信前台显示账号登录已过期',
+        'reason':'微信前台显示账号登录已过期' if match[1]=='.ui.AccountExpiredUI' else '微信前台要求密码登录',
         'evidence':evidence,
     }
   immediate=classify(platform,nodes,ocr,False)
