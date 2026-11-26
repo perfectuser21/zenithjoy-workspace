@@ -26,9 +26,11 @@ function candidates(t) {
   writeFileSync(join(source, 'CompanySourceSync.tsx'),
     "export const sync = () => fetch('/api/company-profile/source-sync');\n");
   const newer = commit('Company features', older);
-  writeFileSync(join(source, 'topics.api.ts'), "fetch('/api/topics');");
+  mkdirSync(join(source, 'api'), { recursive: true });
+  writeFileSync(join(source, 'ContentFactoryPage.tsx'), "import { listTopics } from './api/topics.api';");
+  writeFileSync(join(source, 'api/topics.api.ts'), "fetch('/api/topics');");
   const withLegacyTopics = commit('Legacy topics', newer);
-  writeFileSync(join(source, 'topics.api.ts'), "fetch('/api/content-factory/topics');");
+  writeFileSync(join(source, 'api/topics.api.ts'), "fetch('/api/content-factory/topics');");
   const withStaffTopics = commit('Staff topics', withLegacyTopics);
   return { repo, older, newer, withLegacyTopics, withStaffTopics };
 }

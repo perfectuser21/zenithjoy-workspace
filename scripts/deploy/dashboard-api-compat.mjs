@@ -2,6 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 const origins = ['https://zenithjoy.tech', 'https://autopilot.zenjoymedia.media'];
+const dashboardSource = 'apps/dashboard/src';
+const topicClient = dashboardSource + '/api/topics.api.ts';
 const routes = [
   {
     endpoint: '/api/company-profile/outreach-settings',
@@ -14,15 +16,16 @@ const routes = [
   {
     endpoint: '/api/topics',
     reference: '/api/topics',
+    source: topicClient,
     errorCode: 'SESSION_REQUIRED',
   },
   {
     endpoint: '/api/content-factory/topics',
     reference: '/api/content-factory/topics',
+    source: topicClient,
     errorCode: 'SESSION_REQUIRED',
   },
 ];
-const dashboardSource = 'apps/dashboard/src';
 
 function findRequiredRoutes(sha, cwd) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Dashboard candidate requires a full SHA');
@@ -35,11 +38,11 @@ function findRequiredRoutes(sha, cwd) {
   } catch (error) {
     throw new Error(`Dashboard candidate ${sha} or its source tree is unavailable`, { cause: error });
   }
-  return routes.filter(({ reference }) => {
+  return routes.filter(({ reference, source = dashboardSource }) => {
     try {
       git([
         'grep', '-I', '-q', '-F', '-e', reference, sha,
-        '--', dashboardSource,
+        '--', source,
         ':(exclude,glob)apps/dashboard/src/**/__tests__/**',
         ':(exclude,glob)apps/dashboard/src/**/*.test.*',
         ':(exclude,glob)apps/dashboard/src/**/*.spec.*',
