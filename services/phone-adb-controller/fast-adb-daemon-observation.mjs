@@ -11,8 +11,10 @@ const env={PATH:'/usr/bin:/bin:/usr/sbin',LANG:'C',LC_ALL:'C',TZ:'UTC'};
 
 export function openFastAdbDaemonObservation({python,frozen,deadlineMs=Date.now()+300000}) {
  need(process.platform==='darwin'&&process.arch==='arm64'&&typeof python?.path==='string'
-  &&realpathSync(python.path)===python.realpath&&digest(readFileSync(python.realpath))===python.sha256
-  &&statSync(python.realpath).isFile(),'EPOCH_DAEMON_OBSERVER');
+  &&realpathSync(python.path)===python.realpath,'EPOCH_DAEMON_OBSERVER');
+ const interpreter=statSync(python.realpath);
+ need(interpreter.isFile()&&[0,process.getuid()].includes(interpreter.uid)&&!(interpreter.mode&0o022)
+  &&digest(readFileSync(python.realpath))===python.sha256,'EPOCH_DAEMON_OBSERVER');
  const sourceFiles=new Map([[helper,frozen.files['runtime/adb-daemon-observation-fast.py']],[kernel,frozen.files['runtime/adb-process-observation.py']]]);
  const metadata=path=>{
   const s=lstatSync(path,{bigint:true});
@@ -42,7 +44,8 @@ export function openFastAdbDaemonObservation({python,frozen,deadlineMs=Date.now(
   const job=pending;pending=undefined;clearTimeout(job.timer);
   try{
    const response=JSON.parse(output);output='';
-   need(Array.isArray(response.birth)&&response.birth.length===2&&response.birth.every(Number.isSafeInteger),'EPOCH_DAEMON_IDENTITY');
+   need(Object.keys(response).join(',')==='birth'&&Array.isArray(response.birth)&&response.birth.length===2
+    &&response.birth.every(Number.isSafeInteger)&&response.birth[0]>0&&response.birth[1]>=0&&response.birth[1]<1000000,'EPOCH_DAEMON_IDENTITY');
    job.resolve(response.birth.join(':'));
   }catch(error){job.reject(error);}
  });

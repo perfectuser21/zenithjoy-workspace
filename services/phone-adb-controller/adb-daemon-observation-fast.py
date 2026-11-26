@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Per-admission read-only Darwin listener and process proof for the fixed successor."""
 import ctypes
+import errno
 import importlib.util
 import json
 import os
@@ -26,7 +27,13 @@ def listener(lib, pid, port):
         if fd_type != 2:  # PROX_FDTYPE_SOCKET
             continue
         info = ctypes.create_string_buffer(792)  # sizeof(struct socket_fdinfo)
-        need(lib.proc_pidfdinfo(pid, fd, 3, info, len(info)) == len(info))
+        ctypes.set_errno(0)
+        size = lib.proc_pidfdinfo(pid, fd, 3, info, len(info))
+        # Unrelated connected sockets may expire while walking the table. A missing
+        # row never supplies the positive listener proof.
+        if size == 0 and ctypes.get_errno() in (errno.EBADF, errno.ENOENT):
+            continue
+        need(size == len(info))
         raw = info.raw
         if (struct.unpack_from('=ii', raw, 180) == (6, 2)  # TCP, AF_INET
                 and struct.unpack_from('=i', raw, 256)[0] == 2  # SOCKINFO_TCP
@@ -47,6 +54,8 @@ def observe(lib, kernel_snapshot, scope):
     row = subprocess.check_output(['/bin/ps', '-p', str(pid), '-o', 'lstart=', '-o', 'command='],
                                   text=True, timeout=2, stderr=subprocess.DEVNULL).rstrip('\n')
     need(row[:24].strip() == scope['start_identity'] and row[24:].strip() == scope['command'])
+    need(lib.proc_pidpath(pid, path, len(path)) > 0 and os.fsdecode(path.value) == scope['executable']
+         and listener(lib, pid, port))
     after = kernel_snapshot(pid)
     need(after is not None and after['uid'] == uid and after['status'] != 5 and after['start'] == before['start'])
     return before['start']
