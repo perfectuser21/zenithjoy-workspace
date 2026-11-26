@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
-INPUT_RUNTIME_REVISION = 5
+INPUT_RUNTIME_REVISION = 6
 import json
 import hashlib
 import re
@@ -170,6 +170,76 @@ def douyin_title_structure(tree, field):
             "text_sha256": hashlib.sha256(field.get("text", "").encode()).hexdigest()}
 
 
+def xhs_post_title_structure(tree, field):
+    """Identify the standard title box in the observed image-note composer."""
+    nodes = list(tree.iter("node"))
+    parents = {child: parent for parent in nodes for child in parent if child.tag == "node"}
+    obfuscated = PACKAGE + ":id/0_resource_name_obfuscated"
+
+    def safe(node, cls, rid=obfuscated):
+        return (node is not None and node.get("package") == PACKAGE
+                and node.get("class") == cls and node.get("resource-id", "") == rid
+                and node.get("enabled") == "true" and node.get("password") == "false")
+
+    pane = parents.get(field)
+    frame = parents.get(pane)
+    if (not safe(pane, "android.widget.ScrollView") or not safe(frame, "android.widget.FrameLayout", "")
+            or parents.get(frame) is not None or field.get("clickable") != "true"
+            or any(node.get("focused") == "true" and node is not field for node in nodes)):
+        raise ValueError("XHS title is outside the focused image-note composer")
+
+    children = list(pane)
+    index = children.index(field)
+    media = children[index - 1] if index else None
+    body = [n for n in pane.iter("node") if n.get("class") == "android.widget.EditText" and n is not field]
+    publish = [n for n in frame if n.get("text") == "发布笔记"]
+    if (not safe(media, "androidx.recyclerview.widget.RecyclerView")
+            or len(body) != 1 or not safe(body[0], "android.widget.EditText")
+            or not safe(parents.get(body[0]), "android.widget.ScrollView")
+            or parents.get(parents.get(body[0])) is not pane
+            or len(publish) != 1 or not safe(publish[0], "android.widget.Button")
+            or publish[0].get("clickable") != "true"):
+        raise ValueError("XHS image-note title, media, body or publish anchor changed")
+
+    field_bounds = bounds_rect(field.get("bounds"))
+    media_bounds = bounds_rect(media.get("bounds"))
+    body_bounds = bounds_rect(body[0].get("bounds"))
+    if media_bounds[3] != field_bounds[1] or body_bounds[1] < field_bounds[3]:
+        raise ValueError("XHS title is not between the media and body")
+    sibling = children[index + 1] if index + 1 < len(children) else None
+    clear = None
+    if (safe(sibling, "android.widget.ImageView") and sibling.get("clickable") == "true"
+            and sibling.get("focusable") == "true" and not sibling.get("text")):
+        clear = list(bounds_rect(sibling.get("bounds")))
+    if clear is None and field.get("text") != "添加标题":
+        raise ValueError("XHS title placeholder or observed clear control is absent")
+    return {
+        "policy": "xhs_image_note_title_clear_v1",
+        "frame": list(bounds_rect(frame.get("bounds"))),
+        "pane_edges": list(bounds_rect(pane.get("bounds"))[:3]),
+        "media": list(media_bounds),
+        "body_edges": list(body_bounds[:3]),
+        "publish": list(bounds_rect(publish[0].get("bounds"))),
+        "clear": clear,
+    }
+
+
+def check_xhs_post_title_shrink(selection, current):
+    original = selection["xhs_title_structure"]
+    actual = current.get("xhs_title_structure")
+    if (not actual or original["clear"] is not None or not actual["clear"]
+            or any(actual[key] != original[key] for key in original if key != "clear")):
+        raise ValueError("XHS image-note title structure changed after typing")
+    left, top, right, bottom = bounds_rect(selection["bounds"])
+    new_left, new_top, new_right, new_bottom = bounds_rect(current["bounds"])
+    clear_left, clear_top, clear_right, clear_bottom = actual["clear"]
+    if ((new_left, new_top, new_bottom) != (left, top, bottom)
+            or not left < new_right == clear_left < clear_right <= right
+            or not top < clear_top < clear_bottom < bottom
+            or right - new_right > bottom - top):
+        raise ValueError("XHS title geometry is not the observed right shrink beside its clear control")
+
+
 def standard_resolve(xml_path):
     tree = ET.parse(xml_path)
     nodes = [n for n in tree.iter("node")
@@ -189,6 +259,7 @@ def standard_resolve(xml_path):
                 ("com.zhihu.android", "com.zhihu.android:id/input_text"): ("search_structure", zhihu_search_structure),
                 ("com.sina.weibo", "com.sina.weibo:id/edit_view"): ("weibo_structure", weibo_body_structure),
                 ("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme:id/ij+"): ("title_structure", douyin_title_structure)}
+    policies[(PACKAGE, PACKAGE + ":id/0_resource_name_obfuscated")] = ("xhs_title_structure", xhs_post_title_structure)
     if (policy := policies.get((identity["package"], identity["resource-id"]))) is not None:
         try:
             identity[policy[0]] = policy[1](tree, node)
@@ -219,11 +290,16 @@ def standard_readback(xml_path, selection, allow_body_growth=False):
         current = dict(current)
         current["bounds"] = selection["bounds"]
         current["search_structure"] = selection["search_structure"]
+    if allow_body_growth and selection.get("xhs_title_structure") and current != selection:
+        check_xhs_post_title_shrink(selection, current)
+        current["bounds"] = selection["bounds"]
+        current["xhs_title_structure"] = selection["xhs_title_structure"]
     if current != selection:
         raise ValueError("focused input identity changed")
     # 兼容分支也必须重验同屏、唯一命名editor/root以及唯一安全焦点，绝不按空id全局读。
     layout_bound = selection.get("title_structure") or allow_body_growth and (
-        selection.get("body_structure") or selection.get("search_structure") or selection.get("weibo_structure"))
+        selection.get("body_structure") or selection.get("search_structure") or selection.get("weibo_structure")
+        or selection.get("xhs_title_structure"))
     keys = ("package", "resource-id", "class") if layout_bound else ("package", "resource-id", "class", "bounds")
     candidates = [n for n in ET.parse(xml_path).iter("node")
                   if (not layout_bound or n.get("focused") == "true")
@@ -244,7 +320,7 @@ def standard_compare(xml_path, selection, source):
     def identity(text):
         raw = text.encode("utf-8")
         return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-    identity_policy = next((selection[key]["policy"] for key in ("weibo_structure", "search_structure", "body_structure", "title_structure")
+    identity_policy = next((selection[key]["policy"] for key in ("weibo_structure", "search_structure", "body_structure", "title_structure", "xhs_title_structure")
                             if key in selection), "strict_standard")
     return {"comparison_mode": mode, "identity_policy": identity_policy, "source": identity(source), "actual": identity(actual),
             "paragraphs": len(source.split("\n\n")) if selection.get("body_structure") else 0}
