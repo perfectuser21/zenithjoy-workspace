@@ -7,7 +7,7 @@ import {bytes,recordBytes,readPrivatePolicy,validateEpochRecord,freezeFenceRefer
 export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
 import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
-import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
+import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneHostProofPaths,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
 import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment,verifyCloudEpochSuccessorProjection} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {runDiagnostic,readDiagnosticProof} from './device-epoch-fence-diagnostics.mjs';
@@ -245,9 +245,18 @@ export async function main(args){
  const runDir=args[2];let frozen;
  try{
   frozen=readFrozen(runDir);const spec=phone(frozen);let readBudget;
-  if(hasDeadline){
-   const deadlineMs=Number(args[4]);
-   need(frozen.standalone_skill?.protocol==='codex-exec-v1'&&Number.isSafeInteger(deadlineMs)&&deadlineMs>Date.now()&&deadlineMs<=frozen.standalone_skill.cleanup_deadline_ms,'EPOCH_ADMISSION_DEADLINE');
+  const standalone=frozen.standalone_skill?.protocol==='codex-exec-v1';
+  need(!hasDeadline||standalone,'EPOCH_ADMISSION_DEADLINE');
+  if(standalone){
+   let phaseDeadline=frozen.standalone_skill.deadline_ms;
+   const {proof_path:proofPath}=standaloneHostProofPaths(frozen);let marker;
+   try{marker=recordBytes(proofPath.replace(/\.json$/,'.cleanup'));}catch(error){if(error.code!=='ENOENT')throw error;}
+   if(marker!==undefined){
+    need(marker.equals(Buffer.from(sha(recordBytes(proofPath))+'\n')),'EPOCH_ADMISSION_DEADLINE');
+    phaseDeadline=frozen.standalone_skill.cleanup_deadline_ms;
+   }
+   const now=Date.now(),deadlineMs=hasDeadline?Number(args[4]):Math.min(phaseDeadline,now+45000);
+   need(Number.isSafeInteger(deadlineMs)&&deadlineMs>now&&deadlineMs<=phaseDeadline&&deadlineMs<=now+45000,'EPOCH_ADMISSION_DEADLINE');
    readBudget={deadlineMs};
   }
   const result=await canAuthorizeNativeFrame({root:here,frozen,readBudget,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});

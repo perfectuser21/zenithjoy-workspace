@@ -12,7 +12,7 @@ test('工作截止拒绝启动控制器，收尾使用冻结的独立期限',asy
  closing=true;
  await invoke(input);
  assert.equal(calls.length,1);
- assert.equal(calls[0].options.env.WFR_STANDALONE_EPOCH_READ_DEADLINE_MS,String(cleanup));
+ assert.deepEqual(calls[0].options.env,base.environment);
  assert.ok(calls[0].options.timeoutMs>0&&calls[0].options.timeoutMs<=10000);
 });
 test('semantic card uses a fresh selected video grid and returned native card coordinates under the exact owner',async()=>{
@@ -197,7 +197,8 @@ test('work deadline refuses new phone and business work while cleanup leaves ret
   const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});Date.now=()=>start+31000;
   const before=f.effects.length;await assert.rejects(f.dispatch('phone',{command:'status',args:[]}),/WORK_DEADLINE/);await assert.rejects(f.dispatch('business',{operation:'keywords',input:{}}),/WORK_DEADLINE/);assert.equal(f.effects.length,before);assert.equal(rpcCalls,0);
   assert.equal(producerOptions.admissionDeadlineMs,f.frozen.standalone_skill.cleanup_deadline_ms);
-  const receipt=await host.close();assert.equal(receipt.native_return_unknown,false);assert.equal(f.effects.includes('return-safe-desktop'),true);assert.equal(f.effects.includes('central-release'),true);assert.equal(f.fs.existsSync(f.unknownPath),false);
+  assert.equal(f.fs.existsSync(f.path.join(f.registry,f.run+'.cleanup')),false);
+  const receipt=await host.close();assert.equal(f.fs.readFileSync(f.path.join(f.registry,f.run+'.cleanup'),'utf8'),digest(f.fs.readFileSync(f.path.join(f.registry,f.run+'.json')))+'\n');assert.equal(receipt.native_return_unknown,false);assert.equal(f.effects.includes('return-safe-desktop'),true);assert.equal(f.effects.includes('central-release'),true);assert.equal(f.fs.existsSync(f.unknownPath),false);
  }finally{Date.now=originalNow;f.cleanup();}
 });
 

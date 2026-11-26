@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {readFileSync,writeFileSync,appendFileSync,mkdirSync,realpathSync,lstatSync,openSync,closeSync,fsyncSync,constants} from 'node:fs';
 import {createRequire} from 'node:module';
 import {userInfo} from 'node:os';
-import {readFrozen} from './runtime-definition.mjs';
+import {readFrozen,digest} from './runtime-definition.mjs';
 import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches,standaloneHostProofPaths,createStandaloneHostProof} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
 import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
@@ -26,8 +26,7 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
    const cleanup=isCleanup(),phaseDeadline=frozen.standalone_skill?.[cleanup?'cleanup_deadline_ms':'deadline_ms'];
    const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
    if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
-   const nativeEnvironment=Number.isSafeInteger(phaseDeadline)?{...environment,WFR_STANDALONE_EPOCH_READ_DEADLINE_MS:String(phaseDeadline)}:environment;
-   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...nativeEnvironment,DOUYIN_DETAIL_PLAYBACK:playback}:nativeEnvironment,timeoutMs:Math.min(360000,remaining)});
+   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,remaining)});
    if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code,diagnostic:{stdout:safeExecutionDiagnostic(result.stdout,environment).slice(-4000),stderr:safeExecutionDiagnostic(result.stderr,environment).slice(-4000)}});return result;
   };
   if(command==='open-search-card'){
@@ -162,7 +161,14 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    const failed=(reason,error)=>{revoke(reason);firstError??=error;};
    if(ipc)try{await ipc.close();}catch(error){failed('IPC_CLOSE_FAILED',error);}
    if(leafUnknown())revoke('LEAF_UNKNOWN');
-   if(local&&!unknown){cleanupActive=true;try{await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>true})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});}catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}}
+   if(local&&!unknown){
+    cleanupActive=true;
+    try{
+     if(phoneScope.policy.schema_version===2)writeFileSync(hostPath.replace(/\.json$/,'.cleanup'),digest(readFileSync(hostPath))+'\n',{flag:'wx',mode:0o600});
+     await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();
+     desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>true})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});
+    }catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}
+   }
    if(collectionTools&&!unknown)try{await guard({cleanup:true});await collectionTools.releaseOwned();}catch(error){failed('COLLECTION_RELEASE_UNKNOWN',error);}
    if(leaf)try{leaves=await leaf.seal();if(!leaves.requests_returned&&!leaves.empty_requests_returned)revoke('LEAF_SEAL_UNKNOWN');}catch(error){failed('LEAF_SEAL_FAILED',error);}
    if(local&&!unknown)try{

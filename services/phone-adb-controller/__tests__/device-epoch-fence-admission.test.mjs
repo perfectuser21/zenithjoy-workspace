@@ -66,10 +66,19 @@ test('standalone CLI rejection preserves its own task/run diagnostic without old
   fs.mkdirSync(path.join(dir,'runtime'),{mode:0o700});fs.mkdirSync(path.join(dir,'skill'),{mode:0o700});
   const code='fixture code',skill='fixture Skill';fs.writeFileSync(path.join(dir,'runtime/code.mjs'),code,{mode:0o600});fs.writeFileSync(path.join(dir,'skill/SKILL.md'),skill,{mode:0o600});
   f.frozen.files={'runtime/code.mjs':digest(code),'skill/SKILL.md':digest(skill)};f.frozen.standalone_skill.skill.sha256=digest(skill);
+  const now=Date.now();f.frozen.standalone_skill.deadline_ms=now+30000;f.frozen.standalone_skill.cleanup_deadline_ms=now+60000;
   const snapshot={...f.frozen,snapshot_sha256:digest(f.frozen)};fs.writeFileSync(path.join(dir,'run-definition.json'),JSON.stringify(snapshot),{mode:0o600});
   await assert.rejects(()=>main(['verify-epoch','--run-dir',dir]),/EPOCH_FROZEN_REFERENCE/);
   const diagnostic=JSON.parse(fs.readFileSync(path.join(dir,'epoch-fence-admission/diagnostics/00.json'),'utf8'));
   assert.equal(diagnostic.task_id,f.task.id);assert.equal(diagnostic.run_id,f.taskRun.run_id);assert.equal(diagnostic.finite_error_code,'EPOCH_FROZEN_REFERENCE');
+  const cleanupOnly=String(snapshot.standalone_skill.deadline_ms+1), command=['verify-epoch','--run-dir',dir,'--read-deadline-ms',cleanupOnly];
+  await assert.rejects(()=>main(command),/EPOCH_ADMISSION_DEADLINE/);
+  const marker=path.join(dir,'standalone-cleanup-started');
+  fs.writeFileSync(marker,'0'.repeat(64)+'\n',{mode:0o600});
+  await assert.rejects(()=>main(command),/EPOCH_ADMISSION_DEADLINE/);
+  fs.writeFileSync(marker,snapshot.snapshot_sha256+'\n');
+  await assert.rejects(()=>main(command),/EPOCH_ADMISSION_DEADLINE/);
+  await assert.rejects(()=>main([...command.slice(0,-1),String(snapshot.standalone_skill.deadline_ms)]),/EPOCH_FROZEN_REFERENCE/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('standalone scoring has no phone scope and never borrows a device account',async()=>{

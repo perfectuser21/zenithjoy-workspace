@@ -197,7 +197,9 @@ def frozen_verifier_identity(context, run, frozen):
          and scope['source_commit'] == source, 'DIAGNOSTIC_BINDING')
     if standalone:
         need('public_domain' not in body and body['execution_mode'] == 'agent' and body['primary_host'] == 'codex-exec-v1'
-             and run.name == body['run_identity']['tag'] == identity['run_id']
+             and run.name == body['run_identity']['run_id'] == identity['run_id']
+             and re.fullmatch('[A-Za-z0-9_-]{1,120}', body['run_identity']['tag'])
+             and body['run_identity']['tag'] == body['agent_input']['run_tag']
              and body['agent_input']['task_id'] == identity['task_id'], 'DIAGNOSTIC_BINDING')
     return identity, source, snapshot
 
@@ -283,14 +285,32 @@ def standalone_verifier_deadline(context, arguments):
     if not isinstance(frozen, dict) or 'standalone_skill' not in frozen:
         return None
     try:
-        identity, _, _ = frozen_verifier_identity(context, run, frozen)
+        identity, _, snapshot = frozen_verifier_identity(context, run, frozen)
         work, cleanup = identity['deadline_ms'], identity['cleanup_deadline_ms']
     except (KeyError, TypeError, ValueError):
         raise ValueError('ADB_INSTANCE_EPOCH_AUTHORITY') from None
     need(type(work) is int and type(cleanup) is int and 0 < work < cleanup <= 9007199254740991, 'EPOCH_AUTHORITY')
-    phase = os.environ.get('WFR_STANDALONE_EPOCH_READ_DEADLINE_MS', str(work))
-    need(phase in (str(work), str(cleanup)), 'EPOCH_AUTHORITY')
-    return min(int(phase), int(time.time() * 1000) + STANDALONE_EPOCH_MAX_MS)
+    registry = Path(pwd.getpwuid(os.geteuid()).pw_dir) / '.local/state/zenithjoy/standalone-skill-hosts'
+    marker_path = registry / (identity['run_id'] + '.cleanup')
+    try:
+        directory = registry.lstat()
+        need(stat.S_ISDIR(directory.st_mode) and directory.st_uid == os.geteuid()
+             and stat.S_IMODE(directory.st_mode) == 0o700, 'EPOCH_AUTHORITY')
+        marker = read_file(marker_path, private=True)
+    except FileNotFoundError:
+        phase = work
+    else:
+        raw = read_file(registry / (identity['run_id'] + '.json'), private=True)
+        need(len(raw) <= 65536 and marker == (sha(raw) + '\n').encode(), 'EPOCH_AUTHORITY')
+        proof = json.loads(raw)
+        pid = proof.get('process_identity', {}).get('pid')
+        need(proof.get('protocol') == 'standalone-skill-host-proof/v1'
+             and proof.get('run_directory') == str(run) and proof.get('snapshot_sha256') == snapshot
+             and proof.get('source_commit') == context['manifest']['source_commit']
+             and proof.get('run_id') == identity['run_id'] and proof.get('task_id') == identity['task_id']
+             and type(pid) is int and pid > 0, 'EPOCH_AUTHORITY')
+        phase = cleanup
+    return min(phase, int(time.time() * 1000) + STANDALONE_EPOCH_MAX_MS)
 
 
 def verifier_answer(context, arguments, runner):

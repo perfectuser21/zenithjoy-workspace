@@ -135,7 +135,7 @@ test('Python epoch 外层允许真实云机只读闭包超过十五秒且按原�
  const sorted=value=>Array.isArray(value)?value.map(sorted):value&&typeof value==='object'
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,sorted(value[key])])):value;
  const frozen={deployment:{source_commit:commit},execution_mode:'agent',primary_host:'codex-exec-v1',
-  run_identity:{tag:run},agent_input:{task_id:task},
+  run_identity:{tag:'direct101',run_id:run},agent_input:{task_id:task,run_tag:'direct101'},
   discovery_phone_scope:{source_commit:commit},
   standalone_skill:{protocol:'codex-exec-v1',task_id:task,run_id:run,deadline_ms:Date.now()+25000,cleanup_deadline_ms:Date.now()+28000}};
  mkdirSync(runDir,{mode:0o700});

@@ -139,7 +139,7 @@ with tempfile.TemporaryDirectory() as d:
  value,digest=frozen_run(r)
  run_dir=r/RUN;run_dir.mkdir(mode=0o700)
  del value['snapshot_sha256'],value['public_domain']
- value.update(execution_mode='agent',primary_host='codex-exec-v1',run_identity={'tag':RUN},agent_input={'task_id':TASK},
+ value.update(execution_mode='agent',primary_host='codex-exec-v1',run_identity={'tag':'direct101','run_id':RUN},agent_input={'task_id':TASK,'run_tag':'direct101'},
               standalone_skill={'protocol':'codex-exec-v1','task_id':TASK,'run_id':RUN,'deadline_ms':1004000,'cleanup_deadline_ms':1100000})
  frozen=run_dir/'run-definition.json'
  frozen.write_text(json.dumps({**value,'snapshot_sha256':digest(value)}));frozen.chmod(0o600)
@@ -161,9 +161,27 @@ with tempfile.TemporaryDirectory() as d:
  i.time.time=lambda:1005
  rejected(lambda:i.verifier_answer(context,command,lambda *a,**k:(_ for _ in ()).throw(AssertionError('NO_LATE_PROCESS'))),'ADB_INSTANCE_VERIFIER_TIMEOUT')
  os.environ['WFR_STANDALONE_EPOCH_READ_DEADLINE_MS']='1100000'
- assert i.verifier_answer(context,command,finish)['authorized'] is True
- os.environ['WFR_STANDALONE_EPOCH_READ_DEADLINE_MS']='1100001'
+ rejected(lambda:i.verifier_answer(context,command,finish),'ADB_INSTANCE_VERIFIER_TIMEOUT')
+ cwd_marker=run_dir/'standalone-cleanup-started'
+ cwd_marker.write_text(digest(value)+'\n');cwd_marker.chmod(0o600)
+ rejected(lambda:i.verifier_answer(context,command,finish),'ADB_INSTANCE_VERIFIER_TIMEOUT')
+ i.pwd.getpwuid=lambda _:i.types.SimpleNamespace(pw_dir=str(r))
+ registry=r/'.local/state/zenithjoy/standalone-skill-hosts';registry.mkdir(parents=True,mode=0o700)
+ marker=registry/(RUN+'.cleanup')
+ host=registry/(RUN+'.json')
+ host_proof={'protocol':'standalone-skill-host-proof/v1','run_directory':str(run_dir),'snapshot_sha256':digest(value),
+             'source_commit':'a'*40,'run_id':RUN,'task_id':TASK,'process_identity':{'pid':os.getpid()}}
+ host.write_text(json.dumps(host_proof));host.chmod(0o600)
+ marker.write_text('0'*64+'\n');marker.chmod(0o600)
  rejected(lambda:i.verifier_answer(context,command,finish),'EPOCH_AUTHORITY')
+ host.write_text(json.dumps({**host_proof,'task_id':RUN}))
+ marker.write_text(hashlib.sha256(host.read_bytes()).hexdigest()+'\n')
+ rejected(lambda:i.verifier_answer(context,command,finish),'EPOCH_AUTHORITY')
+ host.write_text(json.dumps(host_proof))
+ marker.write_text(hashlib.sha256(host.read_bytes()).hexdigest()+'\n')
+ assert i.verifier_answer(context,command,finish)['authorized'] is True
+ i.time.time=lambda:1100
+ rejected(lambda:i.verifier_answer(context,command,finish),'ADB_INSTANCE_VERIFIER_TIMEOUT')
 `));
 
 test('standalone 取证拒绝非原运行目录和身份混用',()=>py(diagnosticSetup+String.raw`
@@ -171,10 +189,10 @@ with tempfile.TemporaryDirectory() as d:
  r,p,path=fixture(d);i=load(r,'adb-host-instance-policy')
  value,digest=frozen_run(r)
  del value['snapshot_sha256']
- value.update(execution_mode='agent',primary_host='codex-exec-v1',run_identity={'tag':RUN},agent_input={'task_id':TASK},
+ value.update(execution_mode='agent',primary_host='codex-exec-v1',run_identity={'tag':'direct101','run_id':RUN},agent_input={'task_id':TASK,'run_tag':'direct101'},
               standalone_skill={'protocol':'codex-exec-v1','task_id':TASK,'run_id':RUN})
  run_dir=r/RUN;run_dir.mkdir(mode=0o700)
- for target,body in [(r,value),(run_dir,value),(run_dir,{k:v for k,v in value.items() if k!='public_domain'}|{'agent_input':{'task_id':RUN}})]:
+ for target,body in [(r,value),(run_dir,value),(run_dir,{k:v for k,v in value.items() if k!='public_domain'}|{'agent_input':{'task_id':RUN,'run_tag':'direct101'}})]:
   path=target/'run-definition.json';path.write_text(json.dumps({**body,'snapshot_sha256':digest(body)}));path.chmod(0o600)
   i.preserve_verifier_diagnostic({'manifest':{'source_commit':'a'*40}},['verify-epoch','--run-dir',str(target)],'timeout',None)
   assert not diagnostic_rows(target)
