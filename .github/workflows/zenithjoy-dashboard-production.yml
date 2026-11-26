@@ -12,9 +12,6 @@ on:
       sha:
         type: string
         description: Full SHA for promote or rollback
-      acceptance_run_key:
-        type: string
-        description: Same-SHA Dashboard business acceptance key for promote
       confirm:
         type: string
         description: Type PROMOTE or ROLLBACK for the respective production action
@@ -36,27 +33,23 @@ jobs:
         env:
           ACTION: ${{ inputs.action }}
           SHA: ${{ inputs.sha }}
-          RUN_KEY: ${{ inputs.acceptance_run_key }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == refs/heads/main ]]
           case "$ACTION" in
-            inspect) [[ -z "$SHA$RUN_KEY$CONFIRM" ]] ;;
-            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ && "$CONFIRM" == PROMOTE ]] ;;
-            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && -z "$RUN_KEY" && "$CONFIRM" == ROLLBACK ]] ;;
+            inspect) [[ -z "$SHA$CONFIRM" ]] ;;
+            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$CONFIRM" == PROMOTE ]] ;;
+            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$CONFIRM" == ROLLBACK ]] ;;
             *) exit 1 ;;
           esac
 
   admission:
     needs: request
     if: inputs.action == 'promote'
-    uses: ./.github/workflows/release-admission.yml
+    uses: ./.github/workflows/dashboard-release-verification.yml
     with:
       sha: ${{ inputs.sha }}
-      targets: dashboard
-      acceptance_run_key: ${{ inputs.acceptance_run_key }}
-    secrets: inherit
 
   build:
     needs: admission
@@ -68,12 +61,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.admission.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+      - name: Verify the admitted Dashboard works with today's production API
+        env:
+          CANDIDATE_SHA: ${{ needs.admission.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          git fetch --no-tags --depth=1 origin "$CANDIDATE_SHA"
+          node scripts/deploy/dashboard-api-compat.mjs "$CANDIDATE_SHA"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.admission.outputs.sha }}
+          persist-credentials: false
       - name: Build the admitted SHA with production settings
         env:
           DEPLOY_SHA: ${{ needs.admission.outputs.sha }}

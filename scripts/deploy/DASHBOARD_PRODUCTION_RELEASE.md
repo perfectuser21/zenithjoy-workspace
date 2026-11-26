@@ -4,7 +4,9 @@
 
 ## 晋级
 
-在香港 [Dashboard 预发](../../.github/workflows/deploy-dashboard-staging.yml) 验收候选，获取同一完整 SHA 的 Dashboard 业务验收键。从 `main` 手动运行 [ZenithJoy Dashboard production release](../../.github/workflows/zenithjoy-dashboard-production.yml)，选择 `promote`，输入 SHA、验收键和 `PROMOTE`。
+将候选部署到香港 [Dashboard 预发](../../.github/workflows/deploy-dashboard-staging.yml)。从 `main` 可以先单独运行 [Dashboard 业务验证](../../.github/workflows/dashboard-release-verification.yml)，查看登录、测试公司配置草稿保存、独立读回和还原的回执。工作流绑定当前前端和 API 的完整 SHA、预发运行及尝试编号。验证账号只访问香港隔离租户的专用草稿。
+
+从 `main` 手动运行 [ZenithJoy Dashboard production release](../../.github/workflows/zenithjoy-dashboard-production.yml)，选择 `promote`，输入 SHA 和 `PROMOTE`。本次运行会重新执行同一验证，并核对两个生产域名是否支持候选使用的公司设置和选题接口，再开始构建。发布前还应核对候选实际改动影响的页面。
 
 工作流对已验收的提交构建一次生产包。杭州站和香港兼容入口先分别收包验摘要，随后依次切换。两边版本与前端文件均经回读后，日志才会显示新的 `current`。切换或回验失败时，发布器会尝试把两边恢复到同一前驱，核对恢复结果后才清除待恢复记录。
 

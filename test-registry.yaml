@@ -8773,6 +8773,27 @@ tests:
     status: active
     product: CI治理
     note: Dashboard 同版本生产包、双入口发布、失败恢复与回滚。
+  - id: dashboard-stage-evidence-regression
+    path: scripts/release-gate/__tests__/dashboard-staging-evidence.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 独立验证当前香港前端与 API 版本绑定对应的 GitHub 预发运行和尝试编号。
+  - id: dashboard-business-smoke-regression
+    path: scripts/release-gate/__tests__/dashboard-business-smoke.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 测试草稿保护、保存读回和恢复策略的离线用例。真实浏览器验收由香港受保护环境执行。
+  - id: dashboard-api-compat-regression
+    path: scripts/deploy/__tests__/dashboard-api-compat.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 固定候选源码中的公司设置依赖，核对两个生产域名实际的 API 响应口径。
   - id: dashboard-production-coordinator-python
     path: scripts/deploy/__tests__/dashboard-production.test.py
     type: unit
