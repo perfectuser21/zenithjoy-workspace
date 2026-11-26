@@ -60,6 +60,16 @@ profile_card_finish() {
   /usr/bin/grep -qx "video_id=$pc_vid" "$EVIDENCE_ROOT/${pc_eid}-video-identity.txt" || die PROFILE_CARD_WRONG_RETURN_VIDEO
   profile_card_open_comments "${pc_eid}-return-comments"
   ui_evidence "${pc_eid}-restored-comments" >/dev/null
-  profile_card_point comment "$EVIDENCE_ROOT/${pc_eid}-restored-comments.xml" >/dev/null || die PROFILE_CARD_RETURN_COMMENT_UNVERIFIED
+  local returned="$EVIDENCE_ROOT/${pc_eid}-restored-comments.xml"
+  if ! profile_card_point comment "$returned" >/dev/null 2>&1; then
+    local swipe x start_y end_y
+    swipe="$(profile_card_point comment-scroll "$returned")" || die PROFILE_CARD_RETURN_COMMENT_UNVERIFIED
+    read x start_y end_y <<< "$swipe"
+    /bin/cp -p "$returned" "$EVIDENCE_ROOT/${pc_eid}-restored-comments-first.xml" || die PROFILE_CARD_RETURN_COMMENT_UNVERIFIED
+    "$ADB" -s "$SERIAL" shell input swipe "$x" "$start_y" "$x" "$end_y" 500 || die PROFILE_CARD_RETURN_COMMENT_UNVERIFIED
+    wait_ms 800
+    ui_evidence "${pc_eid}-restored-comments" >/dev/null
+    profile_card_point comment "$returned" >/dev/null || die PROFILE_CARD_RETURN_COMMENT_UNVERIFIED
+  fi
   "$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/profile-card-link.py" pack "$EVIDENCE_ROOT" "$pc_uid" "$pc_nick" "$pc_body" "$pc_eid" "$pc_vid" "$PROFILE" "$PHONE_CONTROLLER_DIR/douyin-phone-adb"
 }

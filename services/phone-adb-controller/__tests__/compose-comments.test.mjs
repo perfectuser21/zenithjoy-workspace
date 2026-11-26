@@ -22,6 +22,23 @@ test('returned Compose original verifies the same exact nickname/body while keep
  assert.throws(()=>parseNative(profile,raw,{nickname,douyinId:'person123',commentBody:body+'?'}),/RECIPIENT_NATIVE/);
 });
 function transformed(code){const r=spawnSync('python3',['-c',`import sys,copy,xml.etree.ElementTree as E\nr=E.fromstring(sys.stdin.read());cv=next(n for n in r.iter('node') if n.get('class')=='androidx.compose.ui.platform.ComposeView');lst=next(n for n in cv.iter('node') if n.get('scrollable')=='true');row=lst[0][0]\n${code}\nprint(E.tostring(r,encoding='unicode'))`],{input:raw,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout;}
+test('Compose accepts a centered timestamp inset by one pixel on each edge', () => {
+  const xml = transformed("row[3].set('bounds','[90,589][139,616]')");
+  const expected = parseNativeCommentXml(raw).rows[0];
+  assert.deepEqual(parseNativeCommentXml(xml).rows[0], expected);
+  assert.equal(parseNative(profile, xml, {
+    nickname, douyinId: 'person123', commentBody: body,
+  }).returned_comment_verified, true);
+});
+
+test('Compose still excludes timestamps visibly shifted off the metadata row', () => {
+  const xml = transformed("row[3].set('bounds','[90,591][139,616]')");
+  assert.ok(!parseNativeCommentXml(xml).rows.some(row => row.nickname === nickname));
+  assert.throws(() => parseNative(profile, xml, {
+    nickname, douyinId: 'person123', commentBody: body,
+  }), /RECIPIENT_NATIVE/);
+});
+
 const withoutFirst={
  'missing same-row avatar':"row.remove(row[0])",
  'ambiguous blank avatar':"row.append(copy.deepcopy(row[0]))",

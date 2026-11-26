@@ -16,6 +16,7 @@ import douyinAuthRouter from './routes/douyin-auth';
 import pipelineRouter from './routes/pipeline';
 import contentImagesRouter from './routes/content-images';
 import topicsRouter from './routes/topics';
+import contentFactoryTopicsRouter from './routes/content-factory-topics';
 import pacingConfigRouter from './routes/pacing-config';
 import pipelinesWorkerRouter from './routes/pipelines-worker';
 import competitorResearchRouter from './routes/competitor-research';
@@ -213,6 +214,7 @@ app.use('/api/pipeline', pipelineRouter);
 // content-images：公开访问（图片由 <img> 直接加载，不能加鉴权中间件）
 app.use('/api/content-images', contentImagesRouter);
 app.use('/api/topics', topicsRouter);
+app.use('/api/content-factory/topics', contentFactoryTopicsRouter);
 app.use('/api/pacing-config', pacingConfigRouter);
 app.use('/api/pipelines', pipelinesWorkerRouter);
 app.use('/api/competitor-research', competitorResearchRouter);

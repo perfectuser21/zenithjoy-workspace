@@ -12,9 +12,6 @@ on:
       sha:
         description: 'Full commit SHA required for promote and rollback'
         type: string
-      acceptance_run_key:
-        description: 'Same-version Brain acceptance key required for promote'
-        type: string
       confirm:
         description: 'Type PROMOTE or ROLLBACK to change the API'
         type: string
@@ -22,10 +19,6 @@ on:
 permissions:
   contents: read
   actions: read
-
-concurrency:
-  group: zenithjoy-hangzhou-production-api
-  cancel-in-progress: false
 
 jobs:
   request:
@@ -36,35 +29,58 @@ jobs:
         env:
           MODE: ${{ inputs.action }}
           SHA: ${{ inputs.sha }}
-          RUN_KEY: ${{ inputs.acceptance_run_key }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == refs/heads/main ]]
           case "$MODE" in
-            inspect) [[ -z "$SHA$RUN_KEY$CONFIRM" ]] ;;
-            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ && "$CONFIRM" == PROMOTE ]] ;;
-            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && -z "$RUN_KEY" && "$CONFIRM" == ROLLBACK ]] ;;
+            inspect) [[ -z "$SHA$CONFIRM" ]] ;;
+            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$CONFIRM" == PROMOTE && "$GITHUB_RUN_ATTEMPT" == 1 ]] ;;
+            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$CONFIRM" == ROLLBACK ]] ;;
             *) exit 1 ;;
           esac
 
   admission:
     needs: request
     if: inputs.action == 'promote'
-    uses: ./.github/workflows/release-admission.yml
+    uses: ./.github/workflows/hz-api-release-verification.yml
     with:
       sha: ${{ inputs.sha }}
-      targets: api
-      bind_api_artifact: true
-      acceptance_run_key: ${{ inputs.acceptance_run_key }}
-    secrets: inherit
+    secrets:
+      STAGING_ACCEPTANCE_EMAIL: ${{ secrets.STAGING_ACCEPTANCE_EMAIL }}
+      STAGING_ACCEPTANCE_PASSWORD: ${{ secrets.STAGING_ACCEPTANCE_PASSWORD }}
+
+  business-review:
+    needs: [request, admission]
+    if: inputs.action == 'promote'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    environment: hangzhou-api-business-review
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify the owner's affected-business evidence for this candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
+          STAGED_SHA: ${{ needs.admission.outputs.sha }}
+          STAGED_RUN: ${{ needs.admission.outputs.api_run_id }}
+          STAGED_ATTEMPT: ${{ needs.admission.outputs.api_run_attempt }}
+        run: node scripts/release-gate/hz-api-business-review.mjs
 
   execute:
-    needs: [request, admission]
+    needs: [request, admission, business-review]
     if: >-
       ${{ !cancelled() && needs.request.result == 'success' &&
-          ((inputs.action == 'promote' && needs.admission.result == 'success') ||
-           (inputs.action != 'promote' && needs.admission.result == 'skipped')) }}
+          ((inputs.action == 'promote' && needs.admission.result == 'success' && needs.business-review.result == 'success') ||
+           (inputs.action != 'promote' && needs.admission.result == 'skipped' && needs.business-review.result == 'skipped')) }}
+    concurrency:
+      group: zenithjoy-hangzhou-production-api
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: hangzhou-api-production

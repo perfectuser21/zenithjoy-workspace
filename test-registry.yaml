@@ -488,6 +488,22 @@ tests:
     product: 新媒体运营
     note: "Topics CRUD 路由单元测试（mock DB + internal-auth 鉴权）— 彻底重构 PR-a"
 
+  - id: api-content-factory-topics-session
+    path: apps/api/src/routes/content-factory-topics.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "内容工厂选题共享池的员工会话、同源写入、草稿读回和旧 worker 鉴权回归。"
+
+  - id: dashboard-content-factory-topics-session
+    path: apps/dashboard/src/api/__tests__/topics.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: 选题和节奏配置使用同站员工会话。
+
   - id: api-pacing-config-route
     path: apps/api/tests/pacing-config.test.ts
     type: unit
@@ -4536,9 +4552,9 @@ tests:
     path: apps/api/tests/deploy/promote-all-prod-workflow.test.ts
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: 平台基础
-    note: "回归测试(2026-07-30)：promote-all-prod.yml 的 promote-backend job 07-15拆库刀3后端迁hk-vps docker时未同步更新，仍SSH到已废弃US_MAC_HOST走老蓝绿部署。断言不再引用US_MAC_*secrets且走Tailscale+HK_VPS_SSH_KEY+docker健康冒烟；顺带断言已废弃的promote-prod.yml已被删除。"
+    retirement: 2026-11-26 旧香港 API 和联合晋级入口退役。现役回归见 hz-api-release-regression 和 production-release-entrypoints。
 
   - id: line04-per-cs-config-store-sprint
     path: sprints/06222337-line04-per-cs-config/tests/cs-account-config-store.test.ts
@@ -8231,7 +8247,7 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: 原presence总30秒内的真实fakeSSH进程有限重连及失败闭包；不执行真实设备或安装。
+    note: 真实子进程和 Python 候选闭包夹具覆盖 M4 60 秒、MMV 30 秒、同预算重连及超时不重放。
 
   - id: collection-claimed-workset
     path: services/phone-adb-controller/__tests__/collection-claimed-workset.test.mjs
@@ -8757,6 +8773,27 @@ tests:
     status: active
     product: CI治理
     note: Dashboard 同版本生产包、双入口发布、失败恢复与回滚。
+  - id: dashboard-stage-evidence-regression
+    path: scripts/release-gate/__tests__/dashboard-staging-evidence.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 独立验证当前香港前端与 API 版本绑定对应的 GitHub 预发运行和尝试编号。
+  - id: dashboard-business-smoke-regression
+    path: scripts/release-gate/__tests__/dashboard-business-smoke.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 测试草稿保护、保存读回和恢复策略的离线用例。真实浏览器验收由香港受保护环境执行。
+  - id: dashboard-api-compat-regression
+    path: scripts/deploy/__tests__/dashboard-api-compat.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 固定候选源码中的公司设置依赖，核对两个生产域名实际的 API 响应口径。
   - id: dashboard-production-coordinator-python
     path: scripts/deploy/__tests__/dashboard-production.test.py
     type: unit
@@ -8779,6 +8816,27 @@ tests:
     status: active
     product: CI治理
     note: 杭州生产 API 宿主身份、迁移账本、切换回读及可重放的回退。
+  - id: hz-api-staging-evidence-regression
+    path: scripts/release-gate/__tests__/hz-api-staging-evidence.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 仅接受香港实际运行 SHA 对应的 GitHub 预发镜像产物及精确尝试编号。
+  - id: hz-api-business-smoke-regression
+    path: scripts/release-gate/__tests__/hz-api-business-smoke.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 测试香港隔离草稿的认证、变更读回、版本冲突与安全恢复。正式工作流实测预发。
+  - id: hz-api-business-review-regression
+    path: scripts/release-gate/__tests__/hz-api-business-review.test.mjs
+    type: contract
+    ci: L1
+    status: active
+    product: CI治理
+    note: 生产晋级只接受可信审批者绑定同 SHA 和镜像尝试的业务证据。
   - id: hz-api-candidate-regression
     path: scripts/deploy/__tests__/hz-api-candidate.test.mjs
     type: integration
@@ -9001,15 +9059,15 @@ tests:
   - {"id":"inventory-5d5cb8581f2f5b95","path":"scripts/phone-account-patrol/test_openclaw_native.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-5b9e8981fe9e2a76","path":"scripts/phone-account-patrol/test_runner.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-602aea640f73f174","path":"scripts/phone-account-patrol/test_runtime_safety.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-4a0ec799b6bcf470","path":"scripts/release-gate/__tests__/all-release-recovery.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-ed3036eb193cfc62","path":"scripts/release-gate/__tests__/app-workflow-wiring.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-4a0ec799b6bcf470","path":"scripts/release-gate/__tests__/all-release-recovery.test.mjs","type":"contract","ci":"L1","status":"deprecated","product":"CI治理","retirement":"2026-11-26 旧联合晋级和跨组件自动回退已退役。现役组件分别由 hz-api-release-regression 和 dashboard-production-regression 验证回退。"}
+  - {"id":"inventory-ed3036eb193cfc62","path":"scripts/release-gate/__tests__/app-workflow-wiring.test.mjs","type":"contract","ci":"L1","status":"deprecated","product":"CI治理","retirement":"2026-11-26 旧生产准入与回滚入口退役。现役入口及私有画布退役守卫移至 production-release-entrypoints。"}
   - {"id":"inventory-d9b8a9ccdb75ce61","path":"scripts/release-gate/__tests__/create-release-acceptance.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-03227d06ee8564f1","path":"scripts/release-gate/__tests__/frontend-release.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-00ec8aba7058be5f","path":"scripts/release-gate/__tests__/frontend-staging.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-c13a3377edd30b31","path":"scripts/release-gate/__tests__/process-and-business-gates.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-50112f6769a93c25","path":"scripts/release-gate/__tests__/production-backup.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-b1da779048d91a09","path":"scripts/release-gate/__tests__/release-admission.test.mjs","type":"contract","ci":"L1","status":"active","product":"unclassified","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"Actual mandatory Brain workflow shell and stdin validation module run with SSH/fetch transports isolated; frozen same-SHA S2/S3 required. No real Brain/network/credentials/device/message operations."}
-  - {"id":"inventory-6f6c437d7497b596","path":"scripts/release-gate/__tests__/retired-entrypoints.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"production-release-entrypoints","path":"scripts/release-gate/__tests__/retired-entrypoints.test.mjs","type":"contract","ci":"L1","status":"active","product":"CI治理","execution":"ci-l1-process.yml / release-admission-regression / node --test scripts/release-gate/__tests__/*.test.mjs","note":"拦截已退役入口回流，执行杭州 API 和双域 Dashboard 的真实请求校验脚本。"}
   - {"id":"inventory-72ea866ce3cd0d07","path":"scripts/release-gate/__tests__/staff-staging-project.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-52c5a89611ead670","path":"scripts/test_skill_source_ownership.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-7a16de0d19215de1","path":"services/agent/build-modules/line04/wechat-rpa/tests/test_always_double_read.py","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:services/agent/build-modules/line04/wechat-rpa/tests/test_always_double_read.py. Runtime/package mirror duplicated authoring tests; single source services/agent/wechat-rpa retains current assertions. Package byte comparator and build exclusions reject regenerated duplicate tests. Overlay subset and obsolete recovery field compared separately; current source 51 cases verified."}
@@ -11529,6 +11587,78 @@ tests:
     product: AI员工
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；计划与明确批准后固定顺序隔离恢复，helper死亡、PID复用与未知失败封闭；不冒充现场停止证明"
+
+  - id: phone-device-epoch-fence-yuesheng-readback
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-readback.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；核验悦升云手机 5044 到 5045 的前后观察与同一维护租约"
+
+  - id: phone-device-epoch-fence-yuesheng-migration
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-migration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；模拟悦升 5044 到 5045 迁移的审批、租约、持久写入和中断保护"
+
+  - id: phone-device-epoch-fence-yuesheng-plan
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-plan.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；按现行 Brain 维护任务、候选发布和强租约生成待批计划摘要"
+
+  - id: phone-device-epoch-fence-yuesheng-host-reads
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-host-reads.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；通过隔离 ADB socket 复核悦升云机物理身份、两端监听与同一维护租约"
+
+  - id: phone-device-epoch-fence-yuesheng-execution
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-execution.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；验证切换通过已绑定的两条 Mac Studio ADB 路由及实时授权"
+
+  - id: phone-device-epoch-fence-yuesheng-issuer
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-issuer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；验证原始迁移回执与 CAS 释放后才能签发工作流准入"
+
+  - id: phone-device-epoch-fence-yuesheng-local-lock
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-local-lock.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；验证同一云手机的 TCP 地址和物理设备号共用迁移保护"
+
+  - id: phone-yuesheng-adb-daemon-binding
+    path: services/phone-adb-controller/__tests__/yuesheng-adb-daemon-binding.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / public-code-phone-darwin-test / python3 -B services/phone-adb-controller/__tests__/yuesheng-adb-daemon-binding.test.py
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；通过隔离 Mac 进程和端口验证监听器、父进程和锁身份"
 
   - id: leadgen-activity-skill-public-source
     path: services/phone-adb-controller/__tests__/activity-skill-public-source.test.mjs

@@ -66,7 +66,11 @@ test('真实held隔离Python argv：仅已核48b语法接纳exact -I -B -S，其
 
 test('新source仅可终态核已审d7c私有service，旧manifest/servicehash不可自报',()=>py(fixture+`with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as old:
  r,home,path,receipt,service,g,document=fixture(d)
- service.write_bytes((ROOT/'adb-host-service.py').read_bytes());manifest=json.loads((r/'deployment-manifest.json').read_text())
+ import gzip
+ # This case verifies the frozen deployed service, independently of the current launcher.
+ frozen=gzip.decompress((ROOT/'__tests__/fixtures/adb-host-service-d7c9e6b2.py.gz').read_bytes())
+ assert hashlib.sha256(frozen).hexdigest()=='933443a98589dfbfb2c63d2919bae8d4402f9030dfa9dc0816389baa73d41f64'
+ service.write_bytes(frozen);manifest=json.loads((r/'deployment-manifest.json').read_text())
  for row in manifest['files']:
   if row['deployed_path']=='adb-host-service.py':row['content_sha256']=hashlib.sha256(service.read_bytes()).hexdigest()
  (r/'deployment-manifest.json').write_text(json.dumps(manifest));oldroot=pathlib.Path(old).resolve();shutil.copytree(r,oldroot,dirs_exist_ok=True)

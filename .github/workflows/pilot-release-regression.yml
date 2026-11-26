@@ -18,6 +18,8 @@ jobs:
   snapshot:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    outputs:
+      run_attempt: ${{ github.run_attempt }}
     env:
       SOURCE_REPO: ${{ inputs.source_repo || github.repository }}
       MAP_SCOPE: ${{ inputs.scope }}
@@ -69,7 +71,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}
+          name: pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}-attempt-${{ github.run_attempt }}
           path: evidence/*.json
           if-no-files-found: error
   verify:
@@ -107,7 +109,8 @@ jobs:
           mkdir -p output
       - uses: actions/download-artifact@v4
         with:
-          name: pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}
+          name: pilot-release-snapshot-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}-attempt-${{ needs.snapshot.outputs.run_attempt }}
+          github-token: ${{ github.token }}
           path: snapshot
       - name: 准备固定中央Skill对象缓存
         env:
@@ -135,7 +138,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pilot-release-verification-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}
+          name: pilot-release-verification-${{ inputs.scope }}-${{ inputs.head_revision || github.sha }}-attempt-${{ github.run_attempt }}
           path: output/*.json
           retention-days: 90
           if-no-files-found: error

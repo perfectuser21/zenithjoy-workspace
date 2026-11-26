@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {digest} from '../runtime-definition.mjs';
 const load=()=>import('../device-epoch-fence-admission.mjs'),id=n=>`${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
-function fixture(){const taskId=id('1'),runId=id('2'),bindingId=id('3'),workflow=id('4'),version=id('5'),taskRun=id('6'),epoch=id('7'),source='a'.repeat(40),serial='47.100.213.173:10001',policyHash='b'.repeat(64),activity={reference_id:id('8'),activity_id:id('9'),activity_definition_version_id:id('a')},run_binding={run_binding_id:bindingId,workflow_id:workflow,workflow_definition_version_id:version,attempt_key:taskId+':1',activities:{preflight:activity}},company={company_id:id('b'),tenant_id:id('c'),version:26,policy_id:'original'},old={pid:91186,uid:501,start_identity:'old-start',endpoint:'tcp:127.0.0.1:5041',executable:'/adb',executable_sha256:'d'.repeat(64),policy_path:'/old.json',policy_sha256:'e'.repeat(64)},fresh={...old,pid:120000,start_identity:'new-start',endpoint:'tcp:127.0.0.1:5042',instance_id:'mmv-cloud-epoch2',policy_path:'/new.json',policy_sha256:policyHash},metadata={machine_id:'us-mac-m4',profile_sha256:'f'.repeat(64)},frozen={execution_mode:'code',deployment:{source_commit:source,observation_id:id('d')},release:{id:id('e')},files:{'runtime/code.mjs':'0'.repeat(64)},public_domain:{protocol:'workflow-domain/v1',...metadata,task_id:taskId,run_id:runId,run_binding,company},run_identity:{tag:'new-run'},discovery_phone_scope:{source_commit:source,serial,profile:'cloud-phone-test',expected_account:'77980009922',policy:{schema_version:2,instance_id:fresh.instance_id,endpoint:fresh.endpoint},policy_binding:{policy_path:fresh.policy_path,policy_sha256:policyHash}}},record={protocol:'device-epoch-fence-record/v1',epoch_id:epoch,status:'fenced',authority_basis:'old-route-fenced-observed-noninterference/v1',original_execution_stopped:false,android_internal:'not_attested',resource:{serial,profile:'cloud-phone-test',expected_account:'77980009922',company},old_route:old,new_route:fresh,runtime_source:{commit:source,files:{code:'0'.repeat(64)}},original_quarantine:{dev:1,ino:2,fields:{owner:'original\n'}}},task={id:taskId,status:'in_progress',claimed_by:'common-runner',result:{common_runner:{...metadata,task_id:taskId,run_id:runId,run_binding}}},binding={id:bindingId,run_id:runId,source_kind:'internal',workflow_id:workflow,workflow_definition_version_id:version,attempt_key:run_binding.attempt_key,task_run_id:taskRun,release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,payload:{runtime_snapshot_sha256:digest({'code.mjs':'0'.repeat(64)})}};
+function fixture(serial='47.100.213.173:10001'){const taskId=id('1'),runId=id('2'),bindingId=id('3'),workflow=id('4'),version=id('5'),taskRun=id('6'),epoch=id('7'),source='a'.repeat(40),policyHash='b'.repeat(64),activity={reference_id:id('8'),activity_id:id('9'),activity_definition_version_id:id('a')},run_binding={run_binding_id:bindingId,workflow_id:workflow,workflow_definition_version_id:version,attempt_key:taskId+':1',activities:{preflight:activity}},company={company_id:id('b'),tenant_id:id('c'),version:26,policy_id:'original'},old={pid:91186,uid:501,start_identity:'old-start',endpoint:'tcp:127.0.0.1:5041',executable:'/adb',executable_sha256:'d'.repeat(64),policy_path:'/old.json',policy_sha256:'e'.repeat(64)},fresh={...old,pid:120000,start_identity:'new-start',endpoint:'tcp:127.0.0.1:5042',instance_id:'mmv-cloud-epoch2',policy_path:'/new.json',policy_sha256:policyHash},metadata={machine_id:'us-mac-m4',profile_sha256:'f'.repeat(64)},frozen={execution_mode:'code',deployment:{source_commit:source,observation_id:id('d')},release:{id:id('e')},files:{'runtime/code.mjs':'0'.repeat(64)},public_domain:{protocol:'workflow-domain/v1',...metadata,task_id:taskId,run_id:runId,run_binding,company},run_identity:{tag:'new-run'},discovery_phone_scope:{source_commit:source,serial,profile:'cloud-phone-test',expected_account:'77980009922',policy:{schema_version:2,instance_id:fresh.instance_id,endpoint:fresh.endpoint},policy_binding:{policy_path:fresh.policy_path,policy_sha256:policyHash}}},record={protocol:'device-epoch-fence-record/v1',epoch_id:epoch,status:'fenced',authority_basis:'old-route-fenced-observed-noninterference/v1',original_execution_stopped:false,android_internal:'not_attested',resource:{serial,profile:'cloud-phone-test',expected_account:'77980009922',company},old_route:old,new_route:fresh,runtime_source:{commit:source,files:{code:'0'.repeat(64)}},original_quarantine:{dev:1,ino:2,fields:{owner:'original\n'}}},task={id:taskId,status:'in_progress',claimed_by:'common-runner',result:{common_runner:{...metadata,task_id:taskId,run_id:runId,run_binding}}},binding={id:bindingId,run_id:runId,source_kind:'internal',workflow_id:workflow,workflow_definition_version_id:version,attempt_key:run_binding.attempt_key,task_run_id:taskRun,release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,payload:{runtime_snapshot_sha256:digest({'code.mjs':'0'.repeat(64)})}};
 return {record,frozen,task,binding,links:{task_id:taskId,task_run_id:taskRun},taskRun:{id:taskRun,task_id:taskId,run_id:runId,status:'running',ended_at:null},central:{device_name:serial,locked_by:taskId,expires_at:new Date(Date.now()+60000).toISOString(),expired:false,lease_version:'88'},oldDaemon:old,newDaemon:fresh,oldInventory:[],newInventory:[{serial,state:'device'}],policySha256:policyHash,source:record.runtime_source,archive:{dev:1,ino:2,fields:{owner:'original\n'}},activeOwner:'new-run\n',activeQuarantined:false};}
 test('业务Task持中央owner，旧maintenance不需持锁；历史unknown不提升',async()=>{const {verifyEpochFacts}=await load(),f=fixture(),r=verifyEpochFacts(f);assert.equal(r.authorized,true);assert.equal(r.task_id,f.task.id);assert.equal(r.original_execution_stopped,false);assert.equal(r.android_internal,'not_attested');});
 test('下一frame旧route重现/PID或source漂移/Task伪投影/中央抢占均拒绝',async()=>{const {verifyEpochFacts}=await load();for(const change of [f=>f.oldInventory.push({serial:f.record.resource.serial,state:'device'}),f=>f.oldDaemon={...f.oldDaemon,pid:91187},f=>f.oldDaemon={...f.oldDaemon,start_identity:'reused'},f=>f.newDaemon={...f.newDaemon,pid:120001},f=>f.central.locked_by='other',f=>f.links.task_id=id('d'),f=>f.binding.task_run_id=id('d'),f=>f.taskRun.status='canceled',f=>f.source={...f.source,commit:'c'.repeat(40)},f=>f.policySha256='0'.repeat(64),f=>f.archive.ino++,f=>f.activeOwner='old-run\n',f=>f.activeQuarantined=true,f=>f.frozen.execution_mode='agent',f=>f.record.original_execution_stopped=true]){const f=fixture();change(f);assert.throws(()=>verifyEpochFacts(f));}});
@@ -144,4 +144,105 @@ test('fresh standalone task_run projection includes authorization context but ex
   const later=structuredClone(f);change(later);assert.notDeepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
  }
  const later=structuredClone(f);later.taskRun.context.heartbeat_at='later';later.taskRun.context.span_count=99;assert.deepEqual(businessAuthorityProjection(f),businessAuthorityProjection(later));
+});
+
+test('用网络地址核对 ADB 清单，用硬件编号核对同一设备与业务租约',async()=>{
+ const {verifyEpochFacts}=await load();
+ const physical='PHONE-0045',locator='127.0.0.1:15555';
+ const f=fixture(physical);
+ f.record.resource.adb_serial=locator;
+ f.newInventory=[{serial:locator,state:'device'}];
+ f.newHardwareSerial=physical;
+ assert.equal(verifyEpochFacts(f).serial,physical);
+ for(const change of [
+   data=>delete data.newHardwareSerial,
+   data=>data.newHardwareSerial='WRONG-PHONE',
+   data=>data.record.resource.adb_serial='127.0.0.1:00000',
+   data=>data.oldInventory.push({serial:locator,state:'device'}),
+   data=>data.oldInventory.push({serial:physical,state:'offline'}),
+   data=>data.newInventory=[{serial:'127.0.0.1:15556',state:'device'}],
+   data=>data.central.device_name=locator
+ ]){
+   const bad=structuredClone(f);
+   change(bad);
+   assert.throws(()=>verifyEpochFacts(bad));
+ }
+});
+
+function cleanMigrationFixture(home = process.env.HOME) {
+ const serial='B114E2190975',adbSerial='127.0.0.1:15555',epoch='8f5f6442-540f-48b6-9577-c21cd848aa02';
+ const f=fixture(serial),r=f.record,s=f.frozen.discovery_phone_scope;
+ const old='tcp:127.0.0.1:5044',next='tcp:127.0.0.1:5045',instance='mmv-yuesheng-direct';
+ const lock={device_name:serial,locked_by:epoch,locked_at:'2026-11-26T13:00:00Z',expires_at:'2026-11-26T13:15:00Z',lease_version:'41'};
+ const claim={claimed_by:'maintenance',claimed_at:'2026-11-26T12:55:00Z'};
+ const plan={protocol:'yuesheng-adb-migration-plan/v1',task_id:epoch,pending_action_id:id('a'),claim,lease:{...lock,expired:false},source_commit:f.source.commit,
+  release_id:f.frozen.release.id,observation_id:f.frozen.deployment.observation_id,physical_serial:serial,transport_serial:adbSerial,
+  old_endpoint:old,new_endpoint:next,new_instance_id:instance};
+ const planSha=digest(plan),approvalSha='e'.repeat(64);
+ const completion={protocol:'yuesheng-adb-migration-transaction/v1',status:'observed',plan_sha256:planSha,
+  observation:{protocol:'yuesheng-adb-migration-observation/v1',authorization:'none',task_id:epoch,lease_version:lock.lease_version,source_commit:plan.source_commit,
+   release_id:plan.release_id,observation_id:plan.observation_id,physical_serial:serial,transport_serial:adbSerial,old_endpoint:old,new_endpoint:next,
+   before_at:'2026-11-26T13:01:00Z',after_at:'2026-11-26T13:02:00Z',readback_sha256:'d'.repeat(64)}};
+ const completionRaw=JSON.stringify(completion)+'\n';
+ Object.assign(r,{epoch_id:epoch,authority_basis:'approved-clean-route-migration/v1',
+  resource:{...r.resource,profile:'wuying_android14',adb_serial:adbSerial,line:'yuesheng'},
+  old_route:{endpoint:old,daemon_binding:{kind:'external_existing',endpoint:old,child:{pid:7582}}},
+  new_route:{endpoint:next,instance_id:instance,policy_path:`${home}/.config/zenithjoy/adb-instances/${instance}.json`,policy_sha256:f.policySha256,
+   daemon_binding:{kind:'managed',endpoint:next,child:{pid:76407},startup:{source_commit:plan.source_commit}}},
+  migration:{journal_path:`${home}/.local/share/zenithjoy/device-epoch-migrations/${serial}/yuesheng-5044-to-5045`,plan_sha256:planSha,
+   approval_sha256:approvalSha,completion_sha256:digest(completionRaw),release_id:plan.release_id,observation_id:plan.observation_id,
+   binding_sha256:{'device-epoch-fence-yuesheng-host-reads.mjs':'b'.repeat(64),'yuesheng-adb-daemon-binding.py':'c'.repeat(64)},
+   central_release:{scope:{maintenance_task_id:epoch,serial,claim},expected:lock,current:{device_name:serial,locked_by:null,locked_at:null,expires_at:null,lease_version:'42'}}}});
+ delete r.original_quarantine;
+ Object.assign(s,{profile:r.resource.profile});Object.assign(s.policy,{instance_id:instance,endpoint:next});s.policy_binding.policy_path=r.new_route.policy_path;
+ Object.assign(f,{oldDaemon:r.old_route,newDaemon:r.new_route,newInventory:[{serial:adbSerial,state:'device'}],newHardwareSerial:serial,cleanCompletionSha256:r.migration.completion_sha256});
+ delete f.archive;
+ return {f,completionRaw,storedPlan:{plan,plan_sha256:planSha,approval_sha256:approvalSha}};
+}
+
+test('悦升干净切换对同一清场记录和当前业务租约准入，无需伪造历史隔离归档',async()=>{
+ const {verifyEpochFacts}=await load(),{f}=cleanMigrationFixture();
+ const proof=verifyEpochFacts(f);
+ assert.equal(proof.serial,'B114E2190975');assert.equal(proof.adb_serial,'127.0.0.1:15555');assert.equal(proof.original_execution_stopped,false);
+ for(const change of [
+   v=>delete v.cleanCompletionSha256,
+   v=>v.record.original_quarantine={archive_path:'/fake'},
+   v=>v.record.old_route.endpoint='tcp:127.0.0.1:5041',
+   v=>v.record.migration.release_id=id('2'),
+   v=>v.record.migration.central_release.current.locked_by=v.task.id,
+   v=>v.record.migration.central_release.current.lease_version=v.record.migration.central_release.expected.lease_version,
+   v=>v.oldInventory=[{serial:'127.0.0.1:15555',state:'device'}],
+   v=>v.newHardwareSerial='other',
+   v=>v.activeQuarantined=true,
+ ]){const p=cleanMigrationFixture().f;change(p);assert.throws(()=>verifyEpochFacts(p));}
+});
+
+test('清场 epoch 冻结核对固定 journal 原始摘要、同一计划和候选，并拒绝未知终态',async()=>{
+ const fs=await import('node:fs'),path=await import('node:path'),os=await import('node:os');
+ const {freezeFenceReference}=await import('../device-epoch-fence-reference.mjs');
+ const home=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'clean-epoch-ref-'));
+ try{
+  const {f,completionRaw,storedPlan}=cleanMigrationFixture(home),r=f.record,s=f.frozen.discovery_phone_scope;
+  const journal=r.migration.journal_path,recordDir=path.join(home,'.local/share/zenithjoy/device-epoch-fences',r.resource.serial);
+  fs.mkdirSync(journal,{recursive:true,mode:0o700});fs.mkdirSync(recordDir,{recursive:true,mode:0o700});
+  const policy=r.new_route.policy_path,raw=JSON.stringify(s.policy);
+  fs.mkdirSync(path.dirname(policy),{recursive:true,mode:0o700});
+  r.new_route.policy_sha256=digest(raw);fs.writeFileSync(policy,raw,{mode:0o600});
+  fs.writeFileSync(path.join(recordDir,r.epoch_id+'.json'),JSON.stringify(r),{mode:0o600});
+  fs.writeFileSync(path.join(journal,'plan.json'),JSON.stringify(storedPlan),{mode:0o600});
+  const released=path.join(journal,'central-release-result.json');
+  fs.writeFileSync(released,JSON.stringify(r.migration.central_release),{mode:0o600});
+  const completed=path.join(journal,'complete.json');fs.writeFileSync(completed,completionRaw,{mode:0o600});
+  const freeze=()=>freezeFenceReference({scope:s,epochId:r.epoch_id,home});
+  assert.equal(freeze().epoch_id,r.epoch_id);
+  const mismatched=structuredClone(r.migration.central_release);mismatched.current.lease_version='43';
+  fs.writeFileSync(released,JSON.stringify(mismatched));assert.throws(freeze,/EPOCH_CLEAN_RELEASE/);
+  fs.writeFileSync(released,JSON.stringify(r.migration.central_release));
+  fs.writeFileSync(completed,completionRaw+' ');assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
+  fs.writeFileSync(completed,completionRaw);
+  const planPath=path.join(journal,'plan.json');
+  fs.writeFileSync(planPath,JSON.stringify({...storedPlan,approval_sha256:'0'.repeat(64)}));assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
+  fs.writeFileSync(planPath,JSON.stringify(storedPlan));fs.writeFileSync(path.join(journal,'unknown.json'),'{}',{mode:0o600});
+  assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
 });

@@ -1,7 +1,8 @@
 import {readFileSync,writeFileSync,appendFileSync,mkdirSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
 const c=JSON.parse(readFileSync(process.env.CANDIDATE_TRANSPORT_CONFIG)),args=process.argv.slice(2),host=args.at(-2),command=args.at(-1);
 const presence=command.includes("' presence "),install=command.includes("' install ");
 const input=readFileSync(0),home=join(c.top,'remote-'+host);mkdirSync(home,{recursive:true});
@@ -15,10 +16,14 @@ if(presence&&host==='xian-m4'&&c.mode.startsWith('presence-connect-')){
  if(c.mode==='presence-connect-non255'){console.error('fixture nontransport rejection');process.exit(75);}
  if(c.mode==='presence-connect-output'){process.stdout.write('{"protocol":"candidate_presence_v1","state":"absent"}');process.exit(255);}
  if(c.mode==='presence-connect-always'||count===0){await new Promise(resolve=>setTimeout(resolve,200));console.error('ssh: connect to host fixture port 22: Operation timed out');process.exit(255);}
- if(c.mode==='presence-connect-hang'){await new Promise(resolve=>setTimeout(resolve,60000));process.exit(255);}
+ if(c.mode==='presence-connect-hang'){await delay(5000);process.exit(255);}
  if(c.mode==='presence-connect-bad-json'){process.stdout.write('{truncated');process.exit(0);}
  if(c.mode==='presence-connect-identity'){process.stdout.write(JSON.stringify({protocol:'candidate_presence_v1',state:'present',identity:{source_commit:'other'}}));process.exit(0);}
  if(c.mode==='presence-connect-pending')mkdirSync(join(home,'.local/share/zenithjoy/phone-candidates','.'+c.sha+'.foreign'),{recursive:true});
+}
+if(presence&&existsSync(final)){
+ if((host==='mmv'&&c.mode==='presence-read-mmv')||(host==='xian-m4'&&c.mode==='presence-read-slow'))await delay(1850);
+ if(host==='xian-m4'&&c.mode==='presence-read-hang')await delay(5000);
 }
 if((install&&c.mode==='install-255')||(collect&&c.mode==='collect-255')||(manifest&&c.mode==='manifest-255')){console.error('fixture mutation/collector transport failed');process.exit(255);}
 if(presence&&c.mode==='bad-json'){process.stdout.write('{truncated');process.exit(0);}
@@ -27,6 +32,25 @@ if(install&&c.mode==='late-final'){mkdirSync(final,{recursive:true});writeFileSy
 if(install&&c.mode==='late-pending')mkdirSync(join(home,'.local/share/zenithjoy/phone-candidates','.'+c.sha+'.late-writer'),{recursive:true});
 if(collect&&c.mode==='late-drift')writeFileSync(join(final,'runtime/transport-payload.bin'),'drift after presence');
 if(archive&&existsSync(final)&&c.mode==='recover'){console.error('fixture repeated archive transport unavailable');process.exit(75);}
+if(install&&host==='xian-m4'&&c.mode.startsWith('install-progress-')){
+ if(c.mode.endsWith('-malformed')){
+  process.stdout.write('candidate_install_received_v1 invalid\n');
+  await delay(5000);
+  process.exit(75);
+ }
+ if(c.mode.endsWith('-corrupt'))input[input.length-1]^=1;
+ const remote=spawn('/bin/bash',['-c',command],{env:{...process.env,HOME:home}});
+ remote.stdout.pipe(process.stdout);remote.stderr.pipe(process.stderr);
+ const status=new Promise(resolve=>remote.once('close',resolve));
+ remote.stdin.on('error',()=>{});
+ const chunks=c.mode.endsWith('-limit')?8:4,chunkBytes=65536;
+ for(let i=0;i<chunks;i++){
+  remote.stdin.write(input.subarray(i*chunkBytes,(i+1)*chunkBytes));
+  await delay(c.mode.endsWith('-stall')?5000:500);
+ }
+ remote.stdin.end(c.mode.endsWith('-truncated')?undefined:input.subarray(chunks*chunkBytes));
+ process.exitCode=(await status)??1;
+}else{
 const out=spawnSync('/bin/bash',['-c',command],{input,env:{...process.env,HOME:home},maxBuffer:8*1024*1024,timeout:15000});
 if(out.status===0&&archive&&host==='xian-m4'&&c.mode==='lose-once'&&!existsSync(lost)){
  writeFileSync(lost,'committed-before-disconnect');console.error('fixture transport lost after remote commit');process.exit(75);
@@ -34,3 +58,4 @@ if(out.status===0&&archive&&host==='xian-m4'&&c.mode==='lose-once'&&!existsSync(
 if(out.status===0&&collect){const value=JSON.parse(out.stdout);value.observed_hostname=host==='mmv'?'aad17-2.macminivault.com':'mac-mini-m4-xian';process.stdout.write(JSON.stringify(value));}
 else {process.stdout.write(out.stdout||'');process.stderr.write(out.stderr||'');}
 process.exit(out.status??1);
+}

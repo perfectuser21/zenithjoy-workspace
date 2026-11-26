@@ -1,7 +1,6 @@
 name: Deploy Staff Hub to Staging (:9444)
 
-# 对齐 apps/api 的 deploy-staging-hk.yml 模式：push main 自动部署到 staging，绝不碰生产。
-# 生产更新走人工闸门 promote-staff-hub-prod-hk.yml（workflow_dispatch）。
+# Staff Hub 常规预发已退役（2026-11-26）。GitHub 状态为 disabled_manually，保留原流程供历史回溯。
 
 on:
   push:

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir,hostname } from 'node:os';
 import { deploymentTarget } from '../runtime-host.mjs';
 import { join } from 'node:path';
@@ -8,6 +9,26 @@ import { createHash } from 'node:crypto';
 import { freezeDefinition,agentInput } from '../runtime-definition.mjs';
 const hash = value => createHash('sha256').update(typeof value === 'string' ? value : canonical(value)).digest('hex');
 function canonical(x) { return JSON.stringify(x, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v); }
+let cachedPgTarballs;
+function fixturePgTarballs() {
+  if (cachedPgTarballs) return cachedPgTarballs;
+  const { packages } = JSON.parse(readFileSync(new URL('../preflight-pg-lock.json', import.meta.url), 'utf8'));
+  const dir = mkdtempSync(join(tmpdir(), 'runtime-freeze-pg-tarballs-'));
+  try {
+    const pack = spawnSync('npm', [
+      'pack', '--offline', '--ignore-scripts', '--pack-destination', dir,
+      ...packages.map(pkg => pkg.resolved),
+    ], { cwd: dir, encoding: 'utf8', timeout: 15000 });
+    assert.ifError(pack.error);
+    assert.equal(pack.status, 0, 'npm ci must populate the fixture tarball cache.\n' + pack.stderr);
+    cachedPgTarballs = new Map(packages.map(pkg => [
+      pkg.name, readFileSync(join(dir, `${pkg.name}-${pkg.version}.tgz`)),
+    ]));
+    return cachedPgTarballs;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'runtime-freeze-')); const sha='a'.repeat(40);
   writeFileSync(join(dir,'entry.sh'), '#!/bin/sh\necho frozen\n');
@@ -426,7 +447,7 @@ test('真实HTTP prepare仅取精确MMV活记录，全量不可用仍冻结路�
 });
 
 test('Agent preflight private dependency/control identities freeze together and cannot drift or disappear on resume',async()=>{
- const f=primaryFixture(),deps=await import('../preflight-pg-dependencies.mjs');await deps.installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40)});
+ const f=primaryFixture(),deps=await import('../preflight-pg-dependencies.mjs');await deps.installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40),tarballs:fixturePgTarballs()});
  const preflightPg=deps.preflightPgLockIdentity({runtimeRoot:f.dir}),manifestPath=join(f.dir,'deployment-manifest.json'),manifest=JSON.parse(readFileSync(manifestPath)),descriptor='preflight-pg-lock.json',bytes=readFileSync(join(f.dir,descriptor));
  manifest.files.push({path:'services/phone-adb-controller/'+descriptor,deployed_path:descriptor,content_sha256:hash(bytes.toString('utf8'))});manifest.dependencies={preflight_pg:deps.preflightPgDeployment({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40)})};writeFileSync(manifestPath,JSON.stringify(manifest));
  const av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;av.payload.implementation_bindings.push({kind:'code',status:'verified',repo:av.source_repo,path:'services/phone-adb-controller/'+descriptor,revision:av.source_commit,content_sha256:hash(bytes.toString('utf8'))});av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
@@ -471,7 +492,7 @@ test('normal103 actual freeze publishes only one genuine heartbeat lease after f
  const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;w.payload.activities[0].slot_key='scoring';w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
  const input=agentInput({LEADGEN_EXECUTION_MODE:'agent',LEADGEN_EXECUTION_TRANSPORT:'raw-model-v1',LEADGEN_MAX_TURNS:'8',WF_BRAIN_WORKFLOW:workflow,WF_BRAIN_TASK_ID:taskId,WFR_TAG:'native_fixture',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_MAX_SECONDS:'300',WF_RUN_START_TS:String(Math.floor(Date.now()/1000))});
  const claim={claimed_by:'fixture-owner',claimed_at:new Date().toISOString()},task={id:taskId,status:'in_progress',...claim,payload:{source_commit:'a'.repeat(40),workflow_key:workflow,run_tag:input.run_tag,profile:input.profile,company_line:input.line,scope:{limit:1,source_run:null,execution_transport:input.execution_transport,max_turns:input.max_turns,run_max_seconds:input.run_max_seconds}}};f.routes['/api/brain/tasks/'+taskId]={task};
- await installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40)});
+ await installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40),tarballs:fixturePgTarballs()});
  const manifestPath=join(f.dir,'deployment-manifest.json'),manifest=JSON.parse(readFileSync(manifestPath));manifest.target='mmv';manifest.dependencies={preflight_pg:preflightPgDeployment({runtimeRoot:f.dir,sourceCommit:manifest.source_commit})};
  for(const file of ['preflight-pg-lock.json'])manifest.files.push({path:'services/phone-adb-controller/'+file,deployed_path:file,content_sha256:hash(readFileSync(join(f.dir,file),'utf8'))});writeFileSync(manifestPath,JSON.stringify(manifest));
  let posts=0,reads=0,dropAck=false;const sockets=new Set(),server=http.createServer(async(q,r)=>{if(q.headers.authorization!=='Bearer fixture-brain-token'){r.statusCode=401;return r.end();}if(q.method==='GET'&&q.url===`/api/brain/tasks/${taskId}`){reads++;return r.end(JSON.stringify({task}));}if(q.method!=='POST'||q.url!==`/api/brain/tasks/${taskId}/heartbeat`){r.statusCode=400;return r.end();}let bytes='';for await(const chunk of q)bytes+=chunk;const body=JSON.parse(bytes);if(body.claimer!==claim.claimed_by||!Number.isInteger(body.lease_seconds)||body.lease_seconds<30||body.lease_seconds>300){r.statusCode=400;return r.end();}posts++;if(dropAck)return q.socket.destroy();r.end(JSON.stringify({ok:true,lease_until:new Date(Date.now()+body.lease_seconds*1000).toISOString(),lease_seconds:body.lease_seconds,heartbeat_count:1}));});server.on('connection',s=>{sockets.add(s);s.once('close',()=>sockets.delete(s));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(async()=>{for(const s of sockets)s.destroy();await new Promise(r=>server.close(r));});
@@ -488,7 +509,7 @@ for(const workflow of ['douyin_video_discovery','douyin_video_processing'])test(
  const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
  const env={LEADGEN_EXECUTION_MODE:'agent',LEADGEN_EXECUTION_TRANSPORT:'raw-model-v1',LEADGEN_MAX_TURNS:'8',WF_BRAIN_WORKFLOW:workflow,WF_BRAIN_TASK_ID:taskId,WFR_TAG:'native_phone_fixture',P:'cloud-phone-test',SERIAL:'47.100.213.173:10001',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'1',WF_RUN_MAX_SECONDS:'300',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),...(workflow==='douyin_video_processing'?{LEADGEN_SOURCE_RUN:'source101',LEADGEN_COMMENT_LIMIT:'1'}:{})};
  const input=agentInput(env),claim={claimed_by:'phone-fixture-owner',claimed_at:new Date().toISOString()},task={id:taskId,status:'in_progress',...claim,payload:{source_commit:'a'.repeat(40),workflow_key:workflow,run_tag:input.run_tag,profile:input.profile,device_serial:input.serial,company_line:input.line,scope:{limit:1,source_run:input.source_run,execution_transport:input.execution_transport,max_turns:input.max_turns,run_max_seconds:input.run_max_seconds}}};f.routes['/api/brain/tasks/'+taskId]={task};
- await deps.installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40)});
+ await deps.installPreflightPg({runtimeRoot:f.dir,sourceCommit:'a'.repeat(40),tarballs:fixturePgTarballs()});
  const manifestPath=join(f.dir,'deployment-manifest.json'),manifest=JSON.parse(readFileSync(manifestPath));manifest.target='mmv';manifest.dependencies={preflight_pg:deps.preflightPgDeployment({runtimeRoot:f.dir,sourceCommit:manifest.source_commit})};manifest.files.push({path:'services/phone-adb-controller/preflight-pg-lock.json',deployed_path:'preflight-pg-lock.json',content_sha256:hash(readFileSync(join(f.dir,'preflight-pg-lock.json'),'utf8'))});writeFileSync(manifestPath,JSON.stringify(manifest));
  let posts=0,reads=0,dropAck=false;const sockets=new Set(),server=http.createServer(async(q,r)=>{assert.equal(q.headers.authorization,'Bearer fixture-phone-token');if(q.method==='GET'&&q.url===`/api/brain/tasks/${taskId}`){reads++;return r.end(JSON.stringify({task}));}assert.equal(q.method,'POST');assert.equal(q.url,`/api/brain/tasks/${taskId}/heartbeat`);let bytes='';for await(const chunk of q)bytes+=chunk;const body=JSON.parse(bytes);assert.equal(body.claimer,claim.claimed_by);assert.ok(Number.isInteger(body.lease_seconds)&&body.lease_seconds>=30&&body.lease_seconds<=300);posts++;if(dropAck)return q.socket.destroy();r.end(JSON.stringify({ok:true,lease_until:new Date(Date.now()+body.lease_seconds*1000).toISOString(),lease_seconds:body.lease_seconds,heartbeat_count:1}));});server.on('connection',s=>{sockets.add(s);s.once('close',()=>sockets.delete(s));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(async()=>{for(const s of sockets)s.destroy();await new Promise(r=>server.close(r));});
  const options={...f.options,executionMode:'agent',agentInput:input,...(workflow==='douyin_video_processing'?{samplingInput:commentSamplingInput(env)}:{}),preflightPg:deps.preflightPgLockIdentity({runtimeRoot:f.dir}),preflightControlScope:{source_commit:manifest.source_commit,target:'mmv'},preflightProfile:{schema_version:1,path:join(f.dir,'cloud-phone-test-profiles.tsv'),sha256:'1'.repeat(64),profile:input.profile,serial:input.serial,model:'iPad Pro',width:720,height:1280,enabled:true},nativeLeaseDriver:{origin:`http://127.0.0.1:${server.address().port}`,credential:()=> 'fixture-phone-token'}};

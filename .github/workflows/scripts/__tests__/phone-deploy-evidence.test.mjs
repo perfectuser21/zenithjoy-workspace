@@ -9,7 +9,7 @@ import {digest as deploymentDigest} from '../../../../services/phone-adb-control
 import {deploymentAssertionPlan} from '../../../../services/phone-adb-controller/deployment-preflight.mjs';
 const url=new URL('../phone-deploy-evidence.mjs',import.meta.url),sha='a'.repeat(40),repo='perfectuser21/zenithjoy-workspace';
 async function implementation(){assert.ok(existsSync(url),'必须验证实际GitHub run/artifact来源');return import(url);}
-function run(){return {id:42,status:'completed',conclusion:'success',event:'push',head_branch:'main',head_sha:sha,path:'.github/workflows/pilot-release-verification.yml',repository:{id:1,full_name:repo},head_repository:{id:1,full_name:repo}};}
+function run(){return {id:42,run_attempt:1,status:'completed',conclusion:'success',event:'push',head_branch:'main',head_sha:sha,path:'.github/workflows/pilot-release-verification.yml',repository:{id:1,full_name:repo},head_repository:{id:1,full_name:repo}};}
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 function evidence(scope){
  if(scope==='cecelia-device-patrol-definitions'){
@@ -32,9 +32,9 @@ function zip(data){
  for(const [name,value] of Object.entries({'head.json':{snapshot:data.snapshot},'report.json':data.report,'receipt.json':data.receipt}))writeFileSync(join(dir,name),JSON.stringify(value));
  execFileSync('zip',['-q','bundle.zip','head.json','report.json','receipt.json'],{cwd:dir});return readFileSync(join(dir,'bundle.zip'));
 }
-function githubFixture(scopes=['zenithjoy','commander-generic','cecelia-device-patrol-definitions'],payloads={},artifactChanges={}){
+function githubFixture(scopes=['zenithjoy','commander-generic','cecelia-device-patrol-definitions'],payloads={},artifactChanges={},legacy=false){
  const requests=[];const github=async(path,binary)=>{requests.push(path);
-  if(path.includes('/artifacts?'))return {total_count:scopes.length,artifacts:scopes.map((scope,index)=>({...{id:55+index,name:`pilot-release-verification-${scope?scope+'-':''}${sha}`,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}},...(artifactChanges[scope]||{})}))};
+  if(path.includes('/artifacts?'))return {total_count:scopes.length,artifacts:scopes.map((scope,index)=>({...{id:55+index,name:`pilot-release-verification-${scope?scope+'-':''}${sha}${scope&&!legacy?'-attempt-1':''}`,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}},...(artifactChanges[scope]||{})}))};
   if(path.endsWith('/zip')){assert.equal(binary,true);const index=Number(path.split('/').at(-2))-55;return zip(payloads[scopes[index]]||evidence(scopes[index]));}
   return path.includes('/git/ref/')?{object:{sha}}:run();};
  return {github,requests};
@@ -69,6 +69,81 @@ test('同main成功run精确下载三个scope完整证据，保留原两scope，
  assert.deepEqual(result.commander,evidence('commander-generic'));
  assert.deepEqual(result.patrol,evidence('cecelia-device-patrol-definitions'));
  assert.deepEqual(requests.filter(p=>p.endsWith('/zip')).sort(),[55,57,58].map(id=>`repos/${repo}/actions/artifacts/${id}/zip`));
+});
+const pilotScopes=['zenithjoy','commander-generic','cecelia-device-patrol-definitions'];
+const attemptName=(scope,attempt)=>`pilot-release-verification-${scope}-${sha}-attempt-${attempt}`;
+function rerunFixture({attempt=2,latest=3,conclusion='success',legacy=false,omit=[],duplicate=false,main=sha}={}){
+ const artifacts=[];
+ const add=(scope,artifactAttempt)=>{
+  const id=100+artifacts.length;
+  artifacts.push({scope,id,name:artifactAttempt?attemptName(scope,artifactAttempt):`pilot-release-verification-${scope}-${sha}`,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}});
+ };
+ if(legacy) for(const scope of pilotScopes)add(scope);
+ for(const scope of pilotScopes)add(scope,1);
+ for(const scope of pilotScopes)if(!omit.includes(scope))add(scope,2);
+ if(duplicate)add('zenithjoy',2);
+ const requests=[];
+ const github=async(path,binary)=>{
+  requests.push(path);
+  if(path.endsWith('/git/ref/heads/main'))return {object:{sha:main}};
+  if(path.includes('/compare/'))return {status:'behind',merge_base_commit:{sha}};
+  if(path.endsWith('/runs/42'))return {...run(),run_attempt:latest};
+  if(path.endsWith('/runs/42/attempts/2'))return {...run(),run_attempt:attempt,conclusion};
+  if(path.includes('/artifacts?'))return {total_count:artifacts.length,artifacts};
+  if(path.endsWith('/zip')){
+   assert.equal(binary,true);
+   const id=Number(path.split('/').at(-2));
+   const data=evidence(artifacts.find(artifact=>artifact.id===id).scope);
+   if(id<100+(legacy?6:3))data.receipt.report_sha256='failed-previous-attempt';
+   return zip(data);
+  }
+  assert.fail(`unexpected GitHub API request: ${path}`);
+ };
+ return {github,requests,artifacts};
+}
+test('自动候选下载触发事件指定的成功 attempt，忽略当前最新 attempt 和同 SHA 的历史产物',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ const {github,requests,artifacts}=rerunFixture({legacy:true});
+ const result=await downloadDeploymentEvidence('42',github,undefined,'2');
+ assert.equal(result.run.attempt,2);
+ assert.deepEqual(requests.filter(p=>p.endsWith('/zip')).sort(),
+  artifacts.filter(a=>a.name.endsWith('-attempt-2')).map(a=>`repos/${repo}/actions/artifacts/${a.id}/zip`));
+ assert.ok(requests.includes(`repos/${repo}/actions/runs/42/attempts/2`));
+ assert.ok(!requests.includes(`repos/${repo}/actions/runs/42`));
+});
+test('自动候选拒绝旧SHA、失败 attempt、实际 attempt 不符和不完整或重复的 scope',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ for(const options of [{main:'b'.repeat(40)},{conclusion:'failure'},{attempt:3},{omit:[pilotScopes[2]],legacy:true},{duplicate:true}]){
+  const {github,requests}=rerunFixture(options);
+  await assert.rejects(downloadDeploymentEvidence('42',github,undefined,'2'));
+  assert.ok(!requests.some(p=>p.endsWith('/zip')));
+ }
+ for(const attempt of ['0','02','-2','2/jobs','9007199254740992']){
+  await assert.rejects(downloadDeploymentEvidence('42',()=>assert.fail('attempt 必须先验证'),undefined,attempt));
+ }
+});
+test('手动历史候选保留唯一的旧版 scope，已启用 attempt 的 run 不跨 attempt 补齐',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ const historical=githubFixture(undefined,{}, {},true);
+ const github=(path,binary)=>path.includes('/compare/')?{status:'identical',merge_base_commit:{sha}}:historical.github(path,binary);
+ assert.equal((await downloadDeploymentEvidence('42',github,sha)).run.sha,sha);
+ await assert.rejects(downloadDeploymentEvidence('42',historical.github,undefined,'1'));
+ const latest=rerunFixture({latest:2});
+ assert.equal((await downloadDeploymentEvidence('42',latest.github,sha)).run.attempt,2);
+ const current=rerunFixture({legacy:true});
+ await assert.rejects(downloadDeploymentEvidence('42',current.github,sha));
+ assert.ok(!current.requests.some(p=>p.endsWith('/zip')));
+});
+
+test('多页 run 产物仍能下载对应 attempt 的完整证据',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ const {github,artifacts}=rerunFixture();
+ const otherArtifacts=Array.from({length:100},(_,id)=>({id,name:`snapshot-${id}`}));
+ const paged=(path,binary)=>{
+  if(path.includes('/artifacts?'))return {total_count:100+artifacts.length,artifacts:path.endsWith('&page=2')?artifacts:otherArtifacts};
+  return github(path,binary);
+ };
+ assert.equal((await downloadDeploymentEvidence('42',paged,undefined,'2')).run.attempt,2);
 });
 test('显式已验收main祖先沿用原SHA证据；分叉或伪造merge-base不能晋级',async()=>{
  const {downloadDeploymentEvidence}=await implementation(),f=githubFixture();

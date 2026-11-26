@@ -252,6 +252,23 @@ def verified_client_version(binary, *, environment=None):
         return result.stdout, attempt > 0
 
 
+def select_workflow_route(serial, configured):
+    try:
+        return select_route(serial, configured)
+    except ValueError as error:
+        if not str(error).startswith('ADB_ROUTE_TARGET_UNAVAILABLE'):
+            raise
+        policy = read_host_policy()
+        run_dir = os.environ.get('WFR_RUN_DIR')
+        if not policy or policy.get('schema_version') != 2 or not run_dir:
+            raise
+        proof = instance_module().authorize_epoch(policy, serial, run_dir)
+        locator = proof.get('adb_serial')
+        if not locator:
+            raise
+        return select_route(locator, configured)
+
+
 if __name__ == '__main__':
     phase = 'input'
     phase_started = time.monotonic()
@@ -260,7 +277,7 @@ if __name__ == '__main__':
             raise ValueError('ADB_ROUTE_INPUT_INVALID')
         phase = 'route_select'
         phase_started = time.monotonic()
-        port = select_route(sys.argv[1], os.environ.get('ADB_SERVER_SOCKET', ''))
+        port = select_workflow_route(sys.argv[1], os.environ.get('ADB_SERVER_SOCKET', ''))
         # version只读客户端；协议不符会让adb自身重启server，因此必须先拒绝。
         phase = 'client_version'
         phase_started = time.monotonic()
@@ -268,7 +285,7 @@ if __name__ == '__main__':
         if retried:
             phase = 'route_recheck'
             phase_started = time.monotonic()
-            if select_route(sys.argv[1], os.environ.get('ADB_SERVER_SOCKET', '')) != port:
+            if select_workflow_route(sys.argv[1], os.environ.get('ADB_SERVER_SOCKET', '')) != port:
                 raise ValueError('ADB_ROUTE_CHANGED')
         print(port)
     except Exception as error:

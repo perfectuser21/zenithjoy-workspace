@@ -39,3 +39,14 @@ it('保存返回新版本，陈旧版本发生冲突', async () => {
   expect(db.query.mock.calls[0][1].slice(0, 6)).toEqual(['tenant-1', 80, '09:00', '18:00', false, 0]);
   expect((await save()).status).toBe(409);
 });
+
+it('读取没有保存过触达设置的公司并返回空配置', async () => {
+  db.query.mockImplementationOnce(async (sql: string, args: unknown[]) => {
+    expect(sql).toMatch(/\bs\.updated_at\b/);
+    expect(args).toEqual(['tenant-1']);
+    return { rows: [{ revision: null }] };
+  });
+  const result = await request(app).get('/outreach-settings').set('x-role', 'owner');
+  expect(result.status).toBe(200);
+  expect(result.body).toEqual({ success: true, data: null });
+});

@@ -7,8 +7,8 @@
 #   Brain 回连：host.docker.internal:5221 = HK 宿主 socat → 美国 Brain
 #   env：/opt/zenithjoy/prod-api/.env（chmod 600，密钥不落 git）
 #
-#   死规矩：生产 promote 保持人工卡点——本容器只由 promote-prod-hk.yml（workflow_dispatch）
-#   或用户在场的手动操作更新，任何 push 触发的 workflow 不得碰它。
+#   历史配置。2026-11-23 起生产 API 运行于杭州。
+#   当前生产发布与回退见 scripts/deploy/HANGZHOU_API_RELEASE.md。
 # ───────────────────────────────────────────────────────────────────────────
 networks:
   zenithjoy-net:

@@ -111,6 +111,20 @@ test('公共domain与只读隔离恢复进入双机正式运行闭包',()=>{
  for(const file of ['leadgen-public-domain.mjs','public-domain-authority.mjs','public-domain-snapshot.mjs','public-domain-pg.mjs','public-domain-upstream.mjs','native-preflight-quarantine-review.mjs','native-preflight-quarantine-evidence.mjs','native-preflight-quarantine-lock.py'])for(const group of ['MMV','DEVICE'])assert.ok(lines.includes(group+':'+file),group+':'+file);
 });
 
+test('悦升迁移维护模块由 Mac Studio 候选包独立提供',()=>{
+ const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const arrays=source.slice(source.indexOf('MMV_JS_FILES=('),source.indexOf('# 在任何SSH前'));
+ const r=spawnSync('/bin/bash',['-c',arrays+'\nprintf "MMV:%s\\n" "${MMV_RUNTIME_FILES[@]}";printf "DEVICE:%s\\n" "${DEVICE_NODE_FILES[@]}";printf "RPC:%s\\n" "${RPC_FILES[@]}"'],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);
+ const files=r.stdout.trim().split('\n');
+ const modules=['execution','host-reads','issuer','local-lock','migration','plan','readback'].map(suffix=>`device-epoch-fence-yuesheng-${suffix}.mjs`);
+ for(const module of [...modules,'yuesheng-adb-daemon-binding.py']){
+  assert.equal(files.filter(file=>file===`MMV:${module}`).length,1,module);
+  assert.ok(!files.includes(`DEVICE:${module}`),module);
+  assert.ok(!files.includes(`RPC:${module}`),module);
+ }
+});
+
 test('profile card command and default metadata verifier retain their actual MMV DEVICE and RPC runtime closure',async()=>{
  const {RPC_FILES}=await import('../leadgen-client.mjs');const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8'),arrays=source.slice(source.indexOf('MMV_JS_FILES=('),source.indexOf('# 在任何SSH前'));
  const r=spawnSync('/bin/bash',['-c',arrays+'\nprintf "MMV:%s\\n" "${MMV_RUNTIME_FILES[@]}";printf "DEVICE:%s\\n" "${DEVICE_CTL_FILES[@]}" "${DEVICE_NODE_FILES[@]}";printf "RPC:%s\\n" "${RPC_FILES[@]}"'],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);const lines=r.stdout.trim().split('\n');

@@ -1,9 +1,10 @@
 // 候选只写版本目录；不改正式入口、launchd、手机、账号或队列。
 import {deflateSync} from 'node:zlib';
-import {execFileSync} from 'node:child_process';
+import {execFile,execFileSync} from 'node:child_process';
 import {mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir,homedir} from 'node:os';
+import {createInterface} from 'node:readline';
 import {digest} from './runtime-definition.mjs';
 import {readDeploymentSource,readArchivedDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
 import {observeDeployment,candidateArchivePath} from './deployment-release.mjs';
@@ -22,8 +23,38 @@ function remoteCommand(mode,spec){
  const code=Buffer.from(remoteCode).toString('base64');
  return `python3 -I -c 'import base64;exec(base64.b64decode("${code}"))' ${mode} ${payload}`;
 }
+function installXianWithProgress(spec,archive){
+ const host='xian-m4';
+ const command=remoteCommand('install',{...spec,archive_bytes:archive.length,archive_sha256:digest(archive)});
+ return new Promise((resolve,reject)=>{
+  let received=0,failure;
+  const child=execFile('ssh',[...sshOptions,'-o','ConnectTimeout=20',host,command],
+   {timeout:720000,killSignal:'SIGKILL'},error=>{
+    clearTimeout(idle);
+    if(failure||error||received!==archive.length){
+     const deadline=received===archive.length?'extraction deadline':'transfer deadline';
+     const reason=failure??(error?.signal==='SIGKILL'?deadline:error?.code??'incomplete receive receipt');
+     reject(Object.assign(Error(`候选 SSH ${host}/install: ${reason} (${received}/${archive.length} bytes)`),{cause:error}));
+    }else resolve();
+   });
+  const abort=reason=>{failure??=reason;child.kill('SIGKILL');};
+  const idle=setTimeout(()=>abort(received===archive.length?'extraction deadline':'no receive progress'),90000);
+  createInterface({input:child.stdout}).on('line',line=>{
+   const progress=/^candidate_install_received_v1 ([1-9][0-9]{0,8})$/.exec(line);
+   const bytes=progress?Number(progress[1]):0;
+   if(bytes<=received||bytes>archive.length){abort('invalid receive receipt');return;}
+   received=bytes;
+   idle.refresh();
+  });
+  // A closed input is reported by the exit status or the missing receive receipt.
+  child.stdin.on('error',()=>{});
+  child.stdin.end(archive);
+ });
+}
 function presenceOutput(host,spec){
- const started=performance.now(),deadline=started+30000,command=remoteCommand('presence',spec);
+ // The relayed M4 full-file readback uses the same cap as candidate collection.
+ const budgetMs=host==='xian-m4'?60000:30000;
+ const started=performance.now(),deadline=started+budgetMs,command=remoteCommand('presence',spec);
  for(let attempt=1;attempt<=2;attempt++){
   const remaining=Math.floor(deadline-performance.now());need(remaining>0,'presence预算耗尽');
   try{
@@ -90,7 +121,7 @@ export function materializeCandidate({root,sha,destination,release}){
  need(files.some(f=>f.deployed_path==='leadgen-run.sh')&&files.some(f=>f.deployed_path==='leadgen-rpc.mjs'),'缺候选执行入口');
  return {schema_version:1,source_repo:'perfectuser21/zenithjoy-workspace',source_commit:sha,files};
 }
-export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}){
+export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl,progressiveXianInstall=false}){
  need(plan.environment===`staging:${sha}`,'禁止借候选写production');
  // 纯Skill与多平台发布的候选保留完整依赖闭包；只build，不activate正式Skill链接。
  const sourcePackage=buildPublishRelease(root,sha);
@@ -117,7 +148,8 @@ export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}
    const spec={sha,identity,files:manifest.files,dependency_files:manifest.dependencies?.preflight_pg.files||[],wrapper_sha256:digest(readFileSync(join(temp,host,'run.sh')))};
    if(presence(host,spec)==='absent'){
     const archive=execFileSync('tar',['-C',join(temp,host),'-cf','-','runtime','candidate-identity.json','run.sh'],{maxBuffer:128*1024*1024});
-    ssh(host,'install',remoteCommand('install',spec),{input:archive,stdio:['pipe','pipe','pipe'],timeout:host==='xian-m4'?candidateInstallTimeout(archive.length):120000});
+    if(host==='xian-m4'&&progressiveXianInstall)await installXianWithProgress(spec,archive);
+    else ssh(host,'install',remoteCommand('install',spec),{input:archive,stdio:['pipe','pipe','pipe'],timeout:host==='xian-m4'?candidateInstallTimeout(archive.length):120000});
     need(presence(host,spec)==='present','安装后候选仍不存在');
    }
    const observed=await observeDeployment({host,manifest,releaseId:release.id,environment:`staging:${sha}`,collector:'phone-adb-deployer',attemptKey:`${attemptKey}:candidate`,brainUrl,

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# rollback.sh — ZenithJoy 生产人工回滚统一入口（API + Dashboard 两条路径）。
+# rollback.sh — 历史 Mac API 与香港单站 Dashboard 软链回退脚本。
+# 当前生产回退见 docs/blue-green-cutover-runbook.md。
 #
-# 拓扑（按 repo 真相，别抄旧拓扑）：
+# 原部署拓扑：
 #   · API 生产      = mmv:5200（跑 Claude 这台美国 Mac mini 本机，连生产 cecelia 库）。
 #                     生产 launchd 从 $ZJ_RELEASES_DIR/current 软链跑。
 #   · Dashboard 生产 = HK VPS autopilot.zenjoymedia.media，docker 容器 bind-mount
@@ -13,7 +14,7 @@
 #   是谁 / 指定 sha 在不在留存5份里"的判定。本脚本补这个，API/Dashboard 各一条路径。
 #
 # 用法：
-#   # —— API（默认；不带 api/dashboard 关键字时按 API 处理，向后兼容 rollback-prod.yml）——
+#   # API（默认；不带 api 或 dashboard 关键字时按 API 处理）
 #   ./rollback.sh                  无参 → 退到 current 的上一个留存 release（previous_release）
 #   ./rollback.sh <sha>            带 sha → 从留存里挑（不在留存内报错退出）
 #   ./rollback.sh --list           只列 API 留存 release（不动生产）

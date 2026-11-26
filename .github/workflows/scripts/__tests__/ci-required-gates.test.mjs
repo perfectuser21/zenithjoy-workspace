@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, cpSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, cpSync, symlinkSync, renameSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parse } from 'yaml';
+import { AUTHORING_FILES } from '../../../../scripts/ci/authoring-source-version.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profiles = [
-  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
+  { name: 'code', file: 'ci-l3-code.yml', gate: 'l3-passed', routes: ['dashboard', 'api', 'geoai', 'ci', 'agent_modules', 'docs_only'], always: ['security', 'openclaw-scripts-test', 'collection-phone-darwin-test', 'public-code-phone-darwin-test', 'epoch-resume-darwin-test', 'epoch-continuation-darwin-test', 'epoch-private-recovery-darwin-test', 'native-103-darwin-test', 'api-scripts-test'] },
   { name: 'runtime', file: 'ci-l4-runtime.yml', gate: 'l4-passed', routes: ['dashboard', 'api', 'agent', 'ci', 'staff_hub'], always: [] },
   { name: 'integration', file: 'ci-l4-integration.yml', gate: 'integration-gate', routes: ['api'], always: [] },
 ];
@@ -30,27 +31,30 @@ function runStep(step, context, cwd, extraEnv = {}) {
   for (const [key, value] of Object.entries(step.env ?? {})) env[key] = render(String(value), context);
   return spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', render(step.run, context)], { cwd, env, encoding: 'utf8' });
 }
-function gate(p, { result = 'success', outputs = Object.fromEntries(p.routes.map(k => [k, 'false'])), jobs = {}, absentJobs = [], workflowOverride } = {}) {
+function gate(p, { result = 'success', outputs = Object.fromEntries(p.routes.map(k => [k, 'false'])), jobs = {}, absentJobs = [], workflowOverride, eventName = 'pull_request' } = {}) {
   const w = workflowOverride ?? workflow(p);
   const needs = Object.fromEntries(w.jobs[p.gate].needs.map(k => [k, { result: p.always.includes(k) ? 'success' : 'skipped' }]));
   needs.changes = { result, outputs };
   for (const [key, value] of Object.entries(jobs)) needs[key] = { result: value };
   for (const key of absentJobs) delete needs[key];
   const step = w.jobs[p.gate].steps.find(s => s.run);
-  return runStep(step, { needs }, root);
+  return runStep(step, { needs }, root, { GITHUB_EVENT_NAME: eventName });
 }
 function git(cwd, args, input) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8', input, env: { ...process.env, GIT_AUTHOR_NAME: 'CI fixture', GIT_AUTHOR_EMAIL: 'ci@example.test', GIT_COMMITTER_NAME: 'CI fixture', GIT_COMMITTER_EMAIL: 'ci@example.test' } });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 }
-function fixture(dir, path) {
+function fixture(dir, path, before = () => {}, after = () => {}) {
   git(dir, ['init', '-q']);
+  git(dir, ['config', 'core.filemode', 'true']);
   writeFileSync(join(dir, 'README.md'), 'baseline\n');
+  before();
   git(dir, ['add', '.']);
   const base = git(dir, ['commit-tree', git(dir, ['write-tree']), '-m', 'base']);
   mkdirSync(dirname(join(dir, path)), { recursive: true });
   writeFileSync(join(dir, path), 'changed\n');
+  after();
   git(dir, ['add', '.']);
   const head = git(dir, ['commit-tree', git(dir, ['write-tree']), '-p', base, '-m', 'head']);
   git(dir, ['update-ref', 'refs/remotes/origin/main', base]);
@@ -78,6 +82,7 @@ for (const p of profiles) {
     test(`${p.name}: changes ${result || 'empty'} must close the gate`, () => assert.notEqual(gate(p, { result }).status, 0));
   }
   for (const job of workflow(p).jobs[p.gate].needs.filter(key => workflow(p).jobs[key]?.if)) {
+    if (p.always.includes(job)) continue;
     for (const result of ['failure', 'cancelled']) {
       test(`${p.name}: unselected ${job} ${result} still rejects the gate`, () => {
         assert.notEqual(gate(p, { jobs: { [job]: result } }).status, 0);
@@ -97,7 +102,7 @@ for (const p of profiles) {
       });
     }
   }
-  for (const route of p.routes) {
+  for (const route of p.routes.filter(route => route !== 'docs_only')) {
     test(`${p.name}: ${route} selection agrees with real workflow job conditions`, () => {
       const w = workflow(p);
       const outputs = Object.fromEntries(p.routes.map(k => [k, k === route ? 'true' : 'false']));
@@ -116,7 +121,7 @@ for (const p of profiles) {
   }
   test(`${p.name}: selected jobs must all succeed`, () => {
     const w = workflow(p);
-    const outputs = Object.fromEntries(p.routes.map(k => [k, 'true']));
+    const outputs = Object.fromEntries(p.routes.map(k => [k, String(k !== 'docs_only')]));
     const jobs = Object.fromEntries(w.jobs[p.gate].needs.filter(k => k !== 'changes').map(k => [k, 'success']));
     assert.equal(gate(p, { outputs, jobs }).status, 0);
     for (const job of Object.keys(jobs)) for (const result of ['failure', 'cancelled', 'skipped', '']) {
@@ -176,7 +181,7 @@ for (const p of profiles) {
     const { head } = fixture(dir, 'apps/api/src/a.ts');
     const result = detect(p, dir, 'push', { before: '0'.repeat(40), after: head });
     assert.equal(result.status, 0, result.stderr);
-    for (const route of p.routes) assert.equal(result.outputs[route], 'true');
+    for (const route of p.routes) assert.equal(result.outputs[route], String(route !== 'docs_only'));
   }));
   test(`${p.name}: neighboring paths do not select API`, () => temp(dir => {
     const { base, head } = fixture(dir, 'apps/api-old/src/a.ts');
@@ -273,3 +278,153 @@ test('epoch native Darwin required gate拒绝missing/skipped/failure/cancelled�
 test('stop-only continuation独立Darwin必须成功，missing/skipped/failure/cancelled均拒绝',async()=>{const {checkGate,gates}=await import('../../../../scripts/ci/required-gate.mjs');assert.ok(gates.code.always.includes('epoch-continuation-darwin-test'));const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}]))};assert.doesNotThrow(()=>checkGate('code',needs));for(const state of [undefined,'skipped','failure','cancelled']){const bad=structuredClone(needs);if(state===undefined)delete bad['epoch-continuation-darwin-test'];else bad['epoch-continuation-darwin-test'].result=state;assert.throws(()=>checkGate('code',bad),/epoch-continuation-darwin-test/);}});
 
 test('private session诊断恢复独立原生门必须成功且不接受缺失或跳过',async()=>{const {checkGate,gates}=await import('../../../../scripts/ci/required-gate.mjs');const key='epoch-private-recovery-darwin-test';assert.ok(gates.code.always.includes(key));const needs={changes:{result:'success',outputs:Object.fromEntries(gates.code.routes.map(k=>[k,'false']))},...Object.fromEntries(gates.code.always.map(k=>[k,{result:'success'}]))};assert.doesNotThrow(()=>checkGate('code',needs));for(const status of [undefined,'skipped','failure','cancelled']){const bad=structuredClone(needs);if(status===undefined)delete bad[key];else bad[key].result=status;assert.throws(()=>checkGate('code',bad),/epoch-private-recovery-darwin-test/);}});
+
+const code = profiles.find(p => p.name === 'code');
+const docsPath = 'docs/android-rpa-execution-modes.md';
+const sourceBefore = '{\n  "version": "1.0.3",\n  "runtime": { "version": "2.0.0" }\n}\n';
+const sourceAfter = sourceBefore.replace('1.0.3', '1.0.4');
+const write = (dir, path, bytes) => {
+  const file = join(dir, path);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, bytes);
+};
+const docsEligible = [
+  ['standalone prose edit', () => {}, true],
+  ['the five L2 version headers progress', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+  }, true],
+];
+const docsIneligible = [
+  ['document added', () => {}, false, dir => rmSync(join(dir, docsPath))],
+  ['document removed', dir => rmSync(join(dir, docsPath))],
+  ['document renamed', dir => renameSync(join(dir, docsPath), join(dir, 'docs/renamed.md'))],
+  ['document symlinked', dir => {
+    rmSync(join(dir, docsPath));
+    symlinkSync('../README.md', join(dir, docsPath));
+  }],
+  ['document mode changed', dir => chmodSync(join(dir, docsPath), 0o755)],
+  ['other markdown file', dir => write(dir, 'docs/unreviewed.md', 'new\n')],
+  ['CI changed', dir => write(dir, '.github/workflows/producer.yml', 'new\n')],
+  ['runtime producer changed', dir => write(dir, 'services/phone-adb-controller/public-domain-profile.mjs', 'new\n')],
+  ['generated Markdown changed', dir => write(dir, 'product-map/generated/product-map.md', 'new\n')],
+  ['version headers without the document', dir => {
+    write(dir, docsPath, 'previous prose\n');
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+  }],
+  ['partial version headers', dir => write(dir, AUTHORING_FILES[0], sourceAfter)],
+  ['all headers changed together with a nested version', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+    write(dir, AUTHORING_FILES[4], sourceAfter.replace('2.0.0', '2.0.1'));
+  }],
+  ['all headers changed together with one whitespace byte', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+    write(dir, AUTHORING_FILES[4], sourceAfter.replace('"runtime": ', '"runtime":  '));
+  }],
+  ['version regressed', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+    write(dir, AUTHORING_FILES[4], sourceAfter.replace('1.0.4', '1.0.2'));
+  }],
+  ['noncanonical version', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+    write(dir, AUTHORING_FILES[4], sourceAfter.replace('1.0.4', '1.0.04'));
+  }],
+  ['version changed into a symlink', dir => {
+    for (const path of AUTHORING_FILES) write(dir, path, sourceAfter);
+    rmSync(join(dir, AUTHORING_FILES[4]));
+    symlinkSync('single.json', join(dir, AUTHORING_FILES[4]));
+  }],
+];
+for (const [scenario, change, eligible = false, omitDoc] of [...docsEligible, ...docsIneligible]) {
+  test('code routing: ' + scenario, () => temp(dir => {
+    const { base, head } = fixture(dir, docsPath, () => {
+      write(dir, docsPath, 'previous prose\n');
+      for (const path of AUTHORING_FILES) write(dir, path, sourceBefore);
+      omitDoc?.(dir);
+    }, () => change(dir));
+    const output = detect(code, dir, 'pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } });
+    assert.equal(output.status, 0, output.stderr);
+    assert.equal(output.outputs.docs_only, String(eligible));
+    if (eligible) {
+      const jobs = Object.fromEntries(code.always.map(job => [job, 'success']));
+      for (const job of code.always.filter(job => !['security', 'api-scripts-test'].includes(job))) {
+        const jobConfig = workflow(code).jobs[job];
+        assert.equal(jobConfig.needs, 'changes');
+        assert.equal(Function('needs', 'return (' + jobConfig.if + ')')({ changes: { outputs: output.outputs } }), false, job);
+        jobs[job] = 'skipped';
+      }
+      assert.equal(gate(code, { outputs: output.outputs, jobs }).status, 0);
+      for (const [job, result] of Object.entries(jobs)) {
+        for (const failure of ['failure', 'cancelled', ...(result === 'success' ? ['skipped'] : [])]) {
+          assert.notEqual(gate(code, { outputs: output.outputs, jobs: { ...jobs, [job]: failure } }).status, 0, job + '=' + failure);
+        }
+        assert.notEqual(gate(code, { outputs: output.outputs, jobs, absentJobs: [job] }).status, 0, job + ' missing');
+      }
+      for (const eventName of ['push', 'merge_group']) {
+        assert.notEqual(gate(code, { outputs: output.outputs, jobs, eventName }).status, 0);
+      }
+      const incompatible = { ...output.outputs, ci: 'true' };
+      assert.notEqual(gate(code, { outputs: incompatible, jobs }).status, 0);
+    } else {
+      const heavy = 'openclaw-scripts-test';
+      assert.equal(gate(code, { outputs: output.outputs, jobs: { [heavy]: 'skipped' } }).status, 1);
+    }
+  }));
+}
+
+test('code routing: other event types and PR checkout drift retain full coverage', () => temp(dir => {
+  const { base, head } = fixture(dir, docsPath, () => write(dir, docsPath, 'old prose\n'));
+  const event = { before: base, after: head, merge_group: { base_sha: base, head_sha: head }, pull_request: { base: { sha: base }, head: { sha: head } } };
+  for (const eventName of ['push', 'merge_group']) {
+    const result = detect(code, dir, eventName, event, eventName === 'merge_group' ? '' : 'main');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.outputs.docs_only, 'false');
+  }
+
+  // GitHub checks out a synthetic merge commit for PR workflows.
+  const merge = git(dir, ['commit-tree', git(dir, ['rev-parse', head + '^{tree}']), '-p', base, '-p', head, '-m', 'Merge PR']);
+  git(dir, ['update-ref', 'refs/heads/change', merge]);
+  const matched = detect(code, dir, 'pull_request', event);
+  assert.equal(matched.status, 0, matched.stderr);
+  assert.equal(matched.outputs.docs_only, 'true');
+
+  const advancedBase = git(dir, ['commit-tree', git(dir, ['rev-parse', base + '^{tree}']), '-p', base, '-m', 'Main advanced']);
+  const stale = detect(code, dir, 'pull_request', { pull_request: { base: { sha: advancedBase }, head: { sha: head } } });
+  assert.equal(stale.status, 0, stale.stderr);
+  assert.equal(stale.outputs.docs_only, 'false');
+
+  git(dir, ['update-ref', 'refs/heads/change', base]);
+  const mismatch = detect(code, dir, 'pull_request', event);
+  assert.equal(mismatch.status, 0, mismatch.stderr);
+  assert.equal(mismatch.outputs.docs_only, 'false');
+}));
+
+
+test('code routing: workflow admission and independent security/patrol checks stay required', () => {
+  const w = workflow(code);
+  for (const event of ['pull_request', 'push', 'merge_group']) {
+    assert.ok(Object.hasOwn(w.on, event));
+    assert.equal(w.on[event]?.paths, undefined);
+    assert.equal(w.on[event]?.['paths-ignore'], undefined);
+  }
+  const aggregate = w.jobs[code.gate];
+  assert.equal(aggregate.name, 'L3 Code Gate Passed');
+  assert.equal(aggregate.if, 'always()');
+  assert.equal(aggregate['continue-on-error'], undefined);
+  assert.equal(aggregate.steps.find(step => step.run).if, undefined);
+  for (const job of ['security', 'api-scripts-test']) {
+    assert.ok(aggregate.needs.includes(job));
+    assert.equal(w.jobs[job].if, undefined);
+    assert.equal(w.jobs[job].needs, undefined);
+    assert.equal(w.jobs[job]['continue-on-error'], undefined);
+  }
+  for (const [job, command] of [
+    ['security', 'bash .github/workflows/scripts/audit-gate.sh .'],
+    ['security', 'bash .github/workflows/scripts/audit-gate.sh apps/dashboard'],
+    ['api-scripts-test', 'node --test scripts/phone-account-patrol/implementation-regression.test.mjs'],
+  ]) {
+    const step = w.jobs[job].steps.find(step => step.run === command);
+    assert.ok(step, command);
+    assert.equal(step.if, undefined);
+    assert.equal(step['continue-on-error'], undefined);
+  }
+});

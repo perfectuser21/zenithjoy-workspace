@@ -40,9 +40,9 @@ for(const result of ['skipped','missing','failure','cancelled'])test(`unrelated 
  const r=spawnSync(process.execPath,[gate,'integration'],{encoding:'utf8',env:{...process.env,GATE_NEEDS:JSON.stringify(needs)}});assert.equal(r.status===0,['skipped','missing'].includes(result),r.stdout+r.stderr);
 });
 
-test('deduplicated paired deployment suite remains selected unconditionally by required L3',()=>{
+test('deduplicated paired deployment suite remains selected on the full L3 route',()=>{
  const workflow=YAML.parse(readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8'));
- const job=workflow.jobs['openclaw-scripts-test'];assert.equal(job.if,undefined);assert.equal(job.strategy['fail-fast'],false);
+ const job=workflow.jobs['openclaw-scripts-test'];assert.equal(job.if,"needs.changes.outputs.docs_only != 'true'");assert.equal(job.needs,'changes');assert.equal(job.strategy['fail-fast'],false);
  assert.ok(job.steps.some(s=>s.run?.includes('services/phone-adb-controller/__tests__/*.test.mjs')));
  assert.ok(workflow.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
  const smoke=readFileSync(new URL('../smoke/company-wiki-config-smoke.sh',import.meta.url),'utf8');

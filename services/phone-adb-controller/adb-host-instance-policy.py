@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """ADB声明式实例规矩；只读源码registry、固定policy与维护启动授权，不创建服务。"""
 import hashlib
+from ipaddress import IPv4Address
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import stat
@@ -160,6 +162,7 @@ VERIFIER_ERROR_CODES = frozenset({
     'EPOCH_DAEMON_SCOPE',
     'EPOCH_DAEMON_SOURCE',
     'EPOCH_ENV_BINDING',
+    'EPOCH_DEVICE_IDENTITY',
     'EPOCH_EVIDENCE_ROOT',
     'EPOCH_FROZEN_DRIFT',
     'EPOCH_FROZEN_REFERENCE',
@@ -299,8 +302,16 @@ def authorize_start(policy, config, receipt, runner=subprocess.run):
                 'policy_sha256': c['policy_sha256']}
     original = json.loads(read_file(Path(receipt), private=True))
     if answer.get('protocol') == 'device-epoch-fence-startup-verification/v1':
-        need(answer == expected and original.get('protocol') != 'device-epoch-fence-resume-startup/v1', 'STARTUP_AUTHORITY')
-        return expected
+        auth = answer.get('existing_adb_auth')
+        if auth is None:
+            need(answer == expected and original.get('protocol') != 'device-epoch-fence-resume-startup/v1'
+                 and 'existing_adb_auth' not in original.get('scope', {}), 'STARTUP_AUTHORITY')
+        else:
+            need(answer == {**expected, 'existing_adb_auth': auth}
+                 and original.get('protocol') == 'device-epoch-clean-startup/v1'
+                 and original.get('scope', {}).get('existing_adb_auth') == auth, 'STARTUP_AUTHORITY')
+            clean_authenticated_environment(answer, {})
+        return answer
     extra = {'resume_plan_sha256', 'prior_pending_sha256', 'auth_ref_sha256', 'auth'}
     need(set(answer) == set(expected) | extra
          and answer['protocol'] == 'device-epoch-fence-startup-verification/v2'
@@ -312,6 +323,19 @@ def authorize_start(policy, config, receipt, runner=subprocess.run):
          and answer['auth'].get('ref_sha256') == answer['auth_ref_sha256'], 'STARTUP_AUTHORITY')
     authenticated_environment(policy, config, answer, {})
     return answer
+
+
+def clean_authenticated_environment(answer, environment):
+    auth = answer.get('existing_adb_auth')
+    need(isinstance(auth, dict) and set(auth) == {'key_path', 'key_sha256'}
+         and isinstance(auth['key_path'], str) and isinstance(auth['key_sha256'], str)
+         and re.fullmatch('[a-f0-9]{64}', auth['key_sha256']), 'CLEAN_STARTUP_KEY')
+    key = Path(auth['key_path'])
+    root = Path(pwd.getpwuid(os.geteuid()).pw_dir) / '.credentials'
+    need(key.parent.parent == root and key.name == 'adbkey'
+         and re.fullmatch(r'aliyun-adb-reverse-[0-9]{8}', key.parent.name)
+         and sha(read_file(key, private=True)) == auth['key_sha256'], 'CLEAN_STARTUP_KEY')
+    return {**adb_environment(environment), 'ADB_VENDOR_KEYS': str(key)}
 
 
 def authenticated_environment(policy, config, answer, environment):
@@ -349,6 +373,15 @@ def authorize_epoch(policy, serial, run_dir, runner=subprocess.run):
     answer = verifier_answer(c, ['verify-epoch', '--run-dir', run_dir], runner)
     keys = {'protocol', 'authorized', 'epoch_id', 'task_id', 'run_id', 'source_commit', 'instance_id',
             'endpoint', 'serial', 'old_route_absent', 'original_execution_stopped', 'android_internal'}
+    if 'adb_serial' in answer:
+        locator = answer['adb_serial']
+        try:
+            host, port = locator.split(':')
+            valid_address = str(IPv4Address(host)) == host
+        except (ValueError, AttributeError):
+            valid_address = False
+        need(valid_address and re.fullmatch('[1-9][0-9]{0,4}', port) and int(port) <= 65535, 'EPOCH_AUTHORITY')
+        keys.add('adb_serial')
     need(set(answer) == keys and answer['protocol'] == 'device-epoch-fence-admission/v1'
          and answer['instance_id'] == policy['instance_id'] and answer['endpoint'] == policy['endpoint']
          and answer['serial'] == serial and answer['source_commit'] == c['manifest']['source_commit']
