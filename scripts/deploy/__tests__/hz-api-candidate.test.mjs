@@ -19,8 +19,9 @@ test('Hangzhou candidate checks exact staging bytes, run and attempt', () => {
 test('only a trusted manual main run may activate the admitted Hangzhou API artifact', () => {
   const workflow = readWorkflow('hangzhou-api-release');
   assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
-  assert.equal(workflow.concurrency['cancel-in-progress'], false);
+  assert.equal(workflow.concurrency, undefined);
   const { request, admission, execute } = workflow.jobs;
+  assert.deepEqual(execute.concurrency, {group:'zenithjoy-hangzhou-production-api','cancel-in-progress':false});
   assert.match(request.steps[0].run, /GITHUB_REF.*refs\/heads\/main/);
   assert.match(request.steps[0].run, /ROLLBACK/);
   assert.equal(admission.uses, './.github/workflows/hz-api-release-verification.yml');
@@ -31,6 +32,7 @@ test('only a trusted manual main run may activate the admitted Hangzhou API arti
   assert.match(execute.if, /needs.admission.result == 'skipped' && needs.business-review.result == 'skipped'/);
   const review = workflow.jobs['business-review'];
   assert.equal(review.environment, 'hangzhou-api-business-review');
+  assert.equal(review.concurrency, undefined);
   assert.match(review.steps.at(-1).run, /hz-api-business-review\.mjs/);
   assert.equal(review.steps.at(-1).env.STAGED_ATTEMPT, '${{ needs.admission.outputs.api_run_attempt }}');
   const download = execute.steps.find(step => step.uses?.startsWith('actions/download-artifact@'));
