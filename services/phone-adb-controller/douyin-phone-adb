@@ -1871,7 +1871,17 @@ evidence_bundle() {
 foreground_package() {
   # 全量 window 会先输出 LAST ANR 保存的旧焦点；displays 只读取当前显示状态。
   "$ADB" -s "$SERIAL" shell dumpsys window displays 2>/dev/null \
-    | /usr/bin/awk '/mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }' \
+    | /usr/bin/awk -v mode="${1:-}" '
+      mode == "unique-current" {
+        if ($0 ~ /^[[:space:]]*mCurrentFocus=/) {
+          count++
+          if ($0 !~ /=null([[:space:]]|$)/) focus = $0
+        }
+        next
+      }
+      /mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }
+      END { if (mode == "unique-current" && count == 1 && focus != "") print focus }
+    ' \
     | tr -d '\r'
 }
 
@@ -5439,16 +5449,35 @@ print("COLLECTION_COMMENT_PANEL_READBACK_FAILED xml_path_b64="+base64.b64encode(
     # 改成查设备自己声明的默认桌面(HOME intent resolve-activity),这条查询法通用。
     [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE return-safe-desktop"
     check_target_fast
-    launcher_pkg="$("$ADB" -s "$SERIAL" shell cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null \
-      | /usr/bin/grep -m1 'packageName=' | /usr/bin/sed -E 's/^[[:space:]]*packageName=([^[:space:]]+).*/\1/' | tr -d '\r')"
+    launcher_info="$("$ADB" -s "$SERIAL" shell cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | tr -d '\r')"
+    launcher_pkg="$(print -r -- "$launcher_info" | /usr/bin/sed -nE 's/^[[:space:]]*packageName=([^[:space:]]+).*/\1/p' | /usr/bin/head -n 1)"
     [[ -n "$launcher_pkg" ]] || die "could not resolve default launcher package via HOME intent"
+    launcher_activity="$(print -r -- "$launcher_info" | /usr/bin/awk '
+      /^[[:space:]]*ActivityInfo:$/ { activity = 1; next }
+      activity && $1 ~ /^name=[A-Za-z0-9_.$]+$/ { print substr($1, 6); exit }
+    ')"
+    if [[ "$launcher_activity" == .* ]]; then launcher_activity="$launcher_pkg$launcher_activity"; fi
     rsd_ok=0
-    for rsd_try in 1 2 3; do
-      "$ADB" -s "$SERIAL" shell input keyevent 3
-      wait_ms 1000
-      focus="$(foreground_package)"
-      focus_pkg="$(print -r -- "$focus" | /usr/bin/sed -nE 's@.*[[:space:]]([A-Za-z0-9_.]+)/[^[:space:]]*.*@\1@p')"
-      if [[ "$focus_pkg" == "$launcher_pkg" ]]; then rsd_ok=1; break; fi
+    for rsd_try in 0 1 2 3; do
+      focus_mode=""
+      if (( rsd_try == 0 )); then
+        [[ "$launcher_activity" == "$launcher_pkg".* ]] || continue
+        focus_mode=unique-current
+      else
+        "$ADB" -s "$SERIAL" shell input keyevent 3 || die "SAFE_DESKTOP_HOME_INPUT_FAILED"
+        wait_ms 1000
+      fi
+      focus="$(foreground_package "$focus_mode")" || die "SAFE_DESKTOP_FOREGROUND_QUERY_FAILED"
+      focus_component="$(print -r -- "$focus" | /usr/bin/sed -nE 's@.*[[:space:]]([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)([[:space:]}].*|$)@\1@p')"
+      focus_pkg="${focus_component%%/*}"
+      [[ "$focus_pkg" == "$launcher_pkg" ]] || continue
+      if (( rsd_try == 0 )); then
+        focus_activity="${focus_component#*/}"
+        if [[ "$focus_activity" == .* ]]; then focus_activity="$focus_pkg$focus_activity"; fi
+        [[ "$focus" == *mCurrentFocus=* && "$focus_activity" == "$launcher_activity" ]] || continue
+      fi
+      rsd_ok=1
+      break
     done
     (( rsd_ok )) || die "still not on safe desktop(launcher=$launcher_pkg) after 3 HOME presses; foreground=${focus:-unknown}"
     print -- "launcher=$launcher_pkg"
