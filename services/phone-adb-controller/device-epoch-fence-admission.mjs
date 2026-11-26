@@ -7,7 +7,7 @@ import {bytes,recordBytes,readPrivatePolicy,validateEpochRecord,freezeFenceRefer
 export {freezeFenceReference};
 import {readFrozen,digest,canonical,validateAgentInput} from './runtime-definition.mjs';
 import {publicDomainTaskProjectionMatches} from './public-domain-authority.mjs';
-import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
+import {standaloneIdentityProjection,standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextProjection,standaloneExecutionContextMatches,readStandaloneHostProof,standaloneHostProofPaths,standaloneLocalLockQuarantined} from './standalone-skill-authority.mjs';
 import {epochSourceCompatibilityReference,epochCompatibilityRecordScope,verifyEpochSourceCompatibility,compatibilityReviewProjection,isCloudEpochSourceCompatibility,verifyCloudEpochSuccessorDeployment,verifyCloudEpochSuccessorProjection} from './epoch-source-compatibility.mjs';
 import {hostOperation,parseDeviceInventory} from './device-epoch-fence-transport.mjs';
 import {runDiagnostic,readDiagnosticProof} from './device-epoch-fence-diagnostics.mjs';
@@ -240,7 +240,27 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  finally{if(daemonObservation)await daemonObservation.close(false);}
 }
 export async function main(args){
- need(args.length===3&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');const runDir=args[2];let frozen;
- try{frozen=readFrozen(runDir);const spec=phone(frozen),result=await canAuthorizeNativeFrame({root:here,frozen,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;}
+ const hasDeadline=args.length===5&&args[3]==='--read-deadline-ms'&&/^[1-9]\d{0,15}$/.test(args[4]);
+ need((args.length===3||hasDeadline)&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');
+ const runDir=args[2];let frozen;
+ try{
+  frozen=readFrozen(runDir);const spec=phone(frozen);let readBudget;
+  const standalone=frozen.standalone_skill?.protocol==='codex-exec-v1';
+  need(!hasDeadline||standalone,'EPOCH_ADMISSION_DEADLINE');
+  if(standalone){
+   let phaseDeadline=frozen.standalone_skill.deadline_ms;
+   const {proof_path:proofPath}=standaloneHostProofPaths(frozen);let marker;
+   try{marker=recordBytes(proofPath.replace(/\.json$/,'.cleanup'));}catch(error){if(error.code!=='ENOENT')throw error;}
+   if(marker!==undefined){
+    need(marker.equals(Buffer.from(sha(recordBytes(proofPath))+'\n')),'EPOCH_ADMISSION_DEADLINE');
+    phaseDeadline=frozen.standalone_skill.cleanup_deadline_ms;
+   }
+   const now=Date.now(),deadlineMs=hasDeadline?Number(args[4]):Math.min(phaseDeadline,now+45000);
+   need(Number.isSafeInteger(deadlineMs)&&deadlineMs>now&&deadlineMs<=phaseDeadline&&deadlineMs<=now+45000,'EPOCH_ADMISSION_DEADLINE');
+   readBudget={deadlineMs};
+  }
+  const result=await canAuthorizeNativeFrame({root:here,frozen,readBudget,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});
+  need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;
+ }
  catch(error){if(frozen)preserveVerifierDiagnostic(runDir,frozen,error);throw error;}
 }

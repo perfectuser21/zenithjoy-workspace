@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {readFileSync,writeFileSync,appendFileSync,mkdirSync,realpathSync,lstatSync,openSync,closeSync,fsyncSync,constants} from 'node:fs';
 import {createRequire} from 'node:module';
 import {userInfo} from 'node:os';
-import {readFrozen} from './runtime-definition.mjs';
+import {readFrozen,digest} from './runtime-definition.mjs';
 import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches,standaloneHostProofPaths,createStandaloneHostProof} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
 import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
@@ -18,12 +18,15 @@ import {createStandaloneCommentObserver} from './standalone-comment-observer.mjs
 import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
-export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput}){
+export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput,isCleanup=()=>false}){
  const fixed=frozen.agent_input;
  return async function invoke({command,args,profile,owner,playback}){
   if(profile!==fixed.profile||owner!==fixed.run_tag)fail('SCOPE');
   const call=async(op,values=[])=>{
-   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,(frozen.standalone_skill?.cleanup_deadline_ms??Date.now()+360000)-Date.now())});
+   const cleanup=isCleanup(),phaseDeadline=frozen.standalone_skill?.[cleanup?'cleanup_deadline_ms':'deadline_ms'];
+   const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
+   if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
+   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,remaining)});
    if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code,diagnostic:{stdout:safeExecutionDiagnostic(result.stdout,environment).slice(-4000),stderr:safeExecutionDiagnostic(result.stderr,environment).slice(-4000)}});return result;
   };
   if(command==='open-search-card'){
@@ -142,12 +145,13 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
  const guard=async({cleanup=false}={})=>{
   if(unknown)fail('HOST_REVOKED');if(closing&&!cleanup)fail('CLOSING');
   // 截止前置拒绝尚未调用provider，不因此撤销可用的收尾能力。
-  if(Date.now()>=(cleanup?identity.cleanup_deadline_ms:identity.deadline_ms))fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
+  const deadlineMs=cleanup?identity.cleanup_deadline_ms:identity.deadline_ms;
+  if(Date.now()>=deadlineMs)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
   try{
    if(present(unknownPath)){revoke('EXISTING_REVOCATION');fail('HOST_REVOKED');}
    if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}
    const actual=readFrozen(dir);if(actual.snapshot_sha256!==frozen.snapshot_sha256)fail('FROZEN_DRIFT');
-   return await (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:actual,env});
+   return await (dependencies.guard??canAuthorizeNativeFrame)({root,frozen:actual,env,readBudget:{deadlineMs}});
   }catch(error){if(!unknown)revoke('ADMISSION_REJECTED');throw error;}
  };
  const close=()=>{
@@ -157,7 +161,14 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    const failed=(reason,error)=>{revoke(reason);firstError??=error;};
    if(ipc)try{await ipc.close();}catch(error){failed('IPC_CLOSE_FAILED',error);}
    if(leafUnknown())revoke('LEAF_UNKNOWN');
-   if(local&&!unknown){cleanupActive=true;try{await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});}catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}}
+   if(local&&!unknown){
+    cleanupActive=true;
+    try{
+     if(phoneScope.policy.schema_version===2)writeFileSync(hostPath.replace(/\.json$/,'.cleanup'),digest(readFileSync(hostPath))+'\n',{flag:'wx',mode:0o600});
+     await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();
+     desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>true})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});
+    }catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}
+   }
    if(collectionTools&&!unknown)try{await guard({cleanup:true});await collectionTools.releaseOwned();}catch(error){failed('COLLECTION_RELEASE_UNKNOWN',error);}
    if(leaf)try{leaves=await leaf.seal();if(!leaves.requests_returned&&!leaves.empty_requests_returned)revoke('LEAF_SEAL_UNKNOWN');}catch(error){failed('LEAF_SEAL_FAILED',error);}
    if(local&&!unknown)try{
@@ -183,7 +194,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   await guard();
   leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({directory:join(dir,'standalone-leaves'),policy:phoneScope.policy,serial:scope.serial,deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,env,assertAdmission:()=>guard({cleanup:cleanupActive})});Object.assign(env,leaf.env);
   const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
-  const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute}),assertAuthority=()=>guard();
+  const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>cleanupActive}),assertAuthority=()=>guard();
   const phone=collection?async input=>{
     try{return await invokePhone(input);}
     catch(error){if(error?.code==='STANDALONE_NATIVE_COMMAND'||leafUnknown())revoke('TOOL_RESULT_UNKNOWN');throw error;}
