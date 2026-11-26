@@ -198,7 +198,7 @@ def run_service(policy, config, maintenance_receipt=None):
         old_handlers = {}
         forwarded = []
         def forward(signum, _frame):
-            if resume:
+            if multi:
                 # The main wait owns reap. Nested wait in this handler would
                 # deadlock on Popen's non-reentrant waitpid lock.
                 if child.poll() is None:
@@ -213,7 +213,7 @@ def run_service(policy, config, maintenance_receipt=None):
             for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
                 old_handlers[sig] = signal.signal(sig, forward)
             result = child.wait()
-            require(result == 0 or resume and forwarded and forwarded[-1] == (child.pid, -result), 'CHILD_EXIT_FAILED')
+            require(result == 0 or multi and forwarded and forwarded[-1] == (child.pid, -result), 'CHILD_EXIT_FAILED')
         finally:
             try:
                 if child.poll() is None:
@@ -223,7 +223,7 @@ def run_service(policy, config, maintenance_receipt=None):
                     signal.signal(sig, handler)
         # 保留PID记录供只读核验，不把文件删除当成已停止证据。
         require(child.poll() is not None, 'STOP_UNCONFIRMED')
-        if resume:
+        if multi:
             # Exact own endpoint only. No adb command, connect or global stop.
             ensure_absent(policy)
 
