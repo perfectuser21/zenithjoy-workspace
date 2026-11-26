@@ -92,6 +92,7 @@ with tempfile.TemporaryDirectory() as d:
   return {'adb_serial':locator}
  guard=SimpleNamespace(verify_binary=lambda *_:None,adb_environment=lambda env:{},authorize_epoch=authorize)
  os.environ['WFR_RUN_DIR']=str(r)
+ os.environ['ZJ_ADB_HOST_CONFIG']=str(path)
  os.environ.pop('WFR_COLLECTION_LEAF_SOCKET',None)
  for k in ['ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(k,None)
  m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *_:p,instance_module=lambda:guard,select_route=select)
