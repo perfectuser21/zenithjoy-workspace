@@ -12,6 +12,11 @@ on:
       sha:
         required: true
         type: string
+    secrets:
+      STAGING_ACCEPTANCE_EMAIL:
+        required: true
+      STAGING_ACCEPTANCE_PASSWORD:
+        required: true
     outputs:
       sha:
         value: ${{ jobs.verification.outputs.sha }}

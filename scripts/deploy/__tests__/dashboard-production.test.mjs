@@ -66,7 +66,22 @@ test('protected Dashboard verification and trusted compatibility check precede p
   assert.ok(preflight > 0);
   assert.equal(build.steps[0].with?.ref, undefined);
   assert.match(build.steps[preflight].run, /git fetch --no-tags --depth=1 origin/);
-  assert.equal(workflow('zenithjoy-dashboard-production').jobs.admission.secrets, undefined);
   assert.equal(build.steps[preflight].env.CANDIDATE_SHA, '${{ needs.admission.outputs.sha }}');
   assert.equal(build.steps[preflight + 1].with.ref, '${{ needs.admission.outputs.sha }}');
+});
+
+test('production forwards only the two credential names from the protected staging environment', () => {
+  const caller = workflow('zenithjoy-dashboard-production').jobs.admission;
+  const verifier = workflow('dashboard-release-verification');
+  assert.deepEqual(Object.keys(caller.secrets ?? {}).sort(), ['STAGING_ACCEPTANCE_EMAIL', 'STAGING_ACCEPTANCE_PASSWORD']);
+  assert.deepEqual(Object.keys(verifier.on.workflow_call.secrets ?? {}).sort(), Object.keys(caller.secrets).sort());
+  const job = verifier.jobs.verification;
+  assert.equal(job.environment, 'zenithjoy-staging-acceptance');
+  const probe = job.steps.find(step => step.env?.STAGING_ACCEPTANCE_PASSWORD);
+  for (const name of Object.keys(caller.secrets)) {
+    const expression = '${{ secrets.' + name + ' }}';
+    assert.equal(caller.secrets[name], expression);
+    assert.equal(probe.env[name], expression);
+    assert.equal(verifier.on.workflow_call.secrets[name].required, true);
+  }
 });
