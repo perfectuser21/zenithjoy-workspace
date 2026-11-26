@@ -27,7 +27,7 @@ function invoke(t,failed='',present=[],broken='',expired=false){
  put('env','exec /usr/bin/env "$@"');
  const source=join(top,'ubuntu.sources'),mirrors=join(top,'apt-mirrors.txt');
  writeFileSync(source,'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates noble-backports\nComponents: main universe restricted multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n');writeFileSync(mirrors,'https://archive.ubuntu.com/ubuntu/\n');
- put('bash','script=$1; mode=$2; shift 5; exec /bin/bash "$script" "$mode" "$DEPENDENCY_BIN" "$DEPENDENCY_SOURCE" "$DEPENDENCY_MIRRORS" "$@"');
+ put('bash','script=$1; mode=$2; printf "helper-root %s\\n" "$3" >> "$DEPENDENCY_TRACE"; shift 5; exec /bin/bash "$script" "$mode" "$DEPENDENCY_BIN" "$DEPENDENCY_SOURCE" "$DEPENDENCY_MIRRORS" "$@"');
  put('apt-get',`printf "apt %s\\n" "$*" >> "$DEPENDENCY_TRACE"
  case "$*" in *update*) phase=apt-index;; *) phase=os-packages;; esac
  [ "$DEPENDENCY_FAILED" != "$phase" ] || exit 43
@@ -47,7 +47,7 @@ function invoke(t,failed='',present=[],broken='',expired=false){
  for(const name of present)put(name,'printf "tool '+name+' %s\\n" "$*" >> "$DEPENDENCY_TRACE"; [ "$DEPENDENCY_BROKEN" != "'+name+'" ] || exit 44');
  let output='',status=0;
  for(const s of setup()){
-  const r=spawnSync('/bin/bash',['-e','-o','pipefail','-c',s.run],{env:{...process.env,PATH:top,DEPENDENCY_BIN:top,DEPENDENCY_SOURCE:source,DEPENDENCY_MIRRORS:mirrors,DEPENDENCY_TRACE:trace,DEPENDENCY_FAILED:failed,DEPENDENCY_BROKEN:broken,DEPENDENCY_EXPIRED:expired?'1':'0'},encoding:'utf8',timeout:5000});
+  const r=spawnSync('/bin/bash',['-e','-o','pipefail','-c',s.run],{env:{...process.env,PATH:top,RUNNER_TEMP:join(top,'private-runner-temp'),DEPENDENCY_BIN:top,DEPENDENCY_SOURCE:source,DEPENDENCY_MIRRORS:mirrors,DEPENDENCY_TRACE:trace,DEPENDENCY_FAILED:failed,DEPENDENCY_BROKEN:broken,DEPENDENCY_EXPIRED:expired?'1':'0'},encoding:'utf8',timeout:5000});
   output+=r.stdout+r.stderr;status=r.status;if(status!==0)break;
  }
  return {status,output,trace:readFileSync(trace,'utf8')};
@@ -84,6 +84,7 @@ test('缺工具时同一签名runner来源只刷新一次并为其安装，已�
  }
  const missing=invoke(t,'',['zsh','ffmpeg']);
  assert.equal(missing.status,0,missing.output);
+ assert.match(missing.trace,/^helper-root \/tmp$/m);
  const apt=missing.trace.split('\n').filter(line=>line.startsWith('apt '));
  assert.equal(apt.filter(line=>line.endsWith(' update')).length,1);
  assert.ok(apt.every(line=>line.includes('/original.sources') && line.includes('/original-lists')),missing.trace);
