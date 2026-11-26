@@ -28,8 +28,11 @@ with tarfile.open(fileobj=sys.stdin.buffer, mode='r|*') as tar:
             manifest = value
         elif isinstance(value, dict) and 'rootfs' in value and 'architecture' in value:
             candidates[member.name] = (data, value)
-if not isinstance(manifest, list) or len(manifest) != 1 or wanted not in (manifest[0].get('RepoTags') or []):
-    raise ValueError('unexpected archive manifest or image tag')
+if not isinstance(manifest, list) or len(manifest) != 1:
+    raise ValueError('unexpected archive manifest')
+tags = manifest[0].get('RepoTags') or []
+if (wanted == '--untagged' and tags) or (wanted != '--untagged' and wanted not in tags):
+    raise ValueError('unexpected archive image tag')
 config_name = manifest[0].get('Config')
 if config_name not in candidates:
     raise ValueError('image config not found')

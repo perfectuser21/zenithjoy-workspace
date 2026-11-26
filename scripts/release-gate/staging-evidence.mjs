@@ -22,13 +22,21 @@ export function verifyStaging({sha, targets, api = path => JSON.parse(execFileSy
     // 最近同SHA的运行必须通过；旧绿不能掩盖其后的失败/进行中运行。
     const run = [...(page.workflow_runs || [])].sort((a,b) => b.id-a.id)[0];
     validateStagingRun(run,{sha,workflow});
-    return {target,run_id:run.id,sha};
+    return {target,run_id:run.id,run_attempt:run.run_attempt,sha};
   });
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const sha = process.argv[2], evidence = verifyStaging({sha,targets:process.argv[3]});
     console.log(JSON.stringify({sha,staging:evidence}));
-    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT,`sha=${sha}\n`);
+    if (process.env.GITHUB_OUTPUT) {
+      let outputs = `sha=${sha}\n`;
+      const api = evidence.find(stage => stage.target === 'api');
+      if (Number.isSafeInteger(api?.run_id) && api.run_id > 0
+          && Number.isSafeInteger(api?.run_attempt) && api.run_attempt > 0) {
+        outputs += `api_run_id=${api.run_id}\napi_run_attempt=${api.run_attempt}\n`;
+      }
+      appendFileSync(process.env.GITHUB_OUTPUT, outputs);
+    }
   } catch(error) { console.error(error.message); process.exitCode=1; }
 }
