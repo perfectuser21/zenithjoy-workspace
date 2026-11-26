@@ -19,6 +19,7 @@ on:
       - 'deploy/docker-compose.staging-api.yml'
       - 'scripts/deploy/hk-api-staging.sh'
       - 'scripts/deploy/staging-cos-delivery.py'
+      - 'scripts/deploy/hz-api-candidate.py'
       - '.github/workflows/deploy-staging-hk.yml'
       - '.github/workflows/scripts/payment-public-check.mjs'
       - '.github/workflows/scripts/smoke/payment-smoke.sh'
@@ -127,6 +128,31 @@ jobs:
             exit 0
           fi
           exit "$status"
+
+      - name: Package staged API image for Hangzhou
+        id: hangzhou_bundle
+        continue-on-error: true
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/deploy/hz-api-candidate.py artifact "$RUNNER_TEMP" \
+            "$RUNNER_TEMP/hz-api-candidate" "$DEPLOY_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+
+      - name: Retain verified API candidate
+        id: hangzhou_upload
+        if: steps.hangzhou_bundle.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: hk-api-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hz-api-candidate
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report Hangzhou candidate availability
+        if: steps.hangzhou_bundle.outcome == 'failure' || steps.hangzhou_upload.outcome == 'failure'
+        run: echo '::warning::Hangzhou candidate artifact unavailable. HK staging completed; Hangzhou requires a successful artifact upload on this staging attempt.'
 
       - name: Notify Brain on failure
         if: failure()

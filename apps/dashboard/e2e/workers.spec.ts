@@ -104,10 +104,11 @@ test('活铺满一天时表格里真的出现滑杆，页面本身不变长', as
   expect(pageGrew).toBe(false); // 页面本身没被撑长
 });
 test('表里看得出哪儿还空着、还能塞几单', async ({ page }) => {
-  // 样例按当前日期生成。用当天上午验证可用空档，避免深夜运行时空档全部过期。
-  const morning = new Date();
-  morning.setHours(9, 0, 0, 0);
+  const schedule = __mockSchedulePayloadForDemo();
+  const morning = new Date(schedule.as_of);
+  morning.setHours(8, 0, 0, 0);
   await page.clock.setFixedTime(morning);
+  await page.route('**/api/schedule', (r) => r.fulfill({ json: { success: true, data: schedule } }));
   await page.route('**/api/workers', (r) =>
     r.fulfill({
       json: {

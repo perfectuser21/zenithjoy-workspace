@@ -8750,6 +8750,28 @@ tests:
     product: AI视频
     note: 在 Comfy CPU 镜像运行，验证上传选图、解码前像素限制及节点幂等。
 
+  - id: hz-api-release-regression
+    path: scripts/deploy/__tests__/hz-api-release.test.mjs
+    type: integration
+    ci: L1
+    status: active
+    product: CI治理
+    note: 杭州生产 API 宿主身份、迁移账本、切换回读及可重放的回退。
+  - id: hz-api-candidate-regression
+    path: scripts/deploy/__tests__/hz-api-candidate.test.mjs
+    type: integration
+    ci: L1
+    status: active
+    product: CI治理
+    note: 同一次 staging 的固定产物和杭州 workflow 准入。
+  - id: hz-api-candidate-python
+    path: scripts/deploy/__tests__/hz-api-candidate.test.py
+    type: unit
+    ci: L1
+    status: active
+    product: CI治理
+    note: 由同名 Node 测试调用，覆盖私有镜像的绑定和两个 SSH 跳点。
+
   - id: hk-api-release-regression
     path: scripts/deploy/__tests__/hk-api-release.test.mjs
     type: integration

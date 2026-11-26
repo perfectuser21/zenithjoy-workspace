@@ -76,3 +76,19 @@ test('video tools live admission binds the browser proof to the exact staging ca
     step.conclusion = 'success';
   }
 });
+
+test('Hangzhou business receipt must bind the same API staging run and attempt', () => {
+  const stagedOptions = {...options, targets: ['api'], apiStaging: {runId: 123, attempt: 2}};
+  const accepted = receipt();
+  assert.throws(() => validateAcceptance(accepted, stagedOptions), /未绑定本次/);
+  accepted.run.detail.version_sources = {backend: {target: 'api', sha, run_id: 123, run_attempt: 2}};
+  assert.doesNotThrow(() => validateAcceptance(accepted, stagedOptions));
+  for (const binding of [
+    {run_id: 456}, {run_attempt: 1}, {target: 'dashboard'}, {sha: 'b'.repeat(40)},
+  ]) {
+    const other = structuredClone(accepted);
+    Object.assign(other.run.detail.version_sources.backend, binding);
+    assert.throws(() => validateAcceptance(other, stagedOptions), /未绑定本次/);
+  }
+  assert.doesNotThrow(() => validateAcceptance(receipt(), options));
+});
