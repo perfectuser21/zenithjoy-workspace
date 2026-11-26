@@ -21,7 +21,8 @@ function setup(t) {
     physical_serial: physicalSerial, transport_serial: transportSerial,
     old_endpoint: oldEndpoint, new_endpoint: newEndpoint, new_instance_id: 'mmv-yuesheng-direct',
   };
-  const approval = { protocol: 'yuesheng-adb-migration-approval/v1', approved_by: 'operator', approved_at: at(-70000),
+  const approval = { protocol: 'yuesheng-adb-migration-approval/v1', approved_by: 'authenticated-operator', approved_at: at(-70000),
+    approval_ref: 'pending-action:' + plan.pending_action_id,
     plan_sha256: digest(plan), actions: ['disconnect_old', 'connect_new'] };
   const facts = { task: { ...evidence.task, result: { yuesheng_adb_migration_approval: approval } },
     deviceLocks: { success: true, locks: [evidence.current_lock] },
@@ -130,6 +131,10 @@ test('只有观察材料或有别的批准，不能开始设备动作', async t 
     facts => { facts.pendingAction.source = 'owner_decision_guard'; },
     facts => { facts.pendingAction.params.lease_version = '99'; },
     facts => { facts.pendingAction.params.source_commit = '0'.repeat(40); },
+    facts => { facts.task.result.yuesheng_adb_migration_approval.approved_by = 'client-supplied-operator'; },
+    facts => { facts.task.result.yuesheng_adb_migration_approval.approval_ref = ' '; },
+    facts => { facts.task.result.yuesheng_adb_migration_approval.approval_ref = 'pending-action:another'; },
+    facts => { facts.task.result.yuesheng_adb_migration_approval.approved_at = at(-85000); },
   ]) {
     const x = setup(t);
     mutate(x.facts);

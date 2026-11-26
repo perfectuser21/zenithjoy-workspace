@@ -56,8 +56,9 @@ function verifyAuthority({ plan, planSha, snapshot, now }) {
   const approval = task.result?.yuesheng_adb_migration_approval;
   const approvedAt = Date.parse(approval?.approved_at);
   need(approval?.protocol === 'yuesheng-adb-migration-approval/v1' && approval.plan_sha256 === planSha
-    && same(approval.actions, actions) && typeof approval.approved_by === 'string' && approval.approved_by.trim().length > 0
-    && approvedAt >= Date.parse(plan.claim.claimed_at) && approvedAt <= now
+    && same(approval.actions, actions) && approval.approved_by === 'authenticated-operator'
+    && approval.approval_ref === 'pending-action:' + plan.pending_action_id
+    && approvedAt >= Date.parse(plan.lease.locked_at) && approvedAt <= now
     && pendingAction?.id === plan.pending_action_id && pendingAction.status === 'approved'
     && pendingAction.action_type === 'owner_decision' && pendingAction.source === 'yuesheng_adb_migration'
     && same(pendingAction.params ?? null, { protocol: 'yuesheng-adb-migration-request/v1',
