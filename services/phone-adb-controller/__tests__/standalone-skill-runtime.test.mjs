@@ -187,19 +187,57 @@ for(const failed of [false,true])test(`leaf-state read throws after dispatch ${f
  }finally{f.cleanup();}
 });
 test('work deadline refuses new phone and business work while cleanup leaves retain their reserved deadline',async()=>{
- const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),{digest}=await import('../runtime-definition.mjs'),f=await runtimeFixture();let admit,producerOptions,rpcCalls=0;
+ const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),{digest}=await import('../runtime-definition.mjs'),f=await runtimeFixture();let producerOptions,workVersion,rpcCalls=0;
  const originalNow=Date.now;
  try{
   const start=originalNow();f.frozen.standalone_skill.deadline_ms=start+30000;f.frozen.standalone_skill.cleanup_deadline_ms=start+90000;delete f.frozen.snapshot_sha256;f.frozen.snapshot_sha256=digest(f.frozen);f.fs.writeFileSync(f.path.join(f.dir,'run-definition.json'),JSON.stringify(f.frozen));
   f.dependencies.rpcFactory=()=>async()=>{rpcCalls++;return {ok:true,result:{}};};
-  f.dependencies.producerFactory=async options=>{producerOptions=options;admit=options.assertAdmission;return {env:{},isReturnUnknown:()=>false,seal:async()=>({requests_returned:true})};};
-  f.dependencies.execute=async(c,args)=>{if(args.includes('return-safe-desktop')){await admit();await admit();}return f.execute(c,args);};
-  const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});Date.now=()=>start+31000;
+  f.dependencies.producerFactory=async options=>{producerOptions=options;return {env:{},isReturnUnknown:()=>false,seal:async()=>({requests_returned:true})};};
+  f.dependencies.execute=async(c,args)=>{
+   if(args.includes('return-safe-desktop')){
+    assert.throws(()=>workVersion.assertActive(),/VERSION_PHASE_CHANGED/);
+    const cleanupVersion=producerOptions.beginLocalVersion();
+    assert.equal(cleanupVersion.deadlineMs,start+90000);
+    cleanupVersion.assertActive();
+    await producerOptions.assertAdmission();
+    await producerOptions.assertAdmission();
+    cleanupVersion.assertActive();
+   }
+   return f.execute(c,args);
+  };
+  const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});
+  workVersion=producerOptions.beginLocalVersion();
+  assert.equal(workVersion.deadlineMs,start+30000);
+  workVersion.assertActive();
+  Date.now=()=>start+31000;
+  assert.throws(()=>workVersion.assertActive(),/WORK_DEADLINE/);
   const before=f.effects.length;await assert.rejects(f.dispatch('phone',{command:'status',args:[]}),/WORK_DEADLINE/);await assert.rejects(f.dispatch('business',{operation:'keywords',input:{}}),/WORK_DEADLINE/);assert.equal(f.effects.length,before);assert.equal(rpcCalls,0);
   assert.equal(producerOptions.admissionDeadlineMs,f.frozen.standalone_skill.cleanup_deadline_ms);
   assert.equal(f.fs.existsSync(f.path.join(f.registry,f.run+'.cleanup')),false);
   const receipt=await host.close();assert.equal(f.fs.readFileSync(f.path.join(f.registry,f.run+'.cleanup'),'utf8'),digest(f.fs.readFileSync(f.path.join(f.registry,f.run+'.json')))+'\n');assert.equal(receipt.native_return_unknown,false);assert.equal(f.effects.includes('return-safe-desktop'),true);assert.equal(f.effects.includes('central-release'),true);assert.equal(f.fs.existsSync(f.unknownPath),false);
  }finally{Date.now=originalNow;f.cleanup();}
+});
+
+test('a local version cannot acknowledge output after its frozen snapshot or host is revoked',async()=>{
+ const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs');
+ for(const drift of ['snapshot','revocation']){
+  const f=await runtimeFixture();let beginLocalVersion;
+  try{
+   f.dependencies.producerFactory=async options=>{
+    beginLocalVersion=options.beginLocalVersion;
+    return {env:{},isReturnUnknown:()=>false,seal:async()=>({empty_requests_returned:true})};
+   };
+   const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});
+   const request=beginLocalVersion();
+   request.assertActive();
+   if(drift==='snapshot')f.fs.writeFileSync(f.path.join(f.dir,'skill/SKILL.md'),'changed');
+   else f.fs.writeFileSync(f.unknownPath,'revoked',{mode:0o600});
+   assert.throws(()=>request.assertActive(),drift==='snapshot'?/冻结文件digest不符/:/HOST_REVOKED/);
+   assert.equal((await host.close()).native_return_unknown,true);
+   assert.equal(f.effects.includes('return-safe-desktop'),false);
+   assert.equal(f.effects.includes('central-release'),false);
+  }finally{f.cleanup();}
+ }
 });
 
 test('cleanup deadline denies further desktop leaves and retains the revoked resources',async()=>{

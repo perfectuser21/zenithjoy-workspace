@@ -9,6 +9,7 @@ import {epochTransportSerial} from './device-epoch-fence-reference.mjs';
 const sandbox='/usr/bin/sandbox-exec';
 // 精确复用PR2147 ccfcbfb7 wf-v2-processes.py的单叶子边界，绝不套在允许fork的父shell。
 const profile='(version 1)(allow default)(deny process-fork)';
+const localVersionProfile='(version 1)(allow default)(deny process-fork)(deny network*)';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function pinnedClient(policy){
@@ -29,7 +30,7 @@ async function run(command,args,env,timeoutMs,onStart=()=>{},beforeSpawn=()=>{})
 }
 const prelaunchExpired=new WeakSet();
 export const isPrelaunchExpired=error=>prelaunchExpired.has(error);
-export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env,assertAdmission}){
+export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env,assertAdmission,beginLocalVersion}){
  const fenced=policy?.schema_version===2;
  if(fenced&&typeof assertAdmission!=='function')throw Error('COLLECTION_FENCED_ADMISSION_REQUIRED');
  const launchActive=()=>{if(admissionDeadlineMs!==undefined&&(!Number.isSafeInteger(admissionDeadlineMs)||admissionDeadlineMs>deadlineMs||Date.now()>=admissionDeadlineMs))throw Error('COLLECTION_LEAF_ADMISSION_DEADLINE');};
@@ -61,7 +62,13 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   active++;
   let entry;
   try{
-   const proof=typeof assertAdmission==='function'?await assertAdmission():undefined;
+   const localVersion=fenced&&version&&beginLocalVersion?beginLocalVersion():null;
+   const assertActive=()=>{
+    launchActive();
+    if(sealed||Date.now()>=deadlineMs||localVersion&&Date.now()>=localVersion.deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
+   };
+   if(localVersion)localVersion.assertActive();
+   const proof=!localVersion&&typeof assertAdmission==='function'?await assertAdmission():undefined;
    let transportArgv=argv;
    if(fenced&&!version&&proof?.adb_serial!==undefined){
     if(proof.authorized!==true||proof.serial!==serial||proof.endpoint!==policy.endpoint)throw Error('COLLECTION_LEAF_DEVICE_IDENTITY');
@@ -72,7 +79,10 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
    entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(transportArgv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};leaves.push(entry);
    append({...entry,phase:'intent'});
-   const result=await run(sandbox,['-p',profile,binary,...transportArgv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},()=>{launchActive();if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');});
+   const sandboxProfile=localVersion?localVersionProfile:profile;
+   const childEnv=localVersion?{}:{...clean,ADB_SERVER_SOCKET:policy.endpoint};
+   const processDeadline=localVersion?Math.min(deadlineMs,localVersion.deadlineMs):deadlineMs;
+   const result=await run(sandbox,['-p',sandboxProfile,binary,...transportArgv],childEnv,processDeadline-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},assertActive);
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
    // This is a lifecycle proof from our nofork child close, not business success.
    const dumpCrashReturned=result.code===137&&result.signal===null&&!result.tainted&&result.stderr.length===0
@@ -90,7 +100,10 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    }
    append({...entry,phase:'exit'});
    if(result.code!==0||result.signal||result.tainted)tainted=true;
-   if(typeof assertAdmission==='function')await assertAdmission();
+   if(localVersion){
+    localVersion.assertActive();
+    if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
+   }else if(typeof assertAdmission==='function')await assertAdmission();
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
   }catch(error){tainted=true;if(error.epochFenceLost){epochFenceLost=true;try{append({...entry,phase:'epoch_fence_lost',new_leaf_returned:entry?.request_returned===true});}catch{}}else{returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}}throw error;}finally{active--;}
  };
