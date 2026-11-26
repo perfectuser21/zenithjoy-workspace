@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
-INPUT_RUNTIME_REVISION = 6
+INPUT_RUNTIME_REVISION = 7
 import json
 import hashlib
 import re
@@ -171,7 +171,7 @@ def douyin_title_structure(tree, field):
 
 
 def xhs_post_title_structure(tree, field):
-    """Identify the standard title box in the observed image-note composer."""
+    """Identify the standard title box in the observed image or video note composer."""
     nodes = list(tree.iter("node"))
     parents = {child: parent for parent in nodes for child in parent if child.tag == "node"}
     obfuscated = PACKAGE + ":id/0_resource_name_obfuscated"
@@ -186,26 +186,45 @@ def xhs_post_title_structure(tree, field):
     if (not safe(pane, "android.widget.ScrollView") or not safe(frame, "android.widget.FrameLayout", "")
             or parents.get(frame) is not None or field.get("clickable") != "true"
             or any(node.get("focused") == "true" and node is not field for node in nodes)):
-        raise ValueError("XHS title is outside the focused image-note composer")
+        raise ValueError("XHS title is outside the focused note composer")
 
     children = list(pane)
     index = children.index(field)
     media = children[index - 1] if index else None
     body = [n for n in pane.iter("node") if n.get("class") == "android.widget.EditText" and n is not field]
     publish = [n for n in frame if n.get("text") == "发布笔记"]
-    if (not safe(media, "androidx.recyclerview.widget.RecyclerView")
-            or len(body) != 1 or not safe(body[0], "android.widget.EditText")
+    if (len(body) != 1 or not safe(body[0], "android.widget.EditText")
             or not safe(parents.get(body[0]), "android.widget.ScrollView")
             or parents.get(parents.get(body[0])) is not pane
             or len(publish) != 1 or not safe(publish[0], "android.widget.Button")
             or publish[0].get("clickable") != "true"):
-        raise ValueError("XHS image-note title, media, body or publish anchor changed")
+        raise ValueError("XHS note title, body or publish anchor changed")
 
     field_bounds = bounds_rect(field.get("bounds"))
-    media_bounds = bounds_rect(media.get("bounds"))
     body_bounds = bounds_rect(body[0].get("bounds"))
-    if media_bounds[3] != field_bounds[1] or body_bounds[1] < field_bounds[3]:
-        raise ValueError("XHS title is not between the media and body")
+    if body_bounds[1] < field_bounds[3]:
+        raise ValueError("XHS title is not above the note body")
+    if safe(media, "androidx.recyclerview.widget.RecyclerView"):
+        media_bounds = list(bounds_rect(media.get("bounds")))
+        if media_bounds[3] != field_bounds[1]:
+            raise ValueError("XHS image-grid edge is not adjacent to the title")
+        policy = "xhs_image_note_title_clear_v1"
+    else:
+        preview = children[index - 2] if index >= 2 else None
+        cover_text = [n for n in nodes if n.get("text") == "选封面"]
+        if (not safe(preview, "android.view.View") or preview.get("clickable") != "true"
+                or not safe(media, "android.view.ViewGroup") or media.get("clickable") != "true"
+                or len(cover_text) != 1 or cover_text[0] not in list(media)
+                or not safe(cover_text[0], "android.widget.TextView")):
+            raise ValueError("XHS video preview or cover control is absent or ambiguous")
+        pl, pt, pr, pb = bounds_rect(preview.get("bounds"))
+        cl, ct, cr, cb = bounds_rect(media.get("bounds"))
+        tl, tt, tr, tb = bounds_rect(cover_text[0].get("bounds"))
+        if (not pl <= cl <= tl < tr <= cr <= pr or not pt < pb == ct <= tt < tb <= cb
+                or not 0 <= field_bounds[1] - cb <= field_bounds[3] - field_bounds[1]):
+            raise ValueError("XHS video preview and cover geometry changed")
+        media_bounds = [[pl, pt, pr, pb], [cl, ct, cr, cb], [tl, tt, tr, tb]]
+        policy = "xhs_video_note_title_clear_v1"
     sibling = children[index + 1] if index + 1 < len(children) else None
     clear = None
     if (safe(sibling, "android.widget.ImageView") and sibling.get("clickable") == "true"
@@ -214,10 +233,10 @@ def xhs_post_title_structure(tree, field):
     if clear is None and field.get("text") != "添加标题":
         raise ValueError("XHS title placeholder or observed clear control is absent")
     return {
-        "policy": "xhs_image_note_title_clear_v1",
+        "policy": policy,
         "frame": list(bounds_rect(frame.get("bounds"))),
         "pane_edges": list(bounds_rect(pane.get("bounds"))[:3]),
-        "media": list(media_bounds),
+        "media": media_bounds,
         "body_edges": list(body_bounds[:3]),
         "publish": list(bounds_rect(publish[0].get("bounds"))),
         "clear": clear,
@@ -229,7 +248,7 @@ def check_xhs_post_title_shrink(selection, current):
     actual = current.get("xhs_title_structure")
     if (not actual or original["clear"] is not None or not actual["clear"]
             or any(actual[key] != original[key] for key in original if key != "clear")):
-        raise ValueError("XHS image-note title structure changed after typing")
+        raise ValueError("XHS note title structure changed after typing")
     left, top, right, bottom = bounds_rect(selection["bounds"])
     new_left, new_top, new_right, new_bottom = bounds_rect(current["bounds"])
     clear_left, clear_top, clear_right, clear_bottom = actual["clear"]
