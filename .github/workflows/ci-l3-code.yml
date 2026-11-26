@@ -30,6 +30,7 @@ jobs:
       ci: ${{ steps.filter.outputs.ci }}
       agent_modules: ${{ steps.filter.outputs.agent_modules }}
       docs_only: ${{ steps.filter.outputs.docs_only }}
+      darwin_unrelated: ${{ steps.filter.outputs.darwin_unrelated }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -316,7 +317,7 @@ jobs:
       matrix:
         shard: [remaining, public101]
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'
     runs-on: macos-latest
     timeout-minutes: 20
     permissions:
@@ -361,7 +362,7 @@ jobs:
   public-code-phone-darwin-test:
     name: Public Code Phone Darwin Test
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'
     runs-on: macos-latest
     # Serial native suites passed but exhausted 10m including setup/teardown; worker deadlines stay unchanged.
     timeout-minutes: 15
@@ -418,7 +419,7 @@ jobs:
   epoch-resume-darwin-test:
     name: Epoch Resume Darwin Test
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -455,7 +456,7 @@ jobs:
   epoch-continuation-darwin-test:
     name: Epoch Stop Continuation Darwin Test
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -492,7 +493,7 @@ jobs:
   epoch-private-recovery-darwin-test:
     name: Epoch Private Session Recovery Darwin Test
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -554,7 +555,7 @@ jobs:
               services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs
               services/phone-adb-controller/__tests__/uiautomator-dump-crash.test.mjs
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     steps:

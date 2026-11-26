@@ -65,7 +65,7 @@ test('实际required L3命令仍选择完整Commander执行与部署回归且每
  for(const name of ['commander-report','commander-v2','commander-codex-agent','commander-handoff','deployment-unified','deployment-prepare']){
   const file='services/phone-adb-controller/__tests__/'+name+'.test.mjs';assert.equal(selected.filter(arg=>arg===file).length,1,file);
  }
- const darwin=workflow.jobs['native-103-darwin-test'];assert.ok(darwin?.if==="needs.changes.outputs.docs_only != 'true'"&&darwin.needs==='changes'&&!darwin['continue-on-error']);assert.ok(workflow.jobs['l3-passed'].needs.includes('native-103-darwin-test'));assert.ok(gates.code.always.includes('native-103-darwin-test'));
+ const darwin=workflow.jobs['native-103-darwin-test'];assert.ok(darwin?.if==="needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.darwin_unrelated != 'true'"&&darwin.needs==='changes'&&!darwin['continue-on-error']);assert.ok(workflow.jobs['l3-passed'].needs.includes('native-103-darwin-test'));assert.ok(gates.code.always.includes('native-103-darwin-test'));
  assert.ok(darwin.steps.some(step=>step.run?.includes('node scripts/ci/native-103-darwin-tests.mjs')),'the required Darwin job must actually invoke its full suite driver');
  const driver=readFileSync(new URL('../../../scripts/ci/native-103-darwin-tests.mjs',import.meta.url),'utf8');
  for(const name of ['transaction','public-executor','producers']){const file='native-103-'+name+'.test.mjs';assert.equal(selected.some(arg=>arg.endsWith('/'+file)),false);assert.equal(driver.split("'"+file+"'").length-1,1,'dedicated Darwin driver declares '+file+' exactly once');}
