@@ -77,14 +77,66 @@ async function assignedRun(bound,deps){
  return{task_id,run_id,run_tag:bound.run,task_status:task.status,workflow_id:definition.workflow_id,
   release_id:definition.release_id,workflow_definition_version_id:definition.workflow_definition_version_id};
 }
-async function pgRead(bound,args,deps){
- const query=queryFor(bound,args),pool=await deps.loadPool(bound.c);let client;
- try{client=await pool.connect();await client.query('BEGIN READ ONLY');await client.query("SET LOCAL statement_timeout='10000ms'");
+const PG_RETRY_WINDOW_MS=20_000;
+const RETRYABLE_PG_CODES=new Set(['08000','08001','08003','08006','57P01','57P02','57P03','ECONNRESET','ETIMEDOUT','EPIPE']);
+const DIAGNOSTIC_PG_CODES=new Set([...RETRYABLE_PG_CODES,'28P01','42501','42703','42P01','57014','ECONNREFUSED','ENOTFOUND']);
+
+class PgReadFailure extends Error {
+ constructor(stage,error){
+  super(error?.message==='FACT_SCOPE'?'FACT_SCOPE':'FACT_READ_UNAVAILABLE');
+  const code=error?.code,message=error?.message;
+  const connectionTimeout=stage==='connect'&&message==='Connection terminated due to connection timeout';
+  const statementTimeout=code==='57014'&&message==='canceling statement due to statement timeout';
+  const disconnected=message==='Connection terminated unexpectedly';
+  let diagnostic=DIAGNOSTIC_PG_CODES.has(code)?code.toLowerCase():null;
+  if(connectionTimeout)diagnostic='connection_timeout';
+  else if(statementTimeout)diagnostic='statement_timeout';
+  else if(disconnected)diagnostic='connection_lost';
+  this.reason=diagnostic&&`pg_${stage}_${diagnostic}`;
+  this.retryable=stage!=='close'&&(connectionTimeout||statementTimeout||disconnected||RETRYABLE_PG_CODES.has(code));
+ }
+}
+async function pgReadOnce(bound,query,deps){
+ let pool,client,facts,failure;
+ let stage='load_pool';
+ try{
+  pool=await deps.loadPool(bound.c);
+  stage='connect';
+  client=await pool.connect();
+  stage='begin';
+  await client.query('BEGIN READ ONLY');
+  await client.query("SET LOCAL statement_timeout='10000ms'");
+  stage='snapshot';
   const connection=(await client.query("SELECT current_database() AS database,current_schema() AS schema,current_user AS role,current_setting('transaction_read_only') AS transaction_read_only,transaction_timestamp() AS snapshot_at")).rows;
   requireCondition(connection.length===1&&connection[0].transaction_read_only==='on');
+  stage='rows';
   const rows=(await client.query(query.sql,query.values)).rows;requireCondition(Array.isArray(rows));
-  return{connection:connection[0],rows:rows.slice(0,500),truncated:rows.length>500,observed_at:new Date().toISOString(),query_sha256:createHash('sha256').update(query.sql).digest('hex'),scope:{line:captureLine(bound),run:bound.run}};
- }finally{if(client){try{await client.query('ROLLBACK');}finally{client.release();}}await pool.end();}
+  facts={connection:connection[0],rows:rows.slice(0,500),truncated:rows.length>500,observed_at:new Date().toISOString(),query_sha256:createHash('sha256').update(query.sql).digest('hex'),scope:{line:captureLine(bound),run:bound.run}};
+ }catch(error){failure=new PgReadFailure(stage,error);}
+
+ try{
+  if(client){
+   try{await client.query('ROLLBACK');}
+   catch(error){failure??=new PgReadFailure('rollback',error);}
+   client.release(failure);
+  }
+ }catch(error){throw new PgReadFailure('close',error);}
+ finally{
+  // Never start another attempt when closing its predecessor could not be confirmed.
+  try{await pool?.end();}
+  catch(error){throw new PgReadFailure('close',error);}
+ }
+ if(failure)throw failure;
+ return facts;
+}
+async function pgRead(bound,args,deps){
+ const query=queryFor(bound,args),started=performance.now();
+ try{return await pgReadOnce(bound,query,deps);}
+ catch(error){
+  // This window gates when a fresh read-only transaction may start. Checker transport enforces the total deadline.
+  if(error.retryable&&performance.now()-started<PG_RETRY_WINDOW_MS)return pgReadOnce(bound,query,deps);
+  throw error;
+ }
 }
 export async function readFacts(request,deps){
  let source='facts:unavailable';
@@ -126,7 +178,11 @@ export async function readFacts(request,deps){
    source='feishu:record:'+args.record_id;facts=await deps.feishuGet(args.record_id,b.c);
   }else throw Error('FACT_SCOPE');
   requireCondition(facts!==undefined);return{status:'available',source,facts:selectFacts(facts,projection)};
- }catch(error){return{status:'unavailable',source:'facts:unavailable',facts:null,reason:error.message==='FACT_SCOPE'?'FACT_SCOPE_REJECTED':'FACT_READ_UNAVAILABLE'};}
+ }catch(error){
+  const genericReason=error?.message==='FACT_SCOPE'?'FACT_SCOPE_REJECTED':'FACT_READ_UNAVAILABLE';
+  const diagnostic=error instanceof PgReadFailure?error.reason:null;
+  return{status:'unavailable',source:'facts:unavailable',facts:null,reason:diagnostic??genericReason};
+ }
 }
 export const FACT_TOOL_DESCRIPTION='只读取原始事实，不返回业务判定。可在任意读操作的 args.fields 传最多32个点路径字段，例如 rows.video_id、connection.snapshot_at。数组适用同字段列表，按原顺序和原值返回；缺失字段不会填造。选择字段只减少响应，仍按原授权执行。结束验收先读 proposal.evidence 中本次工具真实返回的相对路径，不猜文件名。使用足以证明条款的最小证据；优先读已指明的具体回执，有证据缺口再读取原始来源，同一事实和相同查询不反复读取。只核对本轮实际适用的失败和幂等条件；未触发时可引用本轮账本和原回执说明，禁止为证明机制重放动作或故意制造失败。开工与收尾来源请用read_file读取checker-input/identity.json（本轮冻结的预期配置与绝对截止，不是原生登录结果）。operation=run.identity,args={}读取正式派单已持久化的原Task/Run/发布身份，不返回任务私有正文。operation=host.receipts,args={}列出本轮宿主工具真实回执路径、状态和动作名；用read_file取所需原件。operation=run.progress,args={}读取本轮执行与检查账本的阶段状态，不证明手机或外部动作。operation=pg.rows,args={relation:"videos"|"comments"|"outbox"|"leads"|"policy"|"company"}；brain.get,args={resource:"task",task_id?:本次或受信producer任务ID}或{resource:"device_lock"}；qualification.origin,args={video_id:已绑定视频ID}返回原judgment run的journal/转写原文（不等于视觉验收）；media.inspect,args={name:本run前缀的native目录媒体basename}返回真实ffprobe元数据（不等于完整覆盖）；native.read,args={}；feishu.get,args={record_id:本次原单或已绑定outbox的真实记录ID}。所有范围由宿主冻结context限制；不得传SQL、URL、命令或执行动作。';
 export async function serveFacts({contextFile,contextSha256,readLedger}){
