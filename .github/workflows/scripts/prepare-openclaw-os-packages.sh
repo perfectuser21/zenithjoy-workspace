@@ -66,7 +66,7 @@ if "$runner_sources"; then
     exit 1
   fi
   stage original-index sudo env LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" -o APT::Update::Error-Mode=any update
-  stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" --no-remove install -y "$@"
+  stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "${original_isolated[@]}" "${opts[@]}" --no-remove --no-install-recommends install -y "$@"
   echo 'PREFLIGHT_APT_DONE'
   exit 0
 fi
