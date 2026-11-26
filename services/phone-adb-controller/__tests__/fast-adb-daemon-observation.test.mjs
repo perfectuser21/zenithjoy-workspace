@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync,spawn} from 'node:child_process';
-import {mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,readFileSync,realpathSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {once} from 'node:events';
@@ -31,7 +31,8 @@ int main(void){int s=socket(AF_INET,SOCK_STREAM,0);struct sockaddr_in a={.sin_fa
  const expected={pid:daemon.pid,uid:process.getuid(),endpoint:`tcp:127.0.0.1:${port}`,executable:binary,executable_sha256:digest(readFileSync(binary)),
   policy_path:policy,policy_sha256:digest('{}'),start_identity:ps('lstart'),command:ps('command')};
  const pythonPath=realpathSync(execFileSync(preflightTestPython,['-I','-B','-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim());
- const python={path:pythonPath,realpath:pythonPath,sha256:digest(readFileSync(pythonPath))};
+ const pinnedPath=join(dir,'pinned-python');symlinkSync(pythonPath,pinnedPath);
+ const python={path:pinnedPath,sha256:digest(readFileSync(pythonPath))};
  const files=Object.fromEntries(['adb-daemon-observation-fast.py','adb-process-observation.py'].map(name=>['runtime/'+name,digest(readFileSync(new URL('../'+name,import.meta.url)))]));
  return {daemon,closed,expected,policy,open:(deadlineMs)=>openFastAdbDaemonObservation({python,frozen:{files},deadlineMs})};
 }

@@ -1,5 +1,6 @@
 import {spawn} from 'node:child_process';
 import {lstatSync,readFileSync,realpathSync,statSync} from 'node:fs';
+import {isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {bytes,digest} from './device-epoch-fence-reference.mjs';
 
@@ -11,10 +12,10 @@ const env={PATH:'/usr/bin:/bin:/usr/sbin',LANG:'C',LC_ALL:'C',TZ:'UTC'};
 
 export function openFastAdbDaemonObservation({python,frozen,deadlineMs=Date.now()+300000}) {
  need(process.platform==='darwin'&&process.arch==='arm64'&&typeof python?.path==='string'
-  &&realpathSync(python.path)===python.realpath,'EPOCH_DAEMON_OBSERVER');
- const interpreter=statSync(python.realpath);
+  &&isAbsolute(python.path)&&/^[a-f0-9]{64}$/.test(python.sha256||''),'EPOCH_DAEMON_OBSERVER');
+ const interpreterPath=realpathSync(python.path),interpreter=statSync(interpreterPath);
  need(interpreter.isFile()&&[0,process.getuid()].includes(interpreter.uid)&&!(interpreter.mode&0o022)
-  &&digest(readFileSync(python.realpath))===python.sha256,'EPOCH_DAEMON_OBSERVER');
+  &&digest(readFileSync(interpreterPath))===python.sha256,'EPOCH_DAEMON_OBSERVER');
  const sourceFiles=new Map([[helper,frozen.files['runtime/adb-daemon-observation-fast.py']],[kernel,frozen.files['runtime/adb-process-observation.py']]]);
  const metadata=path=>{
   const s=lstatSync(path,{bigint:true});
@@ -31,7 +32,7 @@ export function openFastAdbDaemonObservation({python,frozen,deadlineMs=Date.now(
   }
  }
  for(const [path,expected] of sourceFiles)file(path,expected);
- const child=spawn(python.path,['-I','-B',helper,kernel],{env,stdio:['pipe','pipe','ignore']});
+ const child=spawn(interpreterPath,['-I','-B',helper,kernel],{env,stdio:['pipe','pipe','ignore']});
  let pending,output='',ended=false,closing=false;
  const cancel=error=>{if(pending){const job=pending;pending=undefined;clearTimeout(job.timer);job.reject(error);}};
  const closed=new Promise(resolve=>child.once('close',(code,signal)=>{ended=true;cancel(fail('EPOCH_DAEMON_OBSERVER'));resolve({code,signal});}));
