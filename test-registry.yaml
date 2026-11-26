@@ -11588,6 +11588,33 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line02/keyword_acquisition keep-green；计划与明确批准后固定顺序隔离恢复，helper死亡、PID复用与未知失败封闭；不冒充现场停止证明"
 
+  - id: phone-device-epoch-fence-yuesheng-readback
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-readback.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；核验悦升云手机 5044 到 5045 的前后观察与同一维护租约"
+
+  - id: phone-device-epoch-fence-yuesheng-migration
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-migration.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；模拟悦升 5044 到 5045 迁移的审批、租约、持久写入和中断保护"
+
+  - id: phone-device-epoch-fence-yuesheng-plan
+    path: services/phone-adb-controller/__tests__/device-epoch-fence-yuesheng-plan.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line02/keyword_acquisition keep-green；按现行 Brain 维护任务、候选发布和强租约生成待批计划摘要"
+
   - id: leadgen-activity-skill-public-source
     path: services/phone-adb-controller/__tests__/activity-skill-public-source.test.mjs
     type: unit

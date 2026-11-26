@@ -12,7 +12,7 @@ export function readMaintenanceBrainToken(home=homedir()) {
  return token;
 }
 export async function maintenanceBrainRequest(path,body) {
- const readPath=/^\/(?:tasks\/[a-f0-9-]{36}|device-locks|releases\/[a-f0-9-]{36}(?:\/gate|\/observations\/[a-f0-9-]{36})?)$/i;
+ const readPath=/^\/(?:(?:tasks|pending-actions)\/[a-f0-9-]{36}|device-locks|releases\/[a-f0-9-]{36}(?:\/gate|\/observations\/[a-f0-9-]{36})?)$/i;
  const writePath=/^\/(?:tasks\/[a-f0-9-]{36}\/heartbeat|device-locks\/release)$/i;
  need((body===undefined?readPath:writePath).test(path));
  const base=new URL(process.env.BRAIN_URL||'http://localhost:5221');
