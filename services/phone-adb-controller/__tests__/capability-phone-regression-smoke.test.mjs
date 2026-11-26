@@ -47,9 +47,9 @@ function capabilityDependency(workflow, wrapper, installer) {
  const packages=wrapper.match(/^packages=\(([^)]*)\)$/m)?.[1].split(/\s+/);assert.ok(packages,'显式安装包数组必须存在');
  for(const required of ['zsh','python3','jq','libxml2-utils'])assert.ok(packages.includes(required),'missing required package: '+required);
  assert.match(wrapper,/if ! command -v ffmpeg[^\n]*packages\+=\(ffmpeg\)/);
- assert.match(wrapper,/^bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh[^\n]*"\$\{packages\[@\]\}"$/m);
+ assert.match(wrapper,/^bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh --runner-sources \/tmp [^\n]*"\$\{packages\[@\]\}"$/m);
  for(const tool of ['zsh','python3','jq','xmllint'])assert.match(wrapper,new RegExp('^'+tool+' --version$','m'));
- assert.match(installer,/stage official-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{isolated\[@\]\}" "\$\{opts\[@\]\}" install -y "\$@"/);
+ assert.match(installer,/stage original-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{original_isolated\[@\]\}" "\$\{opts\[@\]\}" --no-remove install -y "\$@"/);
 }
 const smokeWrapper=readFileSync(new URL('../../../.github/workflows/scripts/prepare-smoke-os-packages.sh',import.meta.url),'utf8');
 const signedInstaller=readFileSync(new URL('../../../.github/workflows/scripts/prepare-openclaw-os-packages.sh',import.meta.url),'utf8');
