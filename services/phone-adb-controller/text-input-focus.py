@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
-INPUT_RUNTIME_REVISION = 4
+INPUT_RUNTIME_REVISION = 5
 import json
 import hashlib
 import re
@@ -123,6 +123,53 @@ def weibo_body_structure(tree, field):
     return {"policy": "weibo_composer_body_growth_v1", "parent_anchor": [pl, pt, pr],
             "markers": [{k: n.get(k, "") for k in ("resource-id", "class", "package", "text", "bounds")} for n in markers]}
 
+def douyin_title_structure(tree, field):
+    package = "com.ss.android.ugc.aweme"
+    nodes = list(tree.iter("node"))
+    parents = {child: parent for parent in nodes for child in parent}
+    def matches(node, cls):
+        return (node is not None and node.get("package") == package and node.get("class") == cls
+                and node.get("enabled") == "true" and node.get("password") == "false")
+    def unique(rid, cls):
+        found = [node for node in nodes if node.get("resource-id") == package + ":id/" + rid]
+        if len(found) != 1 or not matches(found[0], cls):
+            raise ValueError("Douyin composer marker missing, ambiguous or unsafe")
+        return found[0]
+
+    scroll = unique("jt1", "android.widget.ScrollView")
+    parent = unique("qkj", "android.widget.LinearLayout")
+    title = unique("ij+", "android.widget.EditText")
+    counter = unique("44k", "android.widget.TextView")
+    body = unique("h94", "android.widget.EditText")
+    publish = unique("t5l", "android.widget.FrameLayout")
+    publish_label = unique("wov", "android.widget.TextView")
+    frame, footer = parents.get(scroll), parents.get(publish)
+    if (title is not field or field.get("focusable") != "true"
+            or any(node.get("focused") == "true" and node is not field for node in nodes)
+            or not matches(frame, "android.widget.FrameLayout") or parents.get(frame) is not None
+            or not matches(footer, "android.widget.FrameLayout") or parents.get(footer) is not frame
+            or parents.get(parent) is not scroll or any(parents.get(node) is not parent for node in (title, counter, body))
+            or not re.fullmatch(r"[0-9]{1,2}/20", counter.get("text", ""))
+            or parents.get(publish_label) is not publish or publish_label.get("text") != "发作品"):
+        raise ValueError("focused Douyin title is not in the verified video composer")
+
+    left, top, right, bottom = bounds_rect(parent.get("bounds"))
+    title_bounds = bounds_rect(field.get("bounds"))
+    counter_bounds = bounds_rect(counter.get("bounds"))
+    for l, t, r, b in (title_bounds, counter_bounds):
+        if not (left <= l < r <= right and top <= t < b <= bottom):
+            raise ValueError("Douyin title or counter leaves the composer")
+    # AdbIME moves the composer vertically. Keep the same window anchors,
+    # horizontal placement, and geometry relative to the verified container.
+    return {"policy": "douyin_video_title_ime_translation_v1",
+            "window_bounds": list(bounds_rect(frame.get("bounds"))),
+            "scroll_bounds": list(bounds_rect(scroll.get("bounds"))),
+            "publish_bounds": list(bounds_rect(publish.get("bounds"))),
+            "container_edges": [left, right],
+            "relative_bounds": [[l - left, t - top, r - left, b - top] for l, t, r, b in (title_bounds, counter_bounds)],
+            "text_sha256": hashlib.sha256(field.get("text", "").encode()).hexdigest()}
+
+
 def standard_resolve(xml_path):
     tree = ET.parse(xml_path)
     nodes = [n for n in tree.iter("node")
@@ -140,7 +187,8 @@ def standard_resolve(xml_path):
         raise ValueError("focused input identity is incomplete")
     policies = {("com.zhihu.android", ""): ("body_structure", zhihu_body_structure),
                 ("com.zhihu.android", "com.zhihu.android:id/input_text"): ("search_structure", zhihu_search_structure),
-                ("com.sina.weibo", "com.sina.weibo:id/edit_view"): ("weibo_structure", weibo_body_structure)}
+                ("com.sina.weibo", "com.sina.weibo:id/edit_view"): ("weibo_structure", weibo_body_structure),
+                ("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme:id/ij+"): ("title_structure", douyin_title_structure)}
     if (policy := policies.get((identity["package"], identity["resource-id"]))) is not None:
         try:
             identity[policy[0]] = policy[1](tree, node)
@@ -150,6 +198,13 @@ def standard_resolve(xml_path):
 
 def standard_readback(xml_path, selection, allow_body_growth=False):
     current = standard_resolve(xml_path)
+    if original_title := selection.get("title_structure"):
+        actual_title = current.get("title_structure")
+        if actual_title and allow_body_growth:
+            actual_title["text_sha256"] = original_title["text_sha256"]
+        if original_title != actual_title:
+            raise ValueError("Douyin video composer title changed")
+        current["bounds"] = selection["bounds"]
     if allow_body_growth and selection.get("weibo_structure"):
         before, after = bounds_rect(selection["bounds"]), bounds_rect(current["bounds"])
         if current.get("weibo_structure") != selection["weibo_structure"] or before[:3] != after[:3] or after[3] < before[3]:
@@ -167,7 +222,8 @@ def standard_readback(xml_path, selection, allow_body_growth=False):
     if current != selection:
         raise ValueError("focused input identity changed")
     # 兼容分支也必须重验同屏、唯一命名editor/root以及唯一安全焦点，绝不按空id全局读。
-    layout_bound = allow_body_growth and (selection.get("body_structure") or selection.get("search_structure") or selection.get("weibo_structure"))
+    layout_bound = selection.get("title_structure") or allow_body_growth and (
+        selection.get("body_structure") or selection.get("search_structure") or selection.get("weibo_structure"))
     keys = ("package", "resource-id", "class") if layout_bound else ("package", "resource-id", "class", "bounds")
     candidates = [n for n in ET.parse(xml_path).iter("node")
                   if (not layout_bound or n.get("focused") == "true")
@@ -188,7 +244,9 @@ def standard_compare(xml_path, selection, source):
     def identity(text):
         raw = text.encode("utf-8")
         return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-    return {"comparison_mode": mode, "identity_policy": selection.get("weibo_structure", {}).get("policy", selection.get("search_structure", {}).get("policy", selection.get("body_structure", {}).get("policy", "strict_standard"))), "source": identity(source), "actual": identity(actual),
+    identity_policy = next((selection[key]["policy"] for key in ("weibo_structure", "search_structure", "body_structure", "title_structure")
+                            if key in selection), "strict_standard")
+    return {"comparison_mode": mode, "identity_policy": identity_policy, "source": identity(source), "actual": identity(actual),
             "paragraphs": len(source.split("\n\n")) if selection.get("body_structure") else 0}
 
 
