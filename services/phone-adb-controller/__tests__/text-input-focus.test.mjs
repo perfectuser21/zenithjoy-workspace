@@ -319,8 +319,8 @@ test('XHS native valid missing-default attributes still pass resolve ready and t
 
 const xhsTitle = phase => new URL('./fixtures/xhs-image-note-title-'+phase+'.xml', import.meta.url).pathname;
 const xhsTitleText = '晚风里的青蓝';
-function xhsTitleSelection(){
-  const c=setup(), selected=run('standard-resolve',xhsTitle('before'));
+function xhsTitleSelection(fixture=xhsTitle){
+  const c=setup(), selected=run('standard-resolve',fixture('before'));
   assert.equal(selected.status,0,selected.stderr);
   writeFileSync(c.selection,selected.stdout);
   return c;
@@ -357,5 +357,35 @@ for(const [name,change] of [
     assert.notEqual(changed,typed);
     writeFileSync(c.xp,changed);
     assert.equal(run('standard-compare',c.selection,c.xp,xhsTitleText).status,2);
+  });
+}
+
+
+const xhsVideoTitle = phase => new URL('./fixtures/xhs-video-note-title-'+phase+'.xml', import.meta.url).pathname;
+const xhsVideoText = '雾色慢一点';
+
+test('小红书视频真实选封面布局下标题框写后收窄仍能逐字读回',()=>{
+  const c=xhsTitleSelection(xhsVideoTitle);
+  assert.equal(run('standard-check',c.selection,xhsVideoTitle('ready')).status,0);
+  const typed=run('standard-compare',c.selection,xhsVideoTitle('typed'),xhsVideoText);
+  assert.equal(typed.status,0,typed.stderr);
+  assert.deepEqual(JSON.parse(typed.stdout).source,JSON.parse(typed.stdout).actual);
+  assert.equal(run('standard-check',c.selection,xhsVideoTitle('typed')).status,2);
+  assert.equal(run('standard-compare',c.selection,xhsVideoTitle('typed'),'像雾色慢一点').status,2);
+});
+
+for(const [name,mutate] of [
+  ['选封面文字改变',x=>x.replace('text="选封面"','text="发表视频"')],
+  ['视频预览类别改变',x=>x.replace('class="android.view.View"','class="android.widget.FrameLayout"')],
+  ['视频预览从封面留出间隙',x=>x.replace('[49,311][328,566]','[49,311][328,564]')],
+  ['封面超出预览宽度',x=>x.replace('[85,566][293,658]','[85,566][379,658]')],
+  ['其它标题框取得焦点',x=>x.replace('focused="true"','focused="false"').replace(/(<node class="android.widget.EditText"[^>]*text="添加作品描述"[^>]*focused=")false/,'$1true')],
+]){
+  test('小红书视频拒绝：'+name,()=>{
+    const c=xhsTitleSelection(xhsVideoTitle), original=readFileSync(xhsVideoTitle('typed'),'utf8');
+    const changed=mutate(original);
+    assert.notEqual(changed,original);
+    writeFileSync(c.xp,changed);
+    assert.equal(run('standard-compare',c.selection,c.xp,xhsVideoText).status,2);
   });
 }
