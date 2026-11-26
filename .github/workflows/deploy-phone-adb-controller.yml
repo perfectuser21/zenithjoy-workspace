@@ -79,9 +79,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           IMPLEMENTATION_RUN_ID: ${{ inputs.implementation_run_id || github.event.workflow_run.id }}
+          IMPLEMENTATION_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'candidate' }}
-        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA" "$DEPLOY_MODE"
+        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA" "$DEPLOY_MODE" "$IMPLEMENTATION_RUN_ATTEMPT"
       - name: 接入 Tailscale
         uses: tailscale/github-action@v3
         with:
