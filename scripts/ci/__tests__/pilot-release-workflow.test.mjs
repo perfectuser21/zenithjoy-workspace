@@ -130,6 +130,40 @@ test('Pilot 拒绝错误身份、残缺定义、诊断错误、正式HTTP错误�
   assert.notEqual(r.status,0);assert.deepEqual(r.methods,methods);assert.equal(r.head,null);assert.equal(r.gap.status,'unknown');
  });
 });
+test('非 verified 同版本快照只记录少量允许代码，仍退出 1 且从不重发',async t=>{
+ const allowed=[
+  'activity_snapshot_missing','authoring_definition_missing','capability_mapping_missing',
+  'definition_snapshot_ambiguous','definition_snapshot_missing','manifest_source_mismatch',
+  'manifest_snapshot_ambiguous',
+ ];
+ const secret='fixture-local-token';
+ const gaps=[
+  {code:'scope_manifest_missing\n::error title=untrusted',message:secret},
+  {code:'fixture_local_token',detail:secret},
+  {code:{value:secret}},
+  null,
+  ...allowed.map(code=>({code,message:secret,entity_id:'private-entity'})),
+  {code:allowed[0]},
+  ...Array(32).fill({code:'unrecognized'}),
+  {code:'authoring_adapter_invalid'},
+ ];
+ const r=await runSnapshotStep(t,[{snapshot:{status:'unknown',gaps}},{}]);
+ assert.equal(r.status,1);assert.deepEqual(r.methods,['POST']);assert.equal(r.head,null);
+ assert.deepEqual(r.gap,{status:'unknown',stage:'pilot_snapshot',exit_code:1,code:'PILOT_SNAPSHOT_NOT_VERIFIED',gap_codes:allowed.toSorted().slice(0,6)});
+ assert.equal(r.stderr,'Pilot snapshot rejected: '+JSON.stringify(r.gap)+'\n');
+ assert.doesNotMatch(r.stderr,/untrusted|fixture[-_]local|private-entity/);
+});
+test('读回诊断只采纳同版本有效快照，退出码与未验证门禁保持一致',async t=>{
+ const conflict={status:409,body:{error:{code:'ACTIVITY_CONTRACT_SNAPSHOT_CHANGED'}}};
+ const same=await runSnapshotStep(t,[conflict,exactMissing]);
+ assert.equal(same.status,1);assert.deepEqual(same.methods,['POST','GET']);assert.equal(same.head,null);
+ assert.deepEqual(same.gap.gap_codes,['definition_snapshot_missing','scope_manifest_missing']);
+ const wrong={snapshot:{...exactMissing.snapshot,revision:'c'.repeat(40)}};
+ const mismatch=await runSnapshotStep(t,[conflict,wrong]);
+ assert.equal(mismatch.status,1);assert.deepEqual(mismatch.methods,['POST','GET']);assert.equal(mismatch.head,null);
+ assert.deepEqual(mismatch.gap,{status:'unknown',stage:'pilot_snapshot',exit_code:1});
+ assert.doesNotMatch(mismatch.stderr,/Pilot snapshot rejected|definition_snapshot_missing/);
+});
 test('Pilot 并发冲突只允许读回已经认证的准确快照',async t=>{
  const conflict={status:409,body:{error:{code:'ACTIVITY_CONTRACT_SNAPSHOT_CHANGED'}}};
  const r=await runSnapshotStep(t,[conflict,{}]);

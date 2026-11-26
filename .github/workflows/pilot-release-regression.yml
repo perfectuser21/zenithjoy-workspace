@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          trap 'code=$?; if (( code != 0 )); then printf "%s\n" "{\"status\":\"unknown\",\"stage\":\"pilot_snapshot\",\"exit_code\":$code}" > evidence/gap.json; fi' EXIT
+          trap 'code=$?; if (( code != 0 )) && [[ ! -f evidence/gap.json ]]; then printf "%s\n" "{\"status\":\"unknown\",\"stage\":\"pilot_snapshot\",\"exit_code\":$code}" > evidence/gap.json; fi' EXIT
           test -n "$CECELIA_INTERNAL_TOKEN"
           jq -n --arg scope "$MAP_SCOPE" --arg repo "$SOURCE_REPO" --arg revision "$HEAD" '{scope:$scope,repo:$repo,revision:$revision}' > evidence/request.json
           deadline=$((SECONDS+660))
@@ -104,11 +104,31 @@ jobs:
                 (.snapshot.gaps | type == \"array\") and ($1))" "$response" >/dev/null
           }
           verified() { validate '.snapshot.status == "verified" and (.snapshot.gaps | length == 0)'; }
+          reject_snapshot() {
+            local diagnostic
+            if validate '.snapshot.status == "unknown"' 2>/dev/null &&
+              diagnostic=$(jq -c '
+                [.snapshot.gaps[:32][] | objects | .code | strings | select(IN(
+                  "activity_snapshot_missing", "authoring_adapter_invalid",
+                  "authoring_definition_missing", "authoring_definition_source_mismatch",
+                  "capability_mapping_missing", "capability_source_repo_mismatch",
+                  "definition_snapshot_ambiguous", "definition_snapshot_missing",
+                  "definition_source_owner_unknown", "manifest_snapshot_ambiguous",
+                  "manifest_source_mismatch", "scope_manifest_missing",
+                  "scope_repository_ambiguous", "scope_repository_missing", "workflow_capability_unmapped"
+                ))] | unique | .[:6] |
+                {status:"unknown",stage:"pilot_snapshot",exit_code:1,code:"PILOT_SNAPSHOT_NOT_VERIFIED",gap_codes:.}
+              ' "$response" 2>/dev/null); then
+              printf '%s\n' "$diagnostic" > evidence/gap.json || true
+              printf 'Pilot snapshot rejected: %s\n' "$diagnostic" >&2 || true
+            fi
+            exit 1
+          }
           for attempt in 1 2; do
             lost=false
             if status=$(request POST); then
               if [[ "$status" == 200 ]]; then
-                verified || exit 1
+                verified || reject_snapshot
                 mv "$response" evidence/head.json
                 exit 0
               fi
@@ -129,12 +149,12 @@ jobs:
               mv "$response" evidence/head.json
               exit 0
             fi
-            [[ "$lost" == true && "$attempt" == 1 ]] || exit 1
+            [[ "$lost" == true && "$attempt" == 1 ]] || reject_snapshot
             # Only the exact empty server state permits a single new refresh.
             validate '.snapshot as $s | $s.status == "unknown" and
               ($s.gaps | map(.code) | sort) == ["definition_snapshot_missing","scope_manifest_missing"] and
               $s.definitions.workflows == [] and $s.definitions.activities == [] and
-              ($s.map | has("manifest")) and $s.map.manifest == null' || exit 1
+              ($s.map | has("manifest")) and $s.map.manifest == null' || reject_snapshot
             check_main || exit $?
             echo 'Pilot snapshot is absent on the same main revision, refreshing once more' >&2
           done
