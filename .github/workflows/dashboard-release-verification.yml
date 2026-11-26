@@ -1,0 +1,82 @@
+name: ZenithJoy Dashboard staging business verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        required: true
+        type: string
+        description: Full SHA currently deployed to Hong Kong Dashboard staging
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+    outputs:
+      sha:
+        value: ${{ jobs.verification.outputs.sha }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verification:
+    if: github.repository == 'perfectuser21/zenithjoy-workspace' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    environment: zenithjoy-staging-acceptance
+    concurrency:
+      group: zenithjoy-hk-dashboard-business-verification
+      cancel-in-progress: false
+    outputs:
+      sha: ${{ steps.stage.outputs.dashboard_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Bind running staging versions to their deployment attempts
+        id: stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/release-gate/dashboard-staging-evidence.mjs "$SHA" > "$RUNNER_TEMP/dashboard-staging-before.json"
+          cat "$RUNNER_TEMP/dashboard-staging-before.json"
+      - name: Install the browser for the protected verifier
+        run: |
+          npm ci --workspace=apps/dashboard
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Verify real Dashboard business in Hong Kong staging
+        env:
+          EXPECTED_DASHBOARD_SHA: ${{ steps.stage.outputs.dashboard_sha }}
+          EXPECTED_API_SHA: ${{ steps.stage.outputs.api_sha }}
+          DASHBOARD_STAGING_RUN_ID: ${{ steps.stage.outputs.dashboard_run_id }}
+          DASHBOARD_STAGING_RUN_ATTEMPT: ${{ steps.stage.outputs.dashboard_run_attempt }}
+          API_STAGING_RUN_ID: ${{ steps.stage.outputs.api_run_id }}
+          API_STAGING_RUN_ATTEMPT: ${{ steps.stage.outputs.api_run_attempt }}
+          STAGING_ACCEPTANCE_EMAIL: ${{ secrets.STAGING_ACCEPTANCE_EMAIL }}
+          STAGING_ACCEPTANCE_PASSWORD: ${{ secrets.STAGING_ACCEPTANCE_PASSWORD }}
+          STAGING_ACCEPTANCE_TENANT_ID: ${{ vars.STAGING_ACCEPTANCE_TENANT_ID }}
+          DASHBOARD_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/dashboard-business-verification.json
+        run: node scripts/release-gate/dashboard-business-smoke.mjs
+      - name: Confirm the deployment attempts stayed fixed during verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.stage.outputs.dashboard_sha }}
+        run: |
+          set -euo pipefail
+          GITHUB_OUTPUT='' node scripts/release-gate/dashboard-staging-evidence.mjs "$SHA" > "$RUNNER_TEMP/dashboard-staging-after.json"
+          cmp "$RUNNER_TEMP/dashboard-staging-before.json" "$RUNNER_TEMP/dashboard-staging-after.json"
+      - name: Store immutable verification results
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dashboard-business-verification.json
+          if-no-files-found: error
+          retention-days: 14
