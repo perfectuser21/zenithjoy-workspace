@@ -122,7 +122,11 @@ export function createYueshengEpochIssuer({
     ensureRecords(directory);
     save(join(journal, 'central-release-intent.json'), { plan_sha256: planSha, scope, lease: check.lease });
     const response = await release({ scope, lease: check.lease, readAuthority: assertAuthority });
-    need(response.status === 'released', 'ISSUE_RELEASE');
+    if (response.status !== 'released') {
+      const errorCode = /^CENTRAL_[A-Z_]+$/.test(response.error_code ?? '') ? response.error_code : 'CENTRAL_ACK_UNKNOWN';
+      save(join(journal, 'central-release-unknown.json'), { status: 'unknown', error_code: errorCode, retry_allowed: false });
+      need(false, 'ISSUE_RELEASE');
+    }
     const central = releaseProof(response.receipt);
     save(join(journal, 'central-release-result.json'), central);
     await assertHeld();

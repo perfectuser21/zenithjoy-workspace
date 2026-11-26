@@ -10,7 +10,7 @@ import { yueshengMaintenanceTask } from '../device-epoch-fence-yuesheng-host-rea
 import { verifyYueshengMigrationReadback, yueshengMigrationRoute } from '../device-epoch-fence-yuesheng-readback.mjs';
 import { at, fixture, now, sha, releaseId, observationId } from './fixtures/yuesheng-migration-readback.mjs';
 
-function setup(t) {
+function setup(t, { releaseUnknown = false } = {}) {
   const home = mkdtempSync(join(realpathSync(tmpdir()), 'yuesheng-issuer-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const base = join(home, '.local/share/zenithjoy');
@@ -72,6 +72,7 @@ function setup(t) {
     async release({ scope, lease: expected, readAuthority }) {
       await readAuthority();
       releases++;
+      if (releaseUnknown) return { status: 'unknown', error_code: 'CENTRAL_READBACK_UNKNOWN' };
       const current = { device_name: expected.device_name, locked_by: null, locked_at: null, expires_at: null, lease_version: '19' };
       return { status: 'released', receipt: { scope, expected, current } };
     },
@@ -98,4 +99,14 @@ test('changed raw wire receipt stops before release', async t => {
   writeFileSync(join(fixture.journal, 'connect-wire', 'host-response.raw'), 'changed');
   await assert.rejects(fixture.run(), { code: 'YUESHENG_MIGRATION_ISSUE_WIRE' });
   assert.equal(fixture.releases(), 0);
+});
+
+test('an unconfirmed lease release leaves a durable result and cannot be retried', async t => {
+  const fixture = setup(t, { releaseUnknown: true });
+  await assert.rejects(fixture.run(), { code: 'YUESHENG_MIGRATION_ISSUE_RELEASE' });
+  assert.deepEqual(JSON.parse(readFileSync(join(fixture.journal, 'central-release-unknown.json'))), {
+    status: 'unknown', error_code: 'CENTRAL_READBACK_UNKNOWN', retry_allowed: false,
+  });
+  await assert.rejects(fixture.run(), { code: 'EEXIST' });
+  assert.equal(fixture.releases(), 1);
 });
