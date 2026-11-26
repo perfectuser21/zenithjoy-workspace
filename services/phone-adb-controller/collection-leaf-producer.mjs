@@ -5,6 +5,7 @@ import {mkdirSync,readFileSync,realpathSync,statSync,appendFileSync,chmodSync,un
 import {join,isAbsolute} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
+import {epochTransportSerial} from './device-epoch-fence-reference.mjs';
 const sandbox='/usr/bin/sandbox-exec';
 // 精确复用PR2147 ccfcbfb7 wf-v2-processes.py的单叶子边界，绝不套在允许fork的父shell。
 const profile='(version 1)(allow default)(deny process-fork)';
@@ -60,12 +61,18 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   active++;
   let entry;
   try{
-   if(typeof assertAdmission==='function')await assertAdmission();
+   const proof=typeof assertAdmission==='function'?await assertAdmission():undefined;
+   let transportArgv=argv;
+   if(fenced&&!version&&proof?.adb_serial!==undefined){
+    if(proof.authorized!==true||proof.serial!==serial||proof.endpoint!==policy.endpoint)throw Error('COLLECTION_LEAF_DEVICE_IDENTITY');
+    const transport=epochTransportSerial({serial,adb_serial:proof.adb_serial});
+    transportArgv=[...argv.slice(0,5),transport,...argv.slice(6)];
+   }
    if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
    if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
-   entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(argv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};leaves.push(entry);
+   entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(transportArgv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};leaves.push(entry);
    append({...entry,phase:'intent'});
-   const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},()=>{launchActive();if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');});
+   const result=await run(sandbox,['-p',profile,binary,...transportArgv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});},()=>{launchActive();if(sealed||Date.now()>=deadlineMs)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');});
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
    // This is a lifecycle proof from our nofork child close, not business success.
    const dumpCrashReturned=result.code===137&&result.signal===null&&!result.tainted&&result.stderr.length===0
