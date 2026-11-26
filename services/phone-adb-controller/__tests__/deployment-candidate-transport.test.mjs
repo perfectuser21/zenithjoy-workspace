@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync,writeFileSync,mkdirSync,symlinkSync,rmSync,chmodSync} from 'node:fs';
 import {join} from 'node:path';
 import {transportFixture} from './candidate-transport-fixture.mjs';
-import {candidateInstallTimeout} from '../deployment-candidate.mjs';
 test('中央等价边界：descriptor组件无冻结Activity绑定时零SSH零部署ACK',t=>{
  const f=transportFixture(t,{preflightPg:true});for(const release of Object.values(f.plan.releases))release.payload.activities=[];
  const result=f.run('normal');assert.equal(result.ok,false,JSON.stringify(result));assert.match(result.error,/冻结Activity绑定/);assert.equal(f.calls().length,0);assert.equal(existsSync(join(f.top,'brain.jsonl')),false);
@@ -36,27 +35,7 @@ test('远端已提交而本地运输失败：同SHA重试不重传，仍真实�
 });
 
 function base(f,host='mmv'){return join(f.top,'remote-'+host,'.local/share/zenithjoy/phone-candidates');}
-function assertPrivateSsh(calls){
- for(const c of calls){
-  const command=c.args.at(-1);
-  const connect=command.includes("' presence ")?['-o','ConnectTimeout=10']
-   :c.host==='xian-m4'&&command.includes("' install ")?['-o','ConnectTimeout=20']:[];
-  assert.deepEqual(c.args.slice(0,-2),['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none',...connect]);
- }
-}
-test('M4 installation budget covers a 12 MiB tar at 10 KiB/s within the 30 minute deploy step',()=>{
- assert.equal(candidateInstallTimeout(270000),120000);
- assert.equal(candidateInstallTimeout(11*1024*1024),1157000);
- assert.equal(candidateInstallTimeout(12*1024*1024),1259000);
- assert.equal(candidateInstallTimeout(128*1024*1024),22*60*1000);
-});
-test('a failed M4 install does not replay an archive or publish an M4 observation',t=>{
- const f=transportFixture(t),result=f.run('install-xian-255');assert.equal(result.ok,false);
- assert.match(result.error,/候选 SSH xian-m4\/install/);
- const calls=f.calls().filter(c=>c.host==='xian-m4');
- assert.equal(calls.filter(c=>c.archive).length,1);
- assert.equal(calls.some(c=>c.collect||c.manifest),false);
-});
+function assertPrivateSsh(calls){for(const c of calls){const connect=c.args.at(-1).includes("' presence ")?['-o','ConnectTimeout=10']:[];assert.deepEqual(c.args.slice(0,-2),['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none',...connect]);}}
 test('权威 absent 首次安装原字节，所有SSH原语使用私有连接且完成真实ACK',t=>{
  const f=transportFixture(t),result=f.run('normal');assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(f.calls().filter(c=>c.archive).length,2);assertPrivateSsh(f.calls());

@@ -13,8 +13,7 @@ import {installPreflightPg,preflightPgDeployment,verifyPreflightPgLock} from './
 const remoteCode=readFileSync(new URL('./deployment-candidate-remote.py',import.meta.url),'utf8');
 const sshOptions=['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none'];
 function ssh(host,phase,command,options){
- const connect=phase==='presence'?['-o','ConnectTimeout=10']
-  :host==='xian-m4'&&phase==='install'?['-o','ConnectTimeout=20']:[];
+ const connect=phase==='presence'?['-o','ConnectTimeout=10']:[];
  try{return execFileSync('ssh',[...sshOptions,...connect,host,command],options);}
  catch(error){throw Object.assign(Error(`候选 SSH ${host}/${phase}: ${error.code||error.status||'unknown'}`),{cause:error});}
 }
@@ -48,12 +47,11 @@ function presence(host,spec){
 }
 const prefix='services/phone-adb-controller/';
 const need=(v,m)=>{if(!v)throw Error('候选准备: '+m);};
-// Budget from uncompressed tar size to leave headroom on the relayed Xian route.
-// A 12 MiB tar at 10 KiB/s needs about 21 min including setup.
-// Cap the transfer at 22 min within the workflow's 30 min deploy step.
+// Measured 2.87 MB over the existing Xian route takes 166s; bound size-based
+// transfer time at 10 KiB/s plus 30s connection overhead, never beyond 5min.
 export function candidateInstallTimeout(bytes){
  need(Number.isSafeInteger(bytes)&&bytes>0&&bytes<=128*1024*1024,'invalid archive size');
- return Math.min(22*60*1000,Math.max(120000,30000+Math.ceil(bytes/10240)*1000));
+ return Math.min(300000,Math.max(120000,30000+Math.ceil(bytes/10240)*1000));
 }
 export function candidateRelativeRoot(sha){
  need(/^[a-f0-9]{40}$/.test(sha),'非法版本');
