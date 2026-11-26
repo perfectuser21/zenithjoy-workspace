@@ -4,15 +4,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import YAML from 'yaml';
 
 const path = new URL('../../../.github/workflows/implementation-impact.yml', import.meta.url);
-const fixedRevision = '095d81687079f975c65f14babc27364b4da3e374';
+const fixedWorkflowRevision = '095d81687079f975c65f14babc27364b4da3e374';
+const fixedToolingRevision = '8dfe1b4af891879e0adbbc5d1256ae6e6da6e509';
 function workflow() {
   assert.ok(existsSync(path), '必须存在真实跨仓 implementation-impact caller');
   return YAML.parse(readFileSync(path, 'utf8'));
 }
 test('implementation-impact 以固定提交调用受信工具，两个仓库身份不混淆', () => {
   const job = workflow().jobs.impact;
-  assert.equal(job.uses, `perfectuser21/cecelia/.github/workflows/implementation-impact.yml@${fixedRevision}`);
-  assert.equal(job.with.tooling_revision, fixedRevision);
+  assert.equal(job.uses, `perfectuser21/cecelia/.github/workflows/implementation-impact.yml@${fixedWorkflowRevision}`);
+  assert.equal(job.with.tooling_revision, fixedToolingRevision);
   assert.equal(job.with.source_repo, 'perfectuser21/zenithjoy-workspace');
   assert.equal(job.with.scope, 'cecelia-device-patrol');
   assert.deepEqual(Object.keys(job.with).sort(), ['source_repo', 'scope', 'base_revision', 'head_revision', 'mode', 'tooling_revision'].sort());
