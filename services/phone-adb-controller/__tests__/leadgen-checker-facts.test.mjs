@@ -180,3 +180,143 @@ test('invalid field selectors and foreign authority do not reach a source', asyn
   assert.equal((await readFacts({...request('pg.rows',{relation:'videos',fields:['rows.video_id']}),identity:{task_id:'foreign',run_id:'run'}},db)).status,'unavailable');
   assert.deepEqual(db.calls,[]);
 });
+
+test('PG evidence retries one transient failure with an identical query in a fresh read-only transaction', async () => {
+ const calls = [], expected = [{video_id:'7709208240869657011',comment_count:0}];
+ let pools = 0;
+ const db = {
+  readAuthority: async () => context,
+  loadPool: async () => {
+   const pool = ++pools;
+   return {
+    connect: async () => ({
+     async query(sql, values) {
+      calls.push({pool, sql, values});
+      if (sql.includes('current_database()')) return {rows:[{transaction_read_only:'on',snapshot_at:'fixture'}]};
+      if (sql.includes('FROM zenithjoy.leadgen_videos')) {
+       if (pool === 1) throw Object.assign(Error('connection interrupted'), {code:'ECONNRESET'});
+       return {rows:expected};
+      }
+      return {rows:[]};
+     },
+     release: () => calls.push({pool, sql:'release'}),
+    }),
+    end: async () => calls.push({pool, sql:'end'}),
+   };
+  },
+ };
+ const out = await readFacts(request('pg.rows',{relation:'videos',fields:['rows.video_id','rows.comment_count']}), db);
+ assert.equal(out.status, 'available');
+ assert.deepEqual(out.facts.rows, expected);
+ const queries = calls.filter(call => call.sql.includes('FROM zenithjoy.leadgen_videos'));
+ assert.equal(queries.length, 2);
+ assert.deepEqual(queries[0].values, queries[1].values);
+ assert.equal(queries[0].sql, queries[1].sql);
+ for (const pool of [1, 2]) {
+  const stages = calls.filter(call => call.pool === pool).map(call => call.sql);
+  assert.equal(stages[0], 'BEGIN READ ONLY');
+  assert.deepEqual(stages.slice(-3), ['ROLLBACK','release','end']);
+ }
+ assert.ok(calls.findIndex(call => call.pool === 1 && call.sql === 'end') < calls.findIndex(call => call.pool === 2));
+});
+
+for (const scenario of [
+ {name:'repeated transport timeout', code:undefined, message:'Connection terminated due to connection timeout', expected:'pg_connect_connection_timeout', pools:2},
+ {name:'nontransient authorization error', code:'28P01', message:'postgres://secret@example/forbidden', expected:'pg_connect_28p01', pools:1},
+]) {
+ test(`PG evidence keeps ${scenario.name} unavailable and exposes only safe diagnostics`, async () => {
+  let pools = 0, closed = 0;
+  const db = {
+   readAuthority: async () => context,
+   loadPool: async () => {
+    pools++;
+    return {
+     connect: async () => { throw Object.assign(Error(scenario.message), {code:scenario.code}); },
+     end: async () => { closed++; },
+    };
+   },
+  };
+  const out = await readFacts(request('pg.rows',{relation:'videos'}), db);
+  assert.equal(out.status, 'unavailable');
+  assert.equal(out.facts, null);
+  assert.equal(out.reason, scenario.expected);
+  assert.equal(pools, scenario.pools);
+  assert.equal(closed, scenario.pools);
+  assert.doesNotMatch(JSON.stringify(out), /secret|example|forbidden/);
+ });
+}
+
+test('PG evidence keeps a failed pool close unavailable and never starts an overlapping retry', async () => {
+ let pools = 0;
+ const db = {
+  readAuthority: async () => context,
+  loadPool: async () => {
+   pools++;
+   return {
+    connect: async () => { throw Object.assign(Error('connection timeout'), {code:'ETIMEDOUT'}); },
+    end: async () => { throw Object.assign(Error('pool closure unconfirmed'), {code:'ECONNRESET'}); },
+   };
+  },
+ };
+ const out = await readFacts(request('pg.rows',{relation:'videos'}), db);
+ assert.equal(out.status, 'unavailable');
+ assert.equal(out.reason, 'pg_close_econnreset');
+ assert.equal(pools, 1);
+});
+
+test('PG evidence does not start a retry after the 20-second launch window', async (t) => {
+ let pools = 0;
+ t.mock.method(performance, 'now', () => pools ? 20_000 : 0);
+ const out = await readFacts(request('pg.rows',{relation:'videos'}), {
+  readAuthority: async () => context,
+  loadPool: async () => {
+   pools++;
+   return {
+    connect: async () => { throw Object.assign(Error('connection timeout'), {code:'ETIMEDOUT'}); },
+    end: async () => {},
+   };
+  },
+ });
+ assert.equal(out.status, 'unavailable');
+ assert.equal(out.reason, 'pg_connect_etimedout');
+ assert.equal(pools, 1);
+});
+
+for (const rowError of [false, true]) {
+ test(`PG evidence safely handles rollback failure after a ${rowError ? 'failed' : 'successful'} read`, async () => {
+  let pools = 0;
+  const closed = [];
+  const out = await readFacts(request('pg.rows',{relation:'videos'}), {
+   readAuthority: async () => context,
+   loadPool: async () => {
+    const attempt = ++pools;
+    return {
+     connect: async () => ({
+      async query(sql) {
+       if (sql === 'ROLLBACK' && attempt === 1) throw Object.assign(Error('disconnected'), {code:'ECONNRESET'});
+       if (sql.includes('current_database()')) return {rows:[{transaction_read_only:'on'}]};
+       if (sql.startsWith('SELECT')) {
+        if (rowError) throw Object.assign(Error('permission denied'), {code:'42501'});
+        return {rows:[{snapshot:attempt}]};
+       }
+       return {rows:[]};
+      },
+      release(error) {
+       if (attempt === 1) assert.ok(error instanceof Error);
+      },
+     }),
+     end: async () => { closed.push(attempt); },
+    };
+   },
+  });
+  if (rowError) {
+   assert.equal(out.status, 'unavailable');
+   assert.equal(out.reason, 'pg_rows_42501');
+   assert.deepEqual(closed, [1]);
+  } else {
+   assert.equal(out.status, 'available');
+   assert.deepEqual(out.facts.rows, [{snapshot:2}]);
+   assert.deepEqual(closed, [1, 2]);
+  }
+ });
+}
