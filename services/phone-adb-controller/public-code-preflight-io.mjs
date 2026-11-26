@@ -12,7 +12,8 @@ import {createNativePhoneCommandObserver} from './adb-shell-v2.mjs';
 import {createNativePhonePreflightAdapter} from './native-phone-preflight-adapter.mjs';
 import {startPreflightNativeDomain,preflightDomainClosure} from './preflight-native-domain.mjs';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
-import {epochCompatibilityRecordScope,isCloudEpochSourceCompatibility} from './epoch-source-compatibility.mjs';
+import {epochCompatibilityRecordScope,epochSourceCompatibilityReference,isCloudEpochSourceCompatibility} from './epoch-source-compatibility.mjs';
+import {pinPrivateFileClosure} from './private-file-closure.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const fail=reason=>Error('PUBLIC_CODE_PREFLIGHT_'+reason);
@@ -26,9 +27,16 @@ export async function startPublicCodePreflightIO({root,env,frozen,state,lease,pu
  const source={commit:frozen.deployment.source_commit,files:Object.entries(frozen.files).filter(([p])=>p.startsWith('runtime/')&&!p.startsWith('runtime/_dependencies/')).map(([p,sha256])=>({path:p.slice(8),sha256}))};
  let sealed=false,unknown=false,pending=0,local,issuer,adapter,sequence=0,nativeBootstrapAttempted=false,localAdmitted=false;const observers=[],readers=[],authorizations=new Set();
  const directory=join(env.WFR_RUN_DIR,'public-code-preflight',randomUUID());mkdirSync(directory,{recursive:true,mode:0o700});
- const stable=()=>{
+ const verifyBytes=()=>{
   if(realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||readFrozen(env.WFR_RUN_DIR).snapshot_sha256!==frozen.snapshot_sha256||canonical(freezePreflightProfile({env}))!==canonical(profile))throw fail('SOURCE');
   for(const f of source.files){const path=join(root,f.path),s=lstatSync(path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||hash(readFileSync(path))!==f.sha256)throw fail('SOURCE');}
+ };
+ const scopedCloud=isCloudEpochSourceCompatibility(epochSourceCompatibilityReference(frozen));
+ const closure=scopedCloud?pinPrivateFileClosure({root:env.WFR_RUN_DIR,
+  files:[join(env.WFR_RUN_DIR,'run-definition.json'),...Object.keys(frozen.files).map(path=>join(env.WFR_RUN_DIR,path))],verify:verifyBytes}):null;
+ const stable=()=>{
+  if(closure){closure.check();if(canonical(freezePreflightProfile({env}))!==canonical(profile))throw fail('SOURCE');}
+  else verifyBytes();
   const route=freezePublicPreflightRoute({root,files:Object.fromEntries(source.files.map(f=>[f.path,f.sha256])),scope:epochCompatibilityRecordScope(frozen)});
   if(canonical(route)!==canonical(frozen.public_preflight_route||null))throw fail('ROUTE_SOURCE');
  };
@@ -58,6 +66,7 @@ export async function startPublicCodePreflightIO({root,env,frozen,state,lease,pu
   if(issuer)try{await issuer.close();}catch{stopped=false;}
   if(local)try{await local.close();stopped=Boolean(preflightDomainClosure(local))&&stopped;}catch{stopped=false;}
   await Promise.allSettled([...authorizations]);
+  if(closure)try{closure.verifyBytes();}catch{stopped=false;}
   signal?.removeEventListener('abort',abort);
   return {protocol:'public-code-preflight-io/v1',execution_stopped:stopped&&pending===0&&authorizations.size===0,pending,remote_android_services:'not_attested',directory};
  };
