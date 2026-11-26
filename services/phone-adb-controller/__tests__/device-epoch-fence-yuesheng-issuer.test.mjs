@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -10,13 +10,14 @@ import { yueshengMaintenanceTask } from '../device-epoch-fence-yuesheng-host-rea
 import { verifyYueshengMigrationReadback, yueshengMigrationRoute } from '../device-epoch-fence-yuesheng-readback.mjs';
 import { at, fixture, now, sha, releaseId, observationId } from './fixtures/yuesheng-migration-readback.mjs';
 
-function setup(t, { releaseUnknown = false } = {}) {
+function setup(t, { releaseUnknown = false, sharedMode = 0o700, sharedSymlink = false } = {}) {
   const home = mkdtempSync(join(realpathSync(tmpdir()), 'yuesheng-issuer-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const base = join(home, '.local/share/zenithjoy');
   const route = yueshengMigrationRoute;
   const journal = join(base, 'device-epoch-migrations', route.physical_serial, 'yuesheng-5044-to-5045');
   mkdirSync(journal, { recursive: true, mode: 0o700 });
+  chmodSync(base, sharedMode);
 
   const { before, after, current_lock: lease, candidate, task } = fixture();
   for (const name of ['device-epoch-fence-yuesheng-host-reads.mjs', 'yuesheng-adb-daemon-binding.py']) {
@@ -64,6 +65,11 @@ function setup(t, { releaseUnknown = false } = {}) {
     next: { endpoint: route.new_endpoint, kind: 'managed', startup: { source_commit: sha }, child: { pid: 4445 } },
   };
   let releases = 0;
+  if (sharedSymlink) {
+    const target = join(home, 'shared');
+    renameSync(base, target);
+    symlinkSync(target, base);
+  }
   const issue = createYueshengEpochIssuer({
     home, daemons, bindDaemon: async expected => expected, readCompany: async () => company,
     registration: () => ({ host, policy }), ensureRecords: path => mkdirSync(path, { recursive: true, mode: 0o700 }),
@@ -80,11 +86,11 @@ function setup(t, { releaseUnknown = false } = {}) {
   });
   const run = () => issue({ journal, plan, candidate, result, assertHeld: async () => {},
     assertAuthority: async () => ({ task, lease, approvalSha }) });
-  return { run, home, journal, releases: () => releases };
+  return { run, home, base, journal, releases: () => releases };
 }
 
 test('real file issuer seals the wire receipts and verifies the issued reference', async t => {
-  const fixture = setup(t);
+  const fixture = setup(t, { sharedMode: 0o755 });
   const reference = await fixture.run();
   const raw = readFileSync(reference.path);
   assert.equal(digest(raw), reference.sha256);
@@ -92,6 +98,22 @@ test('real file issuer seals the wire receipts and verifies the issued reference
   const record = JSON.parse(raw);
   assert.equal(readYueshengEpochCompletion(record, { home: fixture.home }), record.migration.completion_sha256);
   assert.equal(record.migration.central_release.current.locked_by, null);
+  assert.equal(statSync(fixture.base).mode & 0o777, 0o755);
+  assert.equal(statSync(fixture.journal).mode & 0o777, 0o700);
+  assert.equal(statSync(join(fixture.base, 'device-epoch-fences', record.resource.serial)).mode & 0o777, 0o700);
+});
+
+test('issuer rejects an externally writable or symlinked shared root', t => {
+  for (const options of [{ sharedMode: 0o775 }, { sharedMode: 0o757 }, { sharedSymlink: true }]) {
+    assert.throws(() => setup(t, options), { code: 'YUESHENG_MIGRATION_ISSUE_ROOT' });
+  }
+});
+
+test('a shared root does not relax the private wire receipt directory', async t => {
+  const fixture = setup(t, { sharedMode: 0o755 });
+  chmodSync(join(fixture.journal, 'connect-wire'), 0o755);
+  await assert.rejects(fixture.run(), { code: 'FENCE_PRIVATE_DIRECTORY' });
+  assert.equal(fixture.releases(), 0);
 });
 
 test('changed raw wire receipt stops before release', async t => {
