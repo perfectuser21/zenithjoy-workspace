@@ -176,3 +176,32 @@ with tempfile.TemporaryDirectory() as d:
  rejected(lambda:i.verifier_answer(context,['verify-startup','--receipt',str(r/'unused')],denied),'ADB_INSTANCE_VERIFIER_AUTHORITY')
  assert len(calls)==2 and diagnostic_rows(r)==[]
 `));
+
+test('已批准清场启动只继承固定的已有 ADB 密钥，不继承进程凭据',()=>py(`from types import SimpleNamespace
+import subprocess
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module()
+ i.pwd.getpwuid=lambda *_:SimpleNamespace(pw_dir=str(r))
+ os.environ['BRAIN_INTERNAL_TOKEN']='FIXTURE_PRIVATE_TOKEN';os.environ['HOME']=str(r)
+ directory=r/'.credentials'/'aliyun-adb-reverse-20261113';directory.mkdir(mode=0o700,parents=True)
+ key=directory/'adbkey';key.write_text('fixture private key');key.chmod(0o600)
+ auth={'key_path':str(key),'key_sha256':hashlib.sha256(key.read_bytes()).hexdigest()}
+ receipt=r/'startup-auth.json';receipt.write_text(json.dumps({'protocol':'device-epoch-clean-startup/v1','scope':{'existing_adb_auth':auth}}));receipt.chmod(0o600)
+ expected={'protocol':'device-epoch-fence-startup-verification/v1','authorized':True,'action':'start_private_server',
+  'instance_id':p['instance_id'],'endpoint':p['endpoint'],'source_commit':'a'*40,
+  'registry_sha256':hashlib.sha256((r/'config/adb-host-instances.json').read_bytes()).hexdigest(),
+  'policy_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'existing_adb_auth':auth}
+ run=lambda *args,**kw:subprocess.CompletedProcess(args,0,json.dumps(expected),'')
+ assert i.authorize_start(p,str(path),str(receipt),run)==expected
+ assert i.clean_authenticated_environment(expected,{'HOME':str(r),'ADB_VENDOR_KEYS':'wrong','BRAIN_INTERNAL_TOKEN':'private'})=={'HOME':str(r),'ADB_VENDOR_KEYS':str(key)}
+ s.validate_host=lambda *args:None;s.load_policy=lambda *args:p
+ i.authorize_start=lambda *args:expected;s.route.instance_module=lambda:i
+ s.ensure_absent=lambda *args:None;s.check_client=lambda *args:None
+ seen=[]
+ def daemon(*_args,**options):
+  seen.append(options['env'])
+  return SimpleNamespace(pid=99,wait=lambda:0,poll=lambda:0)
+ s.subprocess.Popen=daemon;s.run_service(p,str(path),str(receipt))
+ assert len(seen)==1 and seen[0]['ADB_VENDOR_KEYS']==str(key) and 'BRAIN_INTERNAL_TOKEN' not in seen[0]
+ key.write_text('changed');rejected(lambda:i.clean_authenticated_environment(expected,{}),'CLEAN_STARTUP_KEY')
+`));
