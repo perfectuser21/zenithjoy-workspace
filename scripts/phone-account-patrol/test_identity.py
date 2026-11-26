@@ -25,8 +25,13 @@ class IdentityEvidenceTests(unittest.TestCase):
         result = classify('微信', [{'text': '欢迎来到微信'}], [], False)
         self.assertEqual(result['state'], '未登录')
 
-    def test_wechat_expired_activity_reports_logged_out_without_navigation(self):
-        for activity in ('com.tencent.mm.ui.AccountExpiredUI', '.ui.AccountExpiredUI'):
+    def test_wechat_login_barrier_reports_logged_out_without_navigation(self):
+        for activity in (
+            'com.tencent.mm.ui.AccountExpiredUI',
+            '.ui.AccountExpiredUI',
+            'com.tencent.mm.plugin.account.ui.LoginPasswordUI',
+            '.plugin.account.ui.LoginPasswordUI',
+        ):
             with self.subTest(activity=activity):
                 probe = Probe.__new__(Probe)
                 probe.serial = 'sample-phone'
