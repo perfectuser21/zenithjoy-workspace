@@ -1,5 +1,16 @@
 import { readFileSync,writeFileSync,mkdirSync,renameSync } from 'node:fs';
 import { join } from 'node:path';
+export function candidateArchivePath(revision,path){
+ if(!/^[a-f0-9]{40}$/.test(revision)||typeof path!=='string'||path.includes('\\')||path.split('/').some(part=>!part||part==='.'||part==='..'))throw Error('非法候选归档路径');
+ return `_foundation_sources/${revision}/${path}`;
+}
+export function releaseHasArchiveBinding(release,binding){
+ if(!['code','skill'].includes(binding.kind))return false;
+ const expected=binding.content_sha256||binding.digest?.replace(/^sha256:/,'');
+ if(!/^[a-f0-9]{40}$/.test(binding.revision)||!/^[a-f0-9]{64}$/.test(expected))return false;
+ const components=(release.payload.components||[]).filter(c=>c.kind===binding.kind&&c.repo===binding.repo&&c.path===binding.path&&c.revision===binding.revision);
+ return components.length===1&&components[0].digest===`sha256:${expected}`;
+}
 // Release索引提供完整历史定义；不以current指针补全缺失版本。
 // release_versions 不可变（manifest_sha256 摘要）：校验通过后落 releaseCacheDir，下批先读缓存、同一摘要规则复核，
 // 通过就不再跨境下载整包；缓存缺失/损坏/摘要不符一律丢弃，回 Brain 重取（Brain 的那份仍要过同一摘要校验）。

@@ -6,7 +6,7 @@ import outreachScope from './leadgen-outreach-scope.js';
 import lineRoutes from './line-routes.js';
 import {userInfo} from 'node:os';
 import { assertRuntimeHost } from './runtime-host.mjs';
-import { loadRuntimeRelease } from './runtime-release.mjs';
+import { candidateArchivePath, loadRuntimeRelease, releaseHasArchiveBinding } from './runtime-release.mjs';
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync, lstatSync } from 'node:fs';
@@ -324,41 +324,60 @@ export async function freezeDefinition(o) {
   if(o.samplingInput&&version.payload.key!==o.samplingInput.workflow_key)throw Error('冻结采样流程版本身份不符');
   if (!o.rawContractSha256 || version.contract_sha256!==o.rawContractSha256) throw Error('部署计划contract摘要与版本不同');
   if(manifest.source_commit!==version.source_commit || manifest.source_repo!==version.source_repo) throw Error('部署来源与固定版本不同');
-  const checked=new Map();
+  const fileKey=(path,revision)=>JSON.stringify([path,revision]);
+  const deploymentRoot=realpathSync(o.deploymentRoot);
+  const archiveRoot=resolve(deploymentRoot,'_foundation_sources')+sep;
+  const currentDeploymentFile=file=>file.source_revision===undefined&&!file.sourcePath.startsWith(archiveRoot)
+    &&!resolve(deploymentRoot,file.deployed_path).startsWith(archiveRoot);
+  const checked=new Map(),deployedPaths=new Set();
   for (const file of manifest.files||[]) {
+    const key=fileKey(file.path,file.source_revision===undefined?manifest.source_commit:file.source_revision);
+    if(checked.has(key)||deployedPaths.has(file.deployed_path))throw Error(`部署文件声明重复: ${file.path}`);
     const sourcePath=localPath(o.deploymentRoot,file.deployed_path);
     const bytes=readFileSync(sourcePath); const mode=statSync(sourcePath).mode & 0o555;
     const actual=digest(bytes);
     if(actual!==file.content_sha256) throw Error(`实际部署文件digest不符: ${file.path}`);
-    checked.set(file.path,{...file,actual_content_sha256:actual,status:'verified_local',bytes,mode,sourcePath});
+    checked.set(key,{...file,actual_content_sha256:actual,status:'verified_local',bytes,mode,sourcePath});
+    deployedPaths.add(file.deployed_path);
   }
   if(!checked.size) throw Error('部署实现清单为空');
   const checkedBytes=path=>{
-    const file=[...checked.values()].find(file=>file.sourcePath===realpathSync(path));
+    const sourcePath=realpathSync(path);
+    const file=[...checked.values()].find(file=>currentDeploymentFile(file)&&file.sourcePath===sourcePath);
     if(!file)throw Error('实际plan/step文件不在部署清单manifest');
     return file.bytes;
   };
   const plan=checkedBytes(o.planPath);const steps=checkedBytes(o.stepSpecPath);JSON.parse(steps);
+  const pinnedStaging=fixed?.release.environment===`staging:${manifest.source_commit}`;
   const activities=[];
   for(const ref of version.payload.activities||[]) {
     if(!ref.reference_id || !ref.activity_version_id) throw Error('缺少活动使用位置或版本');
     const av=fixed?fixed.activityVersion(ref):(await o.get(`/api/brain/activities/${ref.activity_id}/versions/${ref.activity_version_id}`))?.version;
     verifyVersion(av,'activity',ref.activity_id,ref.activity_version_id);
     const implementations=(av.payload.implementation_bindings||[]).map(binding=>{
-      const deployed=checked.get(binding.path);
-      if(binding.status==='verified' && deployed) {
-        const expected=binding.content_sha256 || binding.digest?.replace(/^sha256:/,'');
-        if(binding.repo!==manifest.source_repo || binding.revision!==manifest.source_commit || expected!==deployed.actual_content_sha256) throw Error(`实现binding digest或来源不符: ${binding.path}`);
-        return {...binding,execution_verification:'verified_local',actual_content_sha256:deployed.actual_content_sha256,execution_path:`runtime/${deployed.deployed_path}`};
-      }
-      return {...binding,execution_verification:'unknown',execution_reason:'not_verified_on_execution_host'};
+      const current=checked.get(fileKey(binding.path,manifest.source_commit));
+      const historical=binding.revision!==manifest.source_commit;
+      const deployed=historical?checked.get(fileKey(binding.path,binding.revision)):current;
+      const historicalHost=pinnedStaging&&historical&&binding.purpose==='foundation_host';
+      if(binding.status!=='verified'||!(current||deployed||historicalHost))return {...binding,execution_verification:'unknown',execution_reason:'not_verified_on_execution_host'};
+      const fail=()=>{throw Error(`实现binding digest或来源不符: ${binding.path}`);};
+      const expected=binding.content_sha256 || binding.digest?.replace(/^sha256:/,'');
+      if(!deployed||binding.repo!==manifest.source_repo||expected!==deployed.actual_content_sha256)fail();
+      if(historical){
+        if(!historicalHost||deployed.deployed_path!==candidateArchivePath(binding.revision,binding.path)
+          ||deployed.sourcePath!==resolve(deploymentRoot,deployed.deployed_path)||!releaseHasArchiveBinding(fixed.release,binding))fail();
+      } else if(!currentDeploymentFile(deployed))fail();
+      return {...binding,execution_verification:'verified_local',actual_content_sha256:deployed.actual_content_sha256,execution_path:`runtime/${deployed.deployed_path}`};
     });
     const entry=av.payload.contract.runtime?.entry;
-    if(entry && !implementations.some(b=>b.execution_verification==='verified_local' && b.path===`services/phone-adb-controller/${entry}`)) throw Error(`运行入口没有本机已核验binding: ${entry}`);
-    if(executionMode==='agent'&&implementations.filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local').length!==1)throw Error('AGENT_PRIMARY_SKILL_BINDING_UNVERIFIED');
+    const controllerPrefix='services/phone-adb-controller/';
+    const entryPath=typeof entry==='string'&&entry.startsWith(controllerPrefix)?entry:`${controllerPrefix}${entry}`;
+    if(entry && !implementations.some(b=>b.execution_verification==='verified_local' && b.revision===manifest.source_commit && b.path===entryPath)) throw Error(`运行入口没有本机已核验binding: ${entry}`);
+    const methods=implementations.filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local'&&b.revision===manifest.source_commit);
+    if(executionMode==='agent'&&methods.length!==1)throw Error('AGENT_PRIMARY_SKILL_BINDING_UNVERIFIED');
     if(executionTransport){
-      const method=implementations.find(b=>b.kind==='skill'&&b.execution_verification==='verified_local');
-      if(!methodAllowsExecutionTransport(checked.get(method.path).bytes.toString('utf8'),executionTransport.execution_transport))throw Error('EXECUTION_TRANSPORT_METHOD_UNSUPPORTED');
+      const [method]=methods;
+      if(!methodAllowsExecutionTransport(checked.get(fileKey(method.path,manifest.source_commit)).bytes.toString('utf8'),executionTransport.execution_transport))throw Error('EXECUTION_TRANSPORT_METHOD_UNSUPPORTED');
     }
     activities.push({reference:ref,version:av,implementations});
   }
