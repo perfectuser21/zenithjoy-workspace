@@ -19,12 +19,17 @@ PROJECT = '44444444-4444-4444-8444-444444444444'
 
 
 class SharedValidationTests(unittest.TestCase):
-    def test_release_pin_promotes_known_package_and_keeps_prior_proof(self):
-        previous_phone = '864154c57e88e8085d2add741a79103a28891a44'
+    def test_release_pin_adds_candidates_without_promoting_live_package(self):
+        collector_hashes = {
+            '864154c57e88e8085d2add741a79103a28891a44': '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3',
+            'e3f8fc705e2c05db43f787711c31843ae080a458': '7e0a29d0264f3ae8535ef1662886b69b76049eb7eb906a80bc9d98642ce07444',
+            '29e27d24517c1f7cfdd82f87d5903a1ebc4ddf2a': '3307758d49c14d9e9dece1f0abd8d58044c60e67d50e0cbcb4e26d03a2c01d70',
+        }
         previous_control = 'f38c5a5635d2f57554efcfee4b09163d10cfe39b'
-        self.assertEqual(shared.PHONE_SOURCE_REVISION, 'e3f8fc705e2c05db43f787711c31843ae080a458')
-        self.assertEqual(shared.EXPECTED_SHA256['collector.py'], '7e0a29d0264f3ae8535ef1662886b69b76049eb7eb906a80bc9d98642ce07444')
-        self.assertEqual(shared.ACCEPTED_RELEASES[previous_phone]['collector.py'], '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3')
+        self.assertEqual(shared.PHONE_SOURCE_REVISION, '864154c57e88e8085d2add741a79103a28891a44')
+        self.assertEqual(shared.EXPECTED_SHA256['collector.py'], collector_hashes[shared.PHONE_SOURCE_REVISION])
+        for pin in (shared.WECHAT_FIX_REVISION, shared.CONSENT_FIX_REVISION):
+            self.assertEqual(shared.ACCEPTED_RELEASES[pin]['collector.py'], collector_hashes[pin])
         self.assertEqual(shared.HISTORICAL_CONTROL_SHA256[previous_control], '51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213')
 
     def test_historical_loader_authenticates_known_hashes_without_changing_current_pointer(self):
