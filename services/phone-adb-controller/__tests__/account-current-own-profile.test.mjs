@@ -62,7 +62,18 @@ function setup(fixtures) {
   chmodSync(adb, 0o755);
   fixtures.forEach((xml, i) => writeFileSync(join(dir, `${i + 1}.xml`), xml));
   writeFileSync(join(dir, "last.xml"), fixtures[fixtures.length - 1]);
-  return { dir, reg, adb, count: join(dir, "dump-count") };
+  const adbBin = fixtureAdb(adb);
+  const endpoint = process.env.ADB_SERVER_SOCKET;
+  const adbPolicy = join(dir, "adb-service.json");
+  writeFileSync(adbPolicy, JSON.stringify({
+    schema_version: 1,
+    host_id: "xian-m4",
+    transport: "usb",
+    endpoint,
+    forbidden_ports: [],
+    adb_bin: adbBin,
+  }), { mode: 0o600 });
+  return { dir, reg, adb, adbPolicy, endpoint, count: join(dir, "dump-count") };
 }
 
 function run(ctx, args) {
@@ -71,7 +82,8 @@ function run(ctx, args) {
       env: {
         ...process.env,
         ...phoneLockFixtureEnv(ctx.reg, join(ctx.dir, 'phone-tmp')),
-        DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
+        ZJ_ADB_HOST_CONFIG: ctx.adbPolicy,
+        ADB_SERVER_SOCKET: ctx.endpoint,
         DOUYIN_PYTHON_BIN: spawnSync("sh",["-c","command -v python3"],{encoding:"utf8"}).stdout.trim(),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),
         FIXTURE_DIR: ctx.dir,
