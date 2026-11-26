@@ -43,7 +43,10 @@ if(install&&host==='xian-m4'&&c.mode.startsWith('install-progress-')){
  remote.stdout.pipe(process.stdout);remote.stderr.pipe(process.stderr);
  const status=new Promise(resolve=>remote.once('close',resolve));
  remote.stdin.on('error',()=>{});
- const chunks=c.mode.endsWith('-limit')?8:4,chunkBytes=65536;
+ const liveSized=c.mode.endsWith('-live-sized');
+ const chunks=c.mode.endsWith('-limit')||liveSized?8:4;
+ // Real production readback had 11,108,352 bytes received and more data still to come.
+ const chunkBytes=liveSized?11108352/chunks:65536;
  for(let i=0;i<chunks;i++){
   remote.stdin.write(input.subarray(i*chunkBytes,(i+1)*chunkBytes));
   await delay(c.mode.endsWith('-stall')?5000:500);
