@@ -122,7 +122,10 @@ test('候选入口在 Brain 发布切换后读回同一 release 并继续准备'
  f.setMode('release_read_cutover');
  const plan = await prepareAndDeploy({
   ...f, mode: 'candidate', businessRunIds: [], acceptanceTaskIds: {},
-  stageCandidateFn: async ({plan}) => plan,
+  stageCandidateFn: async ({plan,progressiveXianInstall}) => {
+   assert.equal(progressiveXianInstall,true);
+   return plan;
+  },
  });
  assert.equal(plan.environment, `staging:${f.sha}`);
  const path = '/api/brain/releases/' + plan.release_ids['xian-m4'];
@@ -137,7 +140,10 @@ test('安全安装入口独立于业务promote：无业务run仍可进入只围�
  const f=await fixture(t);
  const safety=[];
  const result=await prepareAndDeploy({...f,mode:'maintenance-install',businessRunIds:[],acceptanceTaskIds:{},
-  stageCandidateFn:async input=>({source_commit:input.sha,environment:`staging:${input.sha}`,release_ids:input.plan.release_ids,observation_ids:{mmv:'obs-mmv','xian-m4':'obs-m4'},business_runtime_status:'not_evaluated'}),
+  stageCandidateFn:async input=>{
+   assert.equal(input.progressiveXianInstall,undefined);
+   return {source_commit:input.sha,environment:`staging:${input.sha}`,release_ids:input.plan.release_ids,observation_ids:{mmv:'obs-mmv','xian-m4':'obs-m4'},business_runtime_status:'not_evaluated'};
+  },
   runSafetyFn:async input=>{safety.push(input);return{mode:'maintenance-install',source_commit:input.sha,secured:true};}});
  assert.equal(result?.mode,'maintenance-install');
  assert.equal(f.requests.some(r=>r.method==='POST'&&r.environment==='production'),false);

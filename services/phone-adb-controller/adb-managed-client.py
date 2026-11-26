@@ -141,14 +141,15 @@ def main(argv):
         for device in host['devices']:
             print(device['serial'] + '\t' + device['state'])
         return 0
+    transport_serial = serial
     def verify_target():
         if policy.get('schema_version') == 2:
             route.instance_module().verify_binary(policy)
         if scoped and policy.get('schema_version') == 2:
             # schema2已由固定源码registry授权；仅看该instance，不扫描或借用默认/其它epoch。
             measured = route.inspect_managed_host(policy)
-            target = [r for r in measured['devices'] if r['serial'] == serial]
-            if target != [{'serial': serial, 'state': 'device'}]:
+            target = [r for r in measured['devices'] if r['serial'] == transport_serial]
+            if target != [{'serial': transport_serial, 'state': 'device'}]:
                 raise ValueError('ADB_MANAGED_INSTANCE_TARGET_UNAVAILABLE')
         elif scoped:
             actual = route.select_existing_unique_route(serial, policy['endpoint'])
@@ -158,8 +159,20 @@ def main(argv):
             if route.read_host_policy() is not None:
                 route.select_route(serial, policy['endpoint'])
         else:
-            route.select_route(serial, policy['endpoint'])
-    verify_target()
+            route.select_route(transport_serial, policy['endpoint'])
+    def verified_locator():
+        answer = route.instance_module().authorize_epoch(policy, serial, os.environ.get('WFR_RUN_DIR')) or {}
+        return answer.get('adb_serial', serial)
+    try:
+        verify_target()
+    except ValueError as error:
+        if policy.get('schema_version') != 2 or not str(error).startswith((
+                'ADB_MANAGED_INSTANCE_TARGET_UNAVAILABLE', 'ADB_ROUTE_TARGET_UNAVAILABLE')):
+            raise
+        transport_serial = verified_locator()
+        if transport_serial == serial:
+            raise
+        verify_target()
     client_version(binary, recheck=verify_target, **version_options)
     ambient = route.instance_module().adb_environment(os.environ) if policy.get('schema_version') == 2 else os.environ
     env = dict(ambient, ADB_SERVER_SOCKET=policy['endpoint'])
@@ -167,12 +180,13 @@ def main(argv):
                  'ADB_VENDOR_KEYS', 'ADB_LIBUSB', 'ADB_LOCAL_TRANSPORT_MAX_PORT'):
         env.pop(name, None)
     # numeric -H is deliberately not localhost: a missing server must not be spawned.
-    actual = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial, *command]
     if policy.get('schema_version') == 2:
         route.instance_module().verify_binary(policy)
-        route.instance_module().authorize_epoch(policy, serial, os.environ.get('WFR_RUN_DIR'))
+        if verified_locator() != transport_serial:
+            raise ValueError('ADB_MANAGED_DEVICE_IDENTITY_CHANGED')
         route.instance_module().verify_binary(policy)
-    if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
+    actual = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial if scoped else transport_serial, *command]
+    if scoped:
         code, stdout, stderr = parent_leaf(actual)
         sys.stdout.buffer.write(stdout)
         sys.stderr.buffer.write(stderr)

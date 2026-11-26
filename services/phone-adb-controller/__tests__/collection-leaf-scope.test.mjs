@@ -12,7 +12,7 @@ const wrapper=new URL('../adb-managed-client.py',import.meta.url).pathname;
 async function fixture(t){
  const dir=mkdtempSync(join(tmpdir(),'collection-leaf-scope-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const c=join(dir,'client.c'),client=join(dir,'client'),calls=join(dir,'client-calls');
- writeFileSync(c,`#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <errno.h>\nint main(int argc,char **argv){FILE *f=fopen(getenv("LEAF_FIXTURE_CALLS"),"a");if(!f)return 12;for(int i=1;i<argc;i++)fprintf(f,"%s ",argv[i]);fprintf(f,"\\n");fclose(f);if(argc==2&&!strcmp(argv[1],"version"))puts("Android Debug Bridge version 1.0.41");else if(!strcmp(argv[argc-1],"sleep-probe")){sleep(5);return 0;}else if(!strcmp(argv[argc-1],"fork-probe")){int pid=fork();if(pid<0){fprintf(stderr,"fork_denied=%d\\n",errno);return 77;}if(pid==0){FILE *g=fopen(getenv("LEAF_FIXTURE_ESCAPE"),"w");if(g){fputs("escaped",g);fclose(g);}return 0;}return 0;}else puts("device");return 0;}\n`);
+ writeFileSync(c,`#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <errno.h>\nint main(int argc,char **argv){FILE *f=fopen(getenv("LEAF_FIXTURE_CALLS")?getenv("LEAF_FIXTURE_CALLS"):${JSON.stringify(calls)},"a");if(!f)return 12;for(int i=1;i<argc;i++)fprintf(f,"%s ",argv[i]);fprintf(f,"\\n");fclose(f);if(argc==2&&!strcmp(argv[1],"version"))puts("Android Debug Bridge version 1.0.41");else if(!strcmp(argv[argc-1],"sleep-probe")){sleep(5);return 0;}else if(!strcmp(argv[argc-1],"fork-probe")){int pid=fork();if(pid<0){fprintf(stderr,"fork_denied=%d\\n",errno);return 77;}if(pid==0){FILE *g=fopen(getenv("LEAF_FIXTURE_ESCAPE"),"w");if(g){fputs("escaped",g);fclose(g);}return 0;}return 0;}else puts("device");return 0;}\n`);
  const cc=spawnSync('cc',[c,'-o',client],{encoding:'utf8'});assert.equal(cc.status,0,'实际leaf夹具必须成功编译：'+cc.stderr);
  const sockets=new Set(),server=createServer(s=>{sockets.add(s);s.on('close',()=>sockets.delete(s));s.on('error',()=>{});let bytes=Buffer.alloc(0);s.on('data',b=>{bytes=Buffer.concat([bytes,b]);if(bytes.length<4)return;const n=parseInt(bytes.subarray(0,4).toString(),16);if(bytes.length<4+n)return;const q=bytes.subarray(4,4+n).toString(),body=q==='host:version'?'0029':q==='host:devices'?'NO-DEVICE\tdevice\n':null;if(body===null){s.end('FAIL0003bad');return;}s.end('OKAY'+Buffer.byteLength(body).toString(16).padStart(4,'0')+body);});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{for(const s of sockets)s.destroy();server.close();});
@@ -85,4 +85,26 @@ for(const mode of ['wrong-nonce','wrong-serial','extra-fake-terminal','deadline'
   }
   assert.equal((await p.seal()).complete,false);
  }finally{await p.close();}
+});
+
+test('父进程只将已核对硬件绑定的网络地址传给真实 ADB 子进程',{skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),{startCollectionLeafProducer}=await import('../collection-leaf-producer.mjs');
+ const policy={...f.policy,schema_version:2},serial='TEST-DEVICE',locator='127.0.0.1:15555';
+ const producer=await startCollectionLeafProducer({directory:f.dir,policy,serial,deadlineMs:Date.now()+10000,
+  assertAdmission:async()=>({authorized:true,serial,endpoint:policy.endpoint,adb_serial:locator})});
+ try{
+  assert.equal(existsSync(f.calls),false);
+  const port=policy.endpoint.split(':').at(-1);
+  const result=await new Promise((resolve,reject)=>{
+   const peer=createConnection(producer.env.WFR_COLLECTION_LEAF_SOCKET);
+   let data='';
+   peer.on('error',reject);
+   peer.on('data',chunk=>data+=chunk);
+   peer.on('end',()=>resolve(JSON.parse(data)));
+   peer.on('connect',()=>peer.end(JSON.stringify({nonce:producer.env.WFR_COLLECTION_LEAF_NONCE,
+    argv:['-H','127.0.0.1','-P',port,'-s',serial,'get-state']})));
+  });
+  assert.equal(result.code,0);
+  assert.equal(readFileSync(f.calls,'utf8').trim(),'-H 127.0.0.1 -P '+port+' -s '+locator+' get-state');
+ }finally{await producer.close();}
 });
