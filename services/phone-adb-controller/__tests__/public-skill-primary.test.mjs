@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import {mkdtempSync,realpathSync,rmSync,mkdirSync,writeFileSync,cpSync,readdirSync,readFileSync,existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {tmpdir} from 'node:os';import {join} from 'node:path';import {randomUUID} from 'node:crypto';
+import {tmpdir,userInfo} from 'node:os';import {join} from 'node:path';import {randomUUID} from 'node:crypto';
 import {registerPublicDomainAuthority,readPublicDomainBinding} from '../public-domain-authority.mjs';
 import {preparePublicDomainSnapshot,hash} from '../public-domain-snapshot.mjs';
 import * as leases from '../native-task-lease.mjs';
+import {freezePreflightProfile} from '../preflight-control-scope.mjs';
+import {freezePublicPreflightRoute} from '../public-preflight-route.mjs';
 const id=()=>randomUUID();
 function fixture(t){
  const root=realpathSync(mkdtempSync(join(tmpdir(),'public-primary-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
@@ -41,6 +43,99 @@ test('public primary snapshot preserves raw transport and sets mode agent withou
  const child=structuredClone(profile);child.domain_adapter.config.primary_host='official-child-v1';delete child.domain_adapter.config.snapshot.execution_transport;delete child.domain_adapter.config.snapshot.max_turns;
  const childOut=preparePublicDomainSnapshot({identity:{...identity,profile_sha256:hash(child)},profile:child,runDirectory:join(f.root,'child-run'),deadline_ms:f.deadline,cleanup_deadline_ms:f.cleanup});
  assert.equal(childOut.snapshot.primary_host,'official-child-v1');assert.equal(childOut.snapshot.execution_transport,undefined);assert.equal(childOut.env.LEADGEN_EXECUTION_TRANSPORT,undefined);
+});
+
+test('formal Worker identity without protocol freezes the reviewed cloud successor snapshot',async t=>{
+ const {root,deadline,cleanup}=fixture(t);
+ const workflow='douyin_video_discovery',run_id=id(),task_id=id(),activity='preflight';
+ const workflow_id=id(),workflow_definition_version_id=id(),ref={reference_id:id(),activity_id:id(),activity_definition_version_id:id()};
+ const before={commit:'c'.repeat(40),files:{'runtime.mjs':'1'.repeat(64)}};
+ const after={commit:'d'.repeat(40),files:{'runtime.mjs':'2'.repeat(64)}};
+ const machine='us-mac-m4',profileId='cloud-phone-test',serial='fixture-'+id(),account='fixture-account';
+ const policy={schema_version:2,instance_id:'mmv-cloud-epoch2',host_id:'mmv',transport:'tcp',endpoint:'tcp:127.0.0.1:5042'};
+ const policyPath=join(root,'policy.json'),registryPath='config/adb-host-instances.json',stepSpec='steps.json';
+ const rawPolicy=JSON.stringify(policy),stepBytes='{"steps":[]}';
+ const registry=JSON.stringify({schema_version:1,instances:[{instance_id:policy.instance_id,kind:'managed',policy_path:policyPath,policy}]});
+ mkdirSync(join(root,'config'));
+ writeFileSync(policyPath,rawPolicy,{mode:0o600});
+ writeFileSync(join(root,registryPath),registry,{mode:0o600});
+ writeFileSync(join(root,stepSpec),stepBytes,{mode:0o600});
+ const phones=join(root,'profiles.tsv');
+ writeFileSync(phones,`profile	serial	model	width	height	enabled
+${profileId}	${serial}	Fixture	720	1280	true
+`,{mode:0o600});
+ const env={P:profileId,SERIAL:serial,LEADGEN_LINE:'fixture',WFR_TAG:'fixture101',LEADGEN_LIMIT:'1',DOUYIN_PHONE_REGISTRY:phones,LEADGEN_MMV_DEVICE_RUNTIME:'1',DOUYIN_ADB_PORT:'5042',ADB_SERVER_SOCKET:policy.endpoint};
+ const definitions=`export {digest} from ${JSON.stringify(new URL('../runtime-definition.mjs',import.meta.url).href)};
+ export const discoveryInput=()=>undefined,commentSamplingInput=()=>undefined;
+ export const readFrozen=()=>{throw new Error('FIXTURE_STOP_AFTER_FROZEN_DEFINITION');};`;
+ writeFileSync(join(root,'runtime-definition.mjs'),definitions,{mode:0o600});
+ const files={[registryPath]:hash(registry),[stepSpec]:hash(stepBytes),'runtime-definition.mjs':hash(definitions)};
+ const epoch_id=id(),recordRoot=join(userInfo().homedir,'.local/share/zenithjoy/device-epoch-fences',serial);
+ mkdirSync(recordRoot,{recursive:true,mode:0o700});
+ t.after(()=>rmSync(recordRoot,{recursive:true,force:true}));
+ const recordPath=join(recordRoot,epoch_id+'.json');
+ const record=JSON.stringify({protocol:'device-epoch-fence-record/v1',epoch_id,status:'fenced',
+  authority_basis:'old-route-fenced-observed-noninterference/v1',original_execution_stopped:false,android_internal:'not_attested',
+  resource:{serial,profile:profileId,expected_account:account},runtime_source:before,
+  new_route:{instance_id:policy.instance_id,endpoint:policy.endpoint,policy_path:policyPath,policy_sha256:hash(rawPolicy)}});
+ writeFileSync(recordPath,record,{mode:0o600});
+ const scope={target:'mmv',profile:profileId,serial,expected_account:account,source_commit:after.commit,run_id:run_id+'__a1',policy};
+ const route={...freezePublicPreflightRoute({root,files,scope}),
+  epoch_fence:{protocol:'device-epoch-fence-reference/v1',epoch_id,path:recordPath,sha256:hash(record)}};
+ scope.policy_binding=route;
+ const receipt={protocol:'cloud-101-epoch-source-compatibility/v1',business_run_id:run_id,
+  original_record_sha256:hash(record),original_runtime_source:before,candidate_runtime_source:after,
+  candidate_manifest_sha256:hash(files),candidate_release_manifest_sha256:'3'.repeat(64),
+  original:{release_id:id(),observation_id:id(),manifest_sha256:'4'.repeat(64)},
+  release_id:id(),observation_id:id(),serial,instance_id:policy.instance_id,policy_sha256:hash(rawPolicy),
+  changes:[{path:'runtime.mjs',before_sha256:before.files['runtime.mjs'],after_sha256:after.files['runtime.mjs']}],
+  evidence_refs:['fixture://independent-review'],actor:'fixture-reviewer'};
+ const review={review_task_id:id(),receipt,receipt_sha256:hash(receipt)};
+ const snapshot={execution_mode:'code',discovery_phone_scope:scope,public_preflight_route:route,epoch_source_compatibility:review,
+  preflight_profile:freezePreflightProfile({env}),release:{id:receipt.release_id,target:'mmv'},
+  deployment:{source_commit:after.commit,target:'mmv',environment:'staging:'+after.commit},
+  workflow_version:{id:workflow_definition_version_id,payload:{key:workflow,workflow_id}},
+  activities:[{reference:{...ref,slot_key:activity},version:{id:ref.activity_definition_version_id}}]};
+ const profile={cwd:root,files,contract:{activities:[{key:activity}]},
+  metadata:{[activity]:{activity_id:ref.activity_id,executor_kind:'code',runtime_snapshot_sha256:'5'.repeat(64)}},
+  domain_adapter:{budget:{max_duration_s:10,cleanup_grace_s:10},config:{workflow_key:workflow,execution_mode:'code',
+   company:{company_id:id(),tenant_id:id(),version:1,policy_id:'fixture-policy'},step_spec:stepSpec,env,snapshot,
+   resources:{machine,profile:profileId,serial,line:'fixture',account}}}};
+ const identity={run_id,task_id,profile:'managed-fixture',profile_sha256:hash(profile),machine_id:machine,mode:'formal',
+  input:{run_tag:'fixture101'},run_binding:{run_binding_id:id(),workflow_id,workflow_definition_version_id,
+   attempt_key:task_id+':1',activities:{[activity]:ref}}};
+ assert.equal(Object.hasOwn(identity,'protocol'),false);
+ const prepare=(runDirectory,overrides={})=>preparePublicDomainSnapshot({identity:{...identity,...overrides},profile,
+  runDirectory,deadline_ms:deadline,cleanup_deadline_ms:cleanup});
+ for(const [name,overrides,error] of [
+  ['other-run',{run_id:id()},/EPOCH_SOURCE_COMPATIBILITY/],
+  ['other-machine',{machine_id:'xian-mac-m4'},/PUBLIC_DOMAIN_RESOURCE_IDENTITY/],
+ ]){
+  const rejected=join(root,name);
+  assert.throws(()=>prepare(rejected,overrides),error);
+  assert.equal(existsSync(rejected),false);
+ }
+ const out=prepare(join(root,'accepted'));
+ assert.equal(out.snapshot.public_domain.protocol,'workflow-domain/v1');
+ assert.equal(out.snapshot.public_domain.run_id,run_id);
+ assert.equal(out.snapshot.public_domain.task_id,task_id);
+ assert.equal(out.snapshot.public_domain.machine_id,machine);
+ assert.deepEqual(out.snapshot.epoch_source_compatibility,review);
+ assert.equal(out.snapshot.discovery_phone_scope.source_commit,after.commit);
+ assert.equal(out.snapshot.discovery_phone_scope.run_id,run_id);
+ assert.equal(out.snapshot.files['step-dod.json'],hash(stepBytes));
+ assert.equal(readFileSync(join(out.dir,'step-dod.json'),'utf8'),stepBytes);
+ assert.equal(readFileSync(join(out.runtime,registryPath),'utf8'),registry);
+ assert.equal(readFileSync(recordPath,'utf8'),record);
+ const {createWorkflowDomain}=await import('../leadgen-public-domain.mjs');
+ const factoryDir=join(root,'factory');
+ // Stop after production snapshot serialization, before authority, connections or device work.
+ await assert.rejects(createWorkflowDomain({identity,profile,runDirectory:factoryDir,
+  deadline_ms:deadline,cleanup_deadline_ms:cleanup}),/FIXTURE_STOP_AFTER_FROZEN_DEFINITION/);
+ const {snapshot_sha256,...frozen}=JSON.parse(readFileSync(join(factoryDir,'run-definition.json'),'utf8'));
+ assert.equal(snapshot_sha256,hash(frozen));
+ assert.deepEqual(frozen.public_domain,out.snapshot.public_domain);
+ assert.deepEqual(frozen.epoch_source_compatibility,review);
 });
 
 // Full product factory + createWorkflowExecution + primary executor are real.

@@ -58,6 +58,7 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  const phoneHost=remote?'xian-m4':logicalHost(fixed.machine);
  if(!fixed||fixed.machine!==identity.machine_id||fixed.profile!==env.P||fixed.serial!==env.SERIAL||fixed.line!==env.LEADGEN_LINE||!fixed.account)fail('RESOURCE_IDENTITY');
  if(template.deployment.target!==logicalHost(fixed.machine)||template.release.target!==logicalHost(fixed.machine))fail('RESOURCE_IDENTITY');
+ const publicIdentity={protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id};
  if(cfg.workflow_key!=='douyin_comment_scoring'){
   if(!template.preflight_profile||!remote&&hash(freezePreflightProfile({env}))!==hash(template.preflight_profile))fail('PREFLIGHT_PROFILE');
   const scope=template[cfg.workflow_key==='douyin_video_discovery'?'discovery_phone_scope':'collection_phone_scope'];
@@ -67,7 +68,7 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
    const cloudSuccessor=isCloudEpochSourceCompatibility(template.epoch_source_compatibility);
    if(cloudSuccessor&&(!identity.run_id||identity.mode!=='formal'||template.epoch_source_compatibility.receipt.candidate_manifest_sha256!==hash(profile.files)))fail('COMPATIBILITY_SOURCE');
    const recordScope=standalone?epochCompatibilityRecordScope({...template,execution_mode:cfg.execution_mode,primary_host:cfg.primary_host,standalone_skill:identity})
-    :cloudSuccessor?epochCompatibilityRecordScope({...template,public_domain:identity}):scope;
+    :cloudSuccessor?epochCompatibilityRecordScope({...template,public_domain:publicIdentity}):scope;
    if(hash(freezePublicPreflightRoute({root,files:profile.files,scope:recordScope}))!==hash(template.public_preflight_route)||hash(scope.policy_binding)!==hash(template.public_preflight_route))fail('RESOURCE_ROUTE');
    env.ZJ_ADB_HOST_CONFIG=template.public_preflight_route.policy_path;
   }else if(scope.policy?.endpoint!==(phoneHost==='xian-m4'?'tcp:127.0.0.1:5037':'tcp:127.0.0.1:5041')||phoneHost==='xian-m4'&&scope.policy.transport!=='usb'||template.public_preflight_route)fail('RESOURCE_SCOPE');
@@ -93,7 +94,7 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
  if(executionMode==='agent'&&['official-child-v1','codex-exec-v1'].includes(cfg.primary_host)){if(template.execution_transport!==undefined||template.max_turns!==undefined)fail('AGENT_TRANSPORT');template.primary_host=cfg.primary_host;}
  else if(executionMode==='agent'){if(template.execution_transport!=='raw-model-v1'||!Number.isInteger(template.max_turns)||template.max_turns<1||template.max_turns>64)fail('AGENT_TRANSPORT');env.LEADGEN_EXECUTION_TRANSPORT=template.execution_transport;env.LEADGEN_MAX_TURNS=String(template.max_turns);}else{delete template.execution_transport;delete template.max_turns;}
  const binding=identity.run_binding;
- Object.assign(template,{execution_mode:executionMode,files,public_domain:{protocol:'workflow-domain/v1',run_id:identity.run_id,task_id:identity.task_id,machine_id:identity.machine_id,profile_sha256:identity.profile_sha256,runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(remote?{phone_resources:structuredClone(fixed)}:{}),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
+ Object.assign(template,{execution_mode:executionMode,files,public_domain:{...publicIdentity,profile_sha256:identity.profile_sha256,runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,run_binding:binding,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company),...(remote?{phone_resources:structuredClone(fixed)}:{}),...(input.upstream?{upstream:structuredClone(input.upstream)}:{})},run_identity:{capability:cfg.workflow_key,tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,run_id:identity.run_id}});
  if(standalone){
   delete template.public_domain;
   template.agent_input=agentInput(env);
