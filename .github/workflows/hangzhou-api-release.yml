@@ -46,6 +46,9 @@ jobs:
     uses: ./.github/workflows/hz-api-release-verification.yml
     with:
       sha: ${{ inputs.sha }}
+    secrets:
+      STAGING_ACCEPTANCE_EMAIL: ${{ secrets.STAGING_ACCEPTANCE_EMAIL }}
+      STAGING_ACCEPTANCE_PASSWORD: ${{ secrets.STAGING_ACCEPTANCE_PASSWORD }}
 
   business-review:
     needs: [request, admission]

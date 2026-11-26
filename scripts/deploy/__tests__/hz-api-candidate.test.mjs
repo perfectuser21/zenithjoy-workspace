@@ -26,7 +26,6 @@ test('only a trusted manual main run may activate the admitted Hangzhou API arti
   assert.match(request.steps[0].run, /ROLLBACK/);
   assert.equal(admission.uses, './.github/workflows/hz-api-release-verification.yml');
   assert.deepEqual(admission.with, {sha: '${{ inputs.sha }}'});
-  assert.equal(admission.secrets, undefined);
   assert.equal(workflow.on.workflow_dispatch.inputs.acceptance_run_key, undefined);
   assert.match(execute.if, /inputs.action == 'promote' && needs.admission.result == 'success' && needs.business-review.result == 'success'/);
   assert.match(execute.if, /needs.admission.result == 'skipped' && needs.business-review.result == 'skipped'/);
@@ -67,4 +66,20 @@ test('API verifier shares the staging fixture lock and exposes only verified art
   assert.equal(verify['continue-on-error'], undefined);
   assert.match(job.steps.find(s => s.name?.startsWith('Confirm the staging')).run, /cmp .*before\.json.*after\.json/);
   assert.equal(job.steps.find(s => s.uses === 'actions/upload-artifact@v4').with['if-no-files-found'], 'error');
+});
+
+test('production forwards only the two credential names from the protected staging environment', () => {
+  const caller = readWorkflow('hangzhou-api-release').jobs.admission;
+  const verifier = readWorkflow('hz-api-release-verification');
+  assert.deepEqual(Object.keys(caller.secrets ?? {}).sort(), ['STAGING_ACCEPTANCE_EMAIL', 'STAGING_ACCEPTANCE_PASSWORD']);
+  assert.deepEqual(Object.keys(verifier.on.workflow_call.secrets ?? {}).sort(), Object.keys(caller.secrets).sort());
+  const job = verifier.jobs.verification;
+  assert.equal(job.environment, 'zenithjoy-staging-acceptance');
+  const probe = job.steps.find(step => step.env?.STAGING_ACCEPTANCE_PASSWORD);
+  for (const name of Object.keys(caller.secrets)) {
+    const expression = '${{ secrets.' + name + ' }}';
+    assert.equal(caller.secrets[name], expression);
+    assert.equal(probe.env[name], expression);
+    assert.equal(verifier.on.workflow_call.secrets[name].required, true);
+  }
 });
