@@ -1,3 +1,4 @@
+import {isIPv4} from 'node:net';
 // 轻量且唯一的冻结epoch引用：不加载维护执行器或完整业务运行内核。
 import {lstatSync,realpathSync,openSync,fstatSync,readSync,closeSync,constants,writeSync} from 'node:fs';
 import {join,dirname,resolve} from 'node:path';import {userInfo} from 'node:os';import {createHash} from 'node:crypto';
@@ -13,9 +14,18 @@ export function bytes(path){
 }
 export function readPrivatePolicy(path){const s=lstatSync(path);need(s.uid===process.getuid()&&(s.mode&0o777)===0o600,'EPOCH_POLICY_MODE');return bytes(path);}
 export function recordBytes(path){const s=lstatSync(path),root=lstatSync(dirname(path));need(s.uid===process.getuid()&&(s.mode&0o777)===0o600&&root.isDirectory()&&!root.isSymbolicLink()&&(root.mode&0o777)===0o700,'EPOCH_RECORD_MODE');return bytes(path);}
+// Business locks use the hardware serial; ADB uses a fixed network locator.
+export function epochTransportSerial(resource){
+ const locator=resource.adb_serial;
+ if(locator===undefined)return resource.serial;
+ const match=typeof locator==='string'&&locator.match(/^([^:]+):([1-9]\d{0,4})$/);
+ need(match&&isIPv4(match[1])&&Number(match[2])<=65535
+  &&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(resource.serial||''),'EPOCH_DEVICE_IDENTITY');
+ return locator;
+}
 export function validateEpochRecord(record,spec){
  need(record?.protocol==='device-epoch-fence-record/v1'&&uuid.test(record.epoch_id||'')&&record.status==='fenced'&&record.authority_basis==='old-route-fenced-observed-noninterference/v1'&&record.original_execution_stopped===false&&record.android_internal==='not_attested','EPOCH_RECORD');
- need(spec?.policy?.schema_version===2&&record.resource?.serial===spec.serial&&record.resource.profile===spec.profile&&record.resource.expected_account===spec.expected_account&&record.new_route?.instance_id===spec.policy.instance_id&&record.new_route.endpoint===spec.policy.endpoint&&record.runtime_source?.commit===spec.source_commit,'EPOCH_RECORD_SCOPE');return record;
+ need(spec?.policy?.schema_version===2&&record.resource?.serial===spec.serial&&record.resource.profile===spec.profile&&record.resource.expected_account===spec.expected_account&&record.new_route?.instance_id===spec.policy.instance_id&&record.new_route.endpoint===spec.policy.endpoint&&record.runtime_source?.commit===spec.source_commit,'EPOCH_RECORD_SCOPE');epochTransportSerial(record.resource);return record;
 }
 export function freezeFenceReference({scope,epochId,home=userInfo().homedir}){
  need(uuid.test(epochId||'')&&typeof scope?.serial==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(scope.serial),'EPOCH_REFERENCE');const path=join(home,'.local/share/zenithjoy/device-epoch-fences',scope.serial,epochId+'.json'),raw=recordBytes(path),record=validateEpochRecord(JSON.parse(raw),scope);need(record.epoch_id===epochId,'EPOCH_REFERENCE_ID');

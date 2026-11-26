@@ -70,9 +70,42 @@ test('显式Brain token仅送固定Node verifier；schema2 version与daemon不�
 
 test('schema2每个真实phone dispatch前消费唯一epoch准入；失败不得parent_leaf或exec',()=>py(`from types import SimpleNamespace\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));m=load(r,'adb-managed-client');events=[]\n def admission(policy,serial,run_dir):\n  events.append('fence');assert serial=='fixture-serial' and run_dir==str(r)\n guard=SimpleNamespace(verify_binary=lambda *a:None,adb_environment=lambda env:{},authorize_epoch=admission)\n m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *a:p,instance_module=lambda:guard,inspect_managed_host=lambda *a:{'devices':[{'serial':'fixture-serial','state':'device'}]})\n os.environ['WFR_COLLECTION_LEAF_SOCKET']='/fixture/socket';os.environ['WFR_COLLECTION_POLICY_FILE']=str(path);os.environ['WFR_RUN_DIR']=str(r)\n for k in ['ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(k,None)\n m.client_version=lambda *a,**k:None;m.parent_leaf=lambda *a:events.append('dispatch') or (0,b'',b'')\n assert m.main(['-s','fixture-serial','shell','true'])==0;assert events==['fence','dispatch']\n def revoked(*a):raise ValueError('ADB_INSTANCE_EPOCH_AUTHORITY')\n guard.authorize_epoch=revoked;rejected(lambda:m.main(['-s','fixture-serial','shell','true']),'EPOCH_AUTHORITY');assert events==['fence','dispatch']\n`));
 
-test('固定Node epoch答复12字段严核同serial/source/instance，保留原stoppedfalse不伪Android证明',()=>py(`import subprocess\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();os.environ['BRAIN_INTERNAL_TOKEN']='FIXTURE_PRIVATE_TOKEN'\n expected={'protocol':'device-epoch-fence-admission/v1','authorized':True,'epoch_id':'fixture-epoch-2','task_id':'11111111-1111-4111-8111-111111111111','run_id':'fixture-run','source_commit':'a'*40,'instance_id':p['instance_id'],'endpoint':p['endpoint'],'serial':'fixture-serial','old_route_absent':True,'original_execution_stopped':False,'android_internal':'not_attested'}\n def runner(value):\n  def run(args,**kw):\n   assert args[2:]==['verify-epoch','--run-dir',str(r)] and kw['env']['BRAIN_INTERNAL_TOKEN']=='FIXTURE_PRIVATE_TOKEN';return subprocess.CompletedProcess(args,0,json.dumps(value),'')\n  return run\n assert i.authorize_epoch(p,'fixture-serial',str(r),runner(expected))==expected\n for change in [{'serial':'foreign'},{'source_commit':'b'*40},{'instance_id':'foreign'},{'endpoint':'tcp:127.0.0.1:5041'},{'old_route_absent':False},{'old_route_absent':1},{'original_execution_stopped':True},{'original_execution_stopped':0},{'authorized':1},{'android_internal':'attested'},{'extra':'not_allowed'}]:\n  rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner({**expected,**change})),'AUTHORITY')\n rejected(lambda:i.authorize_epoch(p,'fixture-serial','relative',runner(expected)),'EPOCH_RUN_DIR')\n`));
+test('固定Node epoch答复12字段严核同serial/source/instance，保留原stoppedfalse不伪Android证明',()=>py(`import subprocess\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();os.environ['BRAIN_INTERNAL_TOKEN']='FIXTURE_PRIVATE_TOKEN'\n expected={'protocol':'device-epoch-fence-admission/v1','authorized':True,'epoch_id':'fixture-epoch-2','task_id':'11111111-1111-4111-8111-111111111111','run_id':'fixture-run','source_commit':'a'*40,'instance_id':p['instance_id'],'endpoint':p['endpoint'],'serial':'fixture-serial','old_route_absent':True,'original_execution_stopped':False,'android_internal':'not_attested'}\n def runner(value):\n  def run(args,**kw):\n   assert args[2:]==['verify-epoch','--run-dir',str(r)] and kw['env']['BRAIN_INTERNAL_TOKEN']=='FIXTURE_PRIVATE_TOKEN';return subprocess.CompletedProcess(args,0,json.dumps(value),'')\n  return run\n assert i.authorize_epoch(p,'fixture-serial',str(r),runner(expected))==expected
+ mapped={**expected,'adb_serial':'127.0.0.1:15555'}
+ assert i.authorize_epoch(p,'fixture-serial',str(r),runner(mapped))==mapped
+ for locator in ['127.0.0.1:0','127.0.0.1:65536','bad:5555','127.0.0.1:15555; ls','fixture-serial', None]:
+  rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner({**mapped,'adb_serial':locator})),'AUTHORITY')\n for change in [{'serial':'foreign'},{'source_commit':'b'*40},{'instance_id':'foreign'},{'endpoint':'tcp:127.0.0.1:5041'},{'old_route_absent':False},{'old_route_absent':1},{'original_execution_stopped':True},{'original_execution_stopped':0},{'authorized':1},{'android_internal':'attested'},{'extra':'not_allowed'}]:\n  rejected(lambda:i.authorize_epoch(p,'fixture-serial',str(r),runner({**expected,**change})),'AUTHORITY')\n rejected(lambda:i.authorize_epoch(p,'fixture-serial','relative',runner(expected)),'EPOCH_RUN_DIR')\n`));
 
 test('epoch慢核验返回后重新pin；schema2普通client的version与exec均无业务凭据',()=>py(`from types import SimpleNamespace\nimport subprocess\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));m=load(r,'adb-managed-client');i=s.route.instance_module();events=[]\n for key in ['BRAIN_INTERNAL_TOKEN','CECELIA_INTERNAL_TOKEN','DATABASE_URL','DB_URL','OPENAI_API_KEY','OPENROUTER_API_KEY']:os.environ[key]='FIXTURE_PRIVATE_'+key\n os.environ['ZJ_ADB_HOST_CONFIG']=str(path);os.environ['WFR_RUN_DIR']=str(r)\n for key in ['WFR_COLLECTION_LEAF_SOCKET','ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(key,None)\n secret_keys=['BRAIN_INTERNAL_TOKEN','CECELIA_INTERNAL_TOKEN','DATABASE_URL','DB_URL','OPENAI_API_KEY','OPENROUTER_API_KEY']\n def version(args,**kw):\n  assert not any(k in kw['env'] for k in secret_keys);return subprocess.CompletedProcess(args,0,'Android Debug Bridge version 1.0.41\\n','')\n s.route.subprocess.run=version\n guard=SimpleNamespace(verify_binary=i.verify_binary,adb_environment=i.adb_environment,authorize_epoch=lambda *a:events.append('fence'))\n m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *a:p,instance_module=lambda:guard,select_route=lambda *a:p['port'],verified_client_version=s.route.verified_client_version)\n assert m.main(['version'])==0 and events==[]\n def execute(binary,args,env):events.append('exec');assert binary==p['adb_realpath'] and not any(k in env for k in secret_keys)\n m.os.execve=execute;m.main(['-s','fixture-serial','shell','true']);assert events==['fence','exec']\n def changed(*a):events.append('fence');(r/'adb').write_text('changed during verifier')\n guard.authorize_epoch=changed;rejected(lambda:m.main(['-s','fixture-serial','shell','true']),'INSTANCE_BINARY');assert events==['fence','exec','fence']\n`));
+
+test('下达 ADB 命令前由冻结凭证选择网络地址，业务请求继续使用硬件编号',()=>py(`from types import SimpleNamespace
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));m=load(r,'adb-managed-client');adapter=load(r,'adb-existing-route');calls=[]
+ hardware='fixture-serial';locator='127.0.0.1:15555'
+ def select(serial,endpoint):
+  assert endpoint==p['endpoint']
+  if serial==hardware:raise ValueError('ADB_ROUTE_TARGET_UNAVAILABLE')
+  assert serial==locator
+  return p['port']
+ def authorize(policy,serial,run_dir):
+  assert policy==p and serial==hardware and run_dir==str(r)
+  return {'adb_serial':locator}
+ guard=SimpleNamespace(verify_binary=lambda *_:None,adb_environment=lambda env:{},authorize_epoch=authorize)
+ os.environ['WFR_RUN_DIR']=str(r)
+ os.environ.pop('WFR_COLLECTION_LEAF_SOCKET',None)
+ for k in ['ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(k,None)
+ m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *_:p,instance_module=lambda:guard,select_route=select)
+ m.client_version=lambda *a,**kw:None
+ m.os.execve=lambda binary,argv,env:calls.append(argv)
+ m.main(['-s',hardware,'get-state'])
+ assert len(calls)==1 and calls[0][6]==locator
+ adapter.read_host_policy=lambda:p
+ adapter.select_route=select
+ adapter.instance_module=lambda:guard
+ assert adapter.select_workflow_route(hardware,p['endpoint'])==p['port']
+ guard.authorize_epoch=lambda *_:{}
+ rejected(lambda:adapter.select_workflow_route(hardware,p['endpoint']),'ADB_ROUTE_TARGET_UNAVAILABLE')
+`));
 
 const diagnosticSetup=String.raw`
 TASK='11111111-1111-4111-8111-111111111111';RUN='22222222-2222-4222-8222-222222222222'
