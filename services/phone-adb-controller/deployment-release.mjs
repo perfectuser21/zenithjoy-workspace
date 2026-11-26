@@ -8,11 +8,9 @@ import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
 import {atomic} from './runtime-outbox.mjs';
 import {deploymentTarget} from './runtime-host.mjs';
+import {candidateArchivePath} from './runtime-release.mjs';
 export {deploymentTarget} from './runtime-host.mjs';
-export function candidateArchivePath(revision,path){
- if(!/^[a-f0-9]{40}$/.test(revision)||typeof path!=='string'||path.includes('\\')||path.split('/').some(part=>!part||part==='.'||part==='..'))throw Error('非法候选归档路径');
- return `_foundation_sources/${revision}/${path}`;
-}
+export {candidateArchivePath} from './runtime-release.mjs';
 function actualComponents(release,observed,manifest){
  if(observed.source_repo!==manifest.source_repo||observed.source_commit!==manifest.source_commit)throw Error('实际来源与部署commit不符');
  if(digest(observed.files)!==digest(manifest.files))throw Error('实际文件组件与部署manifest不符');

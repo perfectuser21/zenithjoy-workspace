@@ -89,7 +89,9 @@ test('缺工具时同一签名runner来源只刷新一次并为其安装，已�
  assert.equal(apt.filter(line=>line.endsWith(' update')).length,1);
  assert.ok(apt.every(line=>line.includes('/original.sources') && line.includes('/original-lists')),missing.trace);
  assert.ok(apt.some(line=>line.includes('APT::Update::Error-Mode=any') && line.endsWith(' update')),missing.trace);
- assert.ok(apt.some(line=>line.includes('--no-remove') && / install .*libxml2-utils/.test(line)),missing.trace);
+ const installs=apt.filter(line=>line.includes(' install '));
+ assert.equal(installs.length,1,missing.trace);
+ assert.match(installs[0],/ --no-remove --no-install-recommends install -y libxml2-utils$/);
  const present=invoke(t,'',['zsh','xmllint','ffmpeg']);
  assert.equal(present.status,0,present.output);
  assert.doesNotMatch(present.trace,/^apt /m);
