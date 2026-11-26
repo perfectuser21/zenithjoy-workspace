@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ADB声明式实例规矩；只读源码registry、固定policy与维护启动授权，不创建服务。"""
 import hashlib
+from ipaddress import IPv4Address
 import json
 import os
 import pwd
@@ -161,6 +162,7 @@ VERIFIER_ERROR_CODES = frozenset({
     'EPOCH_DAEMON_SCOPE',
     'EPOCH_DAEMON_SOURCE',
     'EPOCH_ENV_BINDING',
+    'EPOCH_DEVICE_IDENTITY',
     'EPOCH_EVIDENCE_ROOT',
     'EPOCH_FROZEN_DRIFT',
     'EPOCH_FROZEN_REFERENCE',
@@ -371,6 +373,15 @@ def authorize_epoch(policy, serial, run_dir, runner=subprocess.run):
     answer = verifier_answer(c, ['verify-epoch', '--run-dir', run_dir], runner)
     keys = {'protocol', 'authorized', 'epoch_id', 'task_id', 'run_id', 'source_commit', 'instance_id',
             'endpoint', 'serial', 'old_route_absent', 'original_execution_stopped', 'android_internal'}
+    if 'adb_serial' in answer:
+        locator = answer['adb_serial']
+        try:
+            host, port = locator.split(':')
+            valid_address = str(IPv4Address(host)) == host
+        except (ValueError, AttributeError):
+            valid_address = False
+        need(valid_address and re.fullmatch('[1-9][0-9]{0,4}', port) and int(port) <= 65535, 'EPOCH_AUTHORITY')
+        keys.add('adb_serial')
     need(set(answer) == keys and answer['protocol'] == 'device-epoch-fence-admission/v1'
          and answer['instance_id'] == policy['instance_id'] and answer['endpoint'] == policy['endpoint']
          and answer['serial'] == serial and answer['source_commit'] == c['manifest']['source_commit']
