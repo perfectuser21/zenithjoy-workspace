@@ -34,7 +34,7 @@ test('实际API映射测试失败同样传播且不输出PASS',t=>{
 });
 const workflow=parse(readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8'));
 function fullSuiteRequired(w){
- const job=w.jobs['openclaw-scripts-test'];assert.ok(job&&!job.if);
+ const job=w.jobs['openclaw-scripts-test'];assert.equal(job.if,"needs.changes.outputs.docs_only != 'true'");assert.equal(job.needs,'changes');
  const step=openclawStep(w);
  assert.ok(step&&!step.if);assert.match(step.run,/services\/phone-adb-controller\/__tests__\/\*\.test\.mjs/);
  assert.doesNotMatch(step.run,/--test-name-pattern|--test-skip-pattern|\|\|\s*true/);
@@ -43,7 +43,7 @@ function fullSuiteRequired(w){
  assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
 }
 function aggregate(w,result){return runCodeGate(w,result);}
-test('独立完整phone通配套始终执行且聚合器实际拒绝其失败/取消/跳过',()=>{
+test('完整L3路由执行phone通配套且聚合器拒绝其失败/取消/跳过',()=>{
  fullSuiteRequired(workflow);assert.equal(aggregate(workflow,'success').status,0);
  for(const result of ['failure','cancelled','skipped'])assert.equal(aggregate(workflow,result).status,1,result);
 });

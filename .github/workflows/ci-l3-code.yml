@@ -29,6 +29,7 @@ jobs:
       geoai: ${{ steps.filter.outputs.geoai }}
       ci: ${{ steps.filter.outputs.ci }}
       agent_modules: ${{ steps.filter.outputs.agent_modules }}
+      docs_only: ${{ steps.filter.outputs.docs_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -201,10 +202,12 @@ jobs:
   # phonectl（件3 信号桥薄壳）等 scripts/openclaw/ 下脚本的 Node 单测。这些是根级
   # 独立脚本，不属于任何 workspace，不会被 apps/api 的 vitest 捡到——不接进某个
   # 具体闸就是孤儿测试（devgate/detect-review-issues.js 已吃过这个亏，见 PR#1769：
-  # 两份回归测试写了半年从未跑过，同一类误判复发 4 次）。无条件跑（纯 node --test，
-  # 读取真实契约需安装已锁定根依赖），不按变更路径过滤。
+  # 两份回归测试写了半年从未跑过，同一类误判复发 4 次）。运行真实契约需安装已锁定根依赖。
+  # 仅经 Git 差异核验的独立文档 PR 可跳过。
   openclaw-scripts-test:
     name: OpenClaw Scripts Test (${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     # 两片主集合实测494秒，加准备79秒及Durable core36秒已超10分钟。
     # 三片覆盖完整同一文件集合，不筛用例、不延长job或生产deadline。
@@ -312,6 +315,8 @@ jobs:
       fail-fast: false
       matrix:
         shard: [remaining, public101]
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 20
     permissions:
@@ -355,6 +360,8 @@ jobs:
   # These two files require real Darwin nofork behavior, not Linux platform skips.
   public-code-phone-darwin-test:
     name: Public Code Phone Darwin Test
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     # Serial native suites passed but exhausted 10m including setup/teardown; worker deadlines stay unchanged.
     timeout-minutes: 15
@@ -407,6 +414,8 @@ jobs:
 
   epoch-resume-darwin-test:
     name: Epoch Resume Darwin Test
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -442,6 +451,8 @@ jobs:
 
   epoch-continuation-darwin-test:
     name: Epoch Stop Continuation Darwin Test
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -477,6 +488,8 @@ jobs:
 
   epoch-private-recovery-darwin-test:
     name: Epoch Private Session Recovery Darwin Test
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -537,6 +550,8 @@ jobs:
               services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs
               services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs
               services/phone-adb-controller/__tests__/uiautomator-dump-crash.test.mjs
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     steps:
