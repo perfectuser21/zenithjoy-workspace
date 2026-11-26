@@ -132,6 +132,54 @@ def safe_diagnostic(path):
  return proof
 `;
 
+test('standalone 外层只消费已冻结的当前阶段期限，并保留 timeout 原件',()=>py(diagnosticSetup+String.raw`
+import subprocess
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);i=load(r,'adb-host-instance-policy')
+ value,digest=frozen_run(r)
+ run_dir=r/RUN;run_dir.mkdir(mode=0o700)
+ del value['snapshot_sha256'],value['public_domain']
+ value.update(execution_mode='agent',primary_host='codex-exec-v1',run_identity={'tag':RUN},agent_input={'task_id':TASK},
+              standalone_skill={'protocol':'codex-exec-v1','task_id':TASK,'run_id':RUN,'deadline_ms':1004000,'cleanup_deadline_ms':1100000})
+ frozen=run_dir/'run-definition.json'
+ frozen.write_text(json.dumps({**value,'snapshot_sha256':digest(value)}));frozen.chmod(0o600)
+ context={'node':{'path':'/fixed/node'},'module':'/fixed/verifier.mjs','manifest':{'source_commit':'a'*40},'env':{}}
+ command=['verify-epoch','--run-dir',str(run_dir)]
+ i.time.time=lambda:1000
+ os.environ.pop('WFR_STANDALONE_EPOCH_READ_DEADLINE_MS',None)
+ calls=[]
+ def timeout_runner(args,**kw):
+  calls.append(args);assert args[-2:]==['--read-deadline-ms','1004000'] and kw['timeout']==4
+  raise subprocess.TimeoutExpired(args,4,b'RAW_PRIVATE_FAILURE')
+ rejected(lambda:i.verifier_answer(context,command,timeout_runner),'ADB_INSTANCE_VERIFIER_TIMEOUT')
+ assert len(calls)==1
+ proof=safe_diagnostic(diagnostic_rows(run_dir)[0])
+ assert proof['fold_branch']=='timeout' and proof['stdout_sha256']==hashlib.sha256(b'RAW_PRIVATE_FAILURE').hexdigest()
+ def finish(args,**kw):
+  assert args[-2:]==['--read-deadline-ms','1050000'] and kw['timeout']==45
+  return subprocess.CompletedProcess(args,0,b'{"authorized":true}',b'')
+ i.time.time=lambda:1005
+ rejected(lambda:i.verifier_answer(context,command,lambda *a,**k:(_ for _ in ()).throw(AssertionError('NO_LATE_PROCESS'))),'ADB_INSTANCE_VERIFIER_TIMEOUT')
+ os.environ['WFR_STANDALONE_EPOCH_READ_DEADLINE_MS']='1100000'
+ assert i.verifier_answer(context,command,finish)['authorized'] is True
+ os.environ['WFR_STANDALONE_EPOCH_READ_DEADLINE_MS']='1100001'
+ rejected(lambda:i.verifier_answer(context,command,finish),'EPOCH_AUTHORITY')
+`));
+
+test('standalone 取证拒绝非原运行目录和身份混用',()=>py(diagnosticSetup+String.raw`
+with tempfile.TemporaryDirectory() as d:
+ r,p,path=fixture(d);i=load(r,'adb-host-instance-policy')
+ value,digest=frozen_run(r)
+ del value['snapshot_sha256']
+ value.update(execution_mode='agent',primary_host='codex-exec-v1',run_identity={'tag':RUN},agent_input={'task_id':TASK},
+              standalone_skill={'protocol':'codex-exec-v1','task_id':TASK,'run_id':RUN})
+ run_dir=r/RUN;run_dir.mkdir(mode=0o700)
+ for target,body in [(r,value),(run_dir,value),(run_dir,{k:v for k,v in value.items() if k!='public_domain'}|{'agent_input':{'task_id':RUN}})]:
+  path=target/'run-definition.json';path.write_text(json.dumps({**body,'snapshot_sha256':digest(body)}));path.chmod(0o600)
+  i.preserve_verifier_diagnostic({'manifest':{'source_commit':'a'*40}},['verify-epoch','--run-dir',str(target)],'timeout',None)
+  assert not diagnostic_rows(target)
+`));
+
 for(const branch of ['timeout','nonzero_allowlisted','nonzero_unrecognized','nonzero_private','stdout_limit','json_invalid','not_object','not_authorized'])test('Python原epoch verifier保留有限fold原件且原拒绝不变 '+branch,()=>py(diagnosticSetup+String.raw`
 import subprocess
 with tempfile.TemporaryDirectory() as d:

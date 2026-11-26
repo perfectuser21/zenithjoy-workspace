@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import time
 import types
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ REGISTRY = 'config/adb-host-instances.json'
 SOURCE_FILES = ('adb-host-instance-policy.py', 'adb-host-service.py', 'adb-existing-route.py', 'adb-managed-client.py', REGISTRY)
 POLICY_KEYS = {'schema_version', 'instance_id', 'host_id', 'transport', 'endpoint',
                'forbidden_ports', 'adb_bin', 'adb_realpath', 'adb_sha256'}
+STANDALONE_EPOCH_MAX_MS = 45_000
 
 
 def need(value, code):
@@ -179,6 +181,27 @@ VERIFIER_ERROR_CODES = frozenset({
 })
 
 
+def frozen_verifier_identity(context, run, frozen):
+    snapshot = frozen['snapshot_sha256']
+    body = {key: value for key, value in frozen.items() if key != 'snapshot_sha256'}
+    canonical = json.dumps(body, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
+    standalone = 'standalone_skill' in body
+    identity = body['standalone_skill' if standalone else 'public_domain']
+    source = body['deployment']['source_commit']
+    scope = body.get('discovery_phone_scope') or body.get('collection_phone_scope')
+    uuid_pattern = r'[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}'
+    need(isinstance(snapshot, str) and re.fullmatch('[a-f0-9]{64}', snapshot) and sha(canonical) == snapshot
+         and identity['protocol'] == ('codex-exec-v1' if standalone else 'workflow-domain/v1')
+         and re.fullmatch(uuid_pattern, identity['run_id']) and re.fullmatch(uuid_pattern, identity['task_id'])
+         and source == context['manifest']['source_commit'] and re.fullmatch('[a-f0-9]{40}', source)
+         and scope['source_commit'] == source, 'DIAGNOSTIC_BINDING')
+    if standalone:
+        need('public_domain' not in body and body['execution_mode'] == 'agent' and body['primary_host'] == 'codex-exec-v1'
+             and run.name == body['run_identity']['tag'] == identity['run_id']
+             and body['agent_input']['task_id'] == identity['task_id'], 'DIAGNOSTIC_BINDING')
+    return identity, source, snapshot
+
+
 def preserve_verifier_diagnostic(context, arguments, branch, returncode, stdout=b'', stderr=b''):
     descriptors = []
     try:
@@ -198,17 +221,7 @@ def preserve_verifier_diagnostic(context, arguments, branch, returncode, stdout=
 
         directory = private_directory(run)
         frozen = json.loads(read_file(run / 'run-definition.json', private=True))
-        snapshot = frozen.pop('snapshot_sha256')
-        canonical = json.dumps(frozen, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
-        public = frozen['public_domain']
-        source = frozen['deployment']['source_commit']
-        scope = frozen.get('discovery_phone_scope') or frozen.get('collection_phone_scope')
-        identity = r'[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}'
-        need(isinstance(snapshot, str) and re.fullmatch('[a-f0-9]{64}', snapshot) and sha(canonical) == snapshot
-             and public['protocol'] == 'workflow-domain/v1'
-             and re.fullmatch(identity, public['run_id']) and re.fullmatch(identity, public['task_id'])
-             and source == context['manifest']['source_commit'] and re.fullmatch('[a-f0-9]{40}', source)
-             and scope['source_commit'] == source, 'DIAGNOSTIC_BINDING')
+        identity, source, snapshot = frozen_verifier_identity(context, run, frozen)
         stdout = stdout.encode() if isinstance(stdout, str) else stdout or b''
         stderr = stderr.encode() if isinstance(stderr, str) else stderr or b''
         code = stderr.decode('ascii', errors='replace')
@@ -216,7 +229,7 @@ def preserve_verifier_diagnostic(context, arguments, branch, returncode, stdout=
         diagnostic_code = code if code in VERIFIER_ERROR_CODES or code == 'DEVICE_EPOCH_FENCE_UNKNOWN' else None
         proof = {'protocol': 'epoch-verifier-diagnostic/v1', 'producer': 'python',
                  'attempt_id': str(uuid.uuid4()), 'observed_at': datetime.now(timezone.utc).isoformat(),
-                 'pid': os.getpid(), 'run_id': public['run_id'], 'task_id': public['task_id'],
+                 'pid': os.getpid(), 'run_id': identity['run_id'], 'task_id': identity['task_id'],
                  'source_commit': source, 'snapshot_sha256': snapshot, 'fold_branch': branch,
                  'returncode': returncode, 'stdout_bytes': len(stdout), 'stderr_bytes': len(stderr),
                  'stdout_sha256': sha(stdout), 'stderr_sha256': sha(stderr), 'node_error_code': diagnostic_code}
@@ -258,10 +271,39 @@ def preserve_verifier_diagnostic(context, arguments, branch, returncode, stdout=
                 pass
 
 
-def verifier_answer(context, arguments, runner):
+def standalone_verifier_deadline(context, arguments):
+    if len(arguments) != 3 or arguments[:2] != ['verify-epoch', '--run-dir']:
+        return None
+    run = Path(arguments[2])
     try:
-        result = runner([context['node']['path'], context['module'], *arguments], env=context['env'],
-                        capture_output=True, text=False, timeout=15)
+        frozen = json.loads(read_file(run / 'run-definition.json', private=True))
+    except (OSError, ValueError):
+        # Legacy calls keep the original timeout and the fixed child remains the authority.
+        return None
+    if not isinstance(frozen, dict) or 'standalone_skill' not in frozen:
+        return None
+    try:
+        identity, _, _ = frozen_verifier_identity(context, run, frozen)
+        work, cleanup = identity['deadline_ms'], identity['cleanup_deadline_ms']
+    except (KeyError, TypeError, ValueError):
+        raise ValueError('ADB_INSTANCE_EPOCH_AUTHORITY') from None
+    need(type(work) is int and type(cleanup) is int and 0 < work < cleanup <= 9007199254740991, 'EPOCH_AUTHORITY')
+    phase = os.environ.get('WFR_STANDALONE_EPOCH_READ_DEADLINE_MS', str(work))
+    need(phase in (str(work), str(cleanup)), 'EPOCH_AUTHORITY')
+    return min(int(phase), int(time.time() * 1000) + STANDALONE_EPOCH_MAX_MS)
+
+
+def verifier_answer(context, arguments, runner):
+    deadline = standalone_verifier_deadline(context, arguments)
+    child_arguments = arguments if deadline is None else [*arguments, '--read-deadline-ms', str(deadline)]
+    try:
+        timeout = 15 if deadline is None else (deadline - time.time() * 1000) / 1000
+        if timeout <= 0:
+            raise subprocess.TimeoutExpired(child_arguments, timeout)
+        result = runner([context['node']['path'], context['module'], *child_arguments], env=context['env'],
+                        capture_output=True, text=False, timeout=timeout)
+        if deadline is not None and time.time() * 1000 >= deadline:
+            raise subprocess.TimeoutExpired(child_arguments, timeout, output=result.stdout, stderr=result.stderr)
     except subprocess.TimeoutExpired as error:
         preserve_verifier_diagnostic(context, arguments, 'timeout', None, error.stdout, error.stderr)
         raise ValueError('ADB_INSTANCE_VERIFIER_TIMEOUT') from None

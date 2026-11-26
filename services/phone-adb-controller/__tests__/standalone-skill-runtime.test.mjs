@@ -1,5 +1,20 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 const fixture=()=>({root:'/fixed/runtime',environment:{WFR_RUN_DIR:'/fixed/run'},frozen:{agent_input:{profile:'cloud-phone-test',run_tag:'direct101'},discovery_phone_scope:{expected_account:'77980009922'}}});
+test('工作截止拒绝启动控制器，收尾使用冻结的独立期限',async()=>{
+ const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs'),base=fixture(),calls=[];
+ const now=Date.now(),work=now-1,cleanup=now+10000;
+ base.frozen.standalone_skill={deadline_ms:work,cleanup_deadline_ms:cleanup};
+ let closing=false;
+ const invoke=createStandalonePhoneProvider({...base,isCleanup:()=>closing,execute:async(_,args,options)=>{calls.push({args,options});return {code:0};}});
+ const input={profile:'cloud-phone-test',owner:'direct101',args:[],command:'return-safe-desktop'};
+ await assert.rejects(invoke(input),{code:'STANDALONE_NATIVE_WORK_DEADLINE'});
+ assert.equal(calls.length,0);
+ closing=true;
+ await invoke(input);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].options.env.WFR_STANDALONE_EPOCH_READ_DEADLINE_MS,String(cleanup));
+ assert.ok(calls[0].options.timeoutMs>0&&calls[0].options.timeoutMs<=10000);
+});
 test('semantic card uses a fresh selected video grid and returned native card coordinates under the exact owner',async()=>{
  const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');const calls=[];
  const invoke=createStandalonePhoneProvider({...fixture(),execute:async(command,args)=>{calls.push({command,args});if(args.includes('search-video-cards'))return {code:0,stdout:'123\t456\t00:15\t一个真实搜索卡片的标题\t作者\nvideo_tab=1\nloading=0\n'};return {code:0,stdout:args.includes('current-video-link')?'video_id=1234567890123456789\ncontent_type=video\n':'ok'};}});

@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
-import {mkdtempSync,readFileSync,rmSync,realpathSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync,rmSync,realpathSync,writeFileSync} from 'node:fs';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -120,6 +124,62 @@ test('云机身份读回遵守外层已到期的准入期限', async () => {
  } finally {
   await f.close();
   rmSync(directory,{recursive:true,force:true});
+ }
+});
+test('Python epoch 外层允许真实云机只读闭包超过十五秒且按原绝对预算授权', {timeout:30000}, async () => {
+ const f=await fixture(),root=realpathSync(mkdtempSync(join(realpathSync(tmpdir()),'fence-python-budget-')));
+ const task='1b0c2057-e381-4c65-bce5-bc93774fcf04',run='2b0c2057-e381-4c65-bce5-bc93774fcf04',commit='a'.repeat(40);
+ const module=fileURLToPath(new URL('../adb-host-instance-policy.py',import.meta.url));
+ const identityModule=new URL('../device-epoch-fence-admission.mjs',import.meta.url).href;
+ const runDir=join(root,run), verifier=join(root,'verifier.mjs');
+ const sorted=value=>Array.isArray(value)?value.map(sorted):value&&typeof value==='object'
+  ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,sorted(value[key])])):value;
+ const frozen={deployment:{source_commit:commit},execution_mode:'agent',primary_host:'codex-exec-v1',
+  run_identity:{tag:run},agent_input:{task_id:task},
+  discovery_phone_scope:{source_commit:commit},
+  standalone_skill:{protocol:'codex-exec-v1',task_id:task,run_id:run,deadline_ms:Date.now()+25000,cleanup_deadline_ms:Date.now()+28000}};
+ mkdirSync(runDir,{mode:0o700});
+ writeFileSync(join(runDir,'run-definition.json'),JSON.stringify({...frozen,
+  snapshot_sha256:createHash('sha256').update(JSON.stringify(sorted(frozen))).digest('hex')}),{mode:0o600});
+ writeFileSync(verifier,`
+import {setTimeout as delay} from 'node:timers/promises';
+import {existsSync,mkdirSync,statSync} from 'node:fs';
+import {join} from 'node:path';
+import {readEpochDeviceIdentity} from ${JSON.stringify(identityModule)};
+const [command,option,dir,deadlineOption,deadline]=process.argv.slice(2);
+if(command!=='verify-epoch'||option!=='--run-dir')process.exit(2);
+const directory=join(dir,'wire');mkdirSync(directory,{mode:0o700});
+const scope={endpoint:${JSON.stringify(f.endpoint)},serial:'127.0.0.1:15555',maintenance_task_id:${JSON.stringify(task)}};
+await delay(11000);
+let delayed=false;
+const wire=join(directory,'socket-1.raw');
+const value=await readEpochDeviceIdentity({query:'hardware_serial',scope,directory,managedCloud:true,
+ ...(deadlineOption==='--read-deadline-ms'?{readBudget:{deadlineMs:Number(deadline)}}:{}),
+ readAuthority:async()=>{
+  if(!delayed&&existsSync(wire)&&statSync(wire).size>=22){delayed=true;await delay(5500);}
+  return {scope,lease_until:new Date(Date.now()+60000).toISOString()};
+ }});
+if(!delayed)process.exit(2);
+console.log(JSON.stringify({authorized:true,value,deadline:Number(deadline)}));`,{mode:0o600});
+ const python=`import importlib.util,json,os,subprocess,sys
+spec=importlib.util.spec_from_file_location('policy',sys.argv[1])
+policy=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(policy)
+context={'node':{'path':sys.argv[2]},'module':sys.argv[3],'manifest':{'source_commit':'a'*40},'env':{'PATH':os.environ['PATH']}}
+print(json.dumps(policy.verifier_answer(context,['verify-epoch','--run-dir',sys.argv[4]],subprocess.run)))`;
+ try {
+  const {stdout}=await promisify(execFile)('python3',['-I','-c',python,module,process.execPath,verifier,runDir],
+   {timeout:28000,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
+  const returned=JSON.parse(stdout);
+  assert.equal(returned.value,'31');
+  assert.equal(returned.deadline,frozen.standalone_skill.deadline_ms);
+  assert.deepEqual(f.services,['host-serial:127.0.0.1:15555:features','host:transport:127.0.0.1:15555','shell,v2,raw:exec /system/bin/getprop ro.serialno']);
+  const terminal=JSON.parse(readFileSync(join(runDir,'wire','diagnostic.json')));
+  assert.equal(terminal.wire_complete,true);
+  assert.equal(terminal.open_sockets,0);
+ } finally {
+  await f.close();
+  rmSync(root,{recursive:true,force:true});
  }
 });
 test('补充诊断固定只读活动与元数据；proc路径仅接受维护scope整数PID',async()=>{

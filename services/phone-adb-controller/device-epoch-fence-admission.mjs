@@ -240,7 +240,18 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  finally{if(daemonObservation)await daemonObservation.close(false);}
 }
 export async function main(args){
- need(args.length===3&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');const runDir=args[2];let frozen;
- try{frozen=readFrozen(runDir);const spec=phone(frozen),result=await canAuthorizeNativeFrame({root:here,frozen,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;}
+ const hasDeadline=args.length===5&&args[3]==='--read-deadline-ms'&&/^[1-9]\d{0,15}$/.test(args[4]);
+ need((args.length===3||hasDeadline)&&args[0]==='verify-epoch'&&args[1]==='--run-dir'&&resolve(args[2])===args[2],'EPOCH_CLI_USAGE');
+ const runDir=args[2];let frozen;
+ try{
+  frozen=readFrozen(runDir);const spec=phone(frozen);let readBudget;
+  if(hasDeadline){
+   const deadlineMs=Number(args[4]);
+   need(frozen.standalone_skill?.protocol==='codex-exec-v1'&&Number.isSafeInteger(deadlineMs)&&deadlineMs>Date.now()&&deadlineMs<=frozen.standalone_skill.cleanup_deadline_ms,'EPOCH_ADMISSION_DEADLINE');
+   readBudget={deadlineMs};
+  }
+  const result=await canAuthorizeNativeFrame({root:here,frozen,readBudget,env:{WFR_RUN_DIR:runDir,WF_BRAIN_TASK_ID:identity(frozen)?.task_id,WFR_RUN_ID:identity(frozen)?.run_id,SERIAL:spec?.serial}});
+  need(result.authorized===true,'EPOCH_CLI_NOT_APPLICABLE');return result;
+ }
  catch(error){if(frozen)preserveVerifierDiagnostic(runDir,frozen,error);throw error;}
 }
