@@ -1,0 +1,148 @@
+name: ZenithJoy Dashboard production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        required: true
+        type: choice
+        default: inspect
+        options: [inspect, promote, rollback]
+        description: Inspect both origins, promote a verified candidate or roll back to the recorded predecessor
+      sha:
+        type: string
+        description: Full SHA for promote or rollback
+      acceptance_run_key:
+        type: string
+        description: Same-SHA Dashboard business acceptance key for promote
+      confirm:
+        type: string
+        description: Type PROMOTE or ROLLBACK for the respective production action
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: zenithjoy-hangzhou-production-api
+  cancel-in-progress: false
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate release request
+        env:
+          ACTION: ${{ inputs.action }}
+          SHA: ${{ inputs.sha }}
+          RUN_KEY: ${{ inputs.acceptance_run_key }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]]
+          case "$ACTION" in
+            inspect) [[ -z "$SHA$RUN_KEY$CONFIRM" ]] ;;
+            promote) [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ && "$CONFIRM" == PROMOTE ]] ;;
+            rollback) [[ "$SHA" =~ ^[a-f0-9]{40}$ && -z "$RUN_KEY" && "$CONFIRM" == ROLLBACK ]] ;;
+            *) exit 1 ;;
+          esac
+
+  admission:
+    needs: request
+    if: inputs.action == 'promote'
+    uses: ./.github/workflows/release-admission.yml
+    with:
+      sha: ${{ inputs.sha }}
+      targets: dashboard
+      acceptance_run_key: ${{ inputs.acceptance_run_key }}
+    secrets: inherit
+
+  build:
+    needs: admission
+    if: inputs.action == 'promote'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact: ${{ steps.package.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.admission.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build the admitted SHA with production settings
+        env:
+          DEPLOY_SHA: ${{ needs.admission.outputs.sha }}
+          VITE_FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID || 'cli_a937a808ca395bd6' }}
+          VITE_DEPLOY_ENV: production
+          VITE_SKIP_AUTH: 'false'
+          VITE_SUPER_ADMIN_EMAILS: 'xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
+          VITE_STAFF_EMAILS: '408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          export VITE_BUILD_SHA="$DEPLOY_SHA"
+          npm ci --workspace=apps/dashboard
+          npm run build --workspace=apps/dashboard
+          printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/dashboard/dist/release-sha.json
+      - name: Package one production bundle
+        id: package
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/dashboard-production"
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+            -C apps/dashboard/dist -cf - . | gzip -n > "$RUNNER_TEMP/dashboard-production/dashboard.tar.gz"
+          printf 'artifact=dashboard-production-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact }}
+          path: ${{ runner.temp }}/dashboard-production
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    needs: [request, admission, build]
+    if: >-
+      ${{ !cancelled() && needs.request.result == 'success' &&
+          ((inputs.action == 'promote' && needs.admission.result == 'success' && needs.build.result == 'success') ||
+           (inputs.action != 'promote' && needs.admission.result == 'skipped' && needs.build.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: zenithjoy-dashboard-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        if: inputs.action == 'promote'
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: ${{ runner.temp }}/dashboard-production
+      - uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+      - name: Verify Dashboard production origins or run the ordered release
+        env:
+          RELEASE_ACTION: ${{ inputs.action }}
+          INPUT_SHA: ${{ inputs.sha }}
+          ADMITTED_SHA: ${{ needs.admission.outputs.sha }}
+          MMV_SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          MMV_SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          MMV_SSH_USER: ${{ secrets.US_MAC_USER }}
+          MMV_HOST_KEY: ${{ vars.HZ_RELEASE_MMV_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_ACTION" in
+            inspect) python3 scripts/deploy/dashboard-production.py inspect ;;
+            promote) python3 scripts/deploy/dashboard-production.py promote --sha "$ADMITTED_SHA" \
+              --archive "$RUNNER_TEMP/dashboard-production/dashboard.tar.gz" ;;
+            rollback) python3 scripts/deploy/dashboard-production.py rollback --sha "$INPUT_SHA" ;;
+            *) exit 1 ;;
+          esac
