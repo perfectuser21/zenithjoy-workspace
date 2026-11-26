@@ -7,7 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {publicDomainAuthority,publicDomainScopeMatches} from './public-domain-authority.mjs';
 import {readFrozen,canonical} from './runtime-definition.mjs';
 import {createNativePhoneAdbRead,createNativePhoneEvidenceRead} from './native-phone-adb-read.mjs';
-import {createNativePhoneSourceIssuer,readNativePhoneCommandSource} from './native-phone-command-source.mjs';
+import {createNativePhoneSourceIssuer,readNativePhoneCommandSource,selectPreflightNativeSource} from './native-phone-command-source.mjs';
 import {createNativePhoneCommandObserver} from './adb-shell-v2.mjs';
 import {createNativePhonePreflightAdapter} from './native-phone-preflight-adapter.mjs';
 import {startPreflightNativeDomain,preflightDomainClosure} from './preflight-native-domain.mjs';
@@ -74,22 +74,23 @@ export async function startPublicCodePreflightIO({root,env,frozen,state,lease,pu
  signal?.addEventListener('abort',abort,{once:true});
  try{
   const task=await authorize();if(typeof task.claimed_at!=='string'||!Number.isFinite(Date.parse(task.claimed_at))||typeof task.claimed_by!=='string')throw fail('CLAIM');
+  const nativeSource=selectPreflightNativeSource({runtimeRoot:root,source,profile:env.P,serial:env.SERIAL});
   const base={task_id:state.task_id,binding_id:formal.binding.id,run_id:state.run_id,source_commit:source.commit,profile:env.P,serial:env.SERIAL,epoch:0,endpoint:spec.policy.endpoint,claim:{claimed_at:task.claimed_at,claimed_by:task.claimed_by},worker_deadline_ms:workerDeadlineMs,cleanup_deadline_ms:receiptDeadlineMs};
   const readScope={...base,protocol:'native-phone-adb-read/v1'},commandScope={...base,protocol:'adb-shell-v2-observation/v1'};
   const authority=scope=>async()=>{const current=await authorize();if(current.claimed_by!==base.claim.claimed_by||current.claimed_at!==base.claim.claimed_at)throw fail('CLAIM_CHANGED');return {scope,claimed_by:current.claimed_by,claimed_at:current.claimed_at,lease_until:new Date(receiptDeadlineMs).toISOString()};};
   const sub=name=>{const p=join(directory,name);mkdirSync(p,{mode:0o700});return p;};
   nativeBootstrapAttempted=true;local=await startPreflightNativeDomain({root,directory:sub('local'),sourceFiles:Object.fromEntries(source.files.map(f=>[f.path,f.sha256])),python:spec.executables.python,policy:spec.policy,serial:env.SERIAL,workerDeadlineMs,receiptDeadlineMs,env,assertAdmission:authorize});
   await prepareLocal({run:(...args)=>local.local(...args)});localAdmitted=true;active();
-  const reader=createNativePhoneAdbRead({runtimeRoot:root,source,directory:sub('source'),scope:readScope,readAuthority:authority(readScope),freshFrameAdmission:Boolean(epochGuard)});readers.push(reader);
+  const reader=createNativePhoneAdbRead({runtimeRoot:root,source:nativeSource,directory:sub('source'),scope:readScope,readAuthority:authority(readScope),freshFrameAdmission:Boolean(epochGuard)});readers.push(reader);
   const context={profile:env.P,serial:env.SERIAL,package:'com.ss.android.ugc.aweme',width:profile.width,height:profile.height,keywords:[],evidenceRoot:spec.evidence_root,run:env.WFR_TAG};
-  issuer=createNativePhoneSourceIssuer({runtimeRoot:root,source,scope:readScope,context,reader});const commandSource=await issuer.prepare();active();
+  issuer=createNativePhoneSourceIssuer({runtimeRoot:root,source:nativeSource,scope:readScope,context,reader});const commandSource=await issuer.prepare();active();
   const command=async(operation,args)=>{
-   await authorize();const observer=createNativePhoneCommandObserver({runtimeRoot:root,source,directory:sub('command-'+sequence++),scope:commandScope,readAuthority:authority(commandScope),commandSource,operation,args,context});observers.push(observer);pending++;
+   await authorize();const observer=createNativePhoneCommandObserver({runtimeRoot:root,source:nativeSource,directory:sub('command-'+sequence++),scope:commandScope,readAuthority:authority(commandScope),commandSource,operation,args,context});observers.push(observer);pending++;
    try{const cap=await observer.observeDump();return observer.readReviewedCommandReceipt(cap,{scope:commandScope});}
    catch(error){unknown=true;throw error;}finally{pending--;const p=await observer.close();if(p.unknown||p.pending||p.open_sockets)unknown=true;}
   };
   const readEvidence=async path=>{
-   await authorize();const reader=createNativePhoneEvidenceRead({runtimeRoot:root,source,directory:sub('evidence-'+readers.length),scope:readScope,readAuthority:authority(readScope),commandSource});readers.push(reader);pending++;
+   await authorize();const reader=createNativePhoneEvidenceRead({runtimeRoot:root,source:nativeSource,directory:sub('evidence-'+readers.length),scope:readScope,readAuthority:authority(readScope),commandSource});readers.push(reader);pending++;
    try{const cap=await reader.read(path);return reader.readReceipt(cap,{scope:readScope}).bytes;}catch(error){unknown=true;throw error;}finally{pending--;if((await reader.close()).channel_stopped!==true)unknown=true;}
   };
   adapter=createNativePhonePreflightAdapter({context:{...context,owner:env.WFR_TAG,purpose,deadlineMs:workerDeadlineMs},io:{command,readEvidence},hostAdb:(...args)=>local.adb(...args)});
