@@ -180,3 +180,10 @@ test('拒绝使用早于接入动作的候选观察', async t => {
   assert.deepEqual(x.operations, ['disconnect', 'connect']);
   assert.ok(!readdirSync(x.journal).includes('complete.json'));
 });
+
+test('an unapproved plan never acquires the phone lock', async t => {
+  const x = setup(t);
+  x.facts.pendingAction.status = 'pending_approval';
+  x.io.withDeviceGuard = () => assert.fail('lock acquired before authority verification');
+  await assert.rejects(x.run(), { code: 'YUESHENG_MIGRATION_AUTHORITY_APPROVAL' });
+});

@@ -67,8 +67,7 @@ function verifyAuthority({ plan, planSha, snapshot, now }) {
   return { task: { id: task.id, status: task.status, ...plan.claim }, lease: { ...plan.lease }, approvalSha: digest(approval) };
 }
 
-// A future production adapter must supply the actual guard, Brain reads and wire operations.
-// This module has no CLI, default transport, automatic rollback, or epoch-record issuer.
+// Keep transaction state independent of the Mac Studio transport and local lock implementation.
 export async function runYueshengMigration({ plan: proposedPlan, journalRoot, io }) {
   const plan = structuredClone(proposedPlan);
   assertPlan(plan);
@@ -77,14 +76,14 @@ export async function runYueshengMigration({ plan: proposedPlan, journalRoot, io
   const root = privateDirectory(journalRoot);
   const journal = join(root, 'yuesheng-5044-to-5045');
   assertNoJournal(journal);
+  const initial = verifyAuthority({ plan, planSha, snapshot: await io.readAuthority(), now: now() });
   return io.withDeviceGuard(plan.physical_serial, async guard => {
-    let approvalSha;
+    const approvalSha = initial.approvalSha;
     const assertAuthority = async () => {
       await guard.assertHeld();
       const snapshot = await io.readAuthority();
       await guard.assertHeld();
       const verified = verifyAuthority({ plan, planSha, snapshot, now: now() });
-      approvalSha ??= verified.approvalSha;
       need(verified.approvalSha === approvalSha, 'AUTHORITY_APPROVAL');
       return verified;
     };

@@ -1,7 +1,9 @@
 import { mkdtempSync } from 'node:fs';
-import { join } from 'node:path';
-import { privateDirectory } from './device-epoch-fence-files.mjs';
-import { canonical } from './device-epoch-fence-reference.mjs';
+import { dirname, join, resolve } from 'node:path';
+import { userInfo } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { ensureRecordRoot, privateDirectory } from './device-epoch-fence-files.mjs';
+import { bytes, canonical, digest, readPrivatePolicy } from './device-epoch-fence-reference.mjs';
 import { hostOperation } from './device-epoch-fence-transport.mjs';
 import {
   createYueshengDaemonBinding, readYueshengHostObservation, readYueshengInstalledCandidate,
@@ -61,4 +63,50 @@ export async function executeYueshengOnMacStudio({ plan, journalRoot, withDevice
     observe: phase => readYueshengHostObservation({ phase, journalRoot: root, daemons, expectedLease }, { bindDaemon }),
     operate: createYueshengRouteOperator({ journalRoot: root, daemons }, { bindDaemon }),
   } });
+}
+
+const here = dirname(fileURLToPath(import.meta.url));
+const migrationFiles = ['execution', 'host-reads', 'local-lock', 'migration', 'plan', 'readback']
+  .map(suffix => 'device-epoch-fence-yuesheng-' + suffix + '.mjs')
+  .concat('yuesheng-adb-daemon-binding.py');
+
+async function readThisCandidate(sourceCommit) {
+  const base = join(userInfo().homedir, '.local/share/zenithjoy');
+  requireCondition(/^[a-f0-9]{40}$/.test(sourceCommit ?? '')
+    && here === join(base, 'phone-candidates', sourceCommit, 'runtime'), 'EXECUTION_SOURCE');
+  const { manifest } = await readYueshengInstalledCandidate(sourceCommit);
+  for (const name of migrationFiles) {
+    const entries = manifest.files?.filter(row => row.deployed_path === name);
+    requireCondition(entries?.length === 1
+      && entries[0].path === 'services/phone-adb-controller/' + name
+      && entries[0].content_sha256 === digest(bytes(join(here, name))), 'EXECUTION_SOURCE');
+  }
+  return { manifest, journalRoot: join(base, 'device-epoch-migrations', route.physical_serial) };
+}
+
+async function main([operation, sourceCommit, input, ...extra]) {
+  requireCondition(extra.length === 0 && input && ['plan', 'execute'].includes(operation), 'USAGE');
+  const { manifest, journalRoot } = await readThisCandidate(sourceCommit);
+  ensureRecordRoot(journalRoot);
+  if (operation === 'plan') {
+    return planYueshengOnMacStudio({ taskId: yueshengMaintenanceTask, pendingActionId: input, sourceCommit, journalRoot });
+  }
+  const { plan, plan_sha256: planSha } = JSON.parse(readPrivatePolicy(resolve(input)));
+  requireCondition(plan?.source_commit === sourceCommit && plan.task_id === yueshengMaintenanceTask
+    && planSha === digest(plan), 'EXECUTION_PLAN');
+  const { createYueshengLocalDeviceGuard } = await import('./device-epoch-fence-yuesheng-local-lock.mjs');
+  const withDeviceGuard = createYueshengLocalDeviceGuard({
+    controllerPath: join(here, 'douyin-phone-adb'), manifest, owner: plan.task_id,
+  });
+  return executeYueshengOnMacStudio({ plan, journalRoot, withDeviceGuard });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    process.stdout.write(JSON.stringify(await main(process.argv.slice(2))) + '\n');
+  } catch (error) {
+    const code = /^YUESHENG_MIGRATION_[A-Z_]+$/.test(error?.code ?? '') ? error.code : 'YUESHENG_MIGRATION_EXECUTION_FAILED';
+    process.stderr.write(code + '\n');
+    process.exitCode = 1;
+  }
 }
