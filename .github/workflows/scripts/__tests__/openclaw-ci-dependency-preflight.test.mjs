@@ -79,6 +79,9 @@ test('仅OS安装采用300秒外层与6分钟step，job和其余阶段预算保�
 test('实际bash中OS外层300秒耗尽仍硬失败且不执行Pillow/测试',t=>{const r=invoke(t,'',[], '',true);assert.equal(r.status,124,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);assert.match(r.trace,/timeout 300s bash .*prepare-openclaw-os-packages/);});
 
 test('缺工具时同一签名runner来源只刷新一次并为其安装，已有工具时完全跳过APT',t=>{
+ for(const step of workflow.jobs['openclaw-scripts-test'].steps){
+  assert.doesNotMatch(step.run??'',/apt-get[^\n]*\bupdate\b/);
+ }
  const missing=invoke(t,'',['zsh','ffmpeg']);
  assert.equal(missing.status,0,missing.output);
  const apt=missing.trace.split('\n').filter(line=>line.startsWith('apt '));
