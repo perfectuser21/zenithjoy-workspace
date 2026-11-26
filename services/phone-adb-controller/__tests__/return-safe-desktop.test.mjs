@@ -12,7 +12,7 @@ import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { writeFileSync, mkdtempSync, chmodSync } from "node:fs";
+import { writeFileSync, mkdtempSync, chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -25,21 +25,25 @@ test("前置：zsh 可用", () => {
 
 // 假 adb：resolve-activity 返回可配置的 launcher 包名；dumpsys window 的前台按
 // "跳过前N次是抖音,之后是launcher"的策略回，模拟"按了几次HOME才真正回到桌面"。
-function makeFakeAdb({ launcherPkg = "com.hihonor.android.launcher", settleAfter = 1, foregroundPkg = launcherPkg }) {
+function makeFakeAdb({ launcherPkg = "com.hihonor.android.launcher", settleAfter = 1, foregroundPkg = launcherPkg, priorActivity = ".MainActivity", priorFocus = "mCurrentFocus" }) {
   return `#!/bin/sh
 HOME_PRESS_COUNT_FILE="\${TMPDIR:-/tmp}/rsd-home-presses-$$-marker"
 [ -n "$RSD_COUNT_FILE" ] && HOME_PRESS_COUNT_FILE="$RSD_COUNT_FILE"
 args="$*"
 case "$args" in
   *"get-state"*) echo device; exit 0;;
-  *"resolve-activity"*) printf 'name=x.y.Launcher\\npackageName=${launcherPkg}\\n'; exit 0;;
+  *"resolve-activity"*) printf 'ActivityInfo:\\n  name=${launcherPkg}.MainActivity\\n  packageName=${launcherPkg}\\n'; exit 0;;
   *"input keyevent 3"*)
     n=$(cat "$HOME_PRESS_COUNT_FILE" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$HOME_PRESS_COUNT_FILE"
     exit 0;;
   *"dumpsys window"*)
     n=$(cat "$HOME_PRESS_COUNT_FILE" 2>/dev/null || echo 0)
     if [ "$n" -ge "${settleAfter}" ]; then
-      printf 'mCurrentFocus=Window{abc u0 ${foregroundPkg}/.MainActivity}\\n'
+      if [ "$n" -eq 0 ]; then
+        printf '${priorFocus}=Window{abc u0 ${foregroundPkg}/${priorActivity}}\\n'
+      else
+        printf 'mCurrentFocus=Window{abc u0 ${foregroundPkg}/.MainActivity}\\n'
+      fi
     else
       printf 'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}\\n'
     fi
@@ -50,27 +54,27 @@ esac
 exit 0`;
 }
 
-function setup({ launcherPkg, settleAfter, foregroundPkg } = {}) {
+function setup(options) {
   const dir = mkdtempSync(join(tmpdir(), "rsd-"));
   const reg = join(dir, "r.tsv");
   writeFileSync(reg, "legacy\tSER1\tANY-MODEL\t1199\t2663\n");
   const adbPath = join(dir, "fake-adb");
-  writeFileSync(adbPath, makeFakeAdb({ launcherPkg, settleAfter, foregroundPkg }));
+  writeFileSync(adbPath, makeFakeAdb(options));
   chmodSync(adbPath, 0o755);
   const countFile = join(dir, "home-presses");
   return { dir, reg, adbPath, countFile };
 }
 
-function run({ launcherPkg, settleAfter, foregroundPkg } = {}) {
-  const { dir, reg, adbPath, countFile } = setup({ launcherPkg, settleAfter, foregroundPkg });
+function run(options = {}) {
+  const { dir, reg, adbPath, countFile } = setup(options);
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", "return-safe-desktop"], {
-      env: { ...process.env, ...fixturePythonEnv(), ...phoneLockFixtureEnv(reg, join(dir, 'phone')), DOUYIN_ADB_BIN: fixtureAdb(adbPath), RSD_COUNT_FILE: countFile },
+      env: { ...process.env, HOME: dir, ...fixturePythonEnv(), ...phoneLockFixtureEnv(reg, join(dir, 'phone')), DOUYIN_ADB_BIN: fixtureAdb(adbPath), RSD_COUNT_FILE: countFile },
     });
     let out = "", err = "";
     p.stdout.on("data", (d) => { out += d; });
     p.stderr.on("data", (d) => { err += d; });
-    p.on("close", (code) => resolve({ code, out: out.trim(), err: err.trim() }));
+    p.on("close", (code) => resolve({ code, out: out.trim(), err: err.trim(), homePresses: existsSync(countFile) ? Number(readFileSync(countFile, "utf8")) : 0 }));
   });
 }
 
@@ -84,6 +88,7 @@ test("前2次按HOME仍在抖音,第3次才回到launcher → 重试后成功", 
   const r = await run({ launcherPkg: "com.miui.home", settleAfter: 3 });
   assert.equal(r.code, 0, `err=${r.err}`);
   assert.match(r.out, /launcher=com\.miui\.home/);
+  assert.equal(r.homePresses, 3);
 });
 
 test("按满3次HOME仍不在launcher(卡在弹窗等) → die,不假装成功", async () => {
@@ -101,4 +106,23 @@ test("不 hardcode 厂商包名: 换一个完全不同的launcher包名(vivo)同
 test('含桌面包名的其他包不能冒充默认桌面',async()=>{
  const r=await run({launcherPkg:'com.hihonor.android.launcher',foregroundPkg:'com.hihonor.android.launcher.fake'});
  assert.notEqual(r.code,0);assert.match(r.err,/still not on safe desktop/);
+});
+
+test("已在设备默认桌面时读回前台且没有 HOME 输入", async () => {
+  const r = await run({ launcherPkg: "com.android.launcher3", settleAfter: 0 });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /^foreground_package=com\.android\.launcher3$/m);
+  assert.equal(r.homePresses, 0);
+});
+
+test("mFocusedApp 的桌面记录不能替代当前焦点", async () => {
+  const r = await run({ launcherPkg: "com.android.launcher3", settleAfter: 0, priorFocus: "mFocusedApp" });
+  assert.equal(r.code, 0, r.err);
+  assert.equal(r.homePresses, 1);
+});
+
+test("默认桌面同包的设置 Activity 仍须实际按 HOME", async () => {
+  const r = await run({ launcherPkg: "com.android.launcher3", settleAfter: 0, priorActivity: ".SettingsActivity" });
+  assert.equal(r.code, 0, r.err);
+  assert.equal(r.homePresses, 1);
 });

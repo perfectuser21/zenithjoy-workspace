@@ -210,3 +210,21 @@ test('cleanup deadline denies further desktop leaves and retains the revoked res
   await assert.rejects(host.close(),/CLEANUP_DEADLINE/);assert.equal(f.fs.existsSync(f.unknownPath),true);assert.equal(f.effects.includes('return-safe-desktop'),false);assert.equal(f.effects.includes('lock-release-exact'),false);assert.equal(f.effects.includes('central-release'),false);
  }finally{Date.now=originalNow;f.cleanup();}
 });
+
+test('desktop failure keeps a private finite error receipt without releasing either lock',async()=>{
+ const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),f=await runtimeFixture();
+ try{
+  f.dependencies.execute=async(command,args)=>args.includes('return-safe-desktop')
+   ?{code:32,stderr:'SAFE_DESKTOP_FOREGROUND_QUERY_FAILED\nprivate raw content',stdout:''}
+   :f.execute(command,args);
+  const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});
+  await assert.rejects(host.close(),{code:'STANDALONE_NATIVE_COMMAND'});
+  const path=f.path.join(f.registry,f.run+'.desktop-error.json'), raw=f.fs.readFileSync(path,'utf8'), receipt=JSON.parse(raw);
+  assert.equal(f.fs.statSync(path).mode&0o777,0o600);
+  assert.equal(receipt.phase,'desktop_command');assert.equal(receipt.error,'STANDALONE_NATIVE_COMMAND');
+  assert.equal(receipt.controller_exit_code,32);assert.equal(receipt.controller_reason,'SAFE_DESKTOP_FOREGROUND_QUERY_FAILED');
+  assert.equal(receipt.task_id,f.task);assert.equal(receipt.run_id,f.run);
+  assert.equal(raw.includes('private raw content'),false);
+  assert.equal(f.effects.includes('lock-release-exact'),false);assert.equal(f.effects.includes('central-release'),false);
+ }finally{f.cleanup();}
+});

@@ -18,6 +18,19 @@ import {createStandaloneCommentObserver} from './standalone-comment-observer.mjs
 import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
+function preserveDesktopError({hostPath,identity,frozen,phase,phaseStartedAt,error}){
+ const codes=['EXECUTION_DEADLINE','EXECUTION_START_FAILED','EXECUTION_OUTPUT_LIMIT',
+  'STANDALONE_NATIVE_COMMAND','STANDALONE_NATIVE_CLEANUP_DEADLINE','EPOCH_ADMISSION_DEADLINE','EPOCH_STANDALONE_IDENTITY'];
+ const code=codes.find(value=>error?.code===value||error?.message===value)??'UNKNOWN';
+ const stderr=error?.diagnostic?.stderr?.split('\n')??[];
+ const reason=['SAFE_DESKTOP_HOME_INPUT_FAILED','SAFE_DESKTOP_FOREGROUND_QUERY_FAILED'].find(value=>stderr.includes(value))??null;
+ const exit=error?.controller_exit_code;
+ writeFileSync(hostPath.replace(/\.json$/,'.desktop-error.json'),JSON.stringify({
+  protocol:'standalone-desktop-error/v1',task_id:identity.task_id,run_id:identity.run_id,
+  snapshot_sha256:frozen.snapshot_sha256,phase,phase_started_at:phaseStartedAt,observed_at:Date.now(),
+  error:code,controller_exit_code:Number.isInteger(exit)&&exit>=0&&exit<=255?exit:null,controller_reason:reason,
+ })+'\n',{flag:'wx',mode:0o600});
+}
 export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput,isCleanup=()=>false}){
  const fixed=frozen.agent_input;
  return async function invoke({command,args,profile,owner,playback}){
@@ -163,11 +176,18 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    if(leafUnknown())revoke('LEAF_UNKNOWN');
    if(local&&!unknown){
     cleanupActive=true;
+    let phase='host_marker',phaseStartedAt=Date.now();
+    const enter=value=>{phase=value;phaseStartedAt=Date.now();};
     try{
      if(phoneScope.policy.schema_version===2)writeFileSync(hostPath.replace(/\.json$/,'.cleanup'),digest(readFileSync(hostPath))+'\n',{flag:'wx',mode:0o600});
-     await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();
+     enter('epoch_guard');await guard({cleanup:true});
+     if(collectionTools){enter('stop_recording');await collectionTools.stopRecording();}
+     enter('desktop_command');
      desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>true})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});
-    }catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}
+    }catch(error){
+     failed('DESKTOP_UNKNOWN',error);
+     try{preserveDesktopError({hostPath,identity,frozen,phase,phaseStartedAt,error});}catch{}
+    }finally{cleanupActive=false;}
    }
    if(collectionTools&&!unknown)try{await guard({cleanup:true});await collectionTools.releaseOwned();}catch(error){failed('COLLECTION_RELEASE_UNKNOWN',error);}
    if(leaf)try{leaves=await leaf.seal();if(!leaves.requests_returned&&!leaves.empty_requests_returned)revoke('LEAF_SEAL_UNKNOWN');}catch(error){failed('LEAF_SEAL_FAILED',error);}
