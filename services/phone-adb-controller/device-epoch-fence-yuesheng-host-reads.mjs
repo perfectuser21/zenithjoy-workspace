@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readDiagnosticProof, runDiagnostic } from './device-epoch-fence-diagnostics.mjs';
 import { privateDirectory } from './device-epoch-fence-files.mjs';
 import { canonical, readPrivatePolicy } from './device-epoch-fence-reference.mjs';
@@ -40,6 +42,40 @@ export async function readYueshengInstalledCandidate(sourceCommit, {
   need(manifest?.source_commit === sourceCommit && uuid.test(manifest.release_id ?? ''), 'CANDIDATE');
   const gate = await readBrain('/releases/' + manifest.release_id + '/gate');
   return { manifest, gate };
+}
+
+const bindingHelper = fileURLToPath(new URL('./yuesheng-adb-daemon-binding.py', import.meta.url));
+
+async function readDaemonBinding(sourceCommit, routeName, expected = null) {
+  return new Promise((resolve, reject) => {
+    const child = execFile('/usr/bin/python3', ['-I', '-B', '-S', bindingHelper], {
+      env: { PATH: '/usr/bin:/bin', LANG: 'C', LC_ALL: 'C' }, timeout: 15_000, maxBuffer: 65_536,
+    }, (error, stdout) => {
+      try {
+        need(!error, 'DAEMON_IDENTITY');
+        const value = JSON.parse(stdout);
+        const endpoint = routeName === 'old' ? route.old_endpoint : route.new_endpoint;
+        need(value?.endpoint === endpoint && value.kind === (routeName === 'old' ? 'external_existing' : 'managed')
+          && Number.isSafeInteger(value.child?.pid), 'DAEMON_IDENTITY');
+        resolve(value);
+      } catch { reject(Object.assign(Error('YUESHENG_MIGRATION_DAEMON_IDENTITY'), { code: 'YUESHENG_MIGRATION_DAEMON_IDENTITY' })); }
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end(canonical({ source_commit: sourceCommit, route: routeName, expected }));
+  });
+}
+
+export async function createYueshengDaemonBinding({ sourceCommit }) {
+  need(commit.test(sourceCommit ?? ''), 'DAEMON_SCOPE');
+  const [old, next] = await Promise.all([readDaemonBinding(sourceCommit, 'old'), readDaemonBinding(sourceCommit, 'next')]);
+  const expected = { old, next };
+  return { daemons: structuredClone(expected), async bindDaemon(daemon) {
+    const name = daemon?.endpoint === route.old_endpoint ? 'old' : 'next';
+    need(canonical(daemon) === canonical(expected[name]), 'DAEMON_SCOPE');
+    const actual = await readDaemonBinding(sourceCommit, name, expected[name]);
+    need(canonical(actual) === canonical(expected[name]), 'DAEMON_IDENTITY');
+    return actual;
+  } };
 }
 
 // bindDaemon must re-verify each pre-bound listener against its trusted process identity.

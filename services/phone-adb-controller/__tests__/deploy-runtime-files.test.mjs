@@ -117,8 +117,8 @@ test('悦升迁移维护模块由 Mac Studio 候选包独立提供',()=>{
  const r=spawnSync('/bin/bash',['-c',arrays+'\nprintf "MMV:%s\\n" "${MMV_RUNTIME_FILES[@]}";printf "DEVICE:%s\\n" "${DEVICE_NODE_FILES[@]}";printf "RPC:%s\\n" "${RPC_FILES[@]}"'],{encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);
  const files=r.stdout.trim().split('\n');
- for(const suffix of ['host-reads','migration','plan','readback']){
-  const module=`device-epoch-fence-yuesheng-${suffix}.mjs`;
+ const modules=['execution','host-reads','migration','plan','readback'].map(suffix=>`device-epoch-fence-yuesheng-${suffix}.mjs`);
+ for(const module of [...modules,'yuesheng-adb-daemon-binding.py']){
   assert.equal(files.filter(file=>file===`MMV:${module}`).length,1,module);
   assert.ok(!files.includes(`DEVICE:${module}`),module);
   assert.ok(!files.includes(`RPC:${module}`),module);
