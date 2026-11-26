@@ -40,3 +40,10 @@ test('预装ffmpeg不重装，四capability包原无条件APT语义保持',t=>{c
 for(const [failed,code]of [['original-index',43],['helper',43],['timeout',124]])test('真实bash '+failed+'失败仍阻断且不发准备DONE',t=>{const r=invoke(t,{failed});assert.equal(r.status,code,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE smoke-os-packages/);if(failed!=='helper')assert.doesNotMatch(r.trace,/^helper /m);});
 for(const tool of ['ffmpeg','zsh','python3','jq','xmllint'])test(tool+'版本命令失败必须拒绝',t=>{const r=invoke(t,{broken:tool});assert.equal(r.status,44,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE smoke-os-packages/);});
 test('helper声称成功但xmllint仍缺失不得发准备DONE',t=>{const r=invoke(t,{missing:'xmllint'});assert.notEqual(r.status,0,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE smoke-os-packages/);});
+
+test('Smoke只通过已验证的runner签名源路径安装，绕过 _apt 无法访问的私有目录',t=>{
+ const r=invoke(t);
+ assert.equal(r.status,0,r.output);
+ assert.match(r.trace,/^helper \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh --runner-sources \/tmp \/etc\/apt\/sources.list.d\/ubuntu.sources \/etc\/apt\/apt-mirrors.txt /m);
+ assert.doesNotMatch(r.trace,/^apt /m);
+});
