@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { userInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,10 @@ import {
   createYueshengDaemonBinding, readYueshengHostObservation, readYueshengInstalledCandidate,
   readYueshengMigrationAuthority, yueshengMaintenanceTask,
 } from './device-epoch-fence-yuesheng-host-reads.mjs';
+import { createYueshengEpochIssuer, readYueshengPreviousClearance } from './device-epoch-fence-yuesheng-issuer.mjs';
+import { loadPreflightPg } from './preflight-pg-dependencies.mjs';
+import { maintenanceBrainRequest } from './qualification-maintenance-brain.mjs';
+import { readMaintenanceDatabaseConfig } from './qualification-maintenance-database.mjs';
 import { runYueshengMigration } from './device-epoch-fence-yuesheng-migration.mjs';
 import { planYueshengMigration } from './device-epoch-fence-yuesheng-plan.mjs';
 import { yueshengMigrationRoute as route } from './device-epoch-fence-yuesheng-readback.mjs';
@@ -22,7 +26,7 @@ function requireCondition(condition, reason) {
 export function createYueshengRouteOperator({ journalRoot, daemons }, { bindDaemon, send = hostOperation }) {
   const root = privateDirectory(journalRoot);
   const endpoints = { disconnect: ['old', route.old_endpoint], connect: ['next', route.new_endpoint] };
-  return async ({ operation, scope, assertAuthority }) => {
+  return async ({ operation, scope, assertAuthority, journal }) => {
     requireCondition(Object.hasOwn(endpoints, operation) && typeof assertAuthority === 'function', 'ACTION_SCOPE');
     const [name, endpoint] = endpoints[operation];
     const expectedScope = { endpoint, serial: route.transport_serial };
@@ -34,8 +38,10 @@ export function createYueshengRouteOperator({ journalRoot, daemons }, { bindDaem
       const { lease } = await assertAuthority();
       return { scope: expectedScope, authorized_action: operation, lease_until: lease.expires_at };
     };
-    return send({ operation, scope: expectedScope, readAuthority,
-      directory: mkdtempSync(join(root, operation + '-wire-')) });
+    requireCondition(journal === join(root, 'yuesheng-5044-to-5045'), 'WIRE_JOURNAL');
+    const directory = join(privateDirectory(journal), operation + '-wire');
+    mkdirSync(directory, { mode: 0o700 });
+    return send({ operation, scope: expectedScope, readAuthority, directory });
   };
 }
 
@@ -55,10 +61,28 @@ export async function executeYueshengOnMacStudio({ plan, journalRoot, withDevice
   requireCondition(plan?.task_id === yueshengMaintenanceTask && typeof withDeviceGuard === 'function', 'EXECUTION_SCOPE');
   const root = privateDirectory(journalRoot);
   const { source_commit: sourceCommit, task_id: taskId, pending_action_id: pendingActionId, lease: expectedLease } = plan;
-  const { daemons, bindDaemon } = await createYueshengDaemonBinding({ sourceCommit });
+  const readAuthority = () => readYueshengMigrationAuthority({ taskId, pendingActionId });
+  const [{ daemons, bindDaemon }, candidate, { task }] = await Promise.all([
+    createYueshengDaemonBinding({ sourceCommit }), readYueshengInstalledCandidate(sourceCommit), readAuthority(),
+  ]);
+  const [previousClearance, company] = await Promise.all([
+    readYueshengPreviousClearance(task), readYueshengCompany(candidate.manifest),
+  ]);
+  const release = async options => {
+    const { releaseCentralLease } = await import('./device-epoch-fence-central.mjs');
+    return releaseCentralLease({ ...options, read: path => maintenanceBrainRequest(path.slice('/api/brain'.length)),
+      post: async (path, body) => ({ status: 200, body: await maintenanceBrainRequest(path.slice('/api/brain'.length), body) }) });
+  };
+  const issueAdmission = createYueshengEpochIssuer({
+    daemons, bindDaemon, previousClearance, release,
+    async readCompany() {
+      const current = await readYueshengCompany(candidate.manifest);
+      requireCondition(canonical(current) === canonical(company), 'COMPANY_DRIFT');
+      return current;
+    },
+  });
   return runYueshengMigration({ plan, journalRoot: root, io: {
-    withDeviceGuard,
-    readAuthority: () => readYueshengMigrationAuthority({ taskId, pendingActionId }),
+    withDeviceGuard, readAuthority, issueAdmission,
     readCandidate: () => readYueshengInstalledCandidate(sourceCommit),
     observe: phase => readYueshengHostObservation({ phase, journalRoot: root, daemons, expectedLease }, { bindDaemon }),
     operate: createYueshengRouteOperator({ journalRoot: root, daemons }, { bindDaemon }),
@@ -66,7 +90,32 @@ export async function executeYueshengOnMacStudio({ plan, journalRoot, withDevice
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const migrationFiles = ['execution', 'host-reads', 'local-lock', 'migration', 'plan', 'readback']
+async function readYueshengCompany(manifest) {
+  const dependency = manifest.dependencies?.preflight_pg;
+  requireCondition(dependency?.source_commit === manifest.source_commit, 'COMPANY_SOURCE');
+  const { Pool } = loadPreflightPg({ runtimeRoot: here, frozen: {
+    deployment: { source_commit: manifest.source_commit },
+    preflight_pg: { lock_sha256: dependency.lock_sha256, package_lock_sha256: dependency.package_lock_sha256 },
+  } });
+  const pool = new Pool({ ...readMaintenanceDatabaseConfig(), max: 1, connectionTimeoutMillis: 5000,
+    query_timeout: 5000, options: '-c default_transaction_read_only=on' });
+  try {
+    const { rows } = await pool.query(`SELECT company_id, tenant_id, config_version AS version,
+         runtime_config->>'policy_id' AS policy_id
+      FROM zenithjoy.tenant_company_profiles
+      WHERE runtime_config->'routing'->>'line_key' = $1 AND config_status = 'enabled'`, ['yuesheng']);
+    requireCondition(rows.length === 1, 'COMPANY');
+    const company = { ...rows[0], version: Number(rows[0].version) };
+    requireCondition(Number.isSafeInteger(company.version) && company.version > 0 && typeof company.policy_id === 'string'
+      && company.policy_id.length > 0 && [company.company_id, company.tenant_id].every(value =>
+        /^[a-f0-9-]{36}$/.test(value ?? '')), 'COMPANY');
+    return company;
+  } finally {
+    await pool.end();
+  }
+}
+
+const migrationFiles = ['execution', 'host-reads', 'issuer', 'local-lock', 'migration', 'plan', 'readback']
   .map(suffix => 'device-epoch-fence-yuesheng-' + suffix + '.mjs')
   .concat('yuesheng-adb-daemon-binding.py');
 

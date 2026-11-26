@@ -107,7 +107,7 @@ export async function runYueshengMigration({ plan: proposedPlan, journalRoot, io
       await assertAuthority();
       let receipt;
       operationStarted = true;
-      try { receipt = await io.operate({ operation: name, scope, assertAuthority }); }
+      try { receipt = await io.operate({ operation: name, scope, assertAuthority, journal }); }
       catch { need(false, 'OPERATION_UNKNOWN'); }
       need(receipt?.protocol === 'device-epoch-fence-host-operation/v1' && receipt.operation === name
         && same(receipt.scope, scope) && receipt.wire_complete === true && receipt.peer_eof === true && receipt.socket_closed === true
@@ -137,7 +137,12 @@ export async function runYueshengMigration({ plan: proposedPlan, journalRoot, io
         before: { ...before, lock: beforeAuthority.lease }, after: afterReadback, current_lock: final.lease }, now());
       const result = { protocol: 'yuesheng-adb-migration-transaction/v1', status: 'observed', plan_sha256: planSha, observation };
       persist('complete', result);
-      return result;
+      if (!io.issueAdmission) return result;
+      operation = 'issue_admission';
+      operationStarted = true;
+      const epochReference = await io.issueAdmission({ journal, plan, candidate, result, assertAuthority,
+        assertHeld: () => guard.assertHeld() });
+      return { ...result, epoch_reference: epochReference };
     } catch (error) {
       const code = /^YUESHENG_MIGRATION_[A-Z_]+$/.test(error?.code ?? '') ? error.code : 'YUESHENG_MIGRATION_UNKNOWN';
       persist('unknown', { status: 'unknown', plan_sha256: planSha, operation, operation_started: operationStarted, error_code: code, retry_allowed: false });

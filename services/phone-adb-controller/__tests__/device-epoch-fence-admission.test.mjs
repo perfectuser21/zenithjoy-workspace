@@ -168,3 +168,81 @@ test('用网络地址核对 ADB 清单，用硬件编号核对同一设备与业
    assert.throws(()=>verifyEpochFacts(bad));
  }
 });
+
+function cleanMigrationFixture(home = process.env.HOME) {
+ const serial='B114E2190975',adbSerial='127.0.0.1:15555',epoch='8f5f6442-540f-48b6-9577-c21cd848aa02';
+ const f=fixture(serial),r=f.record,s=f.frozen.discovery_phone_scope;
+ const old='tcp:127.0.0.1:5044',next='tcp:127.0.0.1:5045',instance='mmv-yuesheng-direct';
+ const lock={device_name:serial,locked_by:epoch,locked_at:'2026-11-26T13:00:00Z',expires_at:'2026-11-26T13:15:00Z',lease_version:'41'};
+ const claim={claimed_by:'maintenance',claimed_at:'2026-11-26T12:55:00Z'};
+ const plan={protocol:'yuesheng-adb-migration-plan/v1',task_id:epoch,pending_action_id:id('a'),claim,lease:{...lock,expired:false},source_commit:f.source.commit,
+  release_id:f.frozen.release.id,observation_id:f.frozen.deployment.observation_id,physical_serial:serial,transport_serial:adbSerial,
+  old_endpoint:old,new_endpoint:next,new_instance_id:instance};
+ const planSha=digest(plan),approvalSha='e'.repeat(64);
+ const completion={protocol:'yuesheng-adb-migration-transaction/v1',status:'observed',plan_sha256:planSha,
+  observation:{protocol:'yuesheng-adb-migration-observation/v1',authorization:'none',task_id:epoch,lease_version:lock.lease_version,source_commit:plan.source_commit,
+   release_id:plan.release_id,observation_id:plan.observation_id,physical_serial:serial,transport_serial:adbSerial,old_endpoint:old,new_endpoint:next,
+   before_at:'2026-11-26T13:01:00Z',after_at:'2026-11-26T13:02:00Z',readback_sha256:'d'.repeat(64)}};
+ const completionRaw=JSON.stringify(completion)+'\n';
+ Object.assign(r,{epoch_id:epoch,authority_basis:'approved-clean-route-migration/v1',
+  resource:{...r.resource,profile:'wuying_android14',adb_serial:adbSerial,line:'yuesheng'},
+  old_route:{endpoint:old,daemon_binding:{kind:'external_existing',endpoint:old,child:{pid:7582}}},
+  new_route:{endpoint:next,instance_id:instance,policy_path:`${home}/.config/zenithjoy/adb-instances/${instance}.json`,policy_sha256:f.policySha256,
+   daemon_binding:{kind:'managed',endpoint:next,child:{pid:76407},startup:{source_commit:plan.source_commit}}},
+  migration:{journal_path:`${home}/.local/share/zenithjoy/device-epoch-migrations/${serial}/yuesheng-5044-to-5045`,plan_sha256:planSha,
+   approval_sha256:approvalSha,completion_sha256:digest(completionRaw),release_id:plan.release_id,observation_id:plan.observation_id,
+   binding_sha256:{'device-epoch-fence-yuesheng-host-reads.mjs':'b'.repeat(64),'yuesheng-adb-daemon-binding.py':'c'.repeat(64)},
+   central_release:{scope:{maintenance_task_id:epoch,serial,claim},expected:lock,current:{device_name:serial,locked_by:null,locked_at:null,expires_at:null,lease_version:'42'}}}});
+ delete r.original_quarantine;
+ Object.assign(s,{profile:r.resource.profile});Object.assign(s.policy,{instance_id:instance,endpoint:next});s.policy_binding.policy_path=r.new_route.policy_path;
+ Object.assign(f,{oldDaemon:r.old_route,newDaemon:r.new_route,newInventory:[{serial:adbSerial,state:'device'}],newHardwareSerial:serial,cleanCompletionSha256:r.migration.completion_sha256});
+ delete f.archive;
+ return {f,completionRaw,storedPlan:{plan,plan_sha256:planSha,approval_sha256:approvalSha}};
+}
+
+test('悦升干净切换对同一清场记录和当前业务租约准入，无需伪造历史隔离归档',async()=>{
+ const {verifyEpochFacts}=await load(),{f}=cleanMigrationFixture();
+ const proof=verifyEpochFacts(f);
+ assert.equal(proof.serial,'B114E2190975');assert.equal(proof.adb_serial,'127.0.0.1:15555');assert.equal(proof.original_execution_stopped,false);
+ for(const change of [
+   v=>delete v.cleanCompletionSha256,
+   v=>v.record.original_quarantine={archive_path:'/fake'},
+   v=>v.record.old_route.endpoint='tcp:127.0.0.1:5041',
+   v=>v.record.migration.release_id=id('2'),
+   v=>v.record.migration.central_release.current.locked_by=v.task.id,
+   v=>v.record.migration.central_release.current.lease_version=v.record.migration.central_release.expected.lease_version,
+   v=>v.oldInventory=[{serial:'127.0.0.1:15555',state:'device'}],
+   v=>v.newHardwareSerial='other',
+   v=>v.activeQuarantined=true,
+ ]){const p=cleanMigrationFixture().f;change(p);assert.throws(()=>verifyEpochFacts(p));}
+});
+
+test('清场 epoch 冻结核对固定 journal 原始摘要、同一计划和候选，并拒绝未知终态',async()=>{
+ const fs=await import('node:fs'),path=await import('node:path'),os=await import('node:os');
+ const {freezeFenceReference}=await import('../device-epoch-fence-reference.mjs');
+ const home=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'clean-epoch-ref-'));
+ try{
+  const {f,completionRaw,storedPlan}=cleanMigrationFixture(home),r=f.record,s=f.frozen.discovery_phone_scope;
+  const journal=r.migration.journal_path,recordDir=path.join(home,'.local/share/zenithjoy/device-epoch-fences',r.resource.serial);
+  fs.mkdirSync(journal,{recursive:true,mode:0o700});fs.mkdirSync(recordDir,{recursive:true,mode:0o700});
+  const policy=r.new_route.policy_path,raw=JSON.stringify(s.policy);
+  fs.mkdirSync(path.dirname(policy),{recursive:true,mode:0o700});
+  r.new_route.policy_sha256=digest(raw);fs.writeFileSync(policy,raw,{mode:0o600});
+  fs.writeFileSync(path.join(recordDir,r.epoch_id+'.json'),JSON.stringify(r),{mode:0o600});
+  fs.writeFileSync(path.join(journal,'plan.json'),JSON.stringify(storedPlan),{mode:0o600});
+  const released=path.join(journal,'central-release-result.json');
+  fs.writeFileSync(released,JSON.stringify(r.migration.central_release),{mode:0o600});
+  const completed=path.join(journal,'complete.json');fs.writeFileSync(completed,completionRaw,{mode:0o600});
+  const freeze=()=>freezeFenceReference({scope:s,epochId:r.epoch_id,home});
+  assert.equal(freeze().epoch_id,r.epoch_id);
+  const mismatched=structuredClone(r.migration.central_release);mismatched.current.lease_version='43';
+  fs.writeFileSync(released,JSON.stringify(mismatched));assert.throws(freeze,/EPOCH_CLEAN_RELEASE/);
+  fs.writeFileSync(released,JSON.stringify(r.migration.central_release));
+  fs.writeFileSync(completed,completionRaw+' ');assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
+  fs.writeFileSync(completed,completionRaw);
+  const planPath=path.join(journal,'plan.json');
+  fs.writeFileSync(planPath,JSON.stringify({...storedPlan,approval_sha256:'0'.repeat(64)}));assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
+  fs.writeFileSync(planPath,JSON.stringify(storedPlan));fs.writeFileSync(path.join(journal,'unknown.json'),'{}',{mode:0o600});
+  assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});

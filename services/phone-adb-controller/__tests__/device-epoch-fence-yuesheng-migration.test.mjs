@@ -187,3 +187,24 @@ test('an unapproved plan never acquires the phone lock', async t => {
   x.io.withDeviceGuard = () => assert.fail('lock acquired before authority verification');
   await assert.rejects(x.run(), { code: 'YUESHENG_MIGRATION_AUTHORITY_APPROVAL' });
 });
+
+test('finishes the route receipt before issuing admission while the local guard is held', async t => {
+  const x = setup(t);
+  let guarded = false;
+  x.io.withDeviceGuard = async (_serial, callback) => {
+    guarded = true;
+    try { return await callback({ assertHeld: async () => assert.equal(guarded, true) }); }
+    finally { guarded = false; }
+  };
+  x.io.issueAdmission = async ({ journal, plan, result, assertAuthority, assertHeld }) => {
+    assert.equal(journal, x.journal);
+    assert.deepEqual(plan, x.plan);
+    assert.deepEqual(result, x.read('complete'));
+    assert.equal((await assertAuthority()).lease.lease_version, x.plan.lease.lease_version);
+    await assertHeld();
+    return { epoch_id: plan.task_id };
+  };
+  const result = await x.run();
+  assert.deepEqual(result.epoch_reference, { epoch_id: x.plan.task_id });
+  assert.equal(guarded, false);
+});
