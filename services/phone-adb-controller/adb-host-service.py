@@ -191,6 +191,9 @@ def run_service(policy, config, maintenance_receipt=None):
         if resume:
             require(first_authority == final_authority, 'RESUME_AUTHORITY_CHANGED')
             daemon_environment = route.instance_module().authenticated_environment(policy, config, final_authority, environment)
+        elif multi and any(isinstance(a, dict) and 'existing_adb_auth' in a for a in (first_authority, final_authority)):
+            require(first_authority == final_authority, 'CLEAN_STARTUP_AUTHORITY_CHANGED')
+            daemon_environment = route.instance_module().clean_authenticated_environment(final_authority, environment)
         child = subprocess.Popen(foreground_command(policy), env=daemon_environment, close_fds=True)
         old_handlers = {}
         forwarded = []

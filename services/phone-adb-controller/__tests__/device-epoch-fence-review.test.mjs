@@ -55,6 +55,14 @@ test('已完成独立清场的设备可单独启空服务，仍要求本次审�
   read:async path=>structuredClone(readings[path])};
  const result=await verifyStartupReceipt(options);
  assert.deepEqual(result,{protocol:'device-epoch-fence-startup-verification/v1',authorized:true,action:'start_private_server',...fixed,source_commit:source.commit});
+ const existing_adb_auth={key_path:'/fixture/.credentials/aliyun-adb-reverse-20261113/adbkey',key_sha256:'f'.repeat(64)};
+ const authenticated={...scope,existing_adb_auth};
+ const authorizedOptions={...options,load:()=>({...receipt,scope:authenticated}),
+  read:async key=>{const value=await options.read(key);if(key==='/api/brain/tasks/'+maintenance)value.result.clean_adb_startup_approval.scope=authenticated;return value;},
+  readExistingKey:key=>{assert.equal(key,existing_adb_auth.key_path);return existing_adb_auth.key_sha256;}};
+ assert.deepEqual(await verifyStartupReceipt(authorizedOptions),{...result,existing_adb_auth});
+ await assert.rejects(verifyStartupReceipt({...authorizedOptions,readExistingKey:()=> '1'.repeat(64)}),/CLEAN_STARTUP_KEY/);
+
  await assert.rejects(verifyStartupReceipt({...options,load:()=>({...receipt,scope:{...scope,adb_serial:hardware}})}),/CLEAN_STARTUP_RECEIPT/);
  await assert.rejects(verifyStartupReceipt({...options,load:()=>({...receipt,scope:{...scope,adb_serial:'192.0.2.15:5555'}})}),/CLEAN_STARTUP_APPROVAL/);
  const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
