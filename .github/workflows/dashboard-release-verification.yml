@@ -23,7 +23,7 @@ permissions:
 jobs:
   verification:
     if: github.repository == 'perfectuser21/zenithjoy-workspace' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 18
     environment: zenithjoy-staging-acceptance
     concurrency:
