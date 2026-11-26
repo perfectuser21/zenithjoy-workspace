@@ -4,8 +4,8 @@ import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
 import { tenantContext } from '../middleware/tenant-context';
 import { companyRecord } from './company-profile-validation';
 
-const columns = `daily_cap, to_char(start_local, 'HH24:MI') AS start_local,
-  to_char(end_local, 'HH24:MI') AS end_local, paused, revision, updated_at`;
+const columns = `s.daily_cap, to_char(s.start_local, 'HH24:MI') AS start_local,
+  to_char(s.end_local, 'HH24:MI') AS end_local, s.paused, s.revision, s.updated_at`;
 const time = /^([01]\d|2[0-3]):[0-5]\d$/;
 const fields = ['daily_cap', 'start_local', 'end_local', 'paused', 'expected_revision'];
 function fail(res: Response, status: number, message: string) {
@@ -52,7 +52,7 @@ export function registerCompanyOutreachSettings(router: Router) {
           paused=EXCLUDED.paused, revision=EXCLUDED.revision, updated_by=EXCLUDED.updated_by, updated_at=now()
         WHERE s.revision=$6 AND s.company_id=EXCLUDED.company_id
         RETURNING *
-      ) SELECT ${columns} FROM saved`, [req.tenantId, cap, start, end, paused, revision, req.feishuUserId ?? '']);
+      ) SELECT ${columns} FROM saved s`, [req.tenantId, cap, start, end, paused, revision, req.feishuUserId ?? '']);
       if (result.rows.length) return res.json({ success: true, data: result.rows[0] });
       const exists = await pool.query('SELECT EXISTS (SELECT 1 FROM zenithjoy.tenant_company_profiles WHERE tenant_id=$1) AS company_exists', [req.tenantId]);
       return exists.rows[0]?.company_exists

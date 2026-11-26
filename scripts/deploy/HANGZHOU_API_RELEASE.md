@@ -5,8 +5,9 @@
 ## 发布
 
 1. 固定已合入 `main` 的完整提交 SHA。确认 [Deploy API to HK staging](../../.github/workflows/deploy-staging-hk.yml) 最新一次同 SHA 运行通过，且同一个运行及尝试号产出 `hk-api-candidate-<run_id>-<attempt>`。候选保留 14 天。保留期过后，从当前 `main` 重新准备候选和同版本验收。
-2. 用现行 [release admission](../../.github/workflows/release-admission.yml) 要求的同 SHA、同次 staging 尝试、`api` 范围真实业务验收获取 `acceptance_run_key`。由 [Hangzhou production API release](../../.github/workflows/hangzhou-api-release.yml) 在 `main` 手动运行 `promote`，填完整 SHA、验收键和 `PROMOTE`。
-3. 查发布日志中的 `HZ_RELEASE_CURRENT` 和 `HZ_RELEASE_PREVIOUS`。发布器同时验证杭州宿主容器、`zenithjoy.tech` 和香港旧域名的健康及完整 SHA。通过准入后，它复用预发镜像，校验归档、配置及镜像层，保留前驱镜像。
+2. 在 `main` 运行 [杭州 API 预发业务验证](../../.github/workflows/hz-api-release-verification.yml) 可先读回结果。验证绑定香港现役完整 SHA 和当次部署的镜像产物。用预发专用测试草稿核对匿名拒绝、真实登录、保存、版本冲突、恢复和独立读回。正式晋级时，从 [Hangzhou production API release](../../.github/workflows/hangzhou-api-release.yml) 选择 `promote`，填完整 SHA 和 `PROMOTE`，流程会重新执行同一验证。
+3. 验收受影响的真实业务后，由仓库负责人在 `hangzhou-api-business-review` 审核本次候选。批准说明首行填写 `API <完整SHA> <预发run ID>/<attempt>`，之后各占一行，填写 `Scope:`、`Readback:` 和 `Retry:` 对应的验收范围、真实读回及恢复证据。生产申请重试需新建运行并重新审批，既有批准不会被复用。审核阶段不占用生产切换队列。
+4. 查发布日志中的 `HZ_RELEASE_CURRENT` 和 `HZ_RELEASE_PREVIOUS`。发布器同时验证杭州宿主容器、`zenithjoy.tech` 和香港旧域名的健康及完整 SHA。通过准入后，它复用预发镜像，校验归档、配置及镜像层，保留前驱镜像。
 
 杭州数据库的迁移文件清单必须与候选完全匹配。出现 `pending`、`extra` 或生产身份不符时，日常入口在切换前停止。涉及数据库变更的发布应先走单独审查的正向迁移，确认回退目标与新 schema 兼容。应用版本回退只能切换镜像。
 

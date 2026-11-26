@@ -18,8 +18,9 @@ test('Dashboard production coordinator and host regression', () => {
 test('manual main Dashboard promotion requires staging admission and one production bundle', () => {
   const w = workflow('zenithjoy-dashboard-production');
   assert.deepEqual(Object.keys(w.on), ['workflow_dispatch']);
-  assert.equal(w.concurrency['cancel-in-progress'], false);
-  assert.equal(w.concurrency.group, workflow('hangzhou-api-release').concurrency.group);
+  assert.equal(w.concurrency, undefined);
+  assert.equal(w.jobs.release.concurrency['cancel-in-progress'], false);
+  assert.deepEqual(w.jobs.release.concurrency, workflow('hangzhou-api-release').jobs.execute.concurrency);
   assert.match(w.jobs.request.steps[0].run, /GITHUB_REF.*refs\/heads\/main/);
   assert.equal(w.jobs.admission.uses, './.github/workflows/dashboard-release-verification.yml');
   assert.equal(w.jobs.admission.with.sha, '${{ inputs.sha }}');

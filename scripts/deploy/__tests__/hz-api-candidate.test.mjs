@@ -19,14 +19,22 @@ test('Hangzhou candidate checks exact staging bytes, run and attempt', () => {
 test('only a trusted manual main run may activate the admitted Hangzhou API artifact', () => {
   const workflow = readWorkflow('hangzhou-api-release');
   assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
-  assert.equal(workflow.concurrency['cancel-in-progress'], false);
+  assert.equal(workflow.concurrency, undefined);
   const { request, admission, execute } = workflow.jobs;
+  assert.deepEqual(execute.concurrency, {group:'zenithjoy-hangzhou-production-api','cancel-in-progress':false});
   assert.match(request.steps[0].run, /GITHUB_REF.*refs\/heads\/main/);
   assert.match(request.steps[0].run, /ROLLBACK/);
-  assert.equal(admission.uses, './.github/workflows/release-admission.yml');
-  assert.equal(admission.with.targets, 'api');
-  assert.equal(admission.with.bind_api_artifact, true);
-  assert.match(execute.if, /inputs.action == 'promote' && needs.admission.result == 'success'/);
+  assert.equal(admission.uses, './.github/workflows/hz-api-release-verification.yml');
+  assert.deepEqual(admission.with, {sha: '${{ inputs.sha }}'});
+  assert.equal(admission.secrets, undefined);
+  assert.equal(workflow.on.workflow_dispatch.inputs.acceptance_run_key, undefined);
+  assert.match(execute.if, /inputs.action == 'promote' && needs.admission.result == 'success' && needs.business-review.result == 'success'/);
+  assert.match(execute.if, /needs.admission.result == 'skipped' && needs.business-review.result == 'skipped'/);
+  const review = workflow.jobs['business-review'];
+  assert.equal(review.environment, 'hangzhou-api-business-review');
+  assert.equal(review.concurrency, undefined);
+  assert.match(review.steps.at(-1).run, /hz-api-business-review\.mjs/);
+  assert.equal(review.steps.at(-1).env.STAGED_ATTEMPT, '${{ needs.admission.outputs.api_run_attempt }}');
   const download = execute.steps.find(step => step.uses?.startsWith('actions/download-artifact@'));
   assert.match(download.with.name, /api_run_id.*api_run_attempt/);
   assert.match(download.with['run-id'], /needs.admission.outputs.api_run_id/);
@@ -41,4 +49,22 @@ test('HK staging publishes a run-attempt artifact after existing acceptance step
   assert.match(steps[publish].with.name, /run_id.*run_attempt/);
   assert.equal(steps[publish]['continue-on-error'], true);
   assert.equal(steps.find(step => step.id === 'hangzhou_bundle')['continue-on-error'], true);
+});
+
+test('API verifier shares the staging fixture lock and exposes only verified artifact coordinates', () => {
+  const verifier = readWorkflow('hz-api-release-verification');
+  assert.deepEqual(Object.keys(verifier.on), ['workflow_dispatch', 'workflow_call']);
+  const job = verifier.jobs.verification;
+  assert.match(job.if, /github.repository == 'perfectuser21\/zenithjoy-workspace'.*github.ref == 'refs\/heads\/main'/);
+  assert.equal(job.environment, 'zenithjoy-staging-acceptance');
+  assert.deepEqual(job.concurrency, readWorkflow('dashboard-release-verification').jobs.verification.concurrency);
+  assert.deepEqual(Object.keys(verifier.on.workflow_call.outputs), ['sha','api_run_id','api_run_attempt']);
+  assert.match(job.steps.find(s => s.id === 'stage').run, /hz-api-staging-evidence\.mjs/);
+  const verify = job.steps.find(s => s.run?.includes('hz-api-business-smoke.mjs'));
+  assert.equal(verify.env.EXPECTED_API_SHA, '${{ steps.stage.outputs.sha }}');
+  assert.equal(verify.env.API_STAGING_RUN_ID, '${{ steps.stage.outputs.api_run_id }}');
+  assert.equal(verify.env.API_STAGING_RUN_ATTEMPT, '${{ steps.stage.outputs.api_run_attempt }}');
+  assert.equal(verify['continue-on-error'], undefined);
+  assert.match(job.steps.find(s => s.name?.startsWith('Confirm the staging')).run, /cmp .*before\.json.*after\.json/);
+  assert.equal(job.steps.find(s => s.uses === 'actions/upload-artifact@v4').with['if-no-files-found'], 'error');
 });
