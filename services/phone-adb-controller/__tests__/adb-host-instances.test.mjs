@@ -203,5 +203,7 @@ with tempfile.TemporaryDirectory() as d:
   return SimpleNamespace(pid=99,wait=lambda:0,poll=lambda:0)
  s.subprocess.Popen=daemon;s.run_service(p,str(path),str(receipt))
  assert len(seen)==1 and seen[0]['ADB_VENDOR_KEYS']==str(key) and 'BRAIN_INTERNAL_TOKEN' not in seen[0]
+ key.chmod(0o644);rejected(lambda:i.clean_authenticated_environment(expected,{}),'ADB_INSTANCE_FILE')
+ key.chmod(0o600)
  key.write_text('changed');rejected(lambda:i.clean_authenticated_environment(expected,{}),'CLEAN_STARTUP_KEY')
 `));
