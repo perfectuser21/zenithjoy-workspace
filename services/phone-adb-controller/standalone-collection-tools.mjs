@@ -201,7 +201,7 @@ const accountCommand = 'account-current';
 const links = 'current-video-link';
 const waitForRecord = new Set(['record-status','record-stop','record-extract-audio']);
 const captureCommands = new Set(['ui-evidence','snapshot-evidence']);
-const commandList = ['open-app',accountCommand,'open-video',links,'record-start',...waitForRecord,...captureCommands];
+const commandList = ['open-app',accountCommand,'open-video',links,'record-start',...waitForRecord,...captureCommands,'account-visual-tap'];
 const operations = ['company_config','collect_claim','qualification_input','qualification_submit','qualification_readback','scan_comments','scroll_comments','prepare_comment','collect_submit'];
 const projectFields = stdout => Object.fromEntries(String(stdout).split('\n')
   .filter(line=>line.includes('=')).map(line=>[line.slice(0,line.indexOf('=')),line.slice(line.indexOf('=')+1)]));
@@ -211,6 +211,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
   checkSource({op:'collect_claim',line,run,source_run:null,committed_origin_run:origin,limit:1},scope);
   let verifiedAccount=false, binding=null, owned=null, verifiedVideo=false, recording=null, busy=false, claimInDoubt=false;
   const evidenceIds=new Set();
+  let accountNavigation=null, openedApp=false;
   let asrAttempted=false, submitted=false, qualificationInput, qualified=false;
   const preparedComments=new Map(),committedLookups=new Map(),pendingLookups=new Set();
 
@@ -323,10 +324,20 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
   async function performPhone(command,args) {
     if(!Array.isArray(args)||!commandList.includes(command))fail('PHONE_INPUT');
     if(command==='open-app') {
-      if(args.length||owned)fail('PHONE_INPUT');
+      if(args.length||owned||accountNavigation)fail('PHONE_INPUT');
     } else if(command===accountCommand) {
-      if(args.length!==1||owned)fail('PHONE_INPUT');
+      if(args.length!==1||owned||!openedApp||accountNavigation&&accountNavigation.state!=='tapped')fail('PHONE_INPUT');
       evidence(args[0]);verifiedAccount=false;
+    } else if(command==='snapshot-evidence'&&!owned&&accountNavigation?.state==='needs_snapshot'){
+      if(args.length!==1)fail('PHONE_INPUT');
+      evidence(args[0]);
+    } else if(command==='account-visual-tap'){
+      const [x,y,snapshot,tap]=args;
+      if(args.length!==4||accountNavigation?.state!=='needs_tap'||snapshot!==accountNavigation.snapshot
+        ||!Number.isSafeInteger(x)||!Number.isSafeInteger(y)||x<0||y<0)fail('PHONE_INPUT');
+      evidence(tap);
+      // 消耗本轮截图，异常或传输中断后不重发点击。
+      accountNavigation.state='tap_attempted';
     } else {
       if(!owned)fail('VIDEO_SCOPE');
       if(command==='open-video') {
@@ -346,8 +357,23 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       }
     }
     const playback=!qualified&&['open-video',links].includes(command)?'continuous_identity':undefined;
-    const result=await phone({command,args,profile,owner:run,playback});
+    const verifyAccountOnly=command===accountCommand&&accountNavigation?.state==='tapped';
+    const result=await phone({command,args,profile,owner:run,playback,verifyAccountOnly});
+    if(command==='open-app')openedApp=true;
+    if(command==='snapshot-evidence'&&!owned&&accountNavigation?.state==='needs_snapshot'){
+      accountNavigation={state:'needs_tap',snapshot:args[0]};
+      return {...result,next_action:'打开 stdout 返回的截图，只有看见抖音底部「我」时，调用 account-visual-tap [x,y,本次截图证据ID,新点击证据ID]。'};
+    }
+    if(command==='account-visual-tap'){
+      accountNavigation={state:'tapped'};
+      return {...result,next_action:'用新的证据 ID 再调用 account-current，从个人主页控件树核对绑定抖音号。'};
+    }
     if(command===accountCommand) {
+      if(result.stdout.trim()==='account_status=visual_required'&&!accountNavigation){
+        accountNavigation={state:'needs_snapshot'};
+        return {account_status:'visual_required',reason:'uiautomator_idle_without_xml',
+          next_action:'调用 snapshot-evidence [本轮新证据ID]，再按截图定位抖音底部「我」。'};
+      }
       verifiedAccount=projectFields(result.stdout).douyin_id===account;
       if(!verifiedAccount)fail('ACCOUNT');
     }
@@ -393,7 +419,8 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         await assertAuthority();
         let result;
         if(kind==='inspect'&&Object.keys(input??{}).length===0) {
-          result={stage:'102',source_run:origin,phone_commands:[...commandList],business_operations:[...operations]};
+          result={stage:'102',source_run:origin,phone_commands:[...commandList],business_operations:[...operations],
+            account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。'};
         } else if(kind==='phone'&&Object.keys(input??{}).sort().join(',')==='args,command'){
           result=await performPhone(input.command,input.args);
         } else if(kind==='business'&&operations.includes(input?.operation)){

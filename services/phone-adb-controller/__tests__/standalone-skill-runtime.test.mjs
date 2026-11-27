@@ -270,3 +270,17 @@ test('受管 102 启动只验证应用前台，保留旧调用和真实设备错
   await createStandalonePhoneProvider({ ...fixture(), execute })(input);
   assert.deepEqual(calls.at(-1), ['open-app']);
 });
+
+test('102 将读树失败交还给 Agent，截图点击后使用只读账号复核',async()=>{
+ const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');
+ const base=fixture(),calls=[];
+ base.frozen.agent_input.workflow_key='douyin_video_processing';
+ const invoke=createStandalonePhoneProvider({...base,execute:async (_,args)=>{
+  calls.push(args.slice(4));
+  return {code:0,stdout:'account_status=visual_required\n'};
+ }});
+ const use=(command,args,verifyAccountOnly)=>invoke({command,args,profile:'cloud-phone-test',owner:'direct101',verifyAccountOnly});
+ assert.equal((await use('account-current',['direct101-entry'])).stdout.trim(),'account_status=visual_required');
+ await use('account-current',['direct101-readback'],true);
+ assert.deepEqual(calls,[['account-current','direct101-entry','--single-dump'],['account-current','direct101-readback','--verify-own-profile']]);
+});

@@ -213,3 +213,36 @@ test('102 只在原批次样本达到目标并再次读回后给出成功证据'
     assert.equal(reads,2);
   } finally {rmSync(root,{recursive:true,force:true});}
 });
+
+test('102 树等待空闲失败后只准用本轮截图导航一次，重新核对绑定账号后才放行业务', async () => {
+  const {createStandaloneCollectionTools}=await import('../standalone-collection-tools.mjs');
+  const effects=[];
+  const accountModes=[];
+  const tools=createStandaloneCollectionTools({
+    scope:{...scope,profile:'bound-phone',serial:'fixture-phone',expected_account:'bound-account'},
+    assertAuthority:async()=>{},
+    async phone({command,args,verifyAccountOnly}) {
+      if(command==='account-current')accountModes.push(verifyAccountOnly);
+      effects.push(command);
+      const stdout=command==='account-current'?(args[0].endsWith('first')?'account_status=visual_required':'douyin_id=bound-account'):'';
+      return {stdout};
+    },
+    async rpc(){throw Error('应在核验后才调用业务接口');},
+  });
+  const phone=(command,args=[])=>tools.call('phone',{command,args});
+  const tap=[648,1173,run+'-screen',run+'-tap'];
+  await phone('open-app');
+  await assert.rejects(phone('account-visual-tap',tap),/STANDALONE_COLLECTION_/);
+  const probe=await phone('account-current',[run+'-first']);
+  assert.equal(probe.account_status,'visual_required');
+  await assert.rejects(tools.call('business',{operation:'collect_claim'}),/ACCOUNT_REQUIRED/);
+  await assert.rejects(phone('account-visual-tap',tap),/STANDALONE_COLLECTION_/);
+  await phone('snapshot-evidence',[run+'-screen']);
+  await assert.rejects(phone('account-visual-tap',[648,1173,run+'-old',run+'-tap']),/STANDALONE_COLLECTION_/);
+  await phone('account-visual-tap',tap);
+  await assert.rejects(phone('account-visual-tap',tap),/STANDALONE_COLLECTION_/);
+  await phone('account-current',[run+'-second']);
+  await assert.rejects(tools.call('business',{operation:'collect_claim'}),/COMPANY_REQUIRED/);
+  assert.deepEqual(accountModes,[false,true]);
+  assert.deepEqual(effects,['open-app','account-current','snapshot-evidence','account-visual-tap','account-current']);
+});
