@@ -12829,3 +12829,4 @@ tests:
     product: line02
     execution: "ci-l3-code.yml / openclaw-scripts-test phone_tests glob"
     note: "采集入口复用条件与Skill一致；实际原件技术读取拒绝错VID/run/hash，不替代通用Agent实测"
+  - {"id":"materials-notion-projection-contract","path":"apps/api/scripts/tests/test_materials_projection.py","type":"contract","ci":"L3","status":"active","product":"组织素材库只读投影","note":"ci-l3-code.yml api-scripts-test 无条件Python unittest discovery；只验证既有投影范围、业务源只读、组织边界与Brain回执，不代表真实部署。"}
