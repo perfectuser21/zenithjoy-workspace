@@ -5005,7 +5005,9 @@ case "$command" in
       || die 'account navigation tap is outside the Me tab area'
     check_target_fast
     _foreground_is_exact_douyin "$(focused_window)" || die 'Douyin is no longer the active window'
-    tap_with_evidence account_visual_tap account-visual-tap "$2" "$3" "$5" 1200 '' snapshot_evidence_cmd
+    "$ADB" -s "$SERIAL" shell input tap "$2" "$3"
+    wait_ms 1200
+    print -- "account_visual_tap=sent screenshot_id=$4 evidence_id=$5"
     ;;
   account-switch)
     [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE account-switch DOUYIN_ID EVIDENCE_ID"

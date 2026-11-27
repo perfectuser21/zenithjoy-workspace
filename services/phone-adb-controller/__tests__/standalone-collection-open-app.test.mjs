@@ -78,6 +78,7 @@ test('账号视觉操作拒绝未取证、非「我」区域及错前台，复�
   writeFileSync(registry, 'legacy\tSER1\tANY-MODEL\t719\t1279\n');
   writeFileSync(adb, fakeAdb.replace('  *) exit 98 ;;', `  *'shell rm -f'*) exit 0 ;;
   *'shell uiautomator dump'*) exit 0 ;;
+  *'shell input tap 648 1173'*) exit 0 ;;
   *'shell stat -c %s'*) echo 104 ;;
   *' pull '*) for path in "$@"; do :; done; printf '%s' '<hierarchy><node content-desc="我，按钮" bounds="[600,1100][700,1200]"/></hierarchy>' > "$path" ;;
   *) exit 98 ;;`), { mode: 0o755 });
@@ -105,4 +106,10 @@ test('账号视觉操作拒绝未取证、非「我」区域及错前台，复�
   assert.equal(readback.status,0,readback.stderr);
   assert.equal(readback.stdout.trim(),'account_status=own_profile_unverified');
   assert.doesNotMatch(readFileSync(log,'utf8'),/input tap/);
+  const entered=tap('yes',648,1173);
+  assert.equal(entered.status,0,entered.stderr);
+  assert.match(entered.stdout,/account_visual_tap=sent/);
+  const calls=readFileSync(log,'utf8');
+  assert.equal((calls.match(/input tap/g)??[]).length,1);
+  assert.doesNotMatch(calls,/screencap/);
 });
