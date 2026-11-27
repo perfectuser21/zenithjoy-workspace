@@ -2,7 +2,7 @@
 import {readFileSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
-import {assertBilibiliFrozenWorkflow,BILIBILI_WORKFLOW} from './bilibili-verify-release.mjs';
+import {assertBilibiliFrozenWorkflow,BILIBILI_PILOT_SCOPE,BILIBILI_WORKFLOW} from './bilibili-verify-release.mjs';
 import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,deploymentAssertionPlan,brainRequest,unifiedReleaseKey} from './deployment-preflight.mjs';
 import {execFileSync} from 'node:child_process';
 import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
@@ -50,16 +50,23 @@ function subset(definitions,workflows){
  const activities=definitions.activities.filter(a=>ids.has(a.id));
  need(ids.size&&activities.length===ids.size&&refs.every(r=>activities.some(a=>a.id===r.activity_version_id&&a.activity_id===r.activity_id&&a.payload.activity_id===r.activity_id)),'活动依赖闭包缺失');return{workflows,activities};
 }
-export function targetDefinitions(bundle,sha,readFile,{preflightPgLock,archiveFoundation=false}={}){
+export function targetDefinitions(bundle,sha,readFile,{preflightPgLock,archiveFoundation=false,bilibiliRequired=false}={}){
  validateDeploymentEvidence(bundle,sha,readFile,{archiveFoundation});
  // 第三scope是whole-Pilot门禁，不进入M4/MMV的7/4流程安装闭包。
  checkScope(bundle.patrol,'cecelia-device-patrol-definitions',sha);
  const scopes=[checkScope(bundle,'zenithjoy',sha,{archiveFoundation}),checkScope(bundle.commander,'commander-generic',sha,{archiveFoundation})],all={workflows:[],activities:[]};
+ need(bilibiliRequired===Boolean(bundle.bilibili),'B站独立Pilot证据与候选源码不匹配');
+ if(bilibiliRequired){
+  const bili=checkScope(bundle.bilibili,BILIBILI_PILOT_SCOPE,sha,{archiveFoundation});
+  need(bili.workflows.length===1&&bili.workflows[0].payload.key===BILIBILI_WORKFLOW,'B站独立Pilot必须覆盖唯一核验Workflow');
+  assertBilibiliFrozenWorkflow(bili.workflows[0],bili.activities,sha);
+  scopes.push(bili);
+ }
  for(const kind of ['workflows','activities']){const rows=new Map();for(const defs of scopes)for(const row of defs[kind]){need(!rows.has(row.id)||same(rows.get(row.id),row),'同ID跨scope冻结冲突');rows.set(row.id,row);}all[kind]=[...rows.values()];}
  const legacy=all.workflows.filter(w=>WORKFLOWS.includes(w.workflow_id));need(legacy.length===4,'缺旧四流程');
  const extras=extraKeys.map(key=>{const found=all.workflows.filter(w=>w.payload.key===key);need(found.length===1,'缺或重复Commander workflow: '+key);return found[0];});
  const bili=all.workflows.filter(w=>w.payload.key===BILIBILI_WORKFLOW);
- need(bili.length<=1,'小白只读B站workflow身份重复');
+ need(bili.length===Number(bilibiliRequired),'小白只读B站workflow身份与独立Pilot不符');
  if(bili.length)assertBilibiliFrozenWorkflow(bili[0],all.activities,sha);
  const mmv=subset(all,[...legacy,...extras]);need(new Set(mmv.workflows.map(w=>w.workflow_id)).size===7,'MMV七流程身份冲突');
  const result={};for(const [target,definitions]of [['xian-m4',subset(all,[...legacy,...bili])],['mmv',mmv]]){
@@ -82,11 +89,13 @@ export function verifyTargetRelease(release,target,sha,expected,environment='pro
  if(target==='mmv')for(const key of extraKeys)need(rows.filter(w=>w.payload.key===key).length===1,'release缺Commander身份');
  if(expected)need(same([...rows].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.workflows].sort((a,b)=>a.id.localeCompare(b.id)))&&same([...release.payload.activities].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.activities].sort((a,b)=>a.id.localeCompare(b.id))),'Brain回了其它冻结版本');return release;
 }
-export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request,environment='production',businessRunIds,acceptanceTaskIds,preflightPgLock}){
- need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile,{preflightPgLock,archiveFoundation:environment===`staging:${sha}`}),releases={};
+export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request,environment='production',businessRunIds,acceptanceTaskIds,preflightPgLock,bilibiliRequired}){
+ need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile,{preflightPgLock,archiveFoundation:environment===`staging:${sha}`,bilibiliRequired}),releases={};
  const admission=environment==='production'?await verifyBusinessAdmission({sha,targets,runIds:businessRunIds,acceptanceTaskIds,readFile,request}):null;
  for(const target of ['xian-m4','mmv']){
-  const {definitions,components}=targets[target],evidence=target==='mmv'||definitions.workflows.some(w=>w.payload.key===BILIBILI_WORKFLOW)?[bundle,bundle.commander]:[bundle];
+  const {definitions,components}=targets[target],evidence=[bundle];
+  if(target==='mmv')evidence.push(bundle.commander);
+  if(target==='xian-m4'&&bilibiliRequired)evidence.push(bundle.bilibili);
   const input={release_key:unifiedReleaseKey({environment,sha,target,pilotRunId:attemptKey.split(':')[1],reports:evidence.map(e=>e.report)}),environment,target,actor:'phone-adb-deployer',workflows:definitions.workflows.map(w=>({workflow_definition_version_id:w.id,payload_sha256:w.payload_sha256})),components,ci_evidence:evidence.map(e=>({report:e.report,receipt:e.receipt,evidence_ref:`https://github.com/${DEPLOY_REPO}/actions/runs/${attemptKey.split(':')[1]}`}))};
   const release=(await request('/api/brain/releases',input)).release;verifyTargetRelease(release,target,sha,targets[target],environment);releases[target]=release;
  }

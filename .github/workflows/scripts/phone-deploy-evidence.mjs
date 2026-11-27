@@ -8,6 +8,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {digest} from '../../../services/phone-adb-controller/runtime-definition.mjs';
 import {deploymentAssertionPlan} from '../../../services/phone-adb-controller/deployment-preflight.mjs';
+import {BILIBILI_PILOT_SCOPE} from '../../../services/phone-adb-controller/bilibili-verify-release.mjs';
 const REPO='perfectuser21/zenithjoy-workspace',WORKFLOW='.github/workflows/pilot-release-verification.yml';
 const SCOPES=['zenithjoy','commander-generic','cecelia-device-patrol-definitions'];
 const ensure=(ok,why)=>{if(!ok)throw Error(`部署CI来源拒绝: ${why}`);};
@@ -39,7 +40,7 @@ function scopedEvidence(zip,scope,sha){
  ensure(receipt?.scope==='declared_pilot_regressions'&&sourceMatches(receipt.source),'receipt scope/来源');
  ensure(/^[0-9a-f]{64}$/.test(snapshot.snapshot_sha256||'')&&report.snapshot_sha256===snapshot.snapshot_sha256&&receipt.snapshot_sha256===snapshot.snapshot_sha256,'scope快照回执绑定');
  ensure(/^[0-9a-f]{64}$/.test(report.assertion_plan_sha256||'')&&receipt.assertion_plan_sha256===report.assertion_plan_sha256&&receipt.report_sha256===createHash('sha256').update(JSON.stringify(report)).digest('hex'),'scope报告回执绑定');
- if(scope==='cecelia-device-patrol-definitions'){
+ if(scope==='cecelia-device-patrol-definitions'||scope===BILIBILI_PILOT_SCOPE){
   const {snapshot_sha256,...body}=snapshot;
   ensure(snapshot_sha256===digest(body),'第三scope快照正文摘要');
   ensure(report.assertion_plan_sha256===digest(deploymentAssertionPlan(report,snapshot)),'第三scope断言计划摘要');
@@ -86,11 +87,14 @@ export async function downloadDeploymentEvidence(runId,github,candidateSha,expec
  const names=SCOPES.map(scope=>`pilot-release-verification-${scope}-${run.head_sha}`);
  const legacy=expectedAttempt===undefined&&candidateSha&&!artifacts.some(artifact=>
   names.some(name=>artifact.name.startsWith(`${name}-attempt-`)));
- const selected=SCOPES.map((scope,index)=>({
-  scope,artifact:selectArtifact(artifacts,legacy?names[index]:`${names[index]}-attempt-${run.run_attempt}`,run),
+ const artifactName=scope=>`pilot-release-verification-${scope}-${run.head_sha}${legacy?'':`-attempt-${run.run_attempt}`}`;
+ const scopes=[...SCOPES];
+ if(artifacts.some(artifact=>artifact.name===artifactName(BILIBILI_PILOT_SCOPE)))scopes.push(BILIBILI_PILOT_SCOPE);
+ const selected=scopes.map(scope=>({
+  scope,artifact:selectArtifact(artifacts,artifactName(scope),run),
  }));
- const [zenithjoy,commander,patrol]=await Promise.all(selected.map(async({scope,artifact})=>scopedEvidence(await github(`repos/${REPO}/actions/artifacts/${artifact.id}/zip`,true),scope,run.head_sha)));
- return {run:{id:run.id,sha:run.head_sha,repo:REPO,event:run.event,path:run.path,branch:'main',...(legacy?{}:{attempt:run.run_attempt})},...zenithjoy,commander,patrol};
+ const [zenithjoy,commander,patrol,bilibili]=await Promise.all(selected.map(async({scope,artifact})=>scopedEvidence(await github(`repos/${REPO}/actions/artifacts/${artifact.id}/zip`,true),scope,run.head_sha)));
+ return {run:{id:run.id,sha:run.head_sha,repo:REPO,event:run.event,path:run.path,branch:'main',...(legacy?{}:{attempt:run.run_attempt})},...zenithjoy,commander,patrol,...(bilibili?{bilibili}:{})};
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
  try{const github=async(path,binary=false)=>{const bytes=execFileSync('gh',['api',path],{maxBuffer:32*1024*1024,stdio:['ignore','pipe','pipe']});return binary?bytes:JSON.parse(bytes.toString());};

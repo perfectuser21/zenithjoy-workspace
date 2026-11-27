@@ -5,6 +5,8 @@ export const BILIBILI_WORKFLOW = 'android_bilibili_verify_existing';
 export const BILIBILI_OPERATION = 'verify_existing';
 export const BILIBILI_STEP = 'verify_private_playback';
 export const BILIBILI_TARGET = 'xian-m4';
+export const BILIBILI_PILOT_SCOPE = 'android-bilibili-readonly';
+export const BILIBILI_DEFINITION_PATH = 'services/phone-adb-controller/commander/contracts/bilibili-verify-existing.json';
 export const BILIBILI_PROVIDER_PATH = 'services/phone-adb-controller/standalone-bilibili-verify.mjs';
 export const BILIBILI_HOST_POLICY_PATH = 'services/phone-adb-controller/config/collection-phone-hosts.json';
 export const BILIBILI_APPROVED = Object.freeze({
@@ -34,6 +36,15 @@ export const BILIBILI_COMPONENT_PATHS = Object.freeze([
 
 function need(value, reason) {
   if (!value) throw Error('BILIBILI_WORKSPACE_' + reason);
+}
+
+export function bilibiliPilotRequired(entries) {
+  need(Array.isArray(entries), 'PILOT_SOURCE');
+  const matches = entries.filter(row => row?.path === BILIBILI_DEFINITION_PATH);
+  if (!matches.length) return false;
+  need(matches.length === 1 && matches[0].type === 'blob' && matches[0].mode === '100644'
+    && gitSha.test(matches[0].sha), 'PILOT_SOURCE');
+  return true;
 }
 
 function keys(value, names) {

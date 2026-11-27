@@ -12,7 +12,7 @@ async function implementation(){assert.ok(existsSync(url),'必须验证实际Git
 function run(){return {id:42,run_attempt:1,status:'completed',conclusion:'success',event:'push',head_branch:'main',head_sha:sha,path:'.github/workflows/pilot-release-verification.yml',repository:{id:1,full_name:repo},head_repository:{id:1,full_name:repo}};}
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 function evidence(scope){
- if(scope==='cecelia-device-patrol-definitions'){
+ if(['cecelia-device-patrol-definitions','android-bilibili-readonly'].includes(scope)){
   const source={repo,path:'fixture.json',commit:sha};
   const row=(id,payload)=>({id,source_repo:repo,source_path:source.path,source_commit:sha,payload,payload_sha256:deploymentDigest({source,payload})});
   const activity=row('00000000-0000-4000-8000-000000000001',{activity_id:'00000000-0000-4000-8000-000000000002',implementation_bindings:[]});
@@ -71,6 +71,13 @@ test('同main成功run精确下载三个scope完整证据，保留原两scope，
  assert.deepEqual(requests.filter(p=>p.endsWith('/zip')).sort(),[55,57,58].map(id=>`repos/${repo}/actions/artifacts/${id}/zip`));
 });
 const pilotScopes=['zenithjoy','commander-generic','cecelia-device-patrol-definitions'];
+test('downloads the separate Bilibili artifact for the same main attempt',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ const scope='android-bilibili-readonly';
+ const {github}=githubFixture([...pilotScopes,scope]);
+ const result=await downloadDeploymentEvidence('42',github);
+ assert.deepEqual(result.bilibili,evidence(scope));
+});
 const attemptName=(scope,attempt)=>`pilot-release-verification-${scope}-${sha}-attempt-${attempt}`;
 function rerunFixture({attempt=2,latest=3,conclusion='success',legacy=false,omit=[],duplicate=false,main=sha}={}){
  const artifacts=[];
