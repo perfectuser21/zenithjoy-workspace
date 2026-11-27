@@ -16,7 +16,7 @@ const inputEnv={profile:'P',serial:'SERIAL',line:'LEADGEN_LINE',run_tag:'WFR_TAG
 const allowedEnv=new Set([...Object.values(inputEnv),'LEADGEN_MMV_DEVICE_RUNTIME','DOUYIN_ADB_PORT','ADB_SERVER_SOCKET','DOUYIN_PHONE_REGISTRY','LEADGEN_DISCOVERY_MAX_SECONDS','LEADGEN_SOURCE_KIND','QUEUED_VIDEO_RECORD_SECONDS']);
 function privateWrite(file,bytes){const fd=openSync(file,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}}
 // 从同一发布包读取 Workflow 定义和它声明的方法，版本与身份必须一致。
-function activitySkillPlan({root,workflowKey}){
+function activitySkillPlan({root,workflowKey,expectedRefs}){
  if(realpathSync(root)!==root)fail('ACTIVITY_SKILL_PATH');
  const segment=v=>typeof v==='string'&&/^[a-z][a-z0-9_-]*$/.test(v);
  const matches=[];
@@ -31,6 +31,8 @@ function activitySkillPlan({root,workflowKey}){
  if(matches.length!==1)fail('ACTIVITY_SKILL_INDEX');
  const [{name,index}]=matches, refs=new Set(),names=new Set([name]);
  if(!Array.isArray(index.activities)||!index.activities.length||index.activities.length>32)fail('ACTIVITY_SKILL_INDEX');
+ if(expectedRefs&&(index.activities.length!==expectedRefs.length
+  ||index.activities.some((row,offset)=>row.activity_ref!==expectedRefs[offset])))fail('ACTIVITY_SKILL_SEQUENCE');
  const activities=index.activities.map(row=>{
   const {activity_ref,skill_name,skill_path,skill_version}=row;
   if(!segment(skill_name)||names.has(skill_name)||typeof activity_ref!=='string'||refs.has(activity_ref)
@@ -152,9 +154,10 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   template.agent_input=agentInput(env);
   const scope={...template.agent_input,source_commit:template.deployment.source_commit,expected_account:fixed.account,company:structuredClone(cfg.company),machine_id:identity.machine_id,approved_keywords:identity.approved_keywords};
   template.standalone_skill={...structuredClone(identity),scope,scope_sha256:hash(scope),runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company)};
-  const methodsRoot=join(root,'skills');
+  const methodsRoot=join(runtime,'skills');
   const activitySkills=cfg.workflow_key==='douyin_video_processing'
-   ?{root:methodsRoot,workflowKey:cfg.workflow_key,entryReference:'references/102.md'}:undefined;
+   ?{root:methodsRoot,workflowKey:cfg.workflow_key,entryReference:'references/102.md',
+     expectedRefs:planned.map(({key})=>cfg.workflow_key+'.'+key)}:undefined;
   const playbook=freezeStandaloneSkillFiles({source:standaloneSkillPath,runDirectory:dir,files,activitySkills});
   if(playbook)template.activity_playbook=playbook;
   validateStandaloneIdentity(template.standalone_skill);standaloneScope(template);

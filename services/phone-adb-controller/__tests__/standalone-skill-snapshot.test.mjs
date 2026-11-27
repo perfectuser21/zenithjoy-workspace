@@ -90,6 +90,8 @@ test('轻盈快照按已发布 Playbook 清单封存 Activity，不拾取未登�
   assert.equal(files['skill/workflow/sample-preflight/SKILL.md'],hash(content));
   assert.ok(!Object.keys(files).some(name=>name.includes('/extra/')));
   assert.equal(readFileSync(join(root,'run',result.playbook),'utf8'),'使用 [预检](../sample-preflight/SKILL.md)');
+  assert.throws(()=>freezeStandaloneSkillFiles({source:join(source,'SKILL.md'),runDirectory:join(root,'missing'),files:{},
+   activitySkills:{root:skills,workflowKey:workflow,expectedRefs:[workflow+'.preflight',workflow+'.cleanup']}}),/ACTIVITY_SKILL_SEQUENCE/);
   writeFileSync(join(method,'SKILL.md'),content.replace('version: 1.0.0','version: 1.0.1'));
   assert.throws(()=>freezeStandaloneSkillFiles({source:join(source,'SKILL.md'),runDirectory:join(root,'bad'),files:{},activitySkills:{root:skills,workflowKey:workflow}}),/ACTIVITY_SKILL_VERSION/);
  }finally{rmSync(root,{recursive:true,force:true});}
