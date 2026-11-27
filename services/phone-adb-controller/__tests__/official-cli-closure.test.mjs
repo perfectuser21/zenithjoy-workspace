@@ -150,3 +150,12 @@ test('官方工具入口保留旧 open-app 合同，拒绝受管 102 专用参�
     assert.throws(() => describe(controller, [...args, '--foreground-only']), /OFFICIAL_CLI_INVOCATION/);
   }
 });
+
+test('官方账号工具保留旧参数，受管视觉导航和只读复核参数不外露',()=>{
+  const controller=join(root,'douyin-phone-adb');
+  const args=['--profile','fixture','--lock-owner','run','account-current','run-account'];
+  assert.equal(describe(controller,args).operation,'account-current');
+  for(const mode of ['--single-dump','--verify-own-profile'])
+    assert.throws(()=>describe(controller,[...args,mode]),/OFFICIAL_CLI_INVOCATION/);
+  assert.throws(()=>describe(controller,[...args.slice(0,4),'account-visual-tap','648','1173','run-screen','run-tap']),/UNREVIEWED_OPERATION/);
+});

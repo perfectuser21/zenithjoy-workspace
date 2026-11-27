@@ -20,7 +20,7 @@ const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
 export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput,isCleanup=()=>false}){
  const fixed=frozen.agent_input;
- return async function invoke({command,args,profile,owner,playback}){
+ return async function invoke({command,args,profile,owner,playback,verifyAccountOnly}){
   if(profile!==fixed.profile||owner!==fixed.run_tag)fail('SCOPE');
   const call=async(op,values=[])=>{
    const cleanup=isCleanup(),phaseDeadline=frozen.standalone_skill?.[cleanup?'cleanup_deadline_ms':'deadline_ms'];
@@ -45,8 +45,12 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
    if(result.stdout?.trim()!=='open_app=app_foreground')fail('COMMAND');
    return result;
   }
-  const result=await call(command,args);
+  const collection=fixed.workflow_key==='douyin_video_processing';
+  const collectionAccount=collection&&command==='account-current';
+  const accountMode=verifyAccountOnly?'--verify-own-profile':'--single-dump';
+  const result=await call(command,collectionAccount?[...args,accountMode]:args);
   if(command==='account-current'){
+   if(collectionAccount&&['account_status=visual_required','account_status=own_profile_unverified'].includes(result.stdout.trim()))return result;
    const accounts=[...result.stdout.matchAll(/^douyin_id=(.+)$/gm)].map(m=>m[1]);
    if(accounts.length!==1||accounts[0]!==(frozen.discovery_phone_scope??frozen.collection_phone_scope)?.expected_account)fail('ACCOUNT');
   }

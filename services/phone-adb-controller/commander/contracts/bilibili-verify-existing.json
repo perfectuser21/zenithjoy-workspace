@@ -4,7 +4,7 @@
   "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
   "channel": "bilibili",
   "form": "android_rpa",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "runtime": {
     "skill_id": "1d2d0bb6-4941-4399-9452-a7f442159a3d",
     "entrypoint": "verify_existing"
