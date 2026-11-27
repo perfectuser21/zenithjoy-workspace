@@ -109,6 +109,13 @@ def client_version(binary, *, recheck=None, environment=None):
     return output
 
 
+def forward_leaf(argv):
+    code, stdout, stderr = parent_leaf(argv)
+    sys.stdout.buffer.write(stdout)
+    sys.stderr.buffer.write(stderr)
+    return code
+
+
 def main(argv):
     scoped = 'WFR_COLLECTION_LEAF_SOCKET' in os.environ
     if not scoped:
@@ -141,6 +148,11 @@ def main(argv):
         for device in host['devices']:
             print(device['serial'] + '\t' + device['state'])
         return 0
+    leaf_argv = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial, *command]
+    if scoped and policy.get('schema_version') == 2 and os.environ.get('WFR_COLLECTION_PARENT_EPOCH') == '1':
+        # The private producer selects the live locator and verifies fresh authority before and after executing the leaf.
+        client_version(binary, **version_options)
+        return forward_leaf(leaf_argv)
     transport_serial = serial
     def verify_target():
         if policy.get('schema_version') == 2:
@@ -185,12 +197,9 @@ def main(argv):
         if verified_locator() != transport_serial:
             raise ValueError('ADB_MANAGED_DEVICE_IDENTITY_CHANGED')
         route.instance_module().verify_binary(policy)
-    actual = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial if scoped else transport_serial, *command]
     if scoped:
-        code, stdout, stderr = parent_leaf(actual)
-        sys.stdout.buffer.write(stdout)
-        sys.stderr.buffer.write(stderr)
-        return code
+        return forward_leaf(leaf_argv)
+    actual = [*leaf_argv[:5], transport_serial, *command]
     os.execve(binary, [binary, *actual], env)
 
 

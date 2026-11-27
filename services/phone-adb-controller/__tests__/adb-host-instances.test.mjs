@@ -70,6 +70,29 @@ test('显式Brain token仅送固定Node verifier；schema2 version与daemon不�
 
 test('schema2每个真实phone dispatch前消费唯一epoch准入；失败不得parent_leaf或exec',()=>py(`from types import SimpleNamespace\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));m=load(r,'adb-managed-client');events=[]\n def admission(policy,serial,run_dir):\n  events.append('fence');assert serial=='fixture-serial' and run_dir==str(r)\n guard=SimpleNamespace(verify_binary=lambda *a:None,adb_environment=lambda env:{},authorize_epoch=admission)\n m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *a:p,instance_module=lambda:guard,inspect_managed_host=lambda *a:{'devices':[{'serial':'fixture-serial','state':'device'}]})\n os.environ['WFR_COLLECTION_LEAF_SOCKET']='/fixture/socket';os.environ['WFR_COLLECTION_POLICY_FILE']=str(path);os.environ['WFR_RUN_DIR']=str(r)\n for k in ['ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(k,None)\n m.client_version=lambda *a,**k:None;m.parent_leaf=lambda *a:events.append('dispatch') or (0,b'',b'')\n assert m.main(['-s','fixture-serial','shell','true'])==0;assert events==['fence','dispatch']\n def revoked(*a):raise ValueError('ADB_INSTANCE_EPOCH_AUTHORITY')\n guard.authorize_epoch=revoked;rejected(lambda:m.main(['-s','fixture-serial','shell','true']),'EPOCH_AUTHORITY');assert events==['fence','dispatch']\n`));
 
+test('轻盈底座私有代理只向父进程发送固定ADB请求，父拒绝时无本地回退',()=>py(`from types import SimpleNamespace
+with tempfile.TemporaryDirectory() as d:
+ r,_,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));m=load(r,'adb-managed-client');requests=[]
+ def forbidden(*args,**kwargs):raise AssertionError('CHILD_MUST_NOT_READ_EPOCH_OR_EXEC_ADB')
+ i=SimpleNamespace(verify_binary=s.route.instance_module().verify_binary,adb_environment=s.route.instance_module().adb_environment,authorize_epoch=forbidden)
+ m.route_module=lambda:SimpleNamespace(read_host_policy=lambda *args:p,instance_module=lambda:i,inspect_managed_host=forbidden)
+ os.environ.update(WFR_COLLECTION_LEAF_SOCKET='/fixture/socket',WFR_COLLECTION_POLICY_FILE=str(path),WFR_COLLECTION_PARENT_EPOCH='1')
+ for key in ['ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT']:os.environ.pop(key,None)
+ m.os.execve=forbidden
+ expected=['-H','127.0.0.1','-P',str(p['port']),'-s','fixture-serial','get-state']
+ def parent(args):
+  requests.append(args)
+  return 0,b'Android Debug Bridge version 1.0.41\\n' if args==['version'] else b'device\\n',b''
+ m.parent_leaf=parent
+ assert m.main(['-s','fixture-serial','get-state'])==0
+ assert requests==[['version'],expected]
+ def revoked(args):
+  if args==['version']:return parent(args)
+  raise ValueError('ADB_MANAGED_COLLECTION_PARENT_REJECTED')
+ m.parent_leaf=revoked
+ rejected(lambda:m.main(['-s','fixture-serial','get-state']),'COLLECTION_PARENT_REJECTED')
+`));
+
 test('固定Node epoch答复12字段严核同serial/source/instance，保留原stoppedfalse不伪Android证明',()=>py(`import subprocess\nwith tempfile.TemporaryDirectory() as d:\n r,p,path=fixture(d);s=load(r,'adb-host-service');p=s.load_policy(str(path));i=s.route.instance_module();os.environ['BRAIN_INTERNAL_TOKEN']='FIXTURE_PRIVATE_TOKEN'\n expected={'protocol':'device-epoch-fence-admission/v1','authorized':True,'epoch_id':'fixture-epoch-2','task_id':'11111111-1111-4111-8111-111111111111','run_id':'fixture-run','source_commit':'a'*40,'instance_id':p['instance_id'],'endpoint':p['endpoint'],'serial':'fixture-serial','old_route_absent':True,'original_execution_stopped':False,'android_internal':'not_attested'}\n def runner(value):\n  def run(args,**kw):\n   assert args[2:]==['verify-epoch','--run-dir',str(r)] and kw['env']['BRAIN_INTERNAL_TOKEN']=='FIXTURE_PRIVATE_TOKEN';return subprocess.CompletedProcess(args,0,json.dumps(value),'')\n  return run\n assert i.authorize_epoch(p,'fixture-serial',str(r),runner(expected))==expected
  mapped={**expected,'adb_serial':'127.0.0.1:15555'}
  assert i.authorize_epoch(p,'fixture-serial',str(r),runner(mapped))==mapped

@@ -30,9 +30,14 @@ async function run(command,args,env,timeoutMs,onStart=()=>{},beforeSpawn=()=>{})
 }
 const prelaunchExpired=new WeakSet();
 export const isPrelaunchExpired=error=>prelaunchExpired.has(error);
-export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env,assertAdmission,beginLocalVersion}){
+export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,admissionDeadlineMs,env=process.env,assertAdmission,beginLocalVersion,parentEpochAdmission=false}){
  const fenced=policy?.schema_version===2;
  if(fenced&&typeof assertAdmission!=='function')throw Error('COLLECTION_FENCED_ADMISSION_REQUIRED');
+ if(parentEpochAdmission&&!fenced)throw Error('COLLECTION_PARENT_EPOCH_REQUIRES_FENCE');
+ const epochIdentity=proof=>{
+  if(proof?.protocol!=='device-epoch-fence-admission/v1'||proof.authorized!==true||proof.serial!==serial||proof.endpoint!==policy.endpoint||proof.instance_id!==policy.instance_id)throw Error('COLLECTION_LEAF_DEVICE_IDENTITY');
+  return JSON.stringify([proof.epoch_id,proof.task_id,proof.run_id,proof.source_commit,proof.adb_serial]);
+ };
  const launchActive=()=>{if(admissionDeadlineMs!==undefined&&(!Number.isSafeInteger(admissionDeadlineMs)||admissionDeadlineMs>deadlineMs||Date.now()>=admissionDeadlineMs))throw Error('COLLECTION_LEAF_ADMISSION_DEADLINE');};
  launchActive();
  const binary=pinnedClient(policy);
@@ -69,6 +74,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    };
    if(localVersion)localVersion.assertActive();
    const proof=!localVersion&&typeof assertAdmission==='function'?await assertAdmission():undefined;
+   const admittedEpoch=parentEpochAdmission&&!version?epochIdentity(proof):undefined;
    let transportArgv=argv;
    if(fenced&&!version&&proof?.adb_serial!==undefined){
     if(proof.authorized!==true||proof.serial!==serial||proof.endpoint!==policy.endpoint)throw Error('COLLECTION_LEAF_DEVICE_IDENTITY');
@@ -103,7 +109,10 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    if(localVersion){
     localVersion.assertActive();
     if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
-   }else if(typeof assertAdmission==='function')await assertAdmission();
+   }else if(typeof assertAdmission==='function'){
+    const after=await assertAdmission();
+    if(admittedEpoch!==undefined&&epochIdentity(after)!==admittedEpoch)throw Error('COLLECTION_LEAF_DEVICE_IDENTITY');
+   }
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
   }catch(error){tainted=true;if(error.epochFenceLost){epochFenceLost=true;try{append({...entry,phase:'epoch_fence_lost',new_leaf_returned:entry?.request_returned===true});}catch{}}else{returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}}throw error;}finally{active--;}
  };
@@ -124,6 +133,6 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  })();
  const returned=()=>sealed&&!returnUnknown&&active===0&&leaves.every(x=>x.started_at&&x.ended_at&&x.request_returned===true);
  const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,requests_returned:returned()&&leaves.length>0,empty_requests_returned:returned()&&leaves.length===0,...(fenced?{epoch_fence_lost:epochFenceLost}:{}),leaves:structuredClone(leaves),ledger});
- return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce,WFR_COLLECTION_LEAF_DEADLINE_MS:String(admissionDeadlineMs??deadlineMs)},isReturnUnknown:()=>returnUnknown,
+ return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce,WFR_COLLECTION_LEAF_DEADLINE_MS:String(admissionDeadlineMs??deadlineMs),...(parentEpochAdmission?{WFR_COLLECTION_PARENT_EPOCH:'1'}:{})},isReturnUnknown:()=>returnUnknown,
   seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }
