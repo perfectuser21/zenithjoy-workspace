@@ -78,6 +78,14 @@ test('downloads the separate Bilibili artifact for the same main attempt',async(
  const result=await downloadDeploymentEvidence('42',github);
  assert.deepEqual(result.bilibili,evidence(scope));
 });
+test('rejects Bilibili evidence from a different Pilot run',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ const scope='android-bilibili-readonly';
+ const {github}=githubFixture([...pilotScopes,scope],{},{
+  [scope]:{workflow_run:{id:41,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}},
+ });
+ await assert.rejects(downloadDeploymentEvidence('42',github),/artifact所属run/);
+});
 const attemptName=(scope,attempt)=>`pilot-release-verification-${scope}-${sha}-attempt-${attempt}`;
 function rerunFixture({attempt=2,latest=3,conclusion='success',legacy=false,omit=[],duplicate=false,main=sha}={}){
  const artifacts=[];
