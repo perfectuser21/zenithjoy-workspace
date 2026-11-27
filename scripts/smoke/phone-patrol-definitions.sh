@@ -52,7 +52,7 @@ for revision in sorted(phone|control):
                     "process.stdout.write(readImplementationSource(process.cwd(), revision,"
                     "'scripts/phone-account-patrol/SKILL.md', {source, offline:true}));"
                 )
-                source = os.environ.get('IMPLEMENTATION_SKILLS_SOURCE_DIR') or str(root / '.skills-source')
+                source = os.environ.get('SKILLS_SOURCE_DIR') or os.environ.get('IMPLEMENTATION_SKILLS_SOURCE_DIR') or str(root / '.skills-source')
                 env = {**os.environ, 'PATROL_ARCHIVE_REVISION':revision, 'PATROL_ARCHIVE_SKILL_CACHE':source}
                 contents = subprocess.check_output(['node', '--input-type=module', '-e', reader],
                                                    cwd=root, env=env, timeout=30)
