@@ -13,7 +13,7 @@ const sha=value=>createHash('sha256').update(value).digest('hex');
 const fields=value=>Object.fromEntries([...String(value).matchAll(/^([a-z_]+)=(.*)$/gm)]
   .map(([,key,text])=>[key,text]));
 
-function readEvidence({evidenceRoot,path,basename,start,limit=4*1024*1024}){
+export function readEvidence({evidenceRoot,path,basename,start,limit=4*1024*1024}){
   if(path!==join(evidenceRoot,basename))fail('COMMENT_FILE');
   try{
     const stat=lstatSync(path);

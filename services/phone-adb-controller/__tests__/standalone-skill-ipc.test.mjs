@@ -90,3 +90,14 @@ test('已确认的启动前台拒绝跨 IPC 返回稳定原因',async t=>{
  t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
  await assert.rejects(callStandaloneSkillTool(host.connectionPath,'phone',{command:'open-app',args:[]}),{code});
 });
+
+test('102 交接来源问题通过真实 IPC 回报具体原因',async t=>{
+ const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),directory=dir(t);
+ const host=await serveStandaloneSkillTools({directory,call:async(_op,input)=>{
+  throw Object.assign(Error('private evidence'),{code:input.code});
+ }});
+ t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
+ for(const code of ['STANDALONE_COLLECTION_SOURCE_NOT_COMPLETED','STANDALONE_COLLECTION_SOURCE_EVIDENCE','STANDALONE_COLLECTION_SOURCE_READ_REQUIRED']){
+  await assert.rejects(callStandaloneSkillTool(host.connectionPath,'business',{code}),{code});
+ }
+});

@@ -116,11 +116,11 @@ export async function handleRpc(input, deps = {}) {
     pool = deps.pool || getPool();
     if (input.kind === 'queue') {
       const collectOp=input.request?.op;
-      if(['collect_claim','qualification_policy','qualification_submit','collect_comment_readback'].includes(collectOp)){
+      if(['collect_source_read','collect_claim','qualification_policy','qualification_submit','collect_comment_readback'].includes(collectOp)){
         if(!fixedPool||!input.source.files.some(file=>file.path==='standalone-collection-tools.mjs'))throw Error('RPC_COLLECTION_CLAIM_AUTHORITY');
         const scope=standaloneCollectionClaimScope({runtimeRoot:root,input});
         const collection=require('./standalone-collection-tools.mjs');
-        const operation={collect_claim:'claimStandaloneCollectionVideo',qualification_policy:'readStandaloneCollectionPolicy',
+        const operation={collect_source_read:'readStandaloneCollectionSource',collect_claim:'claimStandaloneCollectionVideo',qualification_policy:'readStandaloneCollectionPolicy',
           qualification_submit:'recordStandaloneCollectionQualification',collect_comment_readback:'readStandaloneCollectionComment'}[collectOp];
         return {ok:true,result:await collection[operation](pool,input.request,scope)};
       }

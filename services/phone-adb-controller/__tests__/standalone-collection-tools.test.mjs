@@ -246,3 +246,134 @@ test('102 树等待空闲失败后只准用本轮截图导航一次，重新核�
   assert.deepEqual(accountModes,[false,true]);
   assert.deepEqual(effects,['open-app','account-current','snapshot-evidence','account-visual-tap','account-current']);
 });
+
+test('102 正式判重工具声明只读交接入口', async()=>{
+  const {createStandaloneCollectionTools}=await import('../standalone-collection-tools.mjs');
+  const tools=createStandaloneCollectionTools({scope,assertAuthority:async()=>{},activityPlaybook:{}});
+  const inspected=await tools.call('inspect',{});
+  assert.ok(inspected.business_operations.includes('collect_source_read'));
+});
+
+test('102 精确认领错 VID 时事务回滚', async()=>{
+  const wrong={...video,video_id:'2222222222222222',video_url:'https://www.douyin.com/video/2222222222222222'};
+  const {pool,calls}=fixture({selection:[wrong]});
+  await assert.rejects(claimStandaloneCollectionVideo(pool,{...request,video_id:videoId},scope),/STANDALONE_COLLECTION_CLAIM_READBACK/);
+  const write=calls.find(call=>call.sql.includes('UPDATE zenithjoy.leadgen_videos'));
+  assert.match(write.sql,/video_id\s*=\s*\$8/);
+  assert.equal(write.args[7],videoId);
+  assert.equal(calls.some(call=>call.sql==='COMMIT'),false);
+});
+
+test('102 只读查询绑定原批次、租户和精确 VID，错误来源不查库',async()=>{
+  const {readStandaloneCollectionSource}=await import('../standalone-collection-tools.mjs');
+  const calls=[];
+  const row={video_id:videoId,video_url:video.video_url,evidence_digest:'a'.repeat(64),observed_comment_count:1};
+  const pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:[row]};}};
+  const read={...request,op:'collect_source_read',video_id:videoId};
+  await assert.rejects(readStandaloneCollectionSource(pool,{...read,committed_origin_run:'other'},scope),/ORIGIN/);
+  assert.equal(calls.length,0);
+  assert.deepEqual(await readStandaloneCollectionSource(pool,read,scope),{source_run:origin,video:row});
+  assert.equal(calls.length,1);
+  assert.match(calls[0].sql,/^SELECT/);
+  assert.doesNotMatch(calls[0].sql,/\b(?:UPDATE|INSERT|DELETE)\b/i);
+  assert.deepEqual(calls[0].args,[line,origin,scope.company.company_id,scope.company.tenant_id,'34',videoId]);
+});
+
+test('102 已精确认领另一条时不能在同一次运行领取第二条',async()=>{
+  const {pool,calls}=fixture({existing:[video]});
+  await assert.rejects(claimStandaloneCollectionVideo(pool,{...request,video_id:'2222222222222222'},scope),/CLAIM_READBACK/);
+  assert.equal(calls.some(call=>call.sql.includes('UPDATE zenithjoy.leadgen_videos')),false);
+});
+
+test('102 正式判重只能补读候选视频，采集写操作仍需认领',async()=>{
+  const {createStandaloneCollectionTools}=await import('../standalone-collection-tools.mjs');
+  const binding={...scope.company,profile:'bound-phone',device_serial:'fixture-phone',
+    douyin_id:'bound-account',verification_status:'verified',enabled:true};
+  const actions=[];
+  let author='another-company-account',callState='not_idle';
+  const tools=createStandaloneCollectionTools({
+    scope:{...scope,profile:'bound-phone',serial:'fixture-phone',expected_account:'bound-account'},
+    activityPlaybook:{},assertAuthority:async()=>{},
+    async readDeviceContext(){return {device:`state=device\ncall_state=${callState}\n`};},
+    async readAuthor(id){return {video_id:id,douyin_id:author};},
+    async phone({command,args}){
+      actions.push(command);
+      const stdout=command==='account-current'?'douyin_id=bound-account\n':
+        command==='current-video-link'?`content_type=video\nvideo_id=${videoId}\n`:'';
+      return {stdout};
+    },
+    async rpc({request}){
+      actions.push(request.op);
+      return {ok:true,result:request.op==='company_config'?{...scope.company,run_id:run,device_binding:binding}:{source_run:origin,own_douyin_ids:['bound-account','another-company-account'],video:{...video,evidence_digest:'a'.repeat(64)}}};
+    },
+  });
+  const business=(operation,input)=>tools.call('business',input?{operation,input}:{operation});
+  const phone=(command,args=[])=>tools.call('phone',{command,args});
+  await phone('open-app');
+  await phone('account-current',[run+'-account']);
+  await business('company_config');
+  await assert.rejects(business('collect_source_read'),/DEVICE_CONTEXT/);
+  await assert.rejects(tools.call('inspect',{view:'device_context'}),/DEVICE_CONTEXT/);
+  callState='idle';
+  assert.match((await tools.call('inspect',{view:'device_context'})).device,/call_state=idle/);
+  await assert.rejects(business('collect_claim',{video_id:videoId}),/SOURCE_READ_REQUIRED/);
+  await business('collect_source_read');
+  await assert.rejects(phone('open-video',['2222222222222222',run+'-other']),/VIDEO_SCOPE/);
+  await phone('open-video',[videoId,run+'-open']);
+  await phone('current-video-link',[run+'-link']);
+  await phone('ui-evidence',[run+'-tree']);
+  await assert.rejects(phone('record-start',[run+'-record',90,videoId]),/VIDEO_SCOPE/);
+  await assert.rejects(business('collect_claim',{video_id:videoId}),/AUTHOR_UNVERIFIED/);
+  assert.equal((await business('collect_author_read')).own_account,true);
+  await assert.rejects(business('collect_claim',{video_id:videoId}),/AUTHOR_UNVERIFIED/);
+  author='verified-external-author';
+  assert.equal((await business('collect_author_read')).own_account,false);
+  await business('collect_claim',{video_id:videoId});
+  await assert.rejects(phone('record-start',[run+'-record',90,videoId]),/VIDEO_UNVERIFIED/);
+  assert.deepEqual(actions,['open-app','account-current','company_config','collect_source_read',
+    'open-video','current-video-link','ui-evidence','collect_claim']);
+});
+
+test('102 只接受已完成的 101 回执，并从同源同 VID 交付中读作者',async()=>{
+  const {readStandaloneProducerHandoff}=await import('../standalone-collection-origin.mjs');
+  const sourceRun='7493b375-f047-4e1e-8810-fb7529fb2f0a';
+  const taskId='3584447e-0b6c-400a-aac9-f3bc9bcd7874';
+  const candidate={...video,evidence_digest:'a'.repeat(64),observed_comment_count:1};
+  const handoff={...video,author:'原交付作者',line_key:line,
+    discovery_metrics:{digest:candidate.evidence_digest,company_binding:{...scope.company,line_key:line,run_id:sourceRun}}};
+  const result={task_id:taskId,run_id:sourceRun,status:'completed',business_pass:true,
+    receipts:[{activity_key:'collect_videos',status:'completed',outputs:{Video:[handoff]}}]};
+  const rec={run_id:sourceRun,links:{task_id:taskId},task_run:{status:'success',task_id:taskId,run_id:sourceRun}};
+  const task={id:taskId,status:'completed',payload:{workflow_key:'douyin_video_discovery'},result:{foundation_result:result}};
+  const input={sourceRun,line,company:scope.company,candidate,
+    read:async path=>path.includes('/reconciliation')?rec:task};
+  assert.deepEqual(await readStandaloneProducerHandoff(input),{task_id:taskId,run_id:sourceRun,author:'原交付作者'});
+  task.status='blocked';
+  await assert.rejects(readStandaloneProducerHandoff(input),/UPSTREAM_SOURCE_RESULT/);
+  task.status='completed';
+  handoff.discovery_metrics.company_binding.tenant_id='another-tenant';
+  await assert.rejects(readStandaloneProducerHandoff(input),/UPSTREAM_SOURCE_VIDEO_EVIDENCE/);
+});
+
+test('102 认领事务拒绝与核对时不同的证据摘要',async()=>{
+  const digest='a'.repeat(64);
+  const {pool,calls}=fixture({selection:[{...video,evidence_digest:'b'.repeat(64)}]});
+  await assert.rejects(claimStandaloneCollectionVideo(pool,{...request,video_id:videoId,evidence_digest:digest},scope),/CLAIM_READBACK/);
+  const write=calls.find(call=>call.sql.includes('UPDATE zenithjoy.leadgen_videos'));
+  assert.match(write.sql,/discovery_metrics->>'digest'=\$9/);
+  assert.equal(write.args[8],digest);
+  assert.equal(calls.some(call=>call.sql==='COMMIT'),false);
+});
+
+test('102 作者排除只读本轮公司快照中已核实的抖音账号',async()=>{
+  const {readStandaloneCollectionSource}=await import('../standalone-collection-origin.mjs');
+  const account={...scope.company,platform:'douyin',enabled:true,verification_status:'verified',douyin_id:'own'};
+  const snapshot={config_status:'enabled',policy_id:scope.company.policy_id,runtime_config:{routing:{line_key:line},
+    platform_accounts:[account,{...account,tenant_id:'other',douyin_id:'other'},{...account,enabled:false,douyin_id:'archived'}]}};
+  const calls=[];
+  const pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:sql.includes('company_config_runs')?[{snapshot}]:[video]};}};
+  const result=await readStandaloneCollectionSource(pool,{...request,op:'collect_source_read',include_author_scope:true},scope);
+  assert.deepEqual(result.own_douyin_ids,['own']);
+  assert.deepEqual(calls[1].args,[run,scope.company.company_id,scope.company.tenant_id,34]);
+  assert.ok(calls.every(entry=>entry.sql.startsWith('SELECT')));
+});
