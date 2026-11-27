@@ -81,6 +81,8 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
    await admission({phase:'before',resourceOnly:invocation.kind==='local-metadata'});
    const clean={...base,...options.env,...(operationAdmission?operationAdmission.environment():{}),PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:bin,ENV:'',BASH_ENV:'',DOUYIN_BYPASS_REPORT:'off',DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:executables.python.path,DOUYIN_LOCATE_SCRIPT:join(root,'locate-element.py'),DOUYIN_CURL_BIN:'/usr/bin/curl',DOUYIN_SIPS_BIN:'/usr/bin/sips',WFR_NATIVE_UNKNOWN_FILE:marker,DOUYIN_PHONE_LOCK_ROOT:protectionRoot,P:fixed.profile,SERIAL:fixed.serial,WFR_TAG:fixed.owner,WFR_RUN_DIR:fixed.runDir};
    for(const name of Object.keys(clean))if(/^(?:DYLD_|LD_|PYTHON|NODE_OPTIONS$|NODE_PATH$)/.test(name)||['DOUYIN_LOCK_GUARDED','DOUYIN_LOCK_GUARD_FD','DOUYIN_BYPASS_REPORT_BIN'].includes(name))delete clean[name];
+   // Only the standalone host may opt in to parent-owned epoch verification.
+   delete clean.WFR_COLLECTION_PARENT_EPOCH;
    if(clean.DOUYIN_PHONE_LOCK_TEST_MODE==='1')throw fail('TEST_ENV');
    if(!Number.isFinite(options.timeoutMs??180000)||(options.timeoutMs??180000)<=0)throw fail('DEADLINE');
    clean.PYTHONNOUSERSITE='1';clean.PYTHONSAFEPATH='1';
@@ -111,6 +113,7 @@ export function createOfficialCliClosure({root,env,frozen,binding,taskId,assertA
 // 录制进度/可选作品数与完整chat签名经独立复审；仅追加精确controller/focus摘要，调用集合及品牌边界不变。
 // 小红书图文标准标题写后缩宽：复核真实焦点证据及拒绝分支，只追加实测配对摘要。
 // 小红书视频标准标题写后缩宽经独立复核，仅追加配对输入 rev7 摘要。
+// 独审确认受管 schema 2 的代理只提交私有 IPC；普通 CLI 保留原核验和回退边界。
 const REVIEWED=Object.freeze({
  "official-cli-quarantine.py": "f31a63a4f1e70248cf25482f4c6788fafd5c1d46d786d5e3e3eeb204e06fb36b",
  "douyin-phone-adb": ["b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6","6d10d9bc8f23f65da687b51ed1c88ef4f20d61985d8ed2e75c2b603d3257d52d","0b32e528f60423e8ed1b85e02b0ba29d3189170ff0d9a8f5e5b8a751ba5bc8a7","b1aa3013537c1ebc0b8aafb73b32e82f8f00999c1713aad92b240f629da9140b","4e42dfa34ad45e2ee54dfb0087199e110d025f15ff885f721745d7043135595d","45a4264f949de71c3c3e83af80559457643a12400b70dccbf4b69f2c5b22324d","735de0cc1cc29e1b2669fdee74e20af17dbef4a638693d868f553e04f97fe7a6","d66939ff655b1f618c96aebef8c7f543540b0ca9cc06d18dfe5cf9b90526bfb9","9ab1aa4e75d3ce88a9fad69e945338467e09ff5de7e792b52ebcfa71379575ed","00e60b0fd793df362410bd9977cf21fc80e41af0acac178424234e575e0f173e","db9ac63819f387bff5da3a0dfcabd68bfe30c22176ee7545f6ae3c3605c2e17b","08596b305904ffbf7c38e29646ab85182396f32115172116eddaf475246fdff5","39b8968450cca962994afb30d2c1d0bf1395f98a3fe6b7261093e8f7141efbac","6cb665743a769bcc2a44ba2ae3f9c49d8226f6ec6cb5750aa6756b0bb5431ef6","48070df33e1073d9e4d6a6ba822c93b51625d5ae77c8897659c6a7d9b70c1583"],
@@ -118,7 +121,7 @@ const REVIEWED=Object.freeze({
  "phone-lock-helper.py": ["36d705de51e84a04c24db80e9417912959f27fa6d61513f6165b9760d5b59bcd","c89bb223302dbd5b9bc16cae24f41f6d87398fc9f688e5ee572280b88d4fe0c6","fac2aabda5a200b9ca1e690969c1bd063067a9f3d4c4be56ba9f44d24aa60223"],
  "phone-lock-root.py": "3c0dc46c221e80ae220c1174709a9cc6c9d47dfa3702ed6726d52a626a20f48a",
  "adb-existing-route.py": ["98ca76d799deb74cc1481346967f8ab1a14aa99dd28c7eea2d7865c591eb24d4","925a65843cdfd53e76d82ceffa5651d972a20f03b6876ff633699261c06fe6ae","477c1984fdddc510454cc3ba92536c492bf47434f2e842ae90ece11b883b6193"],
- "adb-managed-client.py": ["9cc3bad30042910b1c36c5f8ce17d5402209fa42e5b130a7a29f0e5bf2316910","dcf8c92eb79bd22e708d415227035f9a896181f2388709aca2f42797508d18bb"],
+ "adb-managed-client.py": ["9cc3bad30042910b1c36c5f8ce17d5402209fa42e5b130a7a29f0e5bf2316910","dcf8c92eb79bd22e708d415227035f9a896181f2388709aca2f42797508d18bb","bfbb984f92e38a4b8db99765df0aa8b69377d5aa15af1c17dd489f8714978bed"],
  "adb-host-instance-policy.py": ["dee7a72876b6193535fc5a4ddb3406e7b113c7ddc75e745bf91d450bac807d18","5cd8e7ae7025c35ad76d674368fb53859c7db81679d8506777374bab3f556182","63fea420bc5f6b19e8cefc21de7e0972cfae93bf6e894eed3a8d2f2b451f7b0f","59dcad46ebfe26255487da557ab13b7b2c8691134ab90feae3141200f3586d94","c924b91b331fe7e86569cf28a2e0d57a63422bbb3fda1224c309e2c2c04a79db","db52b234ad00a83dfbc95073ed0c202b30f0ead9d4101fd11809c514e9c67b52"],
  "search-video-tab.py": "7a6a56ebe141dcdaa675735a196004df5e4728534f4f33801fce3b7250c89e04",
  "locate-element.py": ["b1a7db0809d00c99329118552f565fdb2d8b68a23874f9c76dc5db558234bfa0", "599aa29a51c0d3f6a7a219166b57013b03c3f528e53bb29e14822839eb300e76"],
