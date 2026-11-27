@@ -69,7 +69,7 @@ export function createStandaloneSkillTools({frozen,assertAuthority,phone,rpc}){
   if([...usedEvidence].some(previous=>previous===id||id.startsWith(previous+'-')||previous.startsWith(id+'-')))fail('EVIDENCE_REUSED');
   usedEvidence.add(id);
  };
- let busy=false;
+ let busy=false,openAppCompleted=false;
  return async function call(op,raw={}){
   if(busy)fail('BUSY');busy=true;
   try{
@@ -77,8 +77,13 @@ export function createStandaloneSkillTools({frozen,assertAuthority,phone,rpc}){
    if(op==='inspect'){
     keys(q,[]);provider=async()=>({stage:'101',scope:structuredClone(input),approved_keywords:structuredClone(approved),skill:structuredClone(identity.skill),
      phone_commands:[...noArgs,...evidenceArg,'open-search','current-video-link','search-time-layer','open-search-card'],semantic_phone_commands:['open-search-card'],
-     semantic_phone_requirements:{'open-search-card':'provider立即重读当前卡片，按index定位并核对详情；不得直接转发为控制器命令'},business_operations:[...rpcOps]});
-   }else if(op==='phone'){arg=validatePhone(q);provider=phone;}
+     semantic_phone_requirements:{'open-search-card':'provider立即重读当前卡片，按index定位并核对详情；不得直接转发为控制器命令'},
+     phone_preconditions:{'account-current':'open-app'},phone_entry:{open_app_completed:openAppCompleted},business_operations:[...rpcOps]});
+   }else if(op==='phone'){
+    arg=validatePhone(q);
+    if(arg.command==='account-current'&&!openAppCompleted)fail('OPEN_APP_REQUIRED');
+    provider=phone;
+   }
    else if(op==='business'){arg=businessRequest(q);provider=business;}
    else fail('OPERATION');
    await assertAuthority();
@@ -87,7 +92,10 @@ export function createStandaloneSkillTools({frozen,assertAuthority,phone,rpc}){
    try{result=await provider(arg);}catch(e){failed=true;error=e;}
    // 未知提交不重试。后置准入失败同时保留原错误，不能把未知提交改写成未调用。
    try{await assertAuthority();}catch(e){if(failed){if(error instanceof Error)error.authority_after_error=String(e?.message??e);else throw new AggregateError([error,e],'STANDALONE_TOOL_AUTHORITY_AFTER_FAILURE',{cause:error});}else throw e;}
-   if(failed)throw error;return result;
+   if(failed)throw error;
+   if(arg?.command==='open-app')openAppCompleted=true;
+   if(arg?.command==='return-safe-desktop')openAppCompleted=false;
+   return result;
   }finally{busy=false;}
  };
 }

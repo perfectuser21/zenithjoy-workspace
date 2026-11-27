@@ -85,3 +85,29 @@ for(const [first,next] of [['direct101-card','direct101-card-open'],['direct101-
  const {call,effects}=make();await call('phone',{command:'snapshot-evidence',args:[first]});await assert.rejects(call('phone',{command:'snapshot-evidence',args:[next]}),/STANDALONE_TOOL_EVIDENCE_REUSED/);assert.equal(effects.filter(Array.isArray).length,1);
  await call('phone',{command:'snapshot-evidence',args:['direct101-card2']});assert.equal(effects.filter(Array.isArray).length,2,'a shared text fragment without a hyphen boundary is a separate namespace');
 });
+
+test('discovery account read requires a successful launch in the same run and does not consume refused evidence', async () => {
+  const account = {command: 'account-current', args: ['direct101-account']};
+  const open = {command: 'open-app', args: []};
+  const desktop = {command: 'return-safe-desktop', args: []};
+  const {call, effects} = make();
+
+  const initial = await call('inspect', {});
+  assert.equal(initial.phone_preconditions['account-current'], 'open-app');
+  assert.equal(initial.phone_entry.open_app_completed, false);
+  await assert.rejects(call('phone', account), /STANDALONE_TOOL_OPEN_APP_REQUIRED/);
+  assert.deepEqual(effects.filter(Array.isArray), []);
+
+  await call('phone', open);
+  const launched = await call('inspect', {});
+  assert.equal(launched.phone_entry.open_app_completed, true);
+  await call('phone', account);
+  assert.deepEqual(effects.filter(Array.isArray).map(([, request]) => request.command), ['open-app', 'account-current']);
+
+  await call('phone', desktop);
+  await assert.rejects(call('phone', account), /STANDALONE_TOOL_OPEN_APP_REQUIRED/);
+
+  const failed = make({phone: async () => { throw new Error('OPEN_APP_NOT_CONFIRMED'); }});
+  await assert.rejects(failed.call('phone', open), /OPEN_APP_NOT_CONFIRMED/);
+  await assert.rejects(failed.call('phone', account), /STANDALONE_TOOL_OPEN_APP_REQUIRED/);
+});
