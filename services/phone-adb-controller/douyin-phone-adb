@@ -4708,6 +4708,21 @@ case "$command" in
     exec "$ADB" -s "$SERIAL" shell dumpsys window
     ;;
   open-app)
+    if [[ "$#" == 2 && "$2" == --foreground-only ]]; then
+      [[ -n "$LOCK_OWNER" ]] || die "foreground-only startup requires an exact lock owner"
+      check_target
+      "$ADB" -s "$SERIAL" shell monkey -p "$DOUYIN_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+      for _p in 500 1500; do
+        wait_ms "$_p"
+        focus="$($ADB -s "$SERIAL" shell dumpsys window displays | /usr/bin/awk '/mCurrentFocus=Window/ {print}')"
+        if _foreground_is_exact_douyin "$focus"; then
+          print -- 'open_app=app_foreground'
+          exit 0
+        fi
+      done
+      print -- 'open_app=foreground_timeout'
+      exit 0
+    fi
     [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE open-app"
     check_target
     "$ADB" -s "$SERIAL" shell monkey -p "$DOUYIN_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null

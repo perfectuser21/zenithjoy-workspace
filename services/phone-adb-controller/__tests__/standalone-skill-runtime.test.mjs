@@ -248,3 +248,25 @@ test('cleanup deadline denies further desktop leaves and retains the revoked res
   await assert.rejects(host.close(),/CLEANUP_DEADLINE/);assert.equal(f.fs.existsSync(f.unknownPath),true);assert.equal(f.effects.includes('return-safe-desktop'),false);assert.equal(f.effects.includes('lock-release-exact'),false);assert.equal(f.effects.includes('central-release'),false);
  }finally{Date.now=originalNow;f.cleanup();}
 });
+
+test('受管 102 启动只验证应用前台，保留旧调用和真实设备错误', async () => {
+  const { createStandalonePhoneProvider } = await import('../standalone-skill-runtime.mjs');
+  const base = fixture();
+  base.frozen.agent_input.workflow_key = 'douyin_video_processing';
+  const calls = [];
+  let result = { code: 0, stdout: 'open_app=app_foreground\n' };
+  const execute = async (_command, args) => { calls.push(args.slice(4)); return result; };
+  const invoke = createStandalonePhoneProvider({ ...base, execute });
+  const input = { command: 'open-app', args: [], profile: 'cloud-phone-test', owner: 'direct101' };
+  await invoke(input);
+  assert.deepEqual(calls, [['open-app', '--foreground-only']]);
+  result = { code: 0, stdout: 'open_app=foreground_timeout\n' };
+  await assert.rejects(invoke(input), { code: 'STANDALONE_NATIVE_APP_FOREGROUND_TIMEOUT' });
+  result = { code: 0, stdout: 'unexpected\n' };
+  await assert.rejects(invoke(input), { code: 'STANDALONE_NATIVE_COMMAND' });
+  result = { code: 124, stdout: '', stderr: 'guard timeout' };
+  await assert.rejects(invoke(input), { code: 'STANDALONE_NATIVE_COMMAND', controller_exit_code: 124 });
+  result = { code: 0, stdout: 'legacy\n' };
+  await createStandalonePhoneProvider({ ...fixture(), execute })(input);
+  assert.deepEqual(calls.at(-1), ['open-app']);
+});
