@@ -9,13 +9,14 @@ import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
 import {prepare,verify} from './fixtures/paired-deploy-smoke-transport.mjs';
 const service=new URL('../',import.meta.url).pathname;
 const quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
-function run(t,{badSyntax=false,missing=false,missingSh=false,badSh=false,duplicate=false,finishGuard=false,remoteUmask}={}){
+function run(t,{badSyntax=false,missing=false,missingSh=false,badSh=false,duplicate=false,finishGuard=false,remoteUmask,bilibili=false}={}){
  const root=realpathSync(mkdtempSync(join(tmpdir(),'m4-deploy-batch-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const {home,env}=prepareTransport(root),source=join(root,'source');if(remoteUmask)env.M4_FIXTURE_UMASK=remoteUmask;mkdirSync(source);
  const files={'a.sh':badSh?'if broken;\n':'#!/bin/sh\ntrue\n','log-stream-push.sh':'#!/bin/sh\ntrue\n','z.sh':'#!/bin/sh\ntrue\n',
   'one.mjs':badSyntax?'const = ;\n':'export const value=1;\n','two.mjs':'export const value=2;\n',
   'skills/first/SKILL.md':'---\nname: real-payload\n---\nSkill bytes\n','checks/test.json':'{"ok":true}\n',
-  'plans/test.plan':'#!/bin/sh\ntrue\n','plans/test.steps.json':'{"steps":[]}\n'};
+  'plans/test.plan':'#!/bin/sh\ntrue\n','plans/test.steps.json':'{"steps":[]}\n',
+  ...(bilibili ? {'bilibili-verify-worker.mjs':'export const readOnly = true;\n'} : {})};
  for(const [p,bytes] of Object.entries(files)){mkdirSync(join(source,p,'..'),{recursive:true});if(!(missing&&p==='one.mjs')&&!(missingSh&&p==='a.sh'))writeFileSync(join(source,p),bytes,{mode:0o640});}
  // Execute the actual production M4 four-loop block, never a second installer.
  const deploy=readFileSync(join(service,'deploy.sh'),'utf8');
@@ -31,15 +32,25 @@ DEVICE_SH_FILES=(a.sh log-stream-push.sh z.sh)
 DEVICE_NODE_FILES=(one.mjs two.mjs)
 DEVICE_RPC_PROBE_FILES=(skills/first/SKILL.md checks/test.json ${duplicate?'plans/test.steps.json':''})
 DEVICE_PLAN_FILES=(plans/test.plan plans/test.steps.json)
+${bilibili ? `M4_BILIBILI_NODE_FILES=(bilibili-verify-worker.mjs)
+M4_BILIBILI_OCR_SOURCE=scripts/phone-account-patrol/ocr.swift
+M4_BILIBILI_OCR_TARGET=_components/scripts/phone-account-patrol/ocr.swift` : ''}
 ${block}
 ${finishGuard?deploy.slice(deploy.lastIndexOf('if [[ "$FAILED" == "1" ]]'),deploy.indexOf('# 完整安装实读后')):''}
 printf 'FINAL_FAILED=%s\\n' "$FAILED"
 `;
- const started=performance.now(),r=spawnSync('bash',['-c',script],{env,encoding:'utf8',timeout:30000});
+ const started=performance.now(),r=spawnSync('bash',['-c',script],{env,encoding:'utf8',timeout:30000,cwd:service});
  assert.equal(r.error,undefined);assert.equal(r.status,finishGuard?1:0,r.stderr);const calls=readFileSync(join(root,'transport.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
  t.diagnostic(JSON.stringify({ssh:calls.filter(x=>x.kind==='ssh').length,scp:calls.filter(x=>x.kind==='scp').length,elapsed_ms:performance.now()-started}));
  return {root,home,source,files,result:r,calls,elapsed:performance.now()-started,special:readFileSync(special,'utf8')};
 }
+test('only the selected M4 Bilibili payload installs its exact OCR attachment',t=>{
+ const r=run(t,{bilibili:true});assert.match(r.result.stdout,/FINAL_FAILED=0/);
+ const source=join(service,'../../scripts/phone-account-patrol/ocr.swift');
+ const installed=join(r.home,'bin-harvest/_components/scripts/phone-account-patrol/ocr.swift');
+ assert.deepEqual(readFileSync(installed),readFileSync(source));
+ assert.equal(readFileSync(join(r.home,'bin-harvest/bilibili-verify-worker.mjs'),'utf8'),r.files['bilibili-verify-worker.mjs']);
+});
 test('M4 actual ordinary deployment uses bounded transport while preserving every payload and stream barrier',t=>{
  const r=run(t);assert.match(r.result.stdout,/FINAL_FAILED=0/);
  for(const [p,b] of Object.entries(r.files)){assert.equal(readFileSync(join(r.home,'bin-harvest',p),'utf8'),b);assert.equal(statSync(join(r.home,'bin-harvest',p)).mode&0o777,p.endsWith('.sh')?0o751:0o640);}
