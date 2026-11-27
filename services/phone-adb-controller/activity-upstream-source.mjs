@@ -91,3 +91,26 @@ export function wireProducerReadback(source){
  return "import {resolveProducerIdentity} from './activity-upstream-source.mjs';\n"+source.replace(before,
   'const expected={run:producer.run,run_id:producer.run_id,...resolveProducerIdentity(c,activity,producer),line_key:c.line,video_id:row.video_id,video_url:row.video_url};');
 }
+
+export async function readStandaloneProducerHandoff({read,sourceRun,line,company,candidate}){
+ const {video_id:id,video_url:url,evidence_digest:digest}=candidate;
+ need(UUID.test(sourceRun)&&SHA.test(digest??''),'SCOPE');
+ const rec=await read('/api/brain/runs/'+sourceRun+'/reconciliation');
+ const taskId=rec.links?.task_id,run=rec.task_run;
+ need(rec.run_id===sourceRun&&UUID.test(taskId??'')
+  &&run?.task_id===taskId&&run.run_id===sourceRun&&['success','completed','succeeded'].includes(run.status),'RESULT');
+ const payload=await read('/api/brain/tasks/'+taskId);
+ const task=payload.task??payload,result=task.result?.foundation_result;
+ need(task.id===taskId&&task.status==='completed'&&task.payload?.workflow_key==='douyin_video_discovery'
+  &&result?.task_id===taskId&&result.run_id===sourceRun&&result.status==='completed'&&result.business_pass===true,'RESULT');
+ need(Array.isArray(result.receipts),'VIDEO');
+ const receipts=result.receipts.filter(item=>item?.activity_key==='collect_videos'&&item.status==='completed');
+ need(receipts.length===1&&Array.isArray(receipts[0].outputs?.Video),'VIDEO');
+ const videos=receipts[0].outputs.Video.filter(item=>item?.video_id===id);
+ const video=videos[0],metrics=video?.discovery_metrics,binding=metrics?.company_binding;
+ need(videos.length===1&&video.video_url===url&&video.line_key===line&&metrics?.digest===digest
+  &&binding?.line_key===line&&binding.run_id===sourceRun
+  &&['company_id','tenant_id','version'].every(key=>binding[key]===company[key]),'VIDEO_EVIDENCE');
+ need(typeof video.author==='string'&&video.author.trim().length>0&&video.author.length<=500,'VIDEO_EVIDENCE');
+ return {task_id:taskId,run_id:sourceRun,author:video.author};
+}

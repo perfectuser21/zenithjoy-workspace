@@ -2,6 +2,8 @@ import {constants,closeSync,fstatSync,openSync,readFileSync,realpathSync} from '
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {createRequire} from 'node:module';
+import {checkSource,observedOrigin} from './standalone-collection-origin.mjs';
+export {readStandaloneCollectionSource} from './standalone-collection-origin.mjs';
 
 const require=createRequire(import.meta.url);
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -12,20 +14,6 @@ const fail = reason => {
   const code='STANDALONE_COLLECTION_'+reason;
   throw Object.assign(Error(code),{code});
 };
-
-function checkSource(request,scope,operation='collect_claim') {
-  if (scope?.workflow_key !== 'douyin_video_processing' || scope.limit !== 1
-    || request.op !== operation || request.source_run !== null || request.limit !== 1
-    || request.line !== scope.line || request.run !== scope.run_tag
-    || ![scope.line,scope.run_tag,scope.source_run].every(value=>typeof value==='string'&&tag.test(value))
-    || scope.source_run === scope.run_tag || request.committed_origin_run !== scope.source_run) fail('ORIGIN');
-}
-
-const observedOrigin = `discovery_metrics->'company_binding'->>'run_id'=$2
-    AND discovery_metrics->'company_binding'->>'company_id'=$3
-    AND discovery_metrics->'company_binding'->>'tenant_id'=$4
-    AND discovery_metrics->'company_binding'->>'version'=$5
-    AND discovery_metrics->'company_binding'->>'line_key'=$1`;
 
 async function currentCollectionConfig(client,{line,run_tag:run,company}){
   const configs=(await client.query(`SELECT company_id,tenant_id,version,run_id,source_run,snapshot
@@ -40,6 +28,14 @@ async function currentCollectionConfig(client,{line,run_tag:run,company}){
 // 仅领取已核原来源的视频。保留此批次在普通采集账上的身份，供 103 按精确来源读取。
 export async function claimStandaloneCollectionVideo(pool,request,scope) {
   checkSource(request,scope);
+  const requestedVideo = request.video_id;
+  if (requestedVideo !== undefined && (typeof requestedVideo !== 'string' || !videoId.test(requestedVideo))) {
+    fail('VIDEO_SCOPE');
+  }
+  const expectedDigest=request.evidence_digest;
+  if(expectedDigest!==undefined&&(requestedVideo===undefined||!/^[a-f0-9]{64}$/.test(expectedDigest)))fail('SOURCE_EVIDENCE');
+  const exactVideo = requestedVideo === undefined ? '' : ' AND video_id=$8';
+  const exactDigest = expectedDigest === undefined ? '' : " AND discovery_metrics->>'digest'=$9";
   const {line,run_tag:run,source_run:origin,company}=scope;
   const client=await pool.connect();
   try {
@@ -48,20 +44,22 @@ export async function claimStandaloneCollectionVideo(pool,request,scope) {
     await currentCollectionConfig(client,scope);
     const claimed='处理中:'+run;
     const parameters=[line,origin,company.company_id,company.tenant_id,String(company.version),run,claimed];
-    let rows=(await client.query(`SELECT video_id,video_url,title,judgment_status,process_status,harvest_batch
+    let rows=(await client.query(`SELECT video_id,video_url,title,judgment_status,process_status,harvest_batch,discovery_metrics->>'digest' AS evidence_digest
       FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND ${observedOrigin}
       AND harvest_batch=$6 AND process_status=$7 LIMIT 2 FOR UPDATE`,parameters)).rows;
     if(!rows.length) {
+      if (requestedVideo !== undefined) parameters.push(requestedVideo);
+      if (expectedDigest !== undefined) parameters.push(expectedDigest);
       rows=(await client.query(`WITH pending AS (
         SELECT id FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND harvest_batch=$2 AND ${observedOrigin}
-          AND judgment_status IN ('pending','matched') AND process_status IN ('待判定','待采评论')
+          AND judgment_status IN ('pending','matched') AND process_status IN ('待判定','待采评论')${exactVideo}${exactDigest}
         ORDER BY discovered_at,id LIMIT 1 FOR UPDATE SKIP LOCKED)
       UPDATE zenithjoy.leadgen_videos AS video SET process_status=$7,harvest_batch=$6,updated_at=now()
       FROM pending WHERE pending.id=video.id
-      RETURNING video_id,video_url,title,judgment_status,process_status,harvest_batch`,parameters)).rows;
+      RETURNING video_id,video_url,title,judgment_status,process_status,harvest_batch,discovery_metrics->>'digest' AS evidence_digest`,parameters)).rows;
     }
     const row=rows[0];
-    if(rows.length>1||row&&(!videoId.test(row.video_id)||row.video_url!=='https://www.douyin.com/video/'+row.video_id
+    if(rows.length>1||row&&(requestedVideo!==undefined&&row.video_id!==requestedVideo||expectedDigest!==undefined&&row.evidence_digest!==expectedDigest||!videoId.test(row.video_id)||row.video_url!=='https://www.douyin.com/video/'+row.video_id
       ||typeof row.title!=='string'||row.harvest_batch!==run||row.process_status!==claimed
       ||!['pending','matched'].includes(row.judgment_status))) fail('CLAIM_READBACK');
     await client.query('COMMIT');
@@ -206,12 +204,13 @@ const operations = ['company_config','collect_claim','qualification_input','qual
 const projectFields = stdout => Object.fromEntries(String(stdout).split('\n')
   .filter(line=>line.includes('=')).map(line=>[line.slice(0,line.indexOf('=')),line.slice(line.indexOf('=')+1)]));
 
-export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority,evidenceRoot,transcribe,commentObserver,activityPlaybook}) {
+export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority,evidenceRoot,transcribe,commentObserver,activityPlaybook,readSourceHandoff,readAuthor,readDeviceContext}) {
   const {line,run_tag:run,source_run:origin,profile,serial,expected_account:account,company}=scope;
   checkSource({op:'collect_claim',line,run,source_run:null,committed_origin_run:origin,limit:1},scope);
   let verifiedAccount=false, binding=null, owned=null, verifiedVideo=false, recording=null, busy=false, claimInDoubt=false;
   const evidenceIds=new Set();
-  let accountNavigation=null, openedApp=false;
+  let accountNavigation=null, openedApp=false, reviewedVideo=null, openedReviewVideo=null, verifiedReviewVideo=false, authorProof=null, reviewedDigest=null;
+  let deviceReady=!readDeviceContext;
   let asrAttempted=false, submitted=false, qualificationInput, qualified=false;
   const preparedComments=new Map(),committedLookups=new Map(),pendingLookups=new Set();
 
@@ -274,16 +273,44 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         ||['company_id','tenant_id','version'].some(key=>device?.[key]!==company[key])
         ||device.profile!==profile||device.device_serial!==serial||device.douyin_id!==account
         ||device.enabled!==true||device.verification_status!=='verified')fail('ACCOUNT_CONFIG');
-      binding={...device,line_key:line,source_run:null};
+      binding={...device,line_key:line,source_run:null,own_douyin_ids:result.own_douyin_ids};
       return result;
     }
     if(!binding)fail('COMPANY_REQUIRED');
+    if(!deviceReady)fail('DEVICE_CONTEXT');
+    if(operation==='collect_source_read') {
+      if(owned||claimInDoubt)fail('VIDEO_SCOPE');
+      const result=await queue(operation,{committed_origin_run:origin,video_id:proposal?.video_id??null});
+      if(result.source_run!==origin||result.video&&(!videoId.test(result.video.video_id)
+        ||proposal?.video_id!=null&&result.video.video_id!==proposal.video_id))fail('SOURCE_READBACK');
+      if(reviewedVideo!==result.video?.video_id||reviewedDigest!==result.video?.evidence_digest) {
+        openedReviewVideo=null;
+        verifiedReviewVideo=false;
+        authorProof=null;
+      }
+      reviewedVideo=null;
+      const handoff=result.video&&readSourceHandoff?await readSourceHandoff(result.video):null;
+      reviewedVideo=result.video?.video_id??null;
+      reviewedDigest=result.video?.evidence_digest??null;
+      return handoff?{...result,handoff}:result;
+    }
+    if(operation==='collect_author_read') {
+      if(owned||claimInDoubt||!verifiedReviewVideo||!Array.isArray(binding.own_douyin_ids)
+        ||!binding.own_douyin_ids.includes(account))fail('AUTHOR_UNVERIFIED');
+      const proof=await readAuthor(reviewedVideo);
+      if(proof.video_id!==reviewedVideo||!proof.douyin_id)fail('AUTHOR_UNVERIFIED');
+      authorProof={...proof,own_account:binding.own_douyin_ids.includes(proof.douyin_id)};
+      return structuredClone(authorProof);
+    }
     if(operation==='collect_claim') {
+      const requested=proposal?.video_id;
+      if(activityPlaybook&&(!reviewedVideo||requested!==reviewedVideo))fail('SOURCE_READ_REQUIRED');
+      if(readAuthor&&(!reviewedDigest||authorProof?.video_id!==requested||authorProof.own_account))fail('AUTHOR_UNVERIFIED');
       if(owned)return {source_run:origin,video:structuredClone(owned)};
       claimInDoubt=true;
-      const result=await queue(operation,{committed_origin_run:origin});
+      const result=await queue(operation,{committed_origin_run:origin,...(requested?{video_id:requested}:{}),...(readAuthor?{evidence_digest:reviewedDigest}:{})});
       if(result.source_run!==origin||result.video&&(!videoId.test(result.video.video_id||'')
-        ||result.video.video_url!=='https://www.douyin.com/video/'+result.video.video_id))fail('CLAIM_RECEIPT');
+        ||requested&&result.video.video_id!==requested||result.video.video_url!=='https://www.douyin.com/video/'+result.video.video_id))fail('CLAIM_RECEIPT');
       owned=result.video;claimInDoubt=false;
       return result;
     }
@@ -338,8 +365,19 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       evidence(tap);
       // 消耗本轮截图，异常或传输中断后不重发点击。
       accountNavigation.state='tap_attempted';
+    } else if(!owned) {
+      if(!activityPlaybook||!verifiedAccount||!binding||!reviewedVideo||claimInDoubt)fail('VIDEO_SCOPE');
+      if(command==='open-video') {
+        if(args.length!==2||args[0]!==reviewedVideo)fail('VIDEO_SCOPE');
+        evidence(args[1]);
+        openedReviewVideo=null;
+        verifiedReviewVideo=false;
+      } else if(command===links||captureCommands.has(command)) {
+        if(args.length!==1||openedReviewVideo!==reviewedVideo||command!==links&&!verifiedReviewVideo)fail('VIDEO_SCOPE');
+        evidence(args[0]);
+        if(command===links)verifiedReviewVideo=false;
+      } else fail('VIDEO_SCOPE');
     } else {
-      if(!owned)fail('VIDEO_SCOPE');
       if(command==='open-video') {
         if(args.length!==2||args[0]!==owned.video_id||recording&&!recording.stopped)fail('VIDEO_SCOPE');
         evidence(args[1]);verifiedVideo=false;commentObserver?.reset();
@@ -377,10 +415,13 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       verifiedAccount=projectFields(result.stdout).douyin_id===account;
       if(!verifiedAccount)fail('ACCOUNT');
     }
+    if(command==='open-video'&&!owned)openedReviewVideo=reviewedVideo;
     if(command===links) {
       const fields=projectFields(result.stdout);
-      verifiedVideo=fields.video_id===owned.video_id&&fields.content_type==='video';
-      if(!verifiedVideo)fail('VIDEO_IDENTITY');
+      const matched=fields.video_id===(owned?.video_id??reviewedVideo)&&fields.content_type==='video';
+      if(owned)verifiedVideo=matched;
+      else verifiedReviewVideo=matched;
+      if(!matched)fail('VIDEO_IDENTITY');
     }
     if(command==='record-stop'){
       recording.stopped=true;
@@ -418,18 +459,27 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       try {
         await assertAuthority();
         let result;
-        if(kind==='inspect'&&Object.keys(input??{}).length===0) {
-          result={stage:'102',source_run:origin,phone_commands:[...commandList],business_operations:[...operations],
+        if(kind==='inspect'&&readDeviceContext&&input?.view==='device_context'&&Object.keys(input).length===1) {
+          deviceReady=false;
+          result=await readDeviceContext();
+          const state=projectFields(result.device);
+          deviceReady=state.state==='device'&&state.call_state==='idle';
+          if(!deviceReady)fail('DEVICE_CONTEXT');
+        } else if(kind==='inspect'&&Object.keys(input??{}).length===0) {
+          result={stage:'102',source_run:origin,...(readDeviceContext?{inspect_views:['device_context']}:{}),phone_commands:[...commandList],business_operations:activityPlaybook?['collect_source_read',...(readAuthor?['collect_author_read']:[]),...operations]:[...operations],
             account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。',
             ...(activityPlaybook?{activity_playbook:structuredClone(activityPlaybook),
               instructions:'执行本单前，先读取冻结的 Playbook 和方法清单，按清单顺序读取及执行对应的 Activity Skill。'}:{})};
         } else if(kind==='phone'&&Object.keys(input??{}).sort().join(',')==='args,command'){
           result=await performPhone(input.command,input.args);
-        } else if(kind==='business'&&operations.includes(input?.operation)){
+        } else if(kind==='business'&&(operations.includes(input?.operation)||activityPlaybook&&input?.operation==='collect_source_read'||readAuthor&&input?.operation==='collect_author_read')){
           const keys=Object.keys(input).sort().join(',');
-          const inputFields={prepare_comment:'index',collect_submit:'reference'}[input.operation];
+          const sourceRead=input.operation==='collect_source_read';
+          const exactClaim=activityPlaybook&&input.operation==='collect_claim';
+          const inputFields=exactClaim?'video_id':{prepare_comment:'index',collect_submit:'reference'}[input.operation];
+          const optionalSourceId=sourceRead&&keys==='input,operation'&&Object.keys(input.input??{}).join(',')==='video_id';
           const requiresInput=input.operation==='qualification_submit'||inputFields;
-          if(keys!==(requiresInput?'input,operation':'operation')
+          if(!optionalSourceId&&keys!==(requiresInput?'input,operation':'operation')
             ||inputFields&&Object.keys(input.input??{}).join(',')!==inputFields)fail('OPERATION');
           result=await performBusiness(input.operation,input.input);
         } else fail('OPERATION');

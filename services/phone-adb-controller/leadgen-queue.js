@@ -160,7 +160,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         ||account.verification_status!=='verified'||account.enabled!==true||account.device_serial!==requestedBinding.device_serial
         ||String(input.step)==='102'&&(account.company_id!==snapshot.company_id||account.tenant_id!==snapshot.tenant_id||account.platform!=='douyin')
         ||typeof account.douyin_id!=='string'||!account.douyin_id||account.douyin_id.trim()!==account.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: exact frozen company account/device binding required');
-      return {...configEvidence(snapshot,run),device_binding:{company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:run,
+      const ownDouyinIds=String(input.step)==='102'?accounts.filter(a=>a?.company_id===snapshot.company_id
+        &&a.tenant_id===snapshot.tenant_id&&a.platform==='douyin'&&a.enabled===true&&a.verification_status==='verified')
+        .map(a=>a.douyin_id).filter(id=>typeof id==='string'&&id.length>0&&id.trim()===id):null;
+      return {...configEvidence(snapshot,run),...(ownDouyinIds?{own_douyin_ids:[...new Set(ownDouyinIds)]}:{}),
+        device_binding:{company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:run,
         profile:account.profile,device_serial:account.device_serial,douyin_id:account.douyin_id,verification_status:'verified',enabled:true}};
     }
     return {...configEvidence(snapshot,run),...(String(input.step)==='104'?{runtime_config:snapshot.runtime_config}:{})};

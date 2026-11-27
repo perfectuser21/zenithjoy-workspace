@@ -7,6 +7,8 @@ import {userInfo} from 'node:os';
 import {readFrozen,digest} from './runtime-definition.mjs';
 import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches,standaloneHostProofPaths,createStandaloneHostProof} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
+import {readStandaloneProducerHandoff} from './activity-upstream-source.mjs';
+import {createVideoAuthorReader} from './standalone-video-author.mjs';
 import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
 import {createCentralDeviceLease} from './central-device-lease.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
@@ -229,6 +231,28 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
     catch(error){if(error?.code==='STANDALONE_NATIVE_COMMAND'||leafUnknown())revoke('TOOL_RESULT_UNKNOWN');throw error;}
   }:invokePhone;
   if(collection)collectionTools=createStandaloneCollectionTools({scope,assertAuthority,phone,rpc,evidenceRoot:phoneScope.evidence_root,activityPlaybook:frozen.activity_playbook,
+    readDeviceContext:frozen.activity_playbook?async()=>{
+      const central=await lease.verifyHeld(),localStatus=await controller('lock-status');
+      const localLine=localStatus.stdout.split('\n').filter(line=>line.startsWith('lock='));
+      if(central.locked_by!==identity.task_id||localLine.length!==1||!localLine[0].startsWith(`lock=held owner=${scope.run_tag} `)){
+        const code='STANDALONE_COLLECTION_DEVICE_CONTEXT';
+        throw Object.assign(Error(code),{code});
+      }
+      const snapshot=await phone({command:'preflight',args:['--strict-call-state'],profile:scope.profile,owner:scope.run_tag});
+      return {device:snapshot.stdout,local_owner:scope.run_tag,central_owner:identity.task_id,central_lease_version:central.lease_version};
+    }:undefined,
+    readAuthor:frozen.activity_playbook?createVideoAuthorReader({scope,evidenceRoot:phoneScope.evidence_root,runDirectory:dir,
+      python:phoneScope.executables?.python,phone,execute}):undefined,
+    readSourceHandoff:async candidate=>{
+      const read=path=>(dependencies.readBrain??readBrain)(path,{deadlineMs:identity.deadline_ms});
+      try{return await readStandaloneProducerHandoff({read,sourceRun:scope.source_run,line:scope.line,company:scope.company,candidate});}
+      catch(error){
+        const reason=error.message==='UPSTREAM_SOURCE_RESULT'?'SOURCE_NOT_COMPLETED':
+          error.message?.startsWith('UPSTREAM_SOURCE_')?'SOURCE_EVIDENCE':'SOURCE_READ_FAILED';
+        const code='STANDALONE_COLLECTION_'+reason;
+        throw Object.assign(Error(code),{code});
+      }
+    },
     commentObserver:createStandaloneCommentObserver({scope,evidenceRoot:phoneScope.evidence_root,root,frozen,phone,execute}),
     transcribe:async audio=>{
       const key=env.DASHSCOPE_API_KEY;
