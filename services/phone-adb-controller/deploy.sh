@@ -348,10 +348,12 @@ done
 echo "=== [3/3] xian-m4:~/bin-harvest/ 普通payload批量暂存、原序逐文件安装 ==="
 for host in xian-m4; do
   deploy_m4_payload "$host"
-  _bili_root="$(git rev-parse --show-toplevel)"
-  _bili_dir="~/bin-harvest/$(dirname "$M4_BILIBILI_OCR_TARGET")"
-  ssh "$host" "mkdir -p $_bili_dir"
-  push_atomic "$_bili_root/$M4_BILIBILI_OCR_SOURCE" "$host" "$_bili_dir" "$(basename "$M4_BILIBILI_OCR_TARGET")"
+  if [[ -n "${M4_BILIBILI_NODE_FILES[*]-}" ]]; then
+    _bili_root="$(git rev-parse --show-toplevel)"
+    _bili_dir="~/bin-harvest/$(dirname "$M4_BILIBILI_OCR_TARGET")"
+    ssh "$host" "mkdir -p $_bili_dir"
+    push_atomic "$_bili_root/$M4_BILIBILI_OCR_SOURCE" "$host" "$_bili_dir" "$(basename "$M4_BILIBILI_OCR_TARGET")"
+  fi
 done
 
 echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="
