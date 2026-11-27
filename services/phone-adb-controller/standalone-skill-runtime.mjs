@@ -20,6 +20,26 @@ import {createStandaloneCommentObserver} from './standalone-comment-observer.mjs
 import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
+export async function readStandaloneCallRegistry({root,environment,serial,deadlineMs,execute,now=Date.now}){
+ const remaining=deadlineMs-now();
+ if(remaining<=0)fail('WORK_DEADLINE');
+ const reject=reason=>{
+  const code='STANDALONE_COLLECTION_'+reason;
+  throw Object.assign(Error(code),{code});
+ };
+ // The wrapper returns only after both its ADB leaves and the host's final
+ // device-identity check. Bound the complete action by the frozen run deadline.
+ const args=['-H','127.0.0.1','-P',environment.DOUYIN_ADB_PORT,'-s',serial,'shell','dumpsys','telephony.registry'];
+ let output;
+ try{
+  output=await execute(join(root,'adb-managed-client.py'),args,{env:environment,timeoutMs:Math.min(360000,remaining)});
+ }catch(error){
+  reject(error?.message==='EXECUTION_DEADLINE'?'DEVICE_CONTEXT_TIMEOUT':'DEVICE_CONTEXT');
+ }
+ const callStates=[...(output.stdout??'').matchAll(/mCallState=(\d+)/g)].map(match=>match[1]);
+ if(output.code!==0||callStates.length===0||callStates.some(state=>state!=='0'))reject('DEVICE_CONTEXT');
+}
+
 export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput,isCleanup=()=>false}){
  const fixed=frozen.agent_input;
  return async function invoke({command,args,profile,owner,playback,verifyAccountOnly}){
@@ -239,15 +259,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
         throw Object.assign(Error(code),{code});
       }
       const snapshot=await phone({command:'preflight',args:[],profile:scope.profile,owner:scope.run_tag});
-      const remaining=identity.deadline_ms-Date.now();
-      if(remaining<=0)fail('WORK_DEADLINE');
-      const registry=await execute(join(root,'adb-managed-client.py'),['-H','127.0.0.1','-P',env.DOUYIN_ADB_PORT,'-s',scope.serial,
-        'shell','dumpsys','telephony.registry'],{env,timeoutMs:Math.min(15000,remaining)});
-      const calls=[...(registry.stdout??'').matchAll(/mCallState=(\d+)/g)].map(match=>match[1]);
-      if(registry.code!==0||calls.length===0||calls.some(state=>state!=='0')){
-        const code='STANDALONE_COLLECTION_DEVICE_CONTEXT';
-        throw Object.assign(Error(code),{code});
-      }
+      await readStandaloneCallRegistry({root,environment:env,serial:scope.serial,deadlineMs:identity.deadline_ms,execute});
       return {device:snapshot.stdout,local_owner:scope.run_tag,central_owner:identity.task_id,central_lease_version:central.lease_version};
     }:undefined,
     readAuthor:frozen.activity_playbook?createVideoAuthorReader({scope,evidenceRoot:phoneScope.evidence_root,runDirectory:dir,
