@@ -32,8 +32,10 @@ function scopeRecoveryFixture({sources=['a'.repeat(40),'b'.repeat(40)],revision=
   throw Error(`unexpected ${path}`);
  };
  const readDefinition=path=>{const i=files.indexOf(path);return{key:owners[i].key,version:'1.0.2',capability_id:owners[i].capability_id,runtime:{skill_id:'skill'},activities:[],source:{repo,ref:path,revision}};};
+ for(const [i, version] of versions.entries())if(version.source_commit===revision)version.payload.contract=readDefinition(files[i]);
  const validateSnapshot=s=>{const{snapshot_sha256,...body}=s;assert.equal(snapshot_sha256,fixtureDigest(body),'original native snapshot must remain unmodified');};
  const reseal=()=>{for(const s of snapshots.values()){delete s.snapshot_sha256;s.snapshot_sha256=fixtureDigest(s);}};
+ reseal();
  return{args:{api,scope,files,revision,repo,owners,skills:[],readDefinition,validateSnapshot,digestMapManifest:fixtureDigest},snapshots,versions,owners,manifest,active,calls,reseal};
 }
 
@@ -49,6 +51,7 @@ for(const[state,sources,revision]of[
   for(const[item,i]of loaded.documents.map((item,i)=>[item,i])){
    assert.equal(item.snapshot,f.snapshots.get(f.versions[i].source_commit));
    assert.equal(item.owner,f.owners[i]);
+   assert.equal(item.alreadyRegistered,f.versions[i].source_commit===f.args.revision);
   }
   assert.deepEqual([...f.snapshots.values()].map(s=>JSON.stringify(s)),before);
   assert.equal(f.calls.filter(([,path])=>path===`map?scope=${f.args.scope}`).length,2,'anchor must be read before and after planning');
@@ -75,6 +78,20 @@ test('来源恢复读取期间active地图并发变化必须拒绝',async()=>{
  const{loadAuthoringScope}=await import('../authoring-main-source.mjs');const f=scopeRecoveryFixture();const base=f.args.api;let reads=0;
  f.args.api=async(method,path)=>{const result=await base(method,path);return path===`map?scope=${f.args.scope}`&&++reads>1?{...result,manifest_digest:'0'.repeat(64)}:result;};
  await assert.rejects(loadAuthoringScope(f.args),/MAP_ACTIVE_CHANGED/);
+});
+test('同一个已登记源码只读校验完整定义，重试不重新登记同版本',async()=>{
+ const {loadAuthoringScope}=await import('../authoring-main-source.mjs');
+ const {renewDefinitions}=await import('../authoring-main-source-core.mjs');
+ const f=scopeRecoveryFixture({sources:['a'.repeat(40),'a'.repeat(40)]});
+ const scope=await loadAuthoringScope(f.args);
+ let activated=false;
+ const unexpected=()=>{throw Error('same revision must not start a second registration');};
+ await renewDefinitions([scope],{revision:f.args.revision,checkMain:async()=>{},task:unexpected,verify:unexpected,
+  complete:unexpected,register:unexpected,activate:async()=>{activated=true;}});
+ assert.equal(activated,true);
+ f.versions[0].payload.contract={...f.versions[0].payload.contract,runtime:{skill_id:'different'}};
+ f.reseal();
+ await assert.rejects(loadAuthoringScope(f.args),/SAME_SOURCE_DEFINITION/);
 });
 test('五个既有正式定义升patch且保留Patrol实际固定部署来源',()=>{
  for(const [path,version] of [

@@ -111,7 +111,6 @@ export async function runMainSource({repoRoot=process.cwd(),brainRoot=process.en
   if(actual!==revision)throw Error('AUTHORING_SOURCE_MAIN_MOVED');
  };
  await checkMain();mkdirSync(output,{recursive:true});
- const root=await createSourceTask(api,revision,'root');
  const all=(await api('GET','workflows')).workflows;
  const skills=[];for(let offset=0;offset<5000;offset+=500){const rows=await api('GET',`skills?limit=500&offset=${offset}`);skills.push(...rows);if(rows.length<500)break;if(offset===4500)throw Error('AUTHORING_SKILL_LIST_TRUNCATED');}
  const scopes=[];
@@ -124,6 +123,7 @@ export async function runMainSource({repoRoot=process.cwd(),brainRoot=process.en
    readDefinition:path=>({...JSON.parse(readFixedLocalGitBlob(repoRoot,{revision,path})),source:{repo:REPO,ref:path,revision}}),
    validateSnapshot:validateImplementationSnapshot,digestMapManifest}));
  }
+ const root=await createSourceTask(api,revision,`root:${hash(scopes.map(scope=>scope.scope)).slice(0,16)}`);
  const validations=new Map();
  await renewDefinitions(scopes,{revision,hash,checkMain,
   task:async(key)=>{const task=await createSourceTask(api,revision,key,root.id);validations.set(key,task);return task;},
