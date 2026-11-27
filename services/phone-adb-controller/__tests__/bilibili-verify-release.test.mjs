@@ -1,17 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { digest } from '../runtime-definition.mjs';
 import { bindingComponents, verifyTargetRelease } from '../deployment-targets.mjs';
 import { WORKFLOWS } from '../deployment-preflight.mjs';
 import {
   assertBilibiliRelease,
   assertBilibiliWorkspaceJob,
+  resolveBilibiliHostPolicy,
   BILIBILI_APPROVED,
   BILIBILI_COMPONENT_PATHS,
   BILIBILI_PROVIDER_PATH,
   BILIBILI_WORKFLOW,
 } from '../bilibili-verify-release.mjs';
+
+const registeredPolicy = () => JSON.parse(readFileSync(new URL('../config/collection-phone-hosts.json', import.meta.url)));
+const approvedPolicy = registry => registry.hosts.find(row => row.target === 'xian-m4'
+  && row.profile === BILIBILI_APPROVED.profile && row.serial === BILIBILI_APPROVED.serial);
+const localPolicy = ({ schema_version, host_id, transport, endpoint, adb_bin }) => ({
+  schema_version, host_id, transport, endpoint, adb_bin,
+});
+
+test('the installed schema 1 host without a local ADB digest uses the exact registered binary pin', () => {
+  const registered = registeredPolicy();
+  const { policy } = approvedPolicy(registered);
+  const local = localPolicy(policy);
+  assert.deepEqual(resolveBilibiliHostPolicy(local, registered, BILIBILI_APPROVED), {
+    ...local, port: 5037, adb_realpath: policy.adb_realpath, adb_sha256: policy.adb_sha256,
+  });
+  assert.equal(local.adb_sha256, undefined);
+});
+
+test('no policy from a sibling handset, an alternate binary or a conflicting local pin is accepted', () => {
+  const registered = registeredPolicy();
+  const row = approvedPolicy(registered);
+  const local = localPolicy(row.policy);
+  for (const invalid of [{ ...local, adb_bin: '/usr/local/bin/adb' }, { ...local, adb_sha256: '0'.repeat(64) }]) {
+    assert.throws(() => resolveBilibiliHostPolicy(invalid, registered, BILIBILI_APPROVED), /BILIBILI_WORKSPACE_HOST_POLICY/);
+  }
+  row.serial = 'different-serial';
+  assert.throws(() => resolveBilibiliHostPolicy(local, registered, BILIBILI_APPROVED), /BILIBILI_WORKSPACE_HOST_POLICY/);
+});
 
 function fixture() {
   const sourceCommit = 'c'.repeat(40);

@@ -1,9 +1,11 @@
+import { isAbsolute } from 'node:path';
 import { digest } from './runtime-definition.mjs';
 
 export const BILIBILI_WORKFLOW = 'android_bilibili_verify_existing';
 export const BILIBILI_OPERATION = 'verify_existing';
 export const BILIBILI_TARGET = 'xian-m4';
 export const BILIBILI_PROVIDER_PATH = 'services/phone-adb-controller/standalone-bilibili-verify.mjs';
+export const BILIBILI_HOST_POLICY_PATH = 'services/phone-adb-controller/config/collection-phone-hosts.json';
 export const BILIBILI_APPROVED = Object.freeze({
   bvid: 'BV1cLpG6cEHH',
   owner_uid: '3546824935738234',
@@ -25,6 +27,7 @@ export const BILIBILI_COMPONENT_PATHS = Object.freeze([
   'services/phone-adb-controller/bilibili-verify-release.mjs',
   'services/phone-adb-controller/bilibili-verify-native.mjs',
   'services/phone-adb-controller/bilibili-verify-worker.mjs',
+  BILIBILI_HOST_POLICY_PATH,
   'scripts/phone-account-patrol/ocr.swift',
 ]);
 
@@ -35,6 +38,22 @@ function need(value, reason) {
 function keys(value, names) {
   return value && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name));
+}
+
+export function resolveBilibiliHostPolicy(local, registered, scope) {
+  need(registered?.version === 1 && Array.isArray(registered.hosts), 'HOST_POLICY');
+  const rows = registered.hosts.filter(row => row?.target === BILIBILI_TARGET
+    && row.profile === scope.profile && row.serial === scope.serial);
+  need(rows.length === 1, 'HOST_POLICY');
+  const { policy } = rows[0];
+  need(policy?.schema_version === 1 && policy.host_id === BILIBILI_TARGET
+    && policy.transport === 'usb' && policy.endpoint === 'tcp:127.0.0.1:5037'
+    && typeof policy.adb_bin === 'string' && isAbsolute(policy.adb_bin)
+    && typeof policy.adb_realpath === 'string' && isAbsolute(policy.adb_realpath)
+    && sha256.test(policy.adb_sha256 ?? ''), 'HOST_POLICY');
+  need(['schema_version', 'host_id', 'transport', 'endpoint', 'adb_bin'].every(key => local?.[key] === policy[key])
+    && ['adb_realpath', 'adb_sha256'].every(key => !Object.hasOwn(local, key) || local[key] === policy[key]), 'HOST_POLICY');
+  return { ...local, port: 5037, adb_realpath: policy.adb_realpath, adb_sha256: policy.adb_sha256 };
 }
 
 function validRow(row, sourceCommit) {

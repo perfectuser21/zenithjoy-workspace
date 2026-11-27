@@ -10,7 +10,7 @@ import { digest } from './runtime-definition.mjs';
 import { callStandaloneSkillTool } from './standalone-skill-ipc.mjs';
 import { serveStandaloneBilibiliVerify } from './standalone-bilibili-verify.mjs';
 import { createBilibiliNativeDevice, createBilibiliNativeReader } from './bilibili-verify-native.mjs';
-import { assertBilibiliRelease, assertBilibiliWorkspaceJob } from './bilibili-verify-release.mjs';
+import { assertBilibiliRelease, assertBilibiliWorkspaceJob, BILIBILI_HOST_POLICY_PATH, resolveBilibiliHostPolicy } from './bilibili-verify-release.mjs';
 
 const runFile = promisify(execFile);
 const controllerPrefix = 'services/phone-adb-controller/';
@@ -81,9 +81,6 @@ export function createProvider(job, options, context) {
   use(process.platform === 'darwin' && Object.keys(options ?? {}).sort().join(',') === 'evidence_root,host_policy,host_policy_sha256,phone_registry,phone_registry_sha256,runtime_root');
   const policyBytes = readOwned(options.host_policy, 64 * 1024);
   use(digest(policyBytes) === options.host_policy_sha256);
-  const policy = { ...parse(policyBytes), port: 5037 };
-  use(policy.schema_version === 1 && policy.host_id === 'xian-m4' && policy.transport === 'usb'
-    && policy.endpoint === 'tcp:127.0.0.1:5037');
   const registryBytes = readOwned(options.phone_registry, 64 * 1024);
   use(digest(registryBytes) === options.phone_registry_sha256);
   const rawRows = utf8(registryBytes).split(/\r?\n/).map(line => line.split('\t'));
@@ -92,6 +89,7 @@ export function createProvider(job, options, context) {
   const deviceRows = rawRows.filter(row => row[0] === scope.profile);
   use(serialColumn >= 1 && deviceRows.length === 1 && deviceRows[0][serialColumn] === scope.serial);
   const runtime = trustedDirectory(options.runtime_root, false);
+  const registeredPolicyPath = localPath(runtime, BILIBILI_HOST_POLICY_PATH);
   const evidenceRoot = trustedDirectory(options.evidence_root, true);
   const target = new URL(context.brainUrl);
   use(target.protocol === 'http:' && target.hostname === '127.0.0.1' && target.port && target.pathname === '/'
@@ -117,6 +115,7 @@ export function createProvider(job, options, context) {
     WFR_COLLECTION_POLICY_FILE: options.host_policy,
   };
   let leaf, ipc, lease, directory, evidence, started, ended, deadline, cleanupDeadline;
+  let registeredPolicySha;
   let local = 'none';
   let closePromise;
   let cleanup = false;
@@ -132,6 +131,7 @@ export function createProvider(job, options, context) {
   async function hold() {
     use(digest(readOwned(options.host_policy, 64 * 1024)) === options.host_policy_sha256);
     use(digest(readOwned(options.phone_registry, 64 * 1024)) === options.phone_registry_sha256);
+    use(digest(readOwned(registeredPolicyPath, 64 * 1024)) === registeredPolicySha);
     await lease.verifyHeld();
     if (!cleanup) {
       const task = await request('tasks/' + job.task_id);
@@ -234,7 +234,11 @@ export function createProvider(job, options, context) {
         request(releaseKey + '/observations/' + job.definition.observation_id),
       ]);
       const release = info.release;
-      const frozen = assertBilibiliRelease(release, job, path => readOwned(localPath(runtime, path)));
+      const registeredPolicy = readOwned(registeredPolicyPath, 64 * 1024);
+      const frozen = assertBilibiliRelease(release, job, path => path === BILIBILI_HOST_POLICY_PATH
+        ? registeredPolicy : readOwned(localPath(runtime, path)));
+      registeredPolicySha = digest(registeredPolicy);
+      const policy = resolveBilibiliHostPolicy(parse(policyBytes), parse(registeredPolicy), scope);
       assertReleaseReadback(job, release, gate, observed.observation);
       const manifest = parse(readOwned(join(runtime, 'deployment-manifest.json')));
       use(manifest.release_id === release.id && manifest.observation_id === job.definition.observation_id
