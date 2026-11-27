@@ -1,0 +1,117 @@
+{
+  "key": "android_bilibili_verify_existing",
+  "name": "B 站既有私密视频只读核验",
+  "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+  "channel": "bilibili",
+  "form": "android_rpa",
+  "version": "1.0.0",
+  "runtime": {
+    "skill_id": "1d2d0bb6-4941-4399-9452-a7f442159a3d",
+    "entrypoint": "verify_existing"
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "bvid": {
+        "const": "BV1cLpG6cEHH"
+      }
+    },
+    "required": [
+      "bvid"
+    ]
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "evidence": {
+        "type": "string",
+        "pattern": "^sha256:[a-f0-9]{64}$"
+      }
+    },
+    "required": [
+      "evidence"
+    ]
+  },
+  "resources": {
+    "machine": "xian-m4",
+    "profile": "yueshengyun-work",
+    "serial": "e6c7ef34"
+  },
+  "recovery": {
+    "max_attempts": 1,
+    "total_timeout_sec": 480,
+    "cleanup_timeout_sec": 90,
+    "retry_safe": false
+  },
+  "verification": {
+    "independent": true,
+    "instructions": "从同次运行宿主私有目录重新读取六份原件，与 SHA 逐项匹配。"
+  },
+  "activities": [
+    {
+      "key": "verify_existing",
+      "name": "只读核验指定本人私密视频",
+      "executor_kind": "code",
+      "description": "受管独立只读宿主使用固定的已存在作品，不使用发布操作。",
+      "acceptance": [
+        "原生本人和作者 UID 相同",
+        "只读源作品私密可见且播放器实际走完",
+        "同 run 原件的 SHA 逐条复核通过",
+        "中央和本机锁归还到默认桌面"
+      ],
+      "implementation": {
+        "kind": "code",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/phone-adb-controller/bilibili-verify-worker.mjs",
+        "ref": "perfectuser21/zenithjoy-workspace:services/phone-adb-controller/bilibili-verify-worker.mjs",
+        "revision": "contract",
+        "version": "1.0.0"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/standalone-bilibili-verify.mjs",
+          "ref": "perfectuser21/zenithjoy-workspace:services/phone-adb-controller/standalone-bilibili-verify.mjs",
+          "revision": "contract",
+          "version": "1.0.0"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/bilibili-verify-release.mjs",
+          "ref": "perfectuser21/zenithjoy-workspace:services/phone-adb-controller/bilibili-verify-release.mjs",
+          "revision": "contract",
+          "version": "1.0.0"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/bilibili-verify-native.mjs",
+          "ref": "perfectuser21/zenithjoy-workspace:services/phone-adb-controller/bilibili-verify-native.mjs",
+          "revision": "contract",
+          "version": "1.0.0"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
+          "ref": "perfectuser21/zenithjoy-workspace:services/phone-adb-controller/config/collection-phone-hosts.json",
+          "revision": "contract",
+          "version": "1.0.0"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/ocr.swift",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/ocr.swift",
+          "revision": "contract",
+          "version": "1.0.0"
+        }
+      ],
+      "steps": []
+    }
+  ]
+}
