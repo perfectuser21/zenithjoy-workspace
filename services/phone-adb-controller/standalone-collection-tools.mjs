@@ -206,7 +206,7 @@ const operations = ['company_config','collect_claim','qualification_input','qual
 const projectFields = stdout => Object.fromEntries(String(stdout).split('\n')
   .filter(line=>line.includes('=')).map(line=>[line.slice(0,line.indexOf('=')),line.slice(line.indexOf('=')+1)]));
 
-export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority,evidenceRoot,transcribe,commentObserver}) {
+export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority,evidenceRoot,transcribe,commentObserver,activityPlaybook}) {
   const {line,run_tag:run,source_run:origin,profile,serial,expected_account:account,company}=scope;
   checkSource({op:'collect_claim',line,run,source_run:null,committed_origin_run:origin,limit:1},scope);
   let verifiedAccount=false, binding=null, owned=null, verifiedVideo=false, recording=null, busy=false, claimInDoubt=false;
@@ -420,7 +420,9 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         let result;
         if(kind==='inspect'&&Object.keys(input??{}).length===0) {
           result={stage:'102',source_run:origin,phone_commands:[...commandList],business_operations:[...operations],
-            account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。'};
+            account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。',
+            ...(activityPlaybook?{activity_playbook:structuredClone(activityPlaybook),
+              instructions:'执行本单前，先读取冻结的 Playbook 和方法清单，按清单顺序读取及执行对应的 Activity Skill。'}:{})};
         } else if(kind==='phone'&&Object.keys(input??{}).sort().join(',')==='args,command'){
           result=await performPhone(input.command,input.args);
         } else if(kind==='business'&&operations.includes(input?.operation)){

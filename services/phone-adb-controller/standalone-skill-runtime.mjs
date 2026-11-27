@@ -228,7 +228,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
     try{return await invokePhone(input);}
     catch(error){if(error?.code==='STANDALONE_NATIVE_COMMAND'||leafUnknown())revoke('TOOL_RESULT_UNKNOWN');throw error;}
   }:invokePhone;
-  if(collection)collectionTools=createStandaloneCollectionTools({scope,assertAuthority,phone,rpc,evidenceRoot:phoneScope.evidence_root,
+  if(collection)collectionTools=createStandaloneCollectionTools({scope,assertAuthority,phone,rpc,evidenceRoot:phoneScope.evidence_root,activityPlaybook:frozen.activity_playbook,
     commentObserver:createStandaloneCommentObserver({scope,evidenceRoot:phoneScope.evidence_root,root,frozen,phone,execute}),
     transcribe:async audio=>{
       const key=env.DASHSCOPE_API_KEY;
