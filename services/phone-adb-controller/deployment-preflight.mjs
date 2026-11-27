@@ -169,7 +169,27 @@ export function readDeploymentToken(path){
  requireThat(/^[A-Za-z0-9_.~+/=-]{8,}$/.test(token),'凭据镜像格式无效');return token;
 }
 const RELEASE_READ_RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000];
-export function brainRequest(base, token, {retryReleaseReads = false} = {}) {
+function isFixedStagingRelease(context, serialized) {
+ const {sha, attemptKey} = context;
+ const pilotRunId = typeof attemptKey === 'string' && /^github:(\d+):[\w:.-]+$/.exec(attemptKey)?.[1];
+ if (typeof sha !== 'string' || !SHA.test(sha) || !pilotRunId || typeof serialized !== 'string') return false;
+ const input = JSON.parse(serialized);
+ const environment = `staging:${sha}`;
+ if (input?.environment !== environment || !DEPLOY_HOSTS.includes(input.target) || input.actor !== 'phone-adb-deployer') return false;
+ const evidence = input.ci_evidence;
+ const ref = `https://github.com/${DEPLOY_REPO}/actions/runs/${pilotRunId}`;
+ if (!Array.isArray(evidence) || evidence.length !== (input.target === 'mmv' ? 2 : 1) ||
+     !evidence.every(item => item?.report && typeof item.report === 'object' && item.evidence_ref === ref)) return false;
+ return input.release_key === unifiedReleaseKey({
+  environment, sha, target: input.target, pilotRunId, reports: evidence.map(item => item.report),
+ });
+}
+
+export function unifiedReleaseKey({environment, sha, target, pilotRunId, reports}) {
+ return `phone-adb-unified:${environment}:${sha}:${target}:${pilotRunId}:${digest(reports)}`;
+}
+
+export function brainRequest(base, token, {retryReleaseReads = false, candidateReleaseRecovery} = {}) {
  const url = new URL(base);
  requireThat(['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && token, 'Brain地址/凭据未配置');
  return async (path, body) => {
@@ -184,11 +204,10 @@ export function brainRequest(base, token, {retryReleaseReads = false} = {}) {
    headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Connection: 'close'},
    body: body ? JSON.stringify(body) : undefined, signal,
   };
-  let response;
   for (let attempt = 0; ; attempt++) {
+   let response;
    try {
     response = await fetch(target, options);
-    break;
    } catch (error) {
     const code = error?.cause?.code;
     const safeCode = typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'TRANSPORT_ERROR';
@@ -196,11 +215,20 @@ export function brainRequest(base, token, {retryReleaseReads = false} = {}) {
     const delay = RELEASE_READ_RETRY_DELAYS[attempt];
     if (!canRetry || code !== 'UND_ERR_SOCKET' || delay === undefined) throw failure;
     await wait(delay, undefined, {signal}).catch(() => { throw failure; });
+    continue;
+   }
+   requireThat(response.ok, `Brain HTTP ${response.status}`);
+   try { return await response.json(); }
+   catch {
+    const failure = Error(`Brain response invalid ${method} ${target.pathname}`);
+    // The staging ledger may have committed before the response stream was cut.
+    if (attempt !== 0 || signal.aborted || !candidateReleaseRecovery || method !== 'POST' ||
+        target.href !== new URL('/api/brain/releases', url).href ||
+        (response.status !== 200 && response.status !== 201) ||
+        !isFixedStagingRelease(candidateReleaseRecovery, options.body)) throw failure;
+    await wait(1000, undefined, {signal}).catch(() => { throw failure; });
    }
   }
-  requireThat(response.ok, `Brain HTTP ${response.status}`);
-  try { return await response.json(); }
-  catch { throw Error(`Brain response invalid ${method} ${target.pathname}`); }
  };
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){

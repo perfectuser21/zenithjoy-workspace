@@ -15,7 +15,7 @@ import {verifyPreflightPgLock} from './preflight-pg-dependencies.mjs';
 const TOOL_ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[],acceptanceTaskIds={},transaction,
  toolRoot=TOOL_ROOT,toolSha,
- stageCandidateFn=stageCandidate,runSafetyFn=runMaintenanceInstall}){
+ stageCandidateFn=stageCandidate,runSafetyFn=runMaintenanceInstall,automaticCandidate=false}){
  if(!['candidate','maintenance-install','maintenance-recover','promote','recover','rollback'].includes(mode))throw Error('无效手机部署操作');
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:fixedSourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024}).trim();
  if(!/^[0-9a-f]{40}$/.test(sha)||git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署源不是干净的固定main');
@@ -23,7 +23,10 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  const origin=git('remote','get-url','origin');
  if(![`https://github.com/${DEPLOY_REPO}.git`,`https://github.com/${DEPLOY_REPO}`,`git@github.com:${DEPLOY_REPO}.git`].includes(origin))throw Error('部署来源仓库不符');
  if(mode!=='candidate')verifyTransactionProtocol(readDeploymentSource(root,sha,'services/phone-adb-controller/deployment-protocol.json'));
- const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token,{retryReleaseReads:mode==='candidate'});
+ const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token,{
+  retryReleaseReads:mode==='candidate',
+  candidateReleaseRecovery:mode==='candidate'&&automaticCandidate===true?{sha,attemptKey}:undefined,
+ });
  if(mode==='maintenance-recover'){
   if(!/^phone-safety-[a-f0-9]{24}$/.test(transaction||''))throw Error('安全恢复必须指定原事务ID');
   if(toolSha&&toolSha!==sha){
@@ -75,6 +78,6 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  } finally {rmSync(folder,{recursive:true,force:true});}
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),transaction:process.argv[7],acceptanceTaskIds:JSON.parse(process.argv[8]||'{}'),brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env'),toolSha:process.env.WF_PHONE_TOOL_SHA});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
+ try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),transaction:process.argv[7],acceptanceTaskIds:JSON.parse(process.argv[8]||'{}'),brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env'),toolSha:process.env.WF_PHONE_TOOL_SHA,automaticCandidate:process.env.WF_PHONE_AUTOMATIC_CANDIDATE==='1'});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
  catch(error){process.stderr.write(`${error.message}\n`);process.exitCode=1;}
 }

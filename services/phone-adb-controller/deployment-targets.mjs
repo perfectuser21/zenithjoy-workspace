@@ -2,7 +2,7 @@
 import {readFileSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
-import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,deploymentAssertionPlan,brainRequest} from './deployment-preflight.mjs';
+import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,deploymentAssertionPlan,brainRequest,unifiedReleaseKey} from './deployment-preflight.mjs';
 import {execFileSync} from 'node:child_process';
 import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
 import {verifyBusinessAdmission} from './deployment-business-admission.mjs';
@@ -80,7 +80,7 @@ export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,requ
  const admission=environment==='production'?await verifyBusinessAdmission({sha,targets,runIds:businessRunIds,acceptanceTaskIds,readFile,request}):null;
  for(const target of ['xian-m4','mmv']){
   const {definitions,components}=targets[target],evidence=target==='mmv'?[bundle,bundle.commander]:[bundle];
-  const input={release_key:`phone-adb-unified:${environment}:${sha}:${target}:${attemptKey.split(':')[1]}:${digest(evidence.map(e=>e.report))}`,environment,target,actor:'phone-adb-deployer',workflows:definitions.workflows.map(w=>({workflow_definition_version_id:w.id,payload_sha256:w.payload_sha256})),components,ci_evidence:evidence.map(e=>({report:e.report,receipt:e.receipt,evidence_ref:`https://github.com/${DEPLOY_REPO}/actions/runs/${attemptKey.split(':')[1]}`}))};
+  const input={release_key:unifiedReleaseKey({environment,sha,target,pilotRunId:attemptKey.split(':')[1],reports:evidence.map(e=>e.report)}),environment,target,actor:'phone-adb-deployer',workflows:definitions.workflows.map(w=>({workflow_definition_version_id:w.id,payload_sha256:w.payload_sha256})),components,ci_evidence:evidence.map(e=>({report:e.report,receipt:e.receipt,evidence_ref:`https://github.com/${DEPLOY_REPO}/actions/runs/${attemptKey.split(':')[1]}`}))};
   const release=(await request('/api/brain/releases',input)).release;verifyTargetRelease(release,target,sha,targets[target],environment);releases[target]=release;
  }
  for(const target of Object.keys(releases)){const row=(await request('/api/brain/releases/'+releases[target].id)).release;need(same(row,releases[target]),'正式release回读变化');}

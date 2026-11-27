@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +21,20 @@ test("发布由主线Pilot release verification完成触发，不抢在证据前
  const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
  assert.match(text,/workflow_run:/);assert.match(text,/workflows: \[Pilot release verification\]/);assert.match(text,/types: \[completed\]/);assert.match(text,/branches: \[main\]/);
  assert.doesNotMatch(text,/^  push:/m);
+});
+
+test("回执恢复开关只经自动 Pilot 触发传入正式远程入口", () => {
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  const lines = yamlText.split("\n");
+  const start = lines.findIndex(line => line.trim() === "AUTOMATIC_CANDIDATE=0");
+  const end = lines.findIndex(line => line.includes('printf "AUTOMATIC_CANDIDATE='));
+  assert.ok(start >= 0 && start < end);
+  const select = lines.slice(start, end + 1).join("\n");
+  for (const [event, enabled] of [["workflow_run", 1], ["workflow_dispatch", 0]]) {
+    const shell = execFileSync("bash", ["-euc", select], {encoding: "utf8", env: {GITHUB_EVENT_NAME: event}});
+    assert.equal(shell, "AUTOMATIC_CANDIDATE='" + enabled + "'\n");
+  }
+  assert.match(yamlText, /export WF_PHONE_AUTOMATIC_CANDIDATE="\$AUTOMATIC_CANDIDATE"\n\s+if ! DEPLOY_LOG=/);
 });
 
 test("含 workflow_dispatch 手动触发入口", () => {

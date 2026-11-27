@@ -379,3 +379,147 @@ test('真实HTTP冲突保留状态且不重试，非法JSON诊断不泄漏响应
  await assert.rejects(request('/invalid?token=fixture-private-query'),error=>{assert.match(error.message,/Brain response invalid GET \/invalid/);assert.doesNotMatch(error.message,/fixture-private|\?/);return true;});
  const after=await request('/count');assert.equal(after.count,3);
 });
+
+const candidateReleasePath = '/api/brain/releases';
+const candidateAttempt = 'github:123:456:1';
+
+function stagingReleaseRequest(target = 'mmv') {
+ const environment = `staging:${sha}`;
+ const reports = (target === 'mmv' ? ['zenithjoy', 'commander-generic'] : ['zenithjoy'])
+  .map(scope => ({scope, source: {repo, head_revision: sha}}));
+ return {
+  release_key: `phone-adb-unified:${environment}:${sha}:${target}:123:${digest(reports)}`,
+  environment, target, actor: 'phone-adb-deployer',
+  ci_evidence: reports.map(report => ({report, evidence_ref: `https://github.com/${repo}/actions/runs/123`})),
+ };
+}
+
+async function serveCandidateRelease(t, {firstStatus = 201, retryStatus = 200, truncateAgain = false, onFirstRequest} = {}) {
+ const received = [], ledger = new Map();
+ const server = createServer(async (req, res) => {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const bytes = Buffer.concat(chunks).toString();
+  received.push({path: req.url, method: req.method, bytes});
+  if (received.length === 1) onFirstRequest?.();
+  const status = received.length === 1 ? firstStatus : retryStatus;
+  if (status === 'reset') {
+   req.socket.destroy();
+   return;
+  }
+  if (status !== 200 && status !== 201) {
+   res.writeHead(status).end();
+   return;
+  }
+  const input = JSON.parse(bytes);
+  const old = ledger.get(input.release_key);
+  if (old && old.bytes !== bytes) {
+   res.writeHead(409).end();
+   return;
+  }
+  const row = old ?? {bytes, id: vid[0]};
+  ledger.set(input.release_key, row);
+  if (received.length === 1 || truncateAgain) {
+   res.writeHead(status, {'Content-Type': 'application/json', 'Content-Length': '512'});
+   res.write('{"release":');
+   setTimeout(() => res.destroy(), 25);
+   return;
+  }
+  res.writeHead(status, {'Content-Type': 'application/json'});
+  res.end(JSON.stringify({release: {id: row.id, release_key: input.release_key}, created: false}));
+ });
+ await new Promise((resolve, reject) => {
+  server.once('error', reject);
+  server.listen(0, '127.0.0.1', resolve);
+ });
+ t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
+ return {base: `http://127.0.0.1:${server.address().port}`, received, ledger};
+}
+
+test('候选 release 在真实 HTTP 成功头后截断时，以同一请求取回唯一账本行', async t => {
+ const {brainRequest} = await implementation();
+ for (const firstStatus of [200, 201]) {
+  await t.test(`HTTP ${firstStatus} ACK 截断`, async t => {
+   const body = stagingReleaseRequest(firstStatus === 200 ? 'xian-m4' : 'mmv');
+   const serialized = JSON.stringify(body);
+   const server = await serveCandidateRelease(t, {
+    firstStatus, onFirstRequest: () => { body.actor = 'changed-after-send'; },
+   });
+   const request = brainRequest(server.base, 'fixture-token', {
+    candidateReleaseRecovery: {sha, attemptKey: candidateAttempt},
+   });
+   const result = await request(candidateReleasePath, body);
+   assert.deepEqual(result, {release: {id: vid[0], release_key: body.release_key}, created: false});
+   assert.deepEqual(server.received, Array.from({length: 2}, () => ({
+    path: candidateReleasePath, method: 'POST', bytes: serialized,
+   })));
+   assert.equal(server.ledger.size, 1);
+  });
+ }
+});
+
+test('候选 release 无有效作用域、返回HTTP错误或只丢失连接时保持失败', async t => {
+ const {brainRequest} = await implementation();
+ const candidate = {sha, attemptKey: candidateAttempt};
+ const cases = [
+  ['无候选上下文', {noContext: true}],
+  ['生产', {change: body => { body.environment = 'production'; }}],
+  ['其它POST', {path: candidateReleasePath + '/observations'}],
+  ['带额外查询条件的POST', {path: candidateReleasePath + '?unexpected=1'}],
+  ['无key', {change: body => { delete body.release_key; }}],
+  ['被替换的报告', {change: body => { body.ci_evidence[0].report.scope = 'changed'; }}],
+  ['不同Pilot run', {context: {...candidate, attemptKey: 'github:999:456:1'}}],
+  ['已接收的409', {firstStatus: 409, error: /Brain HTTP 409/}],
+  ['已接收的400', {firstStatus: 400, error: /Brain HTTP 400/}],
+  ['已接收的503', {firstStatus: 503, error: /Brain HTTP 503/}],
+  ['未收到成功头', {firstStatus: 'reset', error: /Brain request failed POST/}],
+ ];
+ for (const [name, options] of cases) {
+  await t.test(name, async t => {
+   const server = await serveCandidateRelease(t, options);
+   const body = stagingReleaseRequest();
+   options.change?.(body);
+   const request = brainRequest(server.base, 'fixture-token', {
+    candidateReleaseRecovery: options.noContext ? undefined : options.context ?? candidate,
+   });
+   await assert.rejects(request(options.path ?? candidateReleasePath, body), options.error ?? /Brain response invalid POST/);
+   assert.equal(server.received.length, 1);
+  });
+ }
+});
+
+test('候选 release 恢复最多一次，保留恢复请求的409及再次截断错误', async t => {
+ const {brainRequest} = await implementation();
+ for (const [name, options, error] of [
+  ['409', {retryStatus: 409}, /Brain HTTP 409/],
+  ['截断', {truncateAgain: true}, /Brain response invalid POST/],
+  ['传输中断', {retryStatus: 'reset'}, /Brain request failed POST/],
+ ]) {
+  await t.test(name, async t => {
+   const server = await serveCandidateRelease(t, options);
+   const request = brainRequest(server.base, 'fixture-token', {
+    candidateReleaseRecovery: {sha, attemptKey: candidateAttempt},
+   });
+   await assert.rejects(request(candidateReleasePath, stagingReleaseRequest()), error);
+   assert.equal(server.received.length, 2);
+   assert.equal(server.ledger.size, 1);
+  });
+ }
+});
+
+test('候选 release 的回执恢复与原请求共用期限', async t => {
+ const {brainRequest} = await implementation();
+ const server = await serveCandidateRelease(t);
+ const timeout = AbortSignal.timeout;
+ t.after(() => { AbortSignal.timeout = timeout; });
+ AbortSignal.timeout = ms => {
+  assert.equal(ms, 30000);
+  return timeout(200);
+ };
+ const request = brainRequest(server.base, 'fixture-token', {
+  candidateReleaseRecovery: {sha, attemptKey: candidateAttempt},
+ });
+ await assert.rejects(request(candidateReleasePath, stagingReleaseRequest()), /Brain response invalid POST/);
+ assert.equal(server.received.length, 1);
+ assert.equal(server.ledger.size, 1);
+});
