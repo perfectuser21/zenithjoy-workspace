@@ -3,6 +3,8 @@ import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,realpathSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {hasBilibiliPilotSource} from '../../services/phone-adb-controller/deployment-fixed-source.mjs';
+import {BILIBILI_DEFINITION_PATH} from '../../services/phone-adb-controller/bilibili-verify-release.mjs';
 export const AUTHORING_FILES=[
  'services/phone-adb-controller/commander/contracts/workflow-commander.json',
  'services/phone-adb-controller/commander/contracts/workflow-report.json',
@@ -29,7 +31,8 @@ export function checkAuthoringVersions(root,{base='origin/main',fix=false}={}){
  try{gitSource(root,['merge-base','--is-ancestor',sha,'origin/main']);}catch{throw Error('AUTHORING_SOURCE_BASE_NOT_MAIN');}
  if(fix&&gitSource(root,['symbolic-ref','--short','HEAD'])==='main')throw Error('AUTHORING_SOURCE_FIX_MAIN_FORBIDDEN');
  const missing=[];
- for(const path of AUTHORING_FILES){
+ const files=hasBilibiliPilotSource(root,sha)?[...AUTHORING_FILES,BILIBILI_DEFINITION_PATH]:AUTHORING_FILES;
+ for(const path of files){
   const before=JSON.parse(gitSource(root,['show',`${sha}:${path}`]));const file=resolve(root,path),raw=readFileSync(file,'utf8'),after=JSON.parse(raw);
   if(greaterVersion(after.version,before.version))continue;
   if(after.version!==before.version)throw Error('AUTHORING_SOURCE_VERSION_REGRESSION');
@@ -40,8 +43,8 @@ export function checkAuthoringVersions(root,{base='origin/main',fix=false}={}){
    writeFileSync(file,updated);
   }else missing.push(path);
  }
- if(missing.length)throw Error(`AUTHORING_SOURCE_VERSION_BUMP_REQUIRED: ${missing.join(', ')}; 在PR分支运行 node scripts/ci/authoring-source-version.mjs --fix --base ${sha}，提交五份JSON后重新CI`);
- return {base_revision:sha,files:AUTHORING_FILES,mode:fix?'fix':'check'};
+ if(missing.length)throw Error(`AUTHORING_SOURCE_VERSION_BUMP_REQUIRED: ${missing.join(', ')}; 在PR分支运行 node scripts/ci/authoring-source-version.mjs --fix --base ${sha}，提交版头后重新CI`);
+ return {base_revision:sha,files,mode:fix?'fix':'check'};
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2),fix=args.includes('--fix'),i=args.indexOf('--base');
