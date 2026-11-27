@@ -14,6 +14,8 @@ jobs:
     name: Pilot release caller contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      bilibili_required: ${{ steps.bilibili.outputs.required }}
     steps:
       - name: 发布验证只接受main
         env:
@@ -26,6 +28,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - id: bilibili
+        run: |
+          node --input-type=module -e 'import {hasBilibiliPilotSource} from "./services/phone-adb-controller/deployment-fixed-source.mjs"; console.log(`required=${hasBilibiliPilotSource(process.cwd(), process.env.GITHUB_SHA)}`)' >> "$GITHUB_OUTPUT"
       - run: npm ci --ignore-scripts --workspaces=false
       - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
 
@@ -133,6 +138,22 @@ jobs:
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: cecelia-device-patrol-definitions
+      head_revision: ${{ github.sha }}
+      tooling_revision: 0edd6b0f47d972f0ea7d6a11d7d36b5d98f37411
+    secrets:
+      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+      CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+      BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+
+  verify-bilibili-readonly:
+    name: Complete Bilibili read-only release verification
+    if: github.ref == 'refs/heads/main' && needs.caller-contract.outputs.bilibili_required == 'true'
+    needs: [caller-contract, authoring-main-source]
+    uses: ./.github/workflows/pilot-release-regression.yml
+    with:
+      source_repo: perfectuser21/zenithjoy-workspace
+      scope: android-bilibili-readonly
       head_revision: ${{ github.sha }}
       tooling_revision: 0edd6b0f47d972f0ea7d6a11d7d36b5d98f37411
     secrets:

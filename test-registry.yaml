@@ -12090,6 +12090,42 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "独立评分工具的固定来源、写入读回与恢复边界"
 
+  - id: phone-bilibili-verify-release
+    path: services/phone-adb-controller/__tests__/bilibili-verify-release.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line01/android_worker_publish；小白固定 B站原生只读发布准入与禁止外发"
+
+  - id: phone-bilibili-verify-existing-pilot
+    path: scripts/smoke/bilibili-verify-existing.sh
+    type: smoke
+    ci: L3
+    status: active
+    product: AI员工
+    execution: bash scripts/smoke/bilibili-verify-existing.sh
+    note: "GP-Anchor: line01/android_worker_publish；同一次私密视频读取的 Activity 与 Step、原件验证和禁止发布"
+
+  - id: phone-bilibili-verify-native
+    path: services/phone-adb-controller/__tests__/bilibili-verify-native.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line01/android_worker_publish；小白固定 B站原生只读发布准入与禁止外发"
+
+  - id: phone-bilibili-verify-worker
+    path: services/phone-adb-controller/__tests__/bilibili-verify-worker.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "GP-Anchor: line01/android_worker_publish；只读核验原件运行身份与摘要防篡改"
+
   - id: phone-standalone-bilibili-verify
     path: services/phone-adb-controller/__tests__/standalone-bilibili-verify.test.mjs
     type: integration

@@ -165,7 +165,7 @@ DEVICE_NODE_FILES=(
   preflight-judge.mjs preflight-local-leaves.mjs preflight-local-step.py preflight-metadata.mjs preflight-native-domain.mjs preflight-pg-stream.mjs preflight-phone-driver.mjs preflight-control-scope.mjs preflight-phone-scope.mjs config/preflight-control-hosts.json
 preflight-pg-dependencies.mjs preflight-pg-lock.json leadgen-runner-adapter.mjs common-runner/activity-runtime.js common-runner/activity-contract.js common-runner/activity-process.js common-runner/activity-judgment.js common-runner/runner-commander-bridge.js common-runner/package.json common-runner/source.json skills/runner-commander/SKILL.md qualification-identity-snapshot.mjs central-device-lease.mjs brain-authority-get.mjs discovery-cleanup-readback.mjs capture-strategy.mjs activity-skill-parent-loop.mjs activity-skill-broker-client.mjs activity-skill-executor.mjs activity-skill-primary-broker.mjs leadgen-agent-tools.mjs leadgen-agent-artifacts.mjs activity-skill-recovery.mjs activity-skill-broker.mjs activity-skill-tool.mjs leadgen-skill-agent.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py outreach-order-lock.py leadgen-outreach-scope.js queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-client.mjs native-operation-receipt.mjs leadgen-discovery-action.mjs leadgen-phone-action.mjs discovery-phone-scope.mjs collection-phone-scope.mjs collection-leaf-producer.mjs collection-acceptance-probe.mjs leadgen-workflow.mjs leadgen-handlers.mjs leadgen-video-action.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/collection-phone-hosts.json config/own-accounts.json config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js leadgen-score-context.js leadgen-committed-partial.js leadgen-frozen-policy-evidence.js leadgen-response-recovery.js leadgen-score-exclusion.js leadgen-comment-admission.js leadgen-sampled-admission.js leadgen-comment-admission-authority.js leadgen-legacy-score-recovery.js producer-pending-claim.js qualification-quarantine-recovery-102n.js qualification-quarantine-recovery-102n-authority.js single-video-recovery.js single-video-recovery-authority.js single-video-recovery-0353.js single-video-recovery-0353-authority.js leadgen-policy-review.js leadgen-scoring-handler.mjs commander-model-receipt.mjs activity-commander.mjs official-owner-read-connection.mjs official-skill-owner.mjs commander-owner-state.mjs commander-owner-lock.mjs commander-owner-reconcile.mjs discovery-metrics.js discovery-metrics-queue.js leadgen-db-lib.js leadgen-agent-score.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js asr-protocol.mjs asr-private-cos.mjs asr-cos-http.mjs asr-cos-dependencies.mjs asr-cos-sdk-lock.json line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs producer-descriptor.mjs no-comments-evidence.mjs comment-count-evidence.py runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs deployment-fixed-source.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js
   qualification-maintenance-adb-recovery.mjs qualification-maintenance-authority.mjs qualification-maintenance-beforejudge.mjs qualification-maintenance-brain.mjs qualification-maintenance-bytes.mjs qualification-maintenance-candidate.mjs qualification-maintenance-close.mjs qualification-maintenance-commander.mjs qualification-maintenance-device.py qualification-maintenance-domain.mjs qualification-maintenance-evidence.mjs qualification-maintenance-host.py qualification-maintenance-journal.mjs qualification-maintenance-mmv.mjs qualification-maintenance-mmv.py qualification-maintenance-original.mjs qualification-maintenance-pg.mjs qualification-maintenance-processes.mjs qualification-maintenance-processes.py qualification-maintenance-role-diagnostics.py qualification-maintenance-service.mjs qualification-maintenance-transport.mjs qualification-maintenance.mjs
-  qualification-maintenance-runtime.mjs deployment-targets.mjs deployment-preflight.mjs deployment-business-admission.mjs deployment-skill-acceptance.mjs company-config-readiness.mjs
+  qualification-maintenance-runtime.mjs deployment-targets.mjs bilibili-verify-release.mjs deployment-preflight.mjs deployment-business-admission.mjs deployment-skill-acceptance.mjs company-config-readiness.mjs
   qualification-maintenance-effects.mjs
   qualification-maintenance-database.mjs qualification-maintenance-proof.mjs
 )
@@ -213,6 +213,10 @@ for f in "${DEVICE_RPC_PROBE_FILES[@]}"; do
 done
 
 # MMV独立0103 runner与RPC服务均取正式发布字节；完整四流程定义满足Brain完整CI，运行host限制另行核验。
+# Typed Bilibili verification executes only on the pinned xian-m4 target.
+M4_BILIBILI_NODE_FILES=(bilibili-verify-worker.mjs bilibili-verify-native.mjs standalone-bilibili-verify.mjs)
+M4_BILIBILI_OCR_SOURCE=scripts/phone-account-patrol/ocr.swift
+M4_BILIBILI_OCR_TARGET=_components/scripts/phone-account-patrol/ocr.swift
 MMV_RUNTIME_FILES=()
 for f in "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${MMV_JS_FILES[@]}" "${MMV_PROBE_FILES[@]}"; do
   [[ " ${MMV_RUNTIME_FILES[*]-} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
@@ -256,7 +260,7 @@ activate_publish_package() {
   python3 -c 'import json,sys;print(json.dumps(dict(source=sys.argv[1],revision=sys.argv[2])))' "$REPO_ROOT" "$PUBLISH_PENDING_SHA" | ssh mmv node '~/.openclaw/leadgen-scripts/deployment-publish-release.mjs' deploy-stdin
 }
 : "${WF_RELEASE_IDS:?必须提供全部部署目标的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
-node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${RELEASE_EVIDENCE_ARGS[@]}" > "$DEPLOY_MANIFEST"
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${M4_BILIBILI_NODE_FILES[@]}" "--repository-file=$M4_BILIBILI_OCR_SOURCE=$M4_BILIBILI_OCR_TARGET" "${RELEASE_EVIDENCE_ARGS[@]}" > "$DEPLOY_MANIFEST"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" "${RELEASE_EVIDENCE_ARGS[@]}" > "$MMV_MANIFEST"
 node "$D/deployment-targets.mjs" "$WF_DEPLOY_PLAN_FILE" "$(git rev-parse HEAD)"
 # Reject incomplete/legacy input sources before any remote mutation. The paired revision
@@ -344,6 +348,12 @@ done
 echo "=== [3/3] xian-m4:~/bin-harvest/ 普通payload批量暂存、原序逐文件安装 ==="
 for host in xian-m4; do
   deploy_m4_payload "$host"
+  if [[ -n "${M4_BILIBILI_NODE_FILES[*]-}" ]]; then
+    _bili_root="$(git rev-parse --show-toplevel)"
+    _bili_dir="~/bin-harvest/$(dirname "$M4_BILIBILI_OCR_TARGET")"
+    ssh "$host" "mkdir -p $_bili_dir"
+    push_atomic "$_bili_root/$M4_BILIBILI_OCR_SOURCE" "$host" "$_bili_dir" "$(basename "$M4_BILIBILI_OCR_TARGET")"
+  fi
 done
 
 echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="

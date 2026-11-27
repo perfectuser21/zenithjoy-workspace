@@ -8,6 +8,8 @@ import {AUTHORING_FILES,gitSource,isAuthoringRepositoryOrigin} from './authoring
 import {renewDefinitions} from './authoring-main-source-core.mjs';
 import {scratchRegistration} from './authoring-source-scratch.mjs';
 import {loadAuthoringScope} from './authoring-source-scope.mjs';
+import {hasBilibiliPilotSource} from '../../services/phone-adb-controller/deployment-fixed-source.mjs';
+import {BILIBILI_DEFINITION_PATH,BILIBILI_PILOT_SCOPE,BILIBILI_WORKFLOW} from '../../services/phone-adb-controller/bilibili-verify-release.mjs';
 export {loadAuthoringScope};
 const REPO='perfectuser21/zenithjoy-workspace',SHA=/^[a-f0-9]{40}$/;
 const SPECS=[['commander-generic',AUTHORING_FILES.slice(0,2)],['cecelia-device-patrol-definitions',AUTHORING_FILES.slice(2)]];
@@ -113,7 +115,11 @@ export async function runMainSource({repoRoot=process.cwd(),brainRoot=process.en
  const all=(await api('GET','workflows')).workflows;
  const skills=[];for(let offset=0;offset<5000;offset+=500){const rows=await api('GET',`skills?limit=500&offset=${offset}`);skills.push(...rows);if(rows.length<500)break;if(offset===4500)throw Error('AUTHORING_SKILL_LIST_TRUNCATED');}
  const scopes=[];
- for(const [scope,files] of SPECS){
+ const specs=[...SPECS];
+ if(hasBilibiliPilotSource(repoRoot,revision)&&all.some(owner=>owner.key===BILIBILI_WORKFLOW)){
+  specs.push([BILIBILI_PILOT_SCOPE,[BILIBILI_DEFINITION_PATH]]);
+ }
+ for(const [scope,files] of specs){
   scopes.push(await loadAuthoringScope({api,scope,files,revision,repo:REPO,owners:all,skills,
    readDefinition:path=>({...JSON.parse(readFixedLocalGitBlob(repoRoot,{revision,path})),source:{repo:REPO,ref:path,revision}}),
    validateSnapshot:validateImplementationSnapshot,digestMapManifest}));

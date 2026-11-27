@@ -17,6 +17,10 @@ function evidence(scope,keys){
  const receipt={purpose:'release_verification',actor:'pilot_release_verification',verdict:'PASS',scope:'declared_pilot_regressions',business_runtime_status:'not_evaluated',snapshot_sha256:snapshot.snapshot_sha256,assertion_plan_sha256:report.assertion_plan_sha256,source:report.source,report_sha256:digest(Buffer.from(JSON.stringify(report))),assertions:[{assertion_ref:scope+'.sh',source_repo:repo,source_revision:sha,test_sha256:'b'.repeat(64),source_bindings:[],exit_code:0}]};return{snapshot,report,receipt};
 }
 export function fixture(){return{...evidence('zenithjoy',['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach','douyin_video_publish.android']),commander:evidence('commander-generic',['workflow_report.internal','workflow_commander.internal']),patrol:evidence('cecelia-device-patrol-definitions',['single-phone-account-patrol'])};}
+test('a candidate containing the Bilibili workflow cannot install without its own Pilot receipt',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');
+ assert.throws(()=>targetDefinitions(fixture(),sha,()=>bytes,{bilibiliRequired:true}),/B站.*Pilot/);
+});
 test('双scope唯一MMV七流程/xian四流程，完整receipt不能偷减且同key不同版本拒绝',async()=>{
  const {targetDefinitions}=await import('../deployment-targets.mjs');const bundle=fixture();
  const result=targetDefinitions(bundle,sha,()=>bytes);assert.equal(result.mmv.definitions.workflows.length,7);assert.equal(result['xian-m4'].definitions.workflows.length,4);
