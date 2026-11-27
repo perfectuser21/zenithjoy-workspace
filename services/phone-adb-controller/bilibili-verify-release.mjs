@@ -3,6 +3,7 @@ import { digest } from './runtime-definition.mjs';
 
 export const BILIBILI_WORKFLOW = 'android_bilibili_verify_existing';
 export const BILIBILI_OPERATION = 'verify_existing';
+export const BILIBILI_STEP = 'verify_private_playback';
 export const BILIBILI_TARGET = 'xian-m4';
 export const BILIBILI_PROVIDER_PATH = 'services/phone-adb-controller/standalone-bilibili-verify.mjs';
 export const BILIBILI_HOST_POLICY_PATH = 'services/phone-adb-controller/config/collection-phone-hosts.json';
@@ -80,7 +81,14 @@ export function assertBilibiliFrozenWorkflow(workflow, activities, sourceCommit)
   const [activity] = rows;
   need(validRow(activity, sourceCommit) && activity.payload?.activity_id === ref.activity_id
     && activity.payload.contract?.key === BILIBILI_OPERATION
-    && Array.isArray(activity.payload.steps) && activity.payload.steps.length === 0, 'ACTIVITY');
+    && Array.isArray(activity.payload.steps) && activity.payload.steps.length === 1, 'ACTIVITY');
+  const [step] = activity.payload.steps;
+  const readback = { type: 'metric', key: 'private_playback_verified', expect: { op: '==', value: 1 } };
+  need(uuid.test(step?.step_id) && step.locator?.activity_id === ref.activity_id
+    && step.locator.step_key === BILIBILI_STEP && step.contract?.key === BILIBILI_STEP
+    && step.contract.dod?.mode === 'hard' && step.contract.dod.readback && digest(step.contract.dod.readback) === digest(readback)
+    && step.registration?.id === step.step_id && sha256.test(step.registration.source_sha256)
+    && step.registration.mode === 'hard' && step.registration.readback && digest(step.registration.readback) === digest(readback), 'STEP');
   const bindings = activity.payload.implementation_bindings;
   need(Array.isArray(bindings) && bindings.length === BILIBILI_COMPONENT_PATHS.length
     && new Set(bindings.map(row => row.path)).size === bindings.length, 'COMPONENT');
@@ -90,7 +98,7 @@ export function assertBilibiliFrozenWorkflow(workflow, activities, sourceCommit)
       && /^sha256:[a-f0-9]{64}$/.test(row.digest), 'COMPONENT');
   }
   need(bindings.some(row => row.path === BILIBILI_PROVIDER_PATH), 'COMPONENT');
-  return { activity, ref, bindings };
+  return { activity, ref, step, bindings };
 }
 
 export function assertBilibiliWorkspaceJob(job) {
@@ -102,7 +110,7 @@ export function assertBilibiliWorkspaceJob(job) {
     && sha256.test(definition.snapshot_sha256) && sha256.test(definition.runtime_snapshot_sha256)
     && job.release_id === definition.release_id, 'JOB');
   need(keys(job.input, ['scope', 'skill'])
-    && keys(scope, [...Object.keys(BILIBILI_APPROVED), 'workflow_key', 'operation', 'source_commit', 'limit', 'environment'])
+    && keys(scope, [...Object.keys(BILIBILI_APPROVED), 'workflow_key', 'operation', 'source_commit', 'limit', 'environment', 'step_id'])
     && Object.entries(BILIBILI_APPROVED).every(([key, value]) => scope[key] === value)
     && scope.workflow_key === BILIBILI_WORKFLOW && scope.operation === BILIBILI_OPERATION
     && gitSha.test(scope.source_commit) && scope.limit === 1
@@ -111,21 +119,25 @@ export function assertBilibiliWorkspaceJob(job) {
     && skill.name === 'android-bilibili-verify-existing' && skill.path === BILIBILI_PROVIDER_PATH
     && skill.source_commit === scope.source_commit && sha256.test(skill.sha256)
     && typeof skill.version === 'string' && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(skill.version), 'SKILL');
-  need(Array.isArray(definition.expected_path) && definition.expected_path.length === 1, 'PATH');
-  const [expected] = definition.expected_path;
-  need(keys(expected, ['reference_id', 'activity_id', 'activity_definition_version_id', 'required'])
+  need(Array.isArray(definition.expected_path) && definition.expected_path.length === 2, 'PATH');
+  const [expected, expectedStep] = definition.expected_path;
+  const identity = ['reference_id', 'activity_id', 'activity_definition_version_id'];
+  need(keys(expected, [...identity, 'required'])
     && expected.required === true
-    && ['reference_id', 'activity_id', 'activity_definition_version_id'].every(key => uuid.test(expected[key])), 'PATH');
+    && identity.every(key => uuid.test(expected[key]))
+    && keys(expectedStep, [...identity, 'required', 'step_id']) && expectedStep.required === true
+    && identity.every(key => expectedStep[key] === expected[key]) && uuid.test(expectedStep.step_id)
+    && scope.step_id === expectedStep.step_id, 'PATH');
   const fixed = {
     runId: job.run_id, owner: job.run_id, sourceRunId: scope.source_run_id, ownerUid: scope.owner_uid,
     bvid: scope.bvid, title: scope.title, profile: scope.profile, serial: scope.serial,
     durationSeconds: scope.duration_seconds, width: scope.width, height: scope.height,
   };
-  return { scope: Object.freeze(fixed), skill: Object.freeze({ ...skill }), expected };
+  return { scope: Object.freeze(fixed), skill: Object.freeze({ ...skill }), expected, expectedStep };
 }
 
 export function assertBilibiliRelease(release, job, readComponent) {
-  const { expected, skill } = assertBilibiliWorkspaceJob(job);
+  const { expected, expectedStep, skill } = assertBilibiliWorkspaceJob(job);
   const { definition } = job;
   need(release?.id === definition.release_id && release.environment === job.input.scope.environment
     && release.target === BILIBILI_TARGET && release.payload?.verification?.status === 'verified'
@@ -139,7 +151,7 @@ export function assertBilibiliRelease(release, job, readComponent) {
     && definition.runtime_snapshot_sha256 === digest({ release_id: release.id, workflow_version_id: workflow.id })
     && workflow.payload.contract.version === skill.version
     && fixed.ref.reference_id === expected.reference_id && fixed.ref.activity_id === expected.activity_id
-    && fixed.activity.id === expected.activity_definition_version_id, 'PATH');
+    && fixed.activity.id === expected.activity_definition_version_id && fixed.step.step_id === expectedStep.step_id, 'PATH');
   for (const binding of fixed.bindings) {
     const rows = release.payload.components.filter(row => row.path === binding.path);
     need(rows.length === 1, 'COMPONENT');

@@ -111,7 +111,21 @@
           "version": "1.0.0"
         }
       ],
-      "steps": []
+      "steps": [
+        {
+          "key": "verify_private_playback",
+          "name": "读回本人私密视频及完整播放",
+          "order": 1,
+          "reads": ["固定 BVID、作者 UID、同次原生可见设置与播放器画面"],
+          "writes": ["同一次只读操作的六份证据摘要"],
+          "check": "本人 UID 与作品作者一致，BVID 仅自己可见，播放器读回完整 10 秒，Brain 复核同一次证据摘要。",
+          "uses_llm": false,
+          "dod": {
+            "mode": "hard",
+            "readback": {"type": "metric", "key": "private_playback_verified", "expect": {"op": "==", "value": 1}}
+          }
+        }
+      ]
     }
   ]
 }

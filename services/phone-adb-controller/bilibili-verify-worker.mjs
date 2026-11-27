@@ -253,7 +253,8 @@ export function createProvider(job, options, context) {
       const opened = await request('runs/' + job.run_id + '/start-skill', requestBody(job));
       use(opened?.run_id === scope.runId && /^[0-9a-f-]{36}$/.test(opened.task_run_id)
         && opened.binding?.release_id === release.id && opened.binding.observation_id === job.definition.observation_id
-        && opened.binding.workflow_definition_version_id === frozen.workflow.id);
+        && opened.binding.workflow_definition_version_id === frozen.workflow.id
+        && digest(opened.binding.expected_path) === digest(job.definition.expected_path));
       deadline = Date.now() + 480000;
       cleanupDeadline = deadline + 90000;
       evidence = join(evidenceRoot, scope.runId);
