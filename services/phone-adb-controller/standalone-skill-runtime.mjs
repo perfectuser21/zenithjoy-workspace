@@ -39,6 +39,12 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
    if(!/^content_type=video$/m.test(result.stdout)||!/^video_id=\d{16,24}$/m.test(result.stdout))fail('CARD_IDENTITY');
    return {...result,card:{title:row[3],author:row[4]??'',duration:row[2]??''}};
   }
+  if(command==='open-app'&&fixed.workflow_key==='douyin_video_processing'&&args.length===0){
+   const result=await call(command,['--foreground-only']);
+   if(result.stdout?.trim()==='open_app=foreground_timeout')fail('APP_FOREGROUND_TIMEOUT');
+   if(result.stdout?.trim()!=='open_app=app_foreground')fail('COMMAND');
+   return result;
+  }
   const result=await call(command,args);
   if(command==='account-current'){
    const accounts=[...result.stdout.matchAll(/^douyin_id=(.+)$/gm)].map(m=>m[1]);
@@ -239,7 +245,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   ipc=await (dependencies.ipcFactory??serveStandaloneSkillTools)({directory:ipcDirectory,call:async(op,input)=>{
    try{const result=await call(op,input);if(leafUnknown()){revoke('LEAF_UNKNOWN');fail('HOST_REVOKED');}return result;}
    catch(error){
-    const code=error?.code??'',knownRefusal=['STANDALONE_NATIVE_CLOSING','STANDALONE_NATIVE_WORK_DEADLINE'].includes(code)||code.startsWith('STANDALONE_TOOL_')||code.startsWith('STANDALONE_COLLECTION_');
+    const code=error?.code??'',knownRefusal=['STANDALONE_NATIVE_CLOSING','STANDALONE_NATIVE_WORK_DEADLINE','STANDALONE_NATIVE_APP_FOREGROUND_TIMEOUT'].includes(code)||code.startsWith('STANDALONE_TOOL_')||code.startsWith('STANDALONE_COLLECTION_');
     // 队列commit未知由工具层冻结新写并只准原video读回；它不证明原生手机结果未知。
     if(leafUnknown()||op==='phone'&&!knownRefusal)revoke('TOOL_RESULT_UNKNOWN');
     try{appendFileSync(join(dir,'standalone-tool-errors.jsonl'),JSON.stringify({operation:op,code:/^[A-Z0-9_]+$/.test(code)?code:'TOOL_FAILED',at:new Date().toISOString(),...(error?.controller_exit_code!==undefined?{controller_exit_code:error.controller_exit_code,diagnostic:error.diagnostic}:{})})+'\n',{mode:0o600});}catch{revoke('TOOL_DIAGNOSTIC_UNKNOWN');}

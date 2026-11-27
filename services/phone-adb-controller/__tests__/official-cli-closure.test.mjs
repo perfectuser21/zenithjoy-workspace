@@ -141,3 +141,12 @@ test('legacy official operations do not require helpers reachable only from the 
  const createFacade=(await import(pathToFileURL(join(clone,'official-cli-closure.mjs')).href)).createOfficialCliClosure,r=rig(t,{runtimeRoot:clone,createFacade});
  assert.equal(await r.facade.prepare(),true);assert.throws(()=>describeOfficialCliInvocation({root:clone,command:join(clone,'douyin-phone-adb'),args:['--profile','fixture','--lock-owner','run','commenter-profile-card-link','7707600173446204723','123','bmFtZQ==','a'.repeat(64),'eid'],executables,profile:'fixture',owner:'run',serial:'serial'}),/UNREVIEWED_OPERATION/);await r.facade.close();
 });
+
+test('官方工具入口保留旧 open-app 合同，拒绝受管 102 专用参数', () => {
+  const controller = join(root, 'douyin-phone-adb');
+  for (const owner of [[], ['--lock-owner', 'run']]) {
+    const args = ['--profile', 'fixture', ...owner, 'open-app'];
+    assert.equal(describe(controller, args).operation, 'open-app');
+    assert.throws(() => describe(controller, [...args, '--foreground-only']), /OFFICIAL_CLI_INVOCATION/);
+  }
+});

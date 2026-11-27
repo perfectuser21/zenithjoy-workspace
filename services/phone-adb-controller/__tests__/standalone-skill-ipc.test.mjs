@@ -82,3 +82,11 @@ test('requests above 4MiB are rejected by the client and real server without inv
  await assert.rejects(callStandaloneSkillTool(host.connectionPath,'business',input),error=>error.code==='IPC_REQUEST_INVALID');assert.equal(effects,0);
  const c=JSON.parse(readFileSync(host.connectionPath)),response=await raw(c,body);assert.equal(response.status,413);assert.deepEqual(response.body,{ok:false,error:'IPC_REQUEST_INVALID'});assert.equal(effects,0);
 });
+
+test('已确认的启动前台拒绝跨 IPC 返回稳定原因',async t=>{
+ const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),directory=dir(t);
+ const code='STANDALONE_NATIVE_APP_FOREGROUND_TIMEOUT';
+ const host=await serveStandaloneSkillTools({directory,call:async()=>{throw Object.assign(Error('private log text'),{code});}});
+ t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
+ await assert.rejects(callStandaloneSkillTool(host.connectionPath,'phone',{command:'open-app',args:[]}),{code});
+});
