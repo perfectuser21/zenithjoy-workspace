@@ -4,6 +4,7 @@ export async function renewDefinitions(scopes,{revision,checkMain,task,verify,co
  await checkMain();
  for(const scope of scopes){
   for(const item of scope.documents){
+   if(item.alreadyRegistered)continue;
    const key=item.definition.key;
    const validation=await task(`validation:${key}`,{scope:scope.scope,definition:item.definition});
    const proof=await verify(item,scope);

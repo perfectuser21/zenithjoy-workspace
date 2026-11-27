@@ -14,7 +14,11 @@ export async function loadAuthoringScope({api,scope,files,revision,repo,owners,s
    ||!/^[a-f0-9]{40}$/.test(current.source_commit||'')||current.payload?.registration_protocol!=='definition-freeze-v1'
    ||current.payload.contract?.key!==definition.key||current.payload.contract.version!==owner.version
    ||definition.capability_id!==owner.capability_id||current.payload.contract.capability_id!==owner.capability_id)throw Error('AUTHORING_OWNER_SOURCE_CONFLICT');
-  if(current.source_commit===revision){if(definition.version!==owner.version)throw Error('AUTHORING_SAME_SOURCE_VERSION_CONFLICT');}
+  const alreadyRegistered=current.source_commit===revision;
+  if(alreadyRegistered){
+   if(definition.version!==owner.version)throw Error('AUTHORING_SAME_SOURCE_VERSION_CONFLICT');
+   if(!isDeepStrictEqual(current.payload.contract,definition))throw Error('AUTHORING_SAME_SOURCE_DEFINITION_CONFLICT');
+  }
   else if(!greaterVersion(definition.version,owner.version))throw Error('AUTHORING_SOURCE_VERSION_BUMP_REQUIRED');
   if(!snapshots.has(current.source_commit)){
    const {snapshot}=await api('GET',`implementation-ci/snapshot?scope=${scope}&repo=${repo}&revision=${current.source_commit}`);
@@ -28,7 +32,7 @@ export async function loadAuthoringScope({api,scope,files,revision,repo,owners,s
    .some(key=>!isDeepStrictEqual(seeds[0][key],current[key]))||canonical.length!==1
    ||canonical[0].current_definition_version_id!==current.id||canonical[0].key!==owner.key
    ||canonical[0].version!==owner.version||canonical[0].capability_id!==owner.capability_id)throw Error('AUTHORING_OWNER_SNAPSHOT_CONFLICT');
-  documents.push({definition,owner,snapshot:s,skills:skills.filter(x=>x.id===definition.runtime.skill_id||definition.activities.some(a=>a.implementation?.skill_id===x.id))});
+  documents.push({definition,owner,snapshot:s,alreadyRegistered,skills:skills.filter(x=>x.id===definition.runtime.skill_id||definition.activities.some(a=>a.implementation?.skill_id===x.id))});
  }
  // 逐定义登记并非原子操作。旧snapshot可失去历史map，但scope仍必须有唯一真实active完整map。
  // 不把map塞回旧snapshot、不改它的摘要；来源证据与scope的激活CAS分别保存。
