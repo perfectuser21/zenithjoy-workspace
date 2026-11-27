@@ -231,6 +231,22 @@ snapshot_evidence_cmd() {
   print_jpg_line "$shot"
 }
 
+_snapshot_matches_screen() {
+  "$PYTHON_BIN" - "$1" "$SCREEN_W" "$SCREEN_H" <<'PYSNAPSHOT'
+import struct
+import sys
+
+with open(sys.argv[1], "rb") as image:
+    header = image.read(24)
+    if len(header) != 24 or header[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR":
+        sys.exit(1)
+    if struct.unpack(">II", header[16:24]) != tuple(map(int, sys.argv[2:])):
+        sys.exit(1)
+    image.seek(-12, 2)
+    sys.exit(image.read() != b"\x00\x00\x00\x00IEND\xaeB`\x82")
+PYSNAPSHOT
+}
+
 # 仅用于本次nonce归位后的share策略；不以Activity或旧截图证明详情。
 _is_fresh_share_detail_xml() {
   [[ -s "$1" && ! -L "$1" ]] || return 1
@@ -4982,6 +4998,7 @@ case "$command" in
     [[ "$4" == "$LOCK_OWNER"-* && "$5" == "$LOCK_OWNER"-* && "$4" != "$5" \
        && -s "$EVIDENCE_ROOT/$4.png" && ! -L "$EVIDENCE_ROOT/$4.png" ]] \
       || die 'account navigation requires this run’s screenshot'
+    _snapshot_matches_screen "$EVIDENCE_ROOT/$4.png" || die 'account navigation screenshot is incomplete or has the wrong size'
     # 范围仅用于拒绝超出「我」导航区域的提议，坐标由 Agent 看本轮截图提供。
     (( $2 * 100 >= SCREEN_W * 84 && $2 * 100 <= SCREEN_W * 98 &&
        $3 * 100 >= SCREEN_H * 88 && $3 * 100 <= SCREEN_H * 95 )) \

@@ -75,7 +75,7 @@ test('账号视觉操作拒绝未取证、非「我」区域及错前台，复�
   const dir = mkdtempSync(join(realpathSync(tmpdir()), 'zj-account-nav-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const registry = join(dir, 'profiles.tsv'), adb = join(dir, 'fake-adb'), log = join(dir, 'adb.log');
-  writeFileSync(registry, 'legacy\tSER1\tANY-MODEL\t720\t1280\n');
+  writeFileSync(registry, 'legacy\tSER1\tANY-MODEL\t719\t1279\n');
   writeFileSync(adb, fakeAdb.replace('  *) exit 98 ;;', `  *'shell rm -f'*) exit 0 ;;
   *'shell uiautomator dump'*) exit 0 ;;
   *'shell stat -c %s'*) echo 104 ;;
@@ -90,7 +90,15 @@ test('账号视觉操作拒绝未取证、非「我」区域及错前台，复�
   const tap=(focused,x,y)=>run(focused,'--lock-owner','entry','account-visual-tap',String(x),String(y),'entry-screen','entry-tap');
   assert.match(tap('yes',648,1173).stderr,/requires this run/);
   mkdirSync(proof,{recursive:true});
-  writeFileSync(join(proof,'entry-screen.png'),'native screenshot fixture');
+  const screenshot=join(proof,'entry-screen.png');
+  writeFileSync(screenshot,'native screenshot fixture');
+  assert.match(tap('yes',648,1173).stderr,/screenshot is incomplete/);
+  const size=Buffer.alloc(8);
+  size.writeUInt32BE(720,0);
+  size.writeUInt32BE(1280,4);
+  writeFileSync(screenshot,Buffer.concat([
+    Buffer.from('89504e470d0a1a0a0000000d49484452','hex'),size,Buffer.from('0000000049454e44ae426082','hex'),
+  ]));
   assert.match(tap('yes',680,800).stderr,/outside the Me tab area/);
   assert.match(tap('no',648,1173).stderr,/no longer the active window/);
   const readback=run('yes','--lock-owner','entry','account-current','entry-verify','--verify-own-profile');
