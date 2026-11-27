@@ -38,15 +38,6 @@ function need(value, reason) {
   if (!value) throw Error('BILIBILI_WORKSPACE_' + reason);
 }
 
-export function bilibiliPilotRequired(entries) {
-  need(Array.isArray(entries), 'PILOT_SOURCE');
-  const matches = entries.filter(row => row?.path === BILIBILI_DEFINITION_PATH);
-  if (!matches.length) return false;
-  need(matches.length === 1 && matches[0].type === 'blob' && matches[0].mode === '100644'
-    && gitSha.test(matches[0].sha), 'PILOT_SOURCE');
-  return true;
-}
-
 function keys(value, names) {
   return value && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name));

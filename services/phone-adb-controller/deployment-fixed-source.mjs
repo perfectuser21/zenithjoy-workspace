@@ -4,7 +4,7 @@ import {existsSync,lstatSync,readFileSync,mkdirSync,writeFileSync,renameSync,rmS
 import {resolve,dirname} from 'node:path';
 import {userInfo,tmpdir} from 'node:os';
 import {TextDecoder} from 'node:util';
-import {BILIBILI_DEFINITION_PATH,bilibiliPilotRequired} from './bilibili-verify-release.mjs';
+const bilibiliDefinitionPath='services/phone-adb-controller/commander/contracts/bilibili-verify-existing.json';
 export function fixedSourceEnvironment({network=false}={}){
  const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('GIT_')&&!['SKILLS_SOURCE_DIR','SKILLS_SOURCE_SSH_KEY','PYTHONPATH','PYTHONHOME'].includes(key)));
  return {...env,GIT_NO_REPLACE_OBJECTS:'1',GIT_ALLOW_PROTOCOL:network?'https':'',GIT_TERMINAL_PROMPT:'0',PYTHONDONTWRITEBYTECODE:'1'};
@@ -13,10 +13,11 @@ const options=()=>({env:fixedSourceEnvironment(),stdio:['ignore','pipe','pipe'],
 const git=(root,...args)=>execFileSync('git',['-C',root,...args],options());
 export function hasBilibiliPilotSource(root,revision){
  if(!/^[a-f0-9]{40}$/.test(revision||''))throw Error('BILIBILI_PILOT_SOURCE_SHA');
- const rows=git(root,'ls-tree','-z',revision,'--',BILIBILI_DEFINITION_PATH).toString('utf8').split('\0').filter(Boolean).map(row=>{
-  const [identity,path]=row.split('\t');const [mode,type,sha]=identity.split(' ');return{mode,type,sha,path};
- });
- return bilibiliPilotRequired(rows);
+ const entry=git(root,'ls-tree','-z',revision,'--',bilibiliDefinitionPath).toString('utf8');
+ if(!entry)return false;
+ const [identity,path]=entry.slice(0,-1).split('\t');
+ if(!entry.endsWith('\0')||path!==bilibiliDefinitionPath||!/^100644 blob [a-f0-9]{40}$/.test(identity))throw Error('BILIBILI_PILOT_SOURCE');
+ return true;
 }
 function bootstrapCode(root,revision){return `__file__ = ${JSON.stringify(resolve(root,'scripts/skills-source.py'))}\n${git(root,'show',`${revision}:scripts/skills-source.py`).toString('utf8')}`;}
 function pinnedCache(root,revision){
