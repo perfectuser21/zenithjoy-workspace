@@ -62,3 +62,37 @@ test('Skill reference bytes are part of the frozen closure rather than a mutable
   assert.equal(readFileSync(join(root,'run','skill','references','101.md'),'utf8'),'原业务方法');
  }finally{rmSync(root,{recursive:true,force:true});}
 });
+
+test('轻盈快照按已发布 Playbook 清单封存 Activity，不拾取未登记文件',async()=>{
+ const {freezeStandaloneSkillFiles}=await import('../public-domain-snapshot.mjs');
+ const {mkdirSync,writeFileSync,readFileSync}=await import('node:fs');
+ const root=mkdtempSync(join(realpathSync(tmpdir()),'indexed-light-skill-'));
+ try{
+  const source=join(root,'source'), skills=join(root,'release','skills'), workflow='sample_workflow', name='sample-preflight';
+  mkdirSync(join(source,'references'),{recursive:true}); writeFileSync(join(source,'SKILL.md'),'入口接线说明');
+  writeFileSync(join(source,'references','102.md'),'原简化说明');
+  const playbook=join(skills,'sample-playbook'), method=join(skills,name);
+  mkdirSync(join(playbook,'references'),{recursive:true});mkdirSync(method);
+  writeFileSync(join(playbook,'SKILL.md'),'使用 [预检](../sample-preflight/SKILL.md)');
+  const index={workflow_key:workflow,activities:[{activity_ref:workflow+'.preflight',skill_name:name,
+    skill_path:'services/phone-adb-controller/skills/'+name+'/SKILL.md',skill_version:'1.0.0'}]};
+  writeFileSync(join(playbook,'references','activity-methods.json'),JSON.stringify(index));
+  const content='---\nname: sample-preflight\nmetadata:\n  version: 1.0.0\n  activity_ref: sample_workflow.preflight\n  method_role: single-activity\n---\n真实预检方法';
+  writeFileSync(join(method,'SKILL.md'),content);
+  mkdirSync(join(skills,'extra'));writeFileSync(join(skills,'extra','SKILL.md'),'不得加载');
+  const files={};const result=freezeStandaloneSkillFiles({source:join(source,'SKILL.md'),runDirectory:join(root,'run'),files,activitySkills:{root:skills,workflowKey:workflow,entryReference:'references/102.md'}});
+  const entry=readFileSync(join(root,'run','skill','references','102.md'),'utf8');
+  assert.match(entry,/\.\.\/workflow\/sample-playbook\/SKILL.md/);
+  assert.equal(files['skill/references/102.md'],hash(entry));
+  assert.doesNotMatch(entry,/原简化说明/);
+  assert.equal(result.playbook,'skill/workflow/sample-playbook/SKILL.md');
+  assert.deepEqual(result.activities.map(x=>[x.activity_ref,x.path]),[[workflow+'.preflight','skill/workflow/sample-preflight/SKILL.md']]);
+  assert.equal(files['skill/workflow/sample-preflight/SKILL.md'],hash(content));
+  assert.ok(!Object.keys(files).some(name=>name.includes('/extra/')));
+  assert.equal(readFileSync(join(root,'run',result.playbook),'utf8'),'使用 [预检](../sample-preflight/SKILL.md)');
+  assert.throws(()=>freezeStandaloneSkillFiles({source:join(source,'SKILL.md'),runDirectory:join(root,'missing'),files:{},
+   activitySkills:{root:skills,workflowKey:workflow,expectedRefs:[workflow+'.preflight',workflow+'.cleanup']}}),/ACTIVITY_SKILL_SEQUENCE/);
+  writeFileSync(join(method,'SKILL.md'),content.replace('version: 1.0.0','version: 1.0.1'));
+  assert.throws(()=>freezeStandaloneSkillFiles({source:join(source,'SKILL.md'),runDirectory:join(root,'bad'),files:{},activitySkills:{root:skills,workflowKey:workflow}}),/ACTIVITY_SKILL_VERSION/);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});

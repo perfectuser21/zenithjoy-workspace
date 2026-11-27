@@ -1,7 +1,7 @@
 import {freezePhonePeerSsh} from './official-phone-peer-transport.mjs';
 import {validatePhoneExecution} from './official-phone-execution.mjs';
-import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync,readdirSync} from 'node:fs';
-import {join,resolve,dirname,isAbsolute} from 'node:path';
+import {readFileSync,writeFileSync,chmodSync,mkdirSync,realpathSync,lstatSync,constants,openSync,closeSync,fsyncSync,readdirSync,existsSync} from 'node:fs';
+import {join,resolve,dirname,isAbsolute,posix} from 'node:path';
 import {createHash} from 'node:crypto';
 import {freezePreflightProfile} from './preflight-control-scope.mjs';
 import {freezePublicPreflightRoute} from './public-preflight-route.mjs';
@@ -15,15 +15,69 @@ const logicalHost=machine=>({'us-mac-m4':'mmv','xian-mac-m4':'xian-m4'})[machine
 const inputEnv={profile:'P',serial:'SERIAL',line:'LEADGEN_LINE',run_tag:'WFR_TAG',limit:'LEADGEN_LIMIT',source_run:'LEADGEN_SOURCE_RUN',comment_limit:'LEADGEN_COMMENT_LIMIT',sort:'LEADGEN_SORT',time_layer:'LEADGEN_TIME_LAYER',location:'LEADGEN_LOCATION',max_screens:'LEADGEN_MAX_SCREENS',max_attempts:'LEADGEN_DISCOVERY_MAX_ATTEMPTS',collection_budget_s:'QUEUED_VIDEO_COLLECTION_SECONDS'};
 const allowedEnv=new Set([...Object.values(inputEnv),'LEADGEN_MMV_DEVICE_RUNTIME','DOUYIN_ADB_PORT','ADB_SERVER_SOCKET','DOUYIN_PHONE_REGISTRY','LEADGEN_DISCOVERY_MAX_SECONDS','LEADGEN_SOURCE_KIND','QUEUED_VIDEO_RECORD_SECONDS']);
 function privateWrite(file,bytes){const fd=openSync(file,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}}
+// 从同一发布包读取 Workflow 定义和它声明的方法，版本与身份必须一致。
+function activitySkillPlan({root,workflowKey,expectedRefs}){
+ if(realpathSync(root)!==root)fail('ACTIVITY_SKILL_PATH');
+ const segment=v=>typeof v==='string'&&/^[a-z][a-z0-9_-]*$/.test(v);
+ const matches=[];
+ for(const entry of readdirSync(root,{withFileTypes:true})){
+  if(!entry.isDirectory()||!segment(entry.name))continue;
+  const path=join(root,entry.name,'references','activity-methods.json');
+  if(!existsSync(path))continue;
+  if(realpathSync(path)!==path)fail('ACTIVITY_SKILL_PATH');
+  const index=JSON.parse(readFileSync(path,'utf8'));
+  if(index.workflow_key===workflowKey)matches.push({name:entry.name,index});
+ }
+ if(matches.length!==1)fail('ACTIVITY_SKILL_INDEX');
+ const [{name,index}]=matches, refs=new Set(),names=new Set([name]);
+ if(!Array.isArray(index.activities)||!index.activities.length||index.activities.length>32)fail('ACTIVITY_SKILL_INDEX');
+ if(expectedRefs&&(index.activities.length!==expectedRefs.length
+  ||index.activities.some((row,offset)=>row.activity_ref!==expectedRefs[offset])))fail('ACTIVITY_SKILL_SEQUENCE');
+ const activities=index.activities.map(row=>{
+  const {activity_ref,skill_name,skill_path,skill_version}=row;
+  if(!segment(skill_name)||names.has(skill_name)||typeof activity_ref!=='string'||refs.has(activity_ref)
+   ||typeof skill_version!=='string'||!/^\d+\.\d+\.\d+$/.test(skill_version)
+   ||skill_path!=='services/phone-adb-controller/skills/'+skill_name+'/SKILL.md')fail('ACTIVITY_SKILL_INDEX');
+  const path=join(root,skill_name,'SKILL.md');
+  if(realpathSync(path)!==path)fail('ACTIVITY_SKILL_PATH');
+  const header=readFileSync(path,'utf8').match(/^---\n([\s\S]*?)\n---\n/)?.[1];
+  if(!header||header.match(/^name: (\S+)$/m)?.[1]!==skill_name
+   ||header.match(/^  version: (\S+)$/m)?.[1]!==skill_version
+   ||header.match(/^  activity_ref: (\S+)$/m)?.[1]!==activity_ref
+   ||!/^  method_role: single-activity$/m.test(header))fail('ACTIVITY_SKILL_VERSION');
+  refs.add(activity_ref);names.add(skill_name);
+  return {activity_ref,version:skill_version,path:'skill/workflow/'+skill_name+'/SKILL.md'};
+ });
+ return {directories:[...names],playbook:'skill/workflow/'+name+'/SKILL.md',
+  manifest:'skill/workflow/'+name+'/references/activity-methods.json',activities};
+}
+
 // 全部Skill参考资料固定到本轮目录；执行期间不再读取可变源目录。
-export function freezeStandaloneSkillFiles({source,runDirectory,files}){
+export function freezeStandaloneSkillFiles({source,runDirectory,files,activitySkills}){
  const base=dirname(realpathSync(source)),entries=[];let size=0;
  const walk=(directory,prefix='')=>{for(const entry of readdirSync(directory,{withFileTypes:true})){
   const relative=prefix?prefix+'/'+entry.name:entry.name,path=join(directory,entry.name),stat=lstatSync(path);
   if(!/^[A-Za-z0-9_.-]+$/.test(entry.name)||entry.name==='.'||entry.name==='..'||stat.isSymbolicLink()||realpathSync(path)!==path)fail('STANDALONE_SKILL_PATH');
   if(stat.isDirectory())walk(path,relative);else {if(!stat.isFile()||(stat.mode&0o022))fail('STANDALONE_SKILL_FILE');const bytes=readFileSync(path);size+=bytes.length;entries.push({relative,bytes});if(entries.length>64||size>2*1024*1024)fail('STANDALONE_SKILL_LIMIT');}
  }};walk(base);
+ const plan=activitySkills?activitySkillPlan(activitySkills):null;
+ if(plan){
+  for(const name of plan.directories)walk(join(activitySkills.root,name),'workflow/'+name);
+  const reference=activitySkills.entryReference;
+  if(reference){
+   const entry=entries.find(item=>item.relative===reference);
+   if(!entry||reference==='SKILL.md')fail('ACTIVITY_SKILL_ENTRY');
+   const from=posix.dirname('skill/'+reference);
+   entry.bytes=Buffer.from([
+    '# 本轮 Workflow 执行入口',
+    '依次读取 [已发布的 Playbook]('+posix.relative(from,plan.playbook)+') 和 [Activity 方法清单]('+posix.relative(from,plan.manifest)+')。',
+    '以 Playbook 的顺序和交接条件为准。到每一步时，读取该 Activity 已冻结的 Skill，通过本轮宿主工具执行。',
+    '宿主缺少所需能力时，按原 Activity 的失败或收尾方法处理，并记录具体缺口。'
+   ].join('\n')+'\n');
+  }
+ }
  for(const {relative,bytes}of entries){const name='skill/'+relative,dest=join(runDirectory,name);mkdirSync(dirname(dest),{recursive:true,mode:0o700});privateWrite(dest,bytes);files[name]=hash(bytes);}
+ if(plan)return {playbook:plan.playbook,manifest:plan.manifest,activities:plan.activities};
 }
 export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadline_ms,cleanup_deadline_ms,standaloneSkillPath}){
  const cfg=profile.domain_adapter.config,template=structuredClone(cfg.snapshot);
@@ -100,7 +154,12 @@ export function preparePublicDomainSnapshot({identity,profile,runDirectory,deadl
   template.agent_input=agentInput(env);
   const scope={...template.agent_input,source_commit:template.deployment.source_commit,expected_account:fixed.account,company:structuredClone(cfg.company),machine_id:identity.machine_id,approved_keywords:identity.approved_keywords};
   template.standalone_skill={...structuredClone(identity),scope,scope_sha256:hash(scope),runtime_snapshot_sha256:profile.metadata[planned[0].key].runtime_snapshot_sha256,deadline_ms,cleanup_deadline_ms,company:structuredClone(cfg.company)};
-  freezeStandaloneSkillFiles({source:standaloneSkillPath,runDirectory:dir,files});
+  const methodsRoot=join(runtime,'skills');
+  const activitySkills=cfg.workflow_key==='douyin_video_processing'
+   ?{root:methodsRoot,workflowKey:cfg.workflow_key,entryReference:'references/102.md',
+     expectedRefs:planned.map(({key})=>cfg.workflow_key+'.'+key)}:undefined;
+  const playbook=freezeStandaloneSkillFiles({source:standaloneSkillPath,runDirectory:dir,files,activitySkills});
+  if(playbook)template.activity_playbook=playbook;
   validateStandaloneIdentity(template.standalone_skill);standaloneScope(template);
  }
  for(const key of ['discovery_phone_scope','collection_phone_scope'])if(template[key])Object.assign(template[key],{task_id:identity.task_id,run_id:identity.run_id,attempt:'a1',source_commit:template.deployment.source_commit});
