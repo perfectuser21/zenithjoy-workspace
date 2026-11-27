@@ -25,6 +25,14 @@ export function readEvidence({evidenceRoot,path,basename,start,limit=4*1024*1024
   }
 }
 
+export async function locateStandaloneCommentProfile({leaveCommentPanel,verifyProfileLink,verifyCurrentVideo}) {
+  const before=await leaveCommentPanel('before-card');
+  const profile=await verifyProfileLink();
+  const after=await leaveCommentPanel('after-card');
+  const video=await verifyCurrentVideo();
+  return {profile,video,details:[before,after]};
+}
+
 export function createStandaloneCommentObserver({scope,evidenceRoot,root,frozen,phone,execute}){
   const {run_tag:run,line,profile,run_start_ts:start}=scope;
   const excluded=own.loadOwnAccounts(join(root,'config','own-accounts.json'));
@@ -60,7 +68,17 @@ export function createStandaloneCommentObserver({scope,evidenceRoot,root,frozen,
     });
     if(verification.code!==0||JSON.parse(verification.stdout).profile_url!==link.profile_url
       ||!/^https:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/$/.test(link.profile_url))fail('PROFILE_LINK');
-    return link.profile_url;
+    return {profile_url:link.profile_url,receipt:{stdout:link,proof,sha256:link.profile_link_evidence_sha256}};
+  }
+  async function leaveCommentPanel(stage,row) {
+    const current=await readPanel();
+    if(current.rows.filter(item=>item.nickname===row.nickname&&item.body===row.body).length!==1)fail('COMMENT_PANEL');
+    const back=await call('back-evidence',[name(stage+'-back')]);
+    const eid=name(stage+'-detail'),captured=await call('ui-evidence',[eid]);
+    const path=String(captured.stdout).trim(),xml=read(path,eid+'.xml');
+    const detail=await call('detail-restored',[path]);
+    if(String(detail.stdout).trim()!=='detail_restored=1')fail('COMMENT_DETAIL_UNVERIFIED');
+    return {eid,xml,sha256:sha(xml),back:back.stdout,detail:detail.stdout};
   }
   return {
     reset(){opened=false;lastPanel=null;},
@@ -96,17 +114,24 @@ export function createStandaloneCommentObserver({scope,evidenceRoot,root,frozen,
       const pid=identity.douyin_id;
       const raw={profile:read(identity.profile_evidence,profileEid+'-profile.xml'),
         returned:read(identity.return_evidence,profileEid+'-returned.xml')};
-      const result=fields((await call('current-video-link',[videoEid])).stdout);
-      if(result.video_id!==video.video_id||result.content_type!=='video'||result.resolved_url!==video.video_url)fail('VIDEO_IDENTITY');
+      const originals=await locateStandaloneCommentProfile({
+        leaveCommentPanel:stage=>leaveCommentPanel(stage,row),
+        verifyProfileLink:()=>verifyProfileLink(video,row,identity,run+'-resume1-card'+ordinal),
+        verifyCurrentVideo:async()=>{
+          const response=await call('current-video-link',[videoEid]),result=fields(response.stdout);
+          if(result.video_id!==video.video_id||result.content_type!=='video'||result.resolved_url!==video.video_url)fail('VIDEO_IDENTITY');
+          return {video_id:result.video_id,stdout:response.stdout,evidence_id:videoEid};
+        },
+      });
+      opened=false;
       const evidence={version:1,receipt_id:randomUUID(),status:'verified',scope:{line_key:line,run,source_run:null,
         profile,video_id:video.video_id,video_url:video.video_url,douyin_id:pid,nickname:row.nickname,comment_body_sha256:sha(row.body),
         comment_encoding:'canonical',profile_eid:profileEid,video_identity_eid:videoEid},company_binding:binding,
         raw,sha256:{profile:sha(raw.profile),returned:sha(raw.returned)},video_identity:{verified:true,content_type:'video',
           expected_video_id:video.video_id,observed_video_id:video.video_id,evidence_id:videoEid},observed_at:new Date().toISOString()};
       native.validateEvidence(evidence,{...evidence.scope,comment_body:row.body},{companyBinding:binding});
-      const profileUrl=await verifyProfileLink(video,row,identity,run+'-resume1-card'+ordinal);
-      return {comment:{nickname:row.nickname,douyinId:pid,commentBody:row.body,commentTime:row.time,region:row.region,
-        profileUrl,sourceVideo:video.title,sourceVideoUrl:video.video_url,recipientEvidence:evidence}};
+      return {originals,comment:{nickname:row.nickname,douyinId:pid,commentBody:row.body,commentTime:row.time,region:row.region,
+        profileUrl:originals.profile.profile_url,sourceVideo:video.title,sourceVideoUrl:video.video_url,recipientEvidence:evidence}};
     },
   };
 }

@@ -93,7 +93,10 @@ export function standaloneAgentScoringContext({runtimeRoot,input}){
 }
 
 export function standaloneCollectionClaimScope({runtimeRoot,input}){
- const {scope}=frozenDomain(readFrozen(dirname(runtimeRoot)));
+ const runDirectory=dirname(runtimeRoot),frozen=readFrozen(runDirectory),{p,scope}=frozenDomain(frozen);
  if(input.kind!=='queue'||!['collect_source_read','collect_claim','qualification_policy','qualification_submit','collect_comment_readback'].includes(input.request?.op)||scope?.workflow_key!=='douyin_video_processing')fail();
+ if(input.request.op==='qualification_submit'&&frozen.activity_playbook){
+  return {...scope,qualification_authority:{runDirectory,runIdentity:{task_id:p.task_id,run_id:p.run_id,run_tag:scope.run_tag,workflow:'102'}}};
+ }
  return scope;
 }
