@@ -6,15 +6,19 @@ const digest=b=>createHash('sha256').update(b).digest('hex');
 const PREFIX='services/phone-adb-controller/';
 const NAMES=['MMV_JS_FILES','MMV_TOPLEVEL_FILES','MMV_BIN_FILES','MMV_PROBE_FILES','DEVICE_CTL_FILES',
  'DEVICE_CTL_DIRS','DEVICE_SH_FILES','DEVICE_NODE_FILES','DEVICE_RPC_PROBE_FILES','DEVICE_PLAN_FILES','RPC_FILES','RELEASE_EVIDENCE_FILES'];
+const M4_BILIBILI='M4_BILIBILI_NODE_FILES';
+const BILIBILI_OCR='scripts/phone-account-patrol/ocr.swift';
 const pathOK=p=>typeof p==='string'&&/^[A-Za-z0-9_./-]+$/.test(p)&&!p.startsWith('/')&&p.split('/').every(s=>s&&s!=='.'&&s!=='..');
 export function parseDeployArrays(text){
  const result={};
- for(const name of NAMES){
+ for(const name of [...NAMES,M4_BILIBILI]){
   const matches=[...text.matchAll(new RegExp('^'+name+'=\\(([\\s\\S]*?)\\)','gm'))];
+  if(name===M4_BILIBILI&&!matches.length){result[name]=[];continue;}
   need(matches.length===1,'缺少/重复 '+name);
   const value=matches[0][1].split('\n').map(l=>l.replace(/#.*/, '')).join(' ').trim();
   need(/^[A-Za-z0-9_./=\s-]+$/.test(value),'数组必须为literal '+name);
   result[name]=value.split(/\s+/);need(result[name].length>0,'空数组 '+name);
+  if(name===M4_BILIBILI)need(result[name].join(' ')==='bilibili-verify-worker.mjs bilibili-verify-native.mjs standalone-bilibili-verify.mjs','非法只读B站M4包');
  }
  return result;
 }
@@ -27,7 +31,7 @@ export function buildWriteSet({groups:g,sha,homes,read,mode,commanderFiles,comma
  }
  function file(host,path,source,executable=false,evidence=false){
   need(pathOK(source),'invalid source path');
-  const sourcePath=source.startsWith('apps/')?source:PREFIX+source;
+  const sourcePath=source.startsWith('apps/')||source===BILIBILI_OCR?source:PREFIX+source;
   const bytes=read(sourcePath);need(bytes.length>0,'empty source '+sourcePath);
   const m=evidence?0o600:(mode(sourcePath)|(executable?0o111:0));
   need(Number.isInteger(m)&&m>=0&&m<=0o777,'invalid source mode');
@@ -39,6 +43,8 @@ export function buildWriteSet({groups:g,sha,homes,read,mode,commanderFiles,comma
  for(const f of g.MMV_BIN_FILES)file('mmv','bin/'+f,f,true);
  for(const f of g.DEVICE_SH_FILES)file('xian-m4','bin-harvest/'+f,f,true);
  for(const f of [...g.DEVICE_NODE_FILES,...g.DEVICE_RPC_PROBE_FILES,...g.DEVICE_PLAN_FILES])file('xian-m4','bin-harvest/'+f,f);
+ for(const f of g[M4_BILIBILI]??[])file('xian-m4','bin-harvest/'+f,f);
+ if(g[M4_BILIBILI]?.length)file('xian-m4','bin-harvest/_components/'+BILIBILI_OCR,BILIBILI_OCR);
  for(const f of g.DEVICE_CTL_FILES)for(const directory of g.DEVICE_CTL_DIRS)file('xian-m4',directory+'/'+f,f,true);
  // Match the original MMV_RUNTIME_FILES composition and its final executable-mode rule.
  const runtime=[...g.DEVICE_SH_FILES,...g.DEVICE_NODE_FILES,...g.DEVICE_CTL_FILES,...g.DEVICE_RPC_PROBE_FILES,...g.DEVICE_PLAN_FILES,...g.MMV_JS_FILES,...g.MMV_PROBE_FILES];

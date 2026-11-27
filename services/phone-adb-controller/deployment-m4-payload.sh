@@ -14,7 +14,7 @@ deploy_m4_payload() {
   local host="$1" local_stage stage hash has_zsh=0 _before _chk
   local_stage="$(mktemp -d)"
   hash="$(python3 "$M4_PAYLOAD_TOOL_DIR/deployment-m4-payload.py" pack "$D" "$local_stage/payload.tar" \
-    --sh ${DEVICE_SH_FILES[@]+"${DEVICE_SH_FILES[@]}"} --node ${DEVICE_NODE_FILES[@]+"${DEVICE_NODE_FILES[@]}"} \
+    --sh ${DEVICE_SH_FILES[@]+"${DEVICE_SH_FILES[@]}"} --node ${DEVICE_NODE_FILES[@]+"${DEVICE_NODE_FILES[@]}"} ${M4_BILIBILI_NODE_FILES[@]+"${M4_BILIBILI_NODE_FILES[@]}"} \
     --probe ${DEVICE_RPC_PROBE_FILES[@]+"${DEVICE_RPC_PROBE_FILES[@]}"} --plan ${DEVICE_PLAN_FILES[@]+"${DEVICE_PLAN_FILES[@]}"})"
   [[ "$hash" =~ ^[a-f0-9]{64}$ ]] || return 1
   stage="$(ssh "$host" 'mktemp -d /tmp/m4-payload-deploy.XXXXXX')"
