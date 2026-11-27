@@ -284,3 +284,20 @@ test('102 将读树失败交还给 Agent，截图点击后使用只读账号复�
  await use('account-current',['direct101-readback'],true);
  assert.deepEqual(calls,[['account-current','direct101-entry','--single-dump'],['account-current','direct101-readback','--verify-own-profile']]);
 });
+
+test('102 设备状态读回包含受管 ADB 的后置身份复核，并服从原运行截止',async()=>{
+  const {readStandaloneCallRegistry}=await import('../standalone-skill-runtime.mjs');
+  const args={root:'/sealed/runtime',environment:{DOUYIN_ADB_PORT:'5045'},serial:'physical',now:()=>1000,deadlineMs:61000};
+  let recorded;
+  const execute=async(file,argv,options)=>{
+    recorded={file,argv,budget:options.timeoutMs};
+    assert.ok(options.timeoutMs>32000,'一次原生动作加前后身份复核超过原 15 秒');
+    return {code:0,stdout:'mCallState=0\nmCallState=0\n'};
+  };
+  await readStandaloneCallRegistry({...args,execute});
+  assert.equal(recorded.budget,60000);
+  assert.deepEqual(recorded.argv,['-H','127.0.0.1','-P','5045','-s','physical','shell','dumpsys','telephony.registry']);
+  await assert.rejects(readStandaloneCallRegistry({...args,deadlineMs:1000,execute:()=>assert.fail('超出截止不启动')}),/WORK_DEADLINE/);
+  await assert.rejects(readStandaloneCallRegistry({...args,execute:async()=>({code:0,stdout:'mCallState=0\nmCallState=2\n'})}),/DEVICE_CONTEXT/);
+  await assert.rejects(readStandaloneCallRegistry({...args,execute:async()=>{throw Error('EXECUTION_DEADLINE');}}),/DEVICE_CONTEXT_TIMEOUT/);
+});
