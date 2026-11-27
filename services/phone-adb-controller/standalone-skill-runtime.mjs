@@ -7,7 +7,7 @@ import {userInfo} from 'node:os';
 import {readFrozen,digest} from './runtime-definition.mjs';
 import {standaloneScope,standaloneTaskProjectionMatches,standaloneExecutionContextMatches,standaloneHostProofPaths,createStandaloneHostProof} from './standalone-skill-authority.mjs';
 import {readBrain} from './device-epoch-fence-review.mjs';
-import {readStandaloneProducerHandoff} from './activity-upstream-source.mjs';
+import {readStandaloneProducerHandoff} from './standalone-collection-origin.mjs';
 import {createVideoAuthorReader} from './standalone-video-author.mjs';
 import {canAuthorizeNativeFrame} from './device-epoch-fence-admission.mjs';
 import {createCentralDeviceLease} from './central-device-lease.mjs';

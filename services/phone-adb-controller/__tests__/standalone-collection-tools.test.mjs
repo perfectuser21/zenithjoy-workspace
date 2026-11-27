@@ -304,7 +304,7 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
     },
     async rpc({request}){
       actions.push(request.op);
-      return {ok:true,result:request.op==='company_config'?{...scope.company,run_id:run,device_binding:binding,own_douyin_ids:['bound-account','another-company-account']}:{source_run:origin,video:{...video,evidence_digest:'a'.repeat(64)}}};
+      return {ok:true,result:request.op==='company_config'?{...scope.company,run_id:run,device_binding:binding}:{source_run:origin,own_douyin_ids:['bound-account','another-company-account'],video:{...video,evidence_digest:'a'.repeat(64)}}};
     },
   });
   const business=(operation,input)=>tools.call('business',input?{operation,input}:{operation});
@@ -335,7 +335,7 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
 });
 
 test('102 只接受已完成的 101 回执，并从同源同 VID 交付中读作者',async()=>{
-  const {readStandaloneProducerHandoff}=await import('../activity-upstream-source.mjs');
+  const {readStandaloneProducerHandoff}=await import('../standalone-collection-origin.mjs');
   const sourceRun='7493b375-f047-4e1e-8810-fb7529fb2f0a';
   const taskId='3584447e-0b6c-400a-aac9-f3bc9bcd7874';
   const candidate={...video,evidence_digest:'a'.repeat(64),observed_comment_count:1};
@@ -363,4 +363,17 @@ test('102 认领事务拒绝与核对时不同的证据摘要',async()=>{
   assert.match(write.sql,/discovery_metrics->>'digest'=\$9/);
   assert.equal(write.args[8],digest);
   assert.equal(calls.some(call=>call.sql==='COMMIT'),false);
+});
+
+test('102 作者排除只读本轮公司快照中已核实的抖音账号',async()=>{
+  const {readStandaloneCollectionSource}=await import('../standalone-collection-origin.mjs');
+  const account={...scope.company,platform:'douyin',enabled:true,verification_status:'verified',douyin_id:'own'};
+  const snapshot={config_status:'enabled',policy_id:scope.company.policy_id,runtime_config:{routing:{line_key:line},
+    platform_accounts:[account,{...account,tenant_id:'other',douyin_id:'other'},{...account,enabled:false,douyin_id:'archived'}]}};
+  const calls=[];
+  const pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:sql.includes('company_config_runs')?[{snapshot}]:[video]};}};
+  const result=await readStandaloneCollectionSource(pool,{...request,op:'collect_source_read',include_author_scope:true},scope);
+  assert.deepEqual(result.own_douyin_ids,['own']);
+  assert.deepEqual(calls[1].args,[run,scope.company.company_id,scope.company.tenant_id,34]);
+  assert.ok(calls.every(entry=>entry.sql.startsWith('SELECT')));
 });

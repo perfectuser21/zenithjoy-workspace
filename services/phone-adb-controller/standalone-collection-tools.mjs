@@ -273,14 +273,14 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         ||['company_id','tenant_id','version'].some(key=>device?.[key]!==company[key])
         ||device.profile!==profile||device.device_serial!==serial||device.douyin_id!==account
         ||device.enabled!==true||device.verification_status!=='verified')fail('ACCOUNT_CONFIG');
-      binding={...device,line_key:line,source_run:null,own_douyin_ids:result.own_douyin_ids};
+      binding={...device,line_key:line,source_run:null};
       return result;
     }
     if(!binding)fail('COMPANY_REQUIRED');
     if(!deviceReady)fail('DEVICE_CONTEXT');
     if(operation==='collect_source_read') {
       if(owned||claimInDoubt)fail('VIDEO_SCOPE');
-      const result=await queue(operation,{committed_origin_run:origin,video_id:proposal?.video_id??null});
+      const result=await queue(operation,{committed_origin_run:origin,video_id:proposal?.video_id??null,...(readAuthor?{include_author_scope:true}:{})});
       if(result.source_run!==origin||result.video&&(!videoId.test(result.video.video_id)
         ||proposal?.video_id!=null&&result.video.video_id!==proposal.video_id))fail('SOURCE_READBACK');
       if(reviewedVideo!==result.video?.video_id||reviewedDigest!==result.video?.evidence_digest) {
@@ -292,7 +292,8 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       const handoff=result.video&&readSourceHandoff?await readSourceHandoff(result.video):null;
       reviewedVideo=result.video?.video_id??null;
       reviewedDigest=result.video?.evidence_digest??null;
-      return handoff?{...result,handoff}:result;
+      binding.own_douyin_ids=result.own_douyin_ids;
+      return handoff?{source_run:result.source_run,video:result.video,handoff}:{source_run:result.source_run,video:result.video};
     }
     if(operation==='collect_author_read') {
       if(owned||claimInDoubt||!verifiedReviewVideo||!Array.isArray(binding.own_douyin_ids)
