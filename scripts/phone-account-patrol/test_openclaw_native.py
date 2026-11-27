@@ -400,19 +400,28 @@ class ContinuousRecoveryTests(unittest.TestCase):
 
     def test_historical_wrapper_proof_requires_original_control_revision_path_and_bytes(self):
         self.cycle();attempt = self.attempts()[0];self.complete_phone(attempt)
-        root = (self.state / 'controllers').resolve();old = root / native.bridge.LEGACY_CONTROL_REVISION / 'openclaw_native.py';new = root / ('c' * 40) / 'openclaw_native.py'
-        old.parent.mkdir(parents=True);new.parent.mkdir(parents=True);old.write_text('frozen old controller');new.write_text('new controller')
-        attempt['payload'].update(cmd='/usr/bin/python3 ' + str(old) + ' recovery-phone --demand-task-id ' + self.demands()[0]['id'] + ' --serial phone-a --execution-script "$0"',
-            control_sha256=hashlib.sha256(old.read_bytes()).hexdigest(), control_source_revision=native.bridge.LEGACY_CONTROL_REVISION)
+        root = (self.state / 'controllers').resolve()
+        new = root / ('c' * 40) / 'openclaw_native.py'
+        new.parent.mkdir(parents=True)
+        new.write_text('new controller')
         proof = lambda: native.bridge.phone_completion(attempt, 'phone-a', self.deployment, self.child['created_at'], self.tasks, self.current, new)
-        with patch.object(native.bridge, 'LEGACY_CONTROL_SHA256', hashlib.sha256(old.read_bytes()).hexdigest()):
-            self.assertIsNotNone(proof())
-            attempt['payload']['control_source_revision'] = 'd' * 40
-            self.assertIsNone(proof())
-            attempt['payload']['control_source_revision'] = native.bridge.LEGACY_CONTROL_REVISION;old.write_text('changed after frozen receipt')
-            self.assertIsNone(proof())
-            attempt['payload']['control_sha256'] = hashlib.sha256(old.read_bytes()).hexdigest()
-            self.assertIsNone(proof(), '任务自报hash与磁盘同时改写仍不得冒充已提交控制器')
+        for revision in native.bridge.HISTORICAL_CONTROL_SHA256:
+            with self.subTest(revision=revision):
+                old = root / revision / 'openclaw_native.py'
+                old.parent.mkdir()
+                old.write_text('frozen old controller')
+                digest = hashlib.sha256(old.read_bytes()).hexdigest()
+                attempt['payload'].update(cmd='/usr/bin/python3 ' + str(old) + ' recovery-phone --demand-task-id ' + self.demands()[0]['id'] + ' --serial phone-a --execution-script "$0"',
+                    control_sha256=digest, control_source_revision=revision)
+                with patch.dict(native.bridge.HISTORICAL_CONTROL_SHA256, {revision: digest}):
+                    self.assertIsNotNone(proof())
+                    attempt['payload']['control_source_revision'] = 'd' * 40
+                    self.assertIsNone(proof())
+                    attempt['payload']['control_source_revision'] = revision
+                    old.write_text('changed after frozen receipt')
+                    self.assertIsNone(proof())
+                    attempt['payload']['control_sha256'] = hashlib.sha256(old.read_bytes()).hexdigest()
+                    self.assertIsNone(proof(), '任务自报hash与磁盘同时改写仍不得冒充已提交控制器')
 
     def test_unknown_phone_revision_fails_before_creating_any_recovery(self):
         self.tasks[CHILD]['payload']['source_revision'] = 'f' * 40
