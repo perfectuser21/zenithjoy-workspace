@@ -108,3 +108,36 @@ test('父进程只将已核对硬件绑定的网络地址传给真实 ADB 子进
   assert.equal(readFileSync(f.calls,'utf8').trim(),'-H 127.0.0.1 -P '+port+' -s '+locator+' get-state');
  }finally{await producer.close();}
 });
+
+for(const result of ['valid','invalid-before','changed-after'])test('轻盈底座父进程独立核验设备操作前后的 epoch '+result,{skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),{startCollectionLeafProducer}=await import('../collection-leaf-producer.mjs');
+ const policy={...f.policy,schema_version:2,instance_id:'fixture-private'},serial='TEST-DEVICE',locator='127.0.0.1:15555';
+ const proof={protocol:'device-epoch-fence-admission/v1',authorized:true,epoch_id:'fixture-epoch',task_id:'fixture-task',run_id:'fixture-run',source_commit:'a'.repeat(40),instance_id:policy.instance_id,serial,endpoint:policy.endpoint,adb_serial:locator};
+ let checks=0;
+ const producer=await startCollectionLeafProducer({directory:f.dir,policy,serial,deadlineMs:Date.now()+10000,parentEpochAdmission:true,
+  assertAdmission:async()=>{
+   checks++;
+   if(result==='invalid-before')return {...proof,serial:'OTHER'};
+   if(result==='changed-after'&&checks===2)return {...proof,adb_serial:'127.0.0.1:15556'};
+   return proof;
+  }});
+ try{
+  assert.equal(producer.env.WFR_COLLECTION_PARENT_EPOCH,'1');
+  const port=policy.endpoint.split(':').at(-1);
+  const response=await new Promise((resolve,reject)=>{
+   const peer=createConnection(producer.env.WFR_COLLECTION_LEAF_SOCKET);
+   let data='';
+   peer.on('error',reject);
+   peer.on('data',chunk=>data+=chunk);
+   peer.on('end',()=>resolve(JSON.parse(data)));
+   peer.on('connect',()=>peer.end(JSON.stringify({nonce:producer.env.WFR_COLLECTION_LEAF_NONCE,
+    argv:['-H','127.0.0.1','-P',port,'-s',serial,'get-state']})));
+  });
+  const snapshot=await producer.seal();
+  assert.equal(response.ok,result==='valid');
+  assert.equal(checks,result==='invalid-before'?1:2);
+  assert.equal(existsSync(f.calls),result!=='invalid-before');
+  if(existsSync(f.calls))assert.equal(readFileSync(f.calls,'utf8').trim(),'-H 127.0.0.1 -P '+port+' -s '+locator+' get-state');
+  assert.equal(snapshot.complete,result==='valid');
+ }finally{await producer.close();}
+});

@@ -210,7 +210,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({
    directory:join(dir,'standalone-leaves'),policy:phoneScope.policy,serial:scope.serial,
    deadlineMs:identity.cleanup_deadline_ms,admissionDeadlineMs:identity.cleanup_deadline_ms,
-   env,assertAdmission:()=>guard({cleanup:cleanupActive}),beginLocalVersion,
+   env,assertAdmission:()=>guard({cleanup:cleanupActive}),beginLocalVersion,parentEpochAdmission:phoneScope.policy.schema_version===2,
   });Object.assign(env,leaf.env);
   const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
   const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>cleanupActive}),assertAuthority=()=>guard();
