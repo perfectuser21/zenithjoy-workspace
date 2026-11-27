@@ -238,7 +238,16 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
         const code='STANDALONE_COLLECTION_DEVICE_CONTEXT';
         throw Object.assign(Error(code),{code});
       }
-      const snapshot=await phone({command:'preflight',args:['--strict-call-state'],profile:scope.profile,owner:scope.run_tag});
+      const snapshot=await phone({command:'preflight',args:[],profile:scope.profile,owner:scope.run_tag});
+      const remaining=identity.deadline_ms-Date.now();
+      if(remaining<=0)fail('WORK_DEADLINE');
+      const registry=await execute(join(root,'adb-managed-client.py'),['-H','127.0.0.1','-P',env.DOUYIN_ADB_PORT,'-s',scope.serial,
+        'shell','dumpsys','telephony.registry'],{env,timeoutMs:Math.min(15000,remaining)});
+      const calls=[...(registry.stdout??'').matchAll(/mCallState=(\d+)/g)].map(match=>match[1]);
+      if(registry.code!==0||calls.length===0||calls.some(state=>state!=='0')){
+        const code='STANDALONE_COLLECTION_DEVICE_CONTEXT';
+        throw Object.assign(Error(code),{code});
+      }
       return {device:snapshot.stdout,local_owner:scope.run_tag,central_owner:identity.task_id,central_lease_version:central.lease_version};
     }:undefined,
     readAuthor:frozen.activity_playbook?createVideoAuthorReader({scope,evidenceRoot:phoneScope.evidence_root,runDirectory:dir,

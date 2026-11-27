@@ -4702,19 +4702,13 @@ case "$command" in
     exec "$ADB" devices -l
     ;;
   preflight)
-    [[ "$#" == 1 || ( "$#" == 2 && "$2" == --strict-call-state ) ]] || die "usage: douyin-phone-adb --profile PROFILE preflight [--strict-call-state]"
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE preflight"
     check_target
     print -- "profile=$PROFILE"
     print -- "serial=$SERIAL"
     print -- "model=$MODEL"
     print -- "state=device"
-    if [[ "${2:-}" == --strict-call-state ]]; then
-      _call_rows="$($ADB -s "$SERIAL" shell dumpsys telephony.registry 2>/dev/null)" || die 'preflight could not read call states'
-      _call_result="$(print -r -- "$_call_rows" | /usr/bin/awk -F= '/mCallState=/{n++; gsub(/[[:space:]]/,"",$2); if($2!="0") pending++} END{print !n ? "unknown" : pending ? "not_idle" : "idle"}')"
-      print -- "call_state=$_call_result"
-    else
-      print -- "call_state=$(call_state)"
-    fi
+    print -- "call_state=$(call_state)"
     print -- "foreground=$(foreground_package)"
     ;;
   foreground)
