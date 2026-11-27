@@ -13,7 +13,9 @@ export function deploymentManifest(root,files,{commit,repo='perfectuser21/zenith
   if(!/^[a-f0-9]{40}$/.test(commit))throw Error('部署必须使用固定commit');
   const sources=files.map(name=>({path:`services/phone-adb-controller/${name}`,deployed_path:name}));
   for(const entry of repositoryFiles){
-    if(!entry||!/^apps\/api\/db\/migrations\/[A-Za-z0-9_-]+\.sql$/.test(entry.path)||entry.deployed_path!==`release-evidence/${basename(entry.path)}`)throw Error('非法部署附件路径');
+    const migration=entry&&/^apps\/api\/db\/migrations\/[A-Za-z0-9_-]+\.sql$/.test(entry.path)&&entry.deployed_path===`release-evidence/${basename(entry.path)}`;
+    const bilibiliOcr=entry?.path==='scripts/phone-account-patrol/ocr.swift'&&entry.deployed_path==='_components/scripts/phone-account-patrol/ocr.swift';
+    if(!migration&&!bilibiliOcr)throw Error('非法部署附件路径');
     sources.push(entry);
   }
   const seen=new Set();

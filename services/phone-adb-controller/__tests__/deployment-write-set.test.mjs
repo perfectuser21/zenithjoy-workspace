@@ -77,3 +77,21 @@ test('双机包在无开发树和node_modules的独立目录能冷导入维护ru
   assert.equal(child.status,0,target+': '+child.stderr);assert.match(child.stdout,/MAINTENANCE_RUNTIME_COLD_IMPORT_OK/);
  }
 });
+
+test('the Bilibili verification body and OCR asset are written only to the exact M4 host',()=>{
+ const result=build();
+ for(const [path,bytesFrom] of [
+  ...groups.M4_BILIBILI_NODE_FILES.map(name=>[name,'services/phone-adb-controller/'+name]),
+  ['_components/scripts/phone-account-patrol/ocr.swift','scripts/phone-account-patrol/ocr.swift'],
+ ]){
+  const found=result['xian-m4'].find(row=>row.path==='bin-harvest/'+path);
+  assert.equal(found?.after.sha256,createHash('sha256').update(readFileSync(root+'/'+bytesFrom)).digest('hex'));
+  assert.ok(!result.mmv.some(row=>row.path.endsWith('/'+path)),path);
+ }
+ assert.ok(result.mmv.some(row=>row.path==='bin-harvest/bilibili-verify-release.mjs'));
+ const before=readFileSync(service+'/deploy.sh','utf8');
+ assert.throws(()=>parseDeployArrays(before.replace(
+  'M4_BILIBILI_NODE_FILES=(bilibili-verify-worker.mjs',
+  'M4_BILIBILI_NODE_FILES=(unapproved.mjs'
+ )),/非法只读B站M4包/);
+});
