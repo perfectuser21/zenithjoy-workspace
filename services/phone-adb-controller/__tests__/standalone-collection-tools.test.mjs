@@ -354,3 +354,13 @@ test('102 只接受已完成的 101 回执，并从同源同 VID 交付中读作
   handoff.discovery_metrics.company_binding.tenant_id='another-tenant';
   await assert.rejects(readStandaloneProducerHandoff(input),/UPSTREAM_SOURCE_VIDEO_EVIDENCE/);
 });
+
+test('102 认领事务拒绝与核对时不同的证据摘要',async()=>{
+  const digest='a'.repeat(64);
+  const {pool,calls}=fixture({selection:[{...video,evidence_digest:'b'.repeat(64)}]});
+  await assert.rejects(claimStandaloneCollectionVideo(pool,{...request,video_id:videoId,evidence_digest:digest},scope),/CLAIM_READBACK/);
+  const write=calls.find(call=>call.sql.includes('UPDATE zenithjoy.leadgen_videos'));
+  assert.match(write.sql,/discovery_metrics->>'digest'=\$9/);
+  assert.equal(write.args[8],digest);
+  assert.equal(calls.some(call=>call.sql==='COMMIT'),false);
+});
