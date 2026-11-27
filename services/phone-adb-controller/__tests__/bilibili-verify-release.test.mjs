@@ -54,11 +54,19 @@ function fixture() {
   const components = BILIBILI_COMPONENT_PATHS.map(path => ({ ...component, path }));
   const slot_key = 'verify_existing';
   const ref = { slot_key, activity_id: randomUUID(), activity_version_id: randomUUID(), reference_id: randomUUID() };
+  const step_id = randomUUID();
+  const readback = { type: 'metric', key: 'private_playback_verified', expect: { op: '==', value: 1 } };
+  const playbackStep = {
+    step_id,
+    locator: { activity_id: ref.activity_id, step_key: 'verify_private_playback' },
+    contract: { key: 'verify_private_playback', dod: { mode: 'hard', readback } },
+    registration: { id: step_id, source_sha256: 'a'.repeat(64), mode: 'hard', readback: structuredClone(readback) },
+  };
   const activity = {
     id: ref.activity_version_id, activity_id: ref.activity_id, source_commit: sourceCommit,
     source_repo: repo, source_path: 'fixtures/activity.json',
     payload: {
-      activity_id: ref.activity_id, steps: [], contract: { key: slot_key },
+      activity_id: ref.activity_id, steps: [playbackStep], contract: { key: slot_key },
       implementation_bindings: components.map(value => ({ ...value, scope: 'activity', status: 'verified' })),
     },
   };
@@ -81,17 +89,18 @@ function fixture() {
     release.manifest_sha256 = digest({ environment: release.environment, target: release.target, payload: release.payload });
   }
   rehash();
+  const expectedActivity = { reference_id: ref.reference_id, activity_id: ref.activity_id, activity_definition_version_id: ref.activity_version_id, required: true };
   const definition = {
     release_id: release.id, observation_id: randomUUID(), workflow_id: workflow.workflow_id,
     workflow_definition_version_id: workflow.id, snapshot_sha256: workflow.payload_sha256,
     runtime_snapshot_sha256: digest({release_id: release.id, workflow_version_id: workflow.id}),
-    expected_path: [{ reference_id: ref.reference_id, activity_id: ref.activity_id, activity_definition_version_id: ref.activity_version_id, required: true }],
+    expected_path: [expectedActivity, { ...expectedActivity, step_id: playbackStep.step_id }],
   };
   const job = {
     task_id: randomUUID(), run_id: randomUUID(), machine_id: 'xian-m4', release_id: release.id,
     workflow_key: BILIBILI_WORKFLOW,
     definition, input: {
-      scope: { ...BILIBILI_APPROVED, workflow_key: BILIBILI_WORKFLOW, operation: slot_key, source_commit: sourceCommit, limit: 1, environment: 'production' },
+      scope: { ...BILIBILI_APPROVED, workflow_key: BILIBILI_WORKFLOW, operation: slot_key, source_commit: sourceCommit, limit: 1, environment: 'production', step_id },
       skill: { name: 'android-bilibili-verify-existing', source_commit: sourceCommit, path: BILIBILI_PROVIDER_PATH, sha256: digest(code), version: '1.0.0' },
     },
   };
@@ -125,6 +134,9 @@ for (const [name, change] of [
   ['an extra knob', f => { f.job.input.scope.argv = ['shell', 'input', 'tap']; }],
   ['the wrong code path', f => { f.job.input.skill.path = 'arbitrary.mjs'; }],
   ['a second expected activity', f => { f.job.definition.expected_path.push({ ...f.job.definition.expected_path[0] }); }],
+  ['a playback Step under another activity', f => { f.job.definition.expected_path[1].activity_id = randomUUID(); }],
+  ['only an Activity without its playback Step', f => { f.job.definition.expected_path.pop(); }],
+  ['a Step scope that disagrees with the admitted path', f => { f.job.input.scope.step_id = randomUUID(); }],
 ]) {
   test(`rejects ${name} before touching a host`, () => {
     const f = fixture();
@@ -137,7 +149,13 @@ for (const [name, change] of [
   ['different release target with a valid digest', f => { f.release.target = 'mmv'; f.rehash(); }],
   ['a publish stage with a valid digest', f => { f.workflow.payload.activities[0].slot_key = 'publish'; f.rehash(); }],
   ['runtime permits publish with a valid digest', f => { f.workflow.payload.contract.runtime.entrypoint = 'publish'; f.rehash(); }],
-  ['a frozen substep with a valid digest', f => { f.activity.payload.steps = [{ key: 'publish' }]; f.rehash(); }],
+  ['a frozen publish Step with a valid digest', f => { f.activity.payload.steps[0].contract.key = 'publish'; f.rehash(); }],
+  ['a second frozen Step with a valid digest', f => { f.activity.payload.steps.push(f.activity.payload.steps[0]); f.rehash(); }],
+  ['a frozen Step with an invalid registration digest', f => { f.activity.payload.steps[0].registration.source_sha256 = 'invalid'; f.rehash(); }],
+  ['a frozen Step that would accept unverified playback', f => { f.activity.payload.steps[0].contract.dod.readback.expect.value = 0; f.rehash(); }],
+  ['a valid-looking but different Step in the task path', f => {
+    f.job.input.scope.step_id = f.job.definition.expected_path[1].step_id = randomUUID();
+  }],
   ['activity with an additional implementation', f => {
     f.activity.payload.implementation_bindings.push({ ...f.activity.payload.implementation_bindings[0], path: 'arbitrary.mjs' });
     f.rehash();

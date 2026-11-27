@@ -12099,6 +12099,15 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "GP-Anchor: line01/android_worker_publish；小白固定 B站原生只读发布准入与禁止外发"
 
+  - id: phone-bilibili-verify-existing-pilot
+    path: scripts/smoke/bilibili-verify-existing.sh
+    type: smoke
+    ci: L3
+    status: active
+    product: AI员工
+    execution: bash scripts/smoke/bilibili-verify-existing.sh
+    note: "GP-Anchor: line01/android_worker_publish；同一次私密视频读取的 Activity 与 Step、原件验证和禁止发布"
+
   - id: phone-bilibili-verify-native
     path: services/phone-adb-controller/__tests__/bilibili-verify-native.test.mjs
     type: integration
