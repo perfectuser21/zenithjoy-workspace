@@ -121,6 +121,9 @@ jobs:
           printf "CI_BUNDLE_B64='%s'\n" "$(base64 -w0 phone-release-evidence.json)"
           printf "BUSINESS_RUNS_B64='%s'\n" "$(printf '%s' "$BUSINESS_RUN_IDS" | base64 -w0)"
           printf "ACCEPTANCE_TASKS_B64='%s'\n" "$(printf '%s' "$BUSINESS_ACCEPTANCE_TASK_IDS" | base64 -w0)"
+          AUTOMATIC_CANDIDATE=0
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then AUTOMATIC_CANDIDATE=1; fi
+          printf "AUTOMATIC_CANDIDATE='%s'\n" "$AUTOMATIC_CANDIDATE"
           printf "TRANSACTION_B64='%s'\n" "$(printf '%s' "$TRANSACTION_ID" | base64 -w0)"
           cat << 'REMOTE_EOF'
           set -euo pipefail
@@ -185,6 +188,7 @@ jobs:
           if [[ "$DEPLOY_MODE" == maintenance-install || "$DEPLOY_MODE" == maintenance-recover ]]; then
             DEPLOY_ENTRY=(python3 "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-guard.py" "${DEPLOY_ENTRY[@]}")
           fi
+          export WF_PHONE_AUTOMATIC_CANDIDATE="$AUTOMATIC_CANDIDATE"
           if ! DEPLOY_LOG=$("${DEPLOY_ENTRY[@]}" "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" "$DEPLOY_MODE" "$BUSINESS_RUN_IDS" "$TRANSACTION_ID" "$BUSINESS_ACCEPTANCE_TASK_IDS" </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
             DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"

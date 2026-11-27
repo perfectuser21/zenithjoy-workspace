@@ -55,7 +55,7 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
  const patrol=structuredClone(commander);patrol.snapshot.scope='cecelia-device-patrol-definitions';patrol.snapshot.definitions.workflows=[makeExtra(23,'single-phone-account-patrol')];patrol.report.scope='cecelia-device-patrol-definitions';refresh(patrol);
  const bundlePath=join(temp,'bundle.json');writeFileSync(bundlePath,JSON.stringify({run:{id:42,sha,repo,branch:'main',event:'push',path:'.github/workflows/pilot-release-verification.yml'},snapshot,report,receipt,commander,patrol}));
  const tokenPath=join(temp,'token.env');writeFileSync(tokenPath,'CECELIA_INTERNAL_TOKEN=fixture-private-token\n',{mode:0o600});
- const releases=new Map(),requests=[];let mode='valid';
+ const releases=new Map(),requests=[];let releaseAckDropped=false;let mode='valid';
  const proofs=new Map([...workflows,...commanderWorkflows].filter(w=>w.payload.key!=='workflow_commander.internal').map((w,i)=>{
   const target=['douyin_comment_scoring','workflow_report.internal','workflow_commander.internal','douyin_video_publish.android'].includes(w.payload.key)?'mmv':'xian-m4',id=target==='mmv'?uuid(8):uuid(9),run_id=`candidate-${i}`;
   const release={id,environment:`staging:${sha}`,target,payload:{workflows:[...workflows,...commanderWorkflows],components:[{kind:'repo',repo,revision:sha},...activities[0].payload.implementation_bindings.filter(b=>b.kind==='code').map(({scope,status,...c})=>c)]}};
@@ -92,6 +92,13 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
    release={id,environment:input.environment,target:input.target,payload:{workflows:[...workflows,...commanderWorkflows].filter(w=>input.workflows.some(r=>r.workflow_definition_version_id===w.id)),activities,components:input.components,verification:{status:mode==='unknown'?'unknown':'verified'}}};
    if(mode==='wrong_target')release.target='elsewhere';
    release.manifest_sha256=digest({environment:release.environment,target:release.target,payload:release.payload});releases.set(id,release);
+   if(mode==='release_ack_cutover' && !releaseAckDropped){
+    releaseAckDropped=true;
+    res.writeHead(201,{'Content-Type':'application/json','Content-Length':'512'});
+    res.write('{"release":');
+    setTimeout(()=>res.destroy(),25);
+    return;
+   }
   }else release=releases.get(req.url.split('/').at(-1));
   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({release}));
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
@@ -134,6 +141,34 @@ test('候选入口在 Brain 发布切换后读回同一 release 并继续准备'
  assert.equal(posts.length, 2);
  assert.ok(posts.every(r => r.environment === plan.environment));
  assert.equal(existsSync(f.marker), false);
+});
+
+
+test('正式入口只为自动候选恢复截断的 staging release 回执', async t => {
+ for (const [mode, automaticCandidate, succeeds] of [
+  ['candidate', true, true],
+  ['candidate', false, false],
+  ['maintenance-install', true, false],
+  ['promote', true, false],
+ ]) {
+  await t.test(mode + (automaticCandidate ? ' automatic' : ' manual'), async t => {
+   const f = await fixture(t);
+   f.setMode('release_ack_cutover');
+   const run = prepareAndDeploy({
+    ...f, mode, automaticCandidate,
+    stageCandidateFn: async ({plan}) => plan,
+   });
+   if (succeeds) {
+    const plan = await run;
+    assert.equal(plan.environment, `staging:${f.sha}`);
+    assert.deepEqual(Object.keys(plan.release_ids).sort(), ['mmv','xian-m4']);
+   } else {
+    await assert.rejects(run, /Brain response invalid POST/);
+   }
+   assert.equal(f.requests.filter(r => r.method === 'POST').length, succeeds ? 3 : 1);
+   assert.equal(existsSync(f.marker), false);
+  });
+ }
 });
 
 test('安全安装入口独立于业务promote：无业务run仍可进入只围栏模式，且不生成production release',async t=>{

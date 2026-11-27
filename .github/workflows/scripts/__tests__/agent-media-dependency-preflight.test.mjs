@@ -36,8 +36,8 @@ function invoke(t,{present=[],failed='',broken='',absent='',slow=''}={}){
  exec "$@"`);
  put('sudo','exec "$@"');
  put('apt-get',`printf 'apt %s\\n' "$*" >> "$MEDIA_TRACE"
- [ "$MEDIA_FAILED" != index ] || exit 43
- [ "$MEDIA_SLOW" != index ] || /bin/sleep 10`);
+ [ "$MEDIA_FAILED" != index ] || { echo "packages.microsoft.com InRelease: 403 Forbidden" >&2; exit 43; }
+`);
  put('bash',`case "$1" in *prepare-openclaw-os-packages.sh)
  printf 'helper %s\\n' "$*" >> "$MEDIA_TRACE"
  [ "$MEDIA_FAILED" != helper ] || exit 43
@@ -57,15 +57,19 @@ test('required Agent media preparation rejects deadline/entry/continue-on-error 
   const changed=structuredClone(workflow);mutate(changed);assert.throws(()=>validate(changed));
  }
 });
-test('actual YAML invokes real wrapper, original bounded index and existing signed-plan helper for exact ffmpeg package',t=>{
+test('actual YAML invokes the existing signed-plan helper for exact ffmpeg without a runner-wide APT refresh',t=>{
  const r=invoke(t);assert.equal(r.status,0,r.output);
  assert.match(r.trace,/^timeout --signal=KILL 240s bash .github\/workflows\/scripts\/prepare-agent-media-tools.sh/m);
- assert.match(r.trace,/^apt .*Acquire::Retries=1.*Acquire::http::Timeout=20.*Acquire::https::Timeout=20.*APT::Update::Error-Mode=any update/m);
+ assert.doesNotMatch(r.trace,/^apt /m);
  assert.match(r.trace,/^helper .github\/workflows\/scripts\/prepare-openclaw-os-packages.sh \S+ \/etc\/apt\/sources.list.d\/ubuntu.sources \/etc\/apt\/apt-mirrors.txt ffmpeg$/m);
- assert.ok(r.trace.indexOf('apt ')<r.trace.indexOf('helper '));
- assert.doesNotMatch(r.trace,/^apt .*install/m);
  for(const name of ['ffmpeg','ffprobe'])assert.match(r.trace,new RegExp('version '+name+' -version'));
  assert.match(r.output,/PREFLIGHT_DONE agent-media-tools/);
+});
+test('a failing unrelated source in the runner-wide APT configuration cannot block Agent media preparation',t=>{
+ const r=invoke(t,{failed:'index'});assert.equal(r.status,0,r.output);
+ assert.doesNotMatch(r.trace,/^apt /m);
+ assert.match(r.trace,/^helper .* ffmpeg$/m);
+ for(const name of ['ffmpeg','ffprobe'])assert.match(r.trace,new RegExp('version '+name+' -version'));
 });
 test('both installed tools avoid network but each version really executes',t=>{
  const r=invoke(t,{present:['ffmpeg','ffprobe']});assert.equal(r.status,0,r.output);
@@ -75,9 +79,9 @@ test('both installed tools avoid network but each version really executes',t=>{
 test('ffmpeg presence alone cannot conceal missing ffprobe; exact package install is still required',t=>{
  const r=invoke(t,{present:['ffmpeg']});assert.equal(r.status,0,r.output);assert.match(r.trace,/^helper .* ffmpeg$/m);assert.match(r.trace,/version ffprobe -version/);
 });
-for(const failed of ['index','helper'])test(failed+' failure blocks completion and tests',t=>{
- const r=invoke(t,{failed});assert.equal(r.status,43,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE agent-media-tools/);
- assert.doesNotMatch(r.trace,/version /);if(failed==='index')assert.doesNotMatch(r.trace,/^helper /m);
+test('the signed installer failure blocks completion and tests',t=>{
+ const r=invoke(t,{failed:'helper'});assert.equal(r.status,43,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE agent-media-tools/);
+ assert.doesNotMatch(r.trace,/version /);
 });
 for(const name of ['ffmpeg','ffprobe'])test(name+' version failure is fatal even when both paths exist',t=>{
  const r=invoke(t,{present:['ffmpeg','ffprobe'],broken:name});assert.equal(r.status,44,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE agent-media-tools/);
@@ -85,8 +89,8 @@ for(const name of ['ffmpeg','ffprobe'])test(name+' version failure is fatal even
 test('helper success with missing ffprobe still fails closed',t=>{
  const r=invoke(t,{absent:'ffprobe'});assert.notEqual(r.status,0);assert.doesNotMatch(r.output,/PREFLIGHT_DONE agent-media-tools/);
 });
-for(const slow of ['index','helper'])test('real GNU timeout kills slow '+slow+' within the common boundary',t=>{
- const r=invoke(t,{slow});assert.ok(r.status===137 || r.signal==='SIGKILL',JSON.stringify(r));assert.doesNotMatch(r.output,/PREFLIGHT_DONE agent-media-tools/);assert.match(r.trace,/^timeout --signal=KILL 240s /m);
+test('real GNU timeout kills a slow signed installer within the common boundary',t=>{
+ const r=invoke(t,{slow:'helper'});assert.ok(r.status===137 || r.signal==='SIGKILL',JSON.stringify(r));assert.doesNotMatch(r.output,/PREFLIGHT_DONE agent-media-tools/);assert.match(r.trace,/^timeout --signal=KILL 240s /m);
 });
 
 test('hard timeout also terminates a TERM-ignoring slow acquisition child',t=>{
