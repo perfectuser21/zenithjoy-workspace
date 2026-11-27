@@ -42,11 +42,28 @@ for revision in sorted(phone|control):
         else:
             print('运行代码与历史回归契约来源',revision,flush=True)
         if revision in phone:
+            skill = path / 'SKILL.md'
+            if not skill.exists():
+                # Centrally managed Skill bytes are not part of the historical Git archive.
+                # Resolve them from that revision's lock and the existing read-only CI cache.
+                reader = (
+                    "import {readImplementationSource} from './scripts/ci/implementation-skill-source.mjs';"
+                    "const {PATROL_ARCHIVE_REVISION: revision, PATROL_ARCHIVE_SKILL_CACHE: source} = process.env;"
+                    "process.stdout.write(readImplementationSource(process.cwd(), revision,"
+                    "'scripts/phone-account-patrol/SKILL.md', {source, offline:true}));"
+                )
+                source = os.environ.get('IMPLEMENTATION_SKILLS_SOURCE_DIR') or str(root / '.skills-source')
+                env = {**os.environ, 'PATROL_ARCHIVE_REVISION':revision, 'PATROL_ARCHIVE_SKILL_CACHE':source}
+                contents = subprocess.check_output(['node', '--input-type=module', '-e', reader],
+                                                   cwd=root, env=env, timeout=30)
+                skill.write_bytes(contents)
+                print('历史中央 Skill 归档',revision,'sha256:'+digest(contents),flush=True)
+            runtime_before[skill.name] = digest(skill.read_bytes())
             modules=sorted(f.stem for f in path.glob('test_*.py') if not f.name.startswith('test_openclaw'))
             checked(['python3','-m','unittest',*modules],path)
             checked(['node','--test','test_publish.mjs','test_mirror.mjs'],path)
         if revision in control:
             checked(['python3','-m','unittest','discover','-s','.','-p','test_openclaw*.py'],path)
-        assert runtime_before=={name:digest((path/name).read_bytes()) for name in protected[revision]},'测试不得修改固定运行代码'
+        assert runtime_before=={name:digest((path/name).read_bytes()) for name in runtime_before},'测试不得修改固定运行代码'
         print('固定代码版本回归PASS',revision,flush=True)
 PY
