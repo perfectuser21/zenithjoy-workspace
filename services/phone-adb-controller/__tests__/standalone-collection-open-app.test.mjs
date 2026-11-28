@@ -113,3 +113,39 @@ test('账号视觉操作拒绝未取证、非「我」区域及错前台，复�
   assert.equal((calls.match(/input tap/g)??[]).length,1);
   assert.doesNotMatch(calls,/screencap/);
 });
+
+test('受管返回先核验当前应用并交新截图，前台变化时没有按键或取图', t => {
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'zj-entry-back-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const registry = join(dir, 'profiles.tsv'), adb = join(dir, 'fake-adb'), log = join(dir, 'adb.log');
+  writeFileSync(registry, 'legacy\tSER1\tANY-MODEL\t719\t1279\n');
+  const backMarker=join(dir,'back-sent');
+  writeFileSync(adb, fakeAdb
+    .replace('if [ "$APP_FOREGROUND" = yes ]; then','if [ "$APP_FOREGROUND" = yes ] && { [ "$EXIT_AFTER_BACK" != yes ] || [ ! -e "$BACK_MARKER" ]; }; then')
+    .replace('  *) exit 98 ;;', `  *'shell input keyevent 4'*) : > "$BACK_MARKER" ;;
+  *'shell screencap -p'*) exit 0 ;;
+  *' pull '*) for path in "$@"; do :; done; printf %s image > "$path" ;;
+  *) exit 98 ;;`), { mode: 0o755 });
+  const env = { ...process.env, ...fixturePythonEnv({ DOUYIN_PYTHON_BIN: '/usr/bin/python3' }),
+    ...phoneLockFixtureEnv(registry, join(dir, 'phone')), DOUYIN_ADB_BIN: fixtureAdb(adb),
+    DOUYIN_SIPS_BIN:'/usr/bin/true', HOME: dir, ADB_LOG: log, BACK_MARKER:backMarker };
+  const run = (foreground,exitAfterBack,...argv) => spawnSync('zsh', [controller,'--profile','legacy',...argv], {
+    env:{...env,APP_FOREGROUND:foreground,EXIT_AFTER_BACK:exitAfterBack},encoding:'utf8',timeout:15000,
+  });
+  assert.equal(run('yes','no','lock-acquire-new','entry').status,0);
+  const rejected = run('no','no','--lock-owner','entry','back-evidence','entry-refused','--require-app-focus');
+  assert.equal(rejected.status,0,rejected.stderr);
+  assert.equal(rejected.stdout.trim(),'back_status=foreground_changed');
+  assert.doesNotMatch(readFileSync(log,'utf8'),/input keyevent 4|screencap/);
+  const leftApp = run('yes','yes','--lock-owner','entry','back-evidence','entry-left','--require-app-focus');
+  assert.equal(leftApp.status,0,leftApp.stderr);
+  assert.equal(leftApp.stdout.trim(),'back_status=left_app');
+  assert.doesNotMatch(readFileSync(log,'utf8'),/screencap/);
+  const returned = run('yes','no','--lock-owner','entry','back-evidence','entry-returned','--require-app-focus');
+  assert.equal(returned.status,0,returned.stderr);
+  assert.match(returned.stdout,/entry-returned\.png/);
+  assert.match(returned.stdout,/^back_status=returned_screenshot$/m);
+  const calls=readFileSync(log,'utf8');
+  assert.equal((calls.match(/input keyevent 4/g)??[]).length,2);
+  assert.equal((calls.match(/screencap -p/g)??[]).length,1);
+});

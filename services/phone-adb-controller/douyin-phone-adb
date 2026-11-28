@@ -4864,12 +4864,28 @@ case "$command" in
     snapshot
     ;;
   back-evidence)
-    [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE back-evidence EVIDENCE_ID [WAIT_MS]"
+    [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE back-evidence EVIDENCE_ID [WAIT_MS|--require-app-focus]"
     require_evidence_id "$2"
     check_target_fast
+    back_wait="${3:-600}"
+    if [[ "$back_wait" == --require-app-focus ]]; then
+      [[ -n "$LOCK_OWNER" ]] || die "guarded back requires an exact lock owner"
+      if ! _foreground_is_exact_douyin "$(focused_window)"; then
+        print -- 'back_status=foreground_changed'
+        exit 0
+      fi
+      back_wait=600
+    fi
     "$ADB" -s "$SERIAL" shell input keyevent 4
-    wait_ms "${3:-600}"
+    wait_ms "$back_wait"
+    if [[ "${3:-}" == --require-app-focus ]] && ! _foreground_is_exact_douyin "$(focused_window)"; then
+      print -- 'back_status=left_app'
+      exit 0
+    fi
     snapshot_evidence_cmd "$2"
+    if [[ "${3:-}" == --require-app-focus ]]; then
+      print -- 'back_status=returned_screenshot'
+    fi
     ;;
   wake)
     check_target
