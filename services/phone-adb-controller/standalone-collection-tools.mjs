@@ -47,7 +47,8 @@ export async function claimStandaloneCollectionVideo(pool,request,scope) {
     await currentCollectionConfig(client,scope);
     const claimed='处理中:'+run;
     const parameters=[line,origin,company.company_id,company.tenant_id,String(company.version),run,claimed];
-    let rows=(await client.query(`SELECT video_id,video_url,title,judgment_status,process_status,harvest_batch,discovery_metrics->>'digest' AS evidence_digest
+    let rows=(await client.query(`SELECT video_id,video_url,title,judgment_status,process_status,harvest_batch,comment_count,
+      discovery_metrics->>'digest' AS evidence_digest
       FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND ${observedOrigin}
       AND harvest_batch=$6 AND process_status=$7 LIMIT 2 FOR UPDATE`,parameters)).rows;
     if(!rows.length) {
@@ -59,15 +60,18 @@ export async function claimStandaloneCollectionVideo(pool,request,scope) {
         ORDER BY discovered_at,id LIMIT 1 FOR UPDATE SKIP LOCKED)
       UPDATE zenithjoy.leadgen_videos AS video SET process_status=$7,harvest_batch=$6,updated_at=now()
       FROM pending WHERE pending.id=video.id
-      RETURNING video_id,video_url,title,judgment_status,process_status,harvest_batch,discovery_metrics->>'digest' AS evidence_digest`,parameters)).rows;
+      RETURNING video_id,video_url,title,judgment_status,process_status,harvest_batch,comment_count,
+        discovery_metrics->>'digest' AS evidence_digest`,parameters)).rows;
     }
     const row=rows[0];
     if(rows.length>1||row&&(requestedVideo!==undefined&&row.video_id!==requestedVideo||expectedDigest!==undefined&&row.evidence_digest!==expectedDigest||!videoId.test(row.video_id)||row.video_url!=='https://www.douyin.com/video/'+row.video_id
       ||typeof row.title!=='string'||row.harvest_batch!==run||row.process_status!==claimed
-      ||!['pending','matched'].includes(row.judgment_status))) fail('CLAIM_READBACK');
+      ||!['pending','matched'].includes(row.judgment_status)
+      ||row.comment_count!==null&&(!Number.isSafeInteger(row.comment_count)||row.comment_count<0))) fail('CLAIM_READBACK');
     await client.query('COMMIT');
     return {source_run:origin,video:row?{
       video_id:row.video_id,video_url:row.video_url,title:row.title,judgment_status:row.judgment_status,
+      line_key:line,process_status:row.process_status,harvest_batch:row.harvest_batch,comment_count:row.comment_count,
     }:null};
   } catch(error) {
     await client.query('ROLLBACK');
@@ -502,6 +506,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
           result={stage:'102',source_run:origin,...(activityPlaybook&&runDirectory?activityTools:{}),...(readDeviceContext?{inspect_views:['device_context']}:{}),phone_commands:[...commandList],business_operations:activityPlaybook?['collect_source_read',...(readAuthor?['collect_author_read']:[]),...offeredOperations]:[...offeredOperations],
             account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。',
             ...(activityPlaybook?{activity_playbook:structuredClone(activityPlaybook),
+              dedup_entry:'先读来源、原生核取链与作者，再调用 collect_claim。comment_count 是实采数，和页面总数分开。matched 字段只显示持久历史状态。旧证据不足时按本轮资格 Skill 重新取证。',
               instructions:'执行本单前，先读取冻结的 Playbook 和方法清单，按清单顺序读取及执行对应的 Activity Skill。'}:{})};
         } else if(handoff?.tools.includes(kind)) {
           result=await handoff.call(kind,input);
