@@ -347,6 +347,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
   async function performPhone(command,args) {
     if(!Array.isArray(args)||!commandList.includes(command))fail('PHONE_INPUT');
     let argv=args;
+    const resolveLink=command==='open-video'&&args.length===3&&args[2]==='--resolve-link';
     if(command==='open-app') {
       if(args.length||owned||accountNavigation)fail('PHONE_INPUT');
     } else if(command===accountCommand) {
@@ -364,7 +365,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
     } else if(!owned) {
       if(!activityPlaybook||!verifiedAccount||!binding||!reviewedVideo||claimInDoubt)fail('VIDEO_SCOPE');
       if(command==='open-video') {
-        if(args.length!==2||args[0]!==reviewedVideo)fail('VIDEO_SCOPE');
+        if((args.length!==2&&!resolveLink)||args[0]!==reviewedVideo)fail('VIDEO_SCOPE');
         evidence(args[1]);
         openedReviewVideo=null;
         verifiedReviewVideo=false;
@@ -415,6 +416,11 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         if(!owned)openedReviewVideo=reviewedVideo;
         return {...result,video_open_status:'visual_required',observation_file:observationFile,
           next_action:'用 fetch-native 读取本次截图。看到视频详情时，再用新的证据 ID 调用 current-video-link 核对授权视频身份。画面无法判断时说明具体原因并结束本次尝试。'};
+      }
+      if(resolveLink){
+        const fields=projectFields(result.stdout);
+        if(fields.content_type!=='video'||fields.video_id!==reviewedVideo)fail('VIDEO_IDENTITY');
+        verifiedReviewVideo=true;
       }
       if(!owned)openedReviewVideo=reviewedVideo;
     }
@@ -506,7 +512,8 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
           result={stage:'102',source_run:origin,...(activityPlaybook&&runDirectory?activityTools:{}),...(readDeviceContext?{inspect_views:['device_context']}:{}),phone_commands:[...commandList],business_operations:activityPlaybook?['collect_source_read',...(readAuthor?['collect_author_read']:[]),...offeredOperations]:[...offeredOperations],
             account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。',
             ...(activityPlaybook?{activity_playbook:structuredClone(activityPlaybook),
-              dedup_entry:'先读来源、原生核取链与作者，再调用 collect_claim。comment_count 是实采数，和页面总数分开。matched 字段只显示持久历史状态。旧证据不足时按本轮资格 Skill 重新取证。',
+              capabilities:{open_video_resolve_link:true},
+              dedup_entry:'先读来源。可用 open-video [候选 VID, 证据 ID, --resolve-link] 同次开页和核取链，再核作者，再调用 collect_claim。comment_count 是实采数，和页面总数分开。matched 字段只显示持久历史状态。旧证据不足时按本轮资格 Skill 重新取证。',
               instructions:'执行本单前，先读取冻结的 Playbook 和方法清单，按清单顺序读取及执行对应的 Activity Skill。'}:{})};
         } else if(handoff?.tools.includes(kind)) {
           result=await handoff.call(kind,input);

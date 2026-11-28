@@ -59,7 +59,9 @@ case "$DETAIL_PLAYBACK" in
   standard) ;;
   continuous_identity)
     case "$1" in
-      open-video) [[ "$#" == 3 ]] || die 'CONTINUOUS_IDENTITY_INVALID_COMMAND';;
+      open-video) [[ "$#" == 3 ]] || { [[ "$#" == 4 && "$4" == --resolve-link
+        && "${DOUYIN_MANAGED_VIDEO_OPEN:-}" == 1 && "${DOUYIN_MANAGED_CURRENT_VIDEO_LINK:-}" == 1
+        && -n "$LOCK_OWNER" ]] || die 'CONTINUOUS_IDENTITY_INVALID_COMMAND'; };;
       current-video-link) [[ "$#" == 2 ]] || die 'CONTINUOUS_IDENTITY_RESULTS_NOT_ALLOWED';;
       *) die 'CONTINUOUS_IDENTITY_INVALID_COMMAND';;
     esac;;
@@ -322,10 +324,16 @@ PYSHARE
 
 # 局部暂停取树的可信动作前提，不是视频身份凭据。
 _foreground_is_exact_douyin() {
-  "$PYTHON_BIN" - "$1" "$DOUYIN_PACKAGE" <<'PYFOCUS'
+  "$PYTHON_BIN" - "$1" "$DOUYIN_PACKAGE" "${2:-}" <<'PYFOCUS'
 import re,sys
-components=re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/[\w.$]+',sys.argv[1])
-sys.exit(0 if components==[sys.argv[2]] else 1)
+focus, package, required_activity = sys.argv[1:]
+components = re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)', focus)
+if len(components) != 1 or components[0][0] != package:
+    sys.exit(1)
+activity = components[0][1]
+if activity.startswith('.'):
+    activity = package + activity
+sys.exit(0 if not required_activity or activity == package + required_activity else 1)
 PYFOCUS
 }
 
@@ -776,15 +784,22 @@ _on_video_detail() {
 # 退过头把原详情页也退掉；核验用入口同一把尺子 _is_video_detail_xml（分享按钮在、搜索框里
 # 没有分享文案）。退到位返回 0；退飞/树读不到/超过上限返回 1，由调用方 deep link 重开兜底。
 _leave_scratch_route() {
-  local eid="$1" mode="${2:-detail}" witness_eid="${3:-}" i fg xml
+  local eid="$1" mode="${2:-detail}" witness_eid="${3:-}" strict="${4:-}" i fg xml
   # results-only仅交还导航；不能据此宣称关键词/视频tab归位成功。
   case "$mode" in detail|detail-paused|results-only) ;; *) print -u2 -- "leave-scratch: unknown mode ($mode)"; return 2 ;; esac
   require_evidence_id "$eid"
   [[ -z "$witness_eid" ]] || require_evidence_id "$witness_eid"
   for i in {1..5}; do
+    [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || return 1
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
     wait_ms 700
     fg="$(foreground_package)"
+    if [[ -n "$strict" ]]; then
+      fg="$(focused_window)"
+      _foreground_is_exact_douyin "$fg" || return 1
+      _foreground_is_exact_douyin "$fg" ".$SEARCH_RESULT_ACTIVITY" && continue
+      _foreground_is_exact_douyin "$fg" ".detail.ui.DetailActivity" || return 1
+    fi
     [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "leave-scratch: left Douyin after $i backs (fg=$fg)"; return 1 }
     [[ "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]] && continue
     # keyword出口的真实ID已验收；下游只需回结果页，不读详情树或改变播放。
@@ -805,6 +820,7 @@ _leave_scratch_route() {
       if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1; then
         # 仅精确认出的复制引导允许一次额外BACK；返回后独立新树仍必须是真详情。
         if (( w == 1 )) && _is_copy_success_guide_xml "$xml"; then
+          [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 1
           "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || return 1
           wait_ms 300
           fg="$(foreground_package)"
@@ -841,11 +857,14 @@ _leave_scratch_route() {
 # 取链接偶发失败(面板没弹/剪贴板没同步/超时)不该一击致死：整体包重试，连试到成功。
 # 每次在干净的详情页重来(die在subshell里只退出子壳,外层捕获重试)。
 current_video_link() {
-  local eid="$1" return_keyword="${2:-}" tries=5 i rc _g guard_xml observation_file
+  local eid="$1" return_keyword="${2:-}" tries=5 i rc _g guard_xml="${3:-}" expected_video_id="${4:-}" observation_file
   require_evidence_id "$eid"
   if [[ "${DOUYIN_MANAGED_CURRENT_VIDEO_LINK:-}" == 1 && "$DETAIL_PLAYBACK" == continuous_identity && -n "$LOCK_OWNER" && -z "$return_keyword" ]]; then
     # 先有界观察。无可信详情时只交还新画面，分享、剪贴板与身份结果均留空。
-    _g=0; guard_xml="$(_ui_evidence_wave "${eid}-detail-guard-w1" paused-agent)" || _g=$?
+    _g=0
+    if [[ -z "$guard_xml" ]]; then
+      guard_xml="$(_ui_evidence_wave "${eid}-detail-guard-w1" paused-agent)" || _g=$?
+    fi
     if (( _g == 4 )) || { (( _g == 0 )) && ! _is_video_detail_xml "$guard_xml"; }; then
       observation_file="$(_capture_focused_douyin_png "${eid}-video-observation")" || die "VIDEO_LINK_OBSERVATION_FAILED"
       print -- 'video_link_status=visual_required'
@@ -862,9 +881,20 @@ current_video_link() {
     (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
     (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   fi
+  if [[ -n "$expected_video_id" ]]; then
+    rc=0
+    ( _current_video_link_once "${eid}-t1" "$return_keyword" "$guard_xml" "$expected_video_id" ) || rc=$?
+    case "$rc" in
+      0) return 0 ;;
+      64) die "SHARE_PANEL_TARGET_UNVERIFIED: managed detail or share target was not verified" ;;
+      65) die "VIDEO_LINK_IDENTITY_MISMATCH: copied content differs from the requested video" ;;
+      *) die "MANAGED_VIDEO_LINK_INCOMPLETE: native link flow ended before verification (rc=$rc)" ;;
+    esac
+  fi
   for i in {1..$tries}; do
     if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
     (( rc == 64 )) && die "SHARE_PANEL_TARGET_UNVERIFIED: refusing navigation retries for an untrusted link target"
+    (( rc == 65 )) && die "VIDEO_LINK_IDENTITY_MISMATCH: refusing navigation retries after a different content identity"
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # keyword结果出口退到外部时，不让外层重试再按两次BACK破坏外部栈。
     if [[ -n "$return_keyword" && "$(foreground_package)" != *"$DOUYIN_PACKAGE"* ]]; then
@@ -935,7 +965,7 @@ nonce_sdk31_input() {
 }
 
 nonce_native_copy() {
-  local eid="$1" nonce="$2" center x y i phase
+  local eid="$1" nonce="$2" strict="${3:-}" center x y i phase
   # 保持既有入口权限：SDK31/34或显式owner必须验锁；其余旧入口不新增owner前置。
   if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) || -n "${LOCK_OWNER:-}" ]]; then
     require_held_lock clipboard_nonce
@@ -947,6 +977,7 @@ nonce_native_copy() {
   # 原生复制按实际字段证明使用，不按SDK猜能力。每个阶段读回上下文，
   # 系统小组件框或焦点丢失时不能继续COPY/MOVE_END/DEL。
   for phase in selected copied; do
+    [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH:$phase"
     if [[ "$phase" == selected ]]; then
       "$ADB" -s "$SERIAL" shell input swipe "$x" "$y" "$x" "$y" 650 >/dev/null || die "CLIPBOARD_NONCE_LONG_PRESS_FAILED"
     else
@@ -958,6 +989,7 @@ nonce_native_copy() {
     nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-copy-${phase}.xml" "$nonce" >/dev/null || die "CLIPBOARD_NONCE_COPY_FIELD_UNVERIFIED:$phase"
   done
   # Copy会取消选区；无需Ctrl+A，移到已验证nonce末尾并删除其确切字符数。
+  [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH:cleanup"
   "$ADB" -s "$SERIAL" shell input keyevent 123 >/dev/null || die "CLIPBOARD_NONCE_MOVE_END_FAILED"
   for (( i=0; i<${#nonce}; i++ )); do
     "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
@@ -965,7 +997,7 @@ nonce_native_copy() {
 }
 
 seed_clipboard_nonce_once() {
-  local eid="$1" leave_mode="${2:-detail}" nonce xml line text hint center x y phase
+  local eid="$1" leave_mode="${2:-detail}" strict="${3:-}" nonce xml line text hint center x y phase
   case "$leave_mode" in detail|detail-paused) ;; *) die "CLIPBOARD_NONCE_RETURN_MODE_INVALID" ;; esac
   if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
     [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
@@ -981,6 +1013,7 @@ seed_clipboard_nonce_once() {
   [[ -n "$line" && "$line" == *'clickable="true"'* ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT"
   center="$(node_center "$line")" || die "CLIPBOARD_NONCE_FIELD_BOUNDS"
   read x y <<< "$center"
+  [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH"
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_FAILED"
   if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
     nonce_sdk31_input "$nonce" "$eid" || die "CLIPBOARD_NONCE_INPUT_FAILED"
@@ -1003,6 +1036,7 @@ seed_clipboard_nonce_once() {
     if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) || ( ( -z "${DEVICE_SDK:-}" || "${DEVICE_SDK:-}" == 33 ) && "$phase" != typed ) ]]; then
       nonce_sdk31_field "$xml" >/dev/null || die "CLIPBOARD_NONCE_FIELD_UNVERIFIED:$phase"
     fi
+    [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH:$phase"
     if [[ "$phase" == empty ]]; then
       # Android空输入框会把hint同时写成text；仅接受同节点的非空hint，nonce残留仍拒绝。
       hint=""
@@ -1026,12 +1060,12 @@ seed_clipboard_nonce_once() {
         print -- 'empty_proof=verified_by_exact_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
       fi
       if [[ "$phase" == typed ]]; then
-        nonce_native_copy "$eid" "$nonce" || die "CLIPBOARD_NONCE_COPY_FAILED"
+        nonce_native_copy "$eid" "$nonce" "$strict" || die "CLIPBOARD_NONCE_COPY_FAILED"
       fi
     fi
   done
   [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || leave_mode=detail-paused
-  _leave_scratch_route "${eid}-seed-leave" "$leave_mode" "${eid}-seed-detail-verified" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
+  _leave_scratch_route "${eid}-seed-leave" "$leave_mode" "${eid}-seed-detail-verified" "$strict" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
   print -- "$nonce"
 }
 
@@ -1069,11 +1103,11 @@ cancel_nonce_widget() {
 }
 
 seed_clipboard_nonce() {
-  local eid="$1" mode="${2:-detail}" proof rc=0
-  proof="$(seed_clipboard_nonce_once "$eid" "$mode")" || rc=$?
+  local eid="$1" mode="${2:-detail}" strict="${3:-}" proof rc=0
+  proof="$(seed_clipboard_nonce_once "$eid" "$mode" "$strict")" || rc=$?
   if (( rc == 0 )); then print -r -- "$proof"; return 0; fi
   # 保留中断的原件；只取消已证的精确widget一次，第二轮绝不递归恢复。
-  (( rc == 73 )) || return "$rc"
+  (( rc == 73 )) && [[ -z "$strict" ]] || return "$rc"
   cancel_nonce_widget "$eid" || return "$rc"
   proof="$(seed_clipboard_nonce_once "${eid}-widget-retry" "$mode")" || return $?
   print -r -- "$proof"
@@ -1239,40 +1273,55 @@ _current_video_link_once() {
   local copied_path scratch_xml search_line search_center search_x search_y
   local result_xml result_line escaped_text parsed_link shared_url short_url resolved_url direct_url share_url_kind video_id note_id content_type content_id reopen_url nonce_proof=""
   evidence_id="$1"
-  local return_keyword="${2:-}" return_result return_xml share_policy=standard seed_witness
+  local return_keyword="${2:-}" share_witness="${3:-}" expected_video_id="${4:-}" return_result return_xml share_policy=standard seed_witness
   require_evidence_id "$evidence_id"
 
+  [[ -z "$expected_video_id" ]] || _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 64
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   seed_witness="$EVIDENCE_ROOT/${evidence_id}-seed-detail-verified.xml"
   /bin/rm -f "$seed_witness" "$EVIDENCE_ROOT/${evidence_id}-widget-retry-seed-detail-verified.xml"
   if [[ -s "$(clip_state_file)" ]]; then
     # keyword出口不录音；nonce严格归位后保持暂停，后续分享仍独立取新鲜树。
     local nonce_seed_mode=detail
-    [[ -z "$return_keyword" ]] || nonce_seed_mode=detail-paused
-    nonce_proof="$(seed_clipboard_nonce "$evidence_id" "$nonce_seed_mode")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
+    [[ -z "$return_keyword" && -z "$expected_video_id" ]] || nonce_seed_mode=detail-paused
+    nonce_proof="$(seed_clipboard_nonce "$evidence_id" "$nonce_seed_mode" "$expected_video_id")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
     [[ ! -s "$EVIDENCE_ROOT/${evidence_id}-widget-retry-seed-detail-verified.xml" ]] || seed_witness="$EVIDENCE_ROOT/${evidence_id}-widget-retry-seed-detail-verified.xml"
     if _is_fresh_share_detail_xml "$seed_witness"; then share_policy=verified-seed-share; fi
+    # The nonce visits a different screen. Only its fresh return to detail can be reused.
+    if [[ -n "$share_witness" ]]; then
+      share_witness=""
+      [[ "$share_policy" != verified-seed-share ]] || share_witness="$seed_witness"
+    fi
   fi
-  # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
-  # 先MEDIA_PAUSE幂等暂停再取证，防中央可点击内容被误触。
-  "$ADB" -s "$SERIAL" shell input keyevent 127 || die "MEDIA_PAUSE_FAILED"
-  wait_ms 600
-  # 分享按钮是详情页上"已知存在"的东西，一次读不到不该放弃（0913 实证：前置守卫刚放行、
-  # 正式取证却报找不到，两者之间只隔了上面那次中央点击）。有界重抓，并区分两种死因：
-  #   a) 中央点击把页面点飞了 → 已不在详情页
-  #   b) 还在详情页但按钮没渲染出来 → 纯时序问题，重抓即可
-  share_xml="$EVIDENCE_ROOT/${evidence_id}-share.xml"
   share_line=""
-  local _st _sg
-  for _st in 1 2 3; do
-    if (( _st == 1 )); then ui_evidence "${evidence_id}-share" "$share_policy" >/dev/null
-    else ui_evidence "${evidence_id}-share" >/dev/null; fi
-    share_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$share_xml" | /usr/bin/head -1 || true)"
-    [[ -n "$share_line" && "$share_line" == *'clickable="true"'* ]] && break
+  if [[ -n "$expected_video_id" ]]; then
+    [[ -n "$share_witness" ]] && _is_fresh_share_detail_xml "$share_witness" || return 64
+    _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 64
+    share_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$share_witness" || true)"
+    [[ "$share_line" != *$'\n'* && "$share_line" == *'clickable="true"'* && "$share_line" == *'enabled="true"'* ]] || return 64
+    share_xml="$share_witness"
+  else
+    # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
+    # 先MEDIA_PAUSE幂等暂停再取证，防中央可点击内容被误触。
+    "$ADB" -s "$SERIAL" shell input keyevent 127 || die "MEDIA_PAUSE_FAILED"
+    wait_ms 600
+    # 分享按钮是详情页上"已知存在"的东西，一次读不到不该放弃（0913 实证：前置守卫刚放行、
+    # 正式取证却报找不到，两者之间只隔了上面那次中央点击）。有界重抓，并区分两种死因：
+    #   a) 中央点击把页面点飞了 → 已不在详情页
+    #   b) 还在详情页但按钮没渲染出来 → 纯时序问题，重抓即可
+    share_xml="$EVIDENCE_ROOT/${evidence_id}-share.xml"
     share_line=""
-    print -u2 -- "warning: share button absent from hierarchy (try $_st/3); recapturing"
-    (( _st < 3 )) && wait_ms 1500
-  done
+    local _st _sg
+    for _st in 1 2 3; do
+      if (( _st == 1 )); then ui_evidence "${evidence_id}-share" "$share_policy" >/dev/null
+      else ui_evidence "${evidence_id}-share" >/dev/null; fi
+      share_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$share_xml" | /usr/bin/head -1 || true)"
+      [[ -n "$share_line" && "$share_line" == *'clickable="true"'* ]] && break
+      share_line=""
+      print -u2 -- "warning: share button absent from hierarchy (try $_st/3); recapturing"
+      (( _st < 3 )) && wait_ms 1500
+    done
+  fi
   if [[ -z "$share_line" ]]; then
     _sg=0; _on_video_detail "${evidence_id}-share-diag" || _sg=$?
     (( _sg == 1 )) && die "the centre tap navigated away from the video detail page (share button gone); this is not a missing-button problem"
@@ -1290,9 +1339,11 @@ _current_video_link_once() {
 
   link_center="$(share_panel_link_target "$panel_xml" "$SCREEN_W" "$SCREEN_H")" || return 64
   read link_x link_y <<< "$link_center"
+  [[ -z "$expected_video_id" ]] || _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 64
   "$ADB" -s "$SERIAL" shell input tap "$link_x" "$link_y"
   wait_ms 800
   copied_path="$(snapshot_evidence "${evidence_id}-link-copied")"
+  [[ -z "$expected_video_id" ]] || _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 64
 
   "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null
   wait_ms 900
@@ -1302,8 +1353,10 @@ _current_video_link_once() {
   [[ -n "$search_line" && "$search_line" == *'clickable="true"'* ]] || die "safe scratch search field was not found"
   search_center="$(node_center "$search_line")" || die "scratch field bounds could not be parsed"
   read search_x search_y <<< "$search_center"
+  [[ -z "$expected_video_id" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || return 64
   "$ADB" -s "$SERIAL" shell input tap "$search_x" "$search_y"
   wait_ms 200
+  [[ -z "$expected_video_id" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || return 64
   "$ADB" -s "$SERIAL" shell input keyevent 123
   "$ADB" -s "$SERIAL" shell input keyevent 67
   "$ADB" -s "$SERIAL" shell input keyevent 67
@@ -1336,6 +1389,7 @@ _current_video_link_once() {
   else
     die "resolved link did not contain a valid video or note id"
   fi
+  [[ -z "$expected_video_id" || ( "$content_type" == video && "$content_id" == "$expected_video_id" ) ]] || return 65
   reopen_url="snssdk1128://aweme/detail/$content_id"
 
   if [[ -n "$return_keyword" ]]; then
@@ -1369,9 +1423,10 @@ _current_video_link_once() {
     # 先按返回退出暂存路线、回到打开它之前的那张详情页（同一把尺子核验）；退不回去才重开。
     local final_leave_mode=detail
     [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || final_leave_mode=detail-paused
-    if _leave_scratch_route "${evidence_id}-leave" "$final_leave_mode"; then
+    if _leave_scratch_route "${evidence_id}-leave" "$final_leave_mode" "" "$expected_video_id"; then
       _vr_ok=1
     else
+      [[ -z "$expected_video_id" ]] || die "MANAGED_VIDEO_LINK_RESTORE_FAILED"
       print -u2 -- "warning: could not back out of the scratch route onto the original video detail page; falling back to deep link reopen"
     fi
     (( _vr_ok )) || for _vr_try in 1 2; do
@@ -1402,6 +1457,7 @@ _current_video_link_once() {
     fi
     # 只有实际链接已解析且严格详情归位通过后才恢复播放；录音仍看到原有播放状态。
     if [[ "${DETAIL_PLAYBACK:-standard}" == continuous_identity ]]; then
+      [[ -z "$expected_video_id" ]] || _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 64
       "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null || die "MEDIA_PLAY_FAILED"
     fi
   else
@@ -5261,7 +5317,15 @@ case "$command" in
     # 0913：collection 阶段要回到 discovery 已验证的那条视频。以前没有这条命令，
     # worker 只能重走搜索（撞上综合 tab 永不 idle 的墙，三次尝试全废）。
     # 正解=用平台 deeplink 确定性直开详情页，再用分享按钮守卫复验落点。
-    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE open-video VIDEO_ID EVIDENCE_ID"
+    ov_resolve_link=0
+    if [[ "$#" == 4 && "$4" == --resolve-link && "$DETAIL_PLAYBACK" == continuous_identity
+      && "${DOUYIN_MANAGED_VIDEO_OPEN:-}" == 1 && "${DOUYIN_MANAGED_CURRENT_VIDEO_LINK:-}" == 1 && -n "$LOCK_OWNER" ]]; then
+      ov_resolve_link=1
+      require_evidence_id "$3-link"
+      if [[ "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ]]; then require_held_lock clipboard_nonce; fi
+    else
+      [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE open-video VIDEO_ID EVIDENCE_ID"
+    fi
     check_target
     ov_id="$2"
     [[ "$ov_id" == <-> && ${#ov_id} -ge 16 && ${#ov_id} -le 24 ]] || die "VIDEO_ID must be the 16-24 digit platform video id"
@@ -5322,10 +5386,12 @@ PYCARDFOCUS
       ov_g=0; _on_video_detail "$ov_guard_eid-w2" paused-detail || ov_g=$?
     fi
     (( ov_g == 0 )) || die "detail deeplink for $ov_id did not land on a verified video detail page (guard rc=$ov_g)"
-    if [[ "${DOUYIN_MANAGED_VIDEO_OPEN:-}" == 1 ]]; then
-      _capture_focused_douyin_png "$3-openvideo-ok" >/dev/null || die "VIDEO_OBSERVATION_FAILED"
-    else
-      snapshot_evidence "$3-openvideo-ok" >/dev/null
+    if (( ! ov_resolve_link )); then
+      if [[ "${DOUYIN_MANAGED_VIDEO_OPEN:-}" == 1 ]]; then
+        _capture_focused_douyin_png "$3-openvideo-ok" >/dev/null || die "VIDEO_OBSERVATION_FAILED"
+      else
+        snapshot_evidence "$3-openvideo-ok" >/dev/null
+      fi
     fi
     # 0913 主理人拍板：评论数是详情页树上零成本的字段，必须随开页输出——
     # 零评论的视频不许流向录屏/ASR（最贵工序不该排在最便宜的过滤器前面）。
@@ -5339,6 +5405,12 @@ PYCARDFOCUS
         _foreground_is_exact_douyin "$(focused_window)" || die "UNTRUSTED_FOREGROUND_EVIDENCE"
       fi
       "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
+    fi
+    if (( ov_resolve_link )); then
+      # The returned link must match the authorized VID before this page observation can be used.
+      current_video_link "$3-link" "" "$ov_xml" "$ov_id"
+      print -- "comment_count=${ov_cc:-0}"
+      exit
     fi
     print -- "video_opened=1"
     print -- "video_id=$ov_id"

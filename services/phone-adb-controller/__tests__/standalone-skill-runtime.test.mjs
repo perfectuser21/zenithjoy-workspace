@@ -38,6 +38,22 @@ test('只为对应受管视频命令启用各自的有界观察',async()=>{
 
  assert.ok(calls.slice(0,2).every(call=>call.env.DOUYIN_DETAIL_PLAYBACK==='continuous_identity'));
 });
+test('合并取链只在受管 102 的工作期限内启用双方观察',async()=>{
+ const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');
+ const base=fixture(),calls=[];
+ base.frozen.agent_input.workflow_key='douyin_video_processing';
+ base.frozen.standalone_skill={deadline_ms:Date.now()+600000};
+ const invoke=createStandalonePhoneProvider({...base,execute:async(_,args,options)=>{
+  calls.push({args,options});return {code:0,stdout:'content_type=video'};
+ }});
+ const input={profile:'cloud-phone-test',owner:'direct101',command:'open-video',args:['1234567890123456789','direct101-open','--resolve-link']};
+ await assert.rejects(invoke(input),{code:'STANDALONE_NATIVE_SCOPE'});
+ await invoke({...input,playback:'continuous_identity'});
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].options.env.DOUYIN_MANAGED_VIDEO_OPEN,'1');
+ assert.equal(calls[0].options.env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK,'1');
+ assert.ok(calls[0].options.timeoutMs>360000&&calls[0].options.timeoutMs<=600000);
+});
 test('semantic card uses a fresh selected video grid and returned native card coordinates under the exact owner',async()=>{
  const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');const calls=[];
  const invoke=createStandalonePhoneProvider({...fixture(),execute:async(command,args)=>{calls.push({command,args});if(args.includes('search-video-cards'))return {code:0,stdout:'123\t456\t00:15\t一个真实搜索卡片的标题\t作者\nvideo_tab=1\nloading=0\n'};return {code:0,stdout:args.includes('current-video-link')?'video_id=1234567890123456789\ncontent_type=video\n':'ok'};}});

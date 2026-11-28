@@ -3,6 +3,8 @@ const helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,ctl=new
 const argv=['/bin/zsh',ctl,'--profile','wuying_android14','--lock-owner','fixture-owner','commenter-profile-card-link','7707600173446204723','56755237968','54O954Gr5L2z5Lq6','a'.repeat(64),'fixture-card'];
 function simulated(args,override){const program=String.raw`import sys,os,json,importlib.util,subprocess
 s=importlib.util.spec_from_file_location('helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);argv=json.loads(sys.argv[2]);clock=[0];killed=[]
+if argv[-1]=='--resolve-link':
+ os.environ.update(DOUYIN_MANAGED_VIDEO_OPEN='1',DOUYIN_MANAGED_CURRENT_VIDEO_LINK='1',DOUYIN_DETAIL_PLAYBACK='continuous_identity')
 if sys.argv[3]!='unset':os.environ['DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS']=sys.argv[3]
 else:os.environ.pop('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS',None)
 class Child:
@@ -51,5 +53,16 @@ test('guarded interactive account verification completes at 300s without expandi
  assert.equal(simulated(managed,'341').code,2);
  for(const args of [managed.slice(0,-1),[...managed,'extra'],managed.map((arg,i)=>i===8?'--other':arg),managed.map((arg,i)=>i===5?'broken':arg),managed.map((arg,i)=>i===7?'another-run':arg)]){
   assert.equal(simulated(args,'281').code,2);
+ }
+});
+
+test('real Python guard gives only exact managed open and link a 690-second limit',()=>{
+ const owner='dd9fd7d9-903e-4a0f-835e-4591091e65e1';
+ const managed=['/bin/zsh',ctl,'--profile','wuying_android14','--lock-owner',owner,'open-video','7681632828384394202',owner+'-dedup','--resolve-link'];
+ assert.equal(simulated(managed).code,0);
+ assert.equal(simulated(managed,'690').code,0);
+ assert.equal(simulated(managed,'691').code,2);
+ for(const unrelated of [managed.slice(0,-1),managed.map((v,i)=>i===5?'bad-owner':v),managed.map((v,i)=>i===8?'unrelated-proof':v)]){
+  assert.equal(simulated(unrelated,'281').code,2);
  }
 });

@@ -107,8 +107,21 @@ def guarded_command_budget(argv):
                and re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', argv[5])
                and argv[7].startswith(argv[5] + '-')
                and re.fullmatch(r'[A-Za-z0-9_.-]{1,160}', argv[7]))
+    open_and_link = (controller and len(argv) == 10 and argv[6] == 'open-video'
+                     and argv[9] == '--resolve-link'
+                     and os.environ.get('DOUYIN_MANAGED_VIDEO_OPEN') == '1'
+                     and os.environ.get('DOUYIN_MANAGED_CURRENT_VIDEO_LINK') == '1'
+                     and os.environ.get('DOUYIN_DETAIL_PLAYBACK') == 'continuous_identity'
+                     and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', argv[3])
+                     and re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', argv[5])
+                     and re.fullmatch(r'[0-9]{16,24}', argv[7])
+                     and argv[8].startswith(argv[5] + '-')
+                     and re.fullmatch(r'[A-Za-z0-9_.-]{1,160}', argv[8]))
     cap = 280
-    if card:
+    if open_and_link:
+        # Reserve 30 seconds for termination and reporting before the outer limit.
+        cap = 690
+    elif card:
         cap = 360
     elif account:
         # Leave time to report or clean up before the 360-second outer command limit.

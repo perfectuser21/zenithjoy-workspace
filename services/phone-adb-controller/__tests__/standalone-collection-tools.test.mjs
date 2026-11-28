@@ -428,7 +428,7 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
         return {stdout:`video_link_status=visual_required\nevidence=/native/${args[0]}-video-observation.png\n`};
       }
       const stdout=command==='account-current'?'douyin_id=bound-account\n':
-        command==='current-video-link'?`content_type=video\nvideo_id=${videoId}\n`:'';
+        command==='current-video-link'||args[2]==='--resolve-link'?`content_type=video\nvideo_id=${args[1]===run+'-mismatch'?'2222222222222222':videoId}\ncomment_count=14\n`:'';
       return {stdout};
     },
     async rpc({request}){
@@ -448,8 +448,8 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
   await assert.rejects(business('collect_claim',{video_id:videoId}),/SOURCE_READ_REQUIRED/);
   await business('collect_source_read');
   await assert.rejects(phone('open-video',['2222222222222222',run+'-other']),/VIDEO_SCOPE/);
-  await phone('open-video',[videoId,run+'-open']);
-  await phone('current-video-link',[run+'-link']);
+  await assert.rejects(phone('open-video',[videoId,run+'-mismatch','--resolve-link']),/VIDEO_IDENTITY/);
+  await phone('open-video',[videoId,run+'-open','--resolve-link']);
   await phone('ui-evidence',[run+'-tree']);
   await assert.rejects(phone('record-start',[run+'-record',90,videoId]),/VIDEO_SCOPE/);
   await assert.rejects(business('collect_claim',{video_id:videoId}),/AUTHOR_UNVERIFIED/);
@@ -467,8 +467,9 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
   assert.equal((await business('collect_author_read')).own_account,false);
   await business('collect_claim',{video_id:videoId});
   await assert.rejects(phone('record-start',[run+'-record',90,videoId]),/VIDEO_UNVERIFIED/);
+  await assert.rejects(phone('open-video',[videoId,run+'-owned-combined','--resolve-link']),/VIDEO_SCOPE/);
   assert.deepEqual(actions,['open-app','account-current','company_config','collect_source_read',
-    'open-video','current-video-link','ui-evidence','current-video-link','current-video-link',
+    'open-video','open-video','ui-evidence','current-video-link','current-video-link',
     'open-video','current-video-link','collect_claim']);
 });
 

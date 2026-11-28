@@ -50,7 +50,7 @@ else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.ar
 });
 
 // 实际控制器CLI；只在临时副本替换既有等待函数，业务函数与守卫字节保持。
-function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,managedLink=false,idleExit=1,screenshotFails=false,screenshotEmpty=false,screenshotMalformed=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
+function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,detailFreshOnlyOnce=false,focusChangesAfterDetailDump=false,shareDetailVariant=null,historyClipboard=false,focusDriftAfterPanel=false,focusDriftAfterPasteReadback=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,managedLink=false,resolveLinkDuringOpen=false,copiedVideoId=null,idleExit=1,screenshotFails=false,screenshotEmpty=false,screenshotMalformed=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
   const dir=mkdtempSync(join(tmpdir(),'paused-detail-idle-'));
   try {
     const source=readFileSync(script,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
@@ -82,31 +82,48 @@ sys.stdout.buffer.write(b'\\x89PNG\\r\\n\\x1a\\n'+image+chunk(b'IEND',b''))`]);
     }
     writeFileSync(join(dir,'state.json'),JSON.stringify({play:command==='wave'?'paused':'playing',toggled:false,dumps:0,toggles:0,page:shareOverlay?'share':'detail'}));
     const panel='<hierarchy><node package="com.ss.android.ugc.aweme" text="23条评论"/><node package="com.ss.android.ugc.aweme" class="android.widget.EditText" text="发条评论"/></hierarchy>';
-    writeFileSync(join(dir,'panel.xml'),panel);
+    const linkPanel='<hierarchy><node package="com.ss.android.ugc.aweme" text="分享给" bounds="[0,1200][900,1250]"/><node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/function_container" enabled="true" bounds="[0,1300][900,1700]"><node package="com.ss.android.ugc.aweme" enabled="true" clickable="true" text="分享链接" bounds="[20,1400][100,1480]"/></node></hierarchy>';
+    writeFileSync(join(dir,'panel.xml'),copiedVideoId ? linkPanel : panel);
     let overlay=readFileSync(new URL('./fixtures/comment-card-share-copy-overlay.xml',import.meta.url),'utf8');
     if(overlayUnknown)overlay=overlay.replace('可以通过分享的链接找到我','未知提示');
     if(overlayMissingPackage)overlay=overlay.replaceAll('package="com.ss.android.ugc.aweme"','package=""');
     if(overlayForeign)overlay=overlay.replaceAll('com.ss.android.ugc.aweme','com.other.app');
     writeFileSync(join(dir,'share.xml'),overlay);
-    const detail=readFileSync(fixture,'utf8');writeFileSync(join(dir,'detail.xml'),wrongPackage?detail.replaceAll('com.ss.android.ugc.aweme','com.other.app'):partial?'<hierarchy><node package="com.ss.android.ugc.aweme"/>':detail);
+    let detail=readFileSync(fixture,'utf8');
+    const share=detail.match(/<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>/u)?.[0];
+    if(shareDetailVariant){
+      assert.ok(share);
+      detail=detail.replace(share,shareDetailVariant==='duplicate'?share+share:share.replace('enabled="true"','enabled="false"'));
+    }
+    writeFileSync(join(dir,'detail.xml'),wrongPackage?detail.replaceAll('com.ss.android.ugc.aweme','com.other.app'):partial?'<hierarchy><node package="com.ss.android.ugc.aweme"/>':detail);
+    if(historyClipboard){
+      const cache=join(dir,'.config/openclaw/locate-cache');
+      mkdirSync(cache,{recursive:true});
+      writeFileSync(join(cache,'legacy-last-clip.txt'),'https://www.douyin.com/video/7681632828384394202\n');
+    }
     const adb=join(dir,'adb');writeFileSync(adb,`#!/usr/bin/env node
 const fs=require('fs'),p=require('path'),d=process.env.FAKE_PHONE_DIR,a=process.argv.slice(2),sfile=p.join(d,'state.json');let s=JSON.parse(fs.readFileSync(sfile));const has=v=>a.join(' ').includes(v),save=()=>fs.writeFileSync(sfile,JSON.stringify(s));
 fs.appendFileSync(p.join(d,'calls'),a.join(' ')+'\\n');
 if(has('get-state'))console.log('device');
 else if(has('getprop'))console.log('ANY-MODEL');
-else if(has('dumpsys'))console.log(${overlayFocusAfterBack}&&s.backDone?'mCurrentFocus=Window{u0 com.other.app/Other}':${focusChangesAfterPause}?s.pauseDone?'mCurrentFocus=Window{u0 com.other.app/Other}':'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/Detail}':${JSON.stringify(ambiguousFocus?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/Detail com.other.app/Other}':wrongFocus?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme.evil/Detail}':'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}')});
-else if(has('am start'))s.play='playing';
-else if(has('input keyevent 4')){if(${overlayBackFails})process.exit(9);s.backDone=true;if(!${overlayStuck})s.page='detail';}
+else if(has('dumpsys'))console.log(((${focusDriftAfterPanel}&&s.readPanel)||(${focusDriftAfterPasteReadback}&&s.pastedRead))?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.MainActivity}':s.page==='scratch'&&${Boolean(copiedVideoId)}?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}':${focusChangesAfterDetailDump}&&s.dumps>0?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.MainActivity}':${overlayFocusAfterBack}&&s.backDone?'mCurrentFocus=Window{u0 com.other.app/Other}':${focusChangesAfterPause}?s.pauseDone?'mCurrentFocus=Window{u0 com.other.app/Other}':'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}':${JSON.stringify(ambiguousFocus?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/Detail com.other.app/Other}':wrongFocus?'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme.evil/Detail}':'mCurrentFocus=Window{u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}')});
+else if(has('am start')){s.play='playing';if(${JSON.stringify(Boolean(copiedVideoId))})s.page=has('search/tabs')?'scratch':'detail';}
+else if(has('input keyevent 4')){if(${overlayBackFails})process.exit(9);s.backDone=true;if(!${overlayStuck})s.page='detail';if(${JSON.stringify(Boolean(copiedVideoId))})s.restored=true;}
 else if(has('input keyevent 127')){if(${pauseFails})process.exit(9);s.play='paused';s.pauseDone=true;}
 else if(has('input keyevent 126'))s.play='playing';
+else if(has('input keyevent 279'))s.pasted=s.copied===true;
 else if(has('shell screencap -p')&&${screenshotFails})process.exit(1);
 else if(has('input keyevent 85')){s.toggles++;save();if(s.toggles===${toggleFails})process.exit(9);s.toggled=!s.toggled;s.play=s.toggled?'playing':'paused';}
-else if(has('input tap')){if(${gateDismiss}){s.dismissed=true;s.page='detail';s.play='playing';}else s.page='panel';}
+else if(has('input tap')){if(${gateDismiss}){s.dismissed=true;s.page='detail';s.play='playing';}else if(${JSON.stringify(Boolean(copiedVideoId))}&&s.page==='panel'){s.copied=true;s.page='detail';}else if(s.page!=='scratch')s.page='panel';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){s.dumps++;save();
- if(s.page==='share'){fs.copyFileSync(p.join(d,'share.xml'),p.join(d,'remote.xml'));}
- else if(s.page==='panel'){fs.writeFileSync(p.join(d,'remote.xml'),${panelFails}?'<hierarchy><node package="com.ss.android.ugc.aweme" text="unrelated"/></hierarchy>':fs.readFileSync(p.join(d,'panel.xml')));}
- else if((s.toggled&&!${fallbackFails})||${freshOnFirst}||(${JSON.stringify(error)}==='nonidle'&&s.dumps%3===0)){if(${gateDismiss}&&!s.dismissed)fs.writeFileSync(p.join(d,'remote.xml'),'<hierarchy><node package="com.ss.android.ugc.aweme" text="关闭" clickable="true" bounds="[10,10][110,110]"/></hierarchy>');else fs.copyFileSync(p.join(d,'detail.xml'),p.join(d,'remote.xml'));if(${freshOnFirst}){console.error('ERROR: could not get idle state');process.exit(1);}}
+ if(s.page==='scratch'&&${JSON.stringify(Boolean(copiedVideoId))}){
+  s.pastedRead=s.pasted===true;
+  const text=s.pasted?'https://www.douyin.com/video/'+${JSON.stringify(copiedVideoId)}:'';
+  fs.writeFileSync(p.join(d,'remote.xml'),'<hierarchy><node text="'+text+'" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" package="com.ss.android.ugc.aweme" enabled="true" clickable="true" bounds="[20,20][500,70]"/></hierarchy>');
+ }else if(s.page==='share'){fs.copyFileSync(p.join(d,'share.xml'),p.join(d,'remote.xml'));}
+ else if(s.page==='panel'){s.readPanel=true;fs.writeFileSync(p.join(d,'remote.xml'),${panelFails}?'<hierarchy><node package="com.ss.android.ugc.aweme" text="unrelated"/></hierarchy>':fs.readFileSync(p.join(d,'panel.xml')));}
+ else if((s.toggled&&!${fallbackFails})||${freshOnFirst}||(${detailFreshOnlyOnce}&&(s.dumps===1||s.restored))||(${JSON.stringify(error)}==='nonidle'&&s.dumps%3===0)){if(${gateDismiss}&&!s.dismissed)fs.writeFileSync(p.join(d,'remote.xml'),'<hierarchy><node package="com.ss.android.ugc.aweme" text="关闭" clickable="true" bounds="[10,10][110,110]"/></hierarchy>');else fs.copyFileSync(p.join(d,'detail.xml'),p.join(d,'remote.xml'));if(${freshOnFirst}){console.error('ERROR: could not get idle state');process.exit(1);}}
  else {console.error(${JSON.stringify(error)}==='idle'?'ERROR: could not get idle state':'ERROR: transport unavailable');process.exit(${JSON.stringify(error)}==='idle'?${idleExit}:1);}
 }else if(has('exec-out screencap')){
  if(${screenshotFails})process.exit(1);
@@ -130,7 +147,7 @@ save();
     if(stale){writeFileSync(join(evidence,'read.xml'),detail);writeFileSync(join(dir,'remote.xml'),detail);}
     const key=join(dir,'fixture-key');writeFileSync(key,'FIXTURE_ONLY=1\n');const locator=join(dir,'locate.py');writeFileSync(locator,`import os\nwith open(os.path.join(os.environ['FAKE_PHONE_DIR'],'calls'),'a') as f:f.write('LOCATE\\n')\nprint('1100 1600')\n`);
     const env={...process.env,...(managedOpen?{DOUYIN_MANAGED_VIDEO_OPEN:'1'}:{}),...(managedLink?{DOUYIN_MANAGED_CURRENT_VIDEO_LINK:'1'}:{}),HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),...phoneLockFixtureEnv(join(dir,'registry.tsv'),join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
-    let args=[runner,'--profile','legacy',...(managedLink?['--lock-owner','fixture-owner']:[]),command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
+    let args=[runner,'--profile','legacy',...(managedLink?['--lock-owner','fixture-owner']:[]),command,...(command==='open-video'?['7681632828384394202','idle-open',...(resolveLinkDuringOpen?['--resolve-link']:[])]:['idle-comments'])];
     if(command==='wave'){
       const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];
       const functions=names.map(n=>source.match(new RegExp('^'+n+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0]||'').join('\n');
@@ -138,7 +155,8 @@ save();
       Object.assign(env,{ADB:adb,SERIAL:'SER1',EVIDENCE_ROOT:evidence,REMOTE_UI:'/sdcard/ui.xml',PYTHON_BIN:pythonBin,DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',TEST_POLICY:policy});
     }
     const r=spawnSync('zsh',args,{env,encoding:'utf8',timeout:15000});
-    return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'))),calls:existsSync(join(dir,'calls'))?readFileSync(join(dir,'calls'),'utf8'):''};
+    const metricsPath=r.stdout?.match(/^metrics_evidence=(.+)$/m)?.[1];
+    return {...r,metricsXml:metricsPath&&existsSync(metricsPath)?readFileSync(metricsPath,'utf8'):null,state:JSON.parse(readFileSync(join(dir,'state.json'))),calls:existsSync(join(dir,'calls'))?readFileSync(join(dir,'calls'),'utf8'):''};
   }finally{rmSync(dir,{recursive:true,force:true});}
 }
 
@@ -168,6 +186,66 @@ test('受管取链读不到新树时，一次读树后交还可核画面，不�
     assert.doesNotMatch(result.stdout,/^(video_id|content_type|direct_url)=/m);
     assert.doesNotMatch(result.calls,/input tap|input keyevent (4|85|126)|search\/tabs/);
   }
+});
+test('旧受管取链发现同应用已转页时不点击',()=>{
+  const result=pausedIdle({command:'current-video-link',managedLink:true,androidStat:true,
+    detailFreshOnlyOnce:true,focusChangesAfterDetailDump:true,fallbackFails:true,policy:'continuous_identity'});
+  assert.notEqual(result.status,0);
+  assert.doesNotMatch(result.calls,/input tap|input keyevent 4/);
+  assert.doesNotMatch(result.stdout,/^(video_id|content_type|direct_url)=/m);
+});
+test('受管合并开页取链时复用刚打开的视频详情树',()=>{
+  const result=pausedIdle({managedOpen:true,managedLink:true,resolveLinkDuringOpen:true,androidStat:true,
+    detailFreshOnlyOnce:true,fallbackFails:true,policy:'continuous_identity'});
+  const actions=result.calls.trim().split('\n');
+  const share=actions.findIndex(line=>line.includes('input tap'));
+  assert.ok(share>=0,'开页同一次受锁调用应通过已经验证的详情树进入分享\n'+result.stderr);
+  assert.ok(actions.slice(0,share).some(line=>line.includes('am start')));
+  assert.equal(actions.slice(0,share).filter(line=>line.includes('uiautomator dump')).length,1);
+  assert.ok(actions.slice(share+1).some(line=>line.includes('uiautomator dump')));
+  assert.doesNotMatch(result.stdout,/^content_type=video$/m,'夹具未生成有效分享面板，不得冒认链接成功');
+});
+test('同一次开启并取链须新复制、读回和核对目标视频',()=>{
+  for(const copiedVideoId of ['7681632828384394202','7681632828384394203']){
+    const result=pausedIdle({managedOpen:true,managedLink:true,resolveLinkDuringOpen:true,androidStat:true,
+      detailFreshOnlyOnce:true,fallbackFails:true,policy:'continuous_identity',copiedVideoId});
+    assert.ok(result.state.copied&&result.state.pasted,result.stderr);
+    if(copiedVideoId==='7681632828384394202'){
+      assert.equal(result.status,0,result.stderr);
+      assert.match(result.stdout,/^video_id=7681632828384394202$/m);
+      assert.match(result.metricsXml||'',/<hierarchy[\s>]/);
+    }else{
+      assert.notEqual(result.status,0);
+      assert.match(result.stderr,/VIDEO_LINK_IDENTITY_MISMATCH/);
+      assert.doesNotMatch(result.stdout,/^video_id=/m);
+      assert.doesNotMatch(result.calls,/aweme\/detail\/7681632828384394203/);
+    }
+  }
+});
+test('受管组合取链拒绝歧义或禁用分享以及打开后切页，且不点击或返回',()=>{
+ for(const options of [{shareDetailVariant:'duplicate'},{shareDetailVariant:'disabled'},{focusChangesAfterDetailDump:true}]){
+  const result=pausedIdle({managedOpen:true,managedLink:true,resolveLinkDuringOpen:true,androidStat:true,
+    detailFreshOnlyOnce:true,fallbackFails:true,policy:'continuous_identity',...options});
+  assert.notEqual(result.status,0,result.stdout);
+  assert.doesNotMatch(result.calls,/input tap|input keyevent 4/);
+  assert.doesNotMatch(result.stdout,/^video_id=/m);
+ }
+});
+test('受管组合在 nonce、分享复制和退出暂存前核对当步焦点',()=>{
+ const config={managedOpen:true,managedLink:true,resolveLinkDuringOpen:true,androidStat:true,
+  detailFreshOnlyOnce:true,fallbackFails:true,policy:'continuous_identity',copiedVideoId:'7681632828384394202'};
+ const nonce=pausedIdle({...config,historyClipboard:true,focusChangesAfterDetailDump:true});
+ assert.notEqual(nonce.status,0);
+ assert.doesNotMatch(nonce.calls,/search\/tabs|input tap|input keyevent 4/);
+ const panel=pausedIdle({...config,focusDriftAfterPanel:true});
+ assert.notEqual(panel.status,0);
+ assert.equal(panel.calls.match(/input tap/g)?.length,1);
+ assert.doesNotMatch(panel.calls,/search\/tabs|input keyevent 4/);
+ const scratch=pausedIdle({...config,focusDriftAfterPasteReadback:true});
+ assert.notEqual(scratch.status,0);
+ assert.ok(scratch.state.pasted&&scratch.state.pastedRead,scratch.stderr);
+ assert.doesNotMatch(scratch.calls,/input keyevent 4/);
+ for(const result of [nonce,panel,scratch])assert.doesNotMatch(result.stdout,/^video_id=/m);
 });
 test('受管 Agent 的截图失败不能用读回的旧截图交接',()=>{
   const result=pausedIdle({managedOpen:true,androidStat:true,fallbackFails:true,screenshotFails:true,policy:'continuous_identity'});

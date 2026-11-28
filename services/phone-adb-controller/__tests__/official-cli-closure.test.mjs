@@ -43,6 +43,13 @@ test('Skill公布的只读能力经真实phone参数适配可被官方CLI执行�
  const before=invocations.length;await assert.rejects(()=>tools.phone('outward-ledger','foreign-run'),/PHONE_INPUT_INVALID/);assert.equal(invocations.length,before);
 });
 test('CLI plan admits fixed argv and refuses arbitrary shell, sends and background entry points',()=>{assert.equal(describe('zsh',['-f',join(root,'douyin-phone-adb'),'--profile','fixture','foreground']).kind,'synchronous-cli');assert.equal(describe(join(root,'douyin-phone-adb'),['--profile','fixture','record-start','run-record','25','7712345678901234567']).kind,'recording-outer-only');for(const [command,args]of [['zsh',['-fc','echo fake']],['python3',['-c','pass']],[join(root,'douyin-phone-adb'),['--profile','fixture','private-message-send']],[join(root,'douyin-phone-adb'),['--profile','fixture','with-lock']],[join(root,'douyin-phone-adb'),['--profile','fixture','tap-evidence','--outward','send']]])assert.throws(()=>describe(command,args),/OFFICIAL_CLI/);});
+test('同次开页取链仅由受管独立入口提供',()=>{
+ const ctl=join(root,'douyin-phone-adb');
+ const args=['--profile','fixture','--lock-owner','run','open-video','7681632828384394202','run-dedup'];
+ assert.equal(describe(ctl,args).kind,'synchronous-cli');
+ assert.throws(()=>describe(ctl,[...args,'--resolve-link']),/OFFICIAL_CLI/);
+ assert.throws(()=>describe('zsh',['-f',ctl,...args,'--resolve-link']),/OFFICIAL_CLI/);
+});
 test('只读命令不能携带额外参数或改读另一owner账本',()=>{
  const ctl=join(root,'douyin-phone-adb'),prefix=['--profile','fixture'];
  for(const command of ['status','window']){
