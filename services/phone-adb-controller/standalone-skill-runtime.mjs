@@ -51,8 +51,14 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
    const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
    if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
    let env=environment;
-   if(playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op))
-    env={...env,DOUYIN_DETAIL_PLAYBACK:playback};
+   if(Object.hasOwn(env,'DOUYIN_MANAGED_CURRENT_VIDEO_LINK')){
+    env={...env};
+    delete env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK;
+   }
+   if(playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'){
+    if(op==='open-video')env={...env,DOUYIN_DETAIL_PLAYBACK:playback};
+    if(op==='current-video-link')env={...env,DOUYIN_DETAIL_PLAYBACK:playback,DOUYIN_MANAGED_CURRENT_VIDEO_LINK:'1'};
+   }
    if(op==='open-video')env={...env,DOUYIN_MANAGED_VIDEO_OPEN:'1'};
    const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env,timeoutMs:Math.min(360000,remaining)});
    if(op==='detail-restored'&&result.code===1&&result.stdout.trim()==='detail_restored=0')return result;

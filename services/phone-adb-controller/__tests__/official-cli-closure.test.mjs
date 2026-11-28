@@ -79,12 +79,12 @@ test('官方 CLI 子进程不继承受管云手机的父进程授权模式', asy
  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'official-cli-env-')));
  t.after(() => rmSync(directory,{recursive:true,force:true}));
  const path = join(directory,'child');
- writeFileSync(path, '#!/bin/sh\nprintf "%s:%s" "${WFR_COLLECTION_PARENT_EPOCH-unset}" "$CLI_ENV_TEST"\n',{mode:0o700});
+ writeFileSync(path, '#!/bin/sh\nprintf "%s:%s:%s:%s" "${WFR_COLLECTION_PARENT_EPOCH-unset}" "${DOUYIN_MANAGED_VIDEO_OPEN-unset}" "${DOUYIN_MANAGED_CURRENT_VIDEO_LINK-unset}" "$CLI_ENV_TEST"\n',{mode:0o700});
  const r = rig(t,{programs:{...executables,zsh:{path,sha256:digest(readFileSync(path))}}});
  const result = await r.facade.execute(join(root,'douyin-phone-adb'),['--profile','fixture','runtime-contract'],{
-  receipt:r.receipt, env:{WFR_COLLECTION_PARENT_EPOCH:'1',CLI_ENV_TEST:'preserved'}
+  receipt:r.receipt, env:{WFR_COLLECTION_PARENT_EPOCH:'1',DOUYIN_MANAGED_VIDEO_OPEN:'1',DOUYIN_MANAGED_CURRENT_VIDEO_LINK:'1',CLI_ENV_TEST:'preserved'}
  });
- assert.equal(result.stdout, 'unset:preserved');
+ assert.equal(result.stdout, 'unset:unset:unset:preserved');
  assert.equal(r.admissions(), 2);
  await r.facade.close();
 });

@@ -50,18 +50,26 @@ else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.ar
 });
 
 // 实际控制器CLI；只在临时副本替换既有等待函数，业务函数与守卫字节保持。
-function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,screenshotFails=false,screenshotEmpty=false,screenshotMalformed=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
+function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,managedLink=false,idleExit=1,screenshotFails=false,screenshotEmpty=false,screenshotMalformed=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
   const dir=mkdtempSync(join(tmpdir(),'paused-detail-idle-'));
   try {
     const source=readFileSync(script,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
     assert.ok(wait);assert.equal(source.match(/^wait_ms\(\) \{/gm)?.length,1);
     const controlled='wait_ms() { require_uint "$1"; (( $1 <= 5000 )) || die "wait must be <= 5000 ms"; }';
     const patched=source.replace(wait,controlled);assert.equal(patched.replace(controlled,wait),source);
-    const runner=join(dir,'controller');writeFileSync(runner,patched,{mode:0o755});
+    const runner=join(dir,'douyin-phone-adb');writeFileSync(runner,patched,{mode:0o755});
     writeFileSync(join(dir,'adb-existing-route.py'),readFileSync(new URL('../adb-existing-route.py',import.meta.url)));
     writeFileSync(join(dir,'comment-count-evidence.py'),readFileSync(new URL('../comment-count-evidence.py',import.meta.url)));
+    if(managedLink){
+      for(const name of ['phone-lock-lib.sh','phone-lock-helper.py'])
+        writeFileSync(join(dir,name),readFileSync(new URL('../'+name,import.meta.url)));
+      const lock=join(dir,'tmp','locks','SER1.lock');
+      mkdirSync(lock,{recursive:true});
+      writeFileSync(join(lock,'owner'),'fixture-owner');
+      writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)));
+    }
     writeFileSync(join(dir,'registry.tsv'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
-    if(managedOpen){
+    if(managedOpen||managedLink){
       const png=spawnSync(pythonBin,['-c',`import struct, sys, zlib
 width,height=1201,2665
 def chunk(kind,data):
@@ -99,12 +107,12 @@ else if(has('uiautomator dump')){s.dumps++;save();
  if(s.page==='share'){fs.copyFileSync(p.join(d,'share.xml'),p.join(d,'remote.xml'));}
  else if(s.page==='panel'){fs.writeFileSync(p.join(d,'remote.xml'),${panelFails}?'<hierarchy><node package="com.ss.android.ugc.aweme" text="unrelated"/></hierarchy>':fs.readFileSync(p.join(d,'panel.xml')));}
  else if((s.toggled&&!${fallbackFails})||${freshOnFirst}||(${JSON.stringify(error)}==='nonidle'&&s.dumps%3===0)){if(${gateDismiss}&&!s.dismissed)fs.writeFileSync(p.join(d,'remote.xml'),'<hierarchy><node package="com.ss.android.ugc.aweme" text="关闭" clickable="true" bounds="[10,10][110,110]"/></hierarchy>');else fs.copyFileSync(p.join(d,'detail.xml'),p.join(d,'remote.xml'));if(${freshOnFirst}){console.error('ERROR: could not get idle state');process.exit(1);}}
- else {console.error(${JSON.stringify(error)}==='idle'?'ERROR: could not get idle state':'ERROR: transport unavailable');process.exit(1);}
+ else {console.error(${JSON.stringify(error)}==='idle'?'ERROR: could not get idle state':'ERROR: transport unavailable');process.exit(${JSON.stringify(error)}==='idle'?${idleExit}:1);}
 }else if(has('exec-out screencap')){
  if(${screenshotFails})process.exit(1);
  if(!${screenshotEmpty}){
   if(${screenshotMalformed})process.stdout.write(Buffer.from('89504e470d0a1a0a0000000d49484452000004b100000a690000000049454e44ae426082','hex'));
-  else process.stdout.write(${managedOpen}?fs.readFileSync(p.join(d,'screenshot.png')):'fixture-image');
+  else process.stdout.write(${managedOpen||managedLink}?fs.readFileSync(p.join(d,'screenshot.png')):'fixture-image');
  }
 }
 else if(has('stat -c %s')){
@@ -121,8 +129,8 @@ save();
     const evidence=join(dir,'evidence');mkdirSync(evidence,{recursive:true});
     if(stale){writeFileSync(join(evidence,'read.xml'),detail);writeFileSync(join(dir,'remote.xml'),detail);}
     const key=join(dir,'fixture-key');writeFileSync(key,'FIXTURE_ONLY=1\n');const locator=join(dir,'locate.py');writeFileSync(locator,`import os\nwith open(os.path.join(os.environ['FAKE_PHONE_DIR'],'calls'),'a') as f:f.write('LOCATE\\n')\nprint('1100 1600')\n`);
-    const env={...process.env,...(managedOpen?{DOUYIN_MANAGED_VIDEO_OPEN:'1'}:{}),HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),...phoneLockFixtureEnv(join(dir,'registry.tsv'),join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
-    let args=[runner,'--profile','legacy',command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
+    const env={...process.env,...(managedOpen?{DOUYIN_MANAGED_VIDEO_OPEN:'1'}:{}),...(managedLink?{DOUYIN_MANAGED_CURRENT_VIDEO_LINK:'1'}:{}),HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),...phoneLockFixtureEnv(join(dir,'registry.tsv'),join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
+    let args=[runner,'--profile','legacy',...(managedLink?['--lock-owner','fixture-owner']:[]),command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
     if(command==='wave'){
       const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];
       const functions=names.map(n=>source.match(new RegExp('^'+n+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0]||'').join('\n');
@@ -148,6 +156,18 @@ test('受管 Agent 打开视频无新树时交回截图，且不把视频标为�
   assert.match(result.calls,/exec-out screencap -p/);
   assert.doesNotMatch(result.calls,/input tap|input keyevent 126/);
   assert.equal(result.state.dumps,1,'一次读树后交回截图');
+});
+test('受管取链读不到新树时，一次读树后交还可核画面，不触碰分享',()=>{
+  for(const idleExit of [0,1]){
+    const result=pausedIdle({command:'current-video-link',managedLink:true,androidStat:true,
+      fallbackFails:true,policy:'continuous_identity',idleExit});
+    assert.equal(result.status,0,result.stderr+'\n'+result.calls);
+    assert.equal(result.state.dumps,1,result.calls);
+    assert.match(result.stdout,/^video_link_status=visual_required$/m);
+    assert.match(result.stdout,/^evidence=.*idle-comments-video-observation\.png$/m);
+    assert.doesNotMatch(result.stdout,/^(video_id|content_type|direct_url)=/m);
+    assert.doesNotMatch(result.calls,/input tap|input keyevent (4|85|126)|search\/tabs/);
+  }
 });
 test('受管 Agent 的截图失败不能用读回的旧截图交接',()=>{
   const result=pausedIdle({managedOpen:true,androidStat:true,fallbackFails:true,screenshotFails:true,policy:'continuous_identity'});

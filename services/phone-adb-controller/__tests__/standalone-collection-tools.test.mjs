@@ -68,6 +68,12 @@ test('102 未确认账号不领单，打开及录制只允许原批次实际领�
         'current-video-link':`content_type=video\nvideo_id=${videoId}\n`,
         'open-video':'video_open_status=visual_required\nevidence=/native/102-direct-open-video-observation.png\n',
       };
+      if(command==='current-video-link'&&args[0]===run+'-link-fallback'){
+        return {stdout:`video_link_status=visual_required\nevidence=/native/${run}-link-fallback-video-observation.png\n`};
+      }
+      if(command==='current-video-link'&&args[0]===run+'-ambiguous-link'){
+        return {stdout:`video_link_status=visual_required\nevidence=/native/${run}-ambiguous-link-video-observation.png\nvideo_id=${videoId}\n`};
+      }
       return {stdout:responses[command]??''};
     },
     async rpc({request}) {
@@ -91,10 +97,16 @@ test('102 未确认账号不领单，打开及录制只允许原批次实际领�
   assert.equal(observation.observation_file,eid+'-video-observation.png');
   assert.match(observation.next_action,/fetch-native.*current-video-link/);
   await assert.rejects(phone('record-start',[run+'-capture',90,videoId]),/STANDALONE_COLLECTION_VIDEO_UNVERIFIED/);
+  await assert.rejects(phone('current-video-link',[run+'-ambiguous-link']),/STANDALONE_COLLECTION_VIDEO_OBSERVATION/);
+  const linkObservation=await phone('current-video-link',[run+'-link-fallback']);
+  assert.equal(linkObservation.video_link_status,'visual_required');
+  assert.equal(linkObservation.observation_file,run+'-link-fallback-video-observation.png');
+  await assert.rejects(phone('record-start',[run+'-capture',90,videoId]),/STANDALONE_COLLECTION_VIDEO_UNVERIFIED/);
   await phone('current-video-link',[run+'-link']);
   await phone('record-start',[run+'-capture',90,videoId]);
   assert.deepEqual(effects.map(effect=>effect.command??effect.op),[
-    'open-app','account-current','company_config','collect_claim','open-video','current-video-link','record-start',
+    'open-app','account-current','company_config','collect_claim','open-video',
+    'current-video-link','current-video-link','current-video-link','record-start',
   ]);
 });
 
@@ -392,11 +404,14 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
   let author='another-company-account',callState='not_idle';
   const tools=createStandaloneCollectionTools({
     scope:{...scope,profile:'bound-phone',serial:'fixture-phone',expected_account:'bound-account'},
-    activityPlaybook:{},assertAuthority:async()=>{},
+    activityPlaybook:{},evidenceRoot:'/native',assertAuthority:async()=>{},
     async readDeviceContext(){return {device:`state=device\ncall_state=${callState}\n`};},
     async readAuthor(id){return {video_id:id,douyin_id:author};},
     async phone({command,args}){
       actions.push(command);
+      if(command==='current-video-link'&&args[0].includes('-visual-')){
+        return {stdout:`video_link_status=visual_required\nevidence=/native/${args[0]}-video-observation.png\n`};
+      }
       const stdout=command==='account-current'?'douyin_id=bound-account\n':
         command==='current-video-link'?`content_type=video\nvideo_id=${videoId}\n`:'';
       return {stdout};
@@ -427,10 +442,19 @@ test('102 正式判重只能补读候选视频，采集写操作仍需认领',as
   await assert.rejects(business('collect_claim',{video_id:videoId}),/AUTHOR_UNVERIFIED/);
   author='verified-external-author';
   assert.equal((await business('collect_author_read')).own_account,false);
+  await phone('current-video-link',[run+'-visual-first']);
+  await assert.rejects(business('collect_claim',{video_id:videoId}),/AUTHOR_UNVERIFIED/);
+  assert.match((await phone('current-video-link',[run+'-visual-retry'])).next_action,/重试已用尽/);
+  await assert.rejects(phone('current-video-link',[run+'-visual-third']),/VIDEO_LINK_OBSERVATION_EXHAUSTED/);
+  await phone('open-video',[videoId,run+'-reopen']);
+  await phone('current-video-link',[run+'-recovered-link']);
+  await assert.rejects(business('collect_claim',{video_id:videoId}),/AUTHOR_UNVERIFIED/);
+  assert.equal((await business('collect_author_read')).own_account,false);
   await business('collect_claim',{video_id:videoId});
   await assert.rejects(phone('record-start',[run+'-record',90,videoId]),/VIDEO_UNVERIFIED/);
   assert.deepEqual(actions,['open-app','account-current','company_config','collect_source_read',
-    'open-video','current-video-link','ui-evidence','collect_claim']);
+    'open-video','current-video-link','ui-evidence','current-video-link','current-video-link',
+    'open-video','current-video-link','collect_claim']);
 });
 
 test('102 只接受已完成的 101 回执，并从同源同 VID 交付中读作者',async()=>{
