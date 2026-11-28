@@ -40,8 +40,9 @@ export function compileDiagnosticCommand(query,scope){
 const fail=code=>Object.assign(new Error(code),{code});
 const here=dirname(fileURLToPath(import.meta.url));
 export function diagnosticSource(){return Object.fromEntries(['device-epoch-fence-diagnostics.mjs','adb-shell-v2-protocol.mjs','device-epoch-fence-reference.mjs'].map(n=>[n,sha(readFileSync(join(here,n)))]));}
-export async function runDiagnostic({query,scope,directory,readAuthority,timeoutMs=30000}={}){
+export async function runDiagnostic({query,scope,directory,readAuthority,timeoutMs=30000,authorityPerConnection=false}={}){
  const command=compileDiagnosticCommand(query,scope);
+ if(authorityPerConnection!==false&&(authorityPerConnection!==true||query!=='hardware_serial'))throw fail('DIAGNOSTIC_SCOPE');
  const q=structuredClone(scope),endpoint=q?.endpoint?.match(/^tcp:127\.0\.0\.1:([1-9]\d{0,4})$/);
  if(!endpoint||Number(endpoint[1])>65535||!/^[-a-zA-Z0-9_.:]{1,100}$/.test(q.serial||'')||!/^[-a-f0-9]{36}$/.test(q.maintenance_task_id||'')||typeof readAuthority!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>30000)throw fail('DIAGNOSTIC_SCOPE');
  const st=lstatSync(directory);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o777)!==0o700||realpathSync(directory)!==resolve(directory)||readdirSync(directory).length)throw fail('DIAGNOSTIC_JOURNAL');
@@ -50,11 +51,23 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
  const save=(name,bytes)=>{verifyDirectory();const fd=openSync(join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeAll(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}const df=openSync(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);try{fsyncSync(df);}finally{closeSync(df);}return sha(bytes);};
  const expired=()=>Date.now()>=deadline;
  const deadline=Date.now()+timeoutMs;
- const admit=async()=>{if(expired())throw fail('DIAGNOSTIC_DEADLINE');verifyDirectory();if(canonical(diagnosticSource())!==canonical(source))throw fail('DIAGNOSTIC_SOURCE_DRIFT');const a=await readAuthority();if(expired())throw fail('DIAGNOSTIC_DEADLINE');if(canonical(a?.scope)!==canonical(q)||!Number.isFinite(Date.parse(a?.lease_until))||Date.parse(a.lease_until)<=Date.now())throw fail('DIAGNOSTIC_AUTHORITY');};
+ const admit=async socketAuthority=>{
+  if(expired())throw fail('DIAGNOSTIC_DEADLINE');
+  verifyDirectory();
+  if(canonical(diagnosticSource())!==canonical(source))throw fail('DIAGNOSTIC_SOURCE_DRIFT');
+  const authority=socketAuthority??await readAuthority();
+  if(expired())throw fail('DIAGNOSTIC_DEADLINE');
+  if(canonical(authority?.scope)!==canonical(q)||!Number.isFinite(Date.parse(authority?.lease_until))||Date.parse(authority.lease_until)<=Date.now())throw fail('DIAGNOSTIC_AUTHORITY');
+  return authority;
+ };
  save('intent.json',Buffer.from(JSON.stringify({protocol:'device-epoch-fence-diagnostic/v1',query,command,scope:q,source,started_at:started})+'\n'));
  const timer=setTimeout(()=>{failure??='DIAGNOSTIC_DEADLINE';for(const c of channels)c.socket.destroy();},timeoutMs);
  async function connect(){
-  await admit();const index=channels.length,socket=new Socket(),c={socket,buffer:Buffer.alloc(0),eof:false,closed:false,error:null,total:0,wakes:new Set(),index};channels.push(c);
+  const admission=await admit();
+  // A connected TCP socket keeps its peer for all frames. Open each socket
+  // with fresh authority and verify again after both are closed.
+  const socketAuthority=authorityPerConnection?structuredClone(admission):undefined;
+  const index=channels.length,socket=new Socket(),c={socket,buffer:Buffer.alloc(0),eof:false,closed:false,error:null,total:0,wakes:new Set(),index};channels.push(c);
   verifyDirectory();const raw=openSync(join(directory,`socket-${index}.raw`),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);c.raw=raw;
   const notify=()=>{for(const w of c.wakes)w();c.wakes.clear();};
   c.closePromise=new Promise(r=>socket.once('close',hadError=>{c.closed=true;if(hadError||!c.eof)c.error??='DIAGNOSTIC_SOCKET';events.push({index,event:'close',had_error:hadError,peer_eof:c.eof,at:new Date().toISOString()});notify();r();}));
@@ -65,7 +78,7 @@ export async function runDiagnostic({query,scope,directory,readAuthority,timeout
   const wait=()=>new Promise(r=>c.wakes.add(r));
   c.read=async n=>{while(c.buffer.length<n){check();if(c.eof||c.closed)throw fail('DIAGNOSTIC_TRUNCATED');await wait();}check();const b=c.buffer.subarray(0,n);c.buffer=c.buffer.subarray(n);return b;};
   c.chunk=async()=>{while(!c.buffer.length&&!c.eof){check();if(c.closed)throw fail('DIAGNOSTIC_TRUNCATED');await wait();}check();const b=c.buffer;c.buffer=Buffer.alloc(0);return b.length?b:null;};
-  c.write=async (bytes,{optionalClose=false}={})=>{await admit();check();if(optionalClose&&c.eof)return;if(c.eof||c.closed)throw fail('DIAGNOSTIC_SOCKET');await new Promise((r,j)=>socket.write(bytes,e=>e?j(fail('DIAGNOSTIC_SOCKET')):r()));};
+  c.write=async (bytes,{optionalClose=false}={})=>{await admit(socketAuthority);check();if(optionalClose&&c.eof)return;if(c.eof||c.closed)throw fail('DIAGNOSTIC_SOCKET');await new Promise((r,j)=>socket.write(bytes,e=>e?j(fail('DIAGNOSTIC_SOCKET')):r()));};
   c.finish=async()=>{while(!c.eof){check();if(c.closed)throw fail('DIAGNOSTIC_TRUNCATED');await wait();}if(c.buffer.length)throw fail('DIAGNOSTIC_TRAILING');await c.closePromise;check();};
   await new Promise((r,j)=>{socket.once('connect',r);socket.once('error',()=>j(fail('DIAGNOSTIC_SOCKET')));socket.once('close',()=>j(fail(failure??'DIAGNOSTIC_SOCKET')));socket.connect(Number(endpoint[1]),'127.0.0.1');});return c;
  }
