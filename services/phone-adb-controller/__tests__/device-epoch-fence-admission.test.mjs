@@ -298,11 +298,11 @@ test('清场 epoch 冻结核对固定 journal 原始摘要、同一计划和候�
 });
 
 test('并行只读复核在任一分支失败后仍等两条路由收尾', async () => {
-  const { readPairedEpochFacts } = await load();
+  const { readParallelEpochFacts } = await load();
   let release, complete = false;
   const peer = new Promise(resolve => { release = resolve; });
   const expected = Error('旧路由发生变化');
-  const read = readPairedEpochFacts(
+  const read = readParallelEpochFacts(
     () => { throw expected; },
     async () => { await peer; return '新路由真值'; },
   ).finally(() => { complete = true; });
@@ -314,11 +314,11 @@ test('并行只读复核在任一分支失败后仍等两条路由收尾', async
 });
 
 test('两条路由同时发起并保留参数顺序，全部返回后才交付', async () => {
-  const { readPairedEpochFacts } = await load();
+  const { readParallelEpochFacts } = await load();
   let release;
   const order = [];
   const pending = new Promise(resolve => { release = resolve; });
-  const read = readPairedEpochFacts(
+  const read = readParallelEpochFacts(
     async () => { order.push('旧路由开始'); await pending; return '旧'; },
     () => { order.push('新路由开始'); return '新'; },
   );
@@ -326,4 +326,27 @@ test('两条路由同时发起并保留参数顺序，全部返回后才交付',
   assert.deepEqual(order, ['旧路由开始', '新路由开始']);
   release();
   assert.deepEqual(await read, ['旧', '新']);
+});
+
+test('102 路由和硬件序列只读观察同时发起，并在失败时等所有连接结束', async () => {
+  const { readParallelEpochFacts } = await load();
+  const active = [];
+  let releaseHardware, rejected = false;
+  const hardware = new Promise(resolve => { releaseHardware = resolve; });
+  const expected = Error('旧路由仍见设备');
+  const pending = readParallelEpochFacts(
+    () => { active.push('旧路由'); throw expected; },
+    () => { active.push('新路由'); return '唯一新连接'; },
+    async () => { active.push('硬件序列'); await hardware; return '真实硬件序列'; },
+  );
+  const result = assert.rejects(pending, error => error === expected).then(() => { rejected = true; });
+  try {
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(active, ['旧路由', '新路由', '硬件序列']);
+    assert.equal(rejected, false);
+  } finally {
+    releaseHardware();
+    await result;
+  }
+  assert.deepEqual(await readParallelEpochFacts(() => '旧', () => '新', () => '硬件'), ['旧', '新', '硬件']);
 });

@@ -153,9 +153,9 @@ export function readEpochLocalHandoff({runDirectory,lockPath,frozen,record,stand
  return {activeOwner:bytes(join(lockPath,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,names,marker)};
 }
 
-// Both observations are read-only. Drain the peer even if one route rejects.
-export async function readPairedEpochFacts(readOld,readNew){
- const observations=await Promise.allSettled([readOld,readNew].map(read=>Promise.resolve().then(read)));
+// The observations are read-only. Drain every peer even if one rejects.
+export async function readParallelEpochFacts(...reads){
+ const observations=await Promise.allSettled(reads.map(read=>Promise.resolve().then(read)));
  const rejected=observations.find(result=>result.status==='rejected');
  if(rejected)throw rejected.reason;
  return observations.map(result=>result.value);
@@ -213,7 +213,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  let oldDaemon,newDaemon;
  if(clean){
   stage='initial_daemon_pair';
-  [oldDaemon,newDaemon]=await readPairedEpochFacts(()=>readDaemon(record.old_route),()=>readDaemon(record.new_route));
+  [oldDaemon,newDaemon]=await readParallelEpochFacts(()=>readDaemon(record.old_route),()=>readDaemon(record.new_route));
  }else{
   oldDaemon=await readDaemon(record.old_route);
   stage='initial_new_daemon';newDaemon=await readDaemon(record.new_route);
@@ -221,29 +221,33 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  const activeLock=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks',spec.serial+'.lock');
  stage='evidence_root';const evidenceRoot=join(env.WFR_RUN_DIR,'epoch-fence-admission');try{mkdirSync(evidenceRoot,{mode:0o700});}catch(e){if(e.code!=='EEXIST')throw e;}const rs=lstatSync(evidenceRoot);need(rs.isDirectory()&&!rs.isSymbolicLink()&&realpathSync(evidenceRoot)===evidenceRoot&&(rs.mode&0o777)===0o700&&rs.uid===process.getuid(),'EPOCH_EVIDENCE_ROOT');const directory=join(evidenceRoot,randomUUID());mkdirSync(directory,{mode:0o700});
  async function inventory(route,label){const out=join(directory,label);mkdirSync(out,{mode:0o700});const scope={endpoint:route.endpoint,serial:spec.serial};const result=await hostOperation({operation:'inventory',scope,directory:out,readAuthority:async()=>{await readDaemon(route);return {scope,authorized_action:'inventory',lease_until:initial.central.expires_at};}});need(result.wire_complete,'EPOCH_HOST_INVENTORY');return parseDeviceInventory(result.response);}
- let oldInventory,newInventory;
+ const readDeviceIdentity=async(query,label)=>{
+   const scope={endpoint:record.new_route.endpoint,serial:transportSerial,maintenance_task_id:p.task_id};
+  const out=join(directory,label);mkdirSync(out,{mode:0o700});
+  return readEpochDeviceIdentity({query,scope,directory:out,readBudget,managedCloud:clean || cloud,authorityPerConnection:clean && query==='hardware_serial',readAuthority:async()=>{
+   await readDaemon(record.new_route);
+   need(initial.central.locked_by===p.task_id&&initial.central.expired!==true,'EPOCH_BUSINESS_CENTRAL');
+   return {scope,lease_until:initial.central.expires_at};
+  }});
+ };
+ let oldInventory,newInventory,newHardwareSerial,cloudHardwareSerialSha256,cloudBootIdSha256;
  if(clean){
-  stage='route_inventory_pair';
-  [oldInventory,newInventory]=await readPairedEpochFacts(()=>inventory(record.old_route,'old'),()=>inventory(record.new_route,'new'));
+  stage='route_inventory_and_hardware_serial';
+  // The locator is already frozen. No business command runs until every fresh observation is checked.
+  [oldInventory,newInventory,newHardwareSerial]=await readParallelEpochFacts(
+   ()=>inventory(record.old_route,'old'),
+   ()=>inventory(record.new_route,'new'),
+   ()=>readDeviceIdentity('hardware_serial','hardware-serial'),
+  );
  }else{
   stage='new_inventory';newInventory=await inventory(record.new_route,'new');
   stage='old_inventory';oldInventory=await inventory(record.old_route,'old');
  }
- let newHardwareSerial,cloudHardwareSerialSha256,cloudBootIdSha256;
  if(record.resource.adb_serial!==undefined||cloud){
   stage='hardware_serial';
   need(newInventory.length===1&&newInventory[0].serial===transportSerial&&newInventory[0].state==='device'
    &&!oldInventory.some(row=>row.serial===spec.serial||row.serial===transportSerial),'EPOCH_LIVE_ROUTES');
-  const scope={endpoint:record.new_route.endpoint,serial:transportSerial,maintenance_task_id:p.task_id};
-  const readDeviceIdentity=async(query,label)=>{
-   const out=join(directory,label);mkdirSync(out,{mode:0o700});
-   return readEpochDeviceIdentity({query,scope,directory:out,readBudget,managedCloud:clean || cloud,authorityPerConnection:clean && query==='hardware_serial',readAuthority:async()=>{
-    await readDaemon(record.new_route);
-    need(initial.central.locked_by===p.task_id&&initial.central.expired!==true,'EPOCH_BUSINESS_CENTRAL');
-    return {scope,lease_until:initial.central.expires_at};
-   }});
-  };
-  newHardwareSerial=await readDeviceIdentity('hardware_serial','hardware-serial');
+  if(!clean)newHardwareSerial=await readDeviceIdentity('hardware_serial','hardware-serial');
   if(cloud){
    const hardwareSerial=newHardwareSerial.trim(),bootId=(await readDeviceIdentity('boot_id','boot-id')).trim();
    need(/^[A-Za-z0-9_.:-]{1,256}$/.test(hardwareSerial)&&uuid.test(bootId),'EPOCH_DEVICE_IDENTITY');
@@ -257,7 +261,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
  if(clean){
   stage='final_daemon_pair';
-  await readPairedEpochFacts(()=>readDaemon(record.old_route),()=>readDaemon(record.new_route));
+  await readParallelEpochFacts(()=>readDaemon(record.old_route),()=>readDaemon(record.new_route));
  }else{
   stage='final_old_daemon';await readDaemon(record.old_route);
   stage='final_new_daemon';await readDaemon(record.new_route);
