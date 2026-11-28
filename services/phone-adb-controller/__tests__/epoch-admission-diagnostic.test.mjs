@@ -176,3 +176,22 @@ test('verify-epoch真实CLI保留自有安全码及原coded_guard阶段而不扩
  const paths=diagnosticFiles(f);assert.equal(paths.length,1);const proof=assertPrivateDiagnostic(paths[0]);assert.equal(proof.finite_error_code,'EPOCH_FROZEN_REFERENCE');
  assert.deepEqual(proof.epoch_diagnostic,{protocol:'epoch-admission-diagnostic/v1',stage:'record',endpoint:'none',read_phase:'none',failure:'coded_guard',http_status:null,transport_code:null});
 });
+
+test('并行设备观察失败保留有限阶段诊断', async () => {
+  const { admissionFailure, epochDiagnosticFields } = await import('../epoch-admission-diagnostic.mjs');
+  const failure = Object.assign(Error('private diagnostic details'), { code: 'EPOCH_LIVE_ROUTES' });
+  for (const stage of ['initial_daemon_pair', 'route_inventory_pair', 'final_daemon_pair']) {
+    assert.deepEqual(epochDiagnosticFields(admissionFailure(failure, stage)), {
+      epoch_diagnostic: {
+        protocol: 'epoch-admission-diagnostic/v1',
+        stage,
+        endpoint: 'none',
+        read_phase: 'none',
+        failure: 'coded_guard',
+        http_status: null,
+        transport_code: null,
+      },
+    });
+  }
+  assert.deepEqual(epochDiagnosticFields(admissionFailure(failure, 'private label')), {});
+});

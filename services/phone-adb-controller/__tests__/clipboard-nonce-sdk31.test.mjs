@@ -51,18 +51,21 @@ elif args[:3]==['shell','input','keyevent']:
   elif k=='279':s['field']+='https://v.douyin.com/Old/' if f.get('pasteOld') else s['clip']
 p.write_text(json.dumps(s))
 `,{mode:0o755});
- const helpers=['nonce_sdk31_field','nonce_sdk31_input','nonce_native_copy','current_ime','ti_restore_ime','cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(fn).join('\n');
+ const helpers=['_foreground_is_exact_douyin','nonce_sdk31_field','nonce_sdk31_input','nonce_native_copy','current_ime','ti_restore_ime','cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(fn).join('\n');
  const script=`set -eu;setopt EXTENDED_GLOB
 die(){ print -u2 -- "$1";exit 2; }
 wait_ms(){ :; }
 require_held_lock(){ [[ -n "$LOCK_OWNER" ]] || die CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED; }
 require_target_for(){ :; }
 foreground_package(){ [[ $WRONG_FOREGROUND != 1 ]] && print 'mCurrentFocus=Window{com.ss.android.ugc.aweme/.Search}' || print 'mCurrentFocus=Window{com.android.launcher/.Main}'; }
+DOUYIN_PACKAGE=com.ss.android.ugc.aweme
+SEARCH_RESULT_ACTIVITY=search.activity.SearchResultActivity
+focused_window(){ print -- 'com.ss.android.ugc.aweme/.search.activity.SearchResultActivity'; }
 node_center(){ print '100 65'; }
 ui_evidence(){ "$ADB" test-ui "$EVIDENCE_ROOT/$1.xml"; }
 _leave_scratch_route(){ [[ "$LEAVE_FAIL" != 1 ]]; }
 ${helpers}
-proof="$(seed_clipboard_nonce fixture)" || exit 2
+proof="$(seed_clipboard_nonce fixture detail "${flags.strict ? '1234567890123456' : ''}")" || exit 2
 [[ "$proof" == clipnonce* ]] || exit 3
 print OK`;
  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),DEVICE_SDK:sdk,LOCK_OWNER:flags.noOwner?'':'nonce-test',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',ADBKEYBOARD_IME:'com.android.adbkeyboard/.AdbIME',EVIDENCE_ROOT:dir,LEAVE_FAIL:flags.leaveFail?'1':'0',SCREEN_W:'720',SCREEN_H:'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',WRONG_FOREGROUND:flags.wrongForeground?'1':'0'}});
@@ -70,6 +73,16 @@ print OK`;
 }
 
 for(const sdk of ['31','34']) {
+test(`SDK${sdk} 受管取链只提交一次等长删除并读回清空和粘贴`,()=>{
+ const r=run({strict:true},sdk);
+ assert.equal(r.status,0,r.stderr);
+ const deletion=r.state.events.filter(command=>/^shell input keyevent (?:123 )?67(?: 67)*$/.test(command));
+ assert.deepEqual(deletion,[`shell input keyevent 123 ${Array(41).fill('67').join(' ')}`]);
+ assert.match(readFileSync(join(r.dir,'fixture-seed-empty-proof.txt'),'utf8'),/verified_by_exact_nonce_append/);
+ const unsafe=run({strict:true,clearFail:true},sdk);
+ assert.notEqual(unsafe.status,0);
+ assert.match(unsafe.stderr,/CLIPBOARD_NONCE_CLEAR_UNVERIFIED/);
+});
 test(`SDK${sdk}精确输入、原生复制、清空再粘贴；IME还原，字段bounds可因文字微变`,()=>{
  const r=run({},sdk);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OK/);
  assert.equal(r.state.ime,'google/.LatinIME');
