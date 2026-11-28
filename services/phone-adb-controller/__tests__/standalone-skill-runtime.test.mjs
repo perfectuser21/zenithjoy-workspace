@@ -15,10 +15,11 @@ test('工作截止拒绝启动控制器，收尾使用冻结的独立期限',asy
  assert.deepEqual(calls[0].options.env,base.environment);
  assert.ok(calls[0].options.timeoutMs>0&&calls[0].options.timeoutMs<=10000);
 });
-test('只为受管的视频打开命令启用有界观察，其他手机命令保持原策略',async()=>{
+test('只为对应受管视频命令启用各自的有界观察',async()=>{
  const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');
  const base=fixture(),calls=[];
  base.frozen.agent_input.workflow_key='douyin_video_processing';
+ base.environment.DOUYIN_MANAGED_CURRENT_VIDEO_LINK='1';
  const invoke=createStandalonePhoneProvider({...base,execute:async(_,args,options)=>{
   calls.push({args,env:options.env});
   return {code:0,stdout:'video_open_status=visual_required'};
@@ -28,7 +29,14 @@ test('只为受管的视频打开命令启用有界观察，其他手机命令�
  await invoke({...owner,command:'current-video-link',args:['direct101-link']});
  assert.equal(calls[0].env.DOUYIN_MANAGED_VIDEO_OPEN,'1');
  assert.equal(calls[1].env.DOUYIN_MANAGED_VIDEO_OPEN,undefined);
- assert.ok(calls.every(call=>call.env.DOUYIN_DETAIL_PLAYBACK==='continuous_identity'));
+ assert.equal(calls[0].env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK,undefined);
+ assert.equal(calls[1].env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK,'1');
+ await invoke({...owner,playback:undefined,command:'current-video-link',args:['direct101-unmanaged-link']});
+ assert.equal(calls[2].env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK,undefined);
+ await invoke({...owner,command:'record-start',args:['direct101-record',90,'1234567890123456789']});
+ assert.equal(calls[3].env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK,undefined);
+
+ assert.ok(calls.slice(0,2).every(call=>call.env.DOUYIN_DETAIL_PLAYBACK==='continuous_identity'));
 });
 test('semantic card uses a fresh selected video grid and returned native card coordinates under the exact owner',async()=>{
  const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');const calls=[];

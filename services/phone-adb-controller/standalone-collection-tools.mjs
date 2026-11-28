@@ -185,6 +185,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
   checkSource({op:'collect_claim',line,run,source_run:null,committed_origin_run:origin,limit:1},scope);
   let verifiedAccount=false, binding=null, owned=null, verifiedVideo=false, recording=null, busy=false, claimInDoubt=false;
   const evidenceIds=new Set(),returnedEvidenceIds=new Set(),observationFiles=new Set(),qualificationReceipts=new Map(),fetchedArtifacts=new Map();
+  let linkFollowup=null;
   let accountNavigation=null, openedApp=false, reviewedVideo=null, openedReviewVideo=null, verifiedReviewVideo=false, authorProof=null, reviewedDigest=null;
   let deviceReady=!readDeviceContext;
   let asrAttempted=false, submitted=false, qualificationInput, qualified=false;
@@ -295,8 +296,9 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
     if(operation==='collect_claim') {
       const requested=proposal?.video_id;
       if(activityPlaybook&&(!reviewedVideo||requested!==reviewedVideo))fail('SOURCE_READ_REQUIRED');
-      if(readAuthor&&(!reviewedDigest||authorProof?.video_id!==requested||authorProof.own_account))fail('AUTHOR_UNVERIFIED');
       if(owned)return {source_run:origin,video:structuredClone(owned)};
+      if(readAuthor&&(!verifiedReviewVideo||!reviewedDigest||authorProof?.video_id!==requested||authorProof.own_account))
+        fail('AUTHOR_UNVERIFIED');
       claimInDoubt=true;
       const result=await queue(operation,{committed_origin_run:origin,...(requested?{video_id:requested}:{}),...(readAuthor?{evidence_digest:reviewedDigest}:{})});
       if(result.source_run!==origin||result.video&&(!videoId.test(result.video.video_id||'')
@@ -362,10 +364,14 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         evidence(args[1]);
         openedReviewVideo=null;
         verifiedReviewVideo=false;
+        authorProof=null;
       } else if(command===links||captureCommands.has(command)) {
         if(args.length!==1||openedReviewVideo!==reviewedVideo||command!==links&&!verifiedReviewVideo)fail('VIDEO_SCOPE');
         evidence(args[0]);
-        if(command===links)verifiedReviewVideo=false;
+        if(command===links){
+          verifiedReviewVideo=false;
+          authorProof=null;
+        }
       } else fail('VIDEO_SCOPE');
     } else {
       if(command==='open-video') {
@@ -383,6 +389,11 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
           ||command==='record-extract-audio'&&(!recording.stopped||recording.audioOutput))fail('RECORDING_SCOPE');
         evidence(args[0],{existing:true});
       }
+    }
+    if(command==='open-video')linkFollowup=null;
+    if(command===links&&linkFollowup){
+      if(linkFollowup==='used')fail('VIDEO_LINK_OBSERVATION_EXHAUSTED');
+      linkFollowup='used';
     }
     const playback=!qualified&&['open-video',links].includes(command)?'continuous_identity':undefined;
     const verifyAccountOnly=command===accountCommand&&accountNavigation?.state==='tapped';
@@ -425,11 +436,25 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       if(!verifiedAccount)fail('ACCOUNT');
     }
     if(command===links) {
+      const lines=result.stdout.trim().split('\n');
+      const statusLines=lines.filter(line=>line.startsWith('video_link_status='));
+      if(statusLines.length>0){
+        const observationFile=args[0]+'-video-observation.png';
+        if(playback!=='continuous_identity'||lines.length!==2||lines[0]!=='video_link_status=visual_required'
+          ||lines[1]!=='evidence='+join(evidenceRoot,observationFile))fail('VIDEO_OBSERVATION');
+        observationFiles.add(observationFile);
+        if(!linkFollowup)linkFollowup='allowed';
+        return {...result,video_link_status:'visual_required',observation_file:observationFile,
+          next_action:linkFollowup==='allowed'
+            ?'用 fetch-native 读取截图。若确认仍在视频详情页，可用新证据 ID 重试取链一次；画面不符时报告具体原因。截图不能证明视频身份。'
+            :'本次打开的取链重试已用尽。用 fetch-native 读取截图并报告具体原因。截图不能证明视频身份。'};
+      }
       const fields=projectFields(result.stdout);
       const matched=fields.video_id===(owned?.video_id??reviewedVideo)&&fields.content_type==='video';
       if(owned)verifiedVideo=matched;
       else verifiedReviewVideo=matched;
       if(!matched)fail('VIDEO_IDENTITY');
+      linkFollowup=null;
     }
     if(command==='record-stop'){
       recording.stopped=true;

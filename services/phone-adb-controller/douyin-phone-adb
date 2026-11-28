@@ -841,15 +841,27 @@ _leave_scratch_route() {
 # 取链接偶发失败(面板没弹/剪贴板没同步/超时)不该一击致死：整体包重试，连试到成功。
 # 每次在干净的详情页重来(die在subshell里只退出子壳,外层捕获重试)。
 current_video_link() {
-  local eid="$1" return_keyword="${2:-}" tries=5 i rc _g
+  local eid="$1" return_keyword="${2:-}" tries=5 i rc _g guard_xml observation_file
   require_evidence_id "$eid"
-  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground" WRONG_FOREGROUND
-  # 先以非导航的MEDIA_PAUSE稳定播放状态，再读取真正的详情守卫。
-  "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null || die "MEDIA_PAUSE_FAILED"
-  wait_ms 300
-  _g=0; _on_video_detail "${eid}-detail-guard" || _g=$?   # 必须用 || 捕获：set -e 下裸调用返回非零会静默终止脚本，错误信息一个字都不打
-  (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
-  (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
+  if [[ "${DOUYIN_MANAGED_CURRENT_VIDEO_LINK:-}" == 1 && "$DETAIL_PLAYBACK" == continuous_identity && -n "$LOCK_OWNER" && -z "$return_keyword" ]]; then
+    # 先有界观察。无可信详情时只交还新画面，分享、剪贴板与身份结果均留空。
+    _g=0; guard_xml="$(_ui_evidence_wave "${eid}-detail-guard-w1" paused-agent)" || _g=$?
+    if (( _g == 4 )) || { (( _g == 0 )) && ! _is_video_detail_xml "$guard_xml"; }; then
+      observation_file="$(_capture_focused_douyin_png "${eid}-video-observation")" || die "VIDEO_LINK_OBSERVATION_FAILED"
+      print -- 'video_link_status=visual_required'
+      print -- "evidence=$observation_file"
+      return 0
+    fi
+    (( _g == 0 )) || die "VIDEO_LINK_DETAIL_UNVERIFIED"
+  else
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground" WRONG_FOREGROUND
+    # 先以非导航的MEDIA_PAUSE稳定播放状态，再读取真正的详情守卫。
+    "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null || die "MEDIA_PAUSE_FAILED"
+    wait_ms 300
+    _g=0; _on_video_detail "${eid}-detail-guard" || _g=$?
+    (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
+    (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
+  fi
   for i in {1..$tries}; do
     if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
     (( rc == 64 )) && die "SHARE_PANEL_TARGET_UNVERIFIED: refusing navigation retries for an untrusted link target"
