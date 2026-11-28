@@ -299,6 +299,52 @@ test('本地续期尚未写入时到达工作截止，保留独立收尾预算',
   assert.equal(receipt.central_released,true);
  }finally{Date.now=originalNow;f.cleanup();}
 });
+test('收尾与尚在读中央租约的工作交错时只续期一次', async () => {
+ const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),{digest}=await import('../runtime-definition.mjs'),f=await runtimeFixture();
+ const originalNow=Date.now;
+ try {
+  const startedAt=originalNow();
+  f.frozen.standalone_skill.deadline_ms=startedAt+1_200_000;
+  f.frozen.standalone_skill.cleanup_deadline_ms=startedAt+1_320_000;
+  delete f.frozen.snapshot_sha256;
+  f.frozen.snapshot_sha256=digest(f.frozen);
+  f.fs.writeFileSync(f.path.join(f.dir,'run-definition.json'),JSON.stringify(f.frozen));
+  let firstRead=true;
+  const centralReadEntered=Promise.withResolvers(), centralReadMayReturn=Promise.withResolvers();
+  const leaseFactory=f.dependencies.leaseFactory;
+  f.dependencies.leaseFactory=()=>({...leaseFactory(),verifyHeld:async()=>{
+   if (!firstRead) return;
+   firstRead=false;
+   centralReadEntered.resolve();
+   await centralReadMayReturn.promise;
+  }});
+  let request,dispatch;
+  f.dependencies.ipcFactory=async ({call})=>{
+   dispatch=(...args)=>request=call(...args);
+   return {connectionPath:f.path.join(f.dir,'fake-test-connection.json'),close:async()=>{await request?.catch(()=>{});}};
+  };
+  f.dependencies.execute=async (path,args)=>{
+   const result=await f.execute(path,args);
+   if(args[2]==='lock-refresh')return {code:0,stdout:'lock=refreshed owner=window-test ttl=1800s'};
+   if(args[2]==='lock-status'&&!f.effects.includes('lock-release-exact')){
+    return {code:0,stdout:'lock=held owner=window-test age=0s stale=false reclaimable=false ttl=1800s'};
+   }
+   return result;
+  };
+  Date.now=()=>startedAt;
+  const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});
+  Date.now=()=>startedAt+401_000;
+  const rejected=assert.rejects(dispatch('phone',{command:'status',args:[]}),/CLOSING/);
+  await centralReadEntered.promise;
+  const closing=host.close();
+  centralReadMayReturn.resolve();
+  await rejected;
+  const receipt=await closing;
+  assert.equal(f.effects.filter(op=>op==='lock-refresh').length,1);
+  assert.ok(!f.effects.includes('status'));
+  assert.equal(receipt.central_released,true);
+ }finally{Date.now=originalNow;f.cleanup();}
+});
 test('a local version cannot acknowledge output after its frozen snapshot or host is revoked',async()=>{
  const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs');
  for(const drift of ['snapshot','revocation']){
