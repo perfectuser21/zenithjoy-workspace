@@ -218,6 +218,87 @@ test('work deadline refuses new phone and business work while cleanup leaves ret
  }finally{Date.now=originalNow;f.cleanup();}
 });
 
+for (const matchesOwner of [true, false]) test(`长运行收尾先读回原本地租约的续期，所有权匹配=${matchesOwner}`, async () => {
+ const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),{digest}=await import('../runtime-definition.mjs'),f=await runtimeFixture();
+ const originalNow=Date.now;
+ try {
+  const startedAt=originalNow();
+  f.frozen.standalone_skill.deadline_ms=startedAt+1_200_000;
+  f.frozen.standalone_skill.cleanup_deadline_ms=startedAt+1_320_000;
+  delete f.frozen.snapshot_sha256;
+  f.frozen.snapshot_sha256=digest(f.frozen);
+  f.fs.writeFileSync(f.path.join(f.dir,'run-definition.json'),JSON.stringify(f.frozen));
+  const leaseFactory=f.dependencies.leaseFactory;
+  f.dependencies.leaseFactory=()=>({...leaseFactory(),verifyHeld:async()=>f.effects.push('central-verify')});
+  let acquiredAt=startedAt;
+  f.dependencies.execute=async (path,args)=>{
+   const result=await f.execute(path,args);
+   if(args[2]==='lock-refresh'){
+    assert.equal(args[3],'window-test');
+    acquiredAt=Date.now();
+    return {code:0,stdout:'lock=refreshed owner=window-test ttl=1800s'};
+   }
+   if(args[2]==='lock-status'&&!f.effects.includes('lock-release-exact')){
+    return {code:0,stdout:`lock=held owner=${matchesOwner?'window-test':'another-run'} age=0s stale=false reclaimable=false ttl=1800s`};
+   }
+   if(args.includes('return-safe-desktop')&&Date.now()-acquiredAt>=800_000){
+    return {code:1,stdout:'',stderr:'lock lease budget is insufficient'};
+   }
+   return result;
+  };
+  Date.now=()=>startedAt;
+  const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});
+  Date.now=()=>startedAt+1_026_000;
+  if(matchesOwner){
+   const result=await host.close();
+   assert.equal(result.local_released,true);
+   assert.equal(result.central_released,true);
+   assert.ok(f.effects.indexOf('central-verify')<f.effects.indexOf('lock-refresh'));
+   assert.ok(f.effects.indexOf('lock-status')<f.effects.indexOf('return-safe-desktop'));
+  }else{
+   await assert.rejects(host.close(),/LOCAL_RENEW_READBACK/);
+   assert.ok(f.effects.includes('lock-quarantine'));
+   assert.ok(!f.effects.includes('return-safe-desktop'));
+   assert.ok(!f.effects.includes('central-release'));
+  }
+ }finally{Date.now=originalNow;f.cleanup();}
+});
+test('本地续期尚未写入时到达工作截止，保留独立收尾预算', async () => {
+ const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs'),{digest}=await import('../runtime-definition.mjs'),f=await runtimeFixture();
+ const originalNow=Date.now;
+ try {
+  const startedAt=originalNow();
+  const workDeadline=startedAt+401_000;
+  f.frozen.standalone_skill.deadline_ms=workDeadline;
+  f.frozen.standalone_skill.cleanup_deadline_ms=workDeadline+60_000;
+  delete f.frozen.snapshot_sha256;
+  f.frozen.snapshot_sha256=digest(f.frozen);
+  f.fs.writeFileSync(f.path.join(f.dir,'run-definition.json'),JSON.stringify(f.frozen));
+  const leaseFactory=f.dependencies.leaseFactory;
+  f.dependencies.leaseFactory=()=>({...leaseFactory(),verifyHeld:async()=>{Date.now=()=>workDeadline+1;}});
+  f.dependencies.execute=async (path,args,options)=>{
+   const result=await f.execute(path,args);
+   if(args[2]==='lock-refresh'){
+    assert.ok(options.timeoutMs>0&&options.timeoutMs<=10_000);
+    return {code:0,stdout:'lock=refreshed owner=window-test ttl=1800s'};
+   }
+   if(args[2]==='lock-status'&&!f.effects.includes('lock-release-exact')){
+    assert.ok(options.timeoutMs>0&&options.timeoutMs<=10_000);
+    return {code:0,stdout:'lock=held owner=window-test age=0s stale=false reclaimable=false ttl=1800s'};
+   }
+   return result;
+  };
+  Date.now=()=>startedAt;
+  const host=await startStandaloneSkillRuntime({runDirectory:f.dir,dependencies:f.dependencies});
+  Date.now=()=>workDeadline-1;
+  await assert.rejects(f.dispatch('phone',{command:'status',args:[]}),/WORK_DEADLINE/);
+  assert.ok(!f.effects.includes('lock-refresh'));
+  assert.ok(!f.fs.existsSync(f.unknownPath));
+  const receipt=await host.close();
+  assert.equal(receipt.local_released,true);
+  assert.equal(receipt.central_released,true);
+ }finally{Date.now=originalNow;f.cleanup();}
+});
 test('a local version cannot acknowledge output after its frozen snapshot or host is revoked',async()=>{
  const {startStandaloneSkillRuntime}=await import('../standalone-skill-runtime.mjs');
  for(const drift of ['snapshot','revocation']){

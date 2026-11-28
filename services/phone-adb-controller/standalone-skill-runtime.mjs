@@ -41,12 +41,13 @@ export async function readStandaloneCallRegistry({root,environment,serial,deadli
  if(output.code!==0||callStates.length===0||callStates.some(state=>state!=='0'))reject('DEVICE_CONTEXT');
 }
 
-export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput,isCleanup=()=>false}){
+export function createStandalonePhoneProvider({root,environment,frozen,execute=execInput,isCleanup=()=>false,beforeCommand}){
  const fixed=frozen.agent_input;
  return async function invoke({command,args,profile,owner,playback,verifyAccountOnly}){
   if(profile!==fixed.profile||owner!==fixed.run_tag)fail('SCOPE');
   const call=async(op,values=[])=>{
    const cleanup=isCleanup(),phaseDeadline=frozen.standalone_skill?.[cleanup?'cleanup_deadline_ms':'deadline_ms'];
+   if(beforeCommand)await beforeCommand(cleanup);
    const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
    if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
    const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,remaining)});
@@ -155,6 +156,8 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
  const hostPath=claimStandaloneHost({runId:identity.run_id,runDirectory:dir,frozen,registry:dependencies.hostRegistry}),unknownPath=hostPath.replace(/\.json$/,'.unknown.json');
  let lease,leaf,ipc,collectionTools,local=false,centralHeld=false,centralAttempted=false,unknown=false,revoked=false,revocationFailed=false,closing=false,closingPromise,cleanupActive=false;
  const execute=dependencies.execute??execInput;
+ let localRenewAt = Infinity;
+ let pendingLocalRenewal;
  // 只准专用测试注入故障；CLI不读取任何此类环境开关。默认失败立即终止专用宿主。
  const revoke=reason=>{
   unknown=true;
@@ -172,8 +175,8 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
  };
  // 叶子状态不可读取本身就是原生结果未知，任何调用位置均先撤销全局能力。
  const leafUnknown=()=>{try{return Boolean(leaf?.isReturnUnknown());}catch(error){revoke('LEAF_STATE_UNKNOWN');throw error;}};
- const controller=async(op,args=[])=>{
-  const result=await execute(join(root,'douyin-phone-adb'),['--profile',scope.profile,op,...args],{env,timeoutMs:360000});
+ const controller=async(op,args=[],timeoutMs=360000)=>{
+  const result=await execute(join(root,'douyin-phone-adb'),['--profile',scope.profile,op,...args],{env,timeoutMs});
   if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code});return result;
  };
  const phaseDeadline=cleanup=>cleanup?identity.cleanup_deadline_ms:identity.deadline_ms;
@@ -203,6 +206,38 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    checkHost(cleanup);
   }};
  };
+ // The controller reserves the last 1,000 seconds of its 1,800-second local lease.
+ // Renew before starting another operation, outside the controller's own exclusive guard.
+ const renewLocalLease = async cleanup => {
+  checkHost(cleanup);
+  if (Date.now() < localRenewAt) return;
+  pendingLocalRenewal ??= (async () => {
+   const renewalTimeout = () => {
+    const remaining = phaseDeadline(cleanup)-Date.now();
+    if (remaining <= 0) fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
+    return Math.min(10_000,remaining);
+   };
+   await lease.verifyHeld();
+   checkHost(cleanup);
+   const timeout = renewalTimeout();
+   const startedAt = Date.now();
+   try {
+    const response = await controller('lock-refresh',[scope.run_tag],timeout);
+    if (response.stdout.trim() !== `lock=refreshed owner=${scope.run_tag} ttl=1800s`) fail('LOCAL_RENEW_READBACK');
+    const readback = await controller('lock-status',[],renewalTimeout());
+    const status = readback.stdout.trim().split(/ +/);
+    if (status.length !== 6 || status[0] !== 'lock=held' || status[1] !== `owner=${scope.run_tag}`
+      || !/^age=[0-9]s$/.test(status[2]) || status[3] !== 'stale=false'
+      || status[4] !== 'reclaimable=false' || status[5] !== 'ttl=1800s') fail('LOCAL_RENEW_READBACK');
+    localRenewAt = startedAt + 400_000;
+   } catch (error) {
+    revoke('LOCAL_RENEW_UNCONFIRMED');
+    throw error;
+   }
+  })().finally(()=>{pendingLocalRenewal=undefined;});
+  await pendingLocalRenewal;
+  checkHost(cleanup);
+ };
  const close=()=>{
   if(closingPromise)return closingPromise;closing=true;
   return closingPromise=(async()=>{
@@ -215,7 +250,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
     try{
      if(phoneScope.policy.schema_version===2)writeFileSync(hostPath.replace(/\.json$/,'.cleanup'),digest(readFileSync(hostPath))+'\n',{flag:'wx',mode:0o600});
      await guard({cleanup:true});if(collectionTools)await collectionTools.stopRecording();
-     desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>true})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});
+     desktop=await createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>true,beforeCommand:renewLocalLease})({command:'return-safe-desktop',args:[],profile:scope.profile,owner:scope.run_tag});
     }catch(error){failed('DESKTOP_UNKNOWN',error);}finally{cleanupActive=false;}
    }
    if(collectionTools&&!unknown)try{await guard({cleanup:true});await collectionTools.releaseOwned();}catch(error){failed('COLLECTION_RELEASE_UNKNOWN',error);}
@@ -238,8 +273,10 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
   lease=(dependencies.leaseFactory??createCentralDeviceLease)({brainUrl:env.BRAIN_URL||'http://127.0.0.1:5221',token:env.BRAIN_INTERNAL_TOKEN,deviceName:scope.serial,taskId:identity.task_id,runId:identity.run_id,runSeconds:scope.run_max_seconds});
   writeFileSync(join(dir,'standalone-host-started.json'),JSON.stringify({task_id:identity.task_id,run_id:identity.run_id,pid:process.pid,started_at:new Date().toISOString()}),{flag:'wx',mode:0o600});
   centralAttempted=true;await lease.acquire();centralHeld=true;
+  const acquireStartedAt=Date.now();
   local=true;const acquired=await controller('lock-acquire-new',[scope.run_tag]),acquiredStates=acquired.stdout.split('\n').filter(s=>s.startsWith('lock='));
   if(acquiredStates.length!==1||acquiredStates[0]!==`lock=acquired owner=${scope.run_tag}`)fail('ACQUIRE_READBACK');
+  localRenewAt = acquireStartedAt + 400_000;
   await guard();
   leaf=await (dependencies.producerFactory??startCollectionLeafProducer)({
    directory:join(dir,'standalone-leaves'),policy:phoneScope.policy,serial:scope.serial,
@@ -247,7 +284,7 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
    env,assertAdmission:()=>guard({cleanup:cleanupActive}),beginLocalVersion,parentEpochAdmission:phoneScope.policy.schema_version===2,
   });Object.assign(env,leaf.env);
   const rpc=(dependencies.rpcFactory??createRpc)({frozen,local:true,environment:env,runContext:{run:scope.run_tag,run_id:identity.run_id,profile:scope.profile,line:scope.line}});
-  const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>cleanupActive}),assertAuthority=()=>guard();
+  const invokePhone=createStandalonePhoneProvider({root,environment:env,frozen,execute,isCleanup:()=>cleanupActive,beforeCommand:renewLocalLease}),assertAuthority=()=>guard();
   const phone=collection?async input=>{
     try{return await invokePhone(input);}
     catch(error){if(error?.code==='STANDALONE_NATIVE_COMMAND'||leafUnknown())revoke('TOOL_RESULT_UNKNOWN');throw error;}
