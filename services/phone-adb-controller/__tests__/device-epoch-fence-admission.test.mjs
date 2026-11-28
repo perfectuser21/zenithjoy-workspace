@@ -296,3 +296,34 @@ test('清场 epoch 冻结核对固定 journal 原始摘要、同一计划和候�
   assert.throws(freeze,/EPOCH_CLEAN_JOURNAL/);
  }finally{fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('并行只读复核在任一分支失败后仍等两条路由收尾', async () => {
+  const { readPairedEpochFacts } = await load();
+  let release, complete = false;
+  const peer = new Promise(resolve => { release = resolve; });
+  const expected = Error('旧路由发生变化');
+  const read = readPairedEpochFacts(
+    () => { throw expected; },
+    async () => { await peer; return '新路由真值'; },
+  ).finally(() => { complete = true; });
+  const rejected = assert.rejects(read, error => error === expected);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(complete, false);
+  release();
+  await rejected;
+});
+
+test('两条路由同时发起并保留参数顺序，全部返回后才交付', async () => {
+  const { readPairedEpochFacts } = await load();
+  let release;
+  const order = [];
+  const pending = new Promise(resolve => { release = resolve; });
+  const read = readPairedEpochFacts(
+    async () => { order.push('旧路由开始'); await pending; return '旧'; },
+    () => { order.push('新路由开始'); return '新'; },
+  );
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(order, ['旧路由开始', '新路由开始']);
+  release();
+  assert.deepEqual(await read, ['旧', '新']);
+});

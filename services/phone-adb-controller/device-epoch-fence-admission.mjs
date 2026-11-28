@@ -153,6 +153,14 @@ export function readEpochLocalHandoff({runDirectory,lockPath,frozen,record,stand
  return {activeOwner:bytes(join(lockPath,'owner')).toString(),activeQuarantined:standaloneLocalLockQuarantined(frozen,names,marker)};
 }
 
+// Both observations are read-only. Drain the peer even if one route rejects.
+export async function readPairedEpochFacts(readOld,readNew){
+ const observations=await Promise.allSettled([readOld,readNew].map(read=>Promise.resolve().then(read)));
+ const rejected=observations.find(result=>result.status==='rejected');
+ if(rejected)throw rejected.reason;
+ return observations.map(result=>result.value);
+}
+
 export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includeCurrentAuthority=false}={}){
  let stage='scope';
  let daemonObservation;
@@ -202,12 +210,25 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
   const {bindDaemon}=await createYueshengDaemonBinding({sourceCommit:record.runtime_source.commit});
   readDaemon=async route=>({...route,daemon_binding:await bindDaemon(route.daemon_binding)});
  }
- const oldDaemon=await readDaemon(record.old_route);
- stage='initial_new_daemon';const newDaemon=await readDaemon(record.new_route),activeLock=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks',spec.serial+'.lock');
+ let oldDaemon,newDaemon;
+ if(clean){
+  stage='initial_daemon_pair';
+  [oldDaemon,newDaemon]=await readPairedEpochFacts(()=>readDaemon(record.old_route),()=>readDaemon(record.new_route));
+ }else{
+  oldDaemon=await readDaemon(record.old_route);
+  stage='initial_new_daemon';newDaemon=await readDaemon(record.new_route);
+ }
+ const activeLock=join(userInfo().homedir,'.local/share/zenithjoy/phone-locks',spec.serial+'.lock');
  stage='evidence_root';const evidenceRoot=join(env.WFR_RUN_DIR,'epoch-fence-admission');try{mkdirSync(evidenceRoot,{mode:0o700});}catch(e){if(e.code!=='EEXIST')throw e;}const rs=lstatSync(evidenceRoot);need(rs.isDirectory()&&!rs.isSymbolicLink()&&realpathSync(evidenceRoot)===evidenceRoot&&(rs.mode&0o777)===0o700&&rs.uid===process.getuid(),'EPOCH_EVIDENCE_ROOT');const directory=join(evidenceRoot,randomUUID());mkdirSync(directory,{mode:0o700});
  async function inventory(route,label){const out=join(directory,label);mkdirSync(out,{mode:0o700});const scope={endpoint:route.endpoint,serial:spec.serial};const result=await hostOperation({operation:'inventory',scope,directory:out,readAuthority:async()=>{await readDaemon(route);return {scope,authorized_action:'inventory',lease_until:initial.central.expires_at};}});need(result.wire_complete,'EPOCH_HOST_INVENTORY');return parseDeviceInventory(result.response);}
- stage='new_inventory';const newInventory=await inventory(record.new_route,'new');
- stage='old_inventory';let oldInventory=await inventory(record.old_route,'old');
+ let oldInventory,newInventory;
+ if(clean){
+  stage='route_inventory_pair';
+  [oldInventory,newInventory]=await readPairedEpochFacts(()=>inventory(record.old_route,'old'),()=>inventory(record.new_route,'new'));
+ }else{
+  stage='new_inventory';newInventory=await inventory(record.new_route,'new');
+  stage='old_inventory';oldInventory=await inventory(record.old_route,'old');
+ }
  let newHardwareSerial,cloudHardwareSerialSha256,cloudBootIdSha256;
  if(record.resource.adb_serial!==undefined||cloud){
   stage='hardware_serial';
@@ -234,8 +255,13 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
  stage='fresh_business';const fresh=await readBusiness();
  stage='business_drift';need(same(businessAuthorityProjection(initial),businessAuthorityProjection(fresh)),'EPOCH_BUSINESS_DRIFT');
  // 最终逐frame fresh身份读回，无跨frame缓存；旧serial重现由本次host原件直接拒绝。
- stage='final_old_daemon';await readDaemon(record.old_route);
- stage='final_new_daemon';await readDaemon(record.new_route);
+ if(clean){
+  stage='final_daemon_pair';
+  await readPairedEpochFacts(()=>readDaemon(record.old_route),()=>readDaemon(record.new_route));
+ }else{
+  stage='final_old_daemon';await readDaemon(record.old_route);
+  stage='final_new_daemon';await readDaemon(record.new_route);
+ }
  if(daemonObservation){await daemonObservation.close(true);daemonObservation=undefined;}
  stage='final_record_policy';need(sha(recordBytes(ref.path))===ref.sha256&&sha(readPrivatePolicy(spec.policy_binding.policy_path))===sha(policyRaw),'EPOCH_ADMISSION_DRIFT');
  if(clean)need(readYueshengEpochCompletion(record)===cleanCompletionSha256,'EPOCH_ADMISSION_DRIFT');
