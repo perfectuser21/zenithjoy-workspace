@@ -8,7 +8,7 @@ const line = 'yuesheng';
 const videoId = '1234567890123456789';
 const video = {
   video_id:videoId, video_url:'https://www.douyin.com/video/'+videoId, title:'实际视频',
-  judgment_status:'pending', process_status:'处理中:'+run, harvest_batch:run,
+  judgment_status:'pending', process_status:'处理中:'+run, harvest_batch:run, comment_count:0,
 };
 const scope = {
   workflow_key:'douyin_video_processing', run_tag:run, source_run:origin, line, limit:1,
@@ -37,21 +37,35 @@ function fixture({existing=[],selection=[video]}={}) {
 test('102 原 101 批次和公司在认领事务内绑定，同一次仅认领一条',async()=>{
   const {pool,calls}=fixture();
   assert.deepEqual(await claimStandaloneCollectionVideo(pool,request,scope),{
-    source_run:origin,video:{video_id:videoId,video_url:video.video_url,title:video.title,judgment_status:'pending'},
+    source_run:origin,video:{video_id:videoId,video_url:video.video_url,title:video.title,judgment_status:'pending',
+      line_key:line,process_status:video.process_status,harvest_batch:run,comment_count:0},
   });
   const write=calls.find(call=>call.sql.includes('UPDATE zenithjoy.leadgen_videos'));
   assert.ok(write.sql.includes('harvest_batch=$2')&&write.sql.includes('FOR UPDATE SKIP LOCKED'));
+  assert.match(write.sql,/RETURNING[^\n]*\bcomment_count\b/);
   assert.deepEqual(write.args.slice(0,5),[line,origin,scope.company.company_id,scope.company.tenant_id,'34']);
   assert.deepEqual(calls.slice(-2).map(call=>call.sql),['COMMIT','release']);
 });
 
 test('102 丢失回执后只读同一认领，不用另一条补偿，拒绝改来源',async()=>{
-  const {pool,calls}=fixture({existing:[video]});
+  const {pool,calls}=fixture({existing:[{...video,comment_count:3}]});
   await assert.rejects(claimStandaloneCollectionVideo(pool,{...request,committed_origin_run:'another-batch'},scope),/STANDALONE_COLLECTION_ORIGIN/);
   assert.equal(calls.length,0);
   const result=await claimStandaloneCollectionVideo(pool,request,scope);
   assert.equal(result.video.video_id,videoId);
+  assert.equal(result.video.comment_count,3);
+  assert.match(calls.find(call=>call.sql.includes('FROM zenithjoy.leadgen_videos')).sql,/\bcomment_count\b/);
   assert.equal(calls.some(call=>call.sql.includes('UPDATE zenithjoy.leadgen_videos')),false);
+});
+
+test('102 认领保留原记录空实采数，异常值不提交认领事务',async()=>{
+  const missing=fixture({selection:[{...video,comment_count:null}]});
+  const result=await claimStandaloneCollectionVideo(missing.pool,request,scope);
+  assert.equal(result.video.comment_count,null);
+  const invalid=fixture({selection:[{...video,comment_count:-1}]});
+  await assert.rejects(claimStandaloneCollectionVideo(invalid.pool,request,scope),/CLAIM_READBACK/);
+  assert.equal(invalid.calls.some(call=>call.sql==='COMMIT'),false);
+  assert.equal(invalid.calls.some(call=>call.sql==='ROLLBACK'),true);
 });
 
 test('102 未确认账号不领单，打开及录制只允许原批次实际领到的视频',async()=>{
@@ -378,7 +392,7 @@ test('102 精确认领错 VID 时事务回滚', async()=>{
 test('102 只读查询绑定原批次、租户和精确 VID，错误来源不查库',async()=>{
   const {readStandaloneCollectionSource}=await import('../standalone-collection-tools.mjs');
   const calls=[];
-  const row={video_id:videoId,video_url:video.video_url,evidence_digest:'a'.repeat(64),observed_comment_count:1};
+  const row={video_id:videoId,video_url:video.video_url,evidence_digest:'a'.repeat(64),observed_comment_count:1,comment_count:0};
   const pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:[row]};}};
   const read={...request,op:'collect_source_read',video_id:videoId};
   await assert.rejects(readStandaloneCollectionSource(pool,{...read,committed_origin_run:'other'},scope),/ORIGIN/);
@@ -386,6 +400,7 @@ test('102 只读查询绑定原批次、租户和精确 VID，错误来源不查
   assert.deepEqual(await readStandaloneCollectionSource(pool,read,scope),{source_run:origin,video:row});
   assert.equal(calls.length,1);
   assert.match(calls[0].sql,/^SELECT/);
+  assert.match(calls[0].sql,/\bcomment_count\b/);
   assert.doesNotMatch(calls[0].sql,/\b(?:UPDATE|INSERT|DELETE)\b/i);
   assert.deepEqual(calls[0].args,[line,origin,scope.company.company_id,scope.company.tenant_id,'34',videoId]);
 });

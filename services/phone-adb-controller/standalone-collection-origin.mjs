@@ -27,7 +27,7 @@ export async function readStandaloneCollectionSource(pool,request,scope) {
   const requested = request.video_id ?? null;
   if (requested !== null && (typeof requested !== 'string' || !videoId.test(requested))) fail('VIDEO_SCOPE');
   const {line,source_run:origin,company}=scope;
-  const {rows}=await pool.query(`SELECT video_id,video_url,title,keyword,judgment_status,process_status,
+  const {rows}=await pool.query(`SELECT video_id,video_url,title,keyword,judgment_status,process_status,comment_count,
     discovery_metrics->>'digest' AS evidence_digest,
     discovery_metrics->'comment_total'->'value' AS observed_comment_count
     FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND harvest_batch=$2 AND ${observedOrigin}

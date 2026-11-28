@@ -9,12 +9,12 @@ import {publishNativeFile} from '../standalone-native-evidence.mjs';
 import {
   createStandaloneQualificationPreparation,reviewStandalonePreparedDecision,standaloneQualificationDecisionId,
 } from '../standalone-qualification-preparation.mjs';
-import {recordStandaloneCollectionQualification} from '../standalone-collection-tools.mjs';
+import {claimStandaloneCollectionVideo,readStandaloneCollectionSource,recordStandaloneCollectionQualification} from '../standalone-collection-tools.mjs';
 
 const require=createRequire(import.meta.url);
 const sha=value=>createHash('sha256').update(value).digest('hex');
 
-test('正式资格在隔离 PostgreSQL 实际提交并读回，同一动作重放不二次写入',{
+test('原来源和实采数在隔离 PostgreSQL 事务中认领，正式资格提交可重放',{
   skip:process.env.ZJ_METRICS_PG_REQUIRED!=='1',
 },async t=>{
   const {Pool}=require('pg'),pool=new Pool();
@@ -30,7 +30,7 @@ test('正式资格在隔离 PostgreSQL 实际提交并读回，同一动作重�
   created=true;
   const sql=text=>text.replaceAll('zenithjoy.',schema+'.');
   const query=(text,args)=>pool.query(sql(text),args);
-  const scoped={connect:async()=>{
+  const scoped={query,connect:async()=>{
     const client=await pool.connect();
     return {query:(text,args)=>client.query(sql(text),args),release:()=>client.release()};
   }};
@@ -40,11 +40,24 @@ test('正式资格在隔离 PostgreSQL 实际提交并读回，同一动作重�
     runtime_config:{routing:{line_key:line},video_judgment:{scope:'教学'}}};
   const policy=require('../company-config-lib.js').configTargetProfile(snapshot,'102');
   await query('CREATE TABLE zenithjoy.company_config_runs(company_id uuid,tenant_id uuid,version int,run_id text,source_run text,snapshot jsonb)');
-  await query('CREATE TABLE zenithjoy.leadgen_videos(id uuid default gen_random_uuid(),video_id text,video_url text,title text,line_key text,discovery_metrics jsonb,harvest_batch text,process_status text,judgment_status text,judgment_reason text,judgment_config jsonb,transcript text,updated_at timestamptz)');
+  await query('CREATE TABLE zenithjoy.leadgen_videos(id uuid default gen_random_uuid(),video_id text,video_url text,title text,line_key text,discovery_metrics jsonb,harvest_batch text,process_status text,judgment_status text,judgment_reason text,judgment_config jsonb,transcript text,updated_at timestamptz,discovered_at timestamptz DEFAULT now(),comment_count integer,keyword text)');
   await query('INSERT INTO zenithjoy.company_config_runs VALUES($1,$2,$3,$4,NULL,$5)',
     [company.company_id,company.tenant_id,company.version,run,JSON.stringify(snapshot)]);
-  await query('INSERT INTO zenithjoy.leadgen_videos(video_id,video_url,line_key,discovery_metrics,harvest_batch,process_status,judgment_status) VALUES($1,$2,$3,$4,$5,$6,$7)',
-    [videoId,'https://www.douyin.com/video/'+videoId,line,JSON.stringify({company_binding:{...company,run_id:origin,line_key:line}}),run,'处理中:'+run,'pending']);
+  await query('INSERT INTO zenithjoy.leadgen_videos(video_id,video_url,title,line_key,discovery_metrics,harvest_batch,process_status,judgment_status,comment_count,keyword) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+    [videoId,'https://www.douyin.com/video/'+videoId,'测试候选',line,JSON.stringify({
+      company_binding:{...company,run_id:origin,line_key:line},comment_total:{value:15},
+    }),origin,'待判定','pending',0,'教学']);
+
+  const scope={workflow_key:'douyin_video_processing',line,run_tag:run,source_run:origin,limit:1,company};
+  const claim={op:'collect_claim',line,run,source_run:null,limit:1,committed_origin_run:origin,video_id:videoId};
+  const before=await readStandaloneCollectionSource(scoped,{...claim,op:'collect_source_read'},scope);
+  assert.equal(before.video.comment_count,0);
+  assert.equal(before.video.observed_comment_count,15);
+  const receipt=await claimStandaloneCollectionVideo(scoped,claim,scope);
+  assert.equal(receipt.video.comment_count,0);
+  assert.equal(receipt.video.harvest_batch,run);
+  assert.equal(receipt.video.process_status,'处理中:'+run);
+  assert.deepEqual(await claimStandaloneCollectionVideo(scoped,claim,scope),receipt);
 
   const runIdentity={task_id:randomUUID(),run_id:randomUUID(),run_tag:run,workflow:'102'};
   const audio=join(runDirectory,'sample.wav');
