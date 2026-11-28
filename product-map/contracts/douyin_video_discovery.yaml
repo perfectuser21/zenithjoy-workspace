@@ -1,5 +1,5 @@
 version: 1
-runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/101.json, revision: c8a9a9a63d2de6d58131f1283de731971957b148, digest: sha256:8df6db2132a92947242b243dff7581b179c0b34eeea8518976976d16620a3fce }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "keyword", "search_filters", "max_candidates" ], "properties": { "keyword": { "type": "string", "minLength": 1, "maxLength": 100 }, "search_filters": { "type": "object" }, "max_candidates": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
+runtime: { "kind": "commander-foundation-v1", "profile_ref": { repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/leadgen-foundation/profiles/101.json, revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c, digest: sha256:c93ab78772b32fb5f3dafef7b57f4335ce141837c8ee287532a198a423cf18e4 }, "timeout_ms": 2400000, "cleanup_timeout_ms": 600000, "commander_timeout_ms": 60000, "input_schema": { "type": "object", "additionalProperties": false, "required": [ "binding_key", "business" ], "properties": { "binding_key": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$" }, "business": { "type": "object", "additionalProperties": false, "required": [ "keyword", "search_filters", "max_candidates" ], "properties": { "keyword": { "type": "string", "minLength": 1, "maxLength": 100 }, "search_filters": { "type": "object" }, "max_candidates": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
 input_schema:
   $ref: services/phone-adb-controller/leadgen-foundation/schemas/101.json
 implementation:
@@ -12,7 +12,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.12.16
+  version: 0.12.17
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -596,266 +596,266 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profiles/101.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
-        digest: sha256:8df6db2132a92947242b243dff7581b179c0b34eeea8518976976d16620a3fce
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
+        digest: sha256:c93ab78772b32fb5f3dafef7b57f4335ce141837c8ee287532a198a423cf18e4
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-context.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:9bce43f3f837d9b1604bc4a3d44d8ac5301493c2e6e4193c24d74d21f93c588a
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-runtime.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:876acf98a6c2e79aba04cedabbc0e56be3d98bd950c0a6c4ae35c255277e1b2c
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state-wiring.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:dd6c551080e56b65cd316ada8a394311f49d5d2b1e2ce4955df2794dab918bc1
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-state.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:05e5fca0f8981bf24de5bc10a5c4c3cc296b439aebda3a32ac46fff30f81260a
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-104-transport.py
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:23a2ff6a6267e566be5ab59fbf319669fff7148c4d8f0314eaf745e38b74f109
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-104.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:5917bfc640d6a968bc8c24a0e90241c27eda5792913328c5f0fb3f276134f78e
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-pg.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:bb2f7bef2dfe3551ce4ad283540413c3e70789feeff67962887bca12649d9a79
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-host-tools.py
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:0848f00677e52ea6355de2f808608bec40d8cb25e63b9ed80a88ee34b6daded9
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-facts.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:cb7333325d9dc59d7dd540dd2400e8ab255028717e422f13b7de4dfa16c34062
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-native-identity.py
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:8e9e40ffd0845d1b0ff0b50f9c8b2798511f1b05e7ff9161cee47fcda71f376b
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-tool-result.py
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:4cc6c52836034af0b998142e1f6c435732102f60481c60a15fd747b25e711cc3
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-upstream-source.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:eabb48fb6c5fe0233b498ce291e828992a094690ab6b2bea0ed2238a3d835e5e
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/discovery-metrics-queue.js
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:7f6b4ba23aabc0b4acba54ae9778bde992d3c3716a3281d8135c3dee2157ac59
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/judge-comment.js
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:bb2e0c716756cd3d475320eb5baf2dae731a04ff50d58ee4c1f5c5e6ff97039b
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-authorization-intent.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:063fe402c3068fefe6b43297cb24bd51b81769af66f613dc316883b9f901e5fa
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-committed-partial.js
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:e5b443ecf4b0c0f6ee4cd9580883539f267cf41609016bcba02b26e4ce51230b
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/adapter.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:de4c5501f0a43a61b7477f0f23cc91f311551b40270ed405e20a94ef5355911d
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/assembly.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:49953ccabff00eda146da62d346b28bd24096bdb37e18c3fb2d5f58e6af6bc6f
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/business-module-sources.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:ef91ebc273866ffa7ae9f66fa0cafc7ff9b03a7db1163199ddd4a9c8f4eaf42f
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts-runtime.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:651a11963c66b2eaa4d4e4b4debc557fef52ff4c8f4733413ddb8c3b022e227f
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-facts.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:78040c351ebfbeb15f298a31b2b70d9057d7ab79a7d4f615ad022d983a167c2c
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/checker-file-facts.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:521537fe414e86694775e528cac63e64678c76eaa6b7053fb364a0afdf8851be
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/context.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:4e0eaa3b46827b06d77ad946beccb5a3f5309baeb414c731ed49f52b125ea5b3
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/contract-acceptance.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:ecbc609c83240c0ce09a0e427e9ea65e53cd139b7b6c064649898b3c4c62c402
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/freeze.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:99727dab20ceaab8e98232916a73336af849c1581d7cd7b4c4020ff16d0f7f76
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/profile-contract.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:b975f4570509548b471d8c1ab2e3f1f1e3d28ea300a12d0c680555056849bb86
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/101.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:dcde780d8cc9d8c57be0df4253039980d88dde627a24e49b4e521d678f238b27
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/102.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:6690846699470340b560a700b1ea426ca42b6e4474ae6221516a74362883372c
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/103.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:0b4707aa4e2ef246d811fab6eaacd369dfaf8b827d55c60e92e2f4c9647c187d
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/schemas/104.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:b63221c5e29679549b99ae6a8a4e9a94f755dbe3f57ea2f596c9ceef363e34bd
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/101.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:0f362a792f9cec40b9bb94a428188c6622077a3fb2f12983ffe21dc80ff46149
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/102.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:383ce8239e1468726b3ec5f0631c7263f204da3bc4bb47d92ab4773aab97dea7
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/103.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:816f61135311f08982d2a54405ed5cca93ad2497c7d7a1f7c75d2f167cb8aef9
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/104.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:69796de268c8abdda38c3864cda7e7f7c2f2a8b4b31ccb2e32e8883ccc743dcb
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/sources/asr.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:a9fe3d6babb09860994c5d0916ab6de5adb01569b9528646b5bc8e841f6c6c98
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-foundation/worker.mjs
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:105c7b15001ac44e80118c7688bd0e6d56e4faea5148b941988a1d50ceea6989
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-scope.js
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:c1cb0c6bc21bb02cca0c083fcc52adcb7ab32bed4b436b1d940605f5e2b1e6b7
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:ec35c733151d08c97348406801d07ce6c7c4cd845e89296db16bfd25a2589895
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-score-context.js
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:f9554c1b39fa3dbfe3e2718b558368fd8e7acd3c82d825556b9972d772328a91
         purpose: foundation_host
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/package.json
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:668731795369b7e16a04b0d5492665a9e9669addb8619210cfe841f6b6f28627
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
         digest: sha256:f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d
         purpose: foundation_host
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
-        revision: c8a9a9a63d2de6d58131f1283de731971957b148
-        digest: sha256:70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f
+        revision: e2b1cf1069fbaa6a8b4f8663b34eb19608904d7c
+        digest: sha256:bfe169cd127363ef96868aaa31297ed449a668af95649ac80c613b5a3ca10ac5
         purpose: foundation_host
     model:
       - provider: openrouter
