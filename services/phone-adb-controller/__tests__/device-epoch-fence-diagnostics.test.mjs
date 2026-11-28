@@ -71,6 +71,33 @@ test('受管云机身份读回可等待 shell 请求之后的有效权属复核'
   rmSync(directory,{recursive:true,force:true});
  }
 });
+for (const rejectedRead of [0, 2, 3]) test(`只读序列号按连接核验进程身份，变化轮次=${rejectedRead}`, async () => {
+ const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
+ const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-serial-connections-'));
+ const scope={endpoint:f.endpoint,serial:'127.0.0.1:15555',maintenance_task_id:'1b0c2057-e381-4c65-bce5-bc93774fcf04'};
+ const leaseUntil=new Date(Date.now()+60_000).toISOString();
+ const observations=[];
+ try {
+  const identity=readEpochDeviceIdentity({
+   query:'hardware_serial',scope,directory,managedCloud:true,authorityPerConnection:true,
+   readAuthority:async()=>{
+    observations.push(f.services.length);
+    return {scope:observations.length===rejectedRead?{...scope,serial:'other-device'}:scope,lease_until:leaseUntil};
+   },
+  });
+  if (rejectedRead) await assert.rejects(identity,{code:'EPOCH_DEVICE_IDENTITY'});
+  else assert.equal(await identity,'31');
+  assert.deepEqual(observations,rejectedRead===2?[0,1]:[0,1,3]);
+  assert.equal(f.services.length,rejectedRead===2?1:3);
+  const proof=JSON.parse(readFileSync(join(directory,'diagnostic.json')));
+  assert.equal(proof.wire_complete,!rejectedRead);
+  assert.equal(proof.open_sockets,0);
+ } finally {
+  await f.close();
+  rmSync(directory,{recursive:true,force:true});
+ }
+});
+
 test('普通身份读回仍拒绝超过五秒的权属复核', async () => {
  const {readEpochDeviceIdentity}=await import('../device-epoch-fence-admission.mjs');
  const f=await fixture(), directory=mkdtempSync(join(realpathSync(tmpdir()),'fence-default-identity-'));

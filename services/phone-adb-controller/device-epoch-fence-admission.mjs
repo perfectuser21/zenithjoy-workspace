@@ -131,12 +131,12 @@ export async function readCloud101BusinessFacts({frozen,record,readBudget,read=r
  };
 }
 function archiveSnapshot(record){const path=record.original_quarantine.archive_path,s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&![...readdirSync(path)].some(n=>!['owner','pid','acquired_at','standalone_review_required','standalone_quarantined'].includes(n)),'EPOCH_ARCHIVE');const names=Object.keys(record.original_quarantine.fields),fields=Object.fromEntries(names.map(n=>[n,bytes(join(path,n)).toString()]));need(same(readdirSync(path).sort(),names.sort())&&(!Object.hasOwn(fields,'standalone_quarantined')||fields.standalone_quarantined===fields.owner),'EPOCH_ARCHIVE');return {dev:s.dev,ino:s.ino,fields};}
-export async function readEpochDeviceIdentity({query, scope, directory, readBudget, readAuthority, managedCloud = false}) {
+export async function readEpochDeviceIdentity({query, scope, directory, readBudget, readAuthority, managedCloud = false, authorityPerConnection = false}) {
   // The diagnostic rechecks daemon authority after both ADB sockets close.
   const wireBudgetMs = managedCloud ? 15_000 : 5_000;
   const timeoutMs = readBudget ? Math.min(wireBudgetMs, readBudget.deadlineMs - Date.now()) : wireBudgetMs;
   need(timeoutMs > 0, 'EPOCH_ADMISSION_DEADLINE');
-  const result = await runDiagnostic({query, scope, directory, timeoutMs, readAuthority});
+  const result = await runDiagnostic({query, scope, directory, timeoutMs, readAuthority, authorityPerConnection});
   need(result.wire_complete, 'EPOCH_DEVICE_IDENTITY');
   const proof = readDiagnosticProof(result);
   need(proof.stderr.length === 0, 'EPOCH_DEVICE_IDENTITY');
@@ -237,7 +237,7 @@ export async function canAuthorizeNativeFrame({root,env,frozen,readBudget,includ
   const scope={endpoint:record.new_route.endpoint,serial:transportSerial,maintenance_task_id:p.task_id};
   const readDeviceIdentity=async(query,label)=>{
    const out=join(directory,label);mkdirSync(out,{mode:0o700});
-   return readEpochDeviceIdentity({query,scope,directory:out,readBudget,managedCloud:clean || cloud,readAuthority:async()=>{
+   return readEpochDeviceIdentity({query,scope,directory:out,readBudget,managedCloud:clean || cloud,authorityPerConnection:clean && query==='hardware_serial',readAuthority:async()=>{
     await readDaemon(record.new_route);
     need(initial.central.locked_by===p.task_id&&initial.central.expired!==true,'EPOCH_BUSINESS_CENTRAL');
     return {scope,lease_until:initial.central.expires_at};
