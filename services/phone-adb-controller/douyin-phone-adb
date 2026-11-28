@@ -825,6 +825,7 @@ _leave_scratch_route() {
           wait_ms 300
           fg="$(foreground_package)"
           [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || return 1
+          [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".detail.ui.DetailActivity" || return 1
           "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null 2>&1 || return 1
           wait_ms 600
           xml="$EVIDENCE_ROOT/${eid}-guide-dismiss-b${i}.xml"
@@ -937,7 +938,7 @@ PY
 nonce_sdk31_input() {
   # 子shell隔离原IME与EXIT trap；任何异常也尝试还原，还原失败不能放行。
   (
-    local nonce="$1" eid="$2" b64 enable_out
+    local nonce="$1" eid="$2" strict="${3:-}" b64 enable_out
     require_held_lock clipboard_nonce
     require_target_for clipboard_nonce
     ui_evidence "${eid}-seed-ready" >/dev/null || die "CLIPBOARD_NONCE_READY_UNAVAILABLE"
@@ -953,8 +954,10 @@ nonce_sdk31_input() {
     [[ "$(current_ime)" == "$ADBKEYBOARD_IME" ]] || die "CLIPBOARD_NONCE_IME_SET_UNVERIFIED"
     ui_evidence "${eid}-seed-ime-ready" >/dev/null || die "CLIPBOARD_NONCE_READY_UNAVAILABLE"
     nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-ime-ready.xml" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_UNVERIFIED"
+    [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH:ime-ready"
     b64="$(print -rn -- "$nonce" | /usr/bin/base64 | tr -d '\n')"
     "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null || die "CLIPBOARD_NONCE_INPUT_CLEAR_FAILED"
+    [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH:ime-cleared"
     "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$b64" >/dev/null || die "CLIPBOARD_NONCE_INPUT_FAILED"
     wait_ms 300
     ti_restore_ime || die "CLIPBOARD_NONCE_IME_RESTORE_FAILED"
@@ -1016,7 +1019,7 @@ seed_clipboard_nonce_once() {
   [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH"
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_FAILED"
   if [[ ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 34 ) ]]; then
-    nonce_sdk31_input "$nonce" "$eid" || die "CLIPBOARD_NONCE_INPUT_FAILED"
+    nonce_sdk31_input "$nonce" "$eid" "$strict" || die "CLIPBOARD_NONCE_INPUT_FAILED"
   else
     # SDK33+原有路径保留；退出成功仍必须有下面的精确UI读回。
     "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
