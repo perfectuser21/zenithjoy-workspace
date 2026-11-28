@@ -12090,6 +12090,33 @@ tests:
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
     note: "独立采集只领取真实来源并按同一事务恢复"
 
+  - id: phone-standalone-102-formal-tools
+    path: services/phone-adb-controller/__tests__/standalone-102-formal-tools.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "同一轻盈 IPC 的五个 102 正式活动工具与证据交接"
+
+  - id: phone-standalone-comment-observer
+    path: services/phone-adb-controller/__tests__/standalone-comment-observer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "按采集 Skill 的原生评论面板与详情页顺序取得链接"
+
+  - id: phone-standalone-qualified-pg
+    path: services/phone-adb-controller/__tests__/standalone-qualified-pg.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    execution: ci-l3-code.yml / openclaw-scripts-test / node --test services/phone-adb-controller/__tests__/*.test.mjs
+    note: "隔离 scratch PostgreSQL 验证资格提交、读回和重放幂等"
+
   - id: phone-standalone-video-author
     path: services/phone-adb-controller/__tests__/standalone-video-author.test.mjs
     type: integration
