@@ -326,7 +326,11 @@ PYSHARE
 _foreground_is_exact_douyin() {
   "$PYTHON_BIN" - "$1" "$DOUYIN_PACKAGE" "${2:-}" <<'PYFOCUS'
 import re,sys
-focus, package, required_activity = sys.argv[1:]
+# The existing native read-only UI step invokes this body with two arguments.
+if len(sys.argv) not in (3, 4):
+    sys.exit(1)
+focus, package = sys.argv[1:3]
+required_activity = sys.argv[3] if len(sys.argv) == 4 else ''
 components = re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)', focus)
 if len(components) != 1 or components[0][0] != package:
     sys.exit(1)
