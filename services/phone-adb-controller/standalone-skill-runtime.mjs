@@ -50,7 +50,11 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
    if(beforeCommand)await beforeCommand(cleanup);
    const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
    if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
-   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,remaining)});
+   let env=environment;
+   if(playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op))
+    env={...env,DOUYIN_DETAIL_PLAYBACK:playback};
+   if(op==='open-video')env={...env,DOUYIN_MANAGED_VIDEO_OPEN:'1'};
+   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env,timeoutMs:Math.min(360000,remaining)});
    if(op==='detail-restored'&&result.code===1&&result.stdout.trim()==='detail_restored=0')return result;
    if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code,diagnostic:{stdout:safeExecutionDiagnostic(result.stdout,environment).slice(-4000),stderr:safeExecutionDiagnostic(result.stderr,environment).slice(-4000)}});return result;
   };

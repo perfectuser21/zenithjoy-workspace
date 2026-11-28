@@ -184,7 +184,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
   const {line,run_tag:run,source_run:origin,profile,serial,expected_account:account,company}=scope;
   checkSource({op:'collect_claim',line,run,source_run:null,committed_origin_run:origin,limit:1},scope);
   let verifiedAccount=false, binding=null, owned=null, verifiedVideo=false, recording=null, busy=false, claimInDoubt=false;
-  const evidenceIds=new Set(),returnedEvidenceIds=new Set(),qualificationReceipts=new Map(),fetchedArtifacts=new Map();
+  const evidenceIds=new Set(),returnedEvidenceIds=new Set(),observationFiles=new Set(),qualificationReceipts=new Map(),fetchedArtifacts=new Map();
   let accountNavigation=null, openedApp=false, reviewedVideo=null, openedReviewVideo=null, verifiedReviewVideo=false, authorProof=null, reviewedDigest=null;
   let deviceReady=!readDeviceContext;
   let asrAttempted=false, submitted=false, qualificationInput, qualified=false;
@@ -387,6 +387,22 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
     const playback=!qualified&&['open-video',links].includes(command)?'continuous_identity':undefined;
     const verifyAccountOnly=command===accountCommand&&accountNavigation?.state==='tapped';
     const result=await phone({command,args:argv,profile,owner:run,playback,verifyAccountOnly});
+    if(command==='open-video'){
+      const lines=String(result.stdout).split('\n');
+      const status=lines.filter(line=>line.startsWith('video_open_status='));
+      if(status.length>0){
+        const observationFile=args[1]+'-video-observation.png';
+        const evidence=lines.filter(line=>line.startsWith('evidence='));
+        if(status.length!==1||status[0]!=='video_open_status=visual_required'
+          ||evidence.length!==1||evidence[0]!=='evidence='+join(evidenceRoot,observationFile)
+          ||lines.some(line=>/^(video_opened|video_id)=/.test(line)))fail('VIDEO_OBSERVATION');
+        observationFiles.add(observationFile);
+        if(!owned)openedReviewVideo=reviewedVideo;
+        return {...result,video_open_status:'visual_required',observation_file:observationFile,
+          next_action:'用 fetch-native 读取本次截图。看到视频详情时，再用新的证据 ID 调用 current-video-link 核对授权视频身份。画面无法判断时说明具体原因并结束本次尝试。'};
+      }
+      if(!owned)openedReviewVideo=reviewedVideo;
+    }
     for(const arg of args)if(command!=='back-evidence'&&evidenceIds.has(arg))returnedEvidenceIds.add(arg);
     if(command==='open-app')openedApp=true;
     if(command==='snapshot-evidence'&&!owned&&accountNavigation?.state==='needs_snapshot'){
@@ -408,7 +424,6 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       verifiedAccount=projectFields(result.stdout).douyin_id===account;
       if(!verifiedAccount)fail('ACCOUNT');
     }
-    if(command==='open-video'&&!owned)openedReviewVideo=reviewedVideo;
     if(command===links) {
       const fields=projectFields(result.stdout);
       const matched=fields.video_id===(owned?.video_id??reviewedVideo)&&fields.content_type==='video';
@@ -475,7 +490,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
           result=publishStandaloneQualificationProof({input,runDirectory,runIdentity,videoId:verifiedVideo&&owned?.video_id,recording,qualificationReceipts,fetchedArtifacts});
           publishedProof=result.proof_manifest;
         } else if(kind==='fetch-native'&&activityPlaybook&&runDirectory) {
-          result=fetchStandaloneNativeEvidence({input,evidenceRoot,runDirectory,startSeconds:scope.run_start_ts,returnedEvidenceIds});
+          result=fetchStandaloneNativeEvidence({input,evidenceRoot,runDirectory,startSeconds:scope.run_start_ts,returnedEvidenceIds,observationFiles});
           fetchedArtifacts.set(join(runDirectory,result.path),result.sha256);
         } else if(kind==='phone'&&Object.keys(input??{}).sort().join(',')==='args,command'){
           result=await performPhone(input.command,input.args);

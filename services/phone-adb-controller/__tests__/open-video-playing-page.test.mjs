@@ -50,7 +50,7 @@ else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.ar
 });
 
 // 实际控制器CLI；只在临时副本替换既有等待函数，业务函数与守卫字节保持。
-function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
+function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,screenshotFails=false,screenshotEmpty=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
   const dir=mkdtempSync(join(tmpdir(),'paused-detail-idle-'));
   try {
     const source=readFileSync(script,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
@@ -61,6 +61,17 @@ function pausedIdle({command='open-video',policy='paused-detail',error='idle',wr
     writeFileSync(join(dir,'adb-existing-route.py'),readFileSync(new URL('../adb-existing-route.py',import.meta.url)));
     writeFileSync(join(dir,'comment-count-evidence.py'),readFileSync(new URL('../comment-count-evidence.py',import.meta.url)));
     writeFileSync(join(dir,'registry.tsv'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
+    if(managedOpen){
+      const png=spawnSync(pythonBin,['-c',`import struct, sys, zlib
+width,height=1201,2665
+def chunk(kind,data):
+    return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data))
+image=chunk(b'IHDR',struct.pack('>IIBBBBB',width,height,8,0,0,0,0))
+image+=chunk(b'IDAT',zlib.compress(bytes((width+1)*height)))
+sys.stdout.buffer.write(b'\\x89PNG\\r\\n\\x1a\\n'+image+chunk(b'IEND',b''))`]);
+      assert.equal(png.status,0,png.stderr.toString());
+      writeFileSync(join(dir,'screenshot.png'),png.stdout);
+    }
     writeFileSync(join(dir,'state.json'),JSON.stringify({play:command==='wave'?'paused':'playing',toggled:false,dumps:0,toggles:0,page:shareOverlay?'share':'detail'}));
     const panel='<hierarchy><node package="com.ss.android.ugc.aweme" text="23条评论"/><node package="com.ss.android.ugc.aweme" class="android.widget.EditText" text="发条评论"/></hierarchy>';
     writeFileSync(join(dir,'panel.xml'),panel);
@@ -80,6 +91,7 @@ else if(has('am start'))s.play='playing';
 else if(has('input keyevent 4')){if(${overlayBackFails})process.exit(9);s.backDone=true;if(!${overlayStuck})s.page='detail';}
 else if(has('input keyevent 127')){if(${pauseFails})process.exit(9);s.play='paused';s.pauseDone=true;}
 else if(has('input keyevent 126'))s.play='playing';
+else if(has('shell screencap -p')&&${screenshotFails})process.exit(1);
 else if(has('input keyevent 85')){s.toggles++;save();if(s.toggles===${toggleFails})process.exit(9);s.toggled=!s.toggled;s.play=s.toggled?'playing':'paused';}
 else if(has('input tap')){if(${gateDismiss}){s.dismissed=true;s.page='detail';s.play='playing';}else s.page='panel';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
@@ -88,7 +100,12 @@ else if(has('uiautomator dump')){s.dumps++;save();
  else if(s.page==='panel'){fs.writeFileSync(p.join(d,'remote.xml'),${panelFails}?'<hierarchy><node package="com.ss.android.ugc.aweme" text="unrelated"/></hierarchy>':fs.readFileSync(p.join(d,'panel.xml')));}
  else if((s.toggled&&!${fallbackFails})||${freshOnFirst}||(${JSON.stringify(error)}==='nonidle'&&s.dumps%3===0)){if(${gateDismiss}&&!s.dismissed)fs.writeFileSync(p.join(d,'remote.xml'),'<hierarchy><node package="com.ss.android.ugc.aweme" text="关闭" clickable="true" bounds="[10,10][110,110]"/></hierarchy>');else fs.copyFileSync(p.join(d,'detail.xml'),p.join(d,'remote.xml'));if(${freshOnFirst}){console.error('ERROR: could not get idle state');process.exit(1);}}
  else {console.error(${JSON.stringify(error)}==='idle'?'ERROR: could not get idle state':'ERROR: transport unavailable');process.exit(1);}
-}else if(has('exec-out screencap'))process.stdout.write('fixture-image');
+}else if(has('exec-out screencap')){
+ if(${screenshotFails})process.exit(1);
+ if(!${screenshotEmpty}){
+  process.stdout.write(${managedOpen}?fs.readFileSync(p.join(d,'screenshot.png')):'fixture-image');
+ }
+}
 else if(has('stat -c %s')){
  if(${androidStat}&&!fs.existsSync(p.join(d,'remote.xml'))){if(${JSON.stringify(statError)}==='numeric_failure'){console.log('0');process.exit(1);}console.error(${JSON.stringify(statError)}==='enoent'?"stat: '"+a[a.length-1]+"': No such file or directory":'stat: Permission denied');process.exit(1);}
  console.log(${unknownStat}?'unknown':fs.existsSync(p.join(d,'remote.xml'))?fs.statSync(p.join(d,'remote.xml')).size:0);
@@ -103,7 +120,7 @@ save();
     const evidence=join(dir,'evidence');mkdirSync(evidence,{recursive:true});
     if(stale){writeFileSync(join(evidence,'read.xml'),detail);writeFileSync(join(dir,'remote.xml'),detail);}
     const key=join(dir,'fixture-key');writeFileSync(key,'FIXTURE_ONLY=1\n');const locator=join(dir,'locate.py');writeFileSync(locator,`import os\nwith open(os.path.join(os.environ['FAKE_PHONE_DIR'],'calls'),'a') as f:f.write('LOCATE\\n')\nprint('1100 1600')\n`);
-    const env={...process.env,HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),...phoneLockFixtureEnv(join(dir,'registry.tsv'),join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
+    const env={...process.env,...(managedOpen?{DOUYIN_MANAGED_VIDEO_OPEN:'1'}:{}),HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),...phoneLockFixtureEnv(join(dir,'registry.tsv'),join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
     let args=[runner,'--profile','legacy',command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
     if(command==='wave'){
       const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];
@@ -120,6 +137,39 @@ test('open-video两次本命令暂停取证首idle即85成对兜底，仍两张�
   const r=pausedIdle();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/video_opened=1/);
   assert.equal(r.state.dumps,4,'两个局部阶段各首次失败+一次新鲜兜底，不再各失败3次');
   assert.equal(r.state.toggles,4);assert.equal(r.state.play,'playing');
+});
+test('受管 Agent 打开视频无新树时交回截图，且不把视频标为已核验',()=>{
+  const result=pausedIdle({managedOpen:true,androidStat:true,fallbackFails:true,policy:'continuous_identity'});
+  assert.equal(result.status,0,result.stderr+'\n'+result.calls);
+  assert.match(result.stdout,/^video_open_status=visual_required$/m);
+  assert.doesNotMatch(result.stdout,/^(video_opened|video_id)=/m);
+  assert.match(result.stdout,/^evidence=.*-video-observation\.png$/m);
+  assert.match(result.calls,/exec-out screencap -p/);
+  assert.doesNotMatch(result.calls,/input tap|input keyevent 126/);
+  assert.equal(result.state.dumps,1,'一次读树后交回截图');
+});
+test('受管 Agent 的截图失败不能用读回的旧截图交接',()=>{
+  const result=pausedIdle({managedOpen:true,androidStat:true,fallbackFails:true,screenshotFails:true,policy:'continuous_identity'});
+  assert.notEqual(result.status,0);
+  assert.doesNotMatch(result.stdout,/visual_required|video_opened=1/);
+  assert.doesNotMatch(result.calls,/pull [^\n]+-shot-legacy\.png/);
+});
+test('受管 Agent 收到退出 0 但没有新截图时禁止交出画面',()=>{
+  const result=pausedIdle({managedOpen:true,androidStat:true,fallbackFails:true,screenshotEmpty:true,policy:'continuous_identity'});
+  assert.notEqual(result.status,0);
+  assert.doesNotMatch(result.stdout,/visual_required|video_opened=1/);
+});
+test('受管 Agent 对相似包名在前台时不发送媒体键',()=>{
+  const result=pausedIdle({managedOpen:true,wrongFocus:true,policy:'continuous_identity'});
+  assert.notEqual(result.status,0);
+  assert.doesNotMatch(result.calls,/input keyevent 127|screencap/);
+});
+test('受管 Agent 得到可信详情树时正常返回页状态',()=>{
+  const result=pausedIdle({managedOpen:true,freshOnFirst:true,policy:'continuous_identity'});
+  assert.equal(result.status,0,result.stderr);
+  assert.equal(result.state.dumps,1);
+  assert.match(result.stdout,/^video_opened=1$/m);
+  assert.doesNotMatch(result.stdout,/visual_required/);
 });
 test('open-comments先本命令PAUSE取新详情，首idle兜底且面板另读新树',()=>{
   const r=pausedIdle({command:'open-comments'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/comments_opened=1/);

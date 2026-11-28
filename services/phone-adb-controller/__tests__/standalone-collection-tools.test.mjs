@@ -59,10 +59,16 @@ test('102 未确认账号不领单，打开及录制只允许原批次实际领�
   const effects=[];
   const tools=createStandaloneCollectionTools({
     scope:{...scope,profile:'bound-phone',serial:'fixture-phone',expected_account:'bound-account'},
+    evidenceRoot:'/native',
     assertAuthority:async()=>{},
     async phone({command,args}) {
       effects.push({command,args});
-      return {stdout:command==='account-current'?'douyin_id=bound-account\n':command==='current-video-link'?(`content_type=video\nvideo_id=${videoId}\n`):''};
+      const responses={
+        'account-current':'douyin_id=bound-account\n',
+        'current-video-link':`content_type=video\nvideo_id=${videoId}\n`,
+        'open-video':'video_open_status=visual_required\nevidence=/native/102-direct-open-video-observation.png\n',
+      };
+      return {stdout:responses[command]??''};
     },
     async rpc({request}) {
       effects.push({op:request.op});
@@ -80,13 +86,33 @@ test('102 未确认账号不领单，打开及录制只允许原批次实际领�
   await business('company_config');
   await business('collect_claim');
   await assert.rejects(phone('open-video',['2222222222222222222',eid]),/STANDALONE_COLLECTION_VIDEO_SCOPE/);
-  await phone('open-video',[videoId,eid]);
+  const observation=await phone('open-video',[videoId,eid]);
+  assert.equal(observation.video_open_status,'visual_required');
+  assert.equal(observation.observation_file,eid+'-video-observation.png');
+  assert.match(observation.next_action,/fetch-native.*current-video-link/);
   await assert.rejects(phone('record-start',[run+'-capture',90,videoId]),/STANDALONE_COLLECTION_VIDEO_UNVERIFIED/);
   await phone('current-video-link',[run+'-link']);
   await phone('record-start',[run+'-capture',90,videoId]);
   assert.deepEqual(effects.map(effect=>effect.command??effect.op),[
     'open-app','account-current','company_config','collect_claim','open-video','current-video-link','record-start',
   ]);
+});
+
+test('视频观察图需要精确的同轮回执，较短证据 ID 不能借前缀授权',async()=>{
+  const {fetchStandaloneNativeEvidence}=await import('../standalone-native-evidence.mjs');
+  const {mkdtempSync,realpathSync,writeFileSync,rmSync}=await import('node:fs');
+  const {tmpdir}=await import('node:os');
+  const {join}=await import('node:path');
+  const root=mkdtempSync(join(realpathSync(tmpdir()),'direct-102-observation-'));
+  const file=run+'-open-child-video-observation.png';
+  try {
+    writeFileSync(join(root,file),'native bytes',{mode:0o600});
+    const input={args:[file]},returnedEvidenceIds=new Set([run+'-open']),observationFiles=new Set();
+    const request={input,evidenceRoot:root,runDirectory:root,startSeconds:0,returnedEvidenceIds,observationFiles};
+    assert.throws(()=>fetchStandaloneNativeEvidence(request),/STANDALONE_COLLECTION_NATIVE_FILE_SCOPE/);
+    observationFiles.add(file);
+    assert.equal(fetchStandaloneNativeEvidence({...request,returnedEvidenceIds:new Set()}).path,'native/'+file);
+  } finally {rmSync(root,{recursive:true,force:true});}
 });
 
 test('102 只从本轮已停止、带原生播放佐证的音频生成转写',async()=>{
