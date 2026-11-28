@@ -40,3 +40,16 @@ m.guarded()
 `;const env={...process.env};delete env.DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS;
  for(const [args,cap]of [[argv,360],[[...argv.slice(0,6),'close-app'],280],[argv.slice(0,-1),280],[[...argv,'extra'],280],[argv.map((v,i)=>i===5?'':v),280]]){const r=spawnSync('/usr/bin/python3',['-c',program,helper,JSON.stringify(args),join(root,'SER1.guard')],{encoding:'utf8',timeout:10000,env});assert.equal(r.status,0,r.stderr);const x=JSON.parse(r.stdout);assert.deepEqual(x.argv,args);assert.equal(x.budget,cap);assert.equal(x.owner,args[5]);assert.equal(x.owner_path,join(root,'SER1.lock/owner'));}
  }finally{rmSync(root,{recursive:true,force:true});}});
+
+test('guarded interactive account verification completes at 300s without expanding ordinary operations',()=>{
+ const owner='dd9fd7d9-903e-4a0f-835e-4591091e65e1';
+ const managed=['/bin/zsh',ctl,'--profile','wuying_android14','--lock-owner',owner,'account-current',owner+'-account','--single-dump'];
+ for(const mode of ['--single-dump','--verify-own-profile']){
+  const result=simulated([...managed.slice(0,-1),mode]);
+  assert.deepEqual({code:result.code,elapsed:result.elapsed,killed:result.killed},{code:0,elapsed:300,killed:false});
+ }
+ assert.equal(simulated(managed,'341').code,2);
+ for(const args of [managed.slice(0,-1),[...managed,'extra'],managed.map((arg,i)=>i===8?'--other':arg),managed.map((arg,i)=>i===5?'broken':arg),managed.map((arg,i)=>i===7?'another-run':arg)]){
+  assert.equal(simulated(args,'281').code,2);
+ }
+});
