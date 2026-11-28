@@ -8,7 +8,7 @@
         "key": "preflight",
         "order": 1,
         "budget": {
-          "max_duration_s": 600,
+          "max_duration_s": 900,
           "heartbeat_s": 60
         },
         "acceptance": {
@@ -16,7 +16,7 @@
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "product-map/contracts/douyin_video_processing.yaml",
             "activity_ref": "douyin_video_processing.preflight",
-            "contract_digest": "4ab50bb428bd42c8488089360fdd1e11f7b81b7181f91af350894c8dbe043244"
+            "contract_digest": "3add79826b10eab48ff2cf564377c7d74ab5a179edb818adbe3b8e1e85d30811"
           },
           "document": {
             "key": "preflight",
@@ -33,7 +33,7 @@
               "current_skill_verified": false
             },
             "order": 1,
-            "version": "2.6.3",
+            "version": "2.6.4",
             "required_host_tools": [
               "phone",
               "brain",
@@ -285,7 +285,7 @@
               "via": "Foundation独立执行Agent按固定Activity Skill services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md 执行；底座worker仅协议bootstrap，验收由独立通用Checker依据同一冻结Contract取证。"
             },
             "budget": {
-              "max_duration_s": 600,
+              "max_duration_s": 900,
               "heartbeat_s": 60
             },
             "resources": {
@@ -2563,8 +2563,8 @@
         "services/phone-adb-controller/leadgen-foundation/worker.mjs"
       ],
       "method_repository": "perfectuser21/zenithjoy-skills",
-      "method_revision": "f5826add7a58311519c7968996107cffabbaf329",
-      "contract_sha256": "4a273f7438274b4638fd7440b284b3bb63048d26851d6ba89e80e1f28765ad5d",
+      "method_revision": "cbae106696230b5f450cededaef1de5842456e1d",
+      "contract_sha256": "a97c6cbb7c9a5d09f9b56fcf0831cb272dd93ebe998269d19663e46d6021d10e",
       "checker_policy": "workflow_preflight_once"
     },
     "skill_runtime": {
@@ -2731,7 +2731,7 @@
       "services/phone-adb-controller/package.json": "f781baf17c650d3ebe37fd59245181861671b93d517260366609f02c25161cc8",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md": "668731795369b7e16a04b0d5492665a9e9669addb8619210cfe841f6b6f28627",
       "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md": "f7a147873900216136fdaa7d5582c56d53ac54bc9c00b06ea08401f3af52443d",
-      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "70aa4944a4ffdc90c650bfc999f18c54ab0fadc598e875508931cd4ce442856f"
+      "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md": "bfe169cd127363ef96868aaa31297ed449a668af95649ac80c613b5a3ca10ac5"
     }
   }
 }
