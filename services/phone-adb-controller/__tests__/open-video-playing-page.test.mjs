@@ -50,7 +50,7 @@ else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.ar
 });
 
 // 实际控制器CLI；只在临时副本替换既有等待函数，业务函数与守卫字节保持。
-function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,screenshotFails=false,screenshotEmpty=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
+function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,managedOpen=false,screenshotFails=false,screenshotEmpty=false,screenshotMalformed=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent',shareOverlay=false,overlayUnknown=false,overlayForeign=false,overlayStuck=false,overlayBackFails=false,overlayFocusAfterBack=false,overlayMissingPackage=false}={}) {
   const dir=mkdtempSync(join(tmpdir(),'paused-detail-idle-'));
   try {
     const source=readFileSync(script,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
@@ -103,7 +103,8 @@ else if(has('uiautomator dump')){s.dumps++;save();
 }else if(has('exec-out screencap')){
  if(${screenshotFails})process.exit(1);
  if(!${screenshotEmpty}){
-  process.stdout.write(${managedOpen}?fs.readFileSync(p.join(d,'screenshot.png')):'fixture-image');
+  if(${screenshotMalformed})process.stdout.write(Buffer.from('89504e470d0a1a0a0000000d49484452000004b100000a690000000049454e44ae426082','hex'));
+  else process.stdout.write(${managedOpen}?fs.readFileSync(p.join(d,'screenshot.png')):'fixture-image');
  }
 }
 else if(has('stat -c %s')){
@@ -159,6 +160,11 @@ test('受管 Agent 收到退出 0 但没有新截图时禁止交出画面',()=>{
   assert.notEqual(result.status,0);
   assert.doesNotMatch(result.stdout,/visual_required|video_opened=1/);
 });
+test('受管 Agent 拒绝只有 PNG 首尾标记、没有图像像素的响应',()=>{
+  const result=pausedIdle({managedOpen:true,androidStat:true,fallbackFails:true,screenshotMalformed:true,policy:'continuous_identity'});
+  assert.notEqual(result.status,0);
+  assert.doesNotMatch(result.stdout,/visual_required|video_opened=1/);
+});
 test('受管 Agent 对相似包名在前台时不发送媒体键',()=>{
   const result=pausedIdle({managedOpen:true,wrongFocus:true,policy:'continuous_identity'});
   assert.notEqual(result.status,0);
@@ -170,6 +176,13 @@ test('受管 Agent 得到可信详情树时正常返回页状态',()=>{
   assert.equal(result.state.dumps,1);
   assert.match(result.stdout,/^video_opened=1$/m);
   assert.doesNotMatch(result.stdout,/visual_required/);
+});
+test('受管 Agent 读到抖音自己的浮层时交还画面，不自动点击',()=>{
+  const result=pausedIdle({managedOpen:true,freshOnFirst:true,gateDismiss:true,policy:'continuous_identity'});
+  assert.equal(result.status,0,result.stderr);
+  assert.equal(result.state.dumps,1);
+  assert.match(result.stdout,/^video_open_status=visual_required$/m);
+  assert.doesNotMatch(result.calls,/input tap|input keyevent 4/);
 });
 test('open-comments先本命令PAUSE取新详情，首idle兜底且面板另读新树',()=>{
   const r=pausedIdle({command:'open-comments'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/comments_opened=1/);
