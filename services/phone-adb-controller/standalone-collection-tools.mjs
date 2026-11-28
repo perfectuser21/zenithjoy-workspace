@@ -1,7 +1,10 @@
-import {constants,closeSync,fstatSync,openSync,readFileSync,realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {createRequire} from 'node:module';
+import {fetchStandaloneNativeEvidence,publishStandaloneQualificationProof,withStandaloneQualificationReceipt} from './standalone-native-evidence.mjs';
+import {createStandaloneQualificationPreparation,createStandaloneQualificationSubmission,prepareStandaloneCollectionAudio,reviewStandalonePreparedDecision,standaloneQualificationDecisionId} from './standalone-qualification-preparation.mjs';
+export {prepareStandaloneCollectionAudio};
+import {standaloneCollectionHandoff,readCommittedCollection,createCollectionEvidenceReceipt,createCollectionDeviceReader,collectionHostToolInputs} from './standalone-collection-handoff.mjs';
 import {checkSource,observedOrigin} from './standalone-collection-origin.mjs';
 export {readStandaloneCollectionSource} from './standalone-collection-origin.mjs';
 
@@ -102,23 +105,35 @@ export async function readStandaloneCollectionPolicy(pool,request,scope){
 
 export async function recordStandaloneCollectionQualification(pool,request,scope){
   checkSource(request,scope,'qualification_submit');
-  const transcript=request.transcript;
+  const authority=scope.qualification_authority;
+  let formal;
+  if(authority){
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(request.submission_action_name??'')
+      ||request.submission_action_name===request.proposal?.preparation_action_name)fail('SUBMIT_SCOPE');
+    formal=reviewStandalonePreparedDecision({...authority,videoId:request.video_id,audio:request.audio_path,
+      preparationSha:request.preparation_sha256,proposal:request.proposal});
+    if(standaloneQualificationDecisionId(formal,request.submission_action_name)!==request.decision_sha256)fail('SUBMIT_EVIDENCE');
+  }
+  const {transcript,audio_sha256:audioSha,duration_seconds:duration,policy_sha256:policySha}=formal??request;
   if(typeof transcript!=='string'||!transcript.trim()||Buffer.byteLength(transcript)>256*1024
-    ||!/^[a-f0-9]{64}$/.test(request.audio_sha256??'')||!Number.isFinite(request.duration_seconds)
-    ||request.duration_seconds<1||request.duration_seconds>185)fail('RECORDING_PROOF');
+    ||!/^[a-f0-9]{64}$/.test(audioSha??'')||!Number.isFinite(duration)
+    ||duration<1||duration>185)fail('RECORDING_PROOF');
   const client=await pool.connect();
   try {
     await client.query('BEGIN');
     const {row,policy,snapshot}=await ownedQualification(client,request,scope,{lock:true});
-    if(request.policy_sha256!==sha(policy))fail('QUALIFICATION_POLICY_CHANGED');
-    const vote=reviewStandaloneCollectionQuote(request.proposal,{policy,transcript});
+    if(policySha!==sha(policy))fail('QUALIFICATION_POLICY_CHANGED');
+    const vote=formal??reviewStandaloneCollectionQuote(request.proposal,{policy,transcript});
     const evidence={...require('./judge-video.js').configEvidence(snapshot,scope.run_tag),source_101_run:scope.source_run,
-      actor:'codex',audio_sha256:request.audio_sha256,transcript_sha256:sha(transcript),policy_sha256:request.policy_sha256,
-      duration_seconds:request.duration_seconds,quote:vote.quote,policy_quote:vote.policy_quote,
-      verdict_sha256:sha(JSON.stringify(vote))};
+      actor:'codex',audio_sha256:audioSha,transcript_sha256:sha(transcript),policy_sha256:policySha,
+      duration_seconds:duration,quote:vote.quote,
+      ...(formal?{qualification_agent:{...formal.provenance,submission_action_name:request.submission_action_name,
+        decision_sha256:request.decision_sha256}}:{policy_quote:vote.policy_quote}),
+      verdict_sha256:formal?request.decision_sha256:sha(JSON.stringify(vote))};
     if(row.judgment_config?.run_id===scope.run_tag){
       if(row.judgment_config.verdict_sha256!==evidence.verdict_sha256||row.judgment_config.audio_sha256!==evidence.audio_sha256
-        ||row.judgment_status!==vote.verdict||row.transcript!==transcript)fail('QUALIFICATION_CONFLICT');
+        ||row.judgment_status!==vote.verdict||row.transcript!==transcript
+        ||formal&&row.judgment_config.qualification_agent?.decision_sha256!==request.decision_sha256)fail('QUALIFICATION_CONFLICT');
     }else{
       const saved=await client.query(`UPDATE zenithjoy.leadgen_videos SET judgment_status=$2,judgment_reason=$3,
         transcript=$4,judgment_config=$5::jsonb,updated_at=now()
@@ -127,7 +142,8 @@ export async function recordStandaloneCollectionQualification(pool,request,scope
         [row.id,vote.verdict,vote.reason,transcript,JSON.stringify(evidence),scope.run_tag,'处理中:'+scope.run_tag]);
       const actual=saved.rows[0];
       if(saved.rowCount!==1||actual.video_id!==row.video_id||actual.judgment_status!==vote.verdict
-        ||actual.transcript!==transcript||actual.judgment_config?.audio_sha256!==evidence.audio_sha256)fail('QUALIFICATION_WRITE');
+        ||actual.transcript!==transcript||actual.judgment_config?.audio_sha256!==evidence.audio_sha256
+        ||formal&&actual.judgment_config.qualification_agent?.decision_sha256!==request.decision_sha256)fail('QUALIFICATION_WRITE');
     }
     await client.query('COMMIT');
     return {verified:true,video_id:row.video_id,verdict:vote.verdict,policy_sha256:evidence.policy_sha256};
@@ -155,46 +171,6 @@ export async function readStandaloneCollectionComment(pool,request,scope){
   return {verified:true,comment_id:result.id,video_id:row.video_id};
 }
 
-function nativeFields(output,marker){
-  const lines=String(output).split('\n').filter(line=>line.startsWith(marker+' '));
-  if(lines.length!==1)return {};
-  return Object.fromEntries([...lines[0].matchAll(/(?:^| )([a-z0-9_]+)=([^ ]+)/g)]
-    .map(([,key,value])=>[key,value]));
-}
-function verifiedWav(path){
-  let fd;
-  try {
-    fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
-    const stat=fstatSync(fd);
-    if(!stat.isFile()||stat.size<1000||stat.size>16*1024*1024||stat.mode&0o022
-      ||stat.uid!==process.getuid()||realpathSync(path)!==path)fail('AUDIO_FILE');
-    const bytes=readFileSync(fd),after=fstatSync(fd);
-    if(bytes.length!==stat.size||after.mtimeMs!==stat.mtimeMs||after.ctimeMs!==stat.ctimeMs
-      ||bytes.toString('ascii',0,4)!=='RIFF'||bytes.toString('ascii',8,12)!=='WAVE')fail('AUDIO_FILE');
-    return createHash('sha256').update(bytes).digest('hex');
-  } catch {
-    fail('AUDIO_FILE');
-  } finally {
-    if(fd!==undefined)closeSync(fd);
-  }
-}
-
-export async function prepareStandaloneCollectionAudio({evidenceRoot,recordingId,stoppedOutput,audioOutput,transcribe}){
-  const stopped=nativeFields(stoppedOutput,'record_stopped');
-  if(!(Number(stopped.audio_streams)>0)||stopped.playback_restored!=='true'||stopped.playback_proof_kind!=='native_audio'
-    ||!Number.isFinite(Number(stopped.mean_volume_db))||Number(stopped.mean_volume_db)<=-80)fail('RECORDING_PROOF');
-  const audio=nativeFields(audioOutput,'audio_extracted'),duration=Number(audio.duration_seconds);
-  if(!tag.test(recordingId??'')||!evidenceRoot||realpathSync(evidenceRoot)!==evidenceRoot
-    ||audio.path!==join(evidenceRoot,recordingId+'.16k.wav')||audio.sample_rate!=='16000'||audio.channels!=='1'
-    ||!Number.isFinite(duration)||duration<1||duration>185)fail('AUDIO_FILE');
-  const hash=verifiedWav(audio.path);
-  if(typeof transcribe!=='function')fail('ASR_UNAVAILABLE');
-  const transcript=await transcribe(audio.path);
-  if(typeof transcript!=='string'||!transcript.trim()||Buffer.byteLength(transcript)>256*1024)fail('ASR_EMPTY');
-  if(verifiedWav(audio.path)!==hash)fail('AUDIO_CHANGED');
-  return {transcript,audio_sha256:hash,duration_seconds:duration};
-}
-
 const accountCommand = 'account-current';
 const links = 'current-video-link';
 const waitForRecord = new Set(['record-status','record-stop','record-extract-audio']);
@@ -204,15 +180,28 @@ const operations = ['company_config','collect_claim','qualification_input','qual
 const projectFields = stdout => Object.fromEntries(String(stdout).split('\n')
   .filter(line=>line.includes('=')).map(line=>[line.slice(0,line.indexOf('=')),line.slice(line.indexOf('=')+1)]));
 
-export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority,evidenceRoot,transcribe,commentObserver,activityPlaybook,readSourceHandoff,readAuthor,readDeviceContext}) {
+export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority,evidenceRoot,runDirectory,runIdentity,transcribe,verifyQualificationProof,commentObserver,activityPlaybook,readSourceHandoff,readAuthor,readDeviceContext,readCentralLease}) {
   const {line,run_tag:run,source_run:origin,profile,serial,expected_account:account,company}=scope;
   checkSource({op:'collect_claim',line,run,source_run:null,committed_origin_run:origin,limit:1},scope);
   let verifiedAccount=false, binding=null, owned=null, verifiedVideo=false, recording=null, busy=false, claimInDoubt=false;
-  const evidenceIds=new Set();
+  const evidenceIds=new Set(),returnedEvidenceIds=new Set(),qualificationReceipts=new Map(),fetchedArtifacts=new Map();
   let accountNavigation=null, openedApp=false, reviewedVideo=null, openedReviewVideo=null, verifiedReviewVideo=false, authorProof=null, reviewedDigest=null;
   let deviceReady=!readDeviceContext;
   let asrAttempted=false, submitted=false, qualificationInput, qualified=false;
   const preparedComments=new Map(),committedLookups=new Map(),pendingLookups=new Set();
+  let publishedProof,preparedQualification;
+  const prepare=runIdentity&&verifyQualificationProof?createStandaloneQualificationPreparation({
+    runDirectory,runIdentity,verifyProof:verifyQualificationProof,transcribe,
+    getPolicy:vid=>queue('qualification_policy',{video_id:vid,committed_origin_run:origin}),
+  }):null;
+  const submit=prepare?createStandaloneQualificationSubmission({runDirectory,runIdentity,scope,queue}):null;
+  const offeredOperations=prepare?operations.filter(op=>!['qualification_input','qualification_submit'].includes(op)):operations;
+  const readDevice=readDeviceContext?createCollectionDeviceReader(readDeviceContext,value=>{deviceReady=value;}):undefined;
+  const handoff=activityPlaybook&&runDirectory&&runIdentity?standaloneCollectionHandoff({runDirectory,runIdentity,scope,
+    readCentralLease,readDevice,
+    prepareComment:commentObserver?index=>performComments('prepare_comment',{index}):undefined,
+    readComments:()=>readOwnedComments(),
+  }):null;
 
   function evidence(id,{existing=false}={}) {
     if(typeof id!=='string'||!tag.test(id)||!id.startsWith(run+'-')||evidenceIds.has(id)!==existing)fail('EVIDENCE_ID');
@@ -248,7 +237,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         return {duplicate:true};
       }
       preparedComments.set(id,comment);
-      return {reference:id};
+      return handoff?createCollectionEvidenceReceipt({runDirectory,runIdentity,videoId:owned.video_id,id,comment,originals:result.originals}):{reference:id};
     }
     const reference=input.reference,comment=preparedComments.get(reference);
     if(!comment||committedLookups.size>=scope.comment_limit)fail('COMMENT_SCOPE');
@@ -398,6 +387,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
     const playback=!qualified&&['open-video',links].includes(command)?'continuous_identity':undefined;
     const verifyAccountOnly=command===accountCommand&&accountNavigation?.state==='tapped';
     const result=await phone({command,args,profile,owner:run,playback,verifyAccountOnly});
+    for(const arg of args)if(evidenceIds.has(arg))returnedEvidenceIds.add(arg);
     if(command==='open-app')openedApp=true;
     if(command==='snapshot-evidence'&&!owned&&accountNavigation?.state==='needs_snapshot'){
       accountNavigation={state:'needs_tap',snapshot:args[0]};
@@ -429,21 +419,23 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
       recording.stoppedOutput=result.stdout;
     }
     if(command==='record-extract-audio')recording.audioOutput=result.stdout;
-    return result;
+    return owned&&activityPlaybook&&runDirectory?withStandaloneQualificationReceipt({runDirectory,command,args,result,qualificationReceipts}):result;
   }
 
+  const readOwnedComments=()=>readCommittedCollection({owned,qualified,pendingLookups,committedLookups,readComment,scope});
   return {
     async readEvidence(){
       if(!owned||!qualified||!committedLookups.size||pendingLookups.size
         ||committedLookups.size!==scope.comment_limit)return null;
       await assertAuthority();
-      for(const [id,comment] of committedLookups){
-        const read=await readComment(comment);
-        if(read.verified!==true||read.comment_id!==id)return null;
+      try{
+        const result=await readOwnedComments();
+        await assertAuthority();
+        return result;
+      }catch(error){
+        if(error.code==='STANDALONE_COLLECTION_COMMENT_READBACK')return null;
+        throw error;
       }
-      await assertAuthority();
-      return {source_run:origin,video_id:owned.video_id,video_url:owned.video_url,comment_ids:[...committedLookups.keys()],
-        qualification:'matched',sample_target:scope.comment_limit,coverage:'sampled'};
     },
     async stopRecording(){
       if(recording&&!recording.stopped)await performPhone('record-stop',[recording.id]);
@@ -461,19 +453,31 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
         await assertAuthority();
         let result;
         if(kind==='inspect'&&readDeviceContext&&input?.view==='device_context'&&Object.keys(input).length===1) {
-          deviceReady=false;
-          result=await readDeviceContext();
-          const state=projectFields(result.device);
-          deviceReady=state.state==='device'&&state.call_state==='idle';
-          if(!deviceReady)fail('DEVICE_CONTEXT');
+          result=await readDevice({refresh:true});
         } else if(kind==='inspect'&&Object.keys(input??{}).length===0) {
-          result={stage:'102',source_run:origin,...(readDeviceContext?{inspect_views:['device_context']}:{}),phone_commands:[...commandList],business_operations:activityPlaybook?['collect_source_read',...(readAuthor?['collect_author_read']:[]),...operations]:[...operations],
+          const tools=['fetch-native',...(runIdentity?['proof']:[]),...(prepare?['qualify-prepare','qualify-submit']:[]),...(handoff?.tools??[])];
+          const activityTools={activity_tools:tools,activity_tool_inputs:Object.fromEntries(tools.map(key=>[key,collectionHostToolInputs[key]]))};
+          result={stage:'102',source_run:origin,...(activityPlaybook&&runDirectory?activityTools:{}),...(readDeviceContext?{inspect_views:['device_context']}:{}),phone_commands:[...commandList],business_operations:activityPlaybook?['collect_source_read',...(readAuthor?['collect_author_read']:[]),...offeredOperations]:[...offeredOperations],
             account_entry:'先 open-app 再 account-current；仅 visual_required 时按工具返回的 next_action 看截图、点「我」、再核验绑定账号。',
             ...(activityPlaybook?{activity_playbook:structuredClone(activityPlaybook),
               instructions:'执行本单前，先读取冻结的 Playbook 和方法清单，按清单顺序读取及执行对应的 Activity Skill。'}:{})};
+        } else if(handoff?.tools.includes(kind)) {
+          result=await handoff.call(kind,input);
+        } else if(kind==='qualify-prepare'&&prepare) {
+          result=await prepare(input,publishedProof,verifiedVideo&&owned?.video_id);
+          preparedQualification=result;
+        } else if(kind==='qualify-submit'&&submit) {
+          result=await submit(input,preparedQualification,verifiedVideo&&owned?.video_id);
+          qualified=result.verdict==='matched';
+        } else if(kind==='proof'&&activityPlaybook&&runDirectory&&runIdentity) {
+          result=publishStandaloneQualificationProof({input,runDirectory,runIdentity,videoId:verifiedVideo&&owned?.video_id,recording,qualificationReceipts,fetchedArtifacts});
+          publishedProof=result.proof_manifest;
+        } else if(kind==='fetch-native'&&activityPlaybook&&runDirectory) {
+          result=fetchStandaloneNativeEvidence({input,evidenceRoot,runDirectory,startSeconds:scope.run_start_ts,returnedEvidenceIds});
+          fetchedArtifacts.set(join(runDirectory,result.path),result.sha256);
         } else if(kind==='phone'&&Object.keys(input??{}).sort().join(',')==='args,command'){
           result=await performPhone(input.command,input.args);
-        } else if(kind==='business'&&(operations.includes(input?.operation)||activityPlaybook&&input?.operation==='collect_source_read'||readAuthor&&input?.operation==='collect_author_read')){
+        } else if(kind==='business'&&(offeredOperations.includes(input?.operation)||activityPlaybook&&input?.operation==='collect_source_read'||readAuthor&&input?.operation==='collect_author_read')){
           const keys=Object.keys(input).sort().join(',');
           const sourceRead=input.operation==='collect_source_read';
           const exactClaim=activityPlaybook&&input.operation==='collect_claim';

@@ -10,7 +10,7 @@ const python=realpathSync('/usr/bin/python3'),sha=b=>createHash('sha256').update
 const program=new URL('../qualification-artifacts.py',import.meta.url).pathname;
 const vid='7707600173446204723',run='producer-run',owner='owned-lease';
 function fixture(){
- const root=mkdtempSync(join(tmpdir(),'qualification-native-')),native=join(root,'native'),runtime=join(root,'runtime');mkdirSync(native);mkdirSync(runtime);
+ const root=mkdtempSync(join(realpathSync(tmpdir()),'qualification-native-')),native=join(root,'native'),runtime=join(root,'runtime');mkdirSync(native);mkdirSync(runtime);
  const asset=(name,raw)=>{const path=join(native,name);writeFileSync(path,raw);return {path,sha256:sha(raw)};};
  const json=(name,value)=>asset(name,Buffer.from(JSON.stringify(value)));
  const eid=run+'-qual-record',client='a'.repeat(64),server='b'.repeat(64),sidecars={};
@@ -76,3 +76,56 @@ test('different interpreter cannot replace the frozen artifact interpreter',asyn
 test('recovery permits only its newly frozen evidence slot without enlarging comment quota',()=>{const f=fixture();try{recovery(f);const c=f.input.context;c.comment_limit=1;c.recovery.collection.person_index=2;const prefix=run+'-v'+vid+'-collection-';assert.equal(guard(c,'collection','phone',['commenter-identity','1','1','1',prefix+'person2-t1']).code,0);assert.equal(guard(c,'collection','phone',['current-video-link',prefix+'after-card2']).code,0);for(const slot of [1,3])assert.notEqual(guard(c,'collection','phone',['commenter-identity','1','1','1',prefix+'person'+slot+'-t1']).code,0);for(const index of [true,'2',0,-1,9007199254740992]){c.recovery.collection.person_index=index;assert.notEqual(guard(c,'collection','phone',['commenter-identity','1','1','1',prefix+'person2-t1']).code,0);}}finally{f.cleanup();}});
 
 test('Python rejects floating point recovery slot and existing slot2 native originals',()=>{const f=fixture();try{recovery(f);const c=f.input.context;c.recovery.collection.person_index=2;const eid=run+'-v'+vid+'-collection-person2-t1';const payload=JSON.stringify({kind:'recovery_guard',context:c,activity:'collection',tool_kind:'phone',args:['commenter-identity','1','1','1',eid]}).replace('"person_index":2','"person_index":2.0');const r=spawnSync(python,[program],{input:payload,encoding:'utf8'});assert.notEqual(r.status,0);writeFileSync(join(f.native,eid+'-profile.xml'),'old original');assert.notEqual(guard(c,'collection','phone',['commenter-identity','1','1','1',eid]).code,0);}finally{f.cleanup();}});
+
+test('轻盈资格准备复用冻结 Python 校验和五帧校验，绑定实际音频与视频号',async t=>{
+  const {createStandaloneQualificationEvidenceReader}=await import('../standalone-qualification-preparation.mjs');
+  const {execInput}=await import('../leadgen-client.mjs');
+  const f=fixture(),directory=realpathSync(f.root);
+  t.after(f.cleanup);
+  const ref=(relative,bytes)=>{
+    const file=join(directory,relative);
+    writeFileSync(file,bytes,{mode:0o600});
+    return {path:file,sha256:sha(bytes)};
+  };
+  mkdirSync(join(directory,'receipts'),{mode:0o700});
+  mkdirSync(join(directory,'runtime/leadgen-foundation/sources'),{recursive:true});
+  const archive='runtime/leadgen-foundation/sources/102.json';
+  const archiveRef=ref(archive,readFileSync(new URL('../leadgen-foundation/sources/102.json',import.meta.url)));
+  const pythonRef=ref('runtime/qualification-artifacts.py',readFileSync(program));
+  const runtimeRef=ref('runtime/runtime/runtime-policy-sdk33.json',JSON.stringify({
+    client_sha256:f.spec.client_sha256,server_sha256:f.spec.server_sha256,
+  }));
+  const epoch=ref('epoch.json',JSON.stringify({resource:{serial:'device',profile:'cloud',adb_serial:f.spec.serial}}));
+  const recording=ref('native/recording.mkv','本地录制夹具');
+  const sheet=ref('receipts/sheet.jpg','五帧图夹具');
+  const panels=['A','B','C','D','E'].map((label,i)=>{
+    const frame='receipts/'+label+'.png';
+    return {label,pts_seconds:i,frame,sha256:ref(frame,'本地帧 '+label).sha256};
+  });
+  const spec={...f.spec,recording,coverage_image:sheet,
+    coverage_json:ref('receipts/coverage.json',JSON.stringify({panels,recording,sheet_sha256:sheet.sha256})),
+    visual_observations:[{label:'C',text:'画面显示软件界面'}],
+  };
+  delete spec.asr;
+  const identity={workflow:'102',task_id:'task',run_id:'run',run_tag:owner};
+  const saved=ref('native/qualification-proof.json',JSON.stringify({
+    schema:'activity-evidence/v1',identity,qualification_evidence:{[vid]:spec},
+  }));
+  const reader=createStandaloneQualificationEvidenceReader({runDirectory:directory,runIdentity:identity,execute:execInput,
+    frozen:{standalone_skill:{deadline_ms:Date.now()+60000},
+      collection_phone_scope:{serial:'device',profile:'cloud',policy_binding:{epoch_fence:epoch},
+        executables:{python:{path:python,sha256:sha(readFileSync(python))}}},
+      files:{[archive]:archiveRef.sha256,'runtime/qualification-artifacts.py':pythonRef.sha256,
+        'runtime/runtime/runtime-policy-sdk33.json':runtimeRef.sha256},
+    },
+  });
+  const proof={path:'native/qualification-proof.json',sha256:saved.sha256};
+  const input=[vid,spec.wav.path];
+  const prepared=await reader(proof,input);
+  assert.equal(prepared.audio_sha256,spec.wav.sha256);
+  assert.equal(prepared.duration_seconds,1);
+  assert.equal(prepared.visual.frames[0].text,'画面显示软件界面');
+  await assert.rejects(reader(proof,[vid,join(directory,'not-my-audio.wav')]),{code:'STANDALONE_COLLECTION_PREPARE_PROOF'});
+  writeFileSync(join(directory,'receipts/C.png'),'篡改');
+  await assert.rejects(reader(proof,input),{code:'STANDALONE_COLLECTION_PREPARE_ARTIFACT'});
+});

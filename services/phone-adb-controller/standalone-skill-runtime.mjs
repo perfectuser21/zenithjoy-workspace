@@ -16,6 +16,7 @@ import {execInput,createRpc,safeExecutionDiagnostic} from './leadgen-client.mjs'
 import {createStandaloneSkillTools} from './standalone-skill-tools.mjs';
 import {createStandaloneScoringTools} from './standalone-scoring-tools.mjs';
 import {createStandaloneCollectionTools} from './standalone-collection-tools.mjs';
+import {createStandaloneQualificationEvidenceReader} from './standalone-qualification-preparation.mjs';
 import {createStandaloneCommentObserver} from './standalone-comment-observer.mjs';
 import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,7 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
    const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
    if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
    const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env:playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'&&['open-video','current-video-link'].includes(op)?{...environment,DOUYIN_DETAIL_PLAYBACK:playback}:environment,timeoutMs:Math.min(360000,remaining)});
+   if(op==='detail-restored'&&result.code===1&&result.stdout.trim()==='detail_restored=0')return result;
    if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code,diagnostic:{stdout:safeExecutionDiagnostic(result.stdout,environment).slice(-4000),stderr:safeExecutionDiagnostic(result.stderr,environment).slice(-4000)}});return result;
   };
   if(command==='open-search-card'){
@@ -250,7 +252,14 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
     try{return await invokePhone(input);}
     catch(error){if(error?.code==='STANDALONE_NATIVE_COMMAND'||leafUnknown())revoke('TOOL_RESULT_UNKNOWN');throw error;}
   }:invokePhone;
-  if(collection)collectionTools=createStandaloneCollectionTools({scope,assertAuthority,phone,rpc,evidenceRoot:phoneScope.evidence_root,activityPlaybook:frozen.activity_playbook,
+  const runIdentity={task_id:identity.task_id,run_id:identity.run_id,run_tag:scope.run_tag,workflow:'102'};
+  if(collection&&frozen.activity_playbook){
+   for(const name of ['native','receipts'])mkdirSync(join(dir,name),{mode:0o700,recursive:true});
+  }
+  if(collection)collectionTools=createStandaloneCollectionTools({scope,assertAuthority,phone,rpc,evidenceRoot:phoneScope.evidence_root,runDirectory:dir,activityPlaybook:frozen.activity_playbook,
+    runIdentity,verifyQualificationProof:frozen.activity_playbook?
+      createStandaloneQualificationEvidenceReader({frozen,runDirectory:dir,runIdentity,execute}):undefined,
+    readCentralLease:frozen.activity_playbook?()=>lease.verifyHeld():undefined,
     readDeviceContext:frozen.activity_playbook?async()=>{
       const central=await lease.verifyHeld(),localStatus=await controller('lock-status');
       const localLine=localStatus.stdout.split('\n').filter(line=>line.startsWith('lock='));
@@ -275,19 +284,28 @@ export async function startStandaloneSkillRuntime({runDirectory,environment=proc
       }
     },
     commentObserver:createStandaloneCommentObserver({scope,evidenceRoot:phoneScope.evidence_root,root,frozen,phone,execute}),
-    transcribe:async audio=>{
+    transcribe:async (audio,expectedSha)=>{
       const key=env.DASHSCOPE_API_KEY;
       if(!key)fail('ASR_CREDENTIAL');
-      const {transcribeAudio,ENDPOINT}=createRequire(import.meta.url)('./transcribe-qwen-audio.js');
-      return transcribeAudio(audio,{apiKey:key,httpPost:async(url,body,credential)=>{
+      const {transcribeAudio,ENDPOINT,MODEL}=createRequire(import.meta.url)('./transcribe-qwen-audio.js');
+      let receipt;
+      const transcript=await transcribeAudio(audio,{apiKey:key,httpPost:async(url,body,credential)=>{
+        if(expectedSha){
+          const data=body.input.messages[0].content[0].audio.split(',')[1];
+          if(digest(Buffer.from(data,'base64'))!==expectedSha)fail('ASR_AUDIO_CHANGED');
+        }
         const remaining=identity.deadline_ms-Date.now();
         if(url!==ENDPOINT||remaining<1000)fail('ASR_DEADLINE');
         const response=await fetch(url,{method:'POST',redirect:'error',headers:{
           Authorization:'Bearer '+credential,'Content-Type':'application/json',
         },body:JSON.stringify(body),signal:AbortSignal.timeout(Math.min(75000,remaining))});
         if(!response.ok)fail('ASR_HTTP');
-        return response.json();
+        const result=await response.json();
+        receipt={provider:'dashscope',model:MODEL,http_status:response.status,
+          request_id:result.request_id??response.headers.get('x-request-id')??'unknown',audio_sha256:expectedSha};
+        return result;
       }});
+      return expectedSha?{text:transcript,receipt}:transcript;
     }});
   const call=collectionTools?.call??createStandaloneSkillTools({frozen,assertAuthority,phone,rpc});
   const ipcDirectory=join(dir,'standalone-ipc');mkdirSync(ipcDirectory,{mode:0o700});
