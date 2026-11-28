@@ -997,10 +997,18 @@ nonce_native_copy() {
   done
   # Copy会取消选区；无需Ctrl+A，移到已验证nonce末尾并删除其确切字符数。
   [[ -z "$strict" ]] || _foreground_is_exact_douyin "$(focused_window)" ".$SEARCH_RESULT_ACTIVITY" || die "CLIPBOARD_NONCE_WRONG_SCRATCH:cleanup"
-  "$ADB" -s "$SERIAL" shell input keyevent 123 >/dev/null || die "CLIPBOARD_NONCE_MOVE_END_FAILED"
-  for (( i=0; i<${#nonce}; i++ )); do
-    "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
-  done
+  if [[ -n "$strict" ]]; then
+    # 在同一受管设备调用中移动光标并等长删除。后续仍读取空字段并粘贴读回完整 nonce。
+    local -a clear_keys
+    clear_keys=(123)
+    for (( i=0; i<${#nonce}; i++ )); do clear_keys+=(67); done
+    "$ADB" -s "$SERIAL" shell input keyevent "${clear_keys[@]}" >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
+  else
+    "$ADB" -s "$SERIAL" shell input keyevent 123 >/dev/null || die "CLIPBOARD_NONCE_MOVE_END_FAILED"
+    for (( i=0; i<${#nonce}; i++ )); do
+      "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
+    done
+  fi
 }
 
 seed_clipboard_nonce_once() {
