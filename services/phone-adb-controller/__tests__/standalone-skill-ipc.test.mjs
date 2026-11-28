@@ -43,6 +43,20 @@ test('directory and client connection permissions or links cannot grant access',
  await assert.rejects(callStandaloneSkillTool(host.connectionPath,'inspect',{}),/IPC_CONNECTION_INVALID/);chmodSync(host.connectionPath,0o600);
 });
 
+test('较长 IPC 期限仅适用于明确请求的合并开页取链',async t=>{
+ const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),directory=dir(t);
+ const calls=[];
+ const host=await serveStandaloneSkillTools({directory,call:async(operation,input)=>{calls.push({operation,input});return true;}});
+ t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});
+ const args=['1234567890123456789','direct102-open','--resolve-link'];
+ const input={command:'open-video',args};
+ const longer={timeoutMs:600_000};
+ await assert.rejects(callStandaloneSkillTool(host.connectionPath,'inspect',input,longer),/IPC_REQUEST_INVALID/);
+ await assert.rejects(callStandaloneSkillTool(host.connectionPath,'phone',{command:'open-video',args:args.slice(0,2)},longer),/IPC_REQUEST_INVALID/);
+ await assert.rejects(callStandaloneSkillTool(host.connectionPath,'phone',null),/IPC_REQUEST_INVALID/);
+ assert.deepEqual(await callStandaloneSkillTool(host.connectionPath,'phone',input,longer),{ok:true,result:true});
+ assert.deepEqual(calls,[{operation:'phone',input}]);
+});
 test('client timeout never retries or asserts provider stop and close waits for the pending call',async t=>{
  const {serveStandaloneSkillTools,callStandaloneSkillTool}=await load(),directory=dir(t);let release,started,count=0;
  const ready=new Promise(r=>started=r),host=await serveStandaloneSkillTools({directory,call:async()=>{count++;started();await new Promise(r=>release=r);return 'returned';}});t.after(async()=>{await host.close();rmSync(directory,{recursive:true,force:true});});

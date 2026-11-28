@@ -29,7 +29,7 @@ test('无本次nonce证明仍COPY_STALE；调用不能借旧cache跳过',()=>{co
 
 test('真实入口nonce证明只在本次_once局部生效，先seed再copy，nonce残留不得当短链',()=>{
  const once=controller.slice(controller.indexOf('_current_video_link_once() {'),controller.indexOf('_current_video_link_once() {')+19000);
- assert.match(once,/nonce_proof=""/);assert.match(once,/nonce_proof="\$\(seed_clipboard_nonce "\$evidence_id" "\$nonce_seed_mode"\)" \|\| die/);
+ assert.match(once,/nonce_proof=""/);assert.match(once,/nonce_proof="\$\(seed_clipboard_nonce "\$evidence_id" "\$nonce_seed_mode" "\$expected_video_id"\)" \|\| die/);
  assert.ok(once.indexOf('seed_clipboard_nonce')<once.indexOf('share_xml='));
  assert.ok(once.indexOf('copied text did not contain a verified Douyin short link')<once.indexOf('clip_guard_check "$shared_url" "$nonce_proof"'));
  assert.doesNotMatch(controller.match(/seed_clipboard_nonce\(\) \{[\s\S]*?\n\}/)[0],/clip_guard_record|last-clip.*rm|reopen_url/);
@@ -37,3 +37,43 @@ test('真实入口nonce证明只在本次_once局部生效，先seed再copy，no
 
 test("Android空框text与动态hint相同，仍需实际粘贴读回nonce才放行",()=>{for(const emptyHint of ["AI证书含金量排名","训练师报考时间"]){const r=run({emptyHint});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OK/);}});
 test("真实nonce残留即使被标为hint也拒绝清空通过",()=>{const r=run({clearFail:true,falseHint:true});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_CLEAR_UNVERIFIED/);assert.doesNotMatch(r.stdout,/OK/);});
+
+test('受管取链使用输入法时，每条输入广播都须重验暂存页焦点',()=>{
+ const source=['_foreground_is_exact_douyin','nonce_sdk31_input'].map(name=>
+  controller.match(new RegExp('^'+name+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0]).join('\n');
+ for(const [drift,expected] of [['ready',[]],['clear',['ADB_CLEAR_TEXT']],['never',['ADB_CLEAR_TEXT','ADB_INPUT_B64']]]){
+  const fixture=String.raw`set -eu
+DOUYIN_PACKAGE=com.ss.android.ugc.aweme
+SEARCH_RESULT_ACTIVITY=search.activity.SearchResultActivity
+PYTHON_BIN=/usr/bin/python3
+ADB=fake_adb SERIAL=fixture EVIDENCE_ROOT=. ADBKEYBOARD_IME=fixture-ime
+off_page=0
+die(){ print -u2 -- "$1"; exit 2; }
+require_held_lock(){ :; }
+require_target_for(){ :; }
+current_ime(){ print fixture-ime; }
+wait_ms(){ :; }
+ti_restore_ime(){ print RESTORED >&2; }
+nonce_sdk31_field(){ :; }
+ui_evidence(){
+ if [[ "$DRIFT" == ready && "$1" == *-seed-ime-ready ]]; then off_page=1; fi
+}
+focused_window(){
+ if (( off_page )); then print 'com.android.launcher/.Launcher'; else
+  print 'com.ss.android.ugc.aweme/.search.activity.SearchResultActivity'
+ fi
+}
+fake_adb(){
+ case "$*" in
+  (*'ime enable'*) print 'now enabled' ;;
+  (*'ADB_CLEAR_TEXT'*) print ADB_CLEAR_TEXT >&2; if [[ "$DRIFT" == clear ]]; then off_page=1; fi ;;
+  (*'ADB_INPUT_B64'*) print ADB_INPUT_B64 >&2 ;;
+ esac
+}
+` + '\n' + source + '\nnonce_sdk31_input clipnonce0123 fixture strict';
+  const result=spawnSync('zsh',['-c',fixture],{env:{...process.env,DRIFT:drift},encoding:'utf8'});
+  assert.equal(result.status,drift==='never'?0:2,result.stderr);
+  assert.deepEqual(result.stderr.match(/^ADB_(?:CLEAR_TEXT|INPUT_B64)$/gm)??[],expected);
+  assert.match(result.stderr,/^RESTORED$/m);
+ }
+});

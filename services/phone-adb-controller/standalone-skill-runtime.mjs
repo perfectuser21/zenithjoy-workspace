@@ -18,7 +18,7 @@ import {createStandaloneScoringTools} from './standalone-scoring-tools.mjs';
 import {createStandaloneCollectionTools} from './standalone-collection-tools.mjs';
 import {createStandaloneQualificationEvidenceReader} from './standalone-qualification-preparation.mjs';
 import {createStandaloneCommentObserver} from './standalone-comment-observer.mjs';
-import {serveStandaloneSkillTools,callStandaloneSkillTool} from './standalone-skill-ipc.mjs';
+import {serveStandaloneSkillTools,callStandaloneSkillTool,requestsAtomicVideoLink,atomicVideoLinkTimeoutMs} from './standalone-skill-ipc.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const fail=c=>{throw Object.assign(Error('STANDALONE_NATIVE_'+c),{code:'STANDALONE_NATIVE_'+c});};
 export async function readStandaloneCallRegistry({root,environment,serial,deadlineMs,execute,now=Date.now}){
@@ -45,22 +45,26 @@ export function createStandalonePhoneProvider({root,environment,frozen,execute=e
  const fixed=frozen.agent_input;
  return async function invoke({command,args,profile,owner,playback,verifyAccountOnly}){
   if(profile!==fixed.profile||owner!==fixed.run_tag)fail('SCOPE');
+  const resolveLink=requestsAtomicVideoLink({command,args});
+  const managedCollection=playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing';
+  if(resolveLink&&(!managedCollection||isCleanup()))fail('SCOPE');
   const call=async(op,values=[])=>{
    const cleanup=isCleanup(),phaseDeadline=frozen.standalone_skill?.[cleanup?'cleanup_deadline_ms':'deadline_ms'];
    if(beforeCommand)await beforeCommand(cleanup);
-   const remaining=phaseDeadline===undefined?360000:phaseDeadline-Date.now();
+   const limit=resolveLink?atomicVideoLinkTimeoutMs:360_000;
+   const remaining=phaseDeadline===undefined?limit:phaseDeadline-Date.now();
    if(remaining<=0)fail(cleanup?'CLEANUP_DEADLINE':'WORK_DEADLINE');
    let env=environment;
    if(Object.hasOwn(env,'DOUYIN_MANAGED_CURRENT_VIDEO_LINK')){
     env={...env};
     delete env.DOUYIN_MANAGED_CURRENT_VIDEO_LINK;
    }
-   if(playback==='continuous_identity'&&fixed.workflow_key==='douyin_video_processing'){
+   if(managedCollection){
     if(op==='open-video')env={...env,DOUYIN_DETAIL_PLAYBACK:playback};
-    if(op==='current-video-link')env={...env,DOUYIN_DETAIL_PLAYBACK:playback,DOUYIN_MANAGED_CURRENT_VIDEO_LINK:'1'};
+    if(op==='current-video-link'||resolveLink)env={...env,DOUYIN_DETAIL_PLAYBACK:playback,DOUYIN_MANAGED_CURRENT_VIDEO_LINK:'1'};
    }
    if(op==='open-video')env={...env,DOUYIN_MANAGED_VIDEO_OPEN:'1'};
-   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env,timeoutMs:Math.min(360000,remaining)});
+   const result=await execute(join(root,'douyin-phone-adb'),['--profile',profile,'--lock-owner',owner,op,...values.map(String)],{env,timeoutMs:Math.min(limit,remaining)});
    if(op==='detail-restored'&&result.code===1&&result.stdout.trim()==='detail_restored=0')return result;
    if(result.code!==0)throw Object.assign(Error('STANDALONE_NATIVE_COMMAND'),{code:'STANDALONE_NATIVE_COMMAND',controller_exit_code:result.code,diagnostic:{stdout:safeExecutionDiagnostic(result.stdout,environment).slice(-4000),stderr:safeExecutionDiagnostic(result.stderr,environment).slice(-4000)}});return result;
   };

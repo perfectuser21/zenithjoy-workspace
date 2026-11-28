@@ -79,13 +79,20 @@ export async function serveStandaloneSkillTools({directory,call}){
  })();
  return {connectionPath,close};
 }
-export async function callStandaloneSkillTool(connectionPath,operation,input,{timeoutMs=360000}={}){
+export const atomicVideoLinkTimeoutMs=720_000;
+export function requestsAtomicVideoLink(input){
+ const args=input?.args;
+ return input?.command==='open-video'&&Array.isArray(args)&&args.length===3&&args[2]==='--resolve-link';
+}
+export async function callStandaloneSkillTool(connectionPath,operation,input,{timeoutMs}={}){
+ const limit=operation==='phone'&&requestsAtomicVideoLink(input)?atomicVideoLinkTimeoutMs+30_000:360_000;
+ timeoutMs??=limit;
  const record=privateRead(connectionPath);let c;
  try{c=JSON.parse(record.bytes);}catch{fail('IPC_CONNECTION_INVALID');}
  if(!c||Object.keys(c).sort().join(',')!=='nonce,protocol,socket'||c.protocol!==PROTOCOL||!isAbsolute(c.socket)||!/^([a-f0-9]{64})$/.test(c.nonce||''))fail('IPC_CONNECTION_INVALID');
  privateDirectory(dirname(c.socket),'IPC_CONNECTION_INVALID');
  try{const socket=lstatSync(c.socket);if(!socket.isSocket()||socket.isSymbolicLink()||socket.uid!==process.getuid()||(socket.mode&0o777)!==0o600)fail('IPC_CONNECTION_INVALID');}catch{fail('IPC_CONNECTION_INVALID');}
- const body={operation,input};if(!validBody(body)||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>360000)fail('IPC_REQUEST_INVALID');
+ const body={operation,input};if(!validBody(body)||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>limit)fail('IPC_REQUEST_INVALID');
  let raw;try{raw=JSON.stringify(body);}catch{fail('IPC_REQUEST_INVALID');}if(Buffer.byteLength(raw)>MAX_REQUEST)fail('IPC_REQUEST_INVALID');
  return new Promise((resolve,reject)=>{
   let settled=false;const finish=(error,result)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve(result);};
