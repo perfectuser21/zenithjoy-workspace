@@ -247,6 +247,79 @@ test('102 树等待空闲失败后只准用本轮截图导航一次，重新核�
   assert.deepEqual(effects,['open-app','account-current','snapshot-evidence','account-visual-tap','account-current']);
 });
 
+test('102 账号截图是旧详情页时允许基于本轮截图返回一次', async () => {
+  const {createStandaloneCollectionTools}=await import("../standalone-collection-tools.mjs");
+  const effects=[];
+  const accountModes=[];
+  const tools=createStandaloneCollectionTools({
+    scope:{...scope,profile:'bound-phone',serial:'fixture-phone',expected_account:'bound-account'},
+    assertAuthority:async()=>{},
+    async phone({command,args,verifyAccountOnly}) {
+      if(command==='account-current')accountModes.push(verifyAccountOnly);
+      effects.push(command);
+      if(command==='back-evidence') {
+        assert.deepEqual(args,[run+'-back','--require-app-focus']);
+        return {stdout:'/fixture/new.png\nback_status=returned_screenshot\n'};
+      }
+      const stdout=command==='account-current'?(args[0].endsWith('first')?'account_status=visual_required':'douyin_id=bound-account'):'';
+      return {stdout};
+    },
+    async rpc(){throw Error('应在核验后才调用业务接口');},
+  });
+  const phone=(command,args=[])=>tools.call('phone',{command,args});
+  const tap=[648,1173,run+'-screen',run+'-tap'];
+  await phone('open-app');
+  await assert.rejects(phone('back-evidence',[run+'-screen',run+'-out']),/PHONE_INPUT/);
+  await assert.rejects(phone('account-visual-tap',tap),/STANDALONE_COLLECTION_/);
+  const probe=await phone('account-current',[run+'-first']);
+  assert.equal(probe.account_status,'visual_required');
+  await assert.rejects(tools.call('business',{operation:'collect_claim'}),/ACCOUNT_REQUIRED/);
+  await assert.rejects(phone('account-visual-tap',tap),/STANDALONE_COLLECTION_/);
+  await phone('snapshot-evidence',[run+'-screen']);
+  await assert.rejects(phone('account-visual-tap',[648,1173,run+'-old',run+'-tap']),/STANDALONE_COLLECTION_/);
+  await assert.rejects(phone('back-evidence',[run+'-older',run+'-out']),/PHONE_INPUT/);
+  const returned=await phone('back-evidence',[run+'-screen',run+'-back']);
+  assert.match(returned.next_action,/新截图/);
+  await assert.rejects(phone('account-visual-tap',tap),/PHONE_INPUT/);
+  await assert.rejects(phone('back-evidence',[run+'-screen',run+'-back2']),/STANDALONE_COLLECTION_/);
+  await assert.rejects(phone('back-evidence',[run+'-back',run+'-out']),/PHONE_INPUT/);
+  await assert.rejects(tools.call('business',{operation:'collect_claim'}),/ACCOUNT_REQUIRED/);
+  await phone('account-visual-tap',[648,1173,run+'-back',run+'-tap']);
+  await assert.rejects(phone('account-visual-tap',tap),/STANDALONE_COLLECTION_/);
+  await phone('account-current',[run+'-second']);
+  await assert.rejects(tools.call('business',{operation:'collect_claim'}),/COMPANY_REQUIRED/);
+  assert.deepEqual(accountModes,[false,true]);
+  assert.deepEqual(effects,['open-app','account-current','snapshot-evidence','back-evidence','account-visual-tap','account-current']);
+});
+
+
+test('账号返回回执未证明应用内截图时终止本次视觉导航', async () => {
+  const {createStandaloneCollectionTools}=await import('../standalone-collection-tools.mjs');
+  for(const backOutput of ['', 'back_status=foreground_changed', 'back_status=left_app',
+    'back_status=returned_screenshot\nback_status=left_app']){
+    const effects=[];
+    const tools=createStandaloneCollectionTools({
+      scope:{...scope,profile:'bound-phone',serial:'fixture-phone',expected_account:'bound-account'},
+      assertAuthority:async()=>{},
+      async phone({command}) {
+        effects.push(command);
+        return {stdout:command==='account-current'?'account_status=visual_required':command==='back-evidence'?backOutput:''};
+      },
+      async rpc(){throw Error('账号尚未验证');},
+    });
+    const phone=(command,args=[])=>tools.call('phone',{command,args});
+    await phone('open-app');
+    await phone('account-current',[run+'-first']);
+    await phone('snapshot-evidence',[run+'-screen']);
+    const reply=await phone('back-evidence',[run+'-screen',run+'-back']);
+    assert.match(reply.next_action,/停止账号导航/);
+    await assert.rejects(phone('account-visual-tap',[648,1173,run+'-back',run+'-tap']),/PHONE_INPUT/);
+    await assert.rejects(phone('back-evidence',[run+'-screen',run+'-back2']),/PHONE_INPUT/);
+    await assert.rejects(tools.call('business',{operation:'collect_claim'}),/ACCOUNT_REQUIRED/);
+    assert.deepEqual(effects,['open-app','account-current','snapshot-evidence','back-evidence']);
+  }
+});
+
 test('102 正式判重工具声明只读交接入口', async()=>{
   const {createStandaloneCollectionTools}=await import('../standalone-collection-tools.mjs');
   const tools=createStandaloneCollectionTools({scope,assertAuthority:async()=>{},activityPlaybook:{}});

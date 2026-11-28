@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {fetchStandaloneNativeEvidence,publishStandaloneQualificationProof,withStandaloneQualificationReceipt} from './standalone-native-evidence.mjs';
 import {createStandaloneQualificationPreparation,createStandaloneQualificationSubmission,prepareStandaloneCollectionAudio,reviewStandalonePreparedDecision,standaloneQualificationDecisionId} from './standalone-qualification-preparation.mjs';
 export {prepareStandaloneCollectionAudio};
-import {standaloneCollectionHandoff,readCommittedCollection,createCollectionEvidenceReceipt,createCollectionDeviceReader,collectionHostToolInputs} from './standalone-collection-handoff.mjs';
+import {standaloneCollectionHandoff,readCommittedCollection,createCollectionEvidenceReceipt,createCollectionDeviceReader,collectionHostToolInputs, authorizeAccountNavigation, accountNavigationOutcome} from './standalone-collection-handoff.mjs';
 import {checkSource,observedOrigin} from './standalone-collection-origin.mjs';
 export {readStandaloneCollectionSource} from './standalone-collection-origin.mjs';
 
@@ -175,7 +175,7 @@ const accountCommand = 'account-current';
 const links = 'current-video-link';
 const waitForRecord = new Set(['record-status','record-stop','record-extract-audio']);
 const captureCommands = new Set(['ui-evidence','snapshot-evidence']);
-const commandList = ['open-app',accountCommand,'open-video',links,'record-start',...waitForRecord,...captureCommands,'account-visual-tap'];
+const commandList = ['open-app',accountCommand,'open-video',links,'record-start',...waitForRecord,...captureCommands,'account-visual-tap','back-evidence'];
 const operations = ['company_config','collect_claim','qualification_input','qualification_submit','qualification_readback','scan_comments','scroll_comments','prepare_comment','collect_submit'];
 const projectFields = stdout => Object.fromEntries(String(stdout).split('\n')
   .filter(line=>line.includes('=')).map(line=>[line.slice(0,line.indexOf('=')),line.slice(line.indexOf('=')+1)]));
@@ -340,6 +340,7 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
 
   async function performPhone(command,args) {
     if(!Array.isArray(args)||!commandList.includes(command))fail('PHONE_INPUT');
+    let argv=args;
     if(command==='open-app') {
       if(args.length||owned||accountNavigation)fail('PHONE_INPUT');
     } else if(command===accountCommand) {
@@ -348,13 +349,12 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
     } else if(command==='snapshot-evidence'&&!owned&&accountNavigation?.state==='needs_snapshot'){
       if(args.length!==1)fail('PHONE_INPUT');
       evidence(args[0]);
-    } else if(command==='account-visual-tap'){
-      const [x,y,snapshot,tap]=args;
-      if(args.length!==4||accountNavigation?.state!=='needs_tap'||snapshot!==accountNavigation.snapshot
-        ||!Number.isSafeInteger(x)||!Number.isSafeInteger(y)||x<0||y<0)fail('PHONE_INPUT');
-      evidence(tap);
-      // 消耗本轮截图，异常或传输中断后不重发点击。
-      accountNavigation.state='tap_attempted';
+    } else if(command==='account-visual-tap'||command==='back-evidence'){
+      const action=authorizeAccountNavigation(command,args,accountNavigation);
+      if(!action)fail('PHONE_INPUT');
+      evidence(action.evidenceId);
+      argv=action.argv;
+      accountNavigation.state='navigation_attempted';
     } else if(!owned) {
       if(!activityPlaybook||!verifiedAccount||!binding||!reviewedVideo||claimInDoubt)fail('VIDEO_SCOPE');
       if(command==='open-video') {
@@ -386,16 +386,18 @@ export function createStandaloneCollectionTools({scope,rpc,phone,assertAuthority
     }
     const playback=!qualified&&['open-video',links].includes(command)?'continuous_identity':undefined;
     const verifyAccountOnly=command===accountCommand&&accountNavigation?.state==='tapped';
-    const result=await phone({command,args,profile,owner:run,playback,verifyAccountOnly});
-    for(const arg of args)if(evidenceIds.has(arg))returnedEvidenceIds.add(arg);
+    const result=await phone({command,args:argv,profile,owner:run,playback,verifyAccountOnly});
+    for(const arg of args)if(command!=='back-evidence'&&evidenceIds.has(arg))returnedEvidenceIds.add(arg);
     if(command==='open-app')openedApp=true;
     if(command==='snapshot-evidence'&&!owned&&accountNavigation?.state==='needs_snapshot'){
-      accountNavigation={state:'needs_tap',snapshot:args[0]};
-      return {...result,next_action:'打开 stdout 返回的截图，只有看见抖音底部「我」时，调用 account-visual-tap [x,y,本次截图证据ID,新点击证据ID]。'};
+      accountNavigation={...accountNavigation,state:'needs_tap',snapshot:args[0]};
+      return accountNavigationOutcome(command,result,accountNavigation).reply;
     }
-    if(command==='account-visual-tap'){
-      accountNavigation={state:'tapped'};
-      return {...result,next_action:'用新的证据 ID 再调用 account-current，从个人主页控件树核对绑定抖音号。'};
+    if(command==='account-visual-tap'||command==='back-evidence'){
+      const outcome=accountNavigationOutcome(command,result,{...accountNavigation,snapshot:args[1]});
+      accountNavigation=outcome.navigation;
+      if(command==='back-evidence'&&accountNavigation.state==='needs_tap')returnedEvidenceIds.add(args[1]);
+      return outcome.reply;
     }
     if(command===accountCommand) {
       if(result.stdout.trim()==='account_status=visual_required'&&!accountNavigation){

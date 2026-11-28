@@ -159,3 +159,11 @@ test('官方账号工具保留旧参数，受管视觉导航和只读复核参�
     assert.throws(()=>describe(controller,[...args,mode]),/OFFICIAL_CLI_INVOCATION/);
   assert.throws(()=>describe(controller,[...args.slice(0,4),'account-visual-tap','648','1173','run-screen','run-tap']),/UNREVIEWED_OPERATION/);
 });
+
+test('正式 CLI 保留返回证据原参数，受管账号导航参数由独立工具消费', () => {
+  const controller=join(root,'douyin-phone-adb');
+  const args=['--profile','fixture','--lock-owner','run','back-evidence','run-back'];
+  assert.equal(describe(controller,args).operation,'back-evidence');
+  assert.equal(describe(controller,[...args,'450']).operation,'back-evidence');
+  assert.throws(()=>describe(controller,[...args,'--require-app-focus']),/OFFICIAL_CLI_INVOCATION/);
+});

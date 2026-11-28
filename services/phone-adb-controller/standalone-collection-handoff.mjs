@@ -90,3 +90,34 @@ export const collectionHostToolInputs={
   'collection-evidence':{args:['{"index":0}']},
   'collection-readback':{args:[]},
 };
+
+export function authorizeAccountNavigation(command,args,navigation) {
+  if (navigation?.state!=='needs_tap') return null;
+  if (command==='back-evidence') {
+    const [snapshot,evidenceId]=args;
+    if (args.length!==2 || navigation.returnedOnce || snapshot!==navigation.snapshot) return null;
+    return {evidenceId,argv:[evidenceId,'--require-app-focus']};
+  }
+  const [x,y,snapshot,evidenceId]=args;
+  if (args.length!==4 || snapshot!==navigation.snapshot || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || x<0 || y<0) return null;
+  return {evidenceId,argv:args};
+}
+
+export function accountNavigationOutcome(command,result,navigation) {
+  switch(command) {
+    case 'back-evidence': {
+      const statusLines=result.stdout.split('\n').filter(line=>line.startsWith('back_status='));
+      const remainsInApp=statusLines.length===1 && statusLines[0]==='back_status=returned_screenshot';
+      const state=remainsInApp?'needs_tap':'navigation_unavailable';
+      const next_action=remainsInApp?'打开返回操作出具的新截图，看到「我」才用本次返回的证据 ID 继续账号核验。':'没有获得应用内的新截图，停止账号导航，交由宿主收尾。';
+      return {navigation:{state,returnedOnce:true,snapshot:navigation.snapshot},reply:{...result,next_action}};
+    }
+    case 'account-visual-tap':
+      return {navigation:{state:'tapped'},reply:{...result,next_action:'用新的证据 ID 再调用 account-current，从个人主页控件树核对绑定抖音号。'}};
+    default: {
+      const next_action='看本次截图。看到底部「我」时调用 account-visual-tap [x,y,本次截图证据ID,新点击证据ID]。';
+      const backAction=navigation.returnedOnce?'':'若旧详情页没有「我」且界面可返回，调用 back-evidence [本次截图证据ID,新返回证据ID]，再看返回后附带的新截图。';
+      return {navigation,reply:{...result,next_action:next_action+backAction}};
+    }
+  }
+}
