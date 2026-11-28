@@ -34,13 +34,14 @@ function readFileSyncBounded(fd,buffer) {
   return offset;
 }
 
-export function fetchStandaloneNativeEvidence({input,evidenceRoot,runDirectory,startSeconds,returnedEvidenceIds}) {
+export function fetchStandaloneNativeEvidence({input,evidenceRoot,runDirectory,startSeconds,returnedEvidenceIds,observationFiles}) {
   try {
     const file=input?.args?.[0];
     if(Object.keys(input??{}).join(',')!=='args'||!Array.isArray(input.args)||input.args.length!==1
       ||typeof file!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,180}$/.test(file)||!extensions.test(file)
       ||!Number.isSafeInteger(startSeconds)||startSeconds<0
-      ||![...returnedEvidenceIds].some(id=>file.startsWith(id+'.')||file.startsWith(id+'-')))
+      ||!(file.endsWith('-video-observation.png')?observationFiles?.has(file)
+        :[...returnedEvidenceIds].some(id=>file.startsWith(id+'.')||file.startsWith(id+'-'))))
       throw Error('unissued artifact');
     const bytes=readArtifact(join(evidenceRoot,file),startSeconds*1000);
     return publishNativeFile(runDirectory,file,bytes);

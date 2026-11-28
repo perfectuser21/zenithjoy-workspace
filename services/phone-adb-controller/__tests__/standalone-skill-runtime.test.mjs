@@ -15,6 +15,21 @@ test('工作截止拒绝启动控制器，收尾使用冻结的独立期限',asy
  assert.deepEqual(calls[0].options.env,base.environment);
  assert.ok(calls[0].options.timeoutMs>0&&calls[0].options.timeoutMs<=10000);
 });
+test('只为受管的视频打开命令启用有界观察，其他手机命令保持原策略',async()=>{
+ const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');
+ const base=fixture(),calls=[];
+ base.frozen.agent_input.workflow_key='douyin_video_processing';
+ const invoke=createStandalonePhoneProvider({...base,execute:async(_,args,options)=>{
+  calls.push({args,env:options.env});
+  return {code:0,stdout:'video_open_status=visual_required'};
+ }});
+ const owner={profile:'cloud-phone-test',owner:'direct101',playback:'continuous_identity'};
+ await invoke({...owner,command:'open-video',args:['1234567890123456789','direct101-video']});
+ await invoke({...owner,command:'current-video-link',args:['direct101-link']});
+ assert.equal(calls[0].env.DOUYIN_MANAGED_VIDEO_OPEN,'1');
+ assert.equal(calls[1].env.DOUYIN_MANAGED_VIDEO_OPEN,undefined);
+ assert.ok(calls.every(call=>call.env.DOUYIN_DETAIL_PLAYBACK==='continuous_identity'));
+});
 test('semantic card uses a fresh selected video grid and returned native card coordinates under the exact owner',async()=>{
  const {createStandalonePhoneProvider}=await import('../standalone-skill-runtime.mjs');const calls=[];
  const invoke=createStandalonePhoneProvider({...fixture(),execute:async(command,args)=>{calls.push({command,args});if(args.includes('search-video-cards'))return {code:0,stdout:'123\t456\t00:15\t一个真实搜索卡片的标题\t作者\nvideo_tab=1\nloading=0\n'};return {code:0,stdout:args.includes('current-video-link')?'video_id=1234567890123456789\ncontent_type=video\n':'ok'};}});
